@@ -23,7 +23,7 @@ const CHILDREN = [SwitcherStub, RecycleChipStub, StubEmptyStateComponent, StubLo
 const ENTITY = { Name: 'Accounts' } as unknown as EntityInfo;
 type OnInitProto = { ngOnInit: () => void };
 
-interface State { entity?: EntityInfo | null; IsLoading?: boolean; ShowRecycleBin?: boolean; records?: Record<string, unknown>[]; filteredCount?: number; totalCount?: number }
+interface State { entity?: EntityInfo | null; IsLoading?: boolean; ShowRecycleBin?: boolean; records?: Record<string, unknown>[]; filteredCount?: number; totalCount?: number; config?: Record<string, unknown> }
 function render(state: State = {}) {
   vi.spyOn(EntityViewerComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockImplementation(() => undefined);
   return renderComponentFixture(EntityViewerComponent, {
@@ -31,12 +31,15 @@ function render(state: State = {}) {
     declarations: [EntityViewerComponent],
     inputs: { Records: state.records ?? [] },
     setup: (c) => {
-      const priv = c as unknown as { _entity: EntityInfo | null; IsLoading: boolean; ShowRecycleBin: boolean; FilteredRecordCount: number; TotalRecordCount: number };
+      const priv = c as unknown as { _entity: EntityInfo | null; IsLoading: boolean; ShowRecycleBin: boolean; FilteredRecordCount: number; TotalRecordCount: number; Config: Record<string, unknown> };
       priv._entity = state.entity ?? null;
       priv.IsLoading = state.IsLoading ?? false;
       priv.ShowRecycleBin = state.ShowRecycleBin ?? false;
       priv.FilteredRecordCount = state.filteredCount ?? 0;
       priv.TotalRecordCount = state.totalCount ?? 0;
+      if (state.config) {
+        priv.Config = state.config;
+      }
     },
   });
 }
@@ -51,6 +54,12 @@ describe('EntityViewerComponent (DOM)', () => {
 
   it('renders the header when an entity is set', () => {
     expect(query(render({ entity: ENTITY }), '.viewer-header')).not.toBeNull();
+  });
+
+  it('hides the header when chrome is embedded', () => {
+    const f = render({ entity: ENTITY, config: { chrome: 'embedded' } });
+    expect(query(f, '.viewer-header')).toBeNull();
+    expect(query(f, '.filter-input')).toBeNull();
   });
 
   it('renders the view-type switcher in the header for an entity', () => {
@@ -70,5 +79,43 @@ describe('EntityViewerComponent (DOM)', () => {
     const f = render({ entity: ENTITY, IsLoading: false, records: [] });
     // both the entity header AND the no-records empty state render (the "select an entity" one does not)
     expect(query(f, '.empty-state-fill')).not.toBeNull();
+  });
+
+  it('keeps the page for an in-place refresh that waits on a load, but not once another reload also waits', () => {
+    const f = render({ entity: ENTITY, IsLoading: true });
+    const c = f.componentInstance as unknown as {
+      Records: unknown; _pendingReload: boolean; _pendingReloadKeepsPage: boolean; RefreshInPlace(): void; LoadData(): Promise<void>;
+    };
+    c.Records = null;
+
+    c.RefreshInPlace();
+    expect([c._pendingReload, c._pendingReloadKeepsPage]).toEqual([true, true]);
+
+    void c.LoadData(); // a sort/filter/entity change while still loading: that one starts at page 1
+    expect([c._pendingReload, c._pendingReloadKeepsPage]).toEqual([true, false]);
+
+    c.RefreshInPlace();
+    expect(c._pendingReloadKeepsPage).toBe(false);
+  });
+});
+
+describe('EntityViewerComponent.NoRecordsTitle', () => {
+  // The title speaks the entity's own plural ("No Contacts to display") and only falls back to the
+  // generic "records" wording when no entity is in scope. Pinned because the interpolation
+  // is easy to lose silently — a broken template literal still type-checks.
+  const CONTACT = { Name: 'Contact', DisplayNamePlural: 'Contacts' } as unknown as EntityInfo;
+
+  it('uses the entity display-name plural when an entity is in scope and no filter is active', () => {
+    expect(render({ entity: CONTACT }).componentInstance.NoRecordsTitle).toBe('No Contacts to display');
+  });
+
+  it('falls back to the generic wording when no entity is in scope', () => {
+    expect(render({ entity: null }).componentInstance.NoRecordsTitle).toBe('No records found');
+  });
+
+  it('reports "No matching records" while a filter is active, regardless of entity', () => {
+    const f = render({ entity: CONTACT });
+    (f.componentInstance as unknown as { DebouncedFilterText: string }).DebouncedFilterText = 'zz';
+    expect(f.componentInstance.NoRecordsTitle).toBe('No matching records');
   });
 });

@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T061 - Run Action Test Harness Dialog",
+    "Description": "The action execution harness (parameter collection + Execute + result surface) — a unique, side-effect-bearing surface deliberately kept user-driven; no other test opens it.",
+    "InputDefinition": "{\n  \"goal\": \"Open the application switcher dropdown next to the logo, switch to the 'Actions' application, and open the 'Explorer' nav item. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Find an action whose status is 'Active' (its card shows a green/Active chip; the Run/play button is enabled only for Active actions). Click that action's Run button (a play icon). A test-harness dialog should open showing a 'Test Harness for ...' title, an Input Parameters section, and an 'Execute Action' button. Verify the harness renders with its parameter inputs and the Execute button. Seeing the harness dialog render is success — do NOT click 'Execute Action' (running has real side effects). Close the dialog when done.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"An Active action exposes an enabled Run (play) button; the harness dialog opens when clicked\",\n    \"The dialog shows a Test Harness title, an Input Parameters section, and an 'Execute Action' button\",\n    \"The dialog can be closed and returns to the Explorer\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,actions",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "C96643E0-3F3D-4622-B70E-93B3C4D180C4"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.396Z",
+    "checksum": "6f1ff66615e78b40cd16f10635326fdcffef6d0f92436df893daeb904e510165"
+  }
+}

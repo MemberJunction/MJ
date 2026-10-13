@@ -33,6 +33,8 @@ import { MessageListComponent } from './components/message/message-list.componen
 import { MessageInputComponent } from './components/message/message-input.component';
 import { DynamicFormsModule } from '@memberjunction/ng-forms';
 import { ActionableCommandsComponent } from './components/message/actionable-commands.component';
+import { WorkflowPlanCardComponent } from './components/message/workflow-plan-card.component';
+import { TaskGraphEditorModule } from '@memberjunction/ng-task-graph-editor';
 import { ConversationMessageRatingComponent } from './components/message/conversation-message-rating.component';
 import { ConversationWorkspaceComponent } from './components/workspace/conversation-workspace.component';
 import { ConversationNavigationComponent } from './components/navigation/conversation-navigation.component';
@@ -85,7 +87,12 @@ import { LoadRealtimeRemoteBrowserChannel } from './components/realtime/remote-b
 import { RemoteBrowserSurfaceComponent } from './components/realtime/remote-browser/remote-browser-surface.component';
 import { LoadRealtimeMediaChannel } from './components/realtime/media/media-channel';
 import { LoadClientContextChannel } from './components/realtime/channels/client-context-channel';
+import { LoadIdentityVerificationChannel } from './components/realtime/identity-verification/identity-verification-channel';
+import { LoadRealtimeCaptureChannels } from './components/realtime/capture/realtime-capture-channel';
+import { LoadRealtimeAvatarChannel } from './components/realtime/avatar/realtime-avatar-channel';
 import { RealtimeMediaSurfaceComponent } from './components/realtime/media/realtime-media-surface.component';
+import { LoadRealtimeInteractiveComponentChannel } from './components/realtime/interactive-component/interactive-component-channel';
+import { RealtimeInteractiveComponentSurfaceComponent } from './components/realtime/interactive-component/realtime-interactive-component-surface.component';
 import { RealtimeEvidencePlaybackComponent } from './components/realtime/evidence-playback/realtime-evidence-playback.component';
 
 // Directives
@@ -112,7 +119,14 @@ LoadRealtimeRemoteBrowserChannel();
 // Media channel plugin — same registry-driven resolution (ClientPluginClass
 // 'RealtimeMediaChannel'); the static call defeats tree-shaking of its @RegisterClass.
 LoadRealtimeMediaChannel();
+// Interactive Component channel plugin — ClientPluginClass 'RealtimeInteractiveComponentChannel'.
+LoadRealtimeInteractiveComponentChannel();
 LoadClientContextChannel();
+LoadIdentityVerificationChannel();
+// The Camera and Screen Share channel plugins (ClientPluginClass 'RealtimeCameraChannel' / 'RealtimeScreenShareChannel').
+LoadRealtimeCaptureChannels();
+// The Avatar channel plugin (ClientPluginClass 'RealtimeAvatarChannel'): the agent's video.
+LoadRealtimeAvatarChannel();
 // Whiteboard ARTIFACT VIEWER plugin — resolved by the artifact plugin host via the
 // ClassFactory (keyed by the artifact type's DriverClass), same tree-shaking concern.
 LoadWhiteboardArtifactViewer();
@@ -128,6 +142,7 @@ const COMPONENTS = [
   MessageInputComponent,
   AiComposerComponent,
   ActionableCommandsComponent,
+  WorkflowPlanCardComponent,
   ConversationMessageRatingComponent,
   ConversationWorkspaceComponent,
   ConversationNavigationComponent,
@@ -177,6 +192,7 @@ const COMPONENTS = [
   imports: [
     CommonModule,
     FormsModule,
+    TaskGraphEditorModule,
     ReactiveFormsModule,
     OverlayModule,
     MJButtonDirective,
@@ -216,6 +232,7 @@ const COMPONENTS = [
     RealtimeWhiteboardHostComponent,
     RemoteBrowserSurfaceComponent,
     RealtimeMediaSurfaceComponent,
+    RealtimeInteractiveComponentSurfaceComponent,
     RealtimeEvidencePlaybackComponent
   ],
   exports: [
@@ -243,4 +260,4 @@ const COMPONENTS = [
     RealtimeEvidencePlaybackComponent
   ]
 })
-export class ConversationsModule { }
+export class ConversationsModule {}

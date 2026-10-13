@@ -16,7 +16,7 @@ import { ComponentLinter } from '@memberjunction/react-linter';
 import { LibraryLintCache } from '@memberjunction/react-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { UserInfo } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Setup

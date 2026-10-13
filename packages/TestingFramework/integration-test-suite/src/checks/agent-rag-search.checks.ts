@@ -27,7 +27,7 @@
 import { RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { SearchEngine } from '@memberjunction/search-engine';

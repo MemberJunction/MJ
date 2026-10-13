@@ -157,9 +157,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Duplicate Run Detail Matches','DuplicateRunDetailID')"
-                [NewRecordValues]="NewRecordValues('MJ: Duplicate Run Detail Matches')"
+                [NewRecordValues]="NewRecordValues('MJ: Duplicate Run Detail Matches','DuplicateRunDetailID')"
                 [AllowLoad]="IsSectionExpanded('mJDuplicateRunDetailMatches')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDuplicateRunDetailMatches', $event.totalRowCount)"
                 >

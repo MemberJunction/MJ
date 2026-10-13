@@ -92,9 +92,9 @@ You have access to these file research actions:
 {
   "taskComplete": false,
   "reasoning": "Multiple storage providers available - need to know which to search",
+  "message": "I found 3 storage providers: Azure Blob Storage, Local Files, and SharePoint. Which should I search for the project documents?\n\nOr would you like me to search all three?",
   "nextStep": {
-    "type": "Chat",
-    "message": "I found 3 storage providers: Azure Blob Storage, Local Files, and SharePoint. Which should I search for the project documents?\n\nOr would you like me to search all three?"
+    "type": "Chat"
   }
 }
 ```
@@ -172,6 +172,9 @@ You must follow the LoopAgentResponse format. Put your findings into `payloadCha
 ```
 
 **Example when continuing research:**
+{% if _NATIVE_TOOL_CALLING %}
+Call the `search_storage_files` tool with `provider` and `searchPattern`.
+{% else %}
 ```json
 {
   "taskComplete": false,
@@ -190,6 +193,7 @@ You must follow the LoopAgentResponse format. Put your findings into `payloadCha
   }
 }
 ```
+{% endif %}
 
 {@include _codesmith-integration.md}
 

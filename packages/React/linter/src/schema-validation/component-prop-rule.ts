@@ -55,19 +55,19 @@ export interface Violation {
 }
 
 export interface LintContext {
-  componentName: string;
-  componentSpec?: ComponentSpec;
-  typeContext: any; // TypeContext - avoiding import for now
-  typeEngine: any; // TypeInferenceEngine
-  controlFlowAnalyzer: any; // ControlFlowAnalyzer
+  componentName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  componentSpec?: ComponentSpec;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  typeContext: any; // TypeContext - avoiding import for now — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  typeEngine: any; // TypeInferenceEngine — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  controlFlowAnalyzer: any; // ControlFlowAnalyzer — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
   /** SQL dialect for WHERE clause parsing in semantic validators */
-  sqlDialect?: import('@memberjunction/sql-dialect').SQLParserDialect;
+  sqlDialect?: import('@memberjunction/sql-dialect').SQLParserDialect;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
   /**
    * Resolver for registry-located dependency components. Caller-supplied
    * (see LinterOptions.componentResolver). Optional — rules degrade
    * gracefully when absent.
    */
-  componentResolver?: (name: string, namespace?: string, registry?: string) => ComponentSpec | undefined;
+  componentResolver?: (name: string, namespace?: string, registry?: string) => ComponentSpec | undefined;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /**
@@ -81,8 +81,26 @@ export interface LintContext {
  * 5. Unknown props warning
  */
 export class ComponentPropRule {
-  name = 'component-props';
-  appliesTo: 'all' | 'child' | 'root' = 'all';
+  Name = 'component-props';
+
+  /** @deprecated Use {@link Name}. */
+  get name() {
+    return this.Name;
+  }
+  /** @deprecated Use {@link Name}. */
+  set name(value) {
+    this.Name = value;
+  }
+  AppliesTo: 'all' | 'child' | 'root' = 'all';
+
+  /** @deprecated Use {@link AppliesTo}. */
+  get appliesTo(): 'all' | 'child' | 'root' {
+    return this.AppliesTo;
+  }
+  /** @deprecated Use {@link AppliesTo}. */
+  set appliesTo(value: 'all' | 'child' | 'root') {
+    this.AppliesTo = value;
+  }
 
   // Standard props that are always allowed on any component
   private readonly standardProps = new Set([
@@ -113,7 +131,7 @@ export class ComponentPropRule {
   /**
    * Validate component props
    */
-  validate(ast: t.File, context: LintContext): Violation[] {
+  Validate(ast: t.File, context: LintContext): Violation[] {
     this._sqlDialect = context.sqlDialect;
     const violations: Violation[] = [];
 
@@ -173,6 +191,11 @@ export class ComponentPropRule {
     });
 
     return violations;
+  }
+
+  /** @deprecated Use {@link Validate}. */
+  validate(ast: t.File, context: LintContext): Violation[] {
+    return this.Validate(ast, context);
   }
 
   /**
@@ -718,17 +741,17 @@ export class ComponentPropRule {
 
         // Build ValidationContext
         const validationCtx: ValidationContext = {
-          node: propAttr,
-          path: path as any,
-          componentName: elementName,
-          componentSpec: depSpec,
+          Node: propAttr,
+          Path: path as any,
+          ComponentName: elementName,
+          ComponentSpec: depSpec,
           propertyName: property.name,
           propertyValue: propValue,
           siblingProps,
-          entities: new Map(),
-          queries: new Map(),
-          typeEngine: null as never,
-          dialect: this._sqlDialect,
+          Entities: new Map(),
+          Queries: new Map(),
+          TypeEngine: null as never,
+          Dialect: this._sqlDialect,
 
           getEntityFields: validationHelpers.getEntityFields,
           getEntityFieldType: validationHelpers.getEntityFieldType,

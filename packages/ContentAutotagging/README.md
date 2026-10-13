@@ -315,4 +315,4 @@ Priority order when several caps trip in the same batch: **items → tags → to
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

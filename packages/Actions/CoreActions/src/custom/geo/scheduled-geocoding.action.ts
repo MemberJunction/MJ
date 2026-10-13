@@ -183,7 +183,7 @@ export class ScheduledGeocodingAction extends BaseAction {
         batchSize: number,
         maxRows: number
     ): Promise<{ Processed: number; Success: number }> {
-        const pkField = entityInfo.FirstPrimaryKey;
+        const pkField = entityInfo.FirstPrimaryKey; // first-pk-ok: keyset seek column — used only when canUseKeyset (PrimaryKeys.length === 1) below; composite keys take the offset path
         if (!pkField) return { Processed: 0, Success: 0 };
 
         // Keyset pagination requires a single-column PK. For composite-PK entities, the action
@@ -215,7 +215,7 @@ export class ScheduledGeocodingAction extends BaseAction {
                 pageNumber++;
                 const pageResult = canUseKeyset
                     ? await this.loadEntityPageKeyset(entityInfo.Name, pkField.Name, nonNullConditions, lastSeenKey, contextUser)
-                    : await this.loadEntityPageOffset(entityInfo.Name, nonNullConditions, pageOffset, contextUser);
+                    : await this.loadEntityPageOffset(entityInfo, nonNullConditions, pageOffset, contextUser);
 
                 if (!pageResult.Success || pageResult.Results.length === 0) break;
 
@@ -317,16 +317,17 @@ export class ScheduledGeocodingAction extends BaseAction {
      * with composite primary keys. Slower on deep pages but correctness is preserved.
      */
     private async loadEntityPageOffset(
-        entityName: string,
+        entityInfo: EntityInfo,
         nonNullFilter: string,
         offset: number,
         contextUser: UserInfo
     ): Promise<{ Success: boolean; Results: BaseEntity[]; TotalRowCount: number }> {
         const rv = new RunView();
         const result = await rv.RunView({
-            EntityName: entityName,
+            EntityName: entityInfo.Name,
             ExtraFilter: `(${nonNullFilter})`,
-            OrderBy: 'ID',
+            // Stable paging order over the entity's real key column(s) — this path serves composite-PK entities, which have no 'ID'.
+            OrderBy: entityInfo.PrimaryKeys.map(pk => pk.Name).join(', '),
             MaxRows: ScheduledGeocodingAction.PAGE_SIZE,
             StartRow: offset + 1,  // RunView StartRow is 1-based
             BypassCache: true,
@@ -437,7 +438,8 @@ export class ScheduledGeocodingAction extends BaseAction {
         for (const geoRecord of geoRecords) {
             try {
                 const entity = await md.GetEntityObject(entityInfo.Name, contextUser);
-                const pk = new CompositeKey([{ FieldName: 'ID', Value: geoRecord.RecordID }]);
+                // Geocoded entities are arbitrary — the rest of this action already keys by FirstPrimaryKey.
+                const pk = CompositeKey.FromURLSegment(entityInfo, geoRecord.RecordID);
                 const loaded = await entity.InnerLoad(pk);
                 if (loaded) {
                     entities.push(entity);
@@ -491,11 +493,10 @@ export class ScheduledGeocodingAction extends BaseAction {
                 const entityInfo = md.EntityByID(entityId);
                 if (!entityInfo) continue;
 
-                const pkField = entityInfo.FirstPrimaryKey;
-                if (!pkField) continue;
+                if (entityInfo.PrimaryKeys.length === 0) continue;
 
                 const entityRemoved = await this.cleanupOrphansForEntity(
-                    entityId, entityInfo, pkField.Name, contextUser, batchSize, rv, dialect
+                    entityId, entityInfo, contextUser, batchSize, rv, dialect
                 );
                 totalRemoved += entityRemoved;
             } catch (e: unknown) {
@@ -515,7 +516,6 @@ export class ScheduledGeocodingAction extends BaseAction {
     private async cleanupOrphansForEntity(
         entityId: string,
         entityInfo: EntityInfo,
-        pkFieldName: string,
         contextUser: UserInfo,
         batchSize: number,
         rv: RunView,
@@ -523,8 +523,11 @@ export class ScheduledGeocodingAction extends BaseAction {
     ): Promise<number> {
         let entityRemoved = 0;
         const sourceRef = dialect.QuoteSchema(entityInfo.SchemaName, entityInfo.BaseView);
-        const pkRef = `src.${dialect.QuoteIdentifier(pkFieldName)}`;
-        const pkAsString = dialect.CastToBoundedString(pkRef, 450);
+        // RecordID is the bare key value for a single-column key and the values joined with '||' for a
+        // composite key (buildRecordId / GeoCodeSyncService). Rebuild that exact string from the source
+        // row so the NOT EXISTS probe matches every key shape — probing only the first column would
+        // match nothing on a composite key and delete every geocode row for the entity.
+        const pkAsString = this.BuildRecordIdExpression(entityInfo, 'src', dialect);
         const entityIdLit = dialect.QuoteStringLiteral(entityId);
         const orphanFilter = `EntityID = ${entityIdLit} AND NOT EXISTS (SELECT 1 FROM ${sourceRef} src WHERE ${pkAsString} = RecordID)`;
 
@@ -768,10 +771,14 @@ export class ScheduledGeocodingAction extends BaseAction {
             LocationType: string;
             SourceFieldHash: string | null;
             Status: string;
+            RetryCount: number | null;
         }>({
             EntityName: 'MJ: Record Geo Codes',
             ExtraFilter: `EntityID = '${entityId}'`,
-            Fields: ['ID', 'RecordID', 'LocationType', 'SourceFieldHash', 'Status'],
+            // RetryCount comes along because it is what separates a transient failure from a
+            // settled one (IsSettledGeoCode) — without it every not-geocodable address is
+            // re-attempted on every pass.
+            Fields: ['ID', 'RecordID', 'LocationType', 'SourceFieldHash', 'Status', 'RetryCount'],
             ResultType: 'simple',
             IgnoreMaxRows: true,
             BypassCache: true
@@ -786,11 +793,23 @@ export class ScheduledGeocodingAction extends BaseAction {
                     RecordID: row.RecordID,
                     LocationType: row.LocationType,
                     SourceFieldHash: row.SourceFieldHash,
-                    Status: row.Status
+                    Status: row.Status,
+                    RetryCount: row.RetryCount ?? 0
                 });
             }
         }
         return map;
+    }
+
+    /**
+     * SQL expression that reproduces {@link buildRecordId} for a row of `alias`: each primary key
+     * column cast to a bounded string, joined with the `||` composite delimiter. Single-column keys
+     * reduce to one CAST. Exposed (protected) so the SQL shape is unit-testable per dialect.
+     */
+    protected BuildRecordIdExpression(entityInfo: EntityInfo, alias: string, dialect: SQLDialect): string {
+        const parts = entityInfo.PrimaryKeys.map(pk => dialect.CastToBoundedString(`${alias}.${dialect.QuoteIdentifier(pk.Name)}`, 450));
+        const glue = ` ${dialect.ConcatOperator()} ${dialect.QuoteStringLiteral('||')} ${dialect.ConcatOperator()} `;
+        return parts.join(glue);
     }
 
     /**

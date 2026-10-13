@@ -1,5 +1,5 @@
 <div class="board-toolbar">
-  @for (entry of Tools; track entry.Tool) {
+  @for (entry of VisibleTools; track entry.Tool) {
     <button type="button"
             class="tool"
             [class.active]="ActiveTool === entry.Tool"

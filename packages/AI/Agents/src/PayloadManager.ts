@@ -39,8 +39,8 @@ import _ from 'lodash';
 import { PayloadChangeAnalyzer, PayloadAnalysisResult, PayloadWarning } from './PayloadChangeAnalyzer';
 import { 
     PayloadOperation, 
-    parsePathWithOperations, 
-    parsePathsWithOperations,
+    ParsePathWithOperations, 
+    ParsePathsWithOperations,
     isOperationAllowed 
 } from './types/payload-operations';
 
@@ -172,7 +172,7 @@ export class PayloadManager {
      * // Returns: { customer: { id: 1, name: 'John' }, order: { id: 2 } }
      * ```
      */
-    public extractDownstreamPayload<P = any>(subAgentName: string, fullPayload: P | null | undefined, downstreamPaths: string[]): Partial<P> | null {
+    public ExtractDownstreamPayload<P = any>(subAgentName: string, fullPayload: P | null | undefined, downstreamPaths: string[]): Partial<P> | null {
         if (!fullPayload) return null;
         if (!downstreamPaths || downstreamPaths.length === 0) return {};
         
@@ -194,6 +194,11 @@ export class PayloadManager {
         return result;
     }
 
+    /** @deprecated Use {@link ExtractDownstreamPayload}. */
+    public extractDownstreamPayload<P = any>(subAgentName: string, fullPayload: P | null | undefined, downstreamPaths: string[]): Partial<P> | null {
+        return this.ExtractDownstreamPayload(subAgentName, fullPayload, downstreamPaths);
+    }
+
     /**
      * Merges sub-agent results back into the parent payload, respecting write permissions.
      * 
@@ -211,7 +216,7 @@ export class PayloadManager {
      * // Returns: { customer: { id: 1 }, analysis: { sentiment: 'positive', score: 0.9 } }
      * ```
      */
-    public mergeUpstreamPayload<P = any>(
+    public MergeUpstreamPayload<P = any>(
         subAgentName: string,
         parentPayload: P | null | undefined, 
         subAgentPayload: Partial<P> | null | undefined, 
@@ -266,7 +271,7 @@ export class PayloadManager {
         
         // Handle wildcard - merge everything
         if (upstreamPaths.includes('*')) {
-            const merged = this.deepMerge(result, subAgentPayload);
+            const merged = this.DeepMerge(result, subAgentPayload);
             // Count changes
             this.countChanges(parentPayload, merged, counts);
             return {
@@ -288,6 +293,17 @@ export class PayloadManager {
             timestamp: new Date(),
             blockedOperations: mergeResult.blockedOperations
         };
+    }
+
+    /** @deprecated Use {@link MergeUpstreamPayload}. */
+    public mergeUpstreamPayload<P = any>(
+        subAgentName: string,
+        parentPayload: P | null | undefined, 
+        subAgentPayload: Partial<P> | null | undefined, 
+        upstreamPaths: string[],
+        verbose?: boolean
+    ): PayloadManagerResult<P> {
+        return this.MergeUpstreamPayload(subAgentName, parentPayload, subAgentPayload, upstreamPaths, verbose);
     }
 
     /**
@@ -512,6 +528,12 @@ export class PayloadManager {
         
         // Also check for deletions (paths in result but not in subAgentPayload)
         const resultPaths = this.getAllPaths(result);
+
+        // Paths this merge actually removed. Only the array elements sitting on these paths may
+        // be pruned for recursive emptiness afterwards — see pruneVacatedArrayElements for why
+        // that scope is the whole point.
+        const vacatedPaths: string[] = [];
+
         for (const resultPath of resultPaths) {
             const resultValue = _.get(result, resultPath);
             const subAgentValue = _.get(subAgentPayload, resultPath);
@@ -524,6 +546,7 @@ export class PayloadManager {
                 if (isDeleteAllowed) {
                     // Delete the path from result
                     _.unset(result, resultPath);
+                    vacatedPaths.push(resultPath);
                 } else {
                     const isPathAllowed = this.isPathAllowed(resultPath, upstreamPaths);
                     unauthorizedChanges.push({
@@ -537,6 +560,11 @@ export class PayloadManager {
             }
         }
         
+        // Drop the array elements this merge emptied out. Scoped to the paths just unset, so it
+        // cannot touch a pre-existing element that merely looks empty, nor one whose deletion was
+        // blocked above.
+        this.pruneVacatedArrayElements(result, vacatedPaths);
+
         // Clean up any empty objects that resulted from property deletions in arrays
         this.cleanupEmptyArrayElements(result);
         
@@ -710,9 +738,168 @@ export class PayloadManager {
     }
 
     /**
+     * True when a value carries no primitive content anywhere inside it.
+     *
+     * `_.unset` removes leaf properties but leaves the containers that held them, so deleting
+     * every scalar from an array element does not reduce it to `{}` — it reduces it to a shell
+     * of empty objects and arrays (`{ config: {}, items: [null] }`). Such a shell is data-free
+     * but not key-free, which is why {@link pruneVacatedArrayElements} needs this rather than an
+     * `Object.keys().length` test.
+     *
+     * Only arrays and plain objects are descended into: a `Date`, a class instance, or any other
+     * boxed value has no own enumerable keys and would otherwise read as vacant.
+     *
+     * SCOPE WARNING: recursive vacancy is far too aggressive to apply to a payload at large —
+     * `{ MemberName: null, OrderTotal: null }` is a legitimate record, not a shell — so this test
+     * is only ever asked about array elements that the current merge itself emptied. Two other
+     * emptiness tests live in this class and deliberately differ; see the note on
+     * {@link cleanupEmptyArrayElements}.
+     *
+     * @private
+     */
+    private isVacantValue(value: unknown): boolean {
+        if (value === null || value === undefined) {
+            return true;
+        }
+        if (Array.isArray(value)) {
+            return value.every(element => this.isVacantValue(element));
+        }
+        if (_.isPlainObject(value)) {
+            return Object.values(value as Record<string, unknown>).every(v => this.isVacantValue(v));
+        }
+        // A primitive — including `false`, `0` and `''` — is content.
+        return false;
+    }
+
+    /**
+     * Drops the array elements that THIS merge emptied out, and only those.
+     *
+     * WHY THIS IS SCOPED RATHER THAN GLOBAL
+     *
+     * A sub-agent that legitimately shortens an array returns fewer elements than the parent
+     * holds. The guardrail expresses that as a deletion per surviving leaf path, and `_.unset`
+     * removes each leaf while leaving the containers that held it. The vacated element therefore
+     * does not collapse to `{}` — it lingers as a shell of empty objects and arrays that
+     * downstream consumers read as a real (but nameless) record. Something has to remove it.
+     *
+     * What must NOT happen is removing it everywhere. "No primitive content anywhere inside"
+     * describes plenty of perfectly good data: a query result row whose columns all came back
+     * null, an element whose only fields are an empty `tags: []` and an empty `config: {}`, a
+     * record with just a `parentId: null`. Sweeping the whole merged payload with that criterion
+     * silently deletes such rows — including rows under paths the sub-agent was never granted,
+     * and rows whose deletion the guardrail had just recorded as BLOCKED. That is data loss
+     * performed on the parent's own data, by a sub-agent with no write permission for it.
+     *
+     * So the recursive-vacancy criterion is applied to exactly the positions this merge touched:
+     * the paths handed to `_.unset` on an AUTHORIZED delete. An untouched element is never a
+     * candidate no matter how empty it looks, which keeps every pre-existing payload byte-identical
+     * through a merge and keeps the guardrail's blocked/allowed decision the only thing that can
+     * remove parent data.
+     *
+     * MECHANICS
+     *
+     * For each vacated path, every prefix is a candidate position — the vacated leaf's own slot
+     * included, since `_.unset` on an array index leaves a hole (`['a', 'b', <hole>]`, which
+     * serializes as `["a","b",null]`) rather than shortening the array. A prefix qualifies when
+     * its last segment is an array index and its parent resolves to an array; the element there is
+     * then dropped if {@link isVacantValue}. Unlike the global sweep, nested ARRAYS are eligible
+     * here: a vacated `rows[1]` that was itself `['c', 'd']` is now `[<hole>, <hole>]`, and
+     * exempting arrays would leave that phantom row in place.
+     *
+     * Candidates are grouped by their container array and processed deepest container first, then
+     * highest index first within a container. Both orderings exist to keep the queued indices
+     * meaningful while the arrays underneath them are being spliced. Deepest-first: splicing a
+     * shallow array shifts everything below it, so a deeper container path still queued would
+     * resolve to the wrong array. Highest-index-first: each splice then only moves elements below
+     * the indices still queued, so surviving elements keep their order, no candidate is skipped by
+     * running off the shortened end, and no candidate index lands on its former neighbour.
+     *
+     * @param result The merged payload, mutated in place.
+     * @param vacatedPaths Paths passed to `_.unset` during this merge's authorized deletions, in
+     *                     `getAllPaths()` form (array indices as `[0]`, segments joined with `.`).
+     *
+     * @private
+     */
+    private pruneVacatedArrayElements(result: unknown, vacatedPaths: string[]): void {
+        if (!result || typeof result !== 'object' || vacatedPaths.length === 0) {
+            return;
+        }
+
+        // Container array -> the indices under it that this merge may have emptied. Keyed by the
+        // JSON encoding of the container's segments: a plain '.'-join would let a property
+        // literally named '0.1' collide with the nested path ['0', '1'].
+        const candidates = new Map<string, { containerSegments: string[]; indices: Set<number> }>();
+
+        for (const vacatedPath of vacatedPaths) {
+            // `_.toPath` understands the `rows.[1].name` form `getAllPaths` produces.
+            const segments = _.toPath(vacatedPath);
+
+            for (let depth = segments.length; depth >= 1; depth--) {
+                const segment = segments[depth - 1];
+                if (!/^\d+$/.test(segment)) {
+                    continue; // an object key, so this prefix is not an array element
+                }
+
+                const containerSegments = segments.slice(0, depth - 1);
+                // `_.get(obj, [])` is undefined, so the payload root has to be named directly —
+                // a payload can legitimately BE an array.
+                const container = containerSegments.length === 0
+                    ? result
+                    : _.get(result as object, containerSegments);
+                if (!Array.isArray(container)) {
+                    continue; // a numeric key on a plain object is not an array position
+                }
+
+                const containerKey = JSON.stringify(containerSegments);
+                let candidate = candidates.get(containerKey);
+                if (!candidate) {
+                    candidate = { containerSegments, indices: new Set<number>() };
+                    candidates.set(containerKey, candidate);
+                }
+                candidate.indices.add(Number(segment));
+            }
+        }
+
+        // Deepest container first — see MECHANICS above.
+        const ordered = [...candidates.values()].sort(
+            (a, b) => b.containerSegments.length - a.containerSegments.length
+        );
+
+        for (const { containerSegments, indices } of ordered) {
+            const container = containerSegments.length === 0
+                ? result
+                : _.get(result as object, containerSegments);
+            if (!Array.isArray(container)) {
+                continue; // an ancestor element was already removed, taking this array with it
+            }
+
+            // Highest index first, and vacancy judged here against the tree as it actually
+            // stands after any deeper pruning rather than cached from collection time.
+            for (const index of [...indices].sort((a, b) => b - a)) {
+                if (index < container.length && this.isVacantValue(container[index])) {
+                    container.splice(index, 1);
+                }
+            }
+        }
+    }
+
+    /**
      * Recursively cleans up empty objects from arrays after merge operations.
      * This is necessary because property-level deletions can leave empty object shells in arrays.
-     * 
+     *
+     * The criterion here is deliberately narrow — an object element with literally zero own keys —
+     * and it stays narrow because this sweep runs over the ENTIRE merged payload, including paths
+     * no sub-agent was granted. Anything broader (see {@link isVacantValue}) would delete
+     * pre-existing parent records whose fields simply happen to all be null or empty. Elements
+     * emptied by the current merge are handled by {@link pruneVacatedArrayElements}, which can
+     * afford the recursive criterion because it only looks at positions this merge touched.
+     *
+     * NOTE ON THE THREE EMPTINESS TESTS IN THIS CLASS: this key-count check,
+     * {@link isVacantValue} (recursive, scoped to vacated positions) and
+     * {@link isSignificantValue} (shallow, used by the change-request array paths) have drifted
+     * apart and are NOT interchangeable. Each is load-bearing for its own call site; unifying them
+     * would change merge behavior, so leave them separate and pick the one that matches your path.
+     *
      * @private
      */
     private cleanupEmptyArrayElements(obj: any): void {
@@ -768,7 +955,7 @@ export class PayloadManager {
         
         for (const pattern of allowedPatterns) {
             // Parse the pattern to extract path and operations
-            const parsedPattern = parsePathWithOperations(pattern);
+            const parsedPattern = ParsePathWithOperations(pattern);
             const pathPattern = parsedPattern.path;
             
             if (pathPattern === '*') return true;
@@ -823,7 +1010,7 @@ export class PayloadManager {
         allowedPatterns: string[]
     ): boolean {
         const normalizedPath = actualPath.replace(/\[(\d+)\]/g, '.$1');
-        const parsedPatterns = parsePathsWithOperations(allowedPatterns);
+        const parsedPatterns = ParsePathsWithOperations(allowedPatterns);
         
         for (const parsedPattern of parsedPatterns) {
             const pathPattern = parsedPattern.path;
@@ -919,7 +1106,7 @@ export class PayloadManager {
      *
      * @public
      */
-    public deepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
+    public DeepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
         if (!source) return destination as T;
         if (!destination) return _.cloneDeep(source) as T;
         
@@ -929,7 +1116,7 @@ export class PayloadManager {
             if (source.hasOwnProperty(key)) {
                 if (_.isObject(source[key]) && !_.isArray(source[key]) && _.isObject(result[key]) && !_.isArray(result[key])) {
                     // Both are objects - recursive merge
-                    result[key] = this.deepMerge(result[key], source[key]) as T[Extract<keyof T, string>];
+                    result[key] = this.DeepMerge(result[key], source[key]) as T[Extract<keyof T, string>];
                 } else {
                     // Otherwise, source overwrites destination
                     result[key] = _.cloneDeep(source[key]) as T[Extract<keyof T, string>];
@@ -940,6 +1127,11 @@ export class PayloadManager {
         return result;
     }
 
+    /** @deprecated Use {@link DeepMerge}. */
+    public deepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
+        return this.DeepMerge(destination, source);
+    }
+
     /**
      * Applies an AgentPayloadChangeRequest to a payload
      * 
@@ -948,7 +1140,7 @@ export class PayloadManager {
      * @param options Configuration options for the operation
      * @returns Result object with the modified payload, operation counts, and any warnings
      */
-    public applyAgentChangeRequest<P = any>(
+    public ApplyAgentChangeRequest<P = any>(
         originalPayload: P,
         changeRequest: AgentPayloadChangeRequest<any>,
         options?: {
@@ -1029,6 +1221,24 @@ export class PayloadManager {
             timestamp: new Date(),
             blockedOperations
         };
+    }
+
+    /** @deprecated Use {@link ApplyAgentChangeRequest}. */
+    public applyAgentChangeRequest<P = any>(
+        originalPayload: P,
+        changeRequest: AgentPayloadChangeRequest<any>,
+        options?: {
+            validateChanges?: boolean;
+            logChanges?: boolean;
+            agentName?: string;
+            analyzeChanges?: boolean;
+            generateDiff?: boolean;
+            allowedPaths?: string[];
+            verbose?: boolean;
+            ignoreStrayKeys?: boolean;
+        }
+    ): PayloadManagerResult<P> {
+        return this.ApplyAgentChangeRequest(originalPayload, changeRequest, options);
     }
 
     /**
@@ -1600,6 +1810,14 @@ export class PayloadManager {
 
     /**
      * Check if a value is significant (not empty object or undefined)
+     *
+     * A SHALLOW emptiness test, used only by the change-request array paths: `undefined` and a
+     * key-less object are insignificant, `null` and every other value is significant. It is a
+     * near-twin of {@link isVacantValue} (recursive, `null` counts as empty, scoped to array
+     * elements the merge vacated) and of the key-count check inside
+     * {@link cleanupEmptyArrayElements}. The three have drifted apart and are deliberately NOT
+     * unified — each call site depends on its own criterion, so collapsing them would change
+     * merge behavior. Pick the one matching your path rather than reusing whichever is nearest.
      */
     private isSignificantValue(value: unknown): boolean {
         if (value === undefined) return false;
@@ -1632,21 +1850,21 @@ export class PayloadManager {
      * This method first applies the change request, then enforces upstream path restrictions
      * to ensure the sub-agent only modifies allowed paths.
      */
-    public applySubAgentChangeRequest<P = any>(
+    public ApplySubAgentChangeRequest<P = any>(
         parentPayload: P,
         changeRequest: AgentPayloadChangeRequest<P>,
         upstreamPaths: string[],
         subAgentName: string
     ): PayloadManagerResult<P> & { blocked: number } {
         // First apply the full change request
-        const changeResult = this.applyAgentChangeRequest(
+        const changeResult = this.ApplyAgentChangeRequest(
             parentPayload,
             changeRequest,
             { validateChanges: true }
         );
         
         // Then apply upstream guardrails
-        const guardedResult = this.mergeUpstreamPayload(
+        const guardedResult = this.MergeUpstreamPayload(
             subAgentName,
             parentPayload,
             changeResult.result,
@@ -1662,6 +1880,16 @@ export class PayloadManager {
             blocked,
             blockedOperations: guardedResult.blockedOperations
         };
+    }
+
+    /** @deprecated Use {@link ApplySubAgentChangeRequest}. */
+    public applySubAgentChangeRequest<P = any>(
+        parentPayload: P,
+        changeRequest: AgentPayloadChangeRequest<P>,
+        upstreamPaths: string[],
+        subAgentName: string
+    ): PayloadManagerResult<P> & { blocked: number } {
+        return this.ApplySubAgentChangeRequest(parentPayload, changeRequest, upstreamPaths, subAgentName);
     }
 
     /**
@@ -1689,7 +1917,7 @@ export class PayloadManager {
      * // Returns: { feature1: "..." }
      * ```
      */
-    public applyPayloadScope<P = any>(payload: P, scopePath: string): any | null {
+    public ApplyPayloadScope<P = any>(payload: P, scopePath: string): any | null {
         if (!payload || !scopePath) return payload;
         
         // Remove leading slash and split path
@@ -1712,6 +1940,11 @@ export class PayloadManager {
         return _.cloneDeep(current);
     }
 
+    /** @deprecated Use {@link ApplyPayloadScope}. */
+    public applyPayloadScope<P = any>(payload: P, scopePath: string): any | null {
+        return this.ApplyPayloadScope(payload, scopePath);
+    }
+
     /**
      * Reverses a payload scope transformation by wrapping the scoped content back into the full structure.
      * 
@@ -1726,7 +1959,7 @@ export class PayloadManager {
      * // Returns: { functionalRequirements: { feature1: "updated" } }
      * ```
      */
-    public reversePayloadScope<P = any>(scopedPayload: unknown, scopePath: string): P {
+    public ReversePayloadScope<P = any>(scopedPayload: unknown, scopePath: string): P {
         if (!scopePath) return scopedPayload as P;
         
         // Remove leading slash and split path
@@ -1741,6 +1974,11 @@ export class PayloadManager {
         }
         
         return result as P;
+    }
+
+    /** @deprecated Use {@link ReversePayloadScope}. */
+    public reversePayloadScope<P = any>(scopedPayload: unknown, scopePath: string): P {
+        return this.ReversePayloadScope(scopedPayload, scopePath);
     }
 
     /**
@@ -1758,7 +1996,7 @@ export class PayloadManager {
      * // Returns: { updateElements: { "functionalRequirements.field1": "value" } }
      * ```
      */
-    public transformChangeRequestPaths<P = any>(
+    public TransformChangeRequestPaths<P = any>(
         changeRequest: AgentPayloadChangeRequest<P>,
         scopePath: string
     ): AgentPayloadChangeRequest<P> {
@@ -1797,6 +2035,14 @@ export class PayloadManager {
             replaceElements: transformObject(changeRequest.replaceElements, pathPrefix) as Partial<P>,
             reasoning: changeRequest.reasoning
         } as AgentPayloadChangeRequest<P>;
+    }
+
+    /** @deprecated Use {@link TransformChangeRequestPaths}. */
+    public transformChangeRequestPaths<P = any>(
+        changeRequest: AgentPayloadChangeRequest<P>,
+        scopePath: string
+    ): AgentPayloadChangeRequest<P> {
+        return this.TransformChangeRequestPaths(changeRequest, scopePath);
     }
 
     /**

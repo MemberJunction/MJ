@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FileStorageEngineBase } from '@memberjunction/core-entities';
-import { renderComponentFixture, query, text } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
 import { StorageProvidersListComponent } from './storage-providers-list.component';
 
 /**
@@ -25,9 +25,26 @@ import { StorageProvidersListComponent } from './storage-providers-list.componen
  * testability seam — not auto-loading in ngOnInit, and/or fixing the index-binding CD stability —
  * tracked for a follow-up. (The other three file-storage components are fully DOM-covered.)
  */
+import { FormsModule } from '@angular/forms';
+import {
+  MJDialogComponent,
+  MJDialogActionsComponent,
+  MJEmptyStateComponent,
+} from '@memberjunction/ng-ui-components';
+import { CredentialsModule } from '@memberjunction/ng-credentials';
+import { StorageAdminDialogComponent } from '../admin/storage-admin-dialog.component';
+
 const MOD = {
-  imports: [CommonModule, SharedGenericModule],
-  declarations: [StorageProvidersListComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    MJDialogComponent,
+    MJDialogActionsComponent,
+    MJEmptyStateComponent,
+    SharedGenericModule,
+    CredentialsModule,
+  ],
+  declarations: [StorageProvidersListComponent, StorageAdminDialogComponent],
 };
 
 /** Stops ngOnInit's loadAccounts() from resolving (and async-clobbering state) by hanging at its await. */
@@ -45,18 +62,40 @@ function render(setup?: (c: StorageProvidersListComponent) => void): ComponentFi
   });
 }
 
-describe('StorageProvidersListComponent (DOM — header + loading)', () => {
+describe('StorageProvidersListComponent (DOM — header + loading + admin)', () => {
   it('always renders the header title', () => {
     const f = render();
     expect(text(f, '.header-title')).toBe('Storage Accounts');
   });
 
   it('shows the loading state on initial load', () => {
-    // ngOnInit's loadAccounts() sets isLoading=true and then hangs on the frozen Config await,
-    // so the loading branch is what renders on the first (stable) detectChanges.
     const f = render();
     expect(query(f, '.loading-state')).not.toBeNull();
     expect(query(f, 'mj-loading')).not.toBeNull();
     expect(query(f, '.providers-container')).toBeNull();
+  });
+
+  it('shows admin actions in header when userCanManage is true', () => {
+    const f = render((c) => {
+      c.userCanManage = true;
+    });
+
+    const actions = query(f, '.admin-header-actions');
+    expect(actions).not.toBeNull();
+    const btns = queryAll(f, '.admin-action-btn');
+    expect(btns.length).toBe(2);
+  });
+
+  it('opens admin dialog when openAdminDialog is invoked', () => {
+    const f = render((c) => {
+      c.userCanManage = true;
+    });
+
+    f.componentInstance.openAdminDialog('accounts');
+    expect(f.componentInstance.isManageDialogOpen).toBe(true);
+    expect(f.componentInstance.adminDialogTab).toBe('accounts');
+
+    f.componentInstance.closeAdminDialog();
+    expect(f.componentInstance.isManageDialogOpen).toBe(false);
   });
 });

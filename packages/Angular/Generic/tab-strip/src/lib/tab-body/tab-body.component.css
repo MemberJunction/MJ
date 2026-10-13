@@ -1,12 +1,14 @@
- .tab-body {
-   border-top: 0;
-   width: 100%;
-   display: block;
-   overflow-y: auto;
-   overflow-x: hidden;
-   height: calc(100vh - 123px);
- }
+/* Sizes to CONTENT; the host decides how tall the tab region is.
+ *
+ * The removed `height: calc(100vh - 123px)` was the last of the strip's three viewport-math
+ * hardcodings (container, header, body). A body pinned to viewport height blows out any host that
+ * isn't a full page — one line of content rendered 641px tall in a card — which pushes whatever
+ * follows the strip below the fold, so merely Tab-bing focus to the next element forces the pane
+ * to scroll and the whole area visibly jumps. A host that wants a fixed-height, internally
+ * scrolling tab region sets that height on ITS container, like every other MJ widget. */
 
- .tab-body .tab-body {
-   height: auto;
- }
+.tab-body {
+  border-top: 0;
+  width: 100%;
+  display: block;
+}

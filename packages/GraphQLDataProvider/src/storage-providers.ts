@@ -20,6 +20,24 @@ const DEFAULT_CATEGORY = 'default';
  * Storage structure: `Map<category, Map<key, unknown>>`
  */
 export class BrowserStorageProviderBase implements ILocalStorageProvider {
+    /**
+     * `true` — the base tier keeps values in a `Map` with no serialization, so callers and
+     * the store share objects. Subclasses that add a real serializing backend override this
+     * with a getter that reports `false` while that backend is reachable.
+     * See {@link ILocalStorageProvider.SharesReferences}.
+     */
+    public get SharesReferences(): boolean {
+        return true;
+    }
+
+    /**
+     * `false` — the base tier is a `Map` on the heap, which dies with the page. Subclasses with a
+     * real backend override this. See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public get SupportsCrossProcessPersistence(): boolean {
+        return false;
+    }
+
     private _storage: Map<string, Map<string, unknown>> = new Map();
 
     /**
@@ -91,6 +109,26 @@ export class BrowserStorageProviderBase implements ILocalStorageProvider {
  * Falls back to in-memory storage if localStorage is not available.
  */
 class BrowserLocalStorageProvider extends BrowserStorageProviderBase {
+    /**
+     * `false` while localStorage is reachable — every value round-trips through
+     * `JSON.stringify`/`parse`, which fully isolates stored data from live objects.
+     * When localStorage is absent every method defers to the in-memory base class, so
+     * the reference-sharing semantics (and the cache's freeze) come back.
+     */
+    public override get SharesReferences(): boolean {
+        return typeof localStorage === 'undefined';
+    }
+
+    /**
+     * `true` only while localStorage is reachable — what it holds survives a page reload. Without
+     * it every method defers to the in-memory base tier, which does not, so this reports the
+     * inverse of the fallback condition rather than a constant.
+     * See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public override get SupportsCrossProcessPersistence(): boolean {
+        return typeof localStorage !== 'undefined';
+    }
+
     /**
      * Builds a prefixed key for localStorage
      * Format: `[mj]:[category]:[key]`
@@ -282,13 +320,16 @@ type KnownStoreName = typeof KNOWN_OBJECT_STORES[number];
  * The `unknown` value type reflects that callers control the runtime shape via the
  * generic `SetItem<T>` / `GetItem<T>` typing on the provider.
  */
-export interface MJ_MetadataDB extends DBSchema {
+export interface MJMetadataDB extends DBSchema {
     'mj:default':       { key: string; value: unknown };
     'mj:Metadata':      { key: string; value: unknown };
     'mj:RunViewCache':  { key: string; value: unknown };
     'mj:RunQueryCache': { key: string; value: unknown };
     'mj:DatasetCache':  { key: string; value: unknown };
 }
+
+/** @deprecated Use {@link MJMetadataDB} instead. */
+export type MJ_MetadataDB = MJMetadataDB;
 
 /**
  * IndexedDB storage provider with category support via separate object stores.
@@ -311,12 +352,32 @@ export interface MJ_MetadataDB extends DBSchema {
  * unknown categories share `mj:default` with prefixed keys.
  */
 export class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase {
-    private dbPromise: Promise<IDBPDatabase<MJ_MetadataDB>>;
+    /**
+     * `false` — every value crosses IndexedDB's structured-clone boundary, so stored data
+     * is always a copy, never a live reference. Unlike the localStorage provider this class
+     * never defers to the in-memory base tier (its methods log and return null/no-op when
+     * the DB is unreachable), so there is no fallback path that could reintroduce sharing.
+     */
+    public override get SharesReferences(): boolean {
+        return false;
+    }
+
+    /**
+     * `true` — IndexedDB outlives the page. Unlike the localStorage provider this class never
+     * defers to the in-memory base tier, so there is no fallback that would make a stored
+     * snapshot unreadable on the next load.
+     * See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public override get SupportsCrossProcessPersistence(): boolean {
+        return true;
+    }
+
+    private dbPromise: Promise<IDBPDatabase<MJMetadataDB>>;
     private _dbReady: boolean = false;
 
     constructor() {
         super();
-        this.dbPromise = openDB<MJ_MetadataDB>(IDB_DB_NAME, IDB_DB_VERSION, {
+        this.dbPromise = openDB<MJMetadataDB>(IDB_DB_NAME, IDB_DB_VERSION, {
             upgrade: (db, oldVersion, newVersion) => {
                 try {
                     LogStatus(

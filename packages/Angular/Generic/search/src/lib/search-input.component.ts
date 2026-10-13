@@ -32,7 +32,16 @@ export class SearchInputComponent implements OnInit, OnDestroy {
     private destroy$ = new Subject<void>();
     private queryInput$ = new Subject<string>();
 
-    @ViewChild('inputEl') inputRef!: ElementRef<HTMLInputElement>;
+    @ViewChild('inputEl') InputRef!: ElementRef<HTMLInputElement>;
+
+    /** @deprecated Use {@link InputRef}. */
+    get inputRef(): ElementRef<HTMLInputElement> {
+        return this.InputRef;
+    }
+    /** @deprecated Use {@link InputRef}. */
+    set inputRef(value: ElementRef<HTMLInputElement>) {
+        this.InputRef = value;
+    }
 
     // --- Configuration Inputs ---
 
@@ -40,17 +49,17 @@ export class SearchInputComponent implements OnInit, OnDestroy {
     @Input() Placeholder = 'Search...';
 
     /** Current query value (two-way bindable via QueryChange) */
-    private _Query = '';
+    private _query = '';
 
     @Input()
     set Query(value: string) {
-        if (value !== this._Query) {
-            this._Query = value;
+        if (value !== this._query) {
+            this._query = value;
             this.cdr.detectChanges();
         }
     }
     get Query(): string {
-        return this._Query;
+        return this._query;
     }
 
     /** Whether to show the keyboard shortcut hint badge */
@@ -105,12 +114,12 @@ export class SearchInputComponent implements OnInit, OnDestroy {
 
     /** Programmatically focus the input element */
     public Focus(): void {
-        this.inputRef?.nativeElement?.focus();
+        this.InputRef?.nativeElement?.focus();
     }
 
     /** Clear the query and emit InputCleared */
     public Clear(): void {
-        this._Query = '';
+        this._query = '';
         this.queryInput$.next('');
         this.QueryChange.emit('');
         this.InputCleared.emit();
@@ -122,7 +131,7 @@ export class SearchInputComponent implements OnInit, OnDestroy {
 
     /** Handle native input event */
     public OnInput(value: string): void {
-        this._Query = value;
+        this._query = value;
         this.queryInput$.next(value);
     }
 
@@ -131,7 +140,7 @@ export class SearchInputComponent implements OnInit, OnDestroy {
         switch (event.key) {
             case 'Enter':
                 event.preventDefault();
-                this.QuerySubmit.emit(this._Query);
+                this.QuerySubmit.emit(this._query);
                 break;
             case 'Escape':
                 event.preventDefault();

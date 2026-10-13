@@ -898,6 +898,53 @@ describe('ClassFactory', () => {
       expect(warnSpy).toHaveBeenCalledTimes(1);
     });
 
+    it('does NOT build the diagnostic on the designed path — nothing reads it, so nothing scans', () => {
+      // The diagnostic enumerates every registration in the process and joins them into a
+      // multi-KB string. On this path it was previously built and immediately discarded, once per
+      // probe — i.e. once per field of every entity.
+      const describeSpy = vi.spyOn(
+        factory as unknown as { describeResolutionFailure: () => string },
+        'describeResolutionFailure'
+      );
+      factory.TryCreateInstance<ProbedBase>(ProbedBase, 'Some Entity.SomeField');
+      expect(describeSpy).not.toHaveBeenCalled();
+      describeSpy.mockRestore();
+    });
+
+    it('Reason is still the identical string when a caller actually reads it', () => {
+      const result = factory.TryCreateInstance<ProbedBase>(ProbedBase, 'Some Entity.SomeField');
+      // Lazy, but observationally unchanged: same content, and stable across repeat reads.
+      expect(result.Reason).toContain('ProbedBase');
+      expect(result.Reason).toContain('RequiresSubclass=false');
+      expect(result.Reason).toBe(result.Reason);
+      // Still an enumerable own property, so spread and JSON.stringify behave as before.
+      expect(Object.keys(result)).toContain('Reason');
+      expect({ ...result }.Reason).toBe(result.Reason);
+    });
+
+    it('a suppressed report (volume cap) does not build the diagnostic either', () => {
+      // reportResolutionFailure returns early on the per-base cap and again on the per-base+key
+      // dedup, both BEFORE formatting — so a capped warning must cost nothing to describe.
+      class NoisyBase {
+        Kind = 'noisy';
+      }
+      const describeSpy = vi.spyOn(
+        factory as unknown as { describeResolutionFailure: () => string },
+        'describeResolutionFailure'
+      );
+      for (let i = 0; i < 40; i++) {
+        factory.TryCreateInstance<NoisyBase>(NoisyBase, `Entity${i}.Field${i}`);
+      }
+      // Exactly the reports that actually got emitted, and no more. MAX_FALLBACK_REPORTS_PER_BASE
+      // is 3: seen 1-3 clear the cap and carry a distinct logKey each, so all three describe;
+      // seen 4 prints the suppression notice and returns; seen 5-40 return on the cap. Pinning
+      // the exact number is the point — a loose bound like `< 40` would still pass with the
+      // laziness broken for 39 of the 40 probes, which is what this test exists to catch. It
+      // also guards the cap itself against a silent change.
+      expect(describeSpy).toHaveBeenCalledTimes(3);
+      describeSpy.mockRestore();
+    });
+
     it('a registered keyed subclass on a marked base still resolves — the marker only mutes reporting', () => {
       factory.Register(ProbedBase, ProbedSub, 'Some Entity.Special', 0, true);
       const result = factory.TryCreateInstance<ProbedBase>(ProbedBase, 'Some Entity.Special');

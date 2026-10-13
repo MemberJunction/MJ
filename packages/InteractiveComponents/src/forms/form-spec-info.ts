@@ -18,7 +18,7 @@ import type { ComponentSpec } from '../component-spec';
  *   2. `spec.dataRequirements.entities[0].name` if present
  *   3. `null` — caller decides whether to fall back to a fixture or warn
  */
-export function getDeclaredFormEntityName(
+export function GetDeclaredFormEntityName(
     // `entityName` isn't a typed ComponentSpec field — it's an extension some
     // specs carry. Use a structural input that allows it without breaking on
     // strict-mode Pick<>.
@@ -35,4 +35,14 @@ export function getDeclaredFormEntityName(
         return first.trim();
     }
     return null;
+}
+
+/** @deprecated Use {@link GetDeclaredFormEntityName}. */
+export function getDeclaredFormEntityName(
+    // `entityName` isn't a typed ComponentSpec field — it's an extension some
+    // specs carry. Use a structural input that allows it without breaking on
+    // strict-mode Pick<>.
+    spec: (ComponentSpec & { entityName?: unknown }) | null | undefined,
+): string | null {
+    return GetDeclaredFormEntityName(spec);
 }

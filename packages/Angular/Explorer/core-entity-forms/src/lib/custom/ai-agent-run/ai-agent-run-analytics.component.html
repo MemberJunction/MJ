@@ -62,7 +62,20 @@
                 </div>
                 <div class="card-content">
                   <h3>Total Cost</h3>
-                  <div class="metric-value">{{ formatCost(promptMetrics.costBreakdown.totalCost) }}</div>
+                  <!-- The run's OWN spend plus anything it dispatched. A workflow's cost lives on
+                       Task rows and the prompt runs those tasks produced, which the run's step list
+                       cannot reach — so before this the headline figure silently omitted the most
+                       expensive thing many runs do. -->
+                  <div class="metric-value">
+                    {{ formatCost(promptMetrics.costBreakdown.totalCost + DispatchedCost.Cost) }}
+                  </div>
+                  @if (HasDispatchedWork) {
+                    <div class="metric-detail cache-detail">
+                      <span>{{ formatCost(promptMetrics.costBreakdown.totalCost) }} this run</span>
+                      <span>+ {{ formatCost(DispatchedCost.Cost) }} across
+                        {{ DispatchedCost.NodeCount }} workflow step{{ DispatchedCost.NodeCount === 1 ? '' : 's' }}</span>
+                    </div>
+                  }
                   <div class="metric-detail cache-detail">
                     <span>{{ totalTokensProcessed | number }} tokens</span>
                     @if (promptMetrics.tokenUsage.totalCacheRead > 0 || promptMetrics.tokenUsage.totalCacheWrite > 0) {
@@ -70,6 +83,10 @@
                     }
                     @if (inputCost > 0 || outputCost > 0) {
                       <span>input {{ formatCost(inputCost) }} &middot; output {{ formatCost(outputCost) }}</span>
+                    }
+                    <!-- Priced per minute on its own line, so it is not part of the output figure above. -->
+                    @if (AvatarVideoCost > 0) {
+                      <span class="avatar-video-cost">avatar video {{ FormatCost(AvatarVideoCost) }}</span>
                     }
                     @if (cacheSavings > 0) {
                       <span class="success">saved {{ formatCost(cacheSavings) }} ({{ cacheSavingsPct | number:'1.0-0' }}%) via cache</span>

@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { LoopAgentType } from '../agent-types/loop-agent-type';
 import { AIPromptRunResult, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 
-vi.mock('@memberjunction/core', () => ({
+// Partial mock: LoopAgentType now imports a RUNTIME value from the ai-core-plus barrel (the pure
+// task-graph validator), which pulls @memberjunction/core-entities — and therefore BaseEntity —
+// into the module graph. A total mock would have to restate every export core-entities touches, so
+// spread the real module and override only the logging functions these tests care about.
+vi.mock('@memberjunction/core', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/core')>()),
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     LogStatusEx: vi.fn(),

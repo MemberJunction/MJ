@@ -51,6 +51,8 @@
 @import '@memberjunction/ng-ui-components/dist/lib/accordion/accordion';
 @import '@memberjunction/ng-ui-components/dist/lib/window/window';
 @import '@memberjunction/ng-ui-components/dist/lib/input/chip';
+// Tab chrome shared by mj-tabstrip and the draft/workspace tab strip — one look, two packages.
+@import '@memberjunction/ng-ui-components/dist/lib/tabs/tabs';
 
 .link-text {
     cursor: pointer;

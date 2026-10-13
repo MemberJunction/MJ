@@ -27,8 +27,9 @@ import {
 } from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
 import sgMail, { MailDataRequired } from '@sendgrid/mail';
-import { __API_KEY } from "./config";
+import { API_KEY } from "./config";
 import { LogError, LogStatus } from "@memberjunction/core";
+import { DrainResponseBody } from "@memberjunction/network-utils";
 
 /**
  * Credentials for SendGrid email provider.
@@ -132,7 +133,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
 
         const apiKey = resolveCredentialValue(
             credentials?.apiKey,
-            __API_KEY,
+            API_KEY,
             disableFallback
         );
 
@@ -301,7 +302,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
      */
     private resolveApiKey(credentials?: SendGridCredentials): string {
         const disableFallback = credentials?.disableEnvironmentFallback ?? false;
-        const apiKey = resolveCredentialValue(credentials?.apiKey, __API_KEY, disableFallback);
+        const apiKey = resolveCredentialValue(credentials?.apiKey, API_KEY, disableFallback);
         validateRequiredCredentials({ apiKey }, ['apiKey'], 'SendGrid');
         return apiKey!;
     }
@@ -393,6 +394,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
 
             if (resp.ok || resp.status === 404) {
                 // 404 = already gone; deletion is idempotent from the consumer's perspective.
+                await DrainResponseBody(resp);
                 return { Success: true };
             }
 

@@ -69,7 +69,7 @@ const ADHOC_SIX_ROWS =
  * Create the self-contained Category + paging Query. Publishes the handle up-front so a
  * mid-Setup crash still leaves Teardown a reference to whatever was created (partial-safe).
  */
-export async function createRunQueryFeatureFixtures(ctx: IntegrationCheckContext): Promise<void> {
+export async function CreateRunQueryFeatureFixtures(ctx: IntegrationCheckContext): Promise<void> {
     const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
     const schema = ctx.Schema ?? '__mj';
     const user = ctx.User;
@@ -99,8 +99,13 @@ export async function createRunQueryFeatureFixtures(ctx: IntegrationCheckContext
     await QueryEngine.Instance.Config(true, user);
 }
 
+/** @deprecated Use {@link CreateRunQueryFeatureFixtures}. */
+export async function createRunQueryFeatureFixtures(ctx: IntegrationCheckContext): Promise<void> {
+    return CreateRunQueryFeatureFixtures(ctx);
+}
+
 /** Best-effort teardown — delete the query then the category (FK-safe), partial-safe. */
-export async function teardownRunQueryFeatureFixtures(): Promise<void> {
+export async function TeardownRunQueryFeatureFixtures(): Promise<void> {
     try {
         if (featureFixtures?.PageQuery) {
             await featureFixtures.PageQuery.Delete();
@@ -113,6 +118,11 @@ export async function teardownRunQueryFeatureFixtures(): Promise<void> {
     } finally {
         featureFixtures = undefined;
     }
+}
+
+/** @deprecated Use {@link TeardownRunQueryFeatureFixtures}. */
+export async function teardownRunQueryFeatureFixtures(): Promise<void> {
+    return TeardownRunQueryFeatureFixtures();
 }
 
 /** Build a transient, TYPED MJ: Query Parameters row (never saved) for the unit-style checks. */
@@ -530,6 +540,6 @@ for (const check of RunQueryFeatureChecks) {
 // The bundle's shared Query/Category fixtures, run through the generic bundle-lifecycle hook so the
 // driver and any dispatcher create/tear them down identically inside one Setup → run → Teardown.
 IntegrationCheckRegistry.Instance.RegisterLifecycle('runquery-features', {
-    Setup: async ctx => { await createRunQueryFeatureFixtures(ctx); },
-    Teardown: async () => { await teardownRunQueryFeatureFixtures(); }
+    Setup: async ctx => { await CreateRunQueryFeatureFixtures(ctx); },
+    Teardown: async () => { await TeardownRunQueryFeatureFixtures(); }
 });

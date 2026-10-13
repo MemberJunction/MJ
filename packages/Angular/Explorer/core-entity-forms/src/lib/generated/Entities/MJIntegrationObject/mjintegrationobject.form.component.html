@@ -427,9 +427,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Integration Object Fields','IntegrationObjectID')"
-                [NewRecordValues]="NewRecordValues('MJ: Integration Object Fields')"
+                [NewRecordValues]="NewRecordValues('MJ: Integration Object Fields','IntegrationObjectID')"
                 [AllowLoad]="IsSectionExpanded('mJIntegrationObjectFieldsIntegrationObjectID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJIntegrationObjectFieldsIntegrationObjectID', $event.totalRowCount)"
                 >
@@ -452,9 +452,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Integration Object Fields','RelatedIntegrationObjectID')"
-                [NewRecordValues]="NewRecordValues('MJ: Integration Object Fields')"
+                [NewRecordValues]="NewRecordValues('MJ: Integration Object Fields','RelatedIntegrationObjectID')"
                 [AllowLoad]="IsSectionExpanded('mJIntegrationObjectFieldsRelatedIntegrationObjectID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJIntegrationObjectFieldsRelatedIntegrationObjectID', $event.totalRowCount)"
                 >

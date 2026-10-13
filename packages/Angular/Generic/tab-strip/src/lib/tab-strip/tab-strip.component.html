@@ -1,18 +1,28 @@
 <div class="tabstrip-container">
-  <!-- Tab Headers -->
-  <div class="tab-header-outer">
+  <!-- Tab Headers. Chrome classes (.mj-tabs*) come from the GLOBAL stylesheet in
+       @memberjunction/ng-ui-components (lib/tabs/tabs.scss), which is the single definition of what
+       an MJ tab looks like — shared with the draft/workspace strip. Keyboard behaviour comes from
+       the mjTabList directive in the same package: roving tabindex, arrow/Home/End navigation, and
+       Delete to close. Neither is redefined here; that is the whole point. -->
+  <div class="tab-header-outer mj-tabs mj-tabs__bar">
     @if (showLeftButton) {
-      <div class="tab-scroll-button tab-scroll-button-left" (click)="scrollLeft()">
-        <span class="fa-solid fa-caret-left"></span>
-      </div>
+      <button type="button" class="mj-tabs__scroll" (click)="scrollLeft()" tabindex="-1" aria-label="Scroll tabs left">
+        <span class="fa-solid fa-caret-left" aria-hidden="true"></span>
+      </button>
     }
-    <div class="tab-header-inner" #tabInnerContainer>
+    <div
+      class="tab-header-inner mj-tabs__list"
+      #tabInnerContainer
+      mjTabList
+      (scroll)="checkTabScrollButtons()"
+      (TabActivateRequested)="onTabActivateRequested($event)"
+      (TabCloseRequested)="onTabCloseRequested($event)">
       <ng-content select="mj-tab"></ng-content> <!-- Where <mj-tab> components are projected -->
     </div>
     @if (showRightButton) {
-      <div class="tab-scroll-button tab-scroll-button-right" (click)="scrollRight()">
-        <span class="fa-solid fa-caret-right"></span>
-      </div>
+      <button type="button" class="mj-tabs__scroll" (click)="scrollRight()" tabindex="-1" aria-label="Scroll tabs right">
+        <span class="fa-solid fa-caret-right" aria-hidden="true"></span>
+      </button>
     }
   </div>
   <!-- Tab Content -->

@@ -85,7 +85,7 @@ function scanDirectory(dir: string): MigrationFileInfo[] {
 /**
  * Generates a parity report comparing T-SQL and PG migration directories.
  */
-export function generateParityReport(tsqlDir: string, pgDir: string): ParityReport {
+export function GenerateParityReport(tsqlDir: string, pgDir: string): ParityReport {
   const tsqlFiles = scanDirectory(tsqlDir);
   const pgFiles = scanDirectory(pgDir);
 
@@ -137,4 +137,9 @@ export function generateParityReport(tsqlDir: string, pgDir: string): ParityRepo
     parity: gaps.length === 0,
     coveragePercent,
   };
+}
+
+/** @deprecated Use {@link GenerateParityReport}. */
+export function generateParityReport(tsqlDir: string, pgDir: string): ParityReport {
+  return GenerateParityReport(tsqlDir, pgDir);
 }

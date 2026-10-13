@@ -1,7 +1,182 @@
-import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
-import { RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
+import { NormalizeUUID, RegisterClass, UUIDsEqual } from "@memberjunction/global";
+import { AIModelConfiguration, ModelUsageUnitKind } from "@memberjunction/ai";
 import { MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
-import { AIEngineBase, BasePriceUnitType } from "@memberjunction/ai-engine-base";
+import type { MJAIModelCostEntity } from "@memberjunction/core-entities";
+import {
+    AIEngineBase,
+    AvatarVideoUnpricedReason,
+    BasePriceUnitType,
+    BuildCostLines,
+    ExcludeAvatarVideoTokens,
+    NormalizedUsage,
+    PricedAvatarVideo,
+    PriceAvatarVideoOutput,
+    PromptRunCostLine,
+    ReadRealtimeUsageRecord,
+    RealtimeUsageRecord,
+    WriteCostLines
+} from "@memberjunction/ai-engine-base";
+
+/** The run's default cost row, the calculator its unit type names, and the quantities that calculator prices. */
+interface DefaultRunPricing {
+    CostRow: MJAIModelCostEntity;
+    Calculator: BasePriceUnitType;
+    Usage: NormalizedUsage;
+}
+
+/** What each reason an avatar's video stays priced as before means, for the one log line. */
+const AVATAR_VIDEO_UNPRICED_REASONS: Record<AvatarVideoUnpricedReason, string> = {
+    'no-price': 'the model vendor configuration has no usable Realtime.Pricing.AvatarVideoOutput price',
+    'unit': "the avatar video price's unit is neither 'Per Minute' nor 'Per 1M Tokens'",
+    'currency': "the avatar video price is not in the cost row's currency",
+    'no-seconds': 'the run stored video tokens but no video seconds to price',
+    'no-tokens': 'the run stored video seconds but no video tokens to price',
+};
+
+/**
+ * What a prompt run recorded about the work it did, in whichever measure applies.
+ *
+ * Token counts and continuous units are both present because they are not alternatives at the
+ * schema level — the usage type is what says which pair is meaningful.
+ *
+ * Carried as the measure NAME, not as `UsageTypeID`. The pricing drivers are keyed on the measure
+ * (`ModelUsageUnitKind`); resolving the foreign key once, here at the storage boundary, keeps every
+ * pure function below independent of how the catalog is persisted — and keeps them testable without
+ * a loaded engine.
+ */
+export type RecordedRunUsage = {
+    tokensPrompt: number;
+    tokensCacheRead: number;
+    tokensCacheWrite: number;
+    tokensCompletion: number;
+    /**
+     * Null means a set `UsageTypeID` could not be resolved against the loaded catalog — never an
+     * unset column, which is read as `Tokens` before this type is built; see `RecordedUsage`.
+     */
+    unitsKind: ModelUsageUnitKind | null;
+    inputUnits: number;
+    outputUnits: number;
+};
+
+/** Either the quantities to price, or the reason they cannot be priced. */
+export type NormalizeUsageResult =
+    | { ok: true; usage: NormalizedUsage }
+    | { ok: false; reason: string };
+
+/**
+ * Whether a run recorded any work at all worth pricing.
+ *
+ * Token input is the TOTAL the provider processed: net-new plus cache reads plus cache writes. A
+ * heavily-cached call can have zero net-new prompt tokens and still incur input cost, so the gate
+ * is on the total rather than net-new alone. Continuous-media runs legitimately record zero tokens
+ * — their work is measured in seconds or images — so units count as usage too.
+ */
+export function HasRecordedUsage(recorded: RecordedRunUsage): boolean {
+    const totalInputTokens = recorded.tokensPrompt + recorded.tokensCacheRead + recorded.tokensCacheWrite;
+    const totalUnits = recorded.inputUnits + recorded.outputUnits;
+    return totalInputTokens > 0 || recorded.tokensCompletion > 0 || totalUnits > 0;
+}
+
+/** @deprecated Use {@link HasRecordedUsage}. */
+export function hasRecordedUsage(recorded: RecordedRunUsage): boolean {
+    return HasRecordedUsage(recorded);
+}
+
+/**
+ * Maps a run's recorded usage onto the quantities a driver of `driverUnitKind` prices, refusing
+ * when the two disagree about what is being measured.
+ *
+ * The refusal matters: a transcription run measured in seconds, handed to a per-1M-tokens driver,
+ * would be priced by dividing seconds by a million — a cost of approximately zero that looks like
+ * a real answer. Refusing surfaces the misconfigured cost row instead of hiding it behind a number.
+ */
+export function NormalizeRecordedUsage(
+    recorded: RecordedRunUsage,
+    driverUnitKind: ModelUsageUnitKind
+): NormalizeUsageResult {
+    // Units whose measure could not be RESOLVED name nothing: nothing says what they are counted in,
+    // so there is no driver they can honestly be handed to. This is not "the producer forgot to set
+    // it" — an unset column is read as Tokens at the storage seam and caught by the next guard — it
+    // is an id absent from the loaded catalog: a deleted row or a stale cache. Falling through would
+    // treat them as Tokens and price the run's (zero) token counts, writing Cost = 0 for billed work.
+    if (recorded.unitsKind == null && (recorded.inputUnits > 0 || recorded.outputUnits > 0)) {
+        return {
+            ok: false,
+            reason: `run recorded ${recorded.inputUnits} input / ${recorded.outputUnits} output units but no ` +
+                `resolvable usage type, so there is no measure to price them in`
+        };
+    }
+
+    const recordedKind: ModelUsageUnitKind = recorded.unitsKind ?? 'Tokens';
+
+    // "The producer never said what these units are" and "the producer said they are tokens" arrive
+    // here as the same value, because an unset `UsageTypeID` is read as Tokens at the storage seam.
+    // Both are refused for the same reason: units counted in anything are not token
+    // counts — `TokensPrompt`/`TokensCompletion` carry those — so populated units against the Tokens
+    // measure is a contradiction, not a quantity to price.
+    //
+    // Why it is reachable at all, given the measure-filtered row selection: for a model whose only
+    // active row is media-priced, selection finds no Tokens-priced row and the run is refused with a
+    // logged reason — safe. But a model carrying an active token row ALONGSIDE a media one selects
+    // the token row, matches measures (both say Tokens), normalizes the token buckets to
+    // {0, 0, 0, 0}, and persists Cost = 0 against a run that recorded thousands of units of billed
+    // work. No shipped model+vendor pair carries two measures today, so it cannot occur on current
+    // data — and the deferred image-generation work is exactly where multi-measure models arrive.
+    if (recordedKind === 'Tokens' && (recorded.inputUnits > 0 || recorded.outputUnits > 0)) {
+        return {
+            ok: false,
+            reason: `run recorded ${recorded.inputUnits} input / ${recorded.outputUnits} output units against the ` +
+                `Tokens measure, which counts tokens rather than units; set UsageTypeID to the measure they were ` +
+                `actually counted in`
+        };
+    }
+
+    // The mirror of the check above, and the same defect through the other side: a kind with no
+    // quantity. `hasRecordedUsage` is satisfied by token counts alone, so a run naming `Seconds`
+    // that reports zero seconds reaches here, normalizes to {input: 0, output: 0}, and persists
+    // `Cost = 0` — "free" written against work that was billed. This is the path that actually
+    // WRITES the column, so the guard has to be here and not only on the standalone costing
+    // surface; a run that gets this far has already declared a non-token measure, so a zero
+    // quantity is a producer that set the kind and forgot the amount.
+    if (recordedKind !== 'Tokens' && recorded.inputUnits === 0 && recorded.outputUnits === 0) {
+        return {
+            ok: false,
+            reason: `run recorded usage in ${recordedKind} but no unit quantity, so there is nothing to ` +
+                `price; refusing rather than recording a cost of 0`
+        };
+    }
+
+    if (driverUnitKind !== recordedKind) {
+        return {
+            ok: false,
+            reason: `run recorded usage in ${recordedKind} but its cost row is priced in ${driverUnitKind}` +
+                `; correct the cost row's unit type`
+        };
+    }
+
+    if (recordedKind === 'Tokens') {
+        return {
+            ok: true,
+            usage: {
+                input: recorded.tokensPrompt,
+                output: recorded.tokensCompletion,
+                cacheRead: recorded.tokensCacheRead,
+                cacheWrite: recorded.tokensCacheWrite
+            }
+        };
+    }
+
+    return { ok: true, usage: { input: recorded.inputUnits, output: recorded.outputUnits } };
+}
+
+/** @deprecated Use {@link NormalizeRecordedUsage}. */
+export function normalizeRecordedUsage(
+    recorded: RecordedRunUsage,
+    driverUnitKind: ModelUsageUnitKind
+): NormalizeUsageResult {
+    return NormalizeRecordedUsage(recorded, driverUnitKind);
+}
 
 /**
  * Server-side subclass for MJAIPromptRunEntity that automatically calculates costs
@@ -23,6 +198,11 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
             
             if (shouldCalculateCost) {
                 await this.CalculateAndSetCost();
+            }
+
+            // For parallel parents where DescendantCost is not yet populated, reload descendant cost from children
+            if (this.RunType === 'ParallelParent' && (this.DescendantCost == null || this.DescendantCost === 0) && this.ID) {
+                await this.RecalculateTotalCost();
             }
 
             // always update our TotalCost in case cost or descendant cost changed
@@ -69,14 +249,9 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
             return false;
         }
         
-        // Must have token usage to calculate (at least one input or output token > 0). Input is the
-        // TOTAL input the provider processed: net-new (TokensPrompt) + cache reads + cache writes.
-        // A heavily-cached call can have TokensPrompt === 0 yet still incur input cost via cache
-        // tokens, so we gate on the total rather than net-new alone.
-        const totalInputTokens =
-            (this.TokensPrompt ?? 0) + (this.TokensCacheRead ?? 0) + (this.TokensCacheWrite ?? 0);
-        const totalCompletionTokens = this.TokensCompletion ?? 0;
-        if (totalInputTokens <= 0 && totalCompletionTokens <= 0) {
+        // Must have recorded usage of SOME kind — tokens for an LLM run, seconds or images for a
+        // continuous-media one. Gating on tokens alone is what left media runs silently uncosted.
+        if (!HasRecordedUsage(this.RecordedUsage())) {
             return false;
         }
         
@@ -89,77 +264,195 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
     }
     
     /**
-     * Calculates the cost for this prompt run based on token usage and active pricing
+     * Calculates the cost for this prompt run based on token usage and active pricing.
+     *
+     * A realtime run that stored a usage record (`ModelSpecificResponseDetails.RealtimeUsage`) may add an avatar
+     * video line, priced from the model vendor's resolved configuration (`Realtime.Pricing.AvatarVideoOutput`): its
+     * output video seconds at a per-minute price, or its output video tokens at a per-1M-token price. The output tokens
+     * the provider counted as video then leave the default row's output bucket, and the run's cost lines are written
+     * into its details (`CostLines`). Without a default row the run stays unpriced, video or not; without a usable
+     * video price the run prices as before.
      */
     protected async CalculateAndSetCost(): Promise<void> {
         try {
             // Ensure AI metadata is loaded
             await AIEngineBase.Instance.Config(false, this.ContextCurrentUser);
-            
-            // Get the active cost configuration
-            const activeCost = AIEngineBase.Instance.GetActiveModelCost(
-                this.ModelID, 
-                this.VendorID,
-                'Realtime' // For now, assume all prompt runs are realtime
-            );
-            
-            if (!activeCost) {
-                LogError(`No active cost configuration found for Model: ${this.ModelID}, Vendor: ${this.VendorID}`);
+
+            const recorded = this.RecordedUsage();
+            const pricing = this.resolveDefaultPricing(recorded);
+            if (!pricing) {
                 return;
             }
-            
-            // Get the price unit type to understand the normalization
-            const priceUnitType = AIEngineBase.Instance.ModelPriceUnitTypes.find(
-                put => UUIDsEqual(put.ID, activeCost.UnitTypeID)
-            );
-            
-            if (!priceUnitType) {
-                LogError(`Price unit type not found: ${activeCost.UnitTypeID}`);
-                return;
+            const record = ReadRealtimeUsageRecord(this.ModelSpecificResponseDetails);
+            const video = record ? this.priceAvatarVideo(record, pricing.CostRow.Currency) : null;
+            // The video's tokens leave a token-measured default line only; a run measured in seconds has none to give.
+            const usage = video && pricing.Calculator.UnitKind === 'Tokens' ? this.withoutVideoTokens(pricing.Usage, video) : pricing.Usage;
+
+            // Token pricing prices each input bucket at its own rate: uncached/net-new (TokensPrompt)
+            // at the standard input rate, cache reads/writes at CacheReadPricePerUnit /
+            // CacheWritePricePerUnit when the cost row records them. When those cache rates are NULL
+            // the calculator falls back to the input rate, so the result is identical to the prior
+            // single-bucket behavior for models without cache pricing — while models that DO have
+            // cache rates get the (usually much cheaper) cached-token cost instead of being billed as
+            // full input. Continuous-media pricing ignores the cache buckets entirely.
+            const defaultCost = pricing.Calculator.CalculateCost(pricing.CostRow, usage);
+            this.setCost(defaultCost + (video?.Cost ?? 0), pricing.CostRow.Currency);
+            if (record) {
+                const measure = recorded.unitsKind ?? 'Tokens';
+                this.writeCostLines(BuildCostLines({ CostRowID: pricing.CostRow.ID, Measure: measure, Usage: usage, Cost: defaultCost }, video));
             }
-            
-            // Calculate costs using the driver class
-            const priceCalculator = MJGlobal.Instance.ClassFactory.CreateInstance<BasePriceUnitType>(
-                BasePriceUnitType,
-                priceUnitType.DriverClass
-            );
-            
-            if (!priceCalculator) {
-                LogError(`Failed to create price calculator for driver class: ${priceUnitType.DriverClass}`);
-                return;
-            }
-            
-            // Price each input bucket at its own rate: uncached/net-new (TokensPrompt) at the
-            // standard input rate, cache reads/writes at CacheReadPricePerUnit/CacheWritePricePerUnit
-            // when the cost row records them. When those cache rates are NULL the calculator falls
-            // back to the input rate, so the result is identical to the prior single-bucket behavior
-            // for models without cache pricing — while models that DO have cache rates get the
-            // (usually much cheaper) cached-token cost instead of being billed as full input.
-            const normalizedCost = priceCalculator.CalculateNormalizedCostWithCache(
-                activeCost,
-                this.TokensPrompt ?? 0,
-                this.TokensCacheRead ?? 0,
-                this.TokensCacheWrite ?? 0,
-                this.TokensCompletion ?? 0
-            );
-            
-            // Set the cost fields
-            this.Cost = normalizedCost;
-            this.CostCurrency = activeCost.Currency;
-            
-            // Update total cost (for leaf nodes, total = cost)
-            if (!this.ParentID) {
-                // This is a root prompt run, so total cost = cost
-                this.TotalCost = normalizedCost;
-            }
-            // For child nodes, TotalCost will be calculated during rollup
-            
         } catch (err) {
             LogError(`Error calculating cost for AIPromptRun ${this.ID}: ${err}`);
             // Don't throw - we don't want to prevent saving just because cost calc failed
         }
     }
-    
+
+    /**
+     * The run's default cost row, its calculator and the quantities it prices; `null` (logged) when the run cannot be
+     * priced. The row is selected by the measure this run actually recorded, not just by model+vendor: a model with
+     * rows in two measures would otherwise hand back whichever started most recently and be refused, reporting a
+     * measure mismatch where the real answer was "pick the other row".
+     */
+    private resolveDefaultPricing(recorded: RecordedRunUsage): DefaultRunPricing | null {
+        const costRow = AIEngineBase.Instance.GetActiveModelCost(
+            this.ModelID,
+            this.VendorID,
+            this.ResolveProcessingType(),
+            recorded.unitsKind ?? 'Tokens'
+        );
+        if (!costRow) {
+            LogError(
+                `No active cost configuration priced in ${recorded.unitsKind ?? 'Tokens'} found for ` +
+                `Model: ${this.ModelID}, Vendor: ${this.VendorID}`
+            );
+            return null;
+        }
+        // Resolve the calculator the cost row's unit type names (logs and returns null when
+        // the unit type or its driver class is missing)
+        const calculator = AIEngineBase.Instance.GetPriceCalculator(costRow);
+        const usage = calculator ? this.BuildNormalizedUsage(calculator, recorded) : null;
+        return calculator && usage ? { CostRow: costRow, Calculator: calculator, Usage: usage } : null;
+    }
+
+    /**
+     * The run's avatar video line, priced from the model vendor's resolved configuration; `null` when the run stored
+     * no avatar video, or when the video cannot be priced on its own line (one log line), in which case it prices as
+     * before.
+     */
+    private priceAvatarVideo(record: RealtimeUsageRecord, rowCurrency: string): PricedAvatarVideo | null {
+        const pricing = PriceAvatarVideoOutput(record, this.resolveModelConfiguration(), rowCurrency);
+        if (pricing?.Priced === false) {
+            LogStatus(
+                `[AIPromptRun cost] AIPromptRun ${this.ID}: avatar video is priced as before, not on its own line: ` +
+                `${AVATAR_VIDEO_UNPRICED_REASONS[pricing.Reason]}.`
+            );
+        }
+        return pricing?.Priced ? pricing : null;
+    }
+
+    /**
+     * The model configuration the run's model resolves to on its vendor (type < model < vendor defaults < model
+     * vendor). The model-vendor row is the run's vendor's inference-provider row, or any row for that vendor.
+     */
+    private resolveModelConfiguration(): AIModelConfiguration | null {
+        const engine = AIEngineBase.Instance;
+        const rows = (engine.ModelVendorsByModelID.get(NormalizeUUID(this.ModelID)) ?? []).filter((row) => UUIDsEqual(row.VendorID, this.VendorID));
+        const modelVendor = rows.find((row) => engine.IsInferenceProvider(row)) ?? rows[0];
+        return engine.GetEffectiveModelConfiguration(this.ModelID, modelVendor?.ID);
+    }
+
+    /** The default row's quantities without the output tokens a priced video line covers (logged when they ran out). */
+    private withoutVideoTokens(usage: NormalizedUsage, video: PricedAvatarVideo): NormalizedUsage {
+        const exclusion = ExcludeAvatarVideoTokens(usage, video.VideoTokens);
+        if (exclusion.Clamped) {
+            LogStatus(
+                `[AIPromptRun cost] AIPromptRun ${this.ID}: ${video.VideoTokens} video tokens exceed the ${usage.output} ` +
+                `output tokens recorded; the default line prices no output.`
+            );
+        }
+        return exclusion.Usage;
+    }
+
+    /** Sets the run's cost; a root run's total is its cost, a child's is rolled up by its parent. */
+    private setCost(cost: number, currency: string): void {
+        this.Cost = cost;
+        this.CostCurrency = currency;
+        if (!this.ParentID) {
+            this.TotalCost = cost;
+        }
+    }
+
+    /** Writes the run's cost lines into its details, beside the usage record they price. */
+    private writeCostLines(lines: PromptRunCostLine[]): void {
+        const details = WriteCostLines(this.ModelSpecificResponseDetails, lines);
+        if (details !== null) {
+            this.ModelSpecificResponseDetails = details;
+        }
+    }
+
+    /**
+     * Resolves the processing type for active model cost resolution ('Realtime' vs 'Batch').
+     * Returns 'Realtime' by default. Batch producers (such as offline batch evaluation
+     * or asynchronous bulk processing jobs) override or set this when batch pricing applies.
+     * This is an extension seam (PR1 / #4396) rather than a schema column.
+     */
+    protected ResolveProcessingType(): 'Realtime' | 'Batch' {
+        return 'Realtime';
+    }
+
+    /**
+     * This run's recorded usage, with nulls collapsed to zero for the pure helpers above.
+     *
+     * `UsageTypeID` is resolved to its measure NAME here, through the engine's cached catalog, so
+     * the pure functions never see a foreign key. This is the ONE seam that reads an unset column
+     * as `Tokens`, and it is the only place allowed to: the column is nullable until the release
+     * after the AI Usage Types seed ships, and every row written before it existed was token-billed
+     * — the schema had no way to say anything else.
+     *
+     * A SET id that the catalog does not contain is a different situation and stays null: that is a
+     * real fault — a stale cache or a deleted row — so it is logged, and `normalizeRecordedUsage`
+     * refuses to price units recorded against it. Collapsing the two would price seconds as tokens
+     * and write a confident zero.
+     */
+    protected RecordedUsage(): RecordedRunUsage {
+        const usageTypeName = this.UsageTypeID ? AIEngineBase.Instance.UsageTypeName(this.UsageTypeID) : 'Tokens';
+        if (usageTypeName === null) {
+            LogError(
+                `AIPromptRun ${this.ID} references usage type ${this.UsageTypeID}, which is not in the ` +
+                `loaded catalog; its units cannot be priced.`
+            );
+        }
+        return {
+            tokensPrompt: this.TokensPrompt ?? 0,
+            tokensCacheRead: this.TokensCacheRead ?? 0,
+            tokensCacheWrite: this.TokensCacheWrite ?? 0,
+            tokensCompletion: this.TokensCompletion ?? 0,
+            unitsKind: usageTypeName as ModelUsageUnitKind | null,
+            inputUnits: this.InputUnitsUsed ?? 0,
+            outputUnits: this.OutputUnitsUsed ?? 0
+        };
+    }
+
+    /**
+     * Turns this run's recorded usage into the quantities the resolved calculator prices, or null
+     * (having logged why) when the two disagree about what is being measured.
+     *
+     * Takes the recorded usage as a parameter rather than re-reading it: `CalculateAndSetCost` needs
+     * the measure BEFORE it can select a cost row, and `RecordedUsage` logs when a `UsageTypeID`
+     * fails to resolve — calling it twice would report the same fault twice for one save.
+     */
+    protected BuildNormalizedUsage(
+        priceCalculator: BasePriceUnitType,
+        recorded: RecordedRunUsage = this.RecordedUsage()
+    ): NormalizedUsage | null {
+        const result = NormalizeRecordedUsage(recorded, priceCalculator.UnitKind);
+        if (result.ok === false) {
+            LogError(`Cannot cost AIPromptRun ${this.ID}: ${result.reason}.`);
+            return null;
+        }
+        return result.usage;
+    }
+
     /**
      * Triggers cost rollup calculation on the parent prompt run
      */

@@ -65,3 +65,34 @@ describe('MJPostgresTranspiler', () => {
     await expect(t.transpile('SELECT 1;')).rejects.toThrow(/interpreter.*not found|MJ_SQLGLOT_PYTHON/);
   }, 10000);
 });
+
+describe('MJPostgresTranspiler — extending the BIT registry after construction (issue #3839)', () => {
+  it('coerces 0/1 to boolean for a table the registry learned about LATE', async () => {
+    if (!pythonAvailable) return;
+    // The constructor registry is collected from the migration set's own baseline, which never
+    // declares MJ core's tables — so an Open App seeding __mj.EntityField had no type information
+    // for AllowsNull and emitted a bare 1, which PostgreSQL rejects against a BOOLEAN column.
+    // A caller holding a live connection supplies the authoritative set afterwards.
+    const t = new MJPostgresTranspiler({ pythonPath });
+    const sql = "INSERT INTO [__mj].[EntityField] ([ID],[AllowsNull]) VALUES ('a', 1);";
+
+    const before = await t.transpile(sql);
+    expect(before.sql.join('\n')).toContain('1');
+
+    t.addExtraBitColumns([['entityfield', 'allowsnull']]);
+    const after = await t.transpile(sql);
+    expect(after.sql.join('\n')).toMatch(/TRUE/i);
+  });
+
+  it('is a no-op for an empty list and de-duplicates repeats', async () => {
+    if (!pythonAvailable) return;
+    const t = new MJPostgresTranspiler({ pythonPath, extraBitColumns: [['entityfield', 'allowsnull']] });
+    t.addExtraBitColumns([]);
+    t.addExtraBitColumns([
+      ['entityfield', 'allowsnull'],
+      ['entityfield', 'isvirtual'],
+    ]);
+    const r = await t.transpile("INSERT INTO [__mj].[EntityField] ([ID],[IsVirtual]) VALUES ('a', 0);");
+    expect(r.sql.join('\n')).toMatch(/FALSE/i);
+  });
+});

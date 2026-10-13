@@ -1,13 +1,13 @@
 
-import { dbDatabase, dbHost, dbPassword, dbPort, dbUsername } from '../config';
+import { DbDatabase, DbHost, DbPassword, DbPort, DbUsername } from '../config';
 import sql from 'mssql';
 
 const config: sql.config = {
-  server: dbHost,
-  port: dbPort,
-  user: dbUsername,
-  password: dbPassword,
-  database: dbDatabase,
+  server: DbHost,
+  port: DbPort,
+  user: DbUsername,
+  password: DbPassword,
+  database: DbDatabase,
   requestTimeout: 45000,
   options: {
     encrypt: true,

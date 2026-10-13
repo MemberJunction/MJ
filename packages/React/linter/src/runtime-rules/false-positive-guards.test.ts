@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '@babel/parser';
 import type { File } from '@babel/types';
+import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import type { Violation } from '../component-linter';
 
 import { CallbackEventValidationRule } from './callback-event-validation';
@@ -90,7 +91,7 @@ describe('false-positive guards: optional chaining + idiomatic patterns', () => 
           return null;
         }
       `;
-      const spec = { name: 'MemberForm', type: 'form', properties: [], events: [] } as any;
+      const spec = { name: 'MemberForm', type: 'form', properties: [], events: [] } as unknown as ComponentSpec;
       const v = rule.Test(ast(code), 'MemberForm', spec);
       expect(msgs(v)).toBe('');
     });
@@ -101,7 +102,7 @@ describe('false-positive guards: optional chaining + idiomatic patterns', () => 
           return null;
         }
       `;
-      const spec = { name: 'Dashboard', type: 'dashboard', properties: [], events: [] } as any;
+      const spec = { name: 'Dashboard', type: 'dashboard', properties: [], events: [] } as unknown as ComponentSpec;
       const v = rule.Test(ast(code), 'Dashboard', spec);
       expect(msgs(v)).toBe('');
     });
@@ -116,7 +117,7 @@ describe('false-positive guards: optional chaining + idiomatic patterns', () => 
           return <components.DataGrid rows={[]} />;
         }
       `;
-      const spec = { name: 'Parent', dependencies: [{ name: 'DataGrid' }] } as any;
+      const spec = { name: 'Parent', dependencies: [{ name: 'DataGrid' }] } as unknown as ComponentSpec;
       const v = rule.Test(ast(code), 'Parent', spec);
       expect(msgs(v)).toBe('');
     });

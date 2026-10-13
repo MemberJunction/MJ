@@ -17,6 +17,7 @@ export class MJAPIApplicationScopeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'scopeRuleDetails', sectionName: 'Scope Rule Details', isExpanded: true },
             { sectionKey: 'applicationAssignment', sectionName: 'Application Assignment', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

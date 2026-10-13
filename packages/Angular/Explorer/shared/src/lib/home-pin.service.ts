@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { toJpeg } from 'html-to-image';
 import { HomeAppPinnedItem, HomeAppPinInput, HomeAppPinUpdate } from './home-pin.types';
 
@@ -179,8 +180,9 @@ export class HomeAppPinService {
    * Uses SVG foreignObject so the browser's own CSS engine handles
    * modern features like color-mix() that html2canvas can't parse.
    * Returns a base64 JPEG data URL (~5-15KB) or undefined on failure.
+   * @param timeoutMs How long to wait for the capture before giving up (default 4 seconds).
    */
-  async CaptureThumbnail(element: HTMLElement): Promise<string | undefined> {
+  async CaptureThumbnail(element: HTMLElement, timeoutMs: number = HomeAppPinService.THUMBNAIL_CAPTURE_TIMEOUT_MS): Promise<string | undefined> {
     try {
       if (element.clientWidth === 0 || element.clientHeight === 0) {
         return undefined;
@@ -202,7 +204,7 @@ export class HomeAppPinService {
         quality: 0.6,
         pixelRatio: 0.2,
       });
-      return await this.withTimeout(capture, HomeAppPinService.THUMBNAIL_CAPTURE_TIMEOUT_MS);
+      return await this.withTimeout(capture, timeoutMs);
     } catch {
       return undefined;
     }
@@ -249,13 +251,11 @@ export class HomeAppPinService {
     if (pin.ResourceType !== resourceType) return false;
     switch (resourceType) {
       case 'Dashboards':
-        return pin.Configuration['dashboardId'] === config['dashboardId'];
+        return UUIDsEqual(this.dashboardIdOf(pin.Configuration), this.dashboardIdOf(config));
       case 'User Views':
         return pin.Configuration['viewId'] === config['viewId'];
       case 'Queries':
         return pin.Configuration['queryId'] === config['queryId'];
-      case 'Reports':
-        return pin.Configuration['reportId'] === config['reportId'];
       case 'Records':
         return pin.Configuration['Entity'] === config['Entity']
             && pin.Configuration['recordId'] === config['recordId'];
@@ -290,6 +290,15 @@ export class HomeAppPinService {
       default:
         return false;
     }
+  }
+
+  /**
+   * The dashboard a Dashboards configuration names: its dashboardId, else its recordId (a pin of an app's default
+   * dashboard tab stores only recordId). Undefined when it names neither.
+   */
+  private dashboardIdOf(config: Record<string, unknown>): string | undefined {
+    const id = config['dashboardId'] ?? config['recordId'];
+    return typeof id === 'string' ? id : undefined;
   }
 
   private updateAndSave(pins: HomeAppPinnedItem[]): void {

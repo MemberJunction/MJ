@@ -53,8 +53,8 @@
         class="mj-input"
         [value]="SchemaName"
         (change)="OnSchemaChange($any($event.target).value)">
-        @for (schema of AvailableSchemas; track schema.value) {
-          <option [value]="schema.value">{{ schema.label }}</option>
+        @for (schema of AvailableSchemas; track schema.Value) {
+          <option [value]="schema.Value">{{ schema.Label }}</option>
         }
       </select>
     } @else {

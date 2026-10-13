@@ -58,13 +58,23 @@
   margin-bottom: 4px;
 }
 
+/* A <button> so a click actually does something. The native chrome is reset here rather than by
+   reaching for .mj-btn — this is palette furniture, not an MJ button (see packages/Angular/CLAUDE.md). */
 .mj-flow-palette-item {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
   padding: 8px 10px;
+  margin: 0;
+  border: 0;
   border-radius: var(--mj-radius-md);
-  cursor: grab;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  appearance: none;
+  cursor: pointer;
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
   user-select: none;
 }
@@ -72,6 +82,11 @@
 .mj-flow-palette-item:hover {
   background: var(--mj-bg-page);
   box-shadow: var(--mj-shadow-sm);
+}
+
+.mj-flow-palette-item:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
 }
 
 .mj-flow-palette-item:active {

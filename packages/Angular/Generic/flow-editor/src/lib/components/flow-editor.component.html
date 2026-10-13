@@ -1,8 +1,8 @@
 <div class="mj-flow-editor" [class.mj-flow-editor--readonly]="ReadOnly" tabindex="0">
 
-  <!-- Canvas Toolbar -->
-  @if (ShowToolbar) {
-    <div class="mj-flow-editor-toolbar-area">
+  <!-- Canvas Toolbar — shown / minimized / hidden (recover tab). Align is left/center/right. -->
+  @if (ShowToolbar && EffectiveToolbarVisibility === 'shown') {
+    <div class="mj-flow-editor-toolbar-area" [attr.data-align]="ToolbarAlign">
       <mj-flow-toolbar
         [ZoomLevel]="zoomLevel"
         [ShowGrid]="ShowGrid"
@@ -17,9 +17,23 @@
         (GridToggled)="onGridToggled($event)"
         (MinimapToggled)="onMinimapToggled($event)"
         (LegendToggled)="onLegendToggled($event)"
-        (PanModeToggled)="onPanModeToggled($event)">
+        (PanModeToggled)="onPanModeToggled($event)"
+        (MinimizeClicked)="SetToolbarVisibility('minimized')"
+        (HideClicked)="SetToolbarVisibility('hidden')">
       </mj-flow-toolbar>
     </div>
+  } @else if (ShowToolbar && EffectiveToolbarVisibility === 'minimized') {
+    <button type="button" class="mj-flow-editor-toolbar-chip" [attr.data-align]="ToolbarAlign"
+            (click)="SetToolbarVisibility('shown')"
+            title="Show canvas tools" aria-label="Show canvas tools">
+      <i class="fa-solid fa-wrench" aria-hidden="true"></i>
+    </button>
+  } @else if (ShowToolbar && EffectiveToolbarVisibility === 'hidden') {
+    <button type="button" class="mj-flow-editor-toolbar-tab" [attr.data-align]="ToolbarAlign"
+            (click)="SetToolbarVisibility('shown')"
+            title="Show canvas tools" aria-label="Show canvas tools">
+      <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
+    </button>
   }
 
   <!-- Main Canvas Area -->
@@ -28,12 +42,13 @@
     <!-- Palette Sidebar -->
     @if (ShowPalette && !ReadOnly) {
       <mj-flow-palette
-        [NodeTypes]="NodeTypes">
+        [NodeTypes]="NodeTypes"
+        (NodeTypeActivated)="onPaletteNodeTypeActivated($event)">
       </mj-flow-palette>
     }
 
     <!-- Foblex Canvas -->
-    <div class="mj-flow-editor-canvas"
+    <div class="mj-flow-editor-canvas" #canvasArea
       [class.mj-flow-editor-canvas--pan-mode]="panMode">
       <f-flow fDraggable
         [fDraggableDisabled]="false"
@@ -94,14 +109,18 @@
               [fSelectionDisabled]="false"
               [fReassignDisabled]="ReadOnly"
               [style.--connection-color]="conn.Color || '#94a3b8'"
+              [style.--connection-width.px]="conn.StrokeWidth || 2"
               [class.mj-flow-connection-colored]="!!conn.Color"
               [class.mj-flow-connection-dashed]="conn.Style === 'dashed'"
               [class.mj-flow-connection-dotted]="conn.Style === 'dotted'"
+              [class.mj-flow-connection-animated]="!!conn.Animated"
               (click)="onConnectionClicked($event, conn)"
               (contextmenu)="onConnectionContextMenu($event, conn)">
               <!-- Arrow marker -->
               <svg viewBox="0 0 10 10" fMarker type="end"
-                orient="auto" [refX]="9" [refY]="5" [height]="10" [width]="10">
+                orient="auto" [refX]="9" [refY]="5"
+                [height]="conn.Animated ? 16 : 10"
+                [width]="conn.Animated ? 16 : 10">
                 <path d="M0 0L10 5L0 10Z" [attr.fill]="conn.Color || '#94a3b8'"/>
               </svg>
               <!-- Connection label -->
@@ -243,15 +262,23 @@
       [style.left.px]="contextMenuX"
       [style.top.px]="contextMenuY"
       (click)="$event.stopPropagation()">
-      <button class="mj-flow-context-menu-item" (click)="onContextMenuAction('edit')">
-        <i class="fa-solid fa-pen-to-square"></i>
-        <span>Edit {{ contextMenuTargetType === 'node' ? 'Node' : 'Connection' }}</span>
-      </button>
-      <div class="mj-flow-context-menu-divider"></div>
-      <button class="mj-flow-context-menu-item mj-flow-context-menu-item--danger" (click)="onContextMenuAction('remove')">
-        <i class="fa-solid fa-trash-can"></i>
-        <span>Remove {{ contextMenuTargetType === 'node' ? 'Node' : 'Connection' }}</span>
-      </button>
+      @for (item of contextMenuItems; track item.ID; let last = $last) {
+        <button type="button" class="mj-flow-context-menu-item"
+                [class.mj-flow-context-menu-item--danger]="item.Danger"
+                [disabled]="item.Disabled"
+                (click)="onContextMenuAction(item.ID)">
+          @if (item.Icon) {
+            <i class="fa-solid" [ngClass]="item.Icon"></i>
+          }
+          <span>{{ item.Label }}</span>
+          @if (item.Shortcut) {
+            <kbd class="mj-flow-context-menu-shortcut">{{ item.Shortcut }}</kbd>
+          }
+        </button>
+        @if (!last && item.Danger !== contextMenuItems[$index + 1]?.Danger) {
+          <div class="mj-flow-context-menu-divider"></div>
+        }
+      }
     </div>
   }
 

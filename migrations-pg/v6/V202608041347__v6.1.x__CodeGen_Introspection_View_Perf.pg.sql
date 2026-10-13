@@ -1,0 +1,48 @@
+-- ============================================================================
+-- MemberJunction PostgreSQL Migration — V202608041347__v6.1.x__CodeGen_Introspection_View_Perf.sql
+-- ============================================================================
+--
+-- PG-EMPTY-BY-DESIGN: vwSQLColumnsAndEntityFields is CodeGen's own machinery on PostgreSQL —
+-- defined in TypeScript (packages/CodeGenLib/src/Database/providers/postgresql/metadataSupportObjects.ts)
+-- and re-created on every manageMetadata run, deliberately NOT shipped through migrations. The
+-- SQL Server change is a sys.all_columns -> sys.columns performance narrowing with no PG analogue.
+--
+-- Read the rest before "fixing" this file. An empty counterpart is indistinguishable at a glance
+-- from the silent-emptying defect that shipped v5.45 broken (issue #3253), so this header records
+-- the reasoning and lets a reviewer check it.
+--
+-- WHAT THE SQL SERVER MIGRATION DOES
+-- It narrows __mj.vwSQLColumnsAndEntityFields from sys.all_columns / sys.all_objects to
+-- sys.columns / sys.objects — a SQL-Server-only performance optimization (~10x fewer catalog
+-- rows; a cold CodeGen run measured 190.7s -> 105.9s). Output is unchanged for every row CodeGen
+-- consumes; only sys-internal objects carrying no EntityID stop appearing.
+--
+-- WHY POSTGRESQL GETS NOTHING — two independent reasons, either sufficient alone
+--
+--   1. sys.all_columns / sys.all_objects are SQL Server system catalogs. They do not exist in
+--      PostgreSQL, so there is no equivalent statement to translate. PostgreSQL builds the view
+--      over pg_class / pg_attribute instead.
+--
+--   2. PostgreSQL does not ship this view through migrations AT ALL. It is re-created
+--      idempotently (DROP IF EXISTS + CREATE OR REPLACE) at the start of every manageMetadata
+--      run. That is deliberate: shipping these objects through migrations created a
+--      sync-by-convention dependency that failed in practice — four of the five metadata
+--      routines never existed on PG and CodeGen silently degraded (stale EntityField metadata).
+--      See the header comment in metadataSupportObjects.ts.
+--
+--      Emitting this view as a PG migration would therefore not merely be redundant; it would
+--      reintroduce the version-skew failure mode that the TypeScript-owned design prevents.
+--
+-- WHAT CARRIES THE CHANGE ON POSTGRESQL
+-- Nothing needs to. The PG view always matches the CodeGenLib version that calls it, and it
+-- carries its own performance treatment (temp-table materialization, to give the planner row
+-- statistics over the catalog-introspection scans).
+--
+-- NOTE ON HOW THIS FILE WAS PRODUCED
+-- The converter drops this statement automatically because the view name matches the CodeGen
+-- naming convention (^vw), classifying it 'codegen-object' — "regenerated natively by mj codegen".
+-- That justification is incidentally wrong for THIS view (PG's copy lives in
+-- metadataSupportObjects.ts, not in CodeGen output), but the outcome — emit nothing — is right.
+--
+-- Tracked in issue #3471.
+-- ============================================================================

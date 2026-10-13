@@ -8,10 +8,24 @@ import {
     RunView,
     RegisterForStartup,
 } from '@memberjunction/core';
-import { BaseSingleton, MJGlobal } from '@memberjunction/global';
+import { performance } from 'node:perf_hooks';
+import { hostname } from 'node:os';
+import { randomUUID } from 'node:crypto';
+import { BaseSingleton, MJGlobal, EscapeSQLString } from '@memberjunction/global';
 import {
+    Fmp4AudioSeconds,
+    InboundVideoRateOf,
+    InboundVideoStreamsOf,
     IRealtimeSession,
+    IsAgentParticipantIdentity,
+    ReadFmp4Init,
+    RealtimeMediaKind,
     RealtimeTranscript,
+    UnnamedVideoSourceLabel,
+    VideoSourceEndedNote,
+    VideoSourceSeenNote,
+    type Fmp4Init,
+    type RealtimeVideoFrame,
 } from '@memberjunction/ai';
 import {
     MJAIBridgeProviderEntity,
@@ -19,14 +33,18 @@ import {
     MJAIBridgeProviderChannelEntity,
     MJAIAgentSessionBridgeEntity,
     MJAIAgentSessionBridgeParticipantEntity,
+    MJAIAgentSessionEntity,
 } from '@memberjunction/core-entities';
 import {
     AIBridgeEngineBase,
     BaseRealtimeBridge,
+    BaseTelephonyBridge,
+    BridgeAvatarFailure,
     BridgeMediaFrame,
     BridgeMediaTrackKind,
     BridgeParticipantInfo,
     BridgeDisconnectReason,
+    BridgeVideoSourceEnd,
     RealtimeBridgeContext,
     TurnTakingPolicy,
     TurnTakingPolicyConfig,
@@ -39,8 +57,19 @@ import {
     BridgeChannelToolResult,
     BridgeNativeSdkRegistry,
     BridgeNativeSdkBinding,
+    BuildAddressedMatcher,
+    ModelSideAddressedMatcher,
+    ParseTurnTakingToolCall,
+    IsTurnTakingTool,
+    TURN_TAKING_TOOL_DEFINITIONS,
+    MODEL_SIDE_TURN_TAKING_FRAMING,
+    ResolvedTurnAddressingMode,
+    TurnAddressingMode,
 } from '@memberjunction/ai-bridge-base';
-import { MultiAgentRoomCoordinator } from './multi-agent-room-coordinator';
+import { MultiAgentRoomCoordinator, RoomCoordinatorLimits, RoomFloorState } from './multi-agent-room-coordinator';
+import { FullDuplexTurnGate, HumanSpeechDetector, OutputGateResult, OutputVerdict } from './full-duplex-turn-gate';
+import { DtmfCoalescer } from './dtmf-coalescer';
+import { AppendTranscriptTurn, BridgeTranscriptTurn, BuildPriorTranscript } from './bridge-prior-transcript';
 
 /**
  * Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place.
@@ -92,6 +121,25 @@ const ROOM_AGENT_TURN_HARD_CEILING = 30;
 const SESSION_IDLE_TTL_MS = 10 * 60 * 1000; // 10 min with no transcript activity
 const SESSION_MAX_DURATION_MS = 4 * 60 * 60 * 1000; // 4 h absolute cap
 const STALE_SWEEP_INTERVAL_MS = 60 * 1000; // sweep cadence when self-scheduled
+
+/**
+ * How often a live session's `MJ: AI Agent Sessions.LastActiveAt` is refreshed. The host session janitor closes any
+ * session idle past its threshold (15 min by default); a phone call that never touches the row would be closed
+ * mid-call, finalizing its run while the caller is still talking. Well under that threshold.
+ */
+const SESSION_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
+
+/** How often prior-boot orphans are reconciled after the one-off pass at startup. */
+const ORPHAN_RECONCILE_INTERVAL_MS = 10 * 60 * 1000;
+
+/** How many times a dropped model session is re-opened before the call is ended. Never a loop. */
+const MAX_MODEL_RECOVERY_ATTEMPTS = 1;
+
+/** Said to the caller, at the carrier, when the model session is lost and cannot be recovered. */
+const MODEL_LOSS_CALLER_MESSAGE =
+    'We are sorry, we are having technical difficulties and cannot continue this call. Please try again later. Goodbye.';
+
+const AGENT_SESSION_ENTITY = 'MJ: AI Agent Sessions';
 
 /** Context note injected into a re-gated agent so it knows it's now in a meeting (its prompt predates it). */
 const MEETING_REGATE_CONTEXT_NOTE =
@@ -208,38 +256,57 @@ export interface TurnModeratorContext {
  */
 export type TurnModerator = (ctx: TurnModeratorContext) => Promise<string[]>;
 
+/** What follows an instance's prefix in a `HostInstanceID`: a process id, then a boot id. */
+const PID_AND_BOOT_ID = /^\d+:[^:]+$/;
+
 /**
- * The host-instance identity provider the engine uses to stamp `HostInstanceID` for node affinity
- * and orphan reconciliation. Mirrors `@memberjunction/server`'s `HostInstance` helper but is
- * **injected** so this server-tier engine has no hard dependency on MJServer (which would create a
- * layering inversion) and so tests can supply a deterministic identity.
+ * The identity of the server instance that hosts this engine, and of its current boot. The engine stamps
+ * {@link IHostInstanceIdentity.GetHostInstanceID} into the `HostInstanceID` of every `MJ: AI Agent Session Bridges`
+ * row it creates, and its orphan reconcile ({@link AIBridgeEngine.ReconcileOrphans}) closes the rows that
+ * {@link IHostInstanceIdentity.IsPriorBoot} says an earlier boot of this instance left.
+ *
+ * An instance must be something only one live process can be at a time, so that a row stamped by another boot of it
+ * was left by a process that has ended. MJServer's instance is a host and the port it serves on; it injects the
+ * identity its `MJ: AI Agent Sessions` rows carry (`hostname:port:pid:bootId`). The identity is **injected**
+ * ({@link AIBridgeEngine.SetHostInstanceIdentity}) so this server-tier engine has no dependency on MJServer (a
+ * layering inversion) and tests can supply a fixed one; a {@link DefaultHostInstanceIdentity} applies until then.
  *
  * @see `/plans/realtime/realtime-bridges-architecture.md` §10 (host affinity + janitor).
  */
 export interface IHostInstanceIdentity {
-    /** Returns this process's stable host-instance identity (`hostname:pid:bootId`). */
+    /** This boot's id, stamped into the `HostInstanceID` of the bridge rows it creates. */
     GetHostInstanceID(): string;
 
-    /** Returns the host-name prefix (`hostname:`) matching ANY boot of this OS host. */
-    GetHostNamePrefix(): string;
+    /**
+     * The prefix every boot of this instance stamps and no other instance's id starts with. The reconcile reads the
+     * open bridge rows under it (a SQL `LIKE`), then asks {@link IHostInstanceIdentity.IsPriorBoot} about each one.
+     */
+    GetInstancePrefix(): string;
+
+    /**
+     * Whether a `HostInstanceID` was stamped by another boot of this instance, a process that has ended. False for
+     * this boot's id, for any other instance's, and for null. The reconcile closes a row only when this is true, so
+     * the check must be exact: a SQL `LIKE` reads a `_` in a host name as any character.
+     *
+     * @param hostInstanceID A bridge row's `HostInstanceID`.
+     */
+    IsPriorBoot(hostInstanceID: string | null | undefined): boolean;
 }
 
 /**
- * A default {@link IHostInstanceIdentity} for standalone use (and a sane fallback when the host
- * application does not inject one). Generates a stable `unknown-host:pid:bootId` identity at module
- * load. Production hosts (MJServer) inject the real `HostInstance` helper so the janitor's host
- * affinity matches across the whole deployment.
+ * The {@link IHostInstanceIdentity} the engine uses until the host injects one: this process alone, on this host.
+ * Its id is `hostname:pid-<pid>:<pid>:<bootId>`, the shape MJServer gives a process that serves no port, so
+ * {@link DefaultHostInstanceIdentity.IsPriorBoot} matches only an earlier process that had this pid on this host,
+ * which has ended. It never matches another live process's bridges. A host whose instance outlives a restart (MJServer:
+ * a host and a port) injects its own identity, so that its reconcile closes what an earlier boot left.
  */
 export class DefaultHostInstanceIdentity implements IHostInstanceIdentity {
-    private readonly hostName: string;
+    private readonly instancePrefix: string;
     private readonly instanceId: string;
 
     constructor() {
-        const pid = typeof process !== 'undefined' && process.pid ? process.pid : 0;
-        // A cheap, dependency-free random boot id; good enough for the fallback path.
-        const bootId = Math.random().toString(36).slice(2) + Date.now().toString(36);
-        this.hostName = 'unknown-host';
-        this.instanceId = `${this.hostName}:${pid}:${bootId}`;
+        this.instancePrefix = `${hostname()}:pid-${process.pid}:`;
+        this.instanceId = `${this.instancePrefix}${process.pid}:${randomUUID()}`;
     }
 
     /** @inheritdoc */
@@ -248,8 +315,17 @@ export class DefaultHostInstanceIdentity implements IHostInstanceIdentity {
     }
 
     /** @inheritdoc */
-    public GetHostNamePrefix(): string {
-        return `${this.hostName}:`;
+    public GetInstancePrefix(): string {
+        return this.instancePrefix;
+    }
+
+    /** @inheritdoc */
+    public IsPriorBoot(hostInstanceID: string | null | undefined): boolean {
+        if (!hostInstanceID || hostInstanceID === this.instanceId) {
+            return false;
+        }
+        const prefix = this.instancePrefix;
+        return hostInstanceID.startsWith(prefix) && PID_AND_BOOT_ID.test(hostInstanceID.slice(prefix.length));
     }
 }
 
@@ -306,6 +382,28 @@ export interface StartBridgeSessionParams {
 
     /** Optional extra turn-taking tuning (silence window, throttle, score threshold, clock). */
     TurnTuning?: Partial<Omit<TurnTakingPolicyConfig, 'Mode' | 'Matcher' | 'Scorer'>>;
+
+    /**
+     * How this session decides it was addressed. `'Auto'` (the default when set) uses the MODEL's own
+     * judgement when its session reports full-duplex capability and falls back to name matching otherwise;
+     * `'ModelSide'` / `'Regex'` force one. When omitted the engine keeps the legacy behaviour and uses
+     * {@link StartBridgeSessionParams.TurnMatcher} as given. An explicit `TurnMatcher` is still honoured as
+     * the `Regex`-side matcher (e.g. a 1:1 call's always-addressed matcher).
+     */
+    TurnAddressing?: TurnAddressingMode;
+
+    /**
+     * Whether this session is full-duplex. When omitted, defaults to
+     * `RealtimeSession.Capabilities?.FullDuplex === true`.
+     */
+    FullDuplex?: boolean;
+
+    /**
+     * Whether a full-duplex model's outbound audio runs through the room floor gate in a MULTI-agent room
+     * (the safety net behind the model's own turn-taking). Defaults to `true`; sessions whose model is not
+     * full-duplex are never gated. Set `false` to let a full-duplex agent speak freely (debugging).
+     */
+    FullDuplexTurnGate?: boolean;
 
     /**
      * **Multi-agent meeting mode.** When `true`, the realtime model's blind auto-response was disabled at
@@ -372,6 +470,99 @@ export interface StartBridgeSessionParams {
      * + per-agent `turnTaking.mode` from this agent's config.
      */
     TargetAgentID?: string;
+
+    /**
+     * Where THIS session's final transcript lines go. When set, every final line (both roles) is written through
+     * it directly — no room scribe is elected and the process-wide transcript sink is bypassed. A phone call uses
+     * it to write into the call's own conversation instead of a shared "Meeting Room" one.
+     */
+    TranscriptSink?: BridgeTranscriptSink;
+
+    /**
+     * Called when the caller/participant talks over the agent (a true barge-in). The telephony host uses it to drop
+     * queued spoken progress, which is now stale. It must NOT abort delegated work: the host policy (mirroring the
+     * browser runtime, `RealtimeSessionRuntime.ts` ~L1956-1963) is that the user keeps talking while delegated work
+     * runs, and cancelling on speech would kill exactly the jobs they asked for. Explicit cancellation is a separate
+     * act (the phone's `cancel_pending_work` tool). Must not throw; a throw is logged and swallowed.
+     */
+    OnBargeIn?: () => void;
+
+    /**
+     * Re-opens the model session after it drops mid-call, seeded with the conversation so far. When absent a
+     * dropped model session ends the call. Called at most {@link MAX_MODEL_RECOVERY_ATTEMPTS} time(s) per session;
+     * the returned session MUST use the same audio sample rates as the one it replaces.
+     */
+    RecoverRealtimeSession?: BridgeRealtimeSessionRecovery;
+
+    /**
+     * Re-opens the model session WITHOUT its avatar, seeded with the conversation so far, when the bridge reports it can
+     * no longer show the avatar ({@link BaseRealtimeBridge.OnAvatarUnavailable}: its decoders kept failing, or the room
+     * refused the video track). The replacement renders audio only, so the model stops generating video nobody sees.
+     * Called at most once per session, apart from {@link RecoverRealtimeSession}'s attempts. When absent, the session goes
+     * on as it is (audio still plays; the avatar's video is generated and not shown).
+     */
+    RecoverRealtimeSessionWithoutAvatar?: BridgeRealtimeSessionRecovery;
+
+    /**
+     * Called once at the end of {@link AIBridgeEngine.StopBridgeSession} for this session, after the bridge row is
+     * terminal — the place for the host to close the rest of the session's bookkeeping (the agent session row, a
+     * capacity lease). Must not throw; a throw is logged and swallowed.
+     */
+    OnSessionEnded?: (reason: BridgeDisconnectReason) => void | Promise<void>;
+}
+
+/** What {@link StartBridgeSessionParams.RecoverRealtimeSession} is told about the loss it is recovering from. */
+export interface BridgeRealtimeSessionRecoveryRequest {
+    /** Role-tagged transcript of the conversation so far, ready to frame into the new session's prompt. */
+    PriorTranscript: string;
+    /** 1-based attempt number. */
+    Attempt: number;
+    /** Why the previous session was considered lost. */
+    Reason: string;
+}
+
+/** Opens a replacement realtime model session after the current one was lost. */
+export type BridgeRealtimeSessionRecovery = (request: BridgeRealtimeSessionRecoveryRequest) => Promise<IRealtimeSession>;
+
+/**
+ * Executes the turn-taking host tools for one session. Structurally the agents layer's
+ * `BridgeLocalToolHandler` (declared here so the engine takes no dependency on `@memberjunction/ai-agents`):
+ * the layer that owns the model session passes it to its runtime's `SetLocalToolHandler`.
+ */
+export interface BridgeTurnTakingToolHandler {
+    /** Whether this handler owns `toolName` (`i_am_addressed`, `yield_turn`). */
+    Handles(toolName: string): boolean;
+    /** Runs one call; the returned JSON string is handed back to the model. Never throws. */
+    Execute(call: { ToolName: string; Arguments: string }): Promise<string>;
+}
+
+/** One agent seated in a room, as the turn-taking observability surface describes it. */
+export interface RoomTurnAgentInfo {
+    /** The agent's `MJ: AI Agent Sessions` id (matches the coordinator's ids in {@link RoomFloorState}). */
+    AgentSessionID: string;
+    /** The bridge row id (what stops/removes the agent). */
+    SessionBridgeID: string;
+    /** The names the agent answers to; the first is its display name. */
+    Names: string[];
+    /** The configured turn-taking mode. */
+    TurnMode: BridgeTurnMode;
+    /** How it decides it was addressed (after capability resolution). */
+    Addressing: ResolvedTurnAddressingMode;
+    /** Whether its model is full-duplex (its outbound audio runs through the floor gate). */
+    FullDuplex: boolean;
+}
+
+/** What {@link AIBridgeEngine} builds for a session's turn-taking at connect. */
+interface BuiltTurnPolicy {
+    Policy: TurnTakingPolicy;
+    Mode: ResolvedTurnAddressingMode;
+    ModelSide?: ModelSideAddressedMatcher;
+}
+
+/** A room's live turn-taking state: the coordinator's floor state plus who is seated. See {@link AIBridgeEngine.GetRoomTurnSnapshot}. */
+export interface RoomTurnSnapshot extends RoomFloorState {
+    /** The agents seated in the room. */
+    Agents: RoomTurnAgentInfo[];
 }
 
 /**
@@ -397,6 +588,31 @@ export interface ActiveBridgeSession {
 
     /** The per-session turn-taking policy gating generation. */
     TurnPolicy: TurnTakingPolicy;
+
+    /** How this session decides it was addressed (the mode actually in effect after capability resolution). */
+    AddressingMode?: ResolvedTurnAddressingMode;
+
+    /** The model-side addressing latch the model's `i_am_addressed` signal feeds — present only in `ModelSide` mode. */
+    ModelSideMatcher?: ModelSideAddressedMatcher;
+
+    /** Whether this session operates in full-duplex conversational mode. */
+    FullDuplex: boolean;
+
+    /** The floor gate over this full-duplex model's outbound audio (see {@link FullDuplexTurnGate}); absent for turn-based models. */
+    TurnGate?: FullDuplexTurnGate;
+
+    /** Detects human speech in inbound room audio so the room's agents yield to it; present with {@link ActiveBridgeSession.TurnGate}. */
+    HumanSpeech?: HumanSpeechDetector;
+
+    /**
+     * Executes the turn-taking host tools (`i_am_addressed`, `yield_turn`) for this session. Present for
+     * full-duplex / model-side sessions in a room; the layer that owns the model session binds it as its
+     * local tool handler (the tool DEFINITIONS are {@link TURN_TAKING_TOOL_DEFINITIONS}).
+     */
+    TurnTakingToolHandler?: BridgeTurnTakingToolHandler;
+
+    /** Whether this session has been told how to take turns in a shared room (the framing note is sent once, when the room becomes multi-agent). */
+    TurnTakingAnnounced?: boolean;
 
     /**
      * Whether the model's blind auto-response is OFF for this session (multi-agent meeting). When `true`
@@ -459,6 +675,14 @@ export interface ActiveBridgeSession {
      */
     LastInboundSpeaker?: string;
 
+    /**
+     * The camera and screen sources whose frames reached the current model session (`SourceID` → the label the model was
+     * given). A source not in it is new to the model, which is told what it can now see before its first frame; when one
+     * in it ends, the model is told, by that label, that it can no longer see it (and only about sources it actually saw).
+     * Cleared when a recovered session replaces the model.
+     */
+    SeenVideoSources: Map<string, string>;
+
     /** This agent's participation style for the room moderator (`'proactive'` | `'addressed-only'`). */
     ParticipationMode: 'proactive' | 'addressed-only';
 
@@ -502,6 +726,51 @@ export interface ActiveBridgeSession {
      * when no channel host was supplied. Never throws — resolves to a structured failure.
      */
     ExecuteServerChannelTool?: (toolName: string, argsJson: string) => Promise<BridgeChannelToolResult>;
+
+    /** This session's own transcript sink (see {@link StartBridgeSessionParams.TranscriptSink}), when supplied. */
+    TranscriptSink?: BridgeTranscriptSink;
+
+    /** Barge-in hook (see {@link StartBridgeSessionParams.OnBargeIn}). */
+    OnBargeIn?: () => void;
+
+    /** Model-session recovery factory (see {@link StartBridgeSessionParams.RecoverRealtimeSession}). */
+    RecoverRealtimeSession?: BridgeRealtimeSessionRecovery;
+
+    /** The audio-only replacement factory (see {@link StartBridgeSessionParams.RecoverRealtimeSessionWithoutAvatar}). */
+    RecoverRealtimeSessionWithoutAvatar?: BridgeRealtimeSessionRecovery;
+
+    /** Whether the model session was already replaced because its avatar could not be shown (once per session). */
+    AvatarReplaced?: boolean;
+
+    /**
+     * The avatar stream's latest init segment, read: its audio track's timescale lets the floor gate count an avatar
+     * piece's speaking time. Every stream (a turn, a resumed or replaced model session) opens with its own init.
+     */
+    AvatarInit?: Fmp4Init | null;
+
+    /** End-of-session hook (see {@link StartBridgeSessionParams.OnSessionEnded}). */
+    OnSessionEnded?: (reason: BridgeDisconnectReason) => void | Promise<void>;
+
+    /** The last final transcript turns, kept so a re-opened model session can be told what was said. */
+    TranscriptTail: BridgeTranscriptTurn[];
+
+    /** How many times the model session has been re-opened (capped by {@link MAX_MODEL_RECOVERY_ATTEMPTS}). */
+    ModelRecoveryAttempts: number;
+
+    /** High-resolution timestamp (ms) when the most recent user turn completed, for transcript-to-next-audio latency telemetry. */
+    LastUserSpeechEndMs?: number;
+
+    /** Whether a model-session recovery is in flight; inbound audio is dropped meanwhile. */
+    ModelRecovering: boolean;
+
+    /** Set once the session is being torn down, so a model-loss signal during teardown is ignored. */
+    Ending: boolean;
+
+    /** Coalesces the caller's keypad presses into one note for the model (telephony only). */
+    DtmfCoalescer?: DtmfCoalescer;
+
+    /** Epoch-ms of the last write of the agent session row's `LastActiveAt`. */
+    LastSessionHeartbeatMs: number;
 }
 
 /**
@@ -527,8 +796,8 @@ export interface ActiveBridgeSession {
  *   `AIAgentSessionBridgeParticipant` rows.
  * - **Turn-taking integration** — holds a {@link TurnTakingPolicy} per session and feeds diarized
  *   transcript segments through it, acting on the decision (Speak / PostToChat / Silent).
- * - **Janitor scaffold** — {@link ReconcileOrphans} force-closes Connected bridges left by a dead
- *   host, following the `SessionJanitor` shape.
+ * - **Janitor scaffold** — {@link ReconcileOrphans} force-closes Connected bridges left by an earlier
+ *   boot of this instance (see {@link IHostInstanceIdentity}), following the `SessionJanitor` shape.
  *
  * The engine never constructs the realtime model: the {@link IRealtimeSession} is injected via
  * {@link StartBridgeSessionParams}, keeping the only coupling the transport seam itself and making
@@ -548,6 +817,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     /** Interval handle for the self-scheduled stale-session sweep (started via {@link StartStaleSessionSweep}). */
     private staleSweepTimer?: ReturnType<typeof setInterval>;
 
+    /** Interval handle for the periodic prior-boot orphan reconciliation (see {@link StartOrphanReconciliation}). */
+    private orphanReconcileTimer?: ReturnType<typeof setInterval>;
+
     // Session timing thresholds (defaults from the module consts; overridable via {@link ConfigureSessionTimings}).
     private idleTtlMs = SESSION_IDLE_TTL_MS;
     private maxDurationMs = SESSION_MAX_DURATION_MS;
@@ -559,9 +831,13 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
     /** roomKey (lowercased) → the bridge id of that room's current transcript scribe. Election dedup. */
     private readonly roomScribes = new Map<string, string>();
-    /** Diagnostic: session ids that have already logged their first inbound / outbound media frame. */
-    private diagInbound = new Set<string>();
-    private diagOutbound = new Set<string>();
+    /**
+     * Diagnostic: the bridges (by `SessionBridgeID`) that have logged their first inbound media frame. An ending bridge
+     * adds no id, and {@link StopBridgeSession} drops its id, so a long-running host keeps only its live bridges.
+     */
+    private readonly diagInbound = new Set<string>();
+    /** Diagnostic: the bridges that have logged the agent's first outbound audio, kept the same way as {@link diagInbound}. */
+    private readonly diagOutbound = new Set<string>();
     /** In-memory registry of bridged sessions this process currently hosts, keyed by bridge id (lowercased). */
     private activeSessions = new Map<string, ActiveBridgeSession>();
 
@@ -622,7 +898,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     /**
      * Deferred-startup entry point (per {@link IStartupSink}). Warms the ONE composed base cache by
      * delegating to {@link AIBridgeEngineBase.Config}; mirrors `AIEngine.HandleStartup`. No double
-     * load — there is only the base's cache to warm.
+     * load — there is only the base's cache to warm. Then starts the same-process stale-session sweep.
+     *
+     * It does not start the orphan reconcile. The host starts that ({@link StartOrphanReconciliation}) once it owns
+     * its instance: the deferred startup can run before MJServer listens on its port, while another live MJAPI may
+     * still hold that port, and a reconcile then would close that MJAPI's bridges as this instance's orphans.
      *
      * @param contextUser The boot/system user context.
      * @param provider Optional metadata provider override (multi-provider scenarios).
@@ -752,11 +1032,12 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     }
 
     /**
-     * Injects the host-instance identity provider used for `HostInstanceID` stamping and janitor
-     * affinity. Production hosts (MJServer) call this once at boot with the real `HostInstance`
-     * helper; standalone callers can rely on the {@link DefaultHostInstanceIdentity}.
+     * Injects the identity of the server instance hosting this engine ({@link IHostInstanceIdentity}): the engine
+     * stamps it into every bridge row it creates and reconciles orphans by it. Call it once at boot, before anything
+     * can start a bridge. MJServer's `Serve` passes the identity its agent-session rows carry, right after it sets its
+     * port. Until then the engine uses a {@link DefaultHostInstanceIdentity}.
      *
-     * @param identity The identity provider to use.
+     * @param identity The identity to use.
      */
     public SetHostInstanceIdentity(identity: IHostInstanceIdentity): void {
         this.hostIdentity = identity;
@@ -841,7 +1122,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @throws When the driver cannot be resolved or `Connect` fails (the row is stamped `Failed`).
      */
     public async StartBridgeSession(params: StartBridgeSessionParams): Promise<ActiveBridgeSession> {
-        const bridgeRow = await this.createBridgeRow(params);
+        const fullDuplex = params.FullDuplex ?? params.RealtimeSession.Capabilities?.FullDuplex === true;
+        const turn = this.buildTurnPolicy(params, fullDuplex);
+        const bridgeRow = await this.createBridgeRow(params, turn.Mode);
 
         try {
             // Resolve the driver inside the try so a resolution failure still stamps the row Failed
@@ -861,14 +1144,16 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             bridgeRow.ConnectedAt = new Date();
             await this.transitionStatus(bridgeRow, 'Connected', params);
 
-            const turnPolicy = this.buildTurnPolicy(params);
             const active: ActiveBridgeSession = {
                 SessionBridgeID: bridgeRow.ID,
                 AgentSessionID: params.AgentSessionID,
                 AgentID: params.AgentID,
                 Bridge: driver,
                 RealtimeSession: params.RealtimeSession,
-                TurnPolicy: turnPolicy,
+                TurnPolicy: turn.Policy,
+                AddressingMode: turn.Mode,
+                ModelSideMatcher: turn.ModelSide,
+                FullDuplex: fullDuplex,
                 DisableAutoResponse: params.DisableAutoResponse === true,
                 HasSeenHuman: false,
                 RoomKey: result.ExternalConnectionId,
@@ -887,6 +1172,17 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 MetadataProvider: params.MetadataProvider,
                 ChannelHost: params.ChannelHost,
                 ServerChannelTools: [],
+                TranscriptSink: params.TranscriptSink,
+                OnBargeIn: params.OnBargeIn,
+                RecoverRealtimeSession: params.RecoverRealtimeSession,
+                RecoverRealtimeSessionWithoutAvatar: params.RecoverRealtimeSessionWithoutAvatar,
+                OnSessionEnded: params.OnSessionEnded,
+                TranscriptTail: [],
+                ModelRecoveryAttempts: 0,
+                ModelRecovering: false,
+                Ending: false,
+                LastSessionHeartbeatMs: Date.now(),
+                SeenVideoSources: new Map<string, string>(),
             };
 
             this.electTranscriptScribe(active);
@@ -898,10 +1194,14 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             }
             this.wireTransportSeam(active);
             this.wireParticipantTracking(active);
+            this.wireTelephonyLifecycle(active);
             this.wireTurnTaking(active);
+            this.wireFullDuplexTurnGate(active, params);
             await this.wireChannelPlane(active);
+            this.wireTurnTakingTools(active);
 
             this.activeSessions.set(bridgeRow.ID.toLowerCase(), active);
+            this.announceTurnTaking(active.RoomKey); // after registration, so the newcomer is counted among the room's agents
             LogStatus(`[AIBridgeEngine] Bridge session ${bridgeRow.ID} connected via ${params.Provider.Name}`);
             return active;
         } catch (err) {
@@ -931,18 +1231,34 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         const active = this.activeSessions.get(key);
 
         if (active) {
+            active.Ending = true; // ignore model-loss signals that race the teardown
             await this.disconnectDriver(active, reason);
             this.activeSessions.delete(key);
-            return this.markBridgeDisconnected(
+            // Forget its first-frame diagnostics. A frame that arrives after this can't add the id back: an ending bridge
+            // records none.
+            this.diagInbound.delete(active.SessionBridgeID);
+            this.diagOutbound.delete(active.SessionBridgeID);
+            const done = await this.markBridgeDisconnected(
                 sessionBridgeID,
                 reason,
                 active.ContextUser ?? contextUser,
                 active.MetadataProvider ?? provider,
             );
+            await this.runSessionEndedHook(active, reason);
+            return done;
         }
 
         // Not held by this process — still reconcile the durable row (janitor / cross-host close).
         return this.markBridgeDisconnected(sessionBridgeID, reason, contextUser, provider);
+    }
+
+    /** Runs the host's end-of-session hook. A failure is logged — teardown bookkeeping must not be blocked by it. */
+    private async runSessionEndedHook(active: ActiveBridgeSession, reason: BridgeDisconnectReason): Promise<void> {
+        try {
+            await active.OnSessionEnded?.(reason);
+        } catch (err) {
+            LogError(`[AIBridgeEngine] session-ended hook failed for bridge ${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────────
@@ -956,9 +1272,11 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * that pipe.
      *
      * Two hooks, one per direction:
-     * - **Inbound** (`bridge.OnMedia` → `session.SendInput`): what the agent HEARS. Each inbound
-     *   {@link BridgeMediaFrame} from the endpoint is unwrapped to its raw `ArrayBuffer` payload and
-     *   streamed straight to the model.
+     * - **Inbound** (`bridge.OnMedia` → `session.SendInput`): what the agent HEARS (and, for a video model, SEES).
+     *   Each inbound {@link BridgeMediaFrame} from the endpoint is unwrapped to its raw `ArrayBuffer` payload and
+     *   streamed straight to the model. Camera and screen frames go only to a session that declares inbound video; the
+     *   first frame of a source new to the model session is preceded by a note naming it, and the end of a source the
+     *   model saw is followed by one (see {@link VideoSourceSeenNote}, {@link VideoSourceEndedNote}).
      * - **Outbound** (`session.OnOutput` → `bridge.SendMedia`): what the agent SAYS. Each model
      *   output `ArrayBuffer` is wrapped in an outbound audio {@link BridgeMediaFrame} and sent into
      *   the meeting/call.
@@ -969,11 +1287,21 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @param active The live bridged session whose driver and realtime session are wired together.
      */
     private wireTransportSeam(active: ActiveBridgeSession): void {
-        const { Bridge, RealtimeSession } = active;
+        const { Bridge } = active;
+        this.wireModelSession(active);
+        if (Bridge.Features.DetachedMediaPlane) {
+            // Detached media plane (e.g. OpenAISipBridge): the carrier/platform terminates the media leg
+            // directly with the AI provider. MJ is NOT in the media relay path.
+            return;
+        }
 
-        // Inbound: endpoint media → the agent hears (and, for a video model, SEES) it. The frame's
-        // Track tags the plane, so a human's camera (`video-in`) reaches the model as a `video` frame.
+        // Inbound: endpoint media → the agent hears (and, for a video model, SEES) it. The frame's Track tags the
+        // plane: a camera (`video-in`) or a shared screen (`screen-in`) reaches the model as a `video` frame. Only a
+        // session that declares inbound video gets one; any other driver would read the image as audio. Always read
+        // `active.RealtimeSession` — a recovered session replaces it mid-call.
+        let videoDropNoted = false;
         Bridge.OnMedia((frame: BridgeMediaFrame) => {
+            active.LastActivityMs = Date.now();
             // DIARIZATION: the inbound frame carries the speaking participant's identity (when the provider
             // supports it). The realtime model's transcript has no speaker label, so we remember the
             // most-recent inbound audio speaker here and attribute the next 'user' transcript to them — a
@@ -981,51 +1309,216 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             if (frame.Track === 'audio-in' && frame.SpeakerLabel) {
                 active.LastInboundSpeaker = frame.SpeakerLabel;
             }
-            const chunk = this.frameToArrayBuffer(frame);
-            if (chunk) {
-                if (!this.diagInbound.has(active.SessionBridgeID)) {
-                    this.diagInbound.add(active.SessionBridgeID);
-                    LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=${frame.Track}). The agent is HEARING you.`, verboseOnly: true });
+            const kind = mediaKindOf(frame.Track);
+            if (kind === 'video' && InboundVideoStreamsOf(active.RealtimeSession.Capabilities) === 0) {
+                if (!videoDropNoted) {
+                    videoDropNoted = true;
+                    LogStatusEx({ message: `[AIBridgeEngine] ${frame.Track} frames are not sent to bridge ${active.SessionBridgeID}: its realtime session does not take inbound video.`, verboseOnly: true });
                 }
-                RealtimeSession.SendInput(chunk, frame.Track === 'video-in' ? 'video' : 'audio');
+                return;
+            }
+            const chunk = this.frameToArrayBuffer(frame);
+            this.observeInboundHumanSpeech(active, frame, chunk);
+            if (chunk && !active.ModelRecovering) {
+                if (!active.Ending && !this.diagInbound.has(active.SessionBridgeID)) {
+                    this.diagInbound.add(active.SessionBridgeID);
+                    LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=${frame.Track}). ${firstInboundFrameMeaning(frame.Track)}`, verboseOnly: true });
+                }
+                if (kind === 'video') {
+                    this.tellModelVideoSourceSeen(active, frame);
+                }
+                active.RealtimeSession.SendInput({
+                    Data: chunk,
+                    Kind: kind,
+                    MimeType: frame.MimeType,
+                    TimestampMs: frame.TimestampMs,
+                });
             }
         });
+        Bridge.OnVideoSourceEnded((source: BridgeVideoSourceEnd) => this.tellModelVideoSourceEnded(active, source));
+        Bridge.OnAvatarUnavailable((reason: BridgeAvatarFailure) => void this.replaceModelSessionWithoutAvatar(active, reason));
+    }
+
+    /**
+     * Tells the model what it can now see, right before the first frame of a camera or screen new to the current model
+     * session: the first source, the next one after a switch, a source seen again after it ended, or a replacement
+     * session's first frame. Records the source, so its end is reported. A frame without a `SourceID` is not tracked.
+     * Reads `active.RealtimeSession` each time: a recovered session replaces it.
+     *
+     * @param active The live bridged session.
+     * @param frame The camera or screen frame about to be sent.
+     */
+    private tellModelVideoSourceSeen(active: ActiveBridgeSession, frame: BridgeMediaFrame): void {
+        if (!frame.SourceID || active.SeenVideoSources.has(frame.SourceID)) {
+            return;
+        }
+        const label = frame.SourceLabel ?? fallbackVideoSourceLabel(frame.Track);
+        active.SeenVideoSources.set(frame.SourceID, label);
+        active.RealtimeSession.SendContextNote?.(VideoSourceSeenNote(label));
+    }
+
+    /**
+     * Tells the model it can no longer see a camera or screen whose frames reached it (the person stopped letting agents
+     * see them, left, stopped sharing or turned the camera off, or the view moved to another source), so it stops
+     * describing the last frame as current. The note names the source as the model was told with its first frame, not by
+     * the label the driver reports at the end: the two differ when the person was renamed in between, or had no name when
+     * that first frame was read. A source the model never saw is ignored. Reads `active.RealtimeSession` each time: a
+     * recovered session replaces it.
+     *
+     * @param active The live bridged session.
+     * @param source The source that ended, as the driver reported it.
+     */
+    private tellModelVideoSourceEnded(active: ActiveBridgeSession, source: BridgeVideoSourceEnd): void {
+        const seenLabel = active.SeenVideoSources.get(source.SourceID);
+        if (seenLabel === undefined) {
+            return;
+        }
+        active.SeenVideoSources.delete(source.SourceID);
+        active.RealtimeSession.SendContextNote?.(VideoSourceEndedNote(seenLabel));
+    }
+
+    /**
+     * Wires everything that hangs off the MODEL session: barge-in, the lifecycle (drop) signals, and — unless the
+     * media plane is detached — the agent's outbound audio/video. Called at connect AND again for a replacement
+     * session after a recovery, so every handler checks it still belongs to the active session.
+     *
+     * @param active The live bridged session.
+     */
+    private wireModelSession(active: ActiveBridgeSession): void {
+        const { Bridge } = active;
+        const session = active.RealtimeSession;
+        // A replacement model session has seen no frames yet; the sources it sees are recorded afresh as they arrive.
+        active.SeenVideoSources.clear();
+
+        // Barge-in: on a TRUE interruption (the user speaks over the agent), the model stops generating —
+        // but the driver may still hold queued outbound audio that would keep playing. Flush it so the
+        // agent goes quiet immediately. Without this, interruption "doesn't work" on the bridge surface.
+        session.OnInterruption(() => this.handleBargeIn(active));
+        this.wireModelLifecycle(active, session);
+
+        if (Bridge.Features.DetachedMediaPlane) {
+            return;
+        }
 
         // Outbound: the agent speaks → into the meeting/call.
-        RealtimeSession.OnOutput((chunk: ArrayBuffer) => {
-            if (!this.diagOutbound.has(active.SessionBridgeID)) {
+        session.OnOutput((chunk: ArrayBuffer) => {
+            if (active.RealtimeSession !== session) {
+                return; // a stale (replaced) session
+            }
+            active.LastActivityMs = Date.now();
+            if (active.LastUserSpeechEndMs !== undefined) {
+                const latencyMs = Math.round(performance.now() - active.LastUserSpeechEndMs);
+                active.LastUserSpeechEndMs = undefined;
+                LogStatusEx({
+                    message: `[AIBridgeEngine][telemetry] transcript-to-next-audio latency: ${latencyMs}ms (bridge ${active.SessionBridgeID})`,
+                    verboseOnly: true,
+                });
+            }
+            if (!active.Ending && !this.diagOutbound.has(active.SessionBridgeID)) {
                 this.diagOutbound.add(active.SessionBridgeID);
                 LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST outbound audio from the agent (bridge ${active.SessionBridgeID}). The agent is SPEAKING into the room.`, verboseOnly: true });
+            }
+            const verdict = this.gateOutput(active, chunk.byteLength);
+            if (verdict !== 'Forward') {
+                if (verdict === 'Cut') {
+                    Bridge.FlushOutboundMedia(); // the burst was just refused — drop audio already queued for it too
+                }
+                return;
             }
             const track: BridgeMediaTrackKind = 'audio-out';
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
         });
 
-        // Outbound VIDEO: a video-capable session ALSO emits a synced avatar/video track. Optional —
-        // audio-only sessions don't implement OnVideoOutput, so call it null-safely. The bridge driver
-        // gates the actual publish on its `VideoOut` capability.
-        RealtimeSession.OnVideoOutput?.((chunk: ArrayBuffer) => {
+        // Outbound VIDEO: a video-capable session also emits typed frames (a live avatar's fragmented MP4, encoded
+        // chunks, images). Optional: audio-only sessions don't implement OnVideoFrame, so call it null-safely. The
+        // bridge driver gates the actual publish on its `VideoOut` capability.
+        session.OnVideoFrame?.((frame: RealtimeVideoFrame) => this.forwardVideoFrame(active, session, frame));
+
+        // The deprecated untyped video output, still forwarded as it was (bytes without a MIME type).
+        session.OnVideoOutput?.((chunk: ArrayBuffer) => {
+            if (active.RealtimeSession !== session) {
+                return;
+            }
+            active.LastActivityMs = Date.now();
             const track: BridgeMediaTrackKind = 'video-out';
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
         });
+    }
 
-        // Barge-in: on a TRUE interruption (the user speaks over the agent), the model stops generating —
-        // but the driver may still hold queued outbound audio that would keep playing. Flush it so the
-        // agent goes quiet immediately. Without this, interruption "doesn't work" on the bridge surface.
-        RealtimeSession.OnInterruption(() => {
-            if (this.diagOutbound.has(active.SessionBridgeID)) {
-                LogStatusEx({ message: `[AIBridgeEngine][diag] barge-in — flushing the agent's queued audio (bridge ${active.SessionBridgeID}).`, verboseOnly: true });
+    /**
+     * Sends one frame of the agent's video to the bridge on `video-out`, with its MIME type so the driver can publish it
+     * (a fragmented MP4 piece as an avatar), and what the frame says about its video (see {@link frameVideoFacts}). In a
+     * full-duplex multi-agent room the frame passes the floor gate first.
+     */
+    private forwardVideoFrame(active: ActiveBridgeSession, session: IRealtimeSession, frame: RealtimeVideoFrame): void {
+        if (active.RealtimeSession !== session) {
+            return; // a stale (replaced) session
+        }
+        active.LastActivityMs = Date.now();
+        const verdict = this.gateVideoFrame(active, frame);
+        if (verdict !== 'Forward') {
+            if (verdict === 'Cut') {
+                active.Bridge.FlushOutboundMedia(); // the burst was just refused — drop what is queued for it, voice and face
             }
-            Bridge.FlushOutboundMedia();
-            // A human cut in → any moderator decision staged for the prior turn is now stale. Drop the queued
-            // speakers (the human's new turn will drive a fresh decision); also free the floor this agent held.
-            if (active.RoomKey) {
-                this.clearRoomModeratorState(active.RoomKey, false);
-                if (active.HoldsFloor) {
-                    this.releaseRoomFloor(active);
-                }
-            }
+            return;
+        }
+        active.Bridge.SendMedia('video-out', {
+            Track: 'video-out',
+            Bytes: frame.Data,
+            MimeType: frame.MimeType,
+            TimestampMs: Date.now(),
+            ...frameVideoFacts(frame, active.AvatarInit),
         });
+    }
+
+    /**
+     * The floor gate's verdict on one video frame. An fMP4 piece carries the voice on its audio track, so a fragment is
+     * counted by its audio's duration: that is how long the agent speaks. A fragment its driver marks `Idle` (the face an
+     * avatar shows between answers) counts as no speech, whatever its audio track holds; so does one with video only.
+     * Neither starts a burst or takes the floor (see {@link FullDuplexTurnGate.OnOutputDuration}). An init segment
+     * carries no speech: it is remembered (its audio track's timescale times the fragments) and passes. An encoded chunk
+     * or an image carries no voice (that comes through `OnOutput`, which is gated) and passes.
+     */
+    private gateVideoFrame(active: ActiveBridgeSession, frame: RealtimeVideoFrame): OutputVerdict {
+        if (frame.Kind !== 'fmp4') {
+            return 'Forward';
+        }
+        if (frame.Piece === 'init') {
+            active.AvatarInit = ReadFmp4Init(frame.Data) ?? active.AvatarInit;
+            return 'Forward';
+        }
+        const speechSeconds = frame.Idle || !active.AvatarInit ? 0 : (Fmp4AudioSeconds(frame.Data, active.AvatarInit) ?? 0);
+        return this.gateOutputDuration(active, speechSeconds * 1000);
+    }
+
+    /** A true barge-in: flush queued audio, drop stale room moderator state, free the floor, tell the host. */
+    private handleBargeIn(active: ActiveBridgeSession): void {
+        active.LastUserSpeechEndMs = undefined;
+        if (this.diagOutbound.has(active.SessionBridgeID)) {
+            LogStatusEx({ message: `[AIBridgeEngine][diag] barge-in — flushing the agent's queued audio (bridge ${active.SessionBridgeID}).`, verboseOnly: true });
+        }
+        active.Bridge.FlushOutboundMedia();
+        // A human cut in → any moderator decision staged for the prior turn is now stale. Drop the queued
+        // speakers (the human's new turn will drive a fresh decision); also free the floor this agent held.
+        if (active.RoomKey) {
+            if (this.isHumanSpeaker(active.LastInboundSpeaker)) {
+                this.preemptForHuman(active.RoomKey); // a person cut in — every agent yields, not just this one
+            }
+            this.clearRoomModeratorState(active.RoomKey, false);
+            if (active.HoldsFloor) {
+                this.releaseRoomFloor(active);
+            }
+        }
+        this.notifyBargeIn(active);
+    }
+
+    /** Tells the host about a barge-in so it can drop now-stale narration (never delegated work). A hook failure is logged, never fatal. */
+    private notifyBargeIn(active: ActiveBridgeSession): void {
+        try {
+            active.OnBargeIn?.();
+        } catch (err) {
+            LogError(`[AIBridgeEngine] barge-in hook failed for bridge ${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     /**
@@ -1111,6 +1604,147 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 `[AIBridgeEngine] Participant tracking unavailable for bridge ${active.SessionBridgeID}: ` +
                     `${err instanceof Error ? err.message : String(err)}`,
             );
+        }
+    }
+
+    private wireTelephonyLifecycle(active: ActiveBridgeSession): void {
+        if (active.Bridge instanceof BaseTelephonyBridge) {
+            active.Bridge.OnCallEnded(() => {
+                LogStatus(`[AIBridgeEngine] Telephony call ended for bridge ${active.SessionBridgeID} — stopping bridge session.`);
+                void this.StopBridgeSession(active.SessionBridgeID, 'HostEnded', active.ContextUser, active.MetadataProvider);
+            });
+            this.wireInboundDtmf(active, active.Bridge);
+        }
+    }
+
+    /**
+     * Routes the caller's keypad presses to the model as one short context note per burst ("the caller pressed
+     * 1234"). Capability-gated: a provider with DTMF off throws from `OnDTMF`, which just means no keypad input.
+     */
+    private wireInboundDtmf(active: ActiveBridgeSession, bridge: BaseTelephonyBridge): void {
+        const coalescer = new DtmfCoalescer((digits) => {
+            if (!active.Ending) {
+                active.RealtimeSession.SendContextNote?.(`[caller keypad] The caller pressed: ${digits}`);
+            }
+        });
+        try {
+            bridge.OnDTMF((digits) => coalescer.Push(digits));
+            active.DtmfCoalescer = coalescer;
+        } catch (err) {
+            coalescer.Dispose();
+            LogStatusEx({ message: `[AIBridgeEngine] inbound DTMF not routed for bridge ${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`, verboseOnly: true });
+        }
+    }
+
+    /**
+     * Subscribes to the model session's fatal-error and unexpected-close signals. Either means the caller is now
+     * talking to a dead line, so it starts {@link handleModelLoss}. Both can fire for one drop; the handler
+     * de-duplicates.
+     */
+    private wireModelLifecycle(active: ActiveBridgeSession, session: IRealtimeSession): void {
+        session.OnError((error) => {
+            if (error.Fatal) {
+                void this.handleModelLoss(active, session, `fatal session error${error.Code ? ` [${error.Code}]` : ''}: ${error.Message}`);
+            }
+        });
+        session.OnClose?.(() => {
+            void this.handleModelLoss(active, session, 'the provider closed the connection');
+        });
+    }
+
+    /**
+     * The model session dropped mid-call. Re-open it ONCE, seeded with what was said, and carry on; if that is not
+     * possible (no recovery factory, attempts spent, the factory fails, or the replacement uses different audio
+     * rates) end the call cleanly instead of leaving the caller in silence.
+     */
+    private async handleModelLoss(active: ActiveBridgeSession, lost: IRealtimeSession, why: string): Promise<void> {
+        if (active.Ending || active.ModelRecovering || active.RealtimeSession !== lost) {
+            return; // already tearing down, already recovering, or a signal from a session we replaced
+        }
+        LogError(`[AIBridgeEngine] model session lost for bridge ${active.SessionBridgeID}: ${why}`);
+        if (!active.RecoverRealtimeSession || active.ModelRecoveryAttempts >= MAX_MODEL_RECOVERY_ATTEMPTS) {
+            await this.endCallAfterModelLoss(active);
+            return;
+        }
+        active.ModelRecovering = true;
+        active.ModelRecoveryAttempts++;
+        try {
+            const fresh = await active.RecoverRealtimeSession({
+                PriorTranscript: BuildPriorTranscript(active.TranscriptTail),
+                Attempt: active.ModelRecoveryAttempts,
+                Reason: why,
+            });
+            await this.adoptRecoveredSession(active, lost, fresh);
+        } catch (err) {
+            LogError(`[AIBridgeEngine] model session recovery failed for bridge ${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`);
+            active.ModelRecovering = false;
+            await this.endCallAfterModelLoss(active);
+        }
+    }
+
+    /** Swaps a recovered model session in for the lost one, or refuses it when it cannot carry the call's audio. */
+    private async adoptRecoveredSession(active: ActiveBridgeSession, lost: IRealtimeSession, fresh: IRealtimeSession, note = `attempt ${active.ModelRecoveryAttempts}`): Promise<void> {
+        const sameRates = (fresh.InputSampleRate ?? 24000) === (lost.InputSampleRate ?? 24000) && (fresh.OutputSampleRate ?? 24000) === (lost.OutputSampleRate ?? 24000);
+        if (active.Ending || !sameRates) {
+            await this.closeQuietly(fresh);
+            throw new Error(active.Ending ? 'the call ended during recovery' : 'the replacement session uses different audio sample rates');
+        }
+        active.RealtimeSession = fresh;
+        this.wireModelSession(active);
+        this.wireTurnTaking(active);
+        active.ModelRecovering = false;
+        LogStatus(`[AIBridgeEngine] model session re-opened for bridge ${active.SessionBridgeID} (${note}).`);
+        await this.closeQuietly(lost); // releases the dead socket and finalizes its observability run
+    }
+
+    /**
+     * The bridge can no longer show the agent's avatar: replace the model session, once, with one that renders no avatar
+     * (through the host's {@link StartBridgeSessionParams.RecoverRealtimeSessionWithoutAvatar}), seeded with what was said,
+     * so the model stops generating video nobody sees and, if the voice decoder was the one that failed, the voice comes
+     * back as PCM. Inbound audio is held back while the replacement opens, as in a recovery. If it fails, the session goes
+     * on as it was.
+     */
+    private async replaceModelSessionWithoutAvatar(active: ActiveBridgeSession, reason: BridgeAvatarFailure): Promise<void> {
+        const replace = active.RecoverRealtimeSessionWithoutAvatar;
+        if (active.Ending || active.ModelRecovering || active.AvatarReplaced || !replace) {
+            LogStatus(`[AIBridgeEngine] bridge ${active.SessionBridgeID} lost its avatar (${reason}); its model session is not replaced${replace ? ' (busy, ending or already replaced)' : ' (the host gave no audio-only replacement)'}.`);
+            return;
+        }
+        active.AvatarReplaced = true;
+        active.ModelRecovering = true;
+        const lost = active.RealtimeSession;
+        LogStatus(`[AIBridgeEngine] bridge ${active.SessionBridgeID} lost its avatar (${reason}); replacing its model session with an audio-only one.`);
+        try {
+            const fresh = await replace({ PriorTranscript: BuildPriorTranscript(active.TranscriptTail), Attempt: 1, Reason: `the avatar could not be shown (${reason})` });
+            await this.adoptRecoveredSession(active, lost, fresh, `audio only, after the avatar's ${reason}`);
+        } catch (err) {
+            LogError(`[AIBridgeEngine] the audio-only replacement for bridge ${active.SessionBridgeID} failed; the session goes on as it was: ${err instanceof Error ? err.message : String(err)}`);
+            active.ModelRecovering = false;
+        }
+    }
+
+    /** Ends a call whose model session cannot be recovered: a spoken goodbye at the carrier (telephony), then a clean stop. */
+    private async endCallAfterModelLoss(active: ActiveBridgeSession): Promise<void> {
+        if (active.Ending) {
+            return;
+        }
+        active.Ending = true; // a signal that races this one must not start a second teardown
+        if (active.Bridge instanceof BaseTelephonyBridge) {
+            try {
+                await active.Bridge.AnnounceAndEndCall(MODEL_LOSS_CALLER_MESSAGE);
+            } catch (err) {
+                LogError(`[AIBridgeEngine] could not announce the failure to the caller on bridge ${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+        await this.StopBridgeSession(active.SessionBridgeID, 'Error', active.ContextUser, active.MetadataProvider);
+    }
+
+    /** Closes a realtime session, logging (never throwing) a provider error. */
+    private async closeQuietly(session: IRealtimeSession): Promise<void> {
+        try {
+            await session.Close();
+        } catch (err) {
+            LogError(`[AIBridgeEngine] closing a realtime session failed: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
@@ -1259,18 +1893,30 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @param active The live bridged session.
      */
     private wireTurnTaking(active: ActiveBridgeSession): void {
-        active.RealtimeSession.OnTranscript((t: RealtimeTranscript) => {
+        const session = active.RealtimeSession;
+        session.OnTranscript((t: RealtimeTranscript) => {
+            if (active.RealtimeSession !== session) {
+                return; // a stale (replaced) session
+            }
             active.LastActivityMs = Date.now(); // any transcript = the session is alive (drives the idle sweep)
             if (!t.IsFinal) {
                 return; // partials fire per-word — act only on a completed turn (and don't flood the log)
             }
             LogStatusEx({ message: `[AIBridgeEngine][diag] transcript(final): role=${t.Role} text="${(t.Text ?? '').slice(0, 80)}" (bridge ${active.SessionBridgeID})`, verboseOnly: true });
-            // Persist the unified room transcript (scribe only — emits both roles).
+            if (t.Role === 'user') {
+                active.LastUserSpeechEndMs = performance.now();
+            }
+            if (t.Role === 'user' || t.Role === 'assistant') {
+                AppendTranscriptTurn(active.TranscriptTail, { Role: t.Role, Text: t.Text ?? '' });
+            }
+            // Persist the transcript: this session's own sink, or the unified room transcript (scribe only).
             this.emitTranscriptLine(active, t);
             // Record into the room's diarized lookback so the moderator (and observability) see the full thread.
             this.recordRoomTurn(active, t);
 
             if (t.Role === 'assistant') {
+                // Full-duplex gate: settle the turn first so a short acknowledgement is reclassified as a backchannel.
+                active.TurnGate?.EndTurn({ Text: t.Text });
                 // The agent finished its own turn → release the room floor so the next can speak. Then advance:
                 // run the moderator for "who responds to this agent?" (the agent↔agent + pre-stage path) — this
                 // executes while the agent's audio is still playing out, hiding the moderator latency.
@@ -1306,14 +1952,17 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // Only a REAL human turn counts as presence. In a multi-agent room every agent transcribes its peers'
         // speech as a 'user' turn (it has no other role to assign overheard audio); if those counted as a human,
         // an agents-only room would keep cancelling its own auto-leave and babble forever after the humans left —
-        // burning realtime tokens at full cost. The diarized inbound speaker tells us: an `agent-…` identity is a
-        // peer agent, NOT a human, so it must NOT keep the room alive.
-        const overheardAgent = source.LastInboundSpeaker?.toLowerCase().startsWith('agent-') === true;
+        // burning realtime tokens at full cost. The diarized inbound speaker tells us: an agent's identity
+        // (`agent-…`, IsAgentParticipantIdentity) is a peer agent, NOT a human, so it must NOT keep the room alive.
+        const overheardAgent = IsAgentParticipantIdentity(source.LastInboundSpeaker);
         if (!overheardAgent) {
             // A real human just spoke → definitive presence for EVERY agent in the room. Cancel any pending
             // empty-room auto-leave + reset the consecutive-agent-only counter.
             for (const peer of peers) {
                 this.noteHumanPresence(peer);
+            }
+            if (source.RoomKey) {
+                this.roomCoordinator.NoteHumanTurn(source.RoomKey); // a human spoke: agents may take turns again
             }
         }
         if (source.RoomKey) {
@@ -1405,7 +2054,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             if (!active.IsTranscriptScribe) {
                 return; // only the scribe records human turns (avoids one copy per transcribing agent)
             }
-            if (active.LastInboundSpeaker?.toLowerCase().startsWith('agent-')) {
+            if (IsAgentParticipantIdentity(active.LastInboundSpeaker)) {
                 return; // the scribe is overhearing another agent — that agent's own bridge records it
             }
         }
@@ -1636,20 +2285,307 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         }
     }
 
+    // ──────────────────────────────────────────────────────────────────────────────
+    // Full-duplex turn-taking — the room floor as a safety net behind the model's own judgement.
+    // ──────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Gives a FULL-DUPLEX model the floor gate + human-speech detector (see {@link FullDuplexTurnGate})
+     * ONLY when moderator mode (`MJ_REALTIME_MODERATOR_MODE=on`) is explicitly enabled (or explicitly opted into).
+     * In normal operation (solo and multi-agent rooms alike), full-duplex models are never gated:
+     * native full-duplex models are better at turn-taking and ignoring background noise.
+     *
+     * @param active The freshly connected session.
+     * @param params The start parameters (`FullDuplexTurnGate: false` opts out).
+     */
+    private wireFullDuplexTurnGate(active: ActiveBridgeSession, params: StartBridgeSessionParams): void {
+        if (!active.RoomKey || params.FullDuplexTurnGate === false) {
+            return;
+        }
+        if (!active.FullDuplex) {
+            return;
+        }
+        const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
+        if (!moderatorMode && params.FullDuplexTurnGate !== true) {
+            return;
+        }
+        active.TurnGate = new FullDuplexTurnGate({
+            Coordinator: this.roomCoordinator,
+            RoomId: active.RoomKey,
+            AgentSessionId: active.AgentSessionID,
+            SampleRateHz: active.RealtimeSession.OutputSampleRate,
+        });
+        active.HumanSpeech = new HumanSpeechDetector();
+    }
+
+    /**
+     * Runs one chunk of a full-duplex model's outbound audio through its floor gate. Sessions without a gate,
+     * and rooms with a single agent, are never gated.
+     *
+     * @param active The speaking session.
+     * @param byteLength The chunk size (PCM16).
+     * @returns Whether to forward the chunk, drop it, or cut the burst (drop + flush queued audio).
+     */
+    private gateOutput(active: ActiveBridgeSession, byteLength: number): OutputVerdict {
+        return this.applyTurnGate(active, (gate) => gate.OnOutputAudio(byteLength));
+    }
+
+    /**
+     * Runs one chunk of a full-duplex model's outbound speech through its floor gate by how long it plays (an avatar
+     * piece). Sessions without a gate, and rooms with a single agent, are never gated.
+     *
+     * @param active The speaking session.
+     * @param durationMs How long the chunk's speech plays.
+     */
+    private gateOutputDuration(active: ActiveBridgeSession, durationMs: number): OutputVerdict {
+        return this.applyTurnGate(active, (gate) => gate.OnOutputDuration(durationMs));
+    }
+
+    /** Asks the session's floor gate about one chunk (when it is gated at all) and acts on the floor it took or lost. */
+    private applyTurnGate(active: ActiveBridgeSession, decide: (gate: FullDuplexTurnGate) => OutputGateResult): OutputVerdict {
+        const gate = active.TurnGate;
+        if (!gate || !active.RoomKey || !this.roomCoordinator.IsMultiAgentRoom(active.RoomKey)) {
+            return 'Forward';
+        }
+        const result = decide(gate);
+        if (result.TookFloor) {
+            this.armFloorHold(active);
+        }
+        if (result.Verdict === 'Cut') {
+            LogStatusEx({ message: `[AIBridgeEngine][diag] full-duplex gate CUT bridge ${active.SessionBridgeID} — it spoke without the floor`, verboseOnly: true });
+        }
+        return result.Verdict;
+    }
+
+    /** Whether an inbound speaker label belongs to a human (diarized, and not a peer `agent-…` bot). */
+    private isHumanSpeaker(label: string | undefined): boolean {
+        return label !== undefined && label.length > 0 && !IsAgentParticipantIdentity(label);
+    }
+
+    /**
+     * Watches inbound room audio for a human speaking and, on the first activity, makes every agent yield.
+     * Only a DIARIZED human counts — without a speaker label the audio could be a peer agent, and a peer must
+     * never preempt another agent's turn.
+     */
+    private observeInboundHumanSpeech(active: ActiveBridgeSession, frame: BridgeMediaFrame, chunk: ArrayBuffer | undefined): void {
+        const detector = active.HumanSpeech;
+        if (!detector || !chunk || !active.RoomKey || frame.Track !== 'audio-in' || !this.isHumanSpeaker(frame.SpeakerLabel)) {
+            return;
+        }
+        if (this.roomCoordinator.IsMultiAgentRoom(active.RoomKey) && detector.ShouldReportSpeech(chunk)) {
+            this.preemptForHuman(active.RoomKey);
+        }
+    }
+
+    /**
+     * A human started talking: tell the coordinator (humans win), and for the agent that was holding the floor
+     * flush its queued audio, mute the rest of its burst, free its floor, and fire the barge-in hook so the host
+     * drops now-stale narration. Delegated work keeps running — the same policy as a direct barge-in.
+     *
+     * @param roomKey The room the human spoke in.
+     */
+    private preemptForHuman(roomKey: string): void {
+        const { PreemptedAgentSessionId } = this.roomCoordinator.NoteHumanSpeech(roomKey);
+        if (!PreemptedAgentSessionId) {
+            return;
+        }
+        const target = this.roomAgents(roomKey).find((a) => a.AgentSessionID.toLowerCase() === PreemptedAgentSessionId.toLowerCase());
+        if (!target) {
+            return;
+        }
+        LogStatusEx({ message: `[AIBridgeEngine][diag] human speech preempted bridge ${target.SessionBridgeID} — flushing its output`, verboseOnly: true });
+        target.TurnGate?.Cut();
+        target.Bridge.FlushOutboundMedia();
+        this.clearRoomModeratorState(roomKey, false);
+        this.releaseRoomFloor(target, /*skipDrain*/ true);
+        this.notifyBargeIn(target);
+    }
+
+    /**
+     * Binds the turn-taking host tools (`i_am_addressed`, `yield_turn`) to a session that needs them: a
+     * full-duplex model in a room, or any model using model-side addressing. The tool DEFINITIONS are
+     * {@link TURN_TAKING_TOOL_DEFINITIONS}; the layer that owns the model session registers them at connect and
+     * installs {@link ActiveBridgeSession.TurnTakingToolHandler} as its local tool handler.
+     *
+     * @param active The live bridged session.
+     */
+    private wireTurnTakingTools(active: ActiveBridgeSession): void {
+        const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
+        const isFullDuplex = active.FullDuplex;
+        if (isFullDuplex && !moderatorMode) {
+            return;
+        }
+        if (!active.RoomKey || !(active.AddressingMode === 'ModelSide' || active.TurnGate)) {
+            return;
+        }
+        active.TurnTakingToolHandler = {
+            Handles: (toolName: string) => IsTurnTakingTool(toolName),
+            Execute: async (call) => this.executeTurnTakingTool(active, call.ToolName, call.Arguments),
+        };
+    }
+
+    /**
+     * Once a room holds 2+ agents, tells each tool-equipped (full-duplex / model-side) agent in it — once — how to
+     * take turns: speak when addressed, stop for a person, only acknowledge briefly over someone, hand over by name.
+     * It is a context note rather than part of the system prompt on purpose: the FIRST agent joins before anyone
+     * else, and a solo agent in a one-on-one call must keep answering everything it hears.
+     *
+     * @param roomKey The room to announce in (no-op when `undefined`, or while the room has a single agent).
+     */
+    private announceTurnTaking(roomKey: string | undefined): void {
+        if (!roomKey || !this.roomCoordinator.IsMultiAgentRoom(roomKey)) {
+            return;
+        }
+        const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
+        for (const agent of this.roomAgents(roomKey)) {
+            const isFullDuplex = agent.FullDuplex;
+            if (isFullDuplex && !moderatorMode) {
+                continue;
+            }
+            if (agent.TurnTakingToolHandler && !agent.TurnTakingAnnounced) {
+                agent.RealtimeSession.SendContextNote?.(MODEL_SIDE_TURN_TAKING_FRAMING);
+                agent.TurnTakingAnnounced = true;
+            }
+        }
+    }
+
+    /** Runs one turn-taking tool call and returns the JSON the model is handed back. Never throws. */
+    private executeTurnTakingTool(active: ActiveBridgeSession, toolName: string, argsJson: string): string {
+        try {
+            const parsed = ParseTurnTakingToolCall(toolName, argsJson);
+            if (!parsed) {
+                return JSON.stringify({ ok: false, error: `Unknown turn-taking tool '${toolName}'.` });
+            }
+            switch (parsed.Kind) {
+                case 'Addressed':
+                    return this.onModelAddressed(active);
+                case 'Yield':
+                    return this.onModelYield(active, parsed.To);
+                default:
+                    return JSON.stringify({ ok: false, error: parsed.Reason });
+            }
+        } catch (err) {
+            LogError(`[AIBridgeEngine] turn-taking tool ${toolName} failed for bridge ${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`);
+            return JSON.stringify({ ok: false, error: 'The turn-taking action failed.' });
+        }
+    }
+
+    /**
+     * The model said it is addressed: latch the model-side matcher and — in a multi-agent room — reserve the
+     * floor NOW, before any audio, so a peer cannot start in the gap. A denial tells the model to stay silent,
+     * which is how a cooperative model learns it lost the race.
+     */
+    private onModelAddressed(active: ActiveBridgeSession): string {
+        active.ModelSideMatcher?.NoteModelAddressed();
+        if (!active.RoomKey || !this.roomCoordinator.IsMultiAgentRoom(active.RoomKey)) {
+            return JSON.stringify({ ok: true, floor: 'granted' });
+        }
+        const floor = this.roomCoordinator.TakeFloor(active.RoomKey, active.AgentSessionID);
+        if (!floor.Granted) {
+            return JSON.stringify({ ok: false, floor: 'denied', reason: floor.Reason, instruction: 'Do not speak now; stay silent.' });
+        }
+        this.armFloorHold(active);
+        return JSON.stringify({ ok: true, floor: 'granted' });
+    }
+
+    /**
+     * The model hands the floor over, optionally to a named agent: release it, reserve it for the target, and
+     * nudge the target to speak. A name that matches nobody degrades to a plain release.
+     */
+    private onModelYield(active: ActiveBridgeSession, toName: string | undefined): string {
+        if (!active.RoomKey) {
+            return JSON.stringify({ ok: true, floor: 'released' });
+        }
+        const target = toName ? this.findRoomAgentByName(active.RoomKey, toName, active) : undefined;
+        const result = this.roomCoordinator.YieldFloor(active.RoomKey, active.AgentSessionID, target?.AgentSessionID);
+        active.TurnGate?.Reset();
+        this.releaseRoomFloor(active, /*skipDrain*/ true);
+        if (target && result.HandoffToAgentSessionId) {
+            this.handOffFloor(active, target);
+        }
+        const note = toName && !target ? `No agent named '${toName}' is in the room; the floor went back to the room.` : undefined;
+        const handedTo = result.HandoffToAgentSessionId ? target?.AgentNames[0] ?? null : null;
+        return JSON.stringify({ ok: true, floor: 'released', handedTo, reason: result.Reason, note });
+    }
+
+    /** Finds another agent in the room by any of its names (case-insensitive), excluding the asker. */
+    private findRoomAgentByName(roomKey: string, name: string, asker: ActiveBridgeSession): ActiveBridgeSession | undefined {
+        const wanted = name.trim().toLowerCase();
+        return this.roomAgents(roomKey).find((a) => a !== asker && a.AgentNames.some((n) => n.trim().toLowerCase() === wanted));
+    }
+
+    /** Tells a hand-off target it was given the floor and triggers it to speak (when its driver can be triggered). */
+    private handOffFloor(from: ActiveBridgeSession, target: ActiveBridgeSession): void {
+        const fromName = from.AgentNames[0] ?? 'Another agent';
+        target.RealtimeSession.SendContextNote?.(`[turn] ${fromName} handed the floor to you. Continue the conversation now.`);
+        if (typeof target.RealtimeSession.RequestSpokenUpdate === 'function') {
+            this.triggerMeetingSpeak(target);
+        }
+    }
+
+    /**
+     * Adjusts the turn-taking limits every room uses (the agent-to-agent loop cap, hand-off TTL, human-speech
+     * hold). Omitted values keep their current setting. Call once at startup to tune.
+     *
+     * @param limits The limits to change.
+     */
+    public ConfigureTurnLimits(limits: RoomCoordinatorLimits): void {
+        this.roomCoordinator.ConfigureLimits(limits);
+    }
+
+    /**
+     * A room's live turn-taking state: who holds the floor, whether a human is speaking, any pending hand-off,
+     * the loop-cap progress, recent floor/backchannel/yield events, and who is seated. Read-only; the test bed
+     * polls it. `null` when the room is unknown (no agent in it).
+     *
+     * @param roomKey The room (external connection id — a LiveKit room's name).
+     * @returns The snapshot, or `null`.
+     */
+    public GetRoomTurnSnapshot(roomKey: string): RoomTurnSnapshot | null {
+        const state = this.roomCoordinator.GetRoomState(roomKey);
+        if (!state) {
+            return null;
+        }
+        const agents: RoomTurnAgentInfo[] = this.roomAgents(roomKey).map((a) => ({
+            AgentSessionID: a.AgentSessionID,
+            SessionBridgeID: a.SessionBridgeID,
+            Names: a.AgentNames,
+            TurnMode: a.TurnPolicy.Mode,
+            Addressing: a.AddressingMode ?? 'Regex',
+            FullDuplex: a.FullDuplex,
+        }));
+        return { ...state, Agents: agents };
+    }
+
     /**
      * Builds the per-session {@link TurnTakingPolicy} from the start params.
      *
      * @param params The session parameters.
-     * @returns The configured turn-taking policy.
+     * @param fullDuplex Whether the session's model reports full-duplex capability (enables model-side addressing).
+     * @returns The configured policy plus the addressing mode in effect and the model-side latch, when any.
      */
-    private buildTurnPolicy(params: StartBridgeSessionParams): TurnTakingPolicy {
+    private buildTurnPolicy(params: StartBridgeSessionParams, fullDuplex: boolean): BuiltTurnPolicy {
+        const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
+        let matcher = params.TurnMatcher;
+        let mode: ResolvedTurnAddressingMode = 'Regex';
+        let modelSide: ModelSideAddressedMatcher | undefined;
+        if (params.TurnAddressing !== undefined) {
+            // Full-duplex models only use ModelSide addressing automatically when moderator mode is enabled.
+            // Outside moderator mode, Auto falls back to name/regex matching (keeping AlwaysAddressedMatcher for 1:1 / solo),
+            // while explicit 'ModelSide' is still honoured.
+            const enableModelSide = params.TurnAddressing === 'ModelSide' || (fullDuplex && moderatorMode);
+            const built = BuildAddressedMatcher(params.AgentNames ?? [], params.TurnAddressing, enableModelSide);
+            mode = built.Mode;
+            modelSide = built.ModelSide;
+            matcher = built.Mode === 'ModelSide' ? built.Matcher : (params.TurnMatcher ?? built.Matcher);
+        }
         const config: TurnTakingPolicyConfig = {
             Mode: params.TurnMode ?? 'Passive',
-            Matcher: params.TurnMatcher,
+            Matcher: matcher,
             Scorer: params.TurnScorer,
             ...(params.TurnTuning ?? {}),
         };
-        return new TurnTakingPolicy(config);
+        return { Policy: new TurnTakingPolicy(config), Mode: mode, ModelSide: modelSide };
     }
 
     /**
@@ -1749,8 +2685,8 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @param active The freshly connected session.
      */
     private electTranscriptScribe(active: ActiveBridgeSession): void {
-        if (!this.transcriptSink || !active.RoomKey) {
-            return;
+        if (active.TranscriptSink || !this.transcriptSink || !active.RoomKey) {
+            return; // a session with its own sink never takes part in the room's scribe election
         }
         const roomKey = active.RoomKey.toLowerCase();
         if (!this.roomScribes.has(roomKey)) {
@@ -1796,7 +2732,8 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @param t The final transcript line.
      */
     private emitTranscriptLine(active: ActiveBridgeSession, t: RealtimeTranscript): void {
-        if (!active.IsTranscriptScribe || !this.transcriptSink || !active.RoomKey) {
+        const sink = active.TranscriptSink ?? (active.IsTranscriptScribe ? this.transcriptSink : undefined);
+        if (!sink || !active.RoomKey) {
             return;
         }
         const text = (t.Text ?? '').trim();
@@ -1805,7 +2742,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         }
         const isAgentSpeech = t.Role === 'assistant';
         void Promise.resolve(
-            this.transcriptSink(
+            sink(
                 {
                     RoomKey: active.RoomKey,
                     AgentSessionID: active.AgentSessionID,
@@ -1956,12 +2893,90 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             return;
         }
         this.staleSweepTimer = setInterval(() => {
-            void this.SweepStaleSessions().catch((err) =>
-                LogError(`[AIBridgeEngine] stale sweep tick failed: ${err instanceof Error ? err.message : String(err)}`),
-            );
+            void this.SweepStaleSessions()
+                .then(() => this.HeartbeatLiveSessions())
+                .catch((err) => LogError(`[AIBridgeEngine] stale sweep tick failed: ${err instanceof Error ? err.message : String(err)}`));
         }, intervalMs);
         // Don't keep the process alive solely for the sweep (Node-only; guarded for non-Node hosts).
         (this.staleSweepTimer as { unref?: () => void })?.unref?.();
+    }
+
+    /**
+     * Refreshes `LastActiveAt` on the agent-session row of every live bridge that has not been touched for
+     * {@link SESSION_HEARTBEAT_INTERVAL_MS}. The host session janitor closes sessions idle past its threshold; a
+     * long phone call writes nothing else to the row, so without this it would be closed (and its run finalized)
+     * mid-call. Tolerant: a failed write is logged and the rest are still touched.
+     *
+     * @param nowMs Current epoch-ms (injectable for tests).
+     * @returns The number of rows refreshed.
+     */
+    public async HeartbeatLiveSessions(nowMs: number = Date.now()): Promise<number> {
+        let touched = 0;
+        for (const active of this.activeSessions.values()) {
+            if (nowMs - active.LastSessionHeartbeatMs < SESSION_HEARTBEAT_INTERVAL_MS) {
+                continue;
+            }
+            active.LastSessionHeartbeatMs = nowMs;
+            if (await this.touchAgentSession(active)) {
+                touched++;
+            }
+        }
+        return touched;
+    }
+
+    /** Writes `LastActiveAt = now` on the session's agent-session row. Returns whether it saved. */
+    private async touchAgentSession(active: ActiveBridgeSession): Promise<boolean> {
+        const provider = active.MetadataProvider;
+        if (!provider || !active.AgentSessionID) {
+            return false;
+        }
+        try {
+            const row = await provider.GetEntityObject<MJAIAgentSessionEntity>(AGENT_SESSION_ENTITY, active.ContextUser);
+            if (!(await row.Load(active.AgentSessionID))) {
+                return false;
+            }
+            row.LastActiveAt = new Date();
+            if (await row.Save()) {
+                return true;
+            }
+            LogError(`[AIBridgeEngine] session heartbeat save failed for ${active.AgentSessionID}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        } catch (err) {
+            LogError(`[AIBridgeEngine] session heartbeat failed for ${active.AgentSessionID}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return false;
+    }
+
+    /**
+     * Reconciles prior-boot orphans ({@link ReconcileOrphans}) once now and then every
+     * {@link ORPHAN_RECONCILE_INTERVAL_MS}. Idempotent — a no-op while already scheduled. The timer is `unref`'d.
+     *
+     * The host calls it once it owns its instance, so that no other live process can be that instance: MJServer calls
+     * it after the server listens on its port. {@link HandleStartup} does not start it.
+     *
+     * @param contextUser The user the reconciliation writes run as.
+     * @param provider The metadata provider for the reads/writes.
+     * @param intervalMs How often to reconcile after the first pass.
+     */
+    public StartOrphanReconciliation(contextUser: UserInfo, provider: IMetadataProvider, intervalMs: number = ORPHAN_RECONCILE_INTERVAL_MS): void {
+        if (this.orphanReconcileTimer) {
+            return;
+        }
+        const tick = (): void => {
+            void this.ReconcileOrphans(contextUser, provider).catch((err) =>
+                LogError(`[AIBridgeEngine] orphan reconciliation failed: ${err instanceof Error ? err.message : String(err)}`),
+            );
+        };
+        tick();
+        this.orphanReconcileTimer = setInterval(tick, intervalMs);
+        (this.orphanReconcileTimer as { unref?: () => void })?.unref?.();
+    }
+
+    /** Cancels the periodic orphan reconciliation, if running. */
+    public StopOrphanReconciliation(): void {
+        if (this.orphanReconcileTimer) {
+            clearInterval(this.orphanReconcileTimer);
+            this.orphanReconcileTimer = undefined;
+        }
     }
 
     /** Cancels the self-scheduled stale-session sweep, if running. */
@@ -1973,22 +2988,26 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     }
 
     /**
-     * Force-closes `Connected`/`Connecting` bridges left behind by a **previous boot of this host**
-     * (matching hostname prefix, differing instance id), stamping `CloseReason = 'Janitor'`. Mirrors
-     * `SessionJanitor.RunStartupRecovery`: a crash/redeploy vaporizes the in-memory driver sockets
-     * but leaves the durable rows reading `Connected` forever; this reconciles them.
+     * Force-closes the `Connected`/`Connecting` bridges an **earlier boot of this instance** left, stamping
+     * `CloseReason = 'Janitor'` and finalizing each one's co-agent run. Mirrors `SessionJanitor.RunStartupRecovery`:
+     * a crash/redeploy vaporizes the in-memory driver sockets but leaves the durable rows reading `Connected`
+     * forever; this reconciles them.
      *
-     * The actual *scheduling* (run once at boot + periodic sweep) is intentionally left to the host
-     * application (MJServer's startup + janitor timer) so this engine package carries no timer/IO of
-     * its own; call this method from that scheduler.
+     * Ownership comes from the injected {@link IHostInstanceIdentity}: the read is narrowed to the rows under its
+     * instance prefix other than this boot's, and a row is closed only when
+     * {@link IHostInstanceIdentity.IsPriorBoot} says another boot of this instance stamped it. Another instance's
+     * bridges (another MJAPI on this host, or on another host) are never touched, live or not.
+     *
+     * Run it only once this process owns its instance; {@link StartOrphanReconciliation} schedules it.
      *
      * @param contextUser The system user the reconciliation writes run as.
      * @param provider The metadata provider for the reconciliation reads/writes.
      * @returns The number of orphaned bridges closed.
      */
     public async ReconcileOrphans(contextUser: UserInfo, provider: IMetadataProvider): Promise<number> {
-        const prefix = this.escapeSql(this.hostIdentity.GetHostNamePrefix());
-        const current = this.escapeSql(this.hostIdentity.GetHostInstanceID());
+        const identity = this.hostIdentity;
+        const prefix = EscapeSQLString(identity.GetInstancePrefix());
+        const current = EscapeSQLString(identity.GetHostInstanceID());
         const filter =
             `Status IN ('Connecting','Connected') ` +
             `AND HostInstanceID LIKE '${prefix}%' ` +
@@ -1997,18 +3016,25 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         const rows = await this.loadOrphanRows(filter, contextUser, provider);
         let closed = 0;
         for (const row of rows) {
+            // The LIKE narrows the read; the identity decides, since LIKE reads a `_` in a host name as any character.
+            if (!identity.IsPriorBoot(row.HostInstanceID)) {
+                continue;
+            }
             const ok = await this.markBridgeDisconnected(row.ID, 'Janitor', contextUser, provider);
             if (ok) {
                 closed++;
             }
         }
         if (closed > 0) {
-            LogStatus(`[AIBridgeEngine] Janitor reconciled ${closed} orphaned bridge(s) from a prior boot of this host`);
+            LogStatus(
+                `[AIBridgeEngine] Janitor reconciled ${closed} orphaned bridge(s) from an earlier boot of this instance ` +
+                    `(${identity.GetInstancePrefix()})`,
+            );
         }
         return closed;
     }
 
-    /** Loads the orphaned bridge rows matching the janitor filter. */
+    /** Loads the bridge rows the janitor filter matches: the candidates {@link ReconcileOrphans} checks one by one. */
     private async loadOrphanRows(
         filter: string,
         contextUser: UserInfo,
@@ -2105,6 +3131,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 ...params.Configuration,
                 InboundSampleRate: params.RealtimeSession.InputSampleRate ?? 24000,
                 OutboundSampleRate: params.RealtimeSession.OutputSampleRate ?? 24000,
+                // The model's video facts, for a driver that sends camera or screen frames: how many sources it may send
+                // at once and how often. Read from the session, so the rate always comes from the model.
+                InboundVideoStreams: InboundVideoStreamsOf(params.RealtimeSession.Capabilities),
+                InboundVideoRate: InboundVideoRateOf(params.RealtimeSession.Capabilities),
             },
             ContextUser: params.ContextUser,
         };
@@ -2117,7 +3147,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @returns The saved bridge row.
      * @throws When the row cannot be created (no metadata provider, or save failure).
      */
-    private async createBridgeRow(params: StartBridgeSessionParams): Promise<MJAIAgentSessionBridgeEntity> {
+    private async createBridgeRow(
+        params: StartBridgeSessionParams,
+        addressingMode?: ResolvedTurnAddressingMode,
+    ): Promise<MJAIAgentSessionBridgeEntity> {
         const provider = params.MetadataProvider;
         if (!provider) {
             throw new Error('AIBridgeEngine.StartBridgeSession requires a MetadataProvider.');
@@ -2132,6 +3165,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         row.Direction = params.Direction ?? 'Outbound';
         row.JoinMethod = params.JoinMethod ?? 'OnDemand';
         row.TurnMode = params.TurnMode ?? 'Passive';
+        row.TurnAddressing = addressingMode ?? 'Regex';
         row.Address = params.Address;
         row.Status = 'Pending';
         row.HostInstanceID = this.hostIdentity.GetHostInstanceID();
@@ -2194,6 +3228,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             clearTimeout(active.LeaveGraceTimer);
             active.LeaveGraceTimer = undefined;
         }
+        active.DtmfCoalescer?.Dispose();
         // Hand the transcript scribe role to another live session in the room (if this was the scribe), so a
         // multi-agent room keeps recording after the first agent leaves. Done before the active map removal.
         this.releaseTranscriptScribe(active);
@@ -2288,9 +3323,63 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         }
         return saved;
     }
+}
 
-    /** Escapes single quotes for safe embedding inside an `ExtraFilter` literal. */
-    private escapeSql(value: string): string {
-        return value.replace(/'/g, "''");
+/** The realtime media plane a bridge track feeds: cameras and shared screens are both video to the model. */
+function mediaKindOf(track: BridgeMediaTrackKind): RealtimeMediaKind {
+    return track === 'video-in' || track === 'screen-in' ? 'video' : 'audio';
+}
+
+/**
+ * The name a camera or screen gets in a note when its driver gave none, never its `SourceID`: the name for an unnamed
+ * source in `@memberjunction/ai` ({@link UnnamedVideoSourceLabel}), which the LiveKit bridge also gives a person with no
+ * display name.
+ */
+function fallbackVideoSourceLabel(track: BridgeMediaTrackKind): string {
+    return UnnamedVideoSourceLabel(track === 'screen-in' ? 'screen' : 'camera');
+}
+
+/**
+ * What a bridge's first inbound frame tells the diagnostic log: a camera or screen frame means the agent can see it, and
+ * any other frame means the agent hears the room.
+ */
+function firstInboundFrameMeaning(track: BridgeMediaTrackKind): string {
+    switch (track) {
+        case 'video-in':
+            return 'The agent can SEE your camera.';
+        case 'screen-in':
+            return 'The agent can SEE your screen.';
+        default:
+            return 'The agent is HEARING you.';
     }
+}
+
+/**
+ * What a frame of the agent's video says about its video, for the bridge frame that carries it (`Width`, `Height`,
+ * `KeyFrame`; absent means unknown), copied from the frame. An image always stands alone: a key frame. A chunk says
+ * whether it is a key frame. An fMP4 init segment carries its own size (read from the piece itself, never from an earlier
+ * stream) and no key frame: it holds no frame. An fMP4 fragment with video carries whether its first video frame is a key
+ * frame and the size the stream's init segment gives the video track; an audio-only fragment, a fragment before any init,
+ * or one the driver couldn't read carries nothing.
+ *
+ * @param frame The frame.
+ * @param streamInit The init segment of the stream an fMP4 fragment belongs to, read.
+ */
+function frameVideoFacts(frame: RealtimeVideoFrame, streamInit: Fmp4Init | null | undefined): Pick<BridgeMediaFrame, 'Width' | 'Height' | 'KeyFrame'> {
+    const ownSize = frame.Width && frame.Height ? { Width: frame.Width, Height: frame.Height } : {};
+    if (frame.Kind === 'image') {
+        return { ...ownSize, KeyFrame: true };
+    }
+    if (frame.Kind === 'chunk') {
+        return { ...ownSize, KeyFrame: frame.KeyFrame };
+    }
+    if (frame.Piece === 'init') {
+        return ownSize;
+    }
+    if (frame.KeyFrame === undefined) {
+        return {};
+    }
+    const video = streamInit?.Tracks.find((track) => track.Handler === 'vide');
+    const streamSize = video?.Width && video.Height ? { Width: video.Width, Height: video.Height } : {};
+    return { ...streamSize, KeyFrame: frame.KeyFrame };
 }

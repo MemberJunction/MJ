@@ -107,6 +107,11 @@ export interface ExternalQueryResult<TRow extends ExternalRow = ExternalRow> {
  * entire userinfo portion, leaving the host intact. Shared by the base driver and the read router so
  * every external-read error surface redacts identically.
  */
-export function redactConnectionSecrets(message: string): string {
+export function RedactConnectionSecrets(message: string): string {
   return message.replace(/([a-z][a-z0-9+.-]*:\/\/)[^@/\s]+@/gi, '$1***@');
+}
+
+/** @deprecated Use {@link RedactConnectionSecrets}. */
+export function redactConnectionSecrets(message: string): string {
+  return RedactConnectionSecrets(message);
 }

@@ -3,19 +3,22 @@ import { Subject, BehaviorSubject } from 'rxjs';
 import {
     LayoutConfig,
     ResolvedLayoutConfig,
-    ComponentContainer,
     JsonValue,
     ComponentItemConfig,
     VirtualLayout
 } from 'golden-layout';
+import type { ComponentContainer, EventEmitter, Stack, Tab } from 'golden-layout';
 import {
     DashboardPanel,
     LayoutChangedEvent
 } from '../models/dashboard-types';
+import { BuildStackPartActions, LabelStackPartActions, STACK_PART_ACTIONS_CLASS } from './stack-part-actions';
 
 // Golden Layout interfaces for VirtualLayout
 interface GLVirtualLayout {
     rootItem: GLLayoutItem | null;
+    on(event: 'itemCreated', callback: (event: EventEmitter.BubblingEvent) => void): void;
+    on(event: 'tabCreated', callback: (tab: Tab) => void): void;
     on(event: string, callback: (item?: unknown) => void): void;
     destroy(): void;
     loadLayout(config: LayoutConfig): void;
@@ -48,6 +51,21 @@ export interface LayoutLocation {
  */
 export type PanelComponentFactory = (panel: DashboardPanel, container: HTMLElement) => void;
 
+/** What a part button in a stack header asks for. */
+export type StackAction = 'edit' | 'remove';
+
+/** A click on a stack header's part button: the action, and the panel in the stack's active tab. */
+export interface StackActionEvent {
+    Action: StackAction;
+    PanelId: string;
+}
+
+/** The height of a stack header (part tabs and part buttons), in pixels. The viewer CSS uses the same value. */
+export const DASHBOARD_STACK_HEADER_HEIGHT = 44;
+
+/** Room Golden Layout keeps beside a stack's tabs, in pixels: the tab track's inset, borders and padding, the tab dropdown button with its gaps, and the controls' inset. The viewer CSS uses the same values. */
+export const DASHBOARD_TAB_CONTROL_OFFSET = 78;
+
 /**
  * Service that wraps Golden Layout for Angular integration.
  * Uses Golden Layout 2.6.0 VirtualLayout API.
@@ -67,23 +85,76 @@ export class GoldenLayoutWrapperService {
     private _loadedPanels = new Set<string>();
 
     /** Emitted when layout configuration changes */
-    public onLayoutChanged = new Subject<LayoutChangedEvent>();
+    public OnLayoutChanged = new Subject<LayoutChangedEvent>();
+
+    /** @deprecated Use {@link OnLayoutChanged}. */
+    public get onLayoutChanged() {
+        return this.OnLayoutChanged;
+    }
+    /** @deprecated Use {@link OnLayoutChanged}. */
+    public set onLayoutChanged(value) {
+        this.OnLayoutChanged = value;
+    }
 
     /** Emitted when a panel is closed */
-    public onPanelClosed = new Subject<string>();
+    public OnPanelClosed = new Subject<string>();
+
+    /** @deprecated Use {@link OnPanelClosed}. */
+    public get onPanelClosed() {
+        return this.OnPanelClosed;
+    }
+    /** @deprecated Use {@link OnPanelClosed}. */
+    public set onPanelClosed(value) {
+        this.OnPanelClosed = value;
+    }
 
     /** Emitted when a panel is maximized/restored */
-    public onPanelMaximized = new Subject<{ panelId: string; maximized: boolean }>();
+    public OnPanelMaximized = new Subject<{ panelId: string; maximized: boolean }>();
+
+    /** @deprecated Use {@link OnPanelMaximized}. */
+    public get onPanelMaximized() {
+        return this.OnPanelMaximized;
+    }
+    /** @deprecated Use {@link OnPanelMaximized}. */
+    public set onPanelMaximized(value) {
+        this.OnPanelMaximized = value;
+    }
 
     /** Emitted when a panel is selected (in a stack) */
-    public onPanelSelected = new Subject<string>();
+    public OnPanelSelected = new Subject<string>();
+
+    /** @deprecated Use {@link OnPanelSelected}. */
+    public get onPanelSelected() {
+        return this.OnPanelSelected;
+    }
+    /** @deprecated Use {@link OnPanelSelected}. */
+    public set onPanelSelected(value) {
+        this.OnPanelSelected = value;
+    }
+
+    /** Emitted when the user clicks Edit part or Remove in a stack header. Edit mode only. */
+    public OnStackAction = new Subject<StackActionEvent>();
 
     /** Current panels in layout */
-    public panels$ = new BehaviorSubject<string[]>([]);
+    public Panels$ = new BehaviorSubject<string[]>([]);
+
+    /** @deprecated Use {@link Panels$}. */
+    public get panels$() {
+        return this.Panels$;
+    }
+    /** @deprecated Use {@link Panels$}. */
+    public set panels$(value) {
+        this.Panels$ = value;
+    }
 
     /** Whether layout editing (drag/drop/resize/close) is enabled */
-    public get isEditing(): boolean {
+    public get IsEditing(): boolean {
         return this._isEditing;
+    }
+
+    /** @deprecated Use {@link IsEditing}. */
+    public get isEditing(): boolean {
+        return this.IsEditing;
     }
 
     /**
@@ -93,7 +164,7 @@ export class GoldenLayoutWrapperService {
      * @param componentFactory Factory function to create panel content
      * @param isEditing Whether editing (drag/drop/resize/close) is enabled
      */
-    public initialize(
+    public Initialize(
         container: HTMLElement,
         savedLayout: ResolvedLayoutConfig | null,
         componentFactory: PanelComponentFactory,
@@ -120,6 +191,10 @@ export class GoldenLayoutWrapperService {
             this.emitLayoutChanged('resize');
         });
 
+        // Wire each stack and tab as Golden Layout creates it; loadLayout creates the first ones
+        this._layout.on('itemCreated', (event: EventEmitter.BubblingEvent) => this.onItemCreated(event));
+        this._layout.on('tabCreated', (tab: Tab) => this.onTabCreated(tab));
+
         // Build the LayoutConfig to load
         const glConfig = this.buildLayoutConfig(savedLayout);
 
@@ -127,11 +202,21 @@ export class GoldenLayoutWrapperService {
         this._layout.loadLayout(glConfig);
 
         // Set the size of Golden Layout to match the container
-        const rect = container.getBoundingClientRect();
-        this._layout.setSize(rect.width, rect.height);
+        const size = this.containerLayoutSize(container);
+        this._layout.setSize(size.width, size.height);
 
         this._initialized = true;
         this.updatePanelsList();
+    }
+
+    /** @deprecated Use {@link Initialize}. */
+    public initialize(
+        container: HTMLElement,
+        savedLayout: ResolvedLayoutConfig | null,
+        componentFactory: PanelComponentFactory,
+        isEditing = false
+    ): void {
+        return this.Initialize(container, savedLayout, componentFactory, isEditing);
     }
 
     /**
@@ -140,16 +225,22 @@ export class GoldenLayoutWrapperService {
      * then applies current edit mode settings.
      */
     private buildLayoutConfig(savedLayout: ResolvedLayoutConfig | null): LayoutConfig {
-        // Base settings - reorderEnabled is always true so users can click tabs and
-        // rearrange in view mode (changes won't be saved). Close button only in edit mode.
+        // Base settings: tabs can be dragged only in edit mode, stack headers have room for the part buttons,
+        // and Golden Layout counts the spacing the viewer CSS adds beside the tabs
         const baseSettings: LayoutConfig = {
             settings: {
-                reorderEnabled: this._isEditing
+                reorderEnabled: this._isEditing,
+                tabControlOffset: DASHBOARD_TAB_CONTROL_OFFSET
+            },
+            dimensions: {
+                headerHeight: DASHBOARD_STACK_HEADER_HEIGHT
             },
             header: {
                 show: 'top',
                 popout: false,
                 maximise: false,
+                // Truthy in edit mode: GL cancels a drag of the only tab of a stack whose header cannot close.
+                // The viewer CSS hides the stack close button.
                 close: this._isEditing ? 'tab' : false
             },
             root: undefined
@@ -173,6 +264,10 @@ export class GoldenLayoutWrapperService {
                     settings: {
                         ...convertedConfig.settings,
                         ...baseSettings.settings
+                    },
+                    dimensions: {
+                        ...convertedConfig.dimensions,
+                        ...baseSettings.dimensions
                     },
                     header: {
                         ...convertedConfig.header,
@@ -237,13 +332,27 @@ export class GoldenLayoutWrapperService {
     /**
      * Update layout size to match container.
      */
-    public updateSize(): void {
+    public UpdateSize(): void {
         if (this._layout && this._containerElement) {
-            const rect = this._containerElement.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) {
-                this._layout.setSize(rect.width, rect.height);
+            const size = this.containerLayoutSize(this._containerElement);
+            if (size.width > 0 && size.height > 0) {
+                this._layout.setSize(size.width, size.height);
             }
         }
+    }
+
+    /**
+     * The container's layout size (offsetWidth / offsetHeight). Golden Layout lays out in this size
+     * and reads it itself when it resizes with the container. It differs from the on-screen size
+     * (getBoundingClientRect) when a host scales the viewer, for example with a CSS transform.
+     */
+    private containerLayoutSize(container: HTMLElement): { width: number; height: number } {
+        return { width: container.offsetWidth, height: container.offsetHeight };
+    }
+
+    /** @deprecated Use {@link UpdateSize}. */
+    public updateSize(): void {
+        return this.UpdateSize();
     }
 
     /**
@@ -267,6 +376,9 @@ export class GoldenLayoutWrapperService {
         if (!panel?.id) {
             wrapper.innerHTML = '<div class="panel-error">No panel ID provided</div>';
         } else {
+            // A host finds and measures a panel's content by this attribute
+            wrapper.dataset['panelId'] = panel.id;
+
             // Store reference to container
             this._containerMap.set(panel.id, container);
 
@@ -293,7 +405,7 @@ export class GoldenLayoutWrapperService {
             container.on('beforeComponentRelease', () => {
                 this._containerMap.delete(panel.id);
                 this._loadedPanels.delete(panel.id);
-                this.onPanelClosed.next(panel.id);
+                this.OnPanelClosed.next(panel.id);
                 this.updatePanelsList();
             });
 
@@ -308,7 +420,7 @@ export class GoldenLayoutWrapperService {
                     }
                     this._loadedPanels.add(panel.id);
                 }
-                this.onPanelSelected.next(panel.id);
+                this.OnPanelSelected.next(panel.id);
             });
 
             this.updatePanelsList();
@@ -332,16 +444,97 @@ export class GoldenLayoutWrapperService {
     }
 
     /**
+     * Wires each stack Golden Layout creates: on load, on add, and when a dragged tab makes a new stack.
+     * Every stack gets tab list ARIA; in edit mode it also gets the part buttons.
+     */
+    private onItemCreated(event: EventEmitter.BubblingEvent): void {
+        const item = event.target;
+        if (!isStack(item)) return;
+        this.addTabListAria(item);
+        if (this._isEditing) {
+            this.addStackActions(item);
+        }
+    }
+
+    /**
+     * Marks the stack header's tab list as a tablist, and the tab dropdown list too (Golden Layout moves the
+     * tabs that do not fit there). Keeps aria-selected on each tab in step with the stack's active tab.
+     */
+    private addTabListAria(stack: Stack): void {
+        const header = stack.header;
+        if (header.tabsContainerElement.getAttribute('role') === 'tablist') return;
+        header.tabsContainerElement.setAttribute('role', 'tablist');
+        header.element.querySelector('.lm_tabdropdown_list')?.setAttribute('role', 'tablist');
+        const markSelected = (): void => {
+            for (const tab of header.tabs) {
+                tab.element.setAttribute('aria-selected', String(tab.isActive));
+            }
+        };
+        stack.on('activeContentItemChanged', markSelected);
+        markSelected();
+    }
+
+    /** Adds Edit part and Remove to the stack header. They act on the stack's active tab at click time. */
+    private addStackActions(stack: Stack): void {
+        const controls = stack.header.controlsContainerElement;
+        if (controls.querySelector(`.${STACK_PART_ACTIONS_CLASS}`)) return;
+        const group = BuildStackPartActions(action => this.emitStackAction(stack, action));
+        controls.appendChild(group);
+        const relabel = (): void => LabelStackPartActions(group, stack.getActiveComponentItem()?.title ?? '');
+        stack.on('activeContentItemChanged', relabel);
+        relabel();
+    }
+
+    /** Emits the action for the panel in the stack's active tab. Does nothing when the active tab has no panel. */
+    private emitStackAction(stack: Stack, action: StackAction): void {
+        const container = stack.getActiveComponentItem()?.container;
+        const panelId = container ? this.panelIdOf(container) : null;
+        if (panelId) {
+            this.OnStackAction.next({ Action: action, PanelId: panelId });
+        }
+    }
+
+    /** The ID of the panel bound to a component container, or null. */
+    private panelIdOf(container: ComponentContainer): string | null {
+        for (const [panelId, bound] of this._containerMap) {
+            if (bound === container) return panelId;
+        }
+        return null;
+    }
+
+    /**
+     * Allows tab dragging only in edit mode (a saved part's own reorderEnabled would allow it in view mode),
+     * and makes the tab reachable from the keyboard.
+     */
+    private onTabCreated(tab: Tab): void {
+        tab.reorderEnabled = this._isEditing;
+        const element = tab.element;
+        element.setAttribute('role', 'tab');
+        element.tabIndex = 0;
+        element.addEventListener('keydown', (event: KeyboardEvent) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                element.click(); // GL's own click handler activates the tab
+            }
+        });
+    }
+
+    /**
      * Check if Golden Layout is initialized
      */
-    public isInitialized(): boolean {
+    public IsInitialized(): boolean {
         return this._initialized;
+    }
+
+    /** @deprecated Use {@link IsInitialized}. */
+    public isInitialized(): boolean {
+        return this.IsInitialized();
     }
 
     /**
      * Destroy Golden Layout and clean up
      */
-    public destroy(): void {
+    public Destroy(): void {
         if (this._layout) {
             this._layout.destroy();
             this._layout = null;
@@ -354,11 +547,16 @@ export class GoldenLayoutWrapperService {
         this._containerElement = null;
     }
 
+    /** @deprecated Use {@link Destroy}. */
+    public destroy(): void {
+        return this.Destroy();
+    }
+
     /**
      * Add a panel to the layout.
      * The full DashboardPanel is stored in componentState.
      */
-    public addPanel(panel: DashboardPanel, _location?: LayoutLocation): void {
+    public AddPanel(panel: DashboardPanel, _location?: LayoutLocation): void {
         if (!this._layout) {
             return;
         }
@@ -386,6 +584,11 @@ export class GoldenLayoutWrapperService {
         this.emitLayoutChanged('resize');
     }
 
+    /** @deprecated Use {@link AddPanel}. */
+    public addPanel(panel: DashboardPanel, _location?: LayoutLocation): void {
+        return this.AddPanel(panel, _location);
+    }
+
     /**
      * Find first stack in layout
      */
@@ -411,63 +614,98 @@ export class GoldenLayoutWrapperService {
     /**
      * Remove a panel from the layout
      */
-    public removePanel(panelId: string): void {
+    public RemovePanel(panelId: string): void {
         const container = this._containerMap.get(panelId);
         if (container) {
             container.close();
         }
     }
 
+    /** @deprecated Use {@link RemovePanel}. */
+    public removePanel(panelId: string): void {
+        return this.RemovePanel(panelId);
+    }
+
     /**
      * Split a panel horizontally (add panel to the right)
      */
+    public SplitHorizontal(panelId: string, newPanel: DashboardPanel): void {
+        this.AddPanel(newPanel, { targetPanelId: panelId, position: 'right' });
+    }
+
+    /** @deprecated Use {@link SplitHorizontal}. */
     public splitHorizontal(panelId: string, newPanel: DashboardPanel): void {
-        this.addPanel(newPanel, { targetPanelId: panelId, position: 'right' });
+        return this.SplitHorizontal(panelId, newPanel);
     }
 
     /**
      * Split a panel vertically (add panel below)
      */
+    public SplitVertical(panelId: string, newPanel: DashboardPanel): void {
+        this.AddPanel(newPanel, { targetPanelId: panelId, position: 'bottom' });
+    }
+
+    /** @deprecated Use {@link SplitVertical}. */
     public splitVertical(panelId: string, newPanel: DashboardPanel): void {
-        this.addPanel(newPanel, { targetPanelId: panelId, position: 'bottom' });
+        return this.SplitVertical(panelId, newPanel);
     }
 
     /**
      * Add a panel as a tab to an existing stack
      */
+    public AddToStack(panelId: string, newPanel: DashboardPanel): void {
+        this.AddPanel(newPanel, { targetPanelId: panelId, position: 'tab' });
+    }
+
+    /** @deprecated Use {@link AddToStack}. */
     public addToStack(panelId: string, newPanel: DashboardPanel): void {
-        this.addPanel(newPanel, { targetPanelId: panelId, position: 'tab' });
+        return this.AddToStack(panelId, newPanel);
     }
 
     /**
      * Maximize a panel
      */
+    public MaximizePanel(panelId: string): void {
+        this.OnPanelMaximized.next({ panelId, maximized: true });
+    }
+
+    /** @deprecated Use {@link MaximizePanel}. */
     public maximizePanel(panelId: string): void {
-        this.onPanelMaximized.next({ panelId, maximized: true });
+        return this.MaximizePanel(panelId);
     }
 
     /**
      * Restore a maximized panel
      */
+    public RestorePanel(panelId: string): void {
+        this.OnPanelMaximized.next({ panelId, maximized: false });
+    }
+
+    /** @deprecated Use {@link RestorePanel}. */
     public restorePanel(panelId: string): void {
-        this.onPanelMaximized.next({ panelId, maximized: false });
+        return this.RestorePanel(panelId);
     }
 
     /**
      * Focus a panel by ID
      */
-    public focusPanel(panelId: string): void {
+    public FocusPanel(panelId: string): void {
         const container = this._containerMap.get(panelId);
         if (container) {
             container.focus();
         }
     }
 
+    /** @deprecated Use {@link FocusPanel}. */
+    public focusPanel(panelId: string): void {
+        return this.FocusPanel(panelId);
+    }
+
     /**
      * Get the current layout configuration.
      * Returns GL's native ResolvedLayoutConfig - no conversion.
      */
-    public getLayoutConfig(): ResolvedLayoutConfig | null {
+    public GetLayoutConfig(): ResolvedLayoutConfig | null {
         if (!this._layout) return null;
 
         try {
@@ -478,19 +716,34 @@ export class GoldenLayoutWrapperService {
         }
     }
 
+    /** @deprecated Use {@link GetLayoutConfig}. */
+    public getLayoutConfig(): ResolvedLayoutConfig | null {
+        return this.GetLayoutConfig();
+    }
+
     /**
      * Get the container element for a panel
      */
-    public getPanelContainer(panelId: string): HTMLElement | null {
+    public GetPanelContainer(panelId: string): HTMLElement | null {
         const container = this._containerMap.get(panelId);
         return container?.element || null;
+    }
+
+    /** @deprecated Use {@link GetPanelContainer}. */
+    public getPanelContainer(panelId: string): HTMLElement | null {
+        return this.GetPanelContainer(panelId);
     }
 
     /**
      * Get all panel IDs in the current layout
      */
-    public getPanelIds(): string[] {
+    public GetPanelIds(): string[] {
         return Array.from(this._containerMap.keys());
+    }
+
+    /** @deprecated Use {@link GetPanelIds}. */
+    public getPanelIds(): string[] {
+        return this.GetPanelIds();
     }
 
     /**
@@ -498,18 +751,23 @@ export class GoldenLayoutWrapperService {
      * Note: Golden Layout 2 doesn't support changing settings after initialization.
      * The layout must be reinitialized to apply new settings.
      */
-    public setEditingMode(isEditing: boolean): void {
+    public SetEditingMode(isEditing: boolean): void {
         this._isEditing = isEditing;
     }
 
+    /** @deprecated Use {@link SetEditingMode}. */
+    public setEditingMode(isEditing: boolean): void {
+        return this.SetEditingMode(isEditing);
+    }
+
     private updatePanelsList(): void {
-        this.panels$.next(Array.from(this._containerMap.keys()));
+        this.Panels$.next(Array.from(this._containerMap.keys()));
     }
 
     private emitLayoutChanged(changeType: LayoutChangedEvent['changeType']): void {
-        const layoutConfig = this.getLayoutConfig();
+        const layoutConfig = this.GetLayoutConfig();
         if (layoutConfig) {
-            this.onLayoutChanged.next({
+            this.OnLayoutChanged.next({
                 layout: layoutConfig,
                 changeType
             });
@@ -548,7 +806,7 @@ export class GoldenLayoutWrapperService {
 
             // Create icon element and insert at the beginning of tabElement
             // This preserves GL's .lm_title structure for drag/drop
-            // Icon is positioned absolutely via CSS in the left padding area
+            // The viewer CSS keeps the icon in the tab's flow, before the title
             const iconEl = document.createElement('i');
             iconEl.className = `${normalizedIconClass} panel-icon`;
 
@@ -570,4 +828,9 @@ export class GoldenLayoutWrapperService {
             }, 100);
         }, 50);
     }
+}
+
+/** True when the Golden Layout item is a stack. */
+function isStack(item: EventEmitter): item is Stack {
+    return 'isStack' in item && item.isStack === true;
 }

@@ -1,0 +1,93 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "dbresearch-entity-details-first-01 [claude-sonnet-5 · Anthropic · native-implicit]",
+    "Description": "Nothing known yet about the entity. Writing SQL before looking up the schema is the guessing failure; Get Entity Details first is correct.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "How many active AI agents do we have?"
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "dbresearch-entity-details-first-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Get Entity Details"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Search Query Catalog"
+              }
+            ],
+            "allowAdditionalActions": true
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Database Research Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Get Entity Details"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Search Query Catalog"
+                  }
+                ],
+                "allowAdditionalActions": true
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "4E2DBD3B-4E00-4E57-A44F-00E7075000E8"
+  }
+}

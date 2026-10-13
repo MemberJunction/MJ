@@ -138,15 +138,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ScheduledActionID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="SegmenterKey"
             Type="textbox"
             [EditMode]="EditMode"
@@ -159,6 +150,15 @@
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ScheduledJobID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -209,9 +209,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Items','ContentSourceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Items')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Items','ContentSourceID')"
                 [AllowLoad]="IsSectionExpanded('mJContentItems')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItems', $event.totalRowCount)"
                 >
@@ -234,9 +234,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Process Runs','SourceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Process Runs')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Process Runs','SourceID')"
                 [AllowLoad]="IsSectionExpanded('mJContentProcessRuns')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentProcessRuns', $event.totalRowCount)"
                 >
@@ -259,9 +259,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Source Params','ContentSourceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Source Params')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Source Params','ContentSourceID')"
                 [AllowLoad]="IsSectionExpanded('mJContentSourceParams')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentSourceParams', $event.totalRowCount)"
                 >
@@ -284,9 +284,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Process Run Details','ContentSourceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Process Run Details')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Process Run Details','ContentSourceID')"
                 [AllowLoad]="IsSectionExpanded('mJContentProcessRunDetails')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentProcessRunDetails', $event.totalRowCount)"
                 >
@@ -309,9 +309,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Suggestions','SourceContentSourceID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions','SourceContentSourceID')"
                 [AllowLoad]="IsSectionExpanded('mJTagSuggestions')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagSuggestions', $event.totalRowCount)"
                 >

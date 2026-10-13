@@ -6,7 +6,7 @@
  * and we will dynamically instantiate that sub-class from that point forward
  ******************************************************************************************************/
 
-import { GetRootClass, IsRootClass } from './ClassUtils';
+import { AreClassesRelated, GetRootClass, IsRootClass } from './ClassUtils';
 import { ClassRequiresSubclass } from './RequiresSubclass';
 import { ClassIsOptionalKeyedSpecialization } from './OptionalKeyedSpecialization';
 
@@ -255,6 +255,18 @@ export class ClassFactory {
                     if (registrations[i].Priority > highestPriority)
                         highestPriority = registrations[i].Priority;
                 }
+
+                // The auto-increment above makes this registration outrank every earlier one for the
+                // same base class + key. That is exactly right for an inheritance chain (a subclass
+                // loading after its parent SHOULD win — that is the documented contract on `priority`),
+                // but it is silent when the earlier registration is an UNRELATED class: two
+                // independently-installed Open Apps registering the same key clobber each other with
+                // no diagnostic anywhere, and the loser is simply never resolved. The `priority > 0`
+                // branch above already warns for explicit priorities; the decorator passes 0, so in
+                // practice nothing ever warned. Warn on precisely the unrelated case so a hierarchy
+                // override — the overwhelmingly common path — stays quiet.
+                this.warnOnUnrelatedRegistrations(registrations, subClass, subClassName, effectiveBaseClassName, key);
+
                 // now set the priority to one higher than the highest priority we found
                 priority = highestPriority + 1;
             }
@@ -276,6 +288,39 @@ export class ClassFactory {
             // diagnostic to be emitted again if it fails a second time.
             this._reportedResolutionFailures.clear();
         }
+    }
+
+    /**
+     * Emits a single warning when an incoming registration collides with one or more EXISTING
+     * registrations for the same base class + key that are **not in its inheritance chain**.
+     *
+     * Relatedness is compared by class name (see {@link AreClassesRelated}) for the same reason
+     * {@link GetAllRegistrations} matches on name: the same class loaded through two module paths
+     * is two distinct constructor objects, and identity comparison would report that duplicate as
+     * a collision.
+     *
+     * Diagnostic only — the registration still proceeds, so this cannot change resolution for any
+     * existing consumer.
+     */
+    private warnOnUnrelatedRegistrations(
+        registrations: ClassRegistration[],
+        subClass: unknown,
+        subClassName: string,
+        effectiveBaseClassName: string,
+        key: string | null
+    ): void {
+        const unrelated = registrations.filter(r => !AreClassesRelated(r.SubClass, subClass));
+        if (unrelated.length === 0) {
+            return;
+        }
+        const names = unrelated.map(r => (r.SubClass as NamedClass)?.name ?? 'Anonymous').join(', ');
+        console.warn(
+            `*** ClassFactory.Register: ${subClassName} is registering for base class ${effectiveBaseClassName} ` +
+            `with key '${key}', which is already registered by unrelated class(es): ${names}. These are not in the ` +
+            `same inheritance chain, so this is a COLLISION rather than a subclass override — ${subClassName} wins ` +
+            `only by virtue of registering last, and ${names} will never be resolved for this key. Give one of them ` +
+            `a distinct key, or set an explicit priority if one really is meant to supersede the other. ***`
+        );
     }
 
     /**
@@ -339,7 +384,20 @@ export class ClassFactory {
 
         // ── Fallback path: the requested key did not resolve to any registered subclass. ──
         const requiresSubclass = ClassRequiresSubclass(baseClass);
-        const reason = this.describeResolutionFailure(baseClass, key, requiresSubclass);
+        // Built LAZILY, and memoised for the consumers below.
+        //
+        // describeResolutionFailure scans every registration in the process (GetAllRegistrations is
+        // an unmemoised filter over _registrations), then maps/dedupes/sorts/joins the result into a
+        // multi-KB string. That is affordable for a real failure and ruinous here, because this
+        // fallback path is DESIGNED to be hit: an '@OptionalKeyedSpecialization' base probes
+        // '<Entity>.<Field>' once per field of every entity, and neither of the two consumers below
+        // ends up reading the string on that path — the gate at the end of this block skips
+        // reporting, and CreateInstance never reads Reason when an instance was produced.
+        // reportResolutionFailure ALSO returns early (volume cap, then per-base+key dedup) before it
+        // formats anything, so passing an already-built string wasted the work even when reporting.
+        let describedReason: string | undefined;
+        const reason = (): string =>
+            (describedReason ??= this.describeResolutionFailure(baseClass, key, requiresSubclass));
 
         // Only REPORT when the caller actually asked for something specific.
         //
@@ -363,14 +421,27 @@ export class ClassFactory {
             this.reportResolutionFailure(baseClass, key, requiresSubclass, reason);
         }
 
+
         if (requiresSubclass) {
-            return { Resolved: false, Instance: null, Reason: reason };
+            // A hard error: the string is genuinely wanted here (CreateInstance throws it).
+            return { Resolved: false, Instance: null, Reason: reason() };
         }
 
         // No marker — the base is presumed usable standalone (e.g. BaseEntity). Preserve the
         // historical fallback so existing, CORRECT consumers keep working.
+        //
+        // Reason stays lazy via an enumerable accessor: consumers that read it (see the doc comment
+        // on CreateInstance) get the identical string, while the designed-probe path — which
+        // produces an instance and never looks — pays nothing. Spread and JSON.stringify still
+        // observe it, exactly as before.
         const BaseClassConstructor = baseClass as new (...args: unknown[]) => T;
-        return { Resolved: false, Instance: new BaseClassConstructor(...params), Reason: reason };
+        return {
+            Resolved: false,
+            Instance: new BaseClassConstructor(...params),
+            get Reason(): string {
+                return reason();
+            }
+        };
     }
 
     /**
@@ -404,7 +475,7 @@ export class ClassFactory {
      * very hot paths (once per entity-field hydration), so an un-deduped log would be a firehose.
      * A captured stack is included so the offending call site is identifiable.
      */
-    private reportResolutionFailure(baseClass: unknown, key: string | null, requiresSubclass: boolean, reason: string): void {
+    private reportResolutionFailure(baseClass: unknown, key: string | null, requiresSubclass: boolean, reason: () => string): void {
         // Volume cap, PER BASE CLASS (not per base+key).
         //
         // The existing dedup keys on base+key, which is useless for callers whose key varies per
@@ -433,8 +504,10 @@ export class ClassFactory {
         if (this._reportedResolutionFailures.has(logKey)) return;
         this._reportedResolutionFailures.add(logKey);
 
+        // Both early returns above are past us, so this report is really going to be emitted —
+        // only now is it worth describing the failure.
         const stack = new Error().stack ?? '(stack unavailable)';
-        const message = `${reason}\nCall site:\n${stack}`;
+        const message = `${reason()}\nCall site:\n${stack}`;
         if (requiresSubclass) console.error(message);
         else console.warn(message);
     }
@@ -447,11 +520,14 @@ export class ClassFactory {
      */
     public GetAllRegistrations(baseClass: unknown, key?: string | null): ClassRegistration[] {
         if (baseClass) {
+            // baseClassName and the normalised key are loop-invariant — computed once here rather
+            // than once per registration. This filter runs over every registration in the process.
+            const baseClassName = (baseClass as { name: string }).name;
+            const normalizedKey = key === undefined || key === null ? null : key.trim().toLowerCase();
             return this._registrations.filter(r => {
-                const baseClassName = (baseClass as { name: string }).name;
                 const regBaseClassName = (r.BaseClass as { name: string }).name;
                 return  regBaseClassName === baseClassName && // we use the name of the class instead of the class itself because JS is finicky about this since a given module can be loaded in various places (like from multiple other modules) and the class itself will be different in each case
-                        ( key === undefined || key === null ? true : r.Key?.trim().toLowerCase() === key.trim().toLowerCase())
+                        ( normalizedKey === null ? true : r.Key?.trim().toLowerCase() === normalizedKey)
             } );
         }
         else

@@ -61,7 +61,12 @@ vi.mock('fs', async () => {
             existsSync: vi.fn().mockReturnValue(true),
             mkdirSync: vi.fn(),
             writeFileSync: vi.fn(),
-            readFileSync: vi.fn().mockReturnValue('')
+            readFileSync: vi.fn().mockReturnValue(''),
+            // Per-schema emit lists its output directory to prune files no live schema
+            // claims. existsSync is stubbed true above, so without these the pruner
+            // reaches the real filesystem.
+            readdirSync: vi.fn().mockReturnValue([]),
+            unlinkSync: vi.fn()
         }
     };
 });
@@ -72,7 +77,9 @@ vi.mock('mssql', () => ({
 
 vi.mock('../Misc/status_logging', () => ({
     logError: vi.fn(),
-    logStatus: vi.fn()
+    logStatus: vi.fn(),
+    LogWarning: vi.fn(),
+    get logWarning() { return this.LogWarning; }
 }));
 
 vi.mock('../Database/manage-metadata', () => ({
@@ -83,8 +90,15 @@ vi.mock('../Database/manage-metadata', () => ({
 }));
 
 vi.mock('../Config/config', () => ({
-    mj_core_schema: '__mj',
-    configInfo: {}
+    MjCoreSchema: '__mj',
+    get mj_core_schema() { return this.MjCoreSchema; },
+    configInfo: {},
+    ResolveEntityPackageName: () => 'mj_generatedentities',
+    get resolveEntityPackageName() { return this.ResolveEntityPackageName; },
+    ResolveEntityImportPackage: () => {
+        throw new Error('resolveEntityImportPackage should not be called without peer embeds/collections');
+    },
+    get resolveEntityImportPackage() { return this.ResolveEntityImportPackage; },
 }));
 
 vi.mock('./sql_logging', () => ({
@@ -92,8 +106,10 @@ vi.mock('./sql_logging', () => ({
 }));
 
 vi.mock('../Misc/util', () => ({
-    makeDir: vi.fn(),
-    sortBySequenceAndCreatedAt: vi.fn((items: unknown[]) => [...items])
+    MakeDir: vi.fn(),
+    get makeDir() { return this.MakeDir; },
+    SortBySequenceAndCreatedAt: vi.fn((items: unknown[]) => [...items]),
+    get sortBySequenceAndCreatedAt() { return this.SortBySequenceAndCreatedAt; }
 }));
 
 import { EntitySubClassGeneratorBase } from '../Misc/entity_subclasses_codegen';
@@ -104,6 +120,10 @@ describe('EntitySubClassGeneratorBase', () => {
     beforeEach(() => {
         generator = new EntitySubClassGeneratorBase();
         vi.clearAllMocks();
+        // clearAllMocks drops return values too. Per-schema emit lists its output directory
+        // to prune files no live schema claims, so a case that stubs existsSync true reaches
+        // readdirSync — and an unset mock returns undefined, not an empty listing.
+        vi.mocked(fs.readdirSync).mockReturnValue([]);
     });
 
     describe('generateEntitySubClassFileHeader', () => {
@@ -125,6 +145,12 @@ describe('EntitySubClassGeneratorBase', () => {
         it('should include loadModule export', () => {
             const header = generator.generateEntitySubClassFileHeader();
             expect(header).toContain('export const loadModule');
+        });
+
+        it('omits loadModule from a per-schema file so the barrel owns the symbol', () => {
+            const header = generator.generateEntitySubClassFileHeader(false);
+            expect(header).not.toContain('export const loadModule');
+            expect(header).toContain('import { z } from "zod"');
         });
 
         it('should import from @memberjunction/core', () => {
@@ -242,6 +268,72 @@ describe('EntitySubClassGeneratorBase', () => {
             expect(result).not.toContain('Description_');
         });
 
+        // ── Binary fields (varbinary / bytea): getter doc tells consumers how to decode ──
+        describe('binary field getter documentation', () => {
+            const BINARY_DOC_LINE = '* * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.';
+
+            const binaryEntity = () => ({
+                Name: 'Vector Things',
+                ClassName: 'VectorThing',
+                PrimaryKeys: [{ Name: 'ID', CodeName: 'ID', TSType: 'string', IsPrimaryKey: true, AutoIncrement: false }],
+                Fields: [
+                    { Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', AllowsNull: false, ReadOnly: false, IsPrimaryKey: true, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, IsBinaryFieldType: false },
+                    { Name: 'Embedding', CodeName: 'Embedding', Type: 'varbinary', SQLFullType: 'varbinary(MAX)', AllowsNull: true, ReadOnly: false, IsPrimaryKey: false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, IsBinaryFieldType: true },
+                    { Name: 'Label', CodeName: 'Label', Type: 'nvarchar', SQLFullType: 'nvarchar(100)', AllowsNull: true, ReadOnly: false, IsPrimaryKey: false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, IsBinaryFieldType: false },
+                ],
+                EntityObjectSubclassName: '',
+                EntityObjectSubclassImport: '',
+                AllowDeleteAPI: true,
+                AllowCreateAPI: true,
+                AllowUpdateAPI: true,
+                CascadeDeletes: false,
+                IsChildType: false,
+                Status: 'Active',
+                SchemaName: '__mj',
+                BaseTable: 'VectorThing',
+                BaseView: 'vwVectorThings',
+                Description: ''
+            });
+
+            const generateBinary = () =>
+                generator.generateEntitySubClass(
+                    {} as Parameters<typeof generator.generateEntitySubClass>[0],
+                    binaryEntity() as Parameters<typeof generator.generateEntitySubClass>[1],
+                    false,
+                    true
+                );
+
+            /** The JSDoc block that immediately precedes `get <name>()`. */
+            const docFor = (source: string, getterName: string): string => {
+                const getterIdx = source.indexOf(`get ${getterName}()`);
+                expect(getterIdx, `getter ${getterName}`).toBeGreaterThan(-1);
+                const docStart = source.lastIndexOf('/**', getterIdx);
+                return source.substring(docStart, getterIdx);
+            };
+
+            it('adds the base64 decode note to the binary field getter, right after its SQL data type', async () => {
+                const result = await generateBinary();
+                const doc = docFor(result, 'Embedding');
+
+                expect(doc).toContain(BINARY_DOC_LINE);
+                expect(doc).toMatch(/SQL Data Type: varbinary\(MAX\)\n\s*\* \* Binary Value: base64-encoded string\./);
+            });
+
+            it('emits the note exactly once — only for the binary field', async () => {
+                const result = await generateBinary();
+
+                expect(result.split(BINARY_DOC_LINE).length - 1).toBe(1);
+                expect(docFor(result, 'Label')).not.toContain('Binary Value');
+                expect(docFor(result, 'ID')).not.toContain('Binary Value');
+            });
+
+            it('still types the binary getter as a string', async () => {
+                const result = await generateBinary();
+
+                expect(result).toMatch(/get Embedding\(\): string \| null/);
+            });
+        });
+
         // ── Base-class selection for external data source entities ──
         const makeEntity = (overrides: Record<string, unknown>) => ({
             Name: 'Snowflake Sales',
@@ -307,7 +399,29 @@ describe('EntitySubClassGeneratorBase', () => {
             // Regression (fix C): the import was previously emitted inline per external entity, so a file
             // with 2+ external entities produced duplicate `import { ReadOnlyExternalBaseEntity }` lines
             // → TS2300 duplicate identifier. The assembler now hoists + de-duplicates subclass imports.
-            // (fs is mocked, so we capture the content passed to writeFileSync rather than a real file.)
+            // Two entities in the SAME schema share one per-schema file.
+            const writeMock = vi.mocked(fs.writeFileSync);
+            writeMock.mockClear();
+            const bronze = makeEntity({ Name: 'Bronze Sales', ClassName: 'BronzeSales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'bronze', BaseTable: 'sales', BaseView: 'vwBronzeSales' });
+            const bronze2 = makeEntity({ Name: 'Bronze Quotes', ClassName: 'BronzeQuotes', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'quotes', SchemaName: 'bronze', BaseTable: 'quotes', BaseView: 'vwBronzeQuotes' });
+            const ok = await generator.generateAllEntitySubClasses(
+                {} as Parameters<typeof generator.generateAllEntitySubClasses>[0],
+                [bronze, bronze2] as Parameters<typeof generator.generateAllEntitySubClasses>[1],
+                '/out',
+                true
+            );
+            expect(ok).toBe(true);
+            const schemaCall = writeMock.mock.calls.find((c) => String(c[0]).endsWith('bronze.ts'));
+            expect(schemaCall).toBeTruthy();
+            const content = String(schemaCall![1]);
+            const importMatches = content.match(/import \{ ReadOnlyExternalBaseEntity \} from '@memberjunction\/core-entities';/g) || [];
+            expect(importMatches.length).toBe(1); // exactly one, not one-per-entity
+            expect((content.match(/extends ReadOnlyExternalBaseEntity/g) || []).length).toBe(2); // both still extend it
+            const barrelCall = writeMock.mock.calls.find((c) => String(c[0]).endsWith('entity_subclasses.ts'));
+            expect(String(barrelCall![1])).toContain("export * from './entities/bronze.js'");
+        });
+
+        it('emits one TypeScript file per schema plus a barrel', async () => {
             const writeMock = vi.mocked(fs.writeFileSync);
             writeMock.mockClear();
             const bronze = makeEntity({ Name: 'Bronze Sales', ClassName: 'BronzeSales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'bronze', BaseTable: 'sales', BaseView: 'vwBronzeSales' });
@@ -319,12 +433,46 @@ describe('EntitySubClassGeneratorBase', () => {
                 true
             );
             expect(ok).toBe(true);
-            const call = writeMock.mock.calls.find((c) => String(c[0]).endsWith('entity_subclasses.ts'));
-            expect(call).toBeTruthy();
-            const content = String(call![1]);
-            const importMatches = content.match(/import \{ ReadOnlyExternalBaseEntity \} from '@memberjunction\/core-entities';/g) || [];
-            expect(importMatches.length).toBe(1); // exactly one, not one-per-entity
-            expect((content.match(/extends ReadOnlyExternalBaseEntity/g) || []).length).toBe(2); // both still extend it
+            const written = writeMock.mock.calls.map((c) => String(c[0]));
+            expect(written.some((p) => p.endsWith('entities/bronze.ts'))).toBe(true);
+            expect(written.some((p) => p.endsWith('entities/silver.ts'))).toBe(true);
+            expect(written.some((p) => p.endsWith('entity_subclasses.ts'))).toBe(true);
+        });
+
+        it('skips schema files that exist when the dirty set is empty', async () => {
+            vi.mocked(fs.existsSync).mockReturnValue(true);
+            const writeMock = vi.mocked(fs.writeFileSync);
+            writeMock.mockClear();
+            const bronze = makeEntity({ Name: 'Bronze Sales', ClassName: 'BronzeSales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'bronze', BaseTable: 'sales', BaseView: 'vwBronzeSales' });
+            const ok = await generator.generateAllEntitySubClasses(
+                {} as Parameters<typeof generator.generateAllEntitySubClasses>[0],
+                [bronze] as Parameters<typeof generator.generateAllEntitySubClasses>[1],
+                '/out',
+                true,
+                { dirtySchemas: new Set() },
+            );
+            expect(ok).toBe(true);
+            const written = writeMock.mock.calls.map((c) => String(c[0]));
+            expect(written.some((p) => p.endsWith('entities/bronze.ts'))).toBe(false);
+            expect(written.some((p) => p.endsWith('entity_subclasses.ts'))).toBe(true);
+        });
+
+        it('can still emit the historical single-file monolith', async () => {
+            const writeMock = vi.mocked(fs.writeFileSync);
+            writeMock.mockClear();
+            const bronze = makeEntity({ Name: 'Bronze Sales', ClassName: 'BronzeSales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'bronze', BaseTable: 'sales', BaseView: 'vwBronzeSales' });
+            const ok = await generator.generateAllEntitySubClasses(
+                {} as Parameters<typeof generator.generateAllEntitySubClasses>[0],
+                [bronze] as Parameters<typeof generator.generateAllEntitySubClasses>[1],
+                '/out',
+                true,
+                { perSchema: false },
+            );
+            expect(ok).toBe(true);
+            const monolith = writeMock.mock.calls.find((c) => String(c[0]).endsWith('entity_subclasses.ts'));
+            expect(monolith).toBeTruthy();
+            expect(String(monolith![1])).toContain('extends ReadOnlyExternalBaseEntity');
+            expect(String(monolith![1])).not.toContain("export * from './entities/");
         });
     });
 

@@ -54,7 +54,9 @@ export {
   AnalyticsErrorAnalysisComponent,
   LoadAnalyticsErrorAnalysis,
   AnalyticsUsagePatternsComponent,
-  LoadAnalyticsUsagePatterns
+  LoadAnalyticsUsagePatterns,
+  UsageExplorerComponent,
+  LoadUsageExplorer
 } from './AI/index';
 
 // Knowledge Hub components
@@ -95,7 +97,6 @@ export {
 // Export Actions components as resources (BaseResourceComponent-based)
 export {
   ActionsOverviewComponent,
-  ScheduledActionsComponent,
   CodeManagementComponent,
   EntityIntegrationComponent,
   SecurityPermissionsComponent,
@@ -165,6 +166,10 @@ export {
   ShareDialogResult
 } from './DashboardBrowser/dashboard-share-dialog.component';
 
+// Dashboards app pages (the Library is DashboardBrowserResourceComponent above)
+export { DashboardsCategoriesResourceComponent, LoadDashboardsCategoriesResource } from './DashboardBrowser/dashboards-categories-resource.component';
+export * from './shared/dashboards-app.helpers';
+
 // Home Application and Dashboard
 export { HomeApplication } from './Home/home-application';
 export { HomeDashboardComponent } from './Home/home-dashboard.component';
@@ -174,6 +179,10 @@ export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from 
 
 // Realtime Recordings — review & replay recorded realtime sessions (audio + transcript)
 export { RealtimeRecordingsDashboardComponent, LoadRealtimeRecordingsDashboard } from './RealtimeRecordings/realtime-recordings-dashboard.component';
+
+// Telephony & Interaction Operations
+export { TelephonyOperationsDashboardComponent } from './TelephonyOperations/telephony-operations-dashboard.component';
+export * from './TelephonyOperations/telephony-operations-agent-context';
 
 // Permissions admin — three independent resource tabs (Phase 2a/b/c — unified permissions)
 export {
@@ -217,6 +226,7 @@ export * from './ai-dashboards.module';
 export * from './actions-dashboards.module';
 export * from './testing-dashboards.module';
 export * from './scheduling-dashboards.module';
+export * from './rubrics-dashboards.module';
 export * from './communication-dashboards.module';
 export * from './credentials-dashboards.module';
 export * from './data-explorer-dashboards.module';
@@ -224,11 +234,23 @@ export * from './lists-dashboards.module';
 export * from './routines-dashboards.module';
 export * from './component-studio-dashboards.module';
 export * from './predictive-studio-dashboards.module';
+
+// Workflows app — the workflow list, the Create Workflow front door, and the run history (D18/D19).
+export * from './workflows-dashboards.module';
+export * from './Workflows/workflows-dashboard.component';
+export * from './Workflows/components/create-workflow.component';
+export * from './Workflows/components/workflows-resource.component';
+export * from './Workflows/components/workflow-runs-resource.component';
+export * from './Workflows/workflows.types';
 export { PredictiveStudioEngine } from './PredictiveStudio/engine/predictive-studio.engine';
 export * from './DatabaseDesigner/database-designer-dashboards.module';
 export { DatabaseDesignerDashboardComponent, LoadDatabaseDesignerDashboard } from './DatabaseDesigner/components/database-designer-dashboard.component';
 export * from './shared/shared-dashboard-widgets.module';
 export * from './archiving-dashboards.module';
+
+// Work Queue app — operator dashboard over the WorkQueue.* remote operations (spec 09b)
+export * from './work-queue-dashboards.module';
+export { WorkQueueDashboardComponent } from './WorkQueue/work-queue-dashboard.component';
 
 // Routines app — schedule AI agents to run on a cron cadence
 export { UserRoutinesResourceComponent, LoadUserRoutinesResource } from './UserRoutines/user-routines-resource.component';

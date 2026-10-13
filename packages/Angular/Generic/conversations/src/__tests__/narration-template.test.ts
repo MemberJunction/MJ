@@ -5,10 +5,8 @@
  * `Realtime Co-Agent - Progress Narration` prompt.
  */
 import { describe, it, expect } from 'vitest';
-import {
-  BuildNarrationInstructions,
-  DefaultNarrationInstructions
-} from '../lib/services/narration-template';
+import { BuildNarrationInstructions } from '@memberjunction/realtime-runtime';
+import { DefaultNarrationInstructions } from '@memberjunction/realtime-runtime';
 
 describe('DefaultNarrationInstructions', () => {
   it('embeds the progress digest and keeps the first-person + variation rules', () => {

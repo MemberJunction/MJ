@@ -713,7 +713,8 @@ CREATE PROCEDURE __mj.[spCreateRecordChange_Internal]
     @Comments         NVARCHAR(MAX),
     @Source           NVARCHAR(20)     = NULL,
     @RestoredFromID   UNIQUEIDENTIFIER = NULL,
-    @RestoreReason    NVARCHAR(MAX)    = NULL
+    @RestoreReason    NVARCHAR(MAX)    = NULL,
+    @ChangeContext    NVARCHAR(MAX)    = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -734,7 +735,8 @@ BEGIN
             Status,
             Comments,
             RestoredFromID,
-            RestoreReason
+            RestoreReason,
+            ChangeContext
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
@@ -751,7 +753,8 @@ BEGIN
             @Status,
             @Comments,
             @RestoredFromID,
-            @RestoreReason
+            @RestoreReason,
+            @ChangeContext
         );
 
     -- Return the new record from the base view so calculated fields are included
@@ -1655,6 +1658,10 @@ DELETE FROM [__mj].[UserView] WHERE [EntityID] = @EntityID;
 DELETE FROM [__mj].[EntityAIAction] WHERE [EntityID] = @EntityID;
 DELETE FROM [__mj].[EntityCommunicationMessageType] WHERE [EntityID] = @EntityID;
 DELETE FROM [__mj].[EntityAIAction] WHERE [OutputEntityID] = @EntityID;
+
+-- Clear inbound metadata references from OTHER entities' fields that point AT this entity,
+-- so the Entity row can be deleted without tripping FK_EntityField_RelatedEntity.
+UPDATE __mj.EntityField SET RelatedEntityID = NULL WHERE RelatedEntityID = @EntityID
 
 DELETE FROM __mj.Entity WHERE ID = @EntityID
 GO

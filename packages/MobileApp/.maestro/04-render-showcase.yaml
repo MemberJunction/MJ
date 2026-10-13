@@ -5,9 +5,9 @@ appId: org.memberjunction.mobile
 ---
 - launchApp
 - extendedWaitUntil:
-    visible: "Conversations"
+    visible: "Ask an agent anything, or pick up where you left off."
     timeout: 30000
-- openLink: "mjmobile:///markdown-preview"
+- openLink: "mjmobile://markdown-preview"
 - runFlow:
     when:
       visible: "Open"

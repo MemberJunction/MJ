@@ -1,0 +1,92 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "sage-disambig-internal-vs-web-01 [claude-haiku-4-5-20251001 · Anthropic · envelope]",
+    "Description": "Sage offers four search-shaped actions. A question about OUR records is Scoped Search over internal data, not a web search — the classic near-duplicate confusion.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Find the customer records we have for Northwind Traders."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "sage-disambig-internal-vs-web-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Scoped Search"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Get Record"
+              }
+            ],
+            "allowAdditionalActions": true
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Sage",
+      "modelId": "4FD92457-0BA8-486F-978A-E5947154F4F4",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Scoped Search"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Get Record"
+                  }
+                ],
+                "allowAdditionalActions": true
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "321FE727-1038-4E3F-A811-38E58B1238E7"
+  }
+}

@@ -1,0 +1,172 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Employees",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Reader",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "D6C2AB0E-152A-4ECF-BD27-EBFC15698833"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.500Z",
+      "checksum": "637430473864303a04488816f0e17028df0c78145873a84a8717d6b15c954e2c"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Employees",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Writer",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "F8558468-5284-427D-B816-41361A8B628D"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.513Z",
+      "checksum": "97738b50c40a8618658c1ff734d4a45792ac926889f290e5c20cf79f0675cc02"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Employees",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Denier",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "285F2ED0-432F-4587-AA4E-52C811F95B97"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.523Z",
+      "checksum": "4daddeceab974e5efe3ff05ee2c9bb2d73b4e54e3e4df9712454c700f807fa7c"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Employees",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Neutral",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "B1597C5C-6DF5-41C1-B79E-C8BC79ECC4A3"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.533Z",
+      "checksum": "1ed793422481c116dada3a5f6e7b2d19d26e526e43396c5a6a4c93c01e3389ca"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Reader",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "739F71D9-7BEC-4DF1-8E03-35229BD91EF6"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.543Z",
+      "checksum": "b34ecef9ee651a198d201b986bd3b81d633f7b290de5a60c9b5fcf9576dc6d31"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Roles",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Reader",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "5A74EF5A-7687-443B-BB23-CC2ED4AE2776"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.552Z",
+      "checksum": "2c750acd629d5e1849012ccf4b2c92ba86ac14cb2643baef9cd5a52f53c8eff5"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Writer",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "C3836FDD-EE38-4E96-90F8-900D274CB75C"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.560Z",
+      "checksum": "d49b7d7f858235eab0588581c31427e61ba1749b9f66f1f93231dacc540a7196"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Roles",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Writer",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "32C4B71E-D656-48E3-9B42-0A35C58E20E7"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.570Z",
+      "checksum": "ae8ced4b258207105c2920d463fecbe6e36994ade97a9dc428a47a93c9dbd395"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Record Changes",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Reader",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "9D25B6D1-DC4C-452A-9A69-30CE3D961945"
+    },
+    "sync": {
+      "lastModified": "2026-09-09T03:44:03.098Z",
+      "checksum": "dcf5d113a1b85e69902b6d7eefef1e45cd6131f39765c610b4a6dcf012904c4f"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Record Changes",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Writer",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "F23790F5-A832-4B88-88C9-D667C0E3F29B"
+    },
+    "sync": {
+      "lastModified": "2026-09-09T03:44:03.100Z",
+      "checksum": "1202ef9733fc6e89c9b1236ebc28774ba565f99063ff681dcfc773b68b5ac226"
+    }
+  }
+]

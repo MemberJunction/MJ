@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { TwitterBaseAction, Tweet, TwitterSearchParams } from '../twitter-base.action';
+import { Tweet, TwitterApiResponse, TwitterBaseAction, TwitterSearchParams } from '../twitter-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialPost, SearchParams } from '../../../base/base-social.action';
@@ -254,12 +254,12 @@ export class TwitterSearchTweetsAction extends TwitterBaseAction {
             }
 
             try {
-                const response = await this.axiosInstance.get('/tweets/search/recent', {
-                    params: queryParams
+                const response = await this.httpClient.Get<TwitterApiResponse<Tweet[]>>('/tweets/search/recent', {
+                    Query: queryParams
                 });
 
-                if (response.data.data && Array.isArray(response.data.data)) {
-                    tweets.push(...response.data.data);
+                if (response.Data.data && Array.isArray(response.Data.data)) {
+                    tweets.push(...response.Data.data);
                 }
 
                 // Check if we've reached the desired number of results
@@ -268,7 +268,7 @@ export class TwitterSearchTweetsAction extends TwitterBaseAction {
                 }
 
                 // Check for more pages
-                nextToken = response.data.meta?.next_token;
+                nextToken = response.Data.meta?.next_token;
                 if (!nextToken) {
                     break;
                 }

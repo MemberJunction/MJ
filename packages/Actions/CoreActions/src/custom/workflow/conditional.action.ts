@@ -1,5 +1,5 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, SafeExpressionEvaluator } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { ActionEngineServer } from "@memberjunction/actions";
 import { JSONParamHelper } from "../utilities/json-param-helper";
@@ -71,7 +71,7 @@ export class ConditionalAction extends BaseAction {
      *   - TrueAction: Action configuration to run if condition is true (optional)
      *   - FalseAction: Action configuration to run if condition is false (optional)
      *   - PassthroughContext: Boolean - pass context to child actions (default: false)
-     *   - StrictMode: Boolean - use strict mode for evaluation (default: true)
+     *   - StrictMode: ignored; kept so existing callers still validate
      * 
      * @returns Result from executed action or condition result
      */
@@ -82,7 +82,6 @@ export class ConditionalAction extends BaseAction {
             const trueAction = JSONParamHelper.getJSONParam(params, 'trueaction');
             const falseAction = JSONParamHelper.getJSONParam(params, 'falseaction');
             const passthroughContext = this.getBooleanParam(params, 'passthroughcontext', false);
-            const strictMode = this.getBooleanParam(params, 'strictmode', true);
 
             // Validate condition
             if (!condition) {
@@ -93,17 +92,27 @@ export class ConditionalAction extends BaseAction {
                 };
             }
 
-            // Evaluate condition
-            let conditionResult: boolean;
-            try {
-                conditionResult = this.evaluateCondition(condition, context, strictMode);
-            } catch (error) {
+            // The condition is parsed and checked against an allowlist before it is evaluated; see
+            // SafeExpressionEvaluator. It is never run as unscreened JavaScript.
+            const evaluator = new SafeExpressionEvaluator();
+            const syntax = evaluator.ValidateSyntax(condition);
+            if (!syntax.Valid) {
                 return {
                     Success: false,
-                    Message: `Failed to evaluate condition: ${error instanceof Error ? error.message : String(error)}`,
+                    Message: `Condition is not allowed: ${syntax.Error}`,
+                    ResultCode: "INVALID_CONDITION"
+                };
+            }
+
+            const evaluation = evaluator.Evaluate(condition, context);
+            if (!evaluation.success) {
+                return {
+                    Success: false,
+                    Message: `Failed to evaluate condition: ${evaluation.error}`,
                     ResultCode: "CONDITION_ERROR"
                 };
             }
+            const conditionResult = evaluation.value === true;
 
             // Add output parameter for condition result
             params.Params.push({
@@ -182,33 +191,6 @@ export class ConditionalAction extends BaseAction {
                 Message: `Conditional action failed: ${error instanceof Error ? error.message : String(error)}`,
                 ResultCode: "CONDITIONAL_FAILED"
             };
-        }
-    }
-
-    /**
-     * Evaluate condition safely
-     */
-    private evaluateCondition(condition: string, context: any, strictMode: boolean): boolean {
-        // Create a safe evaluation context
-        const safeContext = { ...context };
-        
-        // Build the evaluation function
-        const functionBody = strictMode 
-            ? `"use strict"; return (${condition});`
-            : `return (${condition});`;
-
-        // Create function with context variables
-        const contextKeys = Object.keys(safeContext);
-        const contextValues = contextKeys.map(key => safeContext[key]);
-        
-        try {
-            const evaluator = new Function(...contextKeys, functionBody);
-            const result = evaluator(...contextValues);
-            
-            // Ensure boolean result
-            return Boolean(result);
-        } catch (error) {
-            throw new Error(`Invalid condition: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 

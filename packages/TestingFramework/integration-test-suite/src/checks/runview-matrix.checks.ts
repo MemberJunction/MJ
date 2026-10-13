@@ -40,6 +40,9 @@
  *   RVM16 (RV16) — numeric Aggregates SUM/MIN/MAX/COUNT match independent computation; alias honored
  *   RVM17 (RV21) — RunViews batch: positional results each match their own params
  *   RVM18 (RV22) — PlatformSQL ExtraFilter/OrderBy: platform variant applied, default ignored
+ *   RVM19 (—)    — UserSearchString is FREE TEXT, not a SQL clause: multi-word / apostrophe /
+ *                   punctuation / SQL-keyword terms survive BOTH removed screens and still
+ *                   filter (#4392)
  *
  * Deliberately NOT implemented here (reasons in the final report / bundle IT record):
  *   RV14 composite-PK leg — covered by view-execution.V11 (metadata-driven discovery there).
@@ -1167,10 +1170,183 @@ const RVM18: NamedCheck = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────────────────
+// RVM19 — UserSearchString is free text, not a SQL clause (#4392)
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * #4392: the GraphQL boundary screened `UserSearchString` with the base-view AST screen that
+ * belongs on real clause fragments. That screen wraps its argument as
+ * `SELECT 1 FROM x WHERE (<clause>)` and fails closed when it does not parse — so every search
+ * term that was not coincidentally valid SQL was refused and the grid showed 0 rows.
+ * `Marcus Chen` parsed as nothing; `O'Leary` as an unterminated literal; `Marcus` happened to
+ * parse as a bare column reference and so worked. Essentially every person-name search was dead.
+ *
+ * A second screen of the same kind sat one layer down: the provider denylist
+ * `ValidateUserProvidedSQLClause`, meant for SQL fragments, word-boundary-matched keywords against
+ * the same free text — so "Union Pacific", "Update Request" and "drop shipment" were refused, with
+ * a null error message reaching the grid. Both screens are gone from this input; quote-doubling
+ * into a literal is what protects it, which is the right tool for a value that lands in a literal.
+ *
+ * The GraphQL-boundary leg is CLIENT-TRANSPORT-LOAD-BEARING: server-side that screen does not
+ * exist, so a server-transport run proves nothing about it — the refusal lived in `ResolverBase`,
+ * which only a real GraphQL round trip traverses. That is exactly why unit tests never caught it.
+ *
+ * RVM9 above pins that a discovered seed value matches; it does not pin the SHAPE of the term,
+ * and its discovery regex admits single-word values, so it can pass while #4392 is live.
+ */
+
+/**
+ * Search terms a person actually types. None is SQL; all must survive BOTH screens that #4392
+ * removed from this input — the GraphQL-boundary AST screen in `ResolverBase` (which refused
+ * anything that did not parse as SQL) and the provider keyword denylist in
+ * `GenericDatabaseProvider` (which word-boundary-matched SQL keywords against the raw text and
+ * refused "Union Pacific" with a null error message).
+ */
+const FREE_TEXT_TERMS: { Term: string; Why: string }[] = [
+    // Refused by the GraphQL-boundary AST screen before #4392.
+    { Term: "Marcus Chen", Why: 'two words — the #4392 trigger' },
+    { Term: "O'Leary", Why: 'apostrophe — parses as an unterminated literal' },
+    { Term: "Marcus O'Leary Chen", Why: 'spaces AND an apostrophe' },
+    { Term: 'Smith, John', Why: 'comma' },
+    { Term: '50% off', Why: 'LIKE metacharacter %' },
+    { Term: 'a_b [c]', Why: 'LIKE metacharacters _ and [ ]' },
+    { Term: 'café ☕', Why: 'non-ASCII' },
+    // Refused by the provider keyword denylist before #4392 — all ordinary English.
+    { Term: 'Union Pacific', Why: 'denylist: the word "union" in a real company name' },
+    { Term: 'Update Request', Why: 'denylist: the word "update"' },
+    { Term: 'drop shipment', Why: 'denylist: the word "drop"' },
+    { Term: 'delete', Why: 'denylist: bare keyword as a search term' },
+    { Term: 'insert', Why: 'denylist: bare keyword as a search term' },
+    { Term: 'exec', Why: 'denylist: bare keyword as a search term' },
+    { Term: 'waitfor', Why: 'denylist: bare keyword as a search term' },
+    { Term: 'well--known', Why: 'denylist: a double hyphen read as a SQL comment' },
+    { Term: 'a; b', Why: 'denylist: a semicolon read as a statement terminator' },
+];
+
+/**
+ * Find a row on ANY LIKE-path searchable entity whose search-field value is plain multi-word text.
+ * Multi-word is the whole point of #4392, so this leg must not settle for whatever value
+ * `discoverSearchTarget` returns first.
+ */
+async function discoverMultiWordSeed(
+    ctx: IntegrationCheckContext,
+): Promise<{ Entity: EntityInfo; Field: EntityFieldInfo; Pk: string; Id: string; Value: string } | null> {
+    const rv = new RunView();
+    for (const entity of sweepEntities(ctx)) {
+        if (sweepSkip(entity) || entity.FullTextSearchEnabled || entity.PrimaryKeys.length !== 1) {
+            continue;
+        }
+        const field = entity.Fields.find(f =>
+            f.IncludeInUserSearchAPI && !f.IsVirtual && f.TSType === EntityFieldTSType.String && !f.UserSearchParamFormatAPI,
+        );
+        if (!field) {
+            continue;
+        }
+        const pk = entity.PrimaryKeys[0].Name;
+        const rows = await rv.RunView<Record<string, unknown>>(
+            { EntityName: entity.Name, Fields: [pk, field.Name], ExtraFilter: `${field.Name} IS NOT NULL`, MaxRows: 200, ResultType: 'simple' },
+            ctx.User,
+        );
+        if (!rows.Success) {
+            continue;
+        }
+        for (const row of rows.Results) {
+            const v = row[field.Name];
+            if (typeof v === 'string' && / /.test(v.trim()) && /^[A-Za-z0-9][A-Za-z0-9 ]{4,58}[A-Za-z0-9]$/.test(v.trim())) {
+                return { Entity: entity, Field: field, Pk: pk, Id: String(row[pk]), Value: v.trim() };
+            }
+        }
+    }
+    return null;
+}
+
+const RVM19: NamedCheck = {
+    Id: 'runview-matrix.RVM19',
+    Name: 'RVM19: UserSearchString is free text — multi-word / apostrophe / punctuation terms are accepted and still filter (#4392)',
+    Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+        const rv = new RunView();
+
+        // Run against a DISCOVERED LIKE-path entity that really has a configured search surface.
+        // Hardcoding an entity would make every leg vacuous the moment its search fields change:
+        // with no search-enabled field createViewUserSearchSQL emits an empty predicate and every
+        // term below becomes a documented no-op (that leg is RVM9's job, not this one).
+        const target = await discoverSearchTarget(ctx);
+        if (!target) {
+            console.warn('      ⚠ RVM19 SKIPPED — no LIKE-path searchable entity with a plain-text seed exists in this deployment.');
+            return;
+        }
+        const entity = target.Entity;
+        const pkName = entity.PrimaryKeys[0].Name;
+
+        const total = await rv.RunView({ EntityName: entity.Name, ResultType: 'count_only', IgnoreMaxRows: true }, ctx.User);
+        requireSuccess(total, `RVM19 baseline count_only on ${entity.Name}`);
+        const baseline = total.TotalRowCount ?? 0;
+        Assert(baseline > 0, `RVM19 needs a populated entity; ${entity.Name} has ${baseline} rows`);
+
+        // Control probe: prove the entity's search surface actually FILTERS before asserting that
+        // terms filter. discoverSearchTarget accepts any IncludeInUserSearchAPI string field, but
+        // createViewUserSearchSQL skips unbounded (MAX) text columns — if every search field is
+        // one, the predicate is empty and UserSearchString is a documented no-op. That is RVM9's
+        // leg, not this one; here it would make every assertion below vacuous, so skip honestly
+        // rather than fail with a misleading "the term was dropped" message.
+        const control = await rv.RunView(
+            { EntityName: entity.Name, UserSearchString: 'zzz-no-such-term-anywhere-4392', ResultType: 'count_only', IgnoreMaxRows: true },
+            ctx.User,
+        );
+        requireSuccess(control, `RVM19 control probe on ${entity.Name}`);
+        if ((control.TotalRowCount ?? 0) >= baseline) {
+            console.warn(`      ⚠ RVM19 SKIPPED — ${entity.Name} has no effective search predicate (every search field is skipped by createViewUserSearchSQL), so no leg here would discriminate.`);
+            return;
+        }
+
+        // Leg 1 — every free-text term is ACCEPTED (not refused at the boundary) and is APPLIED
+        // (the count drops below the unfiltered baseline; none of these matches everything).
+        for (const t of FREE_TEXT_TERMS) {
+            const r = await rv.RunView(
+                { EntityName: entity.Name, UserSearchString: t.Term, ResultType: 'count_only', IgnoreMaxRows: true }, ctx.User,
+            );
+            Assert(r.Success,
+                `RVM19 [${t.Why}] search term ${JSON.stringify(t.Term)} was REFUSED on ${entity.Name} — UserSearchString is free text, not a SQL clause: ${r.ErrorMessage}`);
+            Assert((r.TotalRowCount ?? 0) < baseline,
+                `RVM19 [${t.Why}] search term ${JSON.stringify(t.Term)} returned the unfiltered count (${r.TotalRowCount}) on ${entity.Name} — the term was dropped rather than applied`);
+        }
+
+        // Leg 2 — the leg that actually proves #4392: a MULTI-WORD term drawn from a real row must
+        // come back matching that row. Search ACROSS LIKE-path entities for a multi-word value
+        // rather than only the one discoverSearchTarget happened to return first — its regex
+        // admits single-word values, so keying this leg to it made the decisive assertion skip on
+        // deployments where that entity's first usable value is one word.
+        const seed = await discoverMultiWordSeed(ctx);
+        if (!seed) {
+            console.warn('      ⚠ RVM19 positive-match leg SKIPPED — no plain MULTI-WORD value on any LIKE-path searchable entity in this deployment.');
+        } else {
+            const hit = await rv.RunView<Record<string, unknown>>(
+                { EntityName: seed.Entity.Name, Fields: [seed.Pk], UserSearchString: seed.Value, IgnoreMaxRows: true, ResultType: 'simple' }, ctx.User,
+            );
+            requireSuccess(hit, `RVM19 multi-word search for ${JSON.stringify(seed.Value)} on ${seed.Entity.Name}`);
+            Assert(hit.Results.some(r => normId(String(r[seed.Pk])) === normId(seed.Id)),
+                `RVM19 the seed row (${seed.Id}) is missing from the results of a search for its own multi-word ${seed.Field.Name} ${JSON.stringify(seed.Value)}`);
+            console.log(`      → multi-word term ${JSON.stringify(seed.Value)} on ${seed.Entity.Name}.${seed.Field.Name}: ${hit.Results.length} row(s), seed row present`);
+        }
+
+        // Leg 3 — the escaping is still doing its job: a quote-breaking payload lands INSIDE the
+        // literal, so it matches nothing rather than becoming a tautology that returns everything.
+        const injection = await rv.RunView(
+            { EntityName: entity.Name, UserSearchString: "x' OR '1'='1", ResultType: 'count_only', IgnoreMaxRows: true }, ctx.User,
+        );
+        Assert(injection.Success, `RVM19 injection probe was refused rather than escaped: ${injection.ErrorMessage}`);
+        AssertEqual(injection.TotalRowCount, 0,
+            `RVM19 "x' OR '1'='1" must be escaped into a literal that matches nothing on ${entity.Name} — a non-zero count means the quote broke out`);
+
+        console.log(`      → ${entity.Name}: ${FREE_TEXT_TERMS.length} free-text terms accepted and applied; injection payload inert (baseline ${baseline})`);
+    },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
 
 export const RunViewMatrixChecks: NamedCheck[] = [
     RVM1, RVM2, RVM3, RVM4, RVM5, RVM6, RVM7, RVM8, RVM9,
-    RVM10, RVM11, RVM12, RVM13, RVM14, RVM15, RVM16, RVM17, RVM18,
+    RVM10, RVM11, RVM12, RVM13, RVM14, RVM15, RVM16, RVM17, RVM18, RVM19,
 ];
 
 for (const check of RunViewMatrixChecks) {

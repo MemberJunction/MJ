@@ -1,4 +1,5 @@
-import { BaseModel } from "./baseModel";
+import { BaseModel, ModelUsage } from "./baseModel";
+import type { AIErrorInfo } from "./errorTypes";
 
 /**
  * Base class for all video generation models. Each AI model will have a sub-class implementing the abstract methods in this base class. Not all 
@@ -13,24 +14,39 @@ export abstract class BaseVideoGenerator extends BaseModel {
 }
 
 export class VideoResult {
-    success: boolean;
+    success: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * When success == false, this will contain the error message
      */
-    errorMessage?: string;
+    errorMessage?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /**
      * Platform-specific video ID for the generated video when success == true
      */
-    videoId: string 
+    videoId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+
+    /**
+     * Usage for the request, when the provider reported it: normally the video's length as
+     * `ModelUsage.ForMedia('Seconds', 0, seconds)`, which per-second video pricing prices. Left
+     * undefined when the length is not known, as it is not for a provider that only accepts a render
+     * job (HeyGen's `CreateAvatarVideo` returns the job's ID before the video exists).
+     */
+    usage?: ModelUsage;  // case-violation-ok-legacy-back-compat: named as SpeechResult.usage and the other fields here are, since drivers fill this class as an object literal
+
+    /**
+     * How a failure is classified, when the request failed: `ErrorAnalyzer`'s reading of the error,
+     * with its HTTP status. See `SpeechResult.errorInfo`, which this mirrors. Undefined on success,
+     * and from a driver that reports only `errorMessage`.
+     */
+    errorInfo?: AIErrorInfo;  // case-violation-ok-legacy-back-compat: named as BaseResult.errorInfo, which the failover loop reads
 }
 
 export class AvatarInfo {
-    id: string;
-    name: string;
-    gender: string;
-    description: string;
-    previewImageUrl: string;
-    previewVideoUrl: string;
+    id: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    name: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    gender: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    description: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    previewImageUrl: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    previewVideoUrl: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 export class VideoTranslationParams {
@@ -41,27 +57,27 @@ export class AvatarVideoParams {
     /**
      * Title of the video for storage in the provider's history
      */
-    title: string;
+    title: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * Generate captions for the video if true, otherwise do not generate captions
      */
-    caption?: boolean;
+    caption?: boolean;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Width of the requested video such as 1280 for 1280 pixels
      */
-    outputWidth: number;
+    outputWidth: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /**
      * Height of the requested video such as 720 for 720 pixels
      */
-    outputHeight: number;
+    outputHeight: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
-    avatarId: string;
+    avatarId: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
-    scale: number;
-    offsetX: number;
-    offsetY: number;
-    audioAssetId: string;
-    imageAssetId: string;
-    avatarStyle: string; // 'circle' etc.
+    scale: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    offsetX: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    offsetY: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    audioAssetId: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    imageAssetId: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    avatarStyle: string; // 'circle' etc. — case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }

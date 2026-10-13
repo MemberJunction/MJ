@@ -79,6 +79,9 @@ vi.mock('@memberjunction/core', () => ({
         static FromKeyValuePair(fieldName: string, value: string) {
             return new MockCompositeKey([{ FieldName: fieldName, Value: value }]);
         }
+        static FromID(value: string) {
+            return new MockCompositeKey([{ FieldName: 'ID', Value: value }]);
+        }
     },
 }));
 

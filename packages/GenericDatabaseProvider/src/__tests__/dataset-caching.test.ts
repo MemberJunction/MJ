@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
 import {
     DatabaseProviderBase,
     SaveSQLResult,
@@ -20,7 +20,7 @@ vi.mock('sql-formatter', () => ({
 /**
  * Concrete test subclass with mocked SQL execution for dataset caching tests.
  */
-class TestProvider extends GenericDatabaseProvider {
+class TestProvider extends GenericDatabaseProviderTestBase {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
 
@@ -202,9 +202,9 @@ describe('Dataset Caching in GetDatasetByName', () => {
         // 2 SQL calls: metadata + batch
         expect(provider.executeSQLCalls).toHaveLength(2);
         // Write-through to cache. Match the full SetRunViewResult signature —
-        // GenericDatabaseProvider invokes it with all 7 args (fingerprint,
+        // GenericDatabaseProvider invokes it with all 9 args (fingerprint,
         // params, results, maxUpdatedAt, aggregateResults?, totalRowCount?,
-        // provider?), and toHaveBeenCalledWith is arity-strict.
+        // provider?, ttlMs?, options?), and toHaveBeenCalledWith is arity-strict.
         expect(cacheSetSpy).toHaveBeenCalledTimes(1);
         expect(cacheSetSpy).toHaveBeenCalledWith(
             expect.any(String),         // fingerprint
@@ -213,8 +213,42 @@ describe('Dataset Caching in GetDatasetByName', () => {
             '2026-03-01T00:00:00.000Z', // maxUpdatedAt
             undefined,                  // aggregateResults
             undefined,                  // totalRowCount
-            expect.anything()           // provider (multi-provider migration: GenericDatabaseProvider passes `this`)
+            expect.anything(),          // provider (multi-provider migration: GenericDatabaseProvider passes `this`)
+            undefined,                  // ttlMs
+            // Dataset items are provider-internal scaffolding: GetAllMetadata's
+            // PostProcessEntityMetadata hydrates these very rows in place (sorts the array,
+            // attaches child collections), so they must stay exempt from the cache's
+            // defensive deep-freeze or metadata bootstrap throws.
+            { ProviderInternalScaffolding: true }
         );
+    });
+
+    it('does NOT mark a non-metadata dataset write as provider-internal scaffolding', async () => {
+        // Target contract (PR #3425 review, finding C2, now fixed): the
+        // scaffolding exemption exists for MJ_Metadata, whose rows only the provider's own
+        // assembly steps mutate. Every OTHER dataset is served to arbitrary consumers
+        // (BaseEngine.Load hands `item.Results` — the live cached arrays — to every engine
+        // subclass), so those slots must stay under the defensive deep-freeze or the original
+        // corruption class stays open for the whole dataset path.
+        provider.setTrustLocalCache(true);
+        vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(true);
+        cacheGetSpy.mockResolvedValue(null);
+
+        const itemRow = buildDatasetItemRow();
+        const entityData = [{ ID: '1', Name: 'ResourceType1', __mj_UpdatedAt: '2026-03-01T00:00:00.000Z' }];
+        provider.setExecuteSQLResults([
+            [itemRow],     // Dataset metadata
+            entityData,    // SQL batch result
+        ]);
+
+        const result = await provider.GetDatasetByName('ResourceTypes', undefined, mockUser);
+
+        expect(result.Success).toBe(true);
+        expect(cacheSetSpy).toHaveBeenCalledTimes(1);
+        // Assert on the effect, not the exact call shape: however the write is made, the
+        // exemption flag must not be set for a dataset that is not MJ_Metadata.
+        const optionsArg = cacheSetSpy.mock.calls[0]?.[8] as { ProviderInternalScaffolding?: boolean } | undefined;
+        expect(optionsArg?.ProviderInternalScaffolding).toBeFalsy();
     });
 
     it('handles mixed cache hits and misses across multiple items', async () => {
@@ -306,19 +340,54 @@ describe('Dataset Caching in GetDatasetByName', () => {
                 ExtraFilter: "SchemaName = '__mj' AND (Status = 'Active')",
             }),
             // InstanceConnectionString is undefined in test context
-            undefined
+            undefined,
+            // No RLS clause is supplied on the dataset path...
+            undefined,
+            // ...but the dataset namespace segment is, so this item cannot share a cache slot
+            // with a plain RunView of the same entity (PR #3425 review, finding M3).
+            'MJ_Metadata/Entities'
         );
+    });
+
+    it('namespaces the dataset slot so it cannot collide with a plain RunView key', async () => {
+        // The collision this closes is exact: every shipped dataset item has a NULL WhereClause,
+        // so without the segment the dataset write emits byte-for-byte the fingerprint of an
+        // unfiltered `RunView` of the same entity — handing ordinary callers the deliberately
+        // UNFROZEN scaffolding rows for MJ: Entities and friends.
+        provider.setTrustLocalCache(true);
+        vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(true);
+        cacheGetSpy.mockResolvedValue(null);
+
+        provider.setExecuteSQLResults([
+            [buildDatasetItemRow({ Code: 'Entities' })],
+            [{ ID: '1' }],
+        ]);
+
+        await provider.GetDatasetByName('MJ_Metadata', undefined, mockUser);
+
+        expect(cacheFingerprintSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ EntityName: 'MJ: Entities' }),
+            undefined,
+            undefined,
+            'MJ_Metadata/Entities'
+        );
+        // And every fingerprint call on this path carries a segment — read and write-through
+        // alike, since a mismatch would mean dataset reads never find dataset writes.
+        for (const call of cacheFingerprintSpy.mock.calls) {
+            expect(call[3]).toBe('MJ_Metadata/Entities');
+        }
     });
 });
 
 describe('Dataset Caching in GetDatasetStatusByName', () => {
     let provider: TestProvider;
     let cacheGetSpy: ReturnType<typeof vi.spyOn>;
+    let datasetFingerprintSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
         provider = new TestProvider();
         cacheGetSpy = vi.spyOn(LocalCacheManager.Instance, 'GetRunViewResult');
-        vi.spyOn(LocalCacheManager.Instance, 'GenerateRunViewFingerprint')
+        datasetFingerprintSpy = vi.spyOn(LocalCacheManager.Instance, 'GenerateRunViewFingerprint')
             .mockImplementation((params: RunViewParams) => {
                 const entity = params.EntityName?.trim() || 'Unknown';
                 const filter = (typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '').trim();
@@ -330,34 +399,44 @@ describe('Dataset Caching in GetDatasetStatusByName', () => {
         vi.restoreAllMocks();
     });
 
-    it('derives status from cache when all items are cached (zero SQL status queries)', async () => {
+    it('derives status from SQL even when every item is cached — the oracle never reads the cache it validates', async () => {
         provider.setTrustLocalCache(true);
         vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(true);
 
-        const cachedRows = [
-            { ID: '1', Name: 'Entity1', __mj_UpdatedAt: '2026-03-01T00:00:00.000Z' },
-            { ID: '2', Name: 'Entity2', __mj_UpdatedAt: '2026-03-15T00:00:00.000Z' },
-        ];
+        // A populated cache slot that a stale-serving bug would happily answer from. Its
+        // timestamps are OLDER than what SQL reports below — if status ever comes from here
+        // again, the RowCount/UpdateDate assertions catch it.
         cacheGetSpy.mockResolvedValue({
-            results: cachedRows,
+            results: [
+                { ID: '1', Name: 'Entity1', __mj_UpdatedAt: '2026-03-01T00:00:00.000Z' },
+                { ID: '2', Name: 'Entity2', __mj_UpdatedAt: '2026-03-15T00:00:00.000Z' },
+            ],
             maxUpdatedAt: '2026-03-15T00:00:00.000Z',
             rowCount: 2,
         });
 
         const itemRow = buildDatasetItemRow();
+        const statusResult = [{ UpdateDate: '2026-04-01T00:00:00.000Z', TheRowCount: 7 }];
         provider.setExecuteSQLResults([
-            [itemRow], // Dataset metadata (still needed)
-            // NO status query — derived from cache
+            [itemRow],    // Dataset metadata
+            statusResult, // SQL status query — ALWAYS executed
         ]);
 
         const result = await provider.GetDatasetStatusByName('MJ_Metadata', undefined, mockUser);
 
         expect(result.Success).toBe(true);
         expect(result.EntityUpdateDates).toHaveLength(1);
-        expect(result.EntityUpdateDates[0].RowCount).toBe(2);
         expect(result.EntityUpdateDates[0].EntityName).toBe('MJ: Entities');
-        // Only 1 SQL call (metadata), no status queries
-        expect(provider.executeSQLCalls).toHaveLength(1);
+        // Status is the SQL answer, not the cached slot's
+        expect(result.EntityUpdateDates[0].RowCount).toBe(7);
+        expect(new Date(result.EntityUpdateDates[0].UpdateDate).toISOString()).toBe('2026-04-01T00:00:00.000Z');
+        // 2 SQL calls: metadata + status batch — the cache never short-circuits the status query.
+        // GetDatasetStatusByName is the staleness ORACLE for RefreshIfNeeded; deriving its answer
+        // from the cache under validation closed a loop where a slot the write path failed to
+        // maintain reported itself current forever (the FLS over-the-wire leak).
+        expect(provider.executeSQLCalls).toHaveLength(2);
+        expect(cacheGetSpy).not.toHaveBeenCalled();
+        expect(datasetFingerprintSpy).not.toHaveBeenCalled();
     });
 
     it('falls back to SQL for cache misses in status check', async () => {
@@ -380,29 +459,25 @@ describe('Dataset Caching in GetDatasetStatusByName', () => {
         expect(provider.executeSQLCalls).toHaveLength(2);
     });
 
-    it('returns correct max update date derived from cached rows', async () => {
-        provider.setTrustLocalCache(true);
-        vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(true);
+    it('composes the stored item WhereClause with the runtime filter in the status query, matching the data read', async () => {
+        const itemRow = buildDatasetItemRow({ WhereClause: "Status = 'Active'" });
+        const statusResult = [{ UpdateDate: '2026-03-01T00:00:00.000Z', TheRowCount: 5 }];
+        provider.setExecuteSQLResults([
+            [itemRow],
+            statusResult,
+        ]);
 
-        const cachedRows = [
-            { ID: '1', __mj_UpdatedAt: '2026-01-01T00:00:00.000Z' },
-            { ID: '2', __mj_UpdatedAt: '2026-06-15T12:00:00.000Z' }, // Latest
-            { ID: '3', __mj_UpdatedAt: '2026-03-01T00:00:00.000Z' },
-        ];
-        cacheGetSpy.mockResolvedValue({
-            results: cachedRows,
-            maxUpdatedAt: '2026-06-15T12:00:00.000Z',
-            rowCount: 3,
-        });
-
-        const itemRow = buildDatasetItemRow();
-        provider.setExecuteSQLResults([[itemRow]]);
-
-        const result = await provider.GetDatasetStatusByName('MJ_Metadata', undefined, mockUser);
+        const result = await provider.GetDatasetStatusByName(
+            'MJ_Metadata',
+            [{ ItemCode: 'Entities', Filter: "Name LIKE 'MJ:%'" }],
+            mockUser
+        );
 
         expect(result.Success).toBe(true);
-        const updateDate = new Date(result.EntityUpdateDates[0].UpdateDate);
-        expect(updateDate.toISOString()).toBe('2026-06-15T12:00:00.000Z');
+        // Status must describe the SAME row set GetDatasetByName reads — stored WhereClause
+        // AND'd with the runtime filter — or timestamps/rowcounts compare across different sets.
+        const statusSQL = provider.executeSQLCalls[1].sql;
+        expect(statusSQL).toContain(`WHERE Status = 'Active' AND (Name LIKE 'MJ:%')`);
     });
 });
 

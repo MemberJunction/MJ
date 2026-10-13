@@ -15,12 +15,41 @@ describe('QueryPagingEngine.ShouldPage', () => {
         expect(QueryPagingEngine.ShouldPage(0, 0)).toBe(false);
     });
 
-    it('returns false when StartRow is undefined', () => {
-        expect(QueryPagingEngine.ShouldPage(undefined, 50)).toBe(false);
+    // CHANGED: this previously asserted false. Requiring an explicit StartRow meant a
+    // caller asking only to CAP a result — rather than walk pages — silently fell through
+    // to "execute full query, apply in-memory pagination": the database returned every row
+    // and the whole set crossed the network before being sliced. RunView already treats
+    // MaxRows alone as row-limiting; RunQuery now matches.
+    it('pages on MaxRows alone — an absent StartRow means page zero', () => {
+        expect(QueryPagingEngine.ShouldPage(undefined, 50)).toBe(true);
+        expect(QueryPagingEngine.ResolveStartRow(undefined)).toBe(0);
+    });
+
+    it('still refuses a negative StartRow', () => {
+        expect(QueryPagingEngine.ShouldPage(-1, 50)).toBe(false);
     });
 
     it('returns false when both are undefined', () => {
         expect(QueryPagingEngine.ShouldPage(undefined, undefined)).toBe(false);
+    });
+
+    it('MaxRows remains the deciding factor — no ceiling, no paging', () => {
+        // Guards the inverse mistake: a StartRow with no MaxRows must not start paging,
+        // which would turn an unbounded query into an arbitrarily truncated one.
+        expect(QueryPagingEngine.ShouldPage(100, undefined)).toBe(false);
+        expect(QueryPagingEngine.ShouldPage(100, 0)).toBe(false);
+    });
+});
+
+describe('QueryPagingEngine.ResolveStartRow', () => {
+    it('passes through a real offset', () => {
+        expect(QueryPagingEngine.ResolveStartRow(250)).toBe(250);
+        expect(QueryPagingEngine.ResolveStartRow(0)).toBe(0);
+    });
+
+    it('treats absent or nonsensical offsets as page zero', () => {
+        expect(QueryPagingEngine.ResolveStartRow(undefined)).toBe(0);
+        expect(QueryPagingEngine.ResolveStartRow(-5)).toBe(0);
     });
 });
 
@@ -283,22 +312,18 @@ ORDER BY v.FirstName`;
         expect(result.CountSQL).not.toMatch(/ORDER BY/i);
     });
 
-    it('strips an outer TOP from the count body so the count reflects the full set (SQL Server)', () => {
+    it('keeps the query’s own TOP in the count, so the total is the size of the capped result (SQL Server)', () => {
         const sql = 'SELECT TOP 500 ID, Name FROM Users WHERE Active = 1 ORDER BY Name';
         const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, 'sqlserver');
-        // The user's TOP must not survive into the count — COUNT(*) should see the
-        // full result set, consistent with the paged data query (which also drops TOP).
-        expect(result.CountSQL).not.toMatch(/\bTOP\b/i);
+        // The data query pages within the TOP 500, so the count must count those 500 at most.
+        expect(result.CountSQL).toMatch(/\bTOP 500\b/);
         expect(result.CountSQL).toContain('TotalRowCount');
     });
 
-    it('strips an outer LIMIT from the count body so the count reflects the full set (PostgreSQL)', () => {
-        // Regression for the dialect inconsistency M1 flagged: the old AST count
-        // path stripped TOP (SQL Server) but left a PostgreSQL LIMIT in place,
-        // producing a count of the limited subset. ClearOuterCap strips both forms.
+    it('keeps the query’s own LIMIT in the count, so the total is the size of the capped result (PostgreSQL)', () => {
         const sql = 'SELECT id, name FROM users WHERE active = true ORDER BY name LIMIT 500';
         const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, 'postgresql');
-        expect(result.CountSQL).not.toMatch(/LIMIT\s+500/i);
+        expect(result.CountSQL).toMatch(/LIMIT\s+500/i);
         expect(result.CountSQL).toContain('TotalRowCount');
     });
 });

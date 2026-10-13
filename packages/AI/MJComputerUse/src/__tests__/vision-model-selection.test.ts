@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
-import { pickHighestPowerVisionLLM } from '../engine/MJComputerUseEngine.js';
+import { PickHighestPowerVisionLLM } from '../engine/MJComputerUseEngine.js';
 
 /**
  * Builds a lightweight model stand-in. `pickHighestPowerVisionLLM` only reads ID / AIModelType / PowerRank,
@@ -23,7 +23,7 @@ describe('pickHighestPowerVisionLLM', () => {
             model('strong-vision', 'LLM', 90),
             model('mid-vision', 'LLM', 50),
         ];
-        const picked = pickHighestPowerVisionLLM(models, visionSet('weak-vision', 'strong-vision', 'mid-vision'));
+        const picked = PickHighestPowerVisionLLM(models, visionSet('weak-vision', 'strong-vision', 'mid-vision'));
         expect(picked?.ID).toBe('strong-vision');
     });
 
@@ -32,7 +32,7 @@ describe('pickHighestPowerVisionLLM', () => {
             model('text-titan', 'LLM', 100), // highest power, but no image input
             model('vision-mid', 'LLM', 60),
         ];
-        const picked = pickHighestPowerVisionLLM(models, visionSet('vision-mid'));
+        const picked = PickHighestPowerVisionLLM(models, visionSet('vision-mid'));
         expect(picked?.ID).toBe('vision-mid');
     });
 
@@ -41,34 +41,34 @@ describe('pickHighestPowerVisionLLM', () => {
             model('image-gen', 'Image', 100), // image MODEL, not an LLM
             model('vision-llm', 'LLM', 40),
         ];
-        const picked = pickHighestPowerVisionLLM(models, visionSet('image-gen', 'vision-llm'));
+        const picked = PickHighestPowerVisionLLM(models, visionSet('image-gen', 'vision-llm'));
         expect(picked?.ID).toBe('vision-llm');
     });
 
     it('returns undefined when no LLM supports image input (the documented fall-back case)', () => {
         const models = [model('a', 'LLM', 50), model('b', 'LLM', 80)];
-        expect(pickHighestPowerVisionLLM(models, visionSet())).toBeUndefined();
+        expect(PickHighestPowerVisionLLM(models, visionSet())).toBeUndefined();
     });
 
     it('returns undefined when there are no LLM-type models at all', () => {
         const models = [model('img', 'Image', 99), model('embed', 'Embeddings', 99)];
-        expect(pickHighestPowerVisionLLM(models, visionSet('img', 'embed'))).toBeUndefined();
+        expect(PickHighestPowerVisionLLM(models, visionSet('img', 'embed'))).toBeUndefined();
     });
 
     it('matches the LLM type case-insensitively and trimming whitespace', () => {
         const models = [model('odd-cased', '  llm  ', 70)];
-        expect(pickHighestPowerVisionLLM(models, visionSet('odd-cased'))?.ID).toBe('odd-cased');
+        expect(PickHighestPowerVisionLLM(models, visionSet('odd-cased'))?.ID).toBe('odd-cased');
     });
 
     it('treats a null PowerRank as 0 when ranking', () => {
         const models = [model('null-rank', 'LLM', null), model('ranked', 'LLM', 5)];
-        expect(pickHighestPowerVisionLLM(models, visionSet('null-rank', 'ranked'))?.ID).toBe('ranked');
+        expect(PickHighestPowerVisionLLM(models, visionSet('null-rank', 'ranked'))?.ID).toBe('ranked');
     });
 
     it('does not mutate the input array order', () => {
         const models = [model('low', 'LLM', 1), model('high', 'LLM', 99)];
         const snapshot = models.map((m) => m.ID);
-        pickHighestPowerVisionLLM(models, visionSet('low', 'high'));
+        PickHighestPowerVisionLLM(models, visionSet('low', 'high'));
         expect(models.map((m) => m.ID)).toEqual(snapshot);
     });
 });

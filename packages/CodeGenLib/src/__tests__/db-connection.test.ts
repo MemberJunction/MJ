@@ -41,7 +41,7 @@ vi.mock('cosmiconfig', () => ({
 // Import after mocks. We mutate the shared `configInfo` to control what
 // `buildSqlConfig()` sees in each test.
 import { configInfo } from '../Config/config';
-import { buildSqlConfig } from '../Config/db-connection';
+import { BuildSqlConfig } from '../Config/db-connection';
 
 describe('buildSqlConfig — codegenPool.statementTimeoutMs precedence', () => {
     beforeEach(() => {
@@ -57,26 +57,26 @@ describe('buildSqlConfig — codegenPool.statementTimeoutMs precedence', () => {
     });
 
     it('uses mssql default 120000ms when neither knob is set', () => {
-        const cfg = buildSqlConfig();
+        const cfg = BuildSqlConfig();
         expect(cfg.options?.requestTimeout).toBe(120000);
     });
 
     it('falls back to legacy dbRequestTimeout when codegenPool.statementTimeoutMs is unset', () => {
         configInfo.dbRequestTimeout = 90000;
-        const cfg = buildSqlConfig();
+        const cfg = BuildSqlConfig();
         expect(cfg.options?.requestTimeout).toBe(90000);
     });
 
     it('codegenPool.statementTimeoutMs takes precedence over dbRequestTimeout when both are set', () => {
         configInfo.dbRequestTimeout = 90000;
         configInfo.codegenPool = { statementTimeoutMs: 30000 };
-        const cfg = buildSqlConfig();
+        const cfg = BuildSqlConfig();
         expect(cfg.options?.requestTimeout).toBe(30000);
     });
 
     it('uses codegenPool.statementTimeoutMs when only it is set (no dbRequestTimeout)', () => {
         configInfo.codegenPool = { statementTimeoutMs: 45000 };
-        const cfg = buildSqlConfig();
+        const cfg = BuildSqlConfig();
         expect(cfg.options?.requestTimeout).toBe(45000);
     });
 });
@@ -95,7 +95,7 @@ describe('buildSqlConfig — connection params', () => {
     });
 
     it('reads connection params from configInfo', () => {
-        const cfg = buildSqlConfig();
+        const cfg = BuildSqlConfig();
         expect(cfg.server).toBe('sql.custom.example');
         expect(cfg.port).toBe(14333);
         expect(cfg.database).toBe('analytics');
@@ -107,8 +107,8 @@ describe('buildSqlConfig — connection params', () => {
 
     it('uses dbInstanceName only when non-empty', () => {
         configInfo.dbInstanceName = '';
-        expect(buildSqlConfig().options?.instanceName).toBeUndefined();
+        expect(BuildSqlConfig().options?.instanceName).toBeUndefined();
         configInfo.dbInstanceName = 'SQLEXPRESS';
-        expect(buildSqlConfig().options?.instanceName).toBe('SQLEXPRESS');
+        expect(BuildSqlConfig().options?.instanceName).toBe('SQLEXPRESS');
     });
 });

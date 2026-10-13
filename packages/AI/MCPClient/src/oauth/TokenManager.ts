@@ -9,6 +9,7 @@
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus, BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
 import { CredentialEngine } from '@memberjunction/credentials';
+import { DescribeTokenEndpointFailure } from '@memberjunction/global';
 import type {
     OAuthTokenSet,
     OAuthTokenResponse,
@@ -16,7 +17,7 @@ import type {
     OAuthClientRegistration
 } from './types.js';
 import { OAuthErrorMessages } from './ErrorMessages.js';
-import { getOAuthAuditLogger } from './OAuthAuditLogger.js';
+import { GetOAuthAuditLogger } from './OAuthAuditLogger.js';
 
 /** Entity name for OAuth tokens */
 const ENTITY_OAUTH_TOKENS = 'MJ: O Auth Tokens';
@@ -74,7 +75,7 @@ export class TokenManager {
      * @param tokens - Token set to store
      * @param contextUser - User context
      */
-    public async storeTokens(
+    public async StoreTokens(
         connectionId: string,
         tokens: OAuthTokenSet,
         contextUser: UserInfo,
@@ -133,7 +134,7 @@ export class TokenManager {
 
                 // Update OAuthToken metadata
                 const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_TOKENS, contextUser);
-                const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: existingRecord.ID }]);
+                const compositeKey = CompositeKey.FromID(existingRecord.ID); // first-pk-ok: ENTITY_OAUTH_TOKENS is the ID-keyed MJ core entity MJ: O Auth Tokens
                 await entity.InnerLoad(compositeKey);
 
                 entity.Set('CredentialID', credentialId);
@@ -184,6 +185,16 @@ export class TokenManager {
         }
     }
 
+    /** @deprecated Use {@link StoreTokens}. */
+    public async storeTokens(
+        connectionId: string,
+        tokens: OAuthTokenSet,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<void> {
+        return this.StoreTokens(connectionId, tokens, contextUser, provider);
+    }
+
     /**
      * Loads tokens for a connection.
      *
@@ -191,7 +202,7 @@ export class TokenManager {
      * @param contextUser - User context
      * @returns Token set or null if not found
      */
-    public async loadTokens(
+    public async LoadTokens(
         connectionId: string,
         contextUser: UserInfo
     ): Promise<OAuthTokenSet | null> {
@@ -271,6 +282,14 @@ export class TokenManager {
         }
     }
 
+    /** @deprecated Use {@link LoadTokens}. */
+    public async loadTokens(
+        connectionId: string,
+        contextUser: UserInfo
+    ): Promise<OAuthTokenSet | null> {
+        return this.LoadTokens(connectionId, contextUser);
+    }
+
     /**
      * Checks if stored tokens are valid (not expired or expiring soon).
      *
@@ -278,13 +297,18 @@ export class TokenManager {
      * @param contextUser - User context
      * @returns true if tokens are valid
      */
-    public async isTokenValid(connectionId: string, contextUser: UserInfo): Promise<boolean> {
-        const tokens = await this.loadTokens(connectionId, contextUser);
+    public async IsTokenValid(connectionId: string, contextUser: UserInfo): Promise<boolean> {
+        const tokens = await this.LoadTokens(connectionId, contextUser);
         if (!tokens) {
             return false;
         }
 
-        return this.isTokenSetValid(tokens);
+        return this.IsTokenSetValid(tokens);
+    }
+
+    /** @deprecated Use {@link IsTokenValid}. */
+    public async isTokenValid(connectionId: string, contextUser: UserInfo): Promise<boolean> {
+        return this.IsTokenValid(connectionId, contextUser);
     }
 
     /**
@@ -293,11 +317,16 @@ export class TokenManager {
      * @param tokens - Token set to check
      * @returns true if valid
      */
-    public isTokenSetValid(tokens: OAuthTokenSet): boolean {
+    public IsTokenSetValid(tokens: OAuthTokenSet): boolean {
         const now = Math.floor(Date.now() / 1000);
         const threshold = now + this.expirationThresholdSeconds;
 
         return tokens.expiresAt > threshold;
+    }
+
+    /** @deprecated Use {@link IsTokenSetValid}. */
+    public isTokenSetValid(tokens: OAuthTokenSet): boolean {
+        return this.IsTokenSetValid(tokens);
     }
 
     /**
@@ -310,20 +339,20 @@ export class TokenManager {
      * @returns Valid token set
      * @throws Error if tokens cannot be obtained
      */
-    public async getValidTokens(
+    public async GetValidTokens(
         connectionId: string,
         clientRegistration: OAuthClientRegistration,
         tokenEndpoint: string,
         contextUser: UserInfo
     ): Promise<OAuthTokenSet> {
-        const tokens = await this.loadTokens(connectionId, contextUser);
+        const tokens = await this.LoadTokens(connectionId, contextUser);
 
         if (!tokens) {
             throw new Error('No tokens stored for this connection. Authorization required.');
         }
 
         // Check if tokens are still valid
-        if (this.isTokenSetValid(tokens)) {
+        if (this.IsTokenSetValid(tokens)) {
             return tokens;
         }
 
@@ -333,7 +362,7 @@ export class TokenManager {
         }
 
         // Refresh the tokens
-        const refreshResult = await this.refreshTokens(
+        const refreshResult = await this.RefreshTokens(
             connectionId,
             tokens,
             clientRegistration,
@@ -351,6 +380,16 @@ export class TokenManager {
         return refreshResult.tokens;
     }
 
+    /** @deprecated Use {@link GetValidTokens}. */
+    public async getValidTokens(
+        connectionId: string,
+        clientRegistration: OAuthClientRegistration,
+        tokenEndpoint: string,
+        contextUser: UserInfo
+    ): Promise<OAuthTokenSet> {
+        return this.GetValidTokens(connectionId, clientRegistration, tokenEndpoint, contextUser);
+    }
+
     /**
      * Refreshes tokens using the refresh token.
      *
@@ -364,7 +403,7 @@ export class TokenManager {
      * @param contextUser - User context
      * @returns Refresh result
      */
-    public async refreshTokens(
+    public async RefreshTokens(
         connectionId: string,
         currentTokens: OAuthTokenSet,
         clientRegistration: OAuthClientRegistration,
@@ -394,6 +433,17 @@ export class TokenManager {
         } finally {
             this.refreshLocks.delete(connectionId);
         }
+    }
+
+    /** @deprecated Use {@link RefreshTokens}. */
+    public async refreshTokens(
+        connectionId: string,
+        currentTokens: OAuthTokenSet,
+        clientRegistration: OAuthClientRegistration,
+        tokenEndpoint: string,
+        contextUser: UserInfo
+    ): Promise<TokenRefreshResult> {
+        return this.RefreshTokens(connectionId, currentTokens, clientRegistration, tokenEndpoint, contextUser);
     }
 
     /**
@@ -432,12 +482,12 @@ export class TokenManager {
                 };
 
                 // Store the new tokens
-                await this.storeTokens(connectionId, refreshedTokens, contextUser);
+                await this.StoreTokens(connectionId, refreshedTokens, contextUser);
 
                 LogStatus(`[OAuth] Successfully refreshed tokens for ${connectionId}`);
 
                 // Audit log: Token refreshed (T049)
-                const auditLogger = getOAuthAuditLogger();
+                const auditLogger = GetOAuthAuditLogger();
                 await auditLogger.logTokenRefreshed({
                     connectionId,
                     issuerUrl: currentTokens.issuer,
@@ -458,7 +508,7 @@ export class TokenManager {
                 // Check if error is retryable
                 if (!OAuthErrorMessages.isRetryable(errorMessage)) {
                     // Audit log: Token refresh failed (T050)
-                    const auditLogger = getOAuthAuditLogger();
+                    const auditLogger = GetOAuthAuditLogger();
                     await auditLogger.logTokenRefreshFailed({
                         connectionId,
                         issuerUrl: currentTokens.issuer,
@@ -482,7 +532,7 @@ export class TokenManager {
         }
 
         // Audit log: Token refresh failed after all retries (T050)
-        const auditLogger = getOAuthAuditLogger();
+        const auditLogger = GetOAuthAuditLogger();
         await auditLogger.logTokenRefreshFailed({
             connectionId,
             issuerUrl: currentTokens.issuer,
@@ -536,20 +586,12 @@ export class TokenManager {
         });
 
         if (!response.ok) {
-            const errorBody = await response.text();
-            let errorCode = `HTTP ${response.status}`;
-            try {
-                const errorJson = JSON.parse(errorBody);
-                if (errorJson.error) {
-                    errorCode = errorJson.error;
-                    if (errorJson.error_description) {
-                        errorCode += `: ${errorJson.error_description}`;
-                    }
-                }
-            } catch {
-                errorCode += `: ${errorBody}`;
-            }
-            throw new Error(errorCode);
+            // SECURITY: the previous fallback appended the raw body whenever it failed
+            // to parse as JSON. Token endpoints commonly echo the failing request back
+            // in their error body, and that request carries `client_secret` and the
+            // refresh token — so an unparseable body is exactly the case that must NOT
+            // be surfaced. Only the RFC 6749 §5.2 error fields are safe.
+            throw new Error(`HTTP ${response.status}${DescribeTokenEndpointFailure(await response.text())}`);
         }
 
         return await response.json() as OAuthTokenResponse;
@@ -572,7 +614,7 @@ export class TokenManager {
      * @param connectionId - MCP Server Connection ID
      * @param contextUser - User context
      */
-    public async revokeCredentials(connectionId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
+    public async RevokeCredentials(connectionId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
         try {
             const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
             const rv = RunView.FromMetadataProvider(md);
@@ -589,7 +631,7 @@ export class TokenManager {
 
                 // Delete the OAuthToken record first
                 const tokenEntity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_TOKENS, contextUser);
-                const tokenKey = new CompositeKey([{ FieldName: 'ID', Value: record.ID }]);
+                const tokenKey = CompositeKey.FromID(record.ID); // first-pk-ok: ENTITY_OAUTH_TOKENS is the ID-keyed MJ core entity MJ: O Auth Tokens
                 const tokenLoaded = await tokenEntity.InnerLoad(tokenKey);
                 if (tokenLoaded) {
                     await tokenEntity.Delete();
@@ -599,7 +641,7 @@ export class TokenManager {
                 if (record.CredentialID) {
                     try {
                         const credEntity = await md.GetEntityObject<BaseEntity>('MJ: Credentials', contextUser);
-                        const credKey = new CompositeKey([{ FieldName: 'ID', Value: record.CredentialID }]);
+                        const credKey = CompositeKey.FromID(record.CredentialID);
                         const credLoaded = await credEntity.InnerLoad(credKey);
                         if (credLoaded) {
                             await credEntity.Delete();
@@ -617,7 +659,7 @@ export class TokenManager {
             LogStatus(`[OAuth] Revoked credentials for connection ${connectionId}`);
 
             // Audit log: Credentials revoked (T051)
-            const auditLogger = getOAuthAuditLogger();
+            const auditLogger = GetOAuthAuditLogger();
             await auditLogger.logCredentialsRevoked({
                 connectionId,
                 revokedBy: contextUser.ID
@@ -628,18 +670,28 @@ export class TokenManager {
         }
     }
 
+    /** @deprecated Use {@link RevokeCredentials}. */
+    public async revokeCredentials(connectionId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        return this.RevokeCredentials(connectionId, contextUser, provider);
+    }
+
     /**
      * Handles a refresh failure by determining if re-authorization is needed.
      *
      * @param errorMessage - The error message from the failed refresh
      * @returns Object indicating whether re-authorization is required
      */
-    public handleRefreshFailure(errorMessage: string): { requiresReauthorization: boolean; userMessage: string } {
+    public HandleRefreshFailure(errorMessage: string): { requiresReauthorization: boolean; userMessage: string } {
         const mapped = OAuthErrorMessages.mapError(errorMessage);
         return {
             requiresReauthorization: mapped.requiresReauthorization,
             userMessage: mapped.userMessage
         };
+    }
+
+    /** @deprecated Use {@link HandleRefreshFailure}. */
+    public handleRefreshFailure(errorMessage: string): { requiresReauthorization: boolean; userMessage: string } {
+        return this.HandleRefreshFailure(errorMessage);
     }
 
     /**

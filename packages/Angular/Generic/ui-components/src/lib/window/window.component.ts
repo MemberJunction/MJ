@@ -171,8 +171,13 @@ export class MJWindowComponent implements OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
 
-  get hasExplicitPosition(): boolean {
+  get HasExplicitPosition(): boolean {
     return this.currentTop != null && this.currentLeft != null;
+  }
+
+  /** @deprecated Use {@link HasExplicitPosition}. */
+  get hasExplicitPosition(): boolean {
+    return this.HasExplicitPosition;
   }
 
   get ResolvedTransform(): string {
@@ -185,24 +190,44 @@ export class MJWindowComponent implements OnDestroy {
     return 'translate(-50%, -50%)';
   }
 
-  get resolvedWidth(): string {
+  get ResolvedWidth(): string {
     if (this.currentWidth != null) return `${this.currentWidth}px`;
     if (this.Width) return typeof this.Width === 'number' ? `${this.Width}px` : this.Width;
     return '500px';
   }
 
-  get resolvedHeight(): string {
+  /** @deprecated Use {@link ResolvedWidth}. */
+  get resolvedWidth(): string {
+    return this.ResolvedWidth;
+  }
+
+  get ResolvedHeight(): string {
     if (this.currentHeight != null) return `${this.currentHeight}px`;
     if (this.Height) return typeof this.Height === 'number' ? `${this.Height}px` : this.Height;
     return 'auto';
   }
 
-  get resolvedTop(): string {
+  /** @deprecated Use {@link ResolvedHeight}. */
+  get resolvedHeight(): string {
+    return this.ResolvedHeight;
+  }
+
+  get ResolvedTop(): string {
     return this.currentTop != null ? `${this.currentTop}px` : '50%';
   }
 
-  get resolvedLeft(): string {
+  /** @deprecated Use {@link ResolvedTop}. */
+  get resolvedTop(): string {
+    return this.ResolvedTop;
+  }
+
+  get ResolvedLeft(): string {
     return this.currentLeft != null ? `${this.currentLeft}px` : '50%';
+  }
+
+  /** @deprecated Use {@link ResolvedLeft}. */
+  get resolvedLeft(): string {
+    return this.ResolvedLeft;
   }
 
   @HostListener('document:keydown.escape')

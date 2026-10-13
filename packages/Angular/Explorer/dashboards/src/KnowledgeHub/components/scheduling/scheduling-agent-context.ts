@@ -11,7 +11,7 @@
  * mutation, no side effects.
  */
 
-import { boundNameList, AGENT_CONTEXT_NAME_LIST_CAP } from '../../../shared/agent-tool-validation';
+import { BoundNameList, AGENT_CONTEXT_NAME_LIST_CAP } from '../../../shared/agent-tool-validation';
 
 /** The status values a scheduled job can hold (the FilterSchedulesByStatus tool's domain). */
 export const VALID_SCHEDULE_STATUSES = ['Active', 'Paused', 'Disabled'] as const;
@@ -40,7 +40,7 @@ export interface ScheduledJobCandidate {
  *
  * @returns the matched job, or null on a miss.
  */
-export function resolveScheduledJob<T extends { ID: string; Name: string }>(
+export function ResolveScheduledJob<T extends { ID: string; Name: string }>(
     input: string,
     jobs: readonly T[],
 ): T | null {
@@ -53,11 +53,24 @@ export function resolveScheduledJob<T extends { ID: string; Name: string }>(
     return jobs.find(j => j.Name.toLowerCase().includes(needle)) ?? null;
 }
 
+/** @deprecated Use {@link ResolveScheduledJob}. */
+export function resolveScheduledJob<T extends { ID: string; Name: string }>(
+    input: string,
+    jobs: readonly T[],
+): T | null {
+    return ResolveScheduledJob(input, jobs);
+}
+
 /** Build a tolerant "no schedule matches" error listing a bounded sample of names. */
-export function buildScheduleNotFoundError(input: string, available: readonly string[]): string {
-    const sample = boundNameList(available, 10).join(', ');
+export function BuildScheduleNotFoundError(input: string, available: readonly string[]): string {
+    const sample = BoundNameList(available, 10).join(', ');
     const more = available.length > 10 ? ` (+${available.length - 10} more)` : '';
     return `No scheduled job matches "${input}". Available jobs: ${sample}${more}.`;
+}
+
+/** @deprecated Use {@link BuildScheduleNotFoundError}. */
+export function buildScheduleNotFoundError(input: string, available: readonly string[]): string {
+    return BuildScheduleNotFoundError(input, available);
 }
 
 /** Component-supplied snapshot for the Scheduling agent context. */
@@ -86,7 +99,7 @@ function countByStatus(jobs: readonly ScheduledJobCandidate[], status: string): 
  * smallest future-or-now timestamp. Returns null when no job has a NextRunAt.
  * Pure + deterministic.
  */
-export function nextDueJobName(jobs: readonly ScheduledJobCandidate[]): string | null {
+export function NextDueJobName(jobs: readonly ScheduledJobCandidate[]): string | null {
     let best: ScheduledJobCandidate | null = null;
     let bestTime = Infinity;
     for (const j of jobs) {
@@ -100,6 +113,11 @@ export function nextDueJobName(jobs: readonly ScheduledJobCandidate[]): string |
     return best?.Name ?? null;
 }
 
+/** @deprecated Use {@link NextDueJobName}. */
+export function nextDueJobName(jobs: readonly ScheduledJobCandidate[]): string | null {
+    return NextDueJobName(jobs);
+}
+
 /**
  * Build the agent-visible context for the Scheduling surface. Publishes deep
  * counts (by lifecycle status), the active status filter + search, the next-due
@@ -107,7 +125,7 @@ export function nextDueJobName(jobs: readonly ScheduledJobCandidate[]): string |
  * cron · success rate) so the agent can pick one to edit/open. A companion
  * truncation flag tells it when the list is capped.
  */
-export function buildSchedulingAgentContext(
+export function BuildSchedulingAgentContext(
     input: SchedulingAgentContextInput,
 ): Record<string, unknown> {
     const all = input.AllJobs;
@@ -123,9 +141,9 @@ export function buildSchedulingAgentContext(
         StatusFilter: input.StatusFilter || 'All',
         SearchQuery: input.SearchQuery,
         RecentRunCount: input.RecentRunCount,
-        NextDueJobName: nextDueJobName(all),
+        NextDueJobName: NextDueJobName(all),
 
-        VisibleJobNames: boundNameList(filtered.map(j => j.Name)),
+        VisibleJobNames: BoundNameList(filtered.map(j => j.Name)),
         Jobs: filtered.slice(0, AGENT_CONTEXT_NAME_LIST_CAP).map(j => ({
             Name: j.Name,
             Status: j.Status,
@@ -142,4 +160,11 @@ export function buildSchedulingAgentContext(
     }
 
     return ctx;
+}
+
+/** @deprecated Use {@link BuildSchedulingAgentContext}. */
+export function buildSchedulingAgentContext(
+    input: SchedulingAgentContextInput,
+): Record<string, unknown> {
+    return BuildSchedulingAgentContext(input);
 }

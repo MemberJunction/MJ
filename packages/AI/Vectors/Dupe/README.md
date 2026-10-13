@@ -60,7 +60,7 @@
 | `@memberjunction/ai-vectordb` | Vector database abstraction (query, hybrid search) |
 | `@memberjunction/ai-vectors` | `VectorBase` base class with metadata and RunView helpers |
 | `@memberjunction/ai-vector-sync` | `EntityVectorSyncer` for record vectorization, template parsing |
-| `@memberjunction/ai-prompts` | Runs the reasoning prompt in `'Prompt'` mode (`PromptReasoningProvider`) |
+| `@memberjunction/ai-prompts` | Runs the reasoning prompt in `'Prompt'` mode (`PromptReasoningProvider`) and the typed decision in the `'Decision'` modes (`AIDecisionRunner`) |
 | `@memberjunction/record-comparison` | Computes the field-level deltas across a matched set that the reasoner judges |
 | `@memberjunction/core` | Core types: `PotentialDuplicateRequest`, `DuplicateDetectionOptions`, etc. |
 | `@memberjunction/core-entities` | Generated entity classes for Duplicate Runs, Lists, Entity Documents (incl. the `*Reasoning*` / `AutomationLevel` columns) |
@@ -139,6 +139,15 @@ for (const dupe of result.Duplicates) {
 ```
 
 ---
+
+## The Query Text Is the Stored Text
+
+Each record is matched by embedding its entity document's template text and querying the index with that vector. The text must be the text vector sync embedded for the record, or the query describes a different document than the one stored and genuine duplicates fall below the threshold. So the detector renders the template the way sync does, through the same `EntityDocumentTemplateDataBuilder` from `@memberjunction/ai-vector-sync`:
+
+- from the row `RunView` returns for the record (`ResultType: 'simple'`), not `BaseEntity.GetAll()`, which turns date fields into `Date` objects;
+- with the rows of every `Entity` template param (a person's Phones, Emails, Addresses...), loaded once per sub-batch.
+
+If a related param's rows can't be loaded, the batch fails rather than query with text that can't match. An unsaved record (the entry-time check) renders from its own values, with empty related rows.
 
 ## DuplicateDetectionOptions Reference
 
@@ -253,20 +262,22 @@ All reasoning configuration lives on the `MJ: Entity Documents` record, per enti
 | Field | Type | Default | Purpose |
 |---|---|---|---|
 | `EnableLLMReasoning` | `boolean` | `false` | Master switch. Off = vector-only behavior, unchanged. |
-| `ReasoningMode` | `'Prompt' \| 'Agent'` | `'Prompt'` | Which provider runs (see below). |
+| `ReasoningMode` | `'Prompt' \| 'Agent' \| 'Decision' \| 'DecisionThenPrompt'` | `'Prompt'` | Which provider runs (see below). |
 | `ReasoningThreshold` | `number \| null` | `null` | Vector-score gate (0–1). LLM runs only when the set's top score clears this. `null` = reason over any non-empty set. |
 | `ReasoningPromptID` | `string \| null` | -- | The AI Prompt to use in `'Prompt'` mode. Falls back to the seeded "Duplicate Resolution" prompt. |
 | `ReasoningAgentID` | `string \| null` | -- | The AI Agent to use in `'Agent'` mode. Falls back to the seeded "Duplicate Resolution Agent". |
-| `AutomationLevel` | `'ReviewAll' \| 'LLMGated' \| 'AutoMergeAboveAbsolute'` | `'ReviewAll'` | How far automation goes after reasoning (review everything / let the LLM gate review / auto-merge above the absolute threshold). |
+| `AutomationLevel` | `'ReviewAll' \| 'LLMGated' \| 'AutoMergeAboveAbsolute'` | `'ReviewAll'` | How far automation goes after reasoning (review everything / let the LLM gate review / auto-merge a candidate above the absolute threshold whose own verdict is `Merge`). |
 
 ### The pluggable provider seam
 
-Reasoning is delegated through an abstract `DuplicateReasoningProvider`, resolved at runtime via the MJ class factory by `ReasoningMode`. Two providers ship; both emit the **identical** `DuplicateReasoningOutput`, so promoting an entity from `Prompt` to `Agent` is a config change, not a rewrite.
+Reasoning is delegated through an abstract `DuplicateReasoningProvider`, resolved at runtime via the MJ class factory by `ReasoningMode`. Four providers ship, and all emit the same `DuplicateReasoningOutput`. `Prompt` and `Agent` run the same instruction set, so promoting an entity from `Prompt` to `Agent` is a config change, not a rewrite. The two decision modes put a typed decision model (the seeded "Default Decision" prompt, run through `AIDecisionRunner`) in front of, or in place of, the prompt.
 
 | Provider | `@RegisterClass` key | Package | Path |
 |---|---|---|---|
 | `PromptReasoningProvider` | `PROMPT_REASONING_PROVIDER_KEY` (`'Prompt'`) | `@memberjunction/ai-vector-dupe` | Single-shot AI Prompt. Persists `AIPromptRunID`. |
 | `DuplicateReasoningAgentProvider` | `AGENT_REASONING_PROVIDER_KEY` (`'Agent'`) | `@memberjunction/ai-agents` | Orchestrated agent run (unlocks memory-note injection + future context tools). Persists `AIAgentRunID`. |
+| `DecisionReasoningProvider` | `DECISION_REASONING_PROVIDER_KEY` (`'Decision'`) | `@memberjunction/ai-vector-dupe` | One decision call per set, with one Likelihood per candidate. The probability is **calibrated** per decision model (`DUPLICATE_DECISION_CALIBRATION`; override `CalibrationFor` for another model). Recommends only: `Uncertain` (flagged for review) at or above its threshold (a calibrated `0.7` by default, `DEFAULT_UNCERTAIN_ABOVE`), else `NotDuplicate`. A candidate with no calibrated probability (no answer, or a model with no calibration) is `Uncertain`. Never `Merge`, so it never auto-merges. Persists `AIPromptRunID`. |
+| `DecisionThenPromptReasoningProvider` | `DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY` (`'DecisionThenPrompt'`) | `@memberjunction/ai-vector-dupe` | The decision drops candidates below its pre-filter threshold (a calibrated `0.3`, `PRE_FILTER_UNCERTAIN_ABOVE`, which keeps recall), then the `'Prompt'` provider reasons over the survivors and may recommend `Merge`. A candidate with no calibrated probability is kept. A dropped candidate reads `NotDuplicate` and its row points at the decision run. With no survivors the prompt never runs; if the decision fails, every candidate goes to the prompt. Both stages resolve through the class factory, so overrides of `'Decision'` and `'Prompt'` apply inside the chain. |
 
 > The Agent provider lives in `@memberjunction/ai-agents`, **not** this package, because `ai-agents` depends on `ai-vector-dupe` -- importing `AgentRunner` here would create a build cycle. It registers against the seam under the `'Agent'` key, so the detector resolves it via the class factory with no static import back into the pipeline. Registration is handled by the class-registration manifest (no `Load*()` helper needed).
 
@@ -295,7 +306,7 @@ export class MyReasoningProvider extends DuplicateReasoningProvider {
 
 ### Per-candidate verdicts
 
-A matched set is the top-K neighbors of one source record, so it routinely mixes true duplicates with false positives. The reasoner therefore returns a verdict **per candidate** (`DuplicateReasoningOutput.CandidateVerdicts`), each judged independently against the source -- a false-positive candidate reads `NotDuplicate` even when another candidate in the same set is a confident `Merge`. The detector stamps each candidate's own verdict onto its match row; the set-level `Recommendation`/`Confidence` are *derived* values used only for the group's dominant display and the auto-merge gate.
+A matched set is the top-K neighbors of one source record, so it routinely mixes true duplicates with false positives. The reasoner therefore returns a verdict **per candidate** (`DuplicateReasoningOutput.CandidateVerdicts`), each judged independently against the source -- a false-positive candidate reads `NotDuplicate` even when another candidate in the same set is a confident `Merge`. The detector stamps each candidate's own verdict onto its match row; the set-level `Recommendation`/`Confidence` are *derived* values used for the group's dominant display. Auto-merge (`AutoMergeAboveAbsolute`) requires both the set-level recommendation and the candidate's own verdict (carried on `PotentialDuplicate.ReasoningRecommendation`) to be `Merge`, so a candidate is never merged because another candidate in its set is a duplicate.
 
 The output also carries a proposed `SurvivorRecordID` and per-field survivor choices (`FieldChoices`) that feed `Metadata.MergeRecords` at merge time. A `null` `Confidence` means the model returned no usable confidence and must be rendered/stored as "unknown" -- never conflated with a real `0` (which reads as "confidently NOT a duplicate"). See `DuplicateReasoningTypes` for the full contract.
 
@@ -373,6 +384,24 @@ interface ScoredCandidate {
 
 ---
 
+## Excluding Records: the Record Filter
+
+An entity document can name the records that take part in duplicate detection with `recordFilter.extraFilter` in its `Configuration` JSON, a RunView `ExtraFilter` predicate on the document's entity:
+
+```json
+{ "recordFilter": { "extraFilter": "ind_delete_flag <> '1'" } }
+```
+
+A record that fails the filter is never checked by a batch run and never offered as a candidate, yet stays readable everywhere else. `CheckSingleRecord` and the entry-time check still check the record they are given, since the caller asked about that record; only its candidates are filtered. Typical uses are records a source system has flagged deleted or merged, and inactive records.
+
+- **Records checked.** A whole-entity run ANDs the filter into its own `ExtraFilter`; a list or view run is narrowed to the members that pass it.
+- **Candidates.** Vector sync skips filtered records too, but their vectors can already be in the index, so every match is checked against the filter with the existence check that drops orphaned vectors. This applies to batch runs, `CheckSingleRecord` and the entry-time check.
+- **TopK.** With a filter set, the query asks for three times TopK and the result is trimmed back to TopK after filtering, so excluded records don't take a genuine duplicate's slot.
+- **Errors.** If the filter can't be applied (a typo in a column name, say), the run fails instead of letting excluded records through.
+- **SQL.** Keep the filter to plain comparisons on the entity's columns (`=`, `<>`, `IN`, `IS NULL`, `AND`/`OR`). On PostgreSQL, MJ quotes identifiers, converts `[brackets]`, turns `= 0`/`= 1` on boolean columns into `FALSE`/`TRUE`, and translates `GETDATE()`, `GETUTCDATE()`, `SYSDATETIMEOFFSET()` and `DATEADD`. Other T-SQL, such as `ISNULL`, `LEN` or `+` string concatenation, is passed through unchanged and fails there.
+
+Vector sync applies the same filter to the records it vectorizes; see the [Sync README](../Sync/README.md#record-filter). Vectors already stored for records the filter now excludes are not removed by sync.
+
 ## Inverse Match Deduplication
 
 The detector maintains a `_seenPairs` set across the entire run to suppress inverse duplicates. If record A is identified as a duplicate of record B (A->B), the reverse match (B->A) is automatically suppressed. Pair keys use canonical ordering (`smallerID::largerID`) for consistent deduplication regardless of query direction.
@@ -419,4 +448,4 @@ npm run test:watch
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../../LICENSE) for details.

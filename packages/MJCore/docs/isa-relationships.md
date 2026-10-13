@@ -1,5 +1,12 @@
 # IS-A Type Relationships in MemberJunction
 
+> **Not what you want?** IS-A is *vertical* — one logical record spread across parent and child
+> tables sharing a primary key. For a header plus N rows that carry a foreign key back to it (order
+> lines, an action's parameters), see [Related-Record Collections](./related-record-collections.md).
+> For an owner-held 1:1 such as `Deal.OrderID`, see [Embedded Records](./embedded-records.md).
+> MJCore reserves the word **child** for IS-A subtypes; FK dependents that point at you are
+> **related records**; a peer you point at is an **embedded record**.
+
 > **Package**: [@memberjunction/core](../readme.md)
 > **Related Guides**: [Virtual Entities](./virtual-entities.md) | [RunQuery Pagination](./runquery-pagination.md)
 > **Related Packages**: [@memberjunction/codegen-lib](../../CodeGenLib/README.md) | [@memberjunction/sqlserver-dataprovider](../../SQLServerDataProvider/README.md) | [@memberjunction/graphql-dataprovider](../../GraphQLDataProvider/README.md) | [@memberjunction/ng-core-entity-forms](../../Angular/Explorer/core-entity-forms/README.md)
@@ -114,6 +121,8 @@ flowchart LR
 
 The chain is **bidirectional** — `_parentEntity` links upward and `_childEntity` links downward. Both directions share the **same object instances**, so dirty state, PK values, and field values are always in sync.
 
+A chain built from the child is linked both ways. `GetEntityObject('Webinars')` then `NewRecord()` points each parent that does not allow multiple subtypes back at that webinar, so `meeting.LeafEntity` and `product.LeafEntity` are the webinar. A parent save hook therefore sees the child's dirty fields, their old values, and their new values. `AttachToParent()` keeps that link when the parent row loads and when it is missing.
+
 When you work with a `WebinarEntity`:
 - `webinar.Set('StreamURL', '...')` → sets on Webinar's own fields
 - `webinar.Set('Name', '...')` → routes to `_parentEntity._parentEntity.Set('Name', ...)`
@@ -177,6 +186,8 @@ When a record is loaded at any level of the IS-A hierarchy, `BaseEntity.Initiali
 3. If a child is found, creates the child entity and wires the bidirectional chain
 4. Recursively discovers grandchildren (the child may also be a parent type)
 
+When the entity opts in to asking its subtype rule on load, step 2 is usually skipped; see [Knowing the Subtype on Load](#knowing-the-subtype-on-load).
+
 ```mermaid
 sequenceDiagram
     participant App as Application
@@ -218,6 +229,67 @@ This executes as PK lookups on clustered indexes — effectively instant, even w
 - **SQLServerDataProvider**: Builds and executes the UNION ALL query directly
 - **GraphQLDataProvider**: Calls the `FindISAChildEntity` GraphQL query endpoint on the server
 - **Server (MJServer)**: `ISAEntityResolver` exposes the `FindISAChildEntity` query, delegates to the provider
+
+### Knowing the Subtype on Load
+
+Without help, a loaded record with IS-A children costs the discovery query plus the child's load. In the browser each is a round trip, so opening one record takes three, and a `RunView` with `ResultType: 'entity_object'` pays two more for every row: 201 round trips for 100 records.
+
+A disjoint parent (`AllowMultipleSubtypes = false`) can opt in to asking its **subtype rule** first. When the rule names a child, that child's load — which happens anyway — checks the answer, and the discovery query runs only on a miss. One record then takes two round trips, and 100 records take 101.
+
+It is opt-in because the rule is written for creating records, and a load has to get its answer without a query:
+
+| Rule | Asked on load when |
+|---|---|
+| A registered `EntitySubtypeResolver` | Its class overrides `ResolveLoadHint`. `Resolve` answers the create-time question and may query; `ResolveLoadHint` answers from memory only, and returns `null` ("no hint") when it can't. A resolver that doesn't override it gives no hint, and the entity's `SubtypeSelector` isn't consulted in its place, because the resolver owns the rule: an app with a resolver and a selector gets load hints by overriding `ResolveLoadHint`. |
+| `Entity.SubtypeSelector` | It sets `"UseForLoadedRecords": true`, and every hop of its path is found among the entity objects that loaded `BaseEngine` caches hold. A hop that isn't cached gives no hint, never a query. |
+| The single-child default | Never. It decides what a new record becomes, not what an existing one is. |
+
+```json
+{ "Path": "ProductTypeID.ProductExtensionEntity", "UseForLoadedRecords": true }
+```
+
+A selector's cached hops are found through an index over each engine's array, rebuilt when the array gains or loses a row. Reading the keys never builds fields on the rows an engine holds in raw mode.
+
+A resolver answers the two questions separately. Creating a record can wait for an engine; loading one can't, so it reads the cache and gives no hint while the cache is cold:
+
+```typescript
+@RegisterClass(EntitySubtypeResolver, 'Products')
+export class ProductSubtypeResolver extends EntitySubtypeResolver {
+    // Creating a record: the answer must be right, so wait for the engine.
+    public async Resolve(record: BaseEntity): Promise<string | null> {
+        await ProductTypeEngine.Instance.Config(false, record.ContextCurrentUser);
+        return this.extensionFor(record);
+    }
+
+    // Loading a record: answer from memory, or not at all.
+    public override ResolveLoadHint(record: BaseEntity): string | null {
+        return ProductTypeEngine.Instance.Loaded ? this.extensionFor(record) : null;
+    }
+
+    private extensionFor(record: BaseEntity): string | null {
+        const product = record as ProductEntity;
+        return ProductTypeEngine.Instance.GetProductType(product.ProductTypeID)?.ProductExtensionEntity ?? null;
+    }
+}
+```
+
+`BaseEntity` checks the registered class for a `ResolveLoadHint` override once, without constructing it, so a resolver that doesn't give load hints is never constructed when records load. One that does is constructed once per entity and shared by every record it loads, so keep it stateless. Override it as a method: an arrow-function property isn't seen.
+
+For well-formed data, a hint changes the number of round trips, not which child is linked or whether the load succeeds:
+
+- **A hinted child with no row, where the record has no subtype row at all**, is a normal state: core never creates a subtype row on save, so a typed record saved through a generic form or an import, or older than its type's subtype, has none. The discovery query finds nothing, and the record loads with no child. That costs one extra round trip per load, so opt in when records of subtyped types have their subtype rows. Nothing is logged as an error; with verbose logging on (`MJ_VERBOSE`) there is one line per entity and hinted child.
+- **A hinted child with no row, where the record's subtype row is in another child**: the discovery query links the real one, and `LogError` reports that the rule and the data disagree, once per entity and pair of subtypes.
+- **"No subtype"** from the rule still runs the discovery query: only the query can tell whether an older record kept a child row.
+- **A child the user can't read** isn't loaded from the hint; the discovery path decides, as it would without a hint.
+- **A resolver that throws or rejects** is logged once per entity, **a rule that names an entity which isn't a declared IS-A child** once per name, and the record loads as it would without a hint.
+- **A promotion** (`AttachToParent`) loads the parent without asking its rule: the child row it adds doesn't exist yet.
+- **Overlapping parents** (`AllowMultipleSubtypes = true`) never ask the rule: they list every child with `FindISAChildEntities`.
+
+Three benign exceptions:
+
+- **Reading the hinted child's row fails**: the load falls back to the discovery query, so a transient failure now recovers where it used to fail the load. A lasting one reads the row twice, then fails as before. A failure after the row was read, such as in the child's own child discovery or its eager companions, fails the load at once, as it does without a hint.
+- **Two child rows**, which break the disjoint rule: the discovery query's `UNION ALL` has no order, so it links either one; a hint links the one the rule names.
+- **A provider without `FindISAChildEntity`** links no child without a hint, and the hinted child with one.
 
 ### ISAParent / ISAChild Accessors
 
@@ -325,18 +397,17 @@ sequenceDiagram
     participant DB as SQL Server
 
     App->>W: Save()
-    W->>Prov: BeginISATransaction()
-    Prov-->>W: Transaction object
-    W->>W: PropagateTransactionToParents()
+    W->>Prov: BeginEntityTransaction()
+    Prov-->>W: Scope (new transaction, or joins one already in flight)
 
     W->>P: Save({ IsParentEntitySave: true })
-    P->>Prov: Save(ProductEntity) [uses shared transaction]
+    P->>Prov: Save(ProductEntity) [uses ambient transaction]
     Prov->>DB: EXEC spCreateProduct / spUpdateProduct
     DB-->>Prov: Result
     Prov-->>P: Success
 
     W->>M: Save({ IsParentEntitySave: true })
-    M->>Prov: Save(MeetingEntity) [uses shared transaction]
+    M->>Prov: Save(MeetingEntity) [uses ambient transaction]
     Prov->>DB: EXEC spCreateMeeting / spUpdateMeeting
     DB-->>Prov: Result
     Prov-->>M: Success
@@ -345,14 +416,47 @@ sequenceDiagram
     Prov->>DB: EXEC spCreateWebinar / spUpdateWebinar
     DB-->>Prov: Result
 
-    W->>Prov: CommitISATransaction()
-    Prov->>DB: COMMIT TRANSACTION
+    W->>Prov: scope.Commit()
+    Prov->>DB: COMMIT TRANSACTION (only if outermost)
     W-->>App: true (success)
 ```
 
 **Save order:** Parent → ... → Child (Product first, then Meeting, then Webinar)
 
-**On failure:** The entire transaction is rolled back — no partial saves.
+**On failure:** The entire transaction is rolled back — no partial saves. Every level of the chain
+also goes back, in memory, to how it was before `Save()`. Each parent was finalized as saved and
+clean when its own write returned, so it gets back its saved flag, its values and its pending edits:
+a new chain reads as unsaved again, and a retry writes every level. An edit made while the save was
+in flight is kept, and still counts as an edit. The same holds on the client, where each parent's
+save is recorded in memory and the leaf's one mutation carries the whole chain.
+
+> ### ⚠️ Transaction handling changed in 6.2
+>
+> IS-A chains previously called a dedicated provider trio — `BeginISATransaction()` /
+> `CommitISATransaction()` / `RollbackISATransaction()` — and propagated the resulting handle down
+> the parent chain via `PropagateTransactionToParents()`.
+>
+> **The problem:** `BeginISATransaction()` opened a *brand-new physical transaction on the pool* with
+> no depth awareness, while `DatabaseProviderBase.BeginTransaction()` — used by every hand-written
+> application cascade — is depth-counted and savepoint-aware. The two were blind to each other. An
+> IS-A entity saved inside an application transaction therefore wrote into **two independent
+> transactions**; rolling one back left the other committed, and nothing raised an error.
+>
+> **The fix:** IS-A now calls the same `BeginEntityTransaction()` everything else does. The provider
+> arbitrates — starting a physical transaction or joining one already in flight as a savepoint — so
+> participants stay ignorant of each other *and* end up in one transaction. Because the ambient
+> transaction is picked up automatically by any `ExecuteSQL` call with no explicit
+> `connectionSource`, there is nothing left to propagate.
+>
+> **🚨 Removed, not deprecated.** 6.x LTS had not shipped, so the old surface was deleted outright
+> rather than carried as debt: the three `*ISATransaction` provider methods,
+> `BaseEntity.ProviderTransaction`, and `BaseEntity.PropagateTransactionToParents()` are all gone.
+> Nothing set the handle after the unification, and the provider reads that consumed it were already
+> dead — an `ExecuteSQL` call with no explicit `connectionSource` picks up the ambient transaction,
+> which is exactly what the scope opens. Callers that hand-managed a handle should open a scope
+> instead: `BeginEntityTransaction()`, or `RunInEntityTransaction(provider, work)`.
+>
+> See [Transactions, Batching & Entity Graphs](../../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md).
 
 ### Delete Orchestration
 
@@ -365,7 +469,7 @@ sequenceDiagram
     participant DB as SQL Server
 
     App->>W: Delete()
-    W->>W: BeginISATransaction()
+    W->>W: BeginEntityTransaction()
 
     W->>DB: DELETE from Webinar (own row first)
     DB-->>W: Success
@@ -378,13 +482,31 @@ sequenceDiagram
     P->>DB: DELETE from Product
     DB-->>P: Success
 
-    W->>W: CommitISATransaction()
+    W->>W: scope.Commit()
+    W->>W: NewRecord() on every level, still linked
     W-->>App: true (success)
 ```
 
 **Delete order:** Child → ... → Parent (Webinar first, then Meeting, then Product)
 
 This order is required because of foreign key constraints — the child row references the parent row.
+
+A parent `Delete()` that the leaf calls with `IsParentEntityDelete` returns after that row is deleted. The call the application awaits is the leaf's.
+
+The GraphQL client sends one delete for the chain. `Delete()` with `IsParentEntityDelete` records success and does not send a second mutation for a row the leaf's mutation already removed.
+
+**On failure:** The entire transaction is rolled back, so no row is deleted, and every level of the
+chain stays in memory as it was before `Delete()`: saved, under the same key, and still linked, so the
+same call can be retried. That holds because nothing is reset until the chain commits: each level is
+reset with `NewRecord()` once the commit succeeds, and so is each record that a parent's related-record
+collections deleted along the way. The failure is recorded on the leaf, the record the application
+called, whichever level failed. A parent's failure reads
+`Failed to delete parent entity '<name>': <its reason>`, and a failed commit is recorded with the
+commit's own error.
+
+On the client there is nothing to roll back: each parent's delete is answered in memory, and the
+leaf's one mutation deletes the whole chain in a single server transaction. Each level resets as its
+delete returns, as before.
 
 ### Parent Delete Protection
 
@@ -599,20 +721,30 @@ webinar.NewRecord();
 
 You never set the ID yourself — that shared key IS the relationship.
 
+### EnsureISAChild on a new record
+
+`EnsureISAChild()` attaches the declared child and copies the shared key onto it. A record that is not saved yet has no child row to read, so this does not load one. A saved parent still reads, and an empty result is an answer rather than a logged error.
+
 ## Provider Implementation
 
 ### SQLServerDataProvider
 
-Implements IS-A transaction methods:
+IS-A uses the **shared** entity transaction primitive, not an IS-A-specific one:
 
 ```typescript
-// These methods create independent SQL Server transactions
-async BeginISATransaction(): Promise<sql.Transaction>
-async CommitISATransaction(txn: sql.Transaction): Promise<void>
-async RollbackISATransaction(txn: sql.Transaction): Promise<void>
+// Inherited from DatabaseProviderBase; delegates to the provider's depth-counted
+// BeginTransaction / CommitTransaction / RollbackTransaction.
+async BeginEntityTransaction(): Promise<EntityTransactionScope>
 ```
 
-The transaction is propagated to each entity in the chain via `entity.ProviderTransaction`, ensuring all SPs execute within the same database transaction.
+The scope either starts a physical transaction or joins one already in flight (as a `SAVE
+TRANSACTION` savepoint). Every stored-procedure call in the chain then runs inside it automatically,
+because `ExecuteSQL` picks up the provider's ambient transaction whenever no explicit
+`connectionSource` is supplied — so no handle has to be propagated along the chain.
+
+The deprecated `BeginISATransaction` / `CommitISATransaction` / `RollbackISATransaction` trio still
+exists on the provider for external callers, but MJ core no longer calls it. See the 6.2 note under
+[Save Orchestration](#save-orchestration) for why it was retired.
 
 ### GraphQLDataProvider (Client-Side)
 
@@ -890,5 +1022,6 @@ class BaseEntity {
 | `ISAChild` is null after Load | Provider doesn't implement `FindISAChildEntity` | Update provider or use `ResolveLeafEntity()` static method |
 | `ISAChild` is null on overlapping parent | Expected — overlapping parents return null for `ISAChild` | Use `ISAChildren` to get the list of child entity names |
 | Save on branch entity not saving all fields | Child entity not discovered | Ensure record was loaded with `Load()` (not just `SetMany()`) |
-| Child discovery adds latency | Extra query per Load for parent-type entities | PK lookups are sub-ms; consider Phase 5 optimization for high-traffic |
+| Child discovery adds latency | Extra query per Load for parent-type entities, and a round trip per record in the browser | Opt the entity in to load hints (`ResolveLoadHint`, or a selector with `UseForLoadedRecords`) — see [Knowing the Subtype on Load](#knowing-the-subtype-on-load) |
+| `IS-A load hint: ... The rule and the data disagree.` in the log | The entity's subtype rule names a child that has no row for this record, and its subtype row is in another child, e.g. its type changed after its subtype row was written | Fix the rule or the data. The record still loads correctly, but each load costs an extra round trip until then |
 | Parent not deleted after child delete | Other child records still exist (overlapping) | Expected — parent preserved while any child references it |

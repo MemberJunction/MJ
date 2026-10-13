@@ -3,9 +3,9 @@
  * @module @memberjunction/scheduling-engine-base
  */
 
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, CacheChangedEvent, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobTypeEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { ToEpochMs, UUIDsEqual } from '@memberjunction/global';
 import { Observable, Subject } from 'rxjs';
 
 /**
@@ -167,7 +167,7 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
                 continue;
             }
 
-            const timeUntilNext = Math.max(0, job.NextRunAt.getTime() - now);
+            const timeUntilNext = Math.max(0, ToEpochMs(job.NextRunAt) - now);
             if (timeUntilNext < minInterval) {
                 minInterval = timeUntilNext;
             }
@@ -237,6 +237,24 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
             ? event.entityName
             : event.baseEntity?.EntityInfo?.Name;
         return name?.toLowerCase().trim() === target;
+    }
+
+    /**
+     * Extend the base cross-server cache-event handling the same way as
+     * {@link HandleIndividualBaseEntityEvent}: the `MJ: Scheduled Jobs` config is loaded
+     * unfiltered (so its cache payloads carry every row), and the Active-only invariant on
+     * {@link ScheduledJobs} is applied in memory after load. The base handler assigns the
+     * payload — or the full-reload fallback's rows — wholesale, so without this re-filter a
+     * cache event published by another server would put Disabled/Paused/Pending jobs back
+     * into the array that dispatch walks.
+     */
+    protected override async OnExternalCacheChange(config: BaseEnginePropertyConfig, event: CacheChangedEvent): Promise<void> {
+        await super.OnExternalCacheChange(config, event);
+
+        if (config.EntityName?.toLowerCase().trim() === 'mj: scheduled jobs') {
+            this.reapplyActiveJobFilter();
+            this._jobsChanged.next();
+        }
     }
 
     /**

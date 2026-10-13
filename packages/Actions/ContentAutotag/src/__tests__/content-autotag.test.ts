@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { IMetadataProvider } from '@memberjunction/core';
 
 // ============================================================================
 // Mocks — vi.mock factories are hoisted; they MUST NOT reference module-scope
@@ -36,6 +37,25 @@ const {
     mockInitTaxonomyBridge: vi.fn().mockResolvedValue(undefined),
     mockCleanupTaxonomyBridge: vi.fn(),
     mockRunViewFn: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
+}));
+
+// Knowledge Hub rows and EntityVectorSyncer construction, for the entity-source vector sync path.
+const { mockKHSourceTypesRef, mockKHSourcesRef, syncerProviders } = vi.hoisted(() => ({
+    mockKHSourceTypesRef: { value: [] as Array<{ ID: string; Name: string }> },
+    mockKHSourcesRef: {
+        value: [] as Array<{ ID: string; Name: string; ContentSourceTypeID: string; EntityID: string | null; EntityDocumentID: string | null }>,
+    },
+    syncerProviders: [] as Array<IMetadataProvider | null | undefined>,
+}));
+
+vi.mock('@memberjunction/ai-vector-sync', () => ({
+    EntityVectorSyncer: class {
+        constructor(provider?: IMetadataProvider | null) {
+            syncerProviders.push(provider);
+        }
+        Config() { return Promise.resolve(); }
+        VectorizeEntity() { return Promise.resolve({ success: true }); }
+    },
 }));
 
 vi.mock('@memberjunction/actions', () => ({
@@ -88,9 +108,9 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
     const mockKHInstance = {
         Config: vi.fn().mockResolvedValue(undefined),
-        ContentSources: [],
+        get ContentSources() { return mockKHSourcesRef.value; },
         ContentTypes: [],
-        ContentSourceTypes: [],
+        get ContentSourceTypes() { return mockKHSourceTypesRef.value; },
         ContentFileTypes: [],
         VectorIndexes: [],
         GetVectorIndexByID: vi.fn().mockReturnValue(undefined),
@@ -166,6 +186,9 @@ describe('AutotagAndVectorizeContentAction', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        mockKHSourceTypesRef.value = [];
+        mockKHSourcesRef.value = [];
+        syncerProviders.length = 0;
         action = new AutotagAndVectorizeContentAction();
         // Reset provider mock
         mockCreateInstance.mockReturnValue({ Autotag: mockProviderAutotag });
@@ -429,6 +452,87 @@ describe('AutotagAndVectorizeContentAction', () => {
     });
 
     // ========================================================================
+    // Flag coercion — the generic RunAction GraphQL mutation delivers every
+    // param value as a STRING, so flags must accept "1"/"true"/"yes" as set
+    // and everything else as unset. A strict `=== 1` check silently skipped
+    // phases for GQL callers.
+    // ========================================================================
+
+    describe('GraphQL string flag coercion', () => {
+        it('should run EmbedPendingChunks when the flag arrives as string "1"', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '0', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' },
+                    { Name: 'EmbedPendingChunks', Value: '1', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockEmbedPendingChunks).toHaveBeenCalledTimes(1);
+        });
+
+        it('should run Purge when the flag arrives as string "true" (case-insensitive)', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '0', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' },
+                    { Name: 'Purge', Value: 'True', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockPurge).toHaveBeenCalledTimes(1);
+        });
+
+        it('should run autotag providers when Autotag arrives as string "1"', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '1', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockInitTaxonomyBridge).toHaveBeenCalledTimes(1);
+        });
+
+        it('should treat string "0" and "false" as unset', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '0', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' },
+                    { Name: 'EmbedPendingChunks', Value: '0', Type: 'Input' },
+                    { Name: 'Purge', Value: 'false', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockEmbedPendingChunks).not.toHaveBeenCalled();
+            expect(mockPurge).not.toHaveBeenCalled();
+            expect(mockInitTaxonomyBridge).not.toHaveBeenCalled();
+        });
+
+        it('should treat arbitrary strings as unset rather than truthy', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '0', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' },
+                    { Name: 'EmbedPendingChunks', Value: 'enable', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockEmbedPendingChunks).not.toHaveBeenCalled();
+        });
+    });
+
+    // ========================================================================
     // Error Handling
     // ========================================================================
 
@@ -624,6 +728,43 @@ describe('AutotagAndVectorizeContentAction', () => {
 
             const { AutotagBaseEngine } = await import('@memberjunction/content-autotagging');
             expect(AutotagBaseEngine.Instance.ExternalRunTrackingActive).toBe(false);
+        });
+    });
+
+    // ========================================================================
+    // Entity-source vector sync — provider threading (#4910)
+    // ========================================================================
+
+    describe('entity-source vector sync', () => {
+        const forceReprocessParams = [
+            { Name: 'Autotag', Value: 0, Type: 'Input' },
+            { Name: 'Vectorize', Value: 1, Type: 'Input' },
+            { Name: 'ForceReprocess', Value: 1, Type: 'Input' },
+        ];
+
+        beforeEach(() => {
+            mockKHSourceTypesRef.value = [{ ID: 'type-entity', Name: 'Entity' }];
+            mockKHSourcesRef.value = [{
+                ID: 'src-entity', Name: 'Products', ContentSourceTypeID: 'type-entity',
+                EntityID: 'entity-products', EntityDocumentID: 'doc-products',
+            }];
+        });
+
+        it('builds the EntityVectorSyncer on params.Provider', async () => {
+            const requestProvider = { Entities: [] } as IMetadataProvider;
+            const result = await callInternal(action, {
+                Params: forceReprocessParams, ContextUser: { ID: 'user-1' }, Provider: requestProvider,
+            });
+
+            expect(result.Success).toBe(true);
+            expect(syncerProviders).toEqual([requestProvider]);
+        });
+
+        it('passes no provider when the caller supplied none, leaving VectorBase to use the global one', async () => {
+            const result = await callInternal(action, { Params: forceReprocessParams, ContextUser: { ID: 'user-1' } });
+
+            expect(result.Success).toBe(true);
+            expect(syncerProviders).toEqual([undefined]);
         });
     });
 });

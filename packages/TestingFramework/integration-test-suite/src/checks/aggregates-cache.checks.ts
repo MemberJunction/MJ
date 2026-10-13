@@ -34,18 +34,42 @@ function connStrOf(provider: IMetadataProvider): string {
     return (provider as unknown as { InstanceConnectionString?: string }).InstanceConnectionString ?? '';
 }
 
+/**
+ * `MAX(<last-updated column>)`, quoted for the running backend.
+ *
+ * An aggregate `expression` reaches the database verbatim, so a bare `__mj_UpdatedAt` is only
+ * safe where identifiers fold case-insensitively. PostgreSQL folds unquoted identifiers to
+ * lowercase and then rejects `column "__mj_updatedat" does not exist`. Quoting through the
+ * provider keeps the check testing aggregate caching rather than identifier casing.
+ */
+function maxUpdatedAtExpr(provider: IMetadataProvider): string {
+    const quote = (provider as unknown as { QuoteIdentifier?: (n: string) => string }).QuoteIdentifier;
+    if (typeof quote !== 'function') {
+        // FAIL, don't fall back. The bare form is exactly the bug this helper exists to avoid, so
+        // substituting it turns a missing capability into a PostgreSQL-only
+        // `column "__mj_updatedat" does not exist` several frames away — and on SQL Server, where
+        // folding is case-insensitive, into a green run that proves nothing about the other
+        // dialect. A provider that cannot quote an identifier cannot run this check honestly.
+        throw new Error(
+            'aggregates-cache checks need a provider exposing QuoteIdentifier; ' +
+            `got ${provider?.constructor?.name ?? typeof provider} without one`
+        );
+    }
+    return `MAX(${quote.call(provider, '__mj_UpdatedAt')})`;
+}
+
 /** Always-true, column-AGNOSTIC, unique-per-tag predicate → a deterministic cold slot. */
 function coldFilter(tag: string): string {
     return `'${tag}' <> 'zzz-cache-test-marker'`;
 }
 
 /** AGG1: two views identical except for Aggregates[] must NOT collide on a cache slot. */
-export async function CheckAgg1_FingerprintIncludesAggregates(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckAgg1FingerprintIncludesAggregates(ctx: IntegrationCheckContext): Promise<void> {
     const entityName = aggEntity(ctx);
     const connStr = connStrOf(ctx.Provider);
     const base: RunViewParams = { EntityName: entityName, ResultType: 'simple' };
     const withSum: RunViewParams = { ...base, Aggregates: [{ expression: 'COUNT(*)', alias: 'Cnt' }] };
-    const withMax: RunViewParams = { ...base, Aggregates: [{ expression: 'MAX(__mj_UpdatedAt)', alias: 'MaxUpd' }] };
+    const withMax: RunViewParams = { ...base, Aggregates: [{ expression: maxUpdatedAtExpr(ctx.Provider), alias: 'MaxUpd' }] };
 
     const fpNone = LocalCacheManager.Instance.GenerateRunViewFingerprint(base, connStr);
     const fpSum = LocalCacheManager.Instance.GenerateRunViewFingerprint(withSum, connStr);
@@ -55,8 +79,13 @@ export async function CheckAgg1_FingerprintIncludesAggregates(ctx: IntegrationCh
     Assert(fpSum !== fpMax, 'aggHash: different Aggregates expressions must yield different fingerprints');
 }
 
+/** @deprecated Use {@link CheckAgg1FingerprintIncludesAggregates}. */
+export async function CheckAgg1_FingerprintIncludesAggregates(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckAgg1FingerprintIncludesAggregates(ctx);
+}
+
 /** AGG2: aggregate results round-trip through the cache (warm hit still returns AggregateResults). */
-export async function CheckAgg2_AggregateResultsRoundTrip(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckAgg2AggregateResultsRoundTrip(ctx: IntegrationCheckContext): Promise<void> {
     const entityName = aggEntity(ctx);
     const rv = new RunView();
     const aggs: AggregateExpression[] = [{ expression: 'COUNT(*)', alias: 'Cnt' }];
@@ -76,6 +105,11 @@ export async function CheckAgg2_AggregateResultsRoundTrip(ctx: IntegrationCheckC
     AssertEqual(ctx.Storage.SetCount('RunViewCache'), 0, 'warm aggregate run must be served (zero writes)');
 }
 
+/** @deprecated Use {@link CheckAgg2AggregateResultsRoundTrip}. */
+export async function CheckAgg2_AggregateResultsRoundTrip(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckAgg2AggregateResultsRoundTrip(ctx);
+}
+
 /**
  * AGG3: AggregateResults are returned in the caller's requested order — the contract
  * documented on RunViewResult.AggregateResults ("in same order as input Aggregates array") —
@@ -83,11 +117,11 @@ export async function CheckAgg2_AggregateResultsRoundTrip(ctx: IntegrationCheckC
  * first. Warm the slot with [A,B], read the same entity+filter with [B,A], and assert each
  * result slot matches the second caller's own input order.
  */
-export async function CheckAgg3_ResultOrderSurvivesCache(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckAgg3ResultOrderSurvivesCache(ctx: IntegrationCheckContext): Promise<void> {
     const entityName = aggEntity(ctx);
     const rv = new RunView();
     const A: AggregateExpression = { expression: 'COUNT(*)', alias: 'Cnt' };
-    const B: AggregateExpression = { expression: 'MAX(__mj_UpdatedAt)', alias: 'MaxUpd' };
+    const B: AggregateExpression = { expression: maxUpdatedAtExpr(ctx.Provider), alias: 'MaxUpd' };
     const filter = coldFilter('agg3');
 
     // Warm the slot with [A, B].
@@ -108,22 +142,27 @@ export async function CheckAgg3_ResultOrderSurvivesCache(ctx: IntegrationCheckCo
         'ORDER CONTRACT: AggregateResults[1] must be the caller\'s SECOND requested aggregate');
 }
 
+/** @deprecated Use {@link CheckAgg3ResultOrderSurvivesCache}. */
+export async function CheckAgg3_ResultOrderSurvivesCache(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckAgg3ResultOrderSurvivesCache(ctx);
+}
+
 /** The ordered 'aggregates-cache' bundle. */
 export const AggregatesCacheChecks: NamedCheck[] = [
     {
         Id: 'aggregates-cache.AGG1',
         Name: 'AGG1: Aggregates[] participates in the cache fingerprint (aggHash) — no cross-aggregate collision',
-        Fn: CheckAgg1_FingerprintIncludesAggregates
+        Fn: CheckAgg1FingerprintIncludesAggregates
     },
     {
         Id: 'aggregates-cache.AGG2',
         Name: 'AGG2: AggregateResults round-trips through the cache (warm hit still returns aggregates)',
-        Fn: CheckAgg2_AggregateResultsRoundTrip
+        Fn: CheckAgg2AggregateResultsRoundTrip
     },
     {
         Id: 'aggregates-cache.AGG3',
         Name: 'AGG3: AggregateResults ORDER survives the cache — reordered Aggregates[] must not inherit the warming caller\'s order',
-        Fn: CheckAgg3_ResultOrderSurvivesCache
+        Fn: CheckAgg3ResultOrderSurvivesCache
     }
 ];
 

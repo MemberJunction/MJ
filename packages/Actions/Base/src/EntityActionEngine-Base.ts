@@ -1,7 +1,8 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, PostCommitToken, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJActionExecutionLogEntity, MJActionResultCodeEntity, MJEntityActionFilterEntity, MJEntityActionInvocationEntity, MJEntityActionInvocationTypeEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { ActionParam, AIDirective, RunActionParams } from "./ActionEngine-Base";
+import { EntityChangeContext } from "./EntityChangeContext";
 import { MJEntityActionEntityExtended } from "./MJEntityActionEntityExtended";
 import { IsEntityActionInScope, ResolveEntityActionScopeResolver } from "./EntityActionScopeResolver";
 
@@ -36,6 +37,29 @@ export class EntityActionInvocationParams {
      * If the invocation type is list-oriented, this parameter will be needed
      */
     public ListID?: string;
+
+    /**
+     * What changed about the record, for filters that need both sides of the save.
+     *
+     * Captured by the dispatcher at the moment the lifecycle event fires, **not** read from the entity
+     * later: `After*` dispatch is fire-and-forget, and by the time an action's filter runs the entity
+     * has been reloaded from the save's returned row and its `OldValue`s reset. A filter reading the
+     * live entity would see before-values identical to after-values and conclude nothing changed.
+     *
+     * Absent on invocations with no save behind them (a View or List fan-out, a direct call).
+     */
+    public EntityChange?: EntityChangeContext;
+
+    /**
+     * The transaction frames that were open on the entity's provider when the lifecycle event fired,
+     * from `DatabaseProviderBase.CapturePostCommitToken()`. Captured by the dispatcher before its first
+     * `await`, for the same reason as {@link EntityChange}: a Durable `After*` run deferred with no
+     * queue submitter is handed to `RunAfterCommit` with this token, so it follows the save's own
+     * transaction — run once that commits, dropped if it rolled back — even when it registers late.
+     *
+     * Absent outside a transaction and on invocations with no save behind them.
+     */
+    public PostCommitToken?: PostCommitToken;
 }
 
 
@@ -91,11 +115,11 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
 
  
     // internal instance properties used for the singleton pattern
-    private _EntityActions: MJEntityActionEntityExtended[] = [];
-    private _EntityActionParams: MJEntityActionParamEntity[] = [];
-    private _EntityActionInvocationTypes: MJEntityActionInvocationTypeEntity[] = [];
-    private _EntityActionFilters: MJEntityActionFilterEntity[] = [];
-    private _EntityActionInvocations: MJEntityActionInvocationEntity[] = [];
+    private _EntityActions: MJEntityActionEntityExtended[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _EntityActionParams: MJEntityActionParamEntity[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _EntityActionInvocationTypes: MJEntityActionInvocationTypeEntity[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _EntityActionFilters: MJEntityActionFilterEntity[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _EntityActionInvocations: MJEntityActionInvocationEntity[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
 
     /**
      * This method is called to configure the ActionEngine. It loads the metadata for the actions, filters, and result codes and caches them in the GlobalObjectStore. You must call this method before running any actions.

@@ -21,7 +21,7 @@ import type { CacheChangedEvent } from '@memberjunction/core';
 
 const REDIS_URL = process.env.REDIS_URL;
 
-const describeRedis = REDIS_URL ? describe : describe.skip;
+const describeRedis = describe.skipIf(!REDIS_URL);
 
 describeRedis('Integration: Two-Server Pub/Sub', () => {
     let providerA: InstanceType<typeof import('../RedisLocalStorageProvider.js').RedisLocalStorageProvider>;
@@ -199,5 +199,32 @@ describeRedis('Integration: Two-Server Pub/Sub', () => {
         expect(received[0].Action).toBe('removed');
 
         unsubscribe();
+    });
+
+    it('delivers a named-channel message to the other provider and counts its receiver', async () => {
+        const channel = `named-${Date.now()}`;
+        const received: string[] = [];
+        const unsubscribe = await providerA.SubscribeToChannel(channel, (message) => {
+            received.push(message);
+        });
+
+        const receivers = await providerB.PublishMessageAndWait(channel, 'abort:req-1');
+        await new Promise(r => setTimeout(r, 200));
+
+        expect(receivers).toBe(1);
+        expect(received).toEqual(['abort:req-1']);
+
+        unsubscribe();
+    });
+
+    it('stops counting a receiver once its last handler unsubscribes', async () => {
+        const channel = `named-release-${Date.now()}`;
+        const unsubscribe = await providerA.SubscribeToChannel(channel, () => undefined);
+        expect(await providerB.PublishMessageAndWait(channel, 'before')).toBe(1);
+
+        unsubscribe();
+        await new Promise(r => setTimeout(r, 200));
+
+        expect(await providerB.PublishMessageAndWait(channel, 'after')).toBe(0);
     });
 });

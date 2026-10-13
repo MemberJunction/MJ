@@ -169,13 +169,23 @@ export const CLUSTER_COLORS: string[] = [
 ];
 
 /** Maps the engine's lowercase {@link ClusterDistanceMetric} to a {@link DistanceMetric}. */
-export function toVectorMetric(metric: ClusterDistanceMetric): DistanceMetric {
+export function ToVectorMetric(metric: ClusterDistanceMetric): DistanceMetric {
     return metric;
 }
 
+/** @deprecated Use {@link ToVectorMetric}. */
+export function toVectorMetric(metric: ClusterDistanceMetric): DistanceMetric {
+    return ToVectorMetric(metric);
+}
+
 /** Maps the engine's lowercase {@link ClusterAlgorithm} to the persisted Algorithm enum value. */
-export function toPersistedAlgorithm(algorithm: ClusterAlgorithm): 'KMeans' | 'DBSCAN' {
+export function ToPersistedAlgorithm(algorithm: ClusterAlgorithm): 'KMeans' | 'DBSCAN' {
     return algorithm === 'dbscan' ? 'DBSCAN' : 'KMeans';
+}
+
+/** @deprecated Use {@link ToPersistedAlgorithm}. */
+export function toPersistedAlgorithm(algorithm: ClusterAlgorithm): 'KMeans' | 'DBSCAN' {
+    return ToPersistedAlgorithm(algorithm);
 }
 
 /** Create a {@link ClusterConfig} populated with sensible defaults. */

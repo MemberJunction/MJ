@@ -13,6 +13,7 @@ import { BaseFormComponent } from '../base-form-component';
 import { BaseFormSectionComponent } from '../base-form-section-component';
 import { InteractiveFormComponent } from '../interactive-form/interactive-form.component';
 import { FormResolverService } from '../resolver/form-resolver.service';
+import { FormVariantChoices } from '../resolver/form-variants';
 import { EntityFormConfig } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import {
@@ -133,6 +134,8 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   @Output() Saved = new EventEmitter<BaseEntity>();
   /** Re-emitted form `RecordSaved` (richer payload). */
   @Output() RecordSaved = new EventEmitter<RecordSavedEvent>();
+  /** Re-emitted form `RecordRefreshed`. */
+  @Output() RecordRefreshed = new EventEmitter<BaseEntity>();
   /** Re-emitted form `RecordDeleted`. */
   @Output() RecordDeleted = new EventEmitter<RecordDeletedEvent>();
   /** Re-emitted form `RecordSaveFailed`. */
@@ -149,11 +152,36 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   @Output() LoadError = new EventEmitter<{ title: string; detail: string }>();
   /** The live form instance, emitted right after it's created (for power-user wiring). */
   @Output() FormCreated = new EventEmitter<BaseFormComponent>();
+  /**
+   * Re-emitted form `EditModeChanged` (true = edit started, false = ended),
+   * plus one `true` right after mount when the form was created already in
+   * edit mode (`StartInEditMode`, or a new record) — StartEditMode never runs
+   * in that path, so without this the shell would never hear about it.
+   */
+  @Output() EditModeChanged = new EventEmitter<boolean>();
 
   // ── State ───────────────────────────────────────────────────────────────
 
-  public loading = true;
-  public errorTitle: string | null = null;
+  public Loading = true;
+
+  /** @deprecated Use {@link Loading}. */
+  public get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set loading(value) {
+    this.Loading = value;
+  }
+  public ErrorTitle: string | null = null;
+
+  /** @deprecated Use {@link ErrorTitle}. */
+  public get errorTitle(): string | null {
+    return this.ErrorTitle;
+  }
+  /** @deprecated Use {@link ErrorTitle}. */
+  public set errorTitle(value: string | null) {
+    this.ErrorTitle = value;
+  }
   public errorDetail: string | null = null;
 
   private _formComponentRef: ComponentRef<BaseFormComponent> | null = null;
@@ -211,12 +239,22 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     this.Form?.CancelEdit();
   }
 
+  /** Refresh the bound record from the database. Full-form mode uses the form's refresh pipeline. */
+  async Refresh(): Promise<boolean> {
+    if (this._isSection) {
+      return this._currentRecord?.IsSaved ? this._currentRecord.Refresh() : false;
+    }
+    const f = this.Form;
+    if (!f) return false;
+    return f.RefreshRecord();
+  }
+
   // ── Core: resolve → load → create → bind → wire ──────────────────────────
 
   private reload(): void {
     this.teardown();
-    this.loading = true;
-    this.errorTitle = null;
+    this.Loading = true;
+    this.ErrorTitle = null;
     this.errorDetail = null;
     void this.loadAndMount();
   }
@@ -281,16 +319,17 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
 
       this.applyVariants(instance, resolution, entityName);
       this.subscribeToFormEvents(instance);
+      this.announceInitialEditMode(instance);
 
       this.FormCreated.emit(instance);
-      this.errorTitle = null;
+      this.ErrorTitle = null;
       this.errorDetail = null;
       this.LoadComplete.emit();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.fail(`Failed to load ${entityName} record.`, `An unexpected error occurred: ${msg}`);
     } finally {
-      this.loading = false;
+      this.Loading = false;
       this.cdr.detectChanges();
     }
   }
@@ -379,9 +418,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     resolution: Awaited<ReturnType<FormResolverService['ResolveFormForEntity']>>,
     entityName: string,
   ): void {
-    instance.Variants = (resolution.variants ?? [])
-      .filter(v => v.Status === 'Active')
-      .map(v => ({ ID: v.ID, Label: v.Name ?? `Override ${v.ID.substring(0, 8)}`, Scope: v.Scope, Status: v.Status }));
+    instance.Variants = FormVariantChoices(resolution.variants ?? []);
     instance.CurrentVariantID = resolution.kind === 'interactive' ? resolution.override.ID : null;
     instance.OnVariantChanged = (variantID: string | null) => {
       if (variantID === null) {
@@ -402,15 +439,30 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       form.Navigate.subscribe(e => this.Navigate.emit(e)),
       form.Notification.subscribe(e => this.Notification.emit(e)),
       form.RecordSaved.subscribe(e => this.RecordSaved.emit(e)),
+      form.RecordRefreshed.subscribe(e => this.RecordRefreshed.emit(e.Record)),
       form.RecordDeleted.subscribe(e => this.RecordDeleted.emit(e)),
       form.RecordSaveFailed.subscribe(e => this.RecordSaveFailed.emit(e)),
       form.ValidationFailed.subscribe(e => this.ValidationFailed.emit(e)),
       form.RecordReady.subscribe(e => this.RecordReady.emit(e)),
+      form.EditModeChanged.subscribe(e => this.EditModeChanged.emit(e)),
     );
     // Surface 'dismiss' navigation as a first-class Dismissed event too.
     this._formEventSubs.push(
       form.Navigate.subscribe(e => { if (e.Kind === 'dismiss') this.Dismissed.emit(); }),
     );
+  }
+
+  /**
+   * Announce edit mode that was set by ASSIGNMENT rather than by
+   * StartEditMode() — the mount path writes `instance.EditMode` directly, so
+   * a form that starts in edit mode would otherwise be editing, unpinned and
+   * italic in a records preview tab. Safe to fire alongside ngOnInit's own
+   * StartEditMode for a new record: the shell's pin is idempotent.
+   */
+  private announceInitialEditMode(form: BaseFormComponent): void {
+    if (form.EditMode) {
+      this.EditModeChanged.emit(true);
+    }
   }
 
   // ── New-record value application (URL segment or object) ──────────────────
@@ -460,9 +512,9 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   private fail(title: string, detail: string): void {
-    this.errorTitle = title;
+    this.ErrorTitle = title;
     this.errorDetail = detail;
-    this.loading = false;
+    this.Loading = false;
     if (this._formComponentRef) {
       try { this._formComponentRef.destroy(); } catch { /* noop */ }
       this._formComponentRef = null;

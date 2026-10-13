@@ -24,9 +24,9 @@ vi.mock('@memberjunction/aiengine', () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { generateRelationshipGraph, formatEntitiesForPrompt, generateMermaidDiagram } from '../utils/graph-helpers';
-import { extractErrorMessage, requireValue, getPropertyOrDefault } from '../utils/error-handlers';
-import { buildQueryCategory, extractUniqueCategories } from '../utils/category-builder';
+import { GenerateRelationshipGraph, FormatEntitiesForPrompt, GenerateMermaidDiagram } from '../utils/graph-helpers';
+import { ExtractErrorMessage, RequireValue, GetPropertyOrDefault } from '../utils/error-handlers';
+import { BuildQueryCategory, ExtractUniqueCategories } from '../utils/category-builder';
 import type { EntityInfo, EntityRelationshipInfo } from '@memberjunction/core';
 
 // ---------------------------------------------------------------------------
@@ -81,14 +81,14 @@ describe('generateRelationshipGraph', () => {
       createMockEntity('Orders', 'dbo', []),
     ];
 
-    const graph = generateRelationshipGraph(entities as EntityInfo[]);
+    const graph = GenerateRelationshipGraph(entities as EntityInfo[]);
     expect(graph).toContain('Customers: \u2192 Orders');
     expect(graph).toContain('Orders: (no relationships)');
   });
 
   it('should handle entities with no relationships', () => {
     const entities = [createMockEntity('Standalone')];
-    const graph = generateRelationshipGraph(entities as EntityInfo[]);
+    const graph = GenerateRelationshipGraph(entities as EntityInfo[]);
     expect(graph).toContain('Standalone: (no relationships)');
   });
 });
@@ -96,7 +96,7 @@ describe('generateRelationshipGraph', () => {
 describe('formatEntitiesForPrompt', () => {
   it('should format entity metadata correctly', () => {
     const entities = [createMockEntity('Users', 'auth')];
-    const result = formatEntitiesForPrompt(entities as EntityInfo[]);
+    const result = FormatEntitiesForPrompt(entities as EntityInfo[]);
     expect(result).toHaveLength(1);
     expect(result[0].Name).toBe('Users');
     expect(result[0].SchemaName).toBe('auth');
@@ -106,7 +106,7 @@ describe('formatEntitiesForPrompt', () => {
   it('should default description for entities without one', () => {
     const entity = createMockEntity('NoDesc');
     (entity as Record<string, unknown>).Description = '';
-    const result = formatEntitiesForPrompt([entity as EntityInfo]);
+    const result = FormatEntitiesForPrompt([entity as EntityInfo]);
     expect(result[0].Description).toBe('No description available');
   });
 });
@@ -120,7 +120,7 @@ describe('generateMermaidDiagram', () => {
       createMockEntity('Orders'),
     ];
 
-    const diagram = generateMermaidDiagram(entities as EntityInfo[]);
+    const diagram = GenerateMermaidDiagram(entities as EntityInfo[]);
     expect(diagram).toContain('graph LR');
     expect(diagram).toContain('Customers[Customers] --> Orders[Orders]');
   });
@@ -130,7 +130,7 @@ describe('generateMermaidDiagram', () => {
       createMockEntity('A', 'dbo', [{ RelatedEntity: 'B', Type: 'One To Many' } as Partial<EntityRelationshipInfo>]),
       createMockEntity('B', 'dbo', [{ RelatedEntity: 'A', Type: 'Many To One' } as Partial<EntityRelationshipInfo>]),
     ];
-    const diagram = generateMermaidDiagram(entities as EntityInfo[]);
+    const diagram = GenerateMermaidDiagram(entities as EntityInfo[]);
     // Only one edge between A and B
     const edgeCount = (diagram.match(/-->/g) || []).length;
     expect(edgeCount).toBe(1);
@@ -143,42 +143,42 @@ describe('generateMermaidDiagram', () => {
 
 describe('extractErrorMessage', () => {
   it('should extract from Error instance', () => {
-    const msg = extractErrorMessage(new Error('boom'), 'TestContext');
+    const msg = ExtractErrorMessage(new Error('boom'), 'TestContext');
     expect(msg).toBe('TestContext: boom');
   });
 
   it('should extract from string', () => {
-    const msg = extractErrorMessage('string error', 'Ctx');
+    const msg = ExtractErrorMessage('string error', 'Ctx');
     expect(msg).toBe('Ctx: string error');
   });
 
   it('should handle unknown error type', () => {
-    const msg = extractErrorMessage(42, 'Ctx');
+    const msg = ExtractErrorMessage(42, 'Ctx');
     expect(msg).toBe('Ctx: Unknown error occurred');
   });
 });
 
 describe('requireValue', () => {
   it('should return value when present', () => {
-    expect(requireValue('hello', 'field')).toBe('hello');
+    expect(RequireValue('hello', 'field')).toBe('hello');
   });
 
   it('should throw for null', () => {
-    expect(() => requireValue(null, 'myField')).toThrow("Required value 'myField' is missing");
+    expect(() => RequireValue(null, 'myField')).toThrow("Required value 'myField' is missing");
   });
 
   it('should throw for undefined', () => {
-    expect(() => requireValue(undefined, 'myField')).toThrow("Required value 'myField' is missing");
+    expect(() => RequireValue(undefined, 'myField')).toThrow("Required value 'myField' is missing");
   });
 });
 
 describe('getPropertyOrDefault', () => {
   it('should return property value when present', () => {
-    expect(getPropertyOrDefault({ x: 10 }, 'x', 0)).toBe(10);
+    expect(GetPropertyOrDefault({ x: 10 }, 'x', 0)).toBe(10);
   });
 
   it('should return default when property missing', () => {
-    expect(getPropertyOrDefault({}, 'x', 42)).toBe(42);
+    expect(GetPropertyOrDefault({}, 'x', 42)).toBe(42);
   });
 });
 
@@ -206,7 +206,7 @@ describe('buildQueryCategory', () => {
       expectedQuestionTypes: [],
     };
 
-    const cat = buildQueryCategory(config as Parameters<typeof buildQueryCategory>[0], entityGroup);
+    const cat = BuildQueryCategory(config as Parameters<typeof BuildQueryCategory>[0], entityGroup);
     expect(cat.name).toBe('Users');
     expect(cat.parentName).toBe('Generated');
     expect(cat.path).toBe('Generated/Users');
@@ -230,7 +230,7 @@ describe('buildQueryCategory', () => {
       expectedQuestionTypes: [],
     };
 
-    const cat = buildQueryCategory(config as Parameters<typeof buildQueryCategory>[0], entityGroup);
+    const cat = BuildQueryCategory(config as Parameters<typeof BuildQueryCategory>[0], entityGroup);
     expect(cat.name).toBe('Auto-Generated');
     expect(cat.parentName).toBeNull();
   });
@@ -244,7 +244,7 @@ describe('extractUniqueCategories', () => {
       { name: 'Users', parentName: 'Root', description: 'Users', path: 'Root/Users' },
     ];
 
-    const unique = extractUniqueCategories(cats);
+    const unique = ExtractUniqueCategories(cats);
     expect(unique).toHaveLength(2);
   });
 
@@ -253,7 +253,7 @@ describe('extractUniqueCategories', () => {
       { name: 'Orders', parentName: 'Generated', description: 'Orders', path: 'Generated/Orders' },
     ];
 
-    const unique = extractUniqueCategories(cats);
+    const unique = ExtractUniqueCategories(cats);
     // Should have both the parent 'Generated' and child 'Orders'
     expect(unique).toHaveLength(2);
     const parentCat = unique.find(c => c.name === 'Generated');
@@ -267,7 +267,7 @@ describe('extractUniqueCategories', () => {
       { name: 'Alpha', parentName: null, description: '', path: 'Alpha' },
     ];
 
-    const sorted = extractUniqueCategories(cats);
+    const sorted = ExtractUniqueCategories(cats);
     expect(sorted[0].name).toBe('Alpha');
     expect(sorted[1].name).toBe('Zeta');
   });

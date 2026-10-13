@@ -1,7 +1,8 @@
-import { Metadata, CompositeKey, DatabaseProviderBase } from '@memberjunction/core';
+import { CompositeKey, DatabaseProviderBase } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Resolver } from 'type-graphql';
-import { AppContext } from '../types.js';
+import { AppContext, UserPayload } from '../types.js';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
+import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
 
 @InputType()
@@ -31,8 +32,20 @@ export class EntityRecordNameResult {
   RecordName?: string;
 }
 
+/**
+ * Resolves a record's display NAME from its primary key — the lookup behind every foreign-key
+ * link, breadcrumb and picker label in the UI.
+ *
+ * Entity-level read permission is checked here ({@link ResolverBase.CheckUserReadPermissions}).
+ * Field- and row-level security are applied by the provider's lookup, for the acting user passed
+ * to it: when any field the name is built from is withheld, it answers with no name.
+ *
+ * A withheld name answers `Success: false` with the same status as a record that does not exist.
+ * Callers already treat "no name" as "show the primary key", and the identical answer keeps this
+ * query from becoming a probe that distinguishes "restricted" from "missing".
+ */
 @Resolver(EntityRecordNameResult)
-export class EntityRecordNameResolver {
+export class EntityRecordNameResolver extends ResolverBase {
   @Query(() => EntityRecordNameResult)
   async GetEntityRecordName(
     @Arg('EntityName', () => String) EntityName: string,
@@ -40,33 +53,44 @@ export class EntityRecordNameResolver {
     @Ctx() { providers, userPayload }: AppContext
   ): Promise<EntityRecordNameResult> {
     const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
+    this.CheckUserReadPermissions(EntityName, userPayload, md);
 
-    return await this.InnerGetEntityRecordName(md, EntityName, primaryKey);
+    return await this.InnerGetEntityRecordName(md, EntityName, primaryKey, userPayload);
   }
 
   @Query(() => [EntityRecordNameResult])
   async GetEntityRecordNames(
     @Arg('info', () => [EntityRecordNameInput]) info: EntityRecordNameInput[],
-    @Ctx() {providers}: AppContext
+    @Ctx() {providers, userPayload}: AppContext
   ): Promise<EntityRecordNameResult[]> {
     const result: EntityRecordNameResult[] = [];
     const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
     for (const i of info) {
-      result.push(await this.InnerGetEntityRecordName(md, i.EntityName, i.CompositeKey));
+      // Per item, because the batch spans entities: one denied entity must not fail the whole
+      // batch, and must not be answered from another entity's grant either.
+      this.CheckUserReadPermissions(i.EntityName, userPayload, md);
+      result.push(await this.InnerGetEntityRecordName(md, i.EntityName, i.CompositeKey, userPayload));
     }
     return result;
   }
 
-  async InnerGetEntityRecordName(md: DatabaseProviderBase, EntityName: string, primaryKey: CompositeKeyInputType): Promise<EntityRecordNameResult> {
+  async InnerGetEntityRecordName(
+    md: DatabaseProviderBase,
+    EntityName: string,
+    primaryKey: CompositeKeyInputType,
+    userPayload?: UserPayload
+  ): Promise<EntityRecordNameResult> {
     const pk = new CompositeKey(primaryKey.KeyValuePairs);
     const e = md.Entities.find((e) => e.Name === EntityName);
     if (e) {
-      const recordName = await md.GetEntityRecordName(e.Name, pk);
+      const contextUser = userPayload ? this.GetUserFromPayload(userPayload) : undefined;
+      // The acting user is what field- and row-level security are applied for.
+      const recordName = await md.GetEntityRecordName(e.Name, pk, contextUser);
       if (recordName) return { Success: true, Status: 'OK', CompositeKey: pk, RecordName: recordName, EntityName };
       else
         return {
           Success: false,
-          Status: `Name for record, or record ${pk.ToString()} itself not found, could be an access issue if user doesn't have Row Level Access (RLS) if RLS is enabled for this entity`,
+          Status: `Name for record, or record ${pk.ToString()} itself not found, could be an access issue`,
           CompositeKey: pk,
           EntityName,
         };

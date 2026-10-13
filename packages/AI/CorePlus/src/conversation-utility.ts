@@ -21,6 +21,7 @@ import {
     createBase64DataUrl
 } from '@memberjunction/ai';
 import { UUIDsEqual } from '@memberjunction/global';
+import { CompositeKey, type KeyValuePair } from '@memberjunction/core';
 
 /**
  * Utility class for parsing and formatting special content in conversation messages
@@ -251,6 +252,134 @@ export class ConversationUtility {
     };
     // Use JSON.stringify directly - keep the braces
     return `@${JSON.stringify(content)}`;
+  }
+
+  /**
+   * Field names on a mention token that are never primary-key values.
+   * Composite PK fields that collide with these go under `keys` instead.
+   */
+  public static readonly RECORD_LINK_RESERVED_KEYS = [
+    '_mode',
+    'type',
+    'name',
+    'entityName',
+    'configurationId',
+    'configurationName',
+    'configId',
+    'config',
+    'keys',
+    'id',
+  ] as const;
+
+  /**
+   * Create a clickable record-link token for Chat `message`.
+   * Primary-key fields are siblings named as in entity metadata.
+   * Reserved names land in nested `keys`.
+   *
+   * `name` is the pill label. Omit it (or pass empty) for an icon-only pill —
+   * the right call when surrounding prose already names the record.
+   */
+  public static CreateRecordLink(
+    entityName: string,
+    name: string | null | undefined,
+    primaryKey: Record<string, string | number>
+  ): string {
+    const content: Record<string, unknown> = {
+      _mode: 'mention',
+      type: 'record',
+      entityName,
+    };
+    const trimmedName = (name ?? '').trim();
+    if (trimmedName) {
+      content.name = trimmedName;
+    }
+    const nested: Record<string, string | number> = {};
+    for (const [k, v] of Object.entries(primaryKey)) {
+      if ((ConversationUtility.RECORD_LINK_RESERVED_KEYS as readonly string[]).includes(k)) {
+        nested[k] = v;
+      } else {
+        content[k] = v;
+      }
+    }
+    if (Object.keys(nested).length > 0) {
+      content.keys = nested;
+    }
+    return `@${JSON.stringify(content)}`;
+  }
+
+  /**
+   * All PK-ish values on a record-link token: nested `keys`, sibling fields,
+   * and `id` as an alias for `ID`.
+   */
+  public static RecordLinkKeyMap(content: MentionContent): Record<string, string | number> {
+    const map: Record<string, string | number> = {};
+    if (content.keys && typeof content.keys === 'object') {
+      for (const [k, v] of Object.entries(content.keys)) {
+        if (v != null && v !== '') {
+          map[k] = v;
+        }
+      }
+    }
+    for (const [k, v] of Object.entries(content as unknown as Record<string, unknown>)) {
+      if ((ConversationUtility.RECORD_LINK_RESERVED_KEYS as readonly string[]).includes(k)) {
+        continue;
+      }
+      if (typeof v === 'string' || typeof v === 'number') {
+        map[k] = v;
+      }
+    }
+    if (map.ID == null && content.id) {
+      map.ID = content.id;
+    }
+    return map;
+  }
+
+  /**
+   * Build a CompositeKey from a record-link token using the entity's PK field names
+   * (from `EntityInfo.PrimaryKeys`). Returns null if any PK part is missing.
+   */
+  public static CompositeKeyFromRecordLink(
+    content: MentionContent,
+    primaryKeyNames: string[]
+  ): CompositeKey | null {
+    if (content.type !== 'record' || primaryKeyNames.length === 0) {
+      return null;
+    }
+    const map = this.RecordLinkKeyMap(content);
+    const pairs: KeyValuePair[] = [];
+    for (const name of primaryKeyNames) {
+      const value = map[name] ?? (name === 'ID' ? map['id'] : undefined);
+      if (value == null || value === '') {
+        return null;
+      }
+      pairs.push({ FieldName: name, Value: String(value) });
+    }
+    return new CompositeKey(pairs);
+  }
+
+  /**
+   * Build a CompositeKey from an `open:resource` Record command.
+   * `keys` wins per field; `resourceId` fills a single PK (or a PK named ID).
+   */
+  public static CompositeKeyFromOpenResource(
+    command: { resourceId?: string; keys?: Record<string, string | number> },
+    primaryKeyNames: string[]
+  ): CompositeKey | null {
+    if (primaryKeyNames.length === 0) {
+      return null;
+    }
+    const pairs: KeyValuePair[] = [];
+    for (const name of primaryKeyNames) {
+      const fromKeys = command.keys?.[name];
+      const fromResourceId =
+        name === 'ID' || primaryKeyNames.length === 1 ? command.resourceId : undefined;
+      const value = fromKeys ?? fromResourceId;
+      if (value == null || value === '') {
+        return null;
+      }
+      pairs.push({ FieldName: name, Value: String(value) });
+    }
+    return new CompositeKey(pairs);
   }
 
   // ==================== Attachment Methods ====================
@@ -533,7 +662,12 @@ export class ConversationUtility {
 
       // Validate based on mode
       if (mode === 'mention') {
-        if (parsed.type && parsed.id && parsed.name) {
+        if (parsed.type === 'record') {
+          // `name` is optional: omit it for an icon-only pill.
+          if (parsed.entityName) {
+            return parsed as MentionContent;
+          }
+        } else if (parsed.type && parsed.id && parsed.name) {
           return parsed as MentionContent;
         }
       } else if (mode === 'form') {
@@ -559,6 +693,12 @@ export class ConversationUtility {
    */
   private static getMode(content: SpecialContent): string {
     return content._mode || 'mention';
+  }
+
+  /** Visible label for a record link: explicit `name`, else the entity name. */
+  private static recordLinkLabel(content: MentionContent): string {
+    const n = (content.name ?? '').trim();
+    return n || content.entityName || 'record';
   }
 
   /**
@@ -588,13 +728,17 @@ export class ConversationUtility {
    * Format: "@Agent Name" or "@User Name"
    */
   private static mentionToPlainText(content: MentionContent, agents?: AgentInfo[], users?: UserInfo[]): string {
-    let name = content.name;
+    let name = content.name ?? '';
+
+    if (content.type === 'record') {
+      return ConversationUtility.recordLinkLabel(content);
+    }
 
     // Try to look up actual name if ID provided
-    if (content.type === 'agent' && agents) {
+    if (content.type === 'agent' && agents && content.id) {
       const agent = agents.find(a => UUIDsEqual(a.ID, content.id));
       if (agent) name = agent.Name;
-    } else if (content.type === 'user' && users) {
+    } else if (content.type === 'user' && users && content.id) {
       const user = users.find(u => UUIDsEqual(u.ID, content.id));
       if (user) name = user.Name;
     }
@@ -609,13 +753,19 @@ export class ConversationUtility {
    * Format: "Agent Name"
    */
   private static mentionToAgentContext(content: MentionContent, agents?: AgentInfo[], users?: UserInfo[]): string {
-    let name = content.name;
+    let name = content.name ?? '';
+
+    if (content.type === 'record') {
+      const keys = this.RecordLinkKeyMap(content);
+      const pk = Object.entries(keys).map(([k, v]) => `${k}=${v}`).join(', ');
+      return `${ConversationUtility.recordLinkLabel(content)} [${content.entityName || 'record'}${pk ? '; ' + pk : ''}]`;
+    }
 
     // Try to look up actual name if ID provided
-    if (content.type === 'agent' && agents) {
+    if (content.type === 'agent' && agents && content.id) {
       const agent = agents.find(a => UUIDsEqual(a.ID, content.id));
       if (agent) name = agent.Name;
-    } else if (content.type === 'user' && users) {
+    } else if (content.type === 'user' && users && content.id) {
       const user = users.find(u => UUIDsEqual(u.ID, content.id));
       if (user) name = user.Name;
     } else if (content.type === 'query') {
@@ -680,17 +830,28 @@ export interface SpecialContentToken {
 export type SpecialContent = MentionContent | FormResponseContent | AttachmentContent;
 
 /**
- * Mention content (@agent, @user, #entity, or #query)
+ * Mention content (@agent, @user, #entity, #query, or a clickable record row)
  */
 export interface MentionContent {
   /** Mode identifier (optional for backward compatibility) */
   _mode?: 'mention';
-  /** Type of mention */
-  type: 'agent' | 'user' | 'entity' | 'query';
-  /** ID of the mentioned entity */
-  id: string;
-  /** Name of the mentioned entity */
-  name: string;
+  /** Type of mention. `record` is a row (opens via OpenEntityRecord), not an entity definition. */
+  type: 'agent' | 'user' | 'entity' | 'query' | 'record';
+  /** ID of the mentioned agent/user/entity/query. Optional on `record` (PK fields are siblings). */
+  id?: string;
+  /**
+   * Display name. Required for agent/user/entity/query mentions.
+   * Optional on `type: "record"` — omit (or leave empty) for an icon-only pill
+   * when surrounding prose already names the record.
+   */
+  name?: string;
+  /** Entity name from metadata. Required on `type: "record"`. */
+  entityName?: string;
+  /**
+   * Escape hatch when a PK field name collides with a reserved mention key.
+   * Normal record links put PK fields as siblings instead.
+   */
+  keys?: Record<string, string | number>;
   /** Optional agent configuration ID */
   configurationId?: string;
   /** Optional agent configuration display name */

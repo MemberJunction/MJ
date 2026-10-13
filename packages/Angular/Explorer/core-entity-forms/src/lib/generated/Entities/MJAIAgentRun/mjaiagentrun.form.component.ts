@@ -23,6 +23,7 @@ export class MJAIAgentRunFormComponent extends BaseFormComponent {
             { sectionKey: 'configurationOverrides', sectionName: 'Configuration & Overrides', isExpanded: true },
             { sectionKey: 'testingValidation', sectionName: 'Testing & Validation', isExpanded: true },
             { sectionKey: 'scopeMultiTenant', sectionName: 'Scope & Multi-Tenant', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
@@ -36,7 +37,10 @@ export class MJAIAgentRunFormComponent extends BaseFormComponent {
             { sectionKey: 'mJDuplicateRunDetailMatches', sectionName: 'Duplicate Run Detail Matches', isExpanded: false },
             { sectionKey: 'mJExperimentSessionIterations', sectionName: 'Experiment Session Iterations', isExpanded: false },
             { sectionKey: 'mJExperimentSessions', sectionName: 'Experiment Sessions', isExpanded: false },
-            { sectionKey: 'mJUserRoutineRuns', sectionName: 'User Routine Runs', isExpanded: false }
+            { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
+            { sectionKey: 'mJUserRoutineRuns', sectionName: 'User Routine Runs', isExpanded: false },
+            { sectionKey: 'mJConversationSkills', sectionName: 'Conversation Skills', isExpanded: false },
+            { sectionKey: 'mJRubricEvaluations', sectionName: 'Rubric Evaluations', isExpanded: false }
         ]);
     }
 }

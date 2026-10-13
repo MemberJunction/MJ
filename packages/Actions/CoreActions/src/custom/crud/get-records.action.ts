@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { RunView } from "@memberjunction/core";
+import { RunView, RunViewParams } from "@memberjunction/core";
 
 /**
  * Generic action for retrieving multiple records from any entity with filtering and sorting capabilities.
@@ -77,9 +77,15 @@ export class GetRecordsAction extends BaseAction {
                 };
             }
 
-            // Use RunView to execute the query
+            // Use RunView to execute the query.
+            //
+            // Typed as RunViewParams rather than `any` on purpose: the filter used to be assigned to
+            // a `Filter` property, which RunView does not have. `any` accepted it silently, so the
+            // filter was dropped and EVERY caller asking for a filtered set quietly received the
+            // whole entity instead — capped only by MaxRows. The field is `ExtraFilter`, and the
+            // type now says so.
             const rv = new RunView();
-            const runViewParams: any = {
+            const runViewParams: RunViewParams = {
                 EntityName: entityName,
                 MaxRows: maxRows,
                 ResultType: 'simple'
@@ -87,7 +93,7 @@ export class GetRecordsAction extends BaseAction {
 
             // Add filter if provided
             if (filter) {
-                runViewParams.Filter = filter;
+                runViewParams.ExtraFilter = filter;
             }
 
             // Add ordering if provided

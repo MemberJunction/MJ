@@ -182,9 +182,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Process Run Details','ContentProcessRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Process Run Details')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Process Run Details','ContentProcessRunID')"
                 [AllowLoad]="IsSectionExpanded('mJContentProcessRunDetails')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentProcessRunDetails', $event.totalRowCount)"
                 >

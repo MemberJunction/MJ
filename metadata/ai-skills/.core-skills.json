@@ -16,14 +16,14 @@
         {
           "fields": {
             "SkillID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search"
+            "ActionID": "@lookup:MJ: Actions.Name=Web Search"
           },
           "primaryKey": {
             "ID": "4CD2ADEA-A42F-493E-9A1A-C98FB666E2D3"
           },
           "sync": {
-            "lastModified": "2026-07-01T23:25:37.263Z",
-            "checksum": "110eeb21526fbe58eead37a646520815fb791bd6b495ebd34f46ef44a088548c"
+            "lastModified": "2026-09-21T02:45:37.256Z",
+            "checksum": "e3e2d7f4c4103127bff939c08f762b0a74be34e76c3e3cfe9df4319a5bf06835"
           }
         },
         {
@@ -77,6 +77,19 @@
             "lastModified": "2026-07-01T23:25:37.324Z",
             "checksum": "86b2b241c67c589ba11983eceb4dcfe7eb704ccd250d6f4e94018d38ff3fe315"
           }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search"
+          },
+          "primaryKey": {
+            "ID": "CB66E6E9-3699-496D-A91C-F00AE27ADD98"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-09-22T18:53:11.648Z"
+          }
         }
       ]
     },
@@ -84,8 +97,8 @@
       "ID": "6FBC5823-3418-4788-A75F-5AC6E0654DB1"
     },
     "sync": {
-      "lastModified": "2026-07-07T15:18:39.654Z",
-      "checksum": "f7d6814dd6c543d7e894e49065916a76820ae44aba1e7d75d9da15605464dc9d"
+      "lastModified": "2026-09-21T02:45:37.233Z",
+      "checksum": "59a1834628067a45b9ce89cd00e982b5a75c900a560500bd2f595bc11b30b647"
     }
   },
   {

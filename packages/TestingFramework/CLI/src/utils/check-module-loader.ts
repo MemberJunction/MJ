@@ -11,8 +11,14 @@
  * ERR_MODULE_NOT_FOUND shipping-bug class (published code importing a package consumers
  * can't install), so the modules to load are declared in configuration:
  *
- *   // mj.config.cjs (repo root)
- *   testing: { checkModules: ['@memberjunction/integration-test-suite'] }
+ *   // an ADOPTER's mj.config.cjs — a bare name resolves from a normal install
+ *   testing: { checkModules: ['@their-org/their-check-suite'] }
+ *
+ * MJ's own repo root cannot use a bare name: nothing creates a workspace-root node_modules
+ * link for the private suite, and this loader COLLECTS failures rather than throwing, so a
+ * bare specifier would degrade every dispatch to "Unknown integration check bundle" with no
+ * error. It therefore passes an absolute `path.join(__dirname, ...)` path to the built
+ * dist/index.js instead.
  *
  * plus an ad-hoc `--checks-module` flag (parity with `--oracles-module`). Deployments
  * without the key simply load nothing extra — external adopters point it at their own
@@ -28,11 +34,11 @@ import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 
 export interface LoadedCheckModulesSummary {
     /** Specifiers that imported successfully. */
-    loaded: string[];
+    Loaded: string[];
     /** Specifier → error message for imports that failed (non-fatal, reported). */
-    failed: Array<{ specifier: string; error: string }>;
+    Failed: Array<{ specifier: string; error: string }>;
     /** Bundle names newly present on the registry after loading. */
-    newBundles: string[];
+    NewBundles: string[];
 }
 
 /**
@@ -44,9 +50,9 @@ export interface LoadedCheckModulesSummary {
  * produce an actionable report line, and the driver's own "Unknown integration check
  * bundle" oracle stays the backstop for anything that truly never registered.
  */
-export async function loadCheckModules(specifiers: string[], cwd: string = process.cwd()): Promise<LoadedCheckModulesSummary> {
+export async function LoadCheckModules(specifiers: string[], cwd: string = process.cwd()): Promise<LoadedCheckModulesSummary> {
     const before = new Set(IntegrationCheckRegistry.Instance.GetBundleNames());
-    const summary: LoadedCheckModulesSummary = { loaded: [], failed: [], newBundles: [] };
+    const summary: LoadedCheckModulesSummary = { Loaded: [], Failed: [], NewBundles: [] };
 
     for (const specifier of specifiers) {
         try {
@@ -62,12 +68,17 @@ export async function loadCheckModules(specifiers: string[], cwd: string = proce
                 // in-repo; node_modules in an adopter's project).
                 await import(specifier);
             }
-            summary.loaded.push(specifier);
+            summary.Loaded.push(specifier);
         } catch (err) {
-            summary.failed.push({ specifier, error: err instanceof Error ? err.message : String(err) });
+            summary.Failed.push({ specifier, error: err instanceof Error ? err.message : String(err) });
         }
     }
 
-    summary.newBundles = IntegrationCheckRegistry.Instance.GetBundleNames().filter(b => !before.has(b));
+    summary.NewBundles = IntegrationCheckRegistry.Instance.GetBundleNames().filter(b => !before.has(b));
     return summary;
+}
+
+/** @deprecated Use {@link LoadCheckModules}. */
+export async function loadCheckModules(specifiers: string[], cwd: string = process.cwd()): Promise<LoadedCheckModulesSummary> {
+    return LoadCheckModules(specifiers, cwd);
 }

@@ -26,6 +26,13 @@ export type RunQueryParams = {
      */
     SQL?: string
     /**
+     * For ad-hoc SQL ({@link SQL}) only: the longest the query may run, in seconds. When it is
+     * exceeded the database cancels the query and the run fails with a timeout error. Omitted
+     * means the connection's usual limit applies; a longer value does not lift that limit.
+     * Ignored for saved queries.
+     */
+    TimeoutSeconds?: number
+    /**
      * Optional, if provided, the query to be run will be selected to match the specified Category by hierarchical path
      * (e.g., "/MJ/AI/Agents/") or simple category name for backward compatibility
      */
@@ -42,7 +49,17 @@ export type RunQueryParams = {
     Parameters?: Record<string, any>
     /**
      * Optional maximum number of rows to return from the query.
-     * If not provided, all rows will be returned.
+     *
+     * There is no default. Without `MaxRows`, and with no `TOP` / `LIMIT` in the query's own SQL,
+     * the query returns every row it matches: bounding the result is the caller's and the query
+     * author's job.
+     *
+     * `MaxRows` limits the rows returned, not the work the database does. The query still reads
+     * everything its SQL asks for, and with paging the total row count is computed over the whole
+     * result. When the query carries its own cap (`TOP n`, `LIMIT n`, `OFFSET … FETCH`), the
+     * smaller of the two applies and `TotalRowCount` counts the capped result. A query that returns
+     * a document (`FOR JSON` / `FOR XML`) cannot be paged; asking for a page of one fails with an
+     * error that says so.
      */
     MaxRows?: number
     /**
@@ -109,6 +126,21 @@ export type RunQueryParams = {
      * @see RunQueryEnrichment
      */
     Enrichment?: RunQueryEnrichment
+
+    /**
+     * Optional read-source selector, mirroring {@link RunViewParams.DataSource} (plan §7 / Phase 2 §5).
+     *
+     * - `'Live'` (default, and the behavior when omitted): execute the query's SQL against the live source.
+     * - `'Materialized'`: if the query has a fresh, Active materialization of mode `RowFilterBroad`, serve
+     *   it from the materialized table with the row-filter parameters injected as bound read-time predicates
+     *   (never interpolated). This is an **opt-in optimization**: on ANY uncertainty — no materialization,
+     *   not fresh/Active, a parameter absent from the persisted read-filter spec, an unsupported operator —
+     *   the provider transparently falls back to the live query, so a materialized read can never return a
+     *   different row set than the live query would (correct by construction; serving live is always correct).
+     *
+     * Existing callers that omit this are unaffected (they get live results, exactly as before).
+     */
+    DataSource?: 'Live' | 'Materialized'
 }
 
 /**

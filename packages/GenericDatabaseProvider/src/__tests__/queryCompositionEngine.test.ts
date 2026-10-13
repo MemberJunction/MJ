@@ -66,6 +66,40 @@ describe('QueryCompositionEngine', () => {
         vi.restoreAllMocks();
     });
 
+
+    // ================================================================
+    // renameSQLIdentifier — $-expansion in the replacement (issue #3171)
+    // ================================================================
+    describe('renameSQLIdentifier', () => {
+        /**
+         * The search side is regex-escaped (`\\$&`) but the replacement side was
+         * passed as a STRING, so `$$`/`$&`/`` $` ``/`$'` in the NEW name were
+         * expanded instead of inserted. `SymbolTable.Register` returns the CTE name
+         * verbatim (or `name__N`) with no sanitisation, and both SQL Server bracketed
+         * identifiers and PG quoted identifiers may legally contain `$` — so this
+         * reaches executed SQL. Same defect the rest of #3171 fixed elsewhere.
+         */
+        const rename = (sql: string, oldName: string, newName: string): string =>
+            (engine as unknown as {
+                renameSQLIdentifier(s: string, o: string, n: string): string;
+            }).renameSQLIdentifier(sql, oldName, newName);
+
+        for (const newName of ['pool$$bridge__2', 'pool$&bridge__2', 'pool$`bridge__2', "pool$'bridge__2", 'pool$1bridge__2']) {
+            it(`substitutes a new name containing ${JSON.stringify(newName)} verbatim`, () => {
+                expect(rename('SELECT * FROM [poolbridge]', 'poolbridge', newName))
+                    .toBe(`SELECT * FROM ${newName}`);
+            });
+        }
+
+        it('still renames all three identifier forms', () => {
+            expect(rename('[a], "a", a', 'a', 'b')).toBe('b, b, b');
+        });
+
+        it('still leaves a longer identifier that merely contains the name alone', () => {
+            expect(rename('SELECT MyAcronymBridge', 'AcronymBridge', 'x')).toBe('SELECT MyAcronymBridge');
+        });
+    });
+
     // ================================================================
     // HasCompositionTokens
     // ================================================================
@@ -227,15 +261,10 @@ SELECT 1 AS Val`;
             expect(tokens).toHaveLength(0);
         });
 
-        it('should not strip tokens inside SQL string literals', () => {
-            // A query token inside a quoted string should still be preserved
-            // (though this is an unusual edge case)
+        it('does not treat a token inside a SQL string literal as a reference', () => {
+            // The literal is text the query returns, not SQL to compose.
             const sql = `SELECT '{{query:"Demos/Active Users"}}' AS TokenText`;
-            const tokens = engine.ParseCompositionTokens(sql);
-
-            // The token is inside a string literal, so the comment stripper
-            // preserves it and the regex still finds it
-            expect(tokens).toHaveLength(1);
+            expect(engine.ParseCompositionTokens(sql)).toHaveLength(0);
         });
 
         it('should parse a reference with no category path (name only)', () => {

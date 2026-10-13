@@ -7,16 +7,17 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
          ChatMessageContent,
          BaseEmbeddings} from "@memberjunction/ai";
 import { SummarizeResult } from "@memberjunction/ai";
+import { AIModelConfiguration } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
-import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, UUIDsEqual } from "@memberjunction/global";
+import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
          MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJArtifactTypeEntity,
-         MJEntityAIActionEntity, MJVectorDatabaseEntity, MJAIAgentPromptEntity,
+         MJEntityAIActionEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJAIAgentPromptEntity,
          MJAIAgentTypeEntity, MJAIVendorEntity, MJAIModelVendorEntity, MJAIModelTypeEntity,
          MJAIModelCostEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity,
          MJAIConfigurationEntity, MJAIConfigurationParamEntity, MJAIAgentStepEntity,
@@ -25,33 +26,33 @@ import { MJAIActionEntity, MJActionEntity,
          MJAICredentialBindingEntity, MJAIModalityEntity, MJAIAgentModalityEntity,
          MJAIModelModalityEntity, MJAIClientToolDefinitionEntity,
          MJAIAgentClientToolEntity, MJAIAgentCategoryEntity, IsInjectableNoteStatus,
-         MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity } from "@memberjunction/core-entities";
-import { AIEngineBase } from "@memberjunction/ai-engine-base";
-import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
+         MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity,
+         MJAIPersonaEntity, MJAIPersonaVendorEntity, MJAIModelPersonaEntity, MJAIAgentPersonaEntity } from "@memberjunction/core-entities";
+import { AIEngineBase, ResolvedModelPersona, ResolvedAgentPersona, EffectiveAgentPersona, EffectiveAgentPermissions } from "@memberjunction/ai-engine-base";
+import { ReadStoredVector, SimpleVectorService, VectorInputEntry } from "@memberjunction/ai-vectors-memory";
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
 import { ActionEngineBase } from "@memberjunction/actions-base";
 import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended } from "@memberjunction/ai-core-plus";
-import { EffectiveAgentPermissions } from "@memberjunction/ai-engine-base";
 
 
 /**
  * @deprecated AI Actions are deprecated. Use AIPromptRunner with the new AI Prompt system instead.
  */
 export class AIActionParams {
-    actionId: string
-    modelId: string
-    modelName?: string
-    systemPrompt?: string
-    userPrompt?: string
+    actionId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    modelId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    modelName?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    systemPrompt?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    userPrompt?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**
  * @deprecated Entity AI Actions are deprecated. Use AIPromptRunner with the new AI Prompt system instead.
  */
 export class EntityAIActionParams extends AIActionParams {
-    entityAIActionId: string
-    entityRecord: BaseEntity
+    entityAIActionId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    entityRecord: BaseEntity  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -146,7 +147,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     private _agentBaseCatalogCache: Map<string, object> = new Map();
     private _agentCatalogListenerSetUp: boolean = false;
     /** Entities whose change must coarse-invalidate the agent base-catalog cache (lowercased). */
-    private static readonly AgentCatalogInvalidatingEntities: ReadonlySet<string> = new Set([
+    private static readonly agentCatalogInvalidatingEntities: ReadonlySet<string> = new Set([
         'ai agents',
         'mj: ai agent actions',
         'mj: ai agent relationships',
@@ -188,7 +189,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                     const e = event.args as BaseEntityEvent;
                     if (e?.type === 'save' || e?.type === 'delete' || e?.type === 'remote-invalidate') {
                         const name = e.baseEntity?.EntityInfo?.Name?.toLowerCase().trim();
-                        if (name && AIEngine.AgentCatalogInvalidatingEntities.has(name)) {
+                        if (name && AIEngine.agentCatalogInvalidatingEntities.has(name)) {
                             this.ClearAgentBaseCatalogCache();
                         }
                     }
@@ -224,6 +225,14 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     // ========================================================================
     // Delegated Properties from AIEngineBase
     // All base metadata is accessed through AIEngineBase.Instance
+    //
+    // 🚨 THIS CLASS IS A FACADE, NOT A SUBCLASS — the delegation below is the
+    // ONLY thing that makes AIEngineBase's surface reachable as
+    // `AIEngine.Instance.X`. When a public member is added to AIEngineBase,
+    // add its one-line delegate here too, or every server-side caller gets
+    // `Property 'X' does not exist on type 'AIEngine'` at compile time.
+    // The rationale for composition-over-inheritance is on the AIEngineBase
+    // class docblock (packages/AI/BaseAIEngine/src/BaseAIEngine.ts).
     // ========================================================================
 
     /** Access to the underlying AIEngineBase instance */
@@ -252,6 +261,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     /** Double-gated self-activation set — see {@link AIEngineBase.GetAutoActivatableSkillsForAgent}. */
     public GetAutoActivatableSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] { return this.Base.GetAutoActivatableSkillsForAgent(agent, user); }
     public GetSkillActionIDs(skillID: string): string[] { return this.Base.GetSkillActionIDs(skillID); }
+    public GetSkillExposedActionIDs(skillID: string): string[] { return this.Base.GetSkillExposedActionIDs(skillID); }
     public GetSkillSubAgentIDs(skillID: string): string[] { return this.Base.GetSkillSubAgentIDs(skillID); }
     public get AgentConfigurations(): MJAIAgentConfigurationEntity[] { return this.Base.AgentConfigurations; }
     public get AgentNoteTypes(): MJAIAgentNoteTypeEntity[] { return this.Base.AgentNoteTypes; }
@@ -297,6 +307,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get ArtifactTypes(): MJArtifactTypeEntity[] { return this.Base.ArtifactTypes; }
     public get LanguageModels(): MJAIModelEntityExtended[] { return this.Base.LanguageModels; }
     public get VectorDatabases(): MJVectorDatabaseEntity[] { return this.Base.VectorDatabases; }
+    public get VectorIndexes(): MJVectorIndexEntity[] { return this.Base.VectorIndexes; }
+    public GetVectorIndexByID(id: string): MJVectorIndexEntity | undefined { return this.Base.GetVectorIndexByID(id); }
+    public GetProviderIndexName(vectorIndex: MJVectorIndexEntity): string { return this.Base.GetProviderIndexName(vectorIndex); }
     public get ModelCosts(): MJAIModelCostEntity[] { return this.Base.ModelCosts; }
     public get ModelPriceTypes(): MJAIModelPriceTypeEntity[] { return this.Base.ModelPriceTypes; }
     public get ModelPriceUnitTypes(): MJAIModelPriceUnitTypeEntity[] { return this.Base.ModelPriceUnitTypes; }
@@ -316,27 +329,59 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get AgentModalities(): MJAIAgentModalityEntity[] { return this.Base.AgentModalities; }
     public get ModelModalities(): MJAIModelModalityEntity[] { return this.Base.ModelModalities; }
 
+    /**
+     * Resolves the EFFECTIVE model-catalog configuration for a model, optionally scoped to one of
+     * its vendor rows — the `AIModelType < AIModel < AIModelVendor` `ModelConfiguration` cascade.
+     * See {@link AIEngineBase.GetEffectiveModelConfiguration} for the merge semantics.
+     */
+    public GetEffectiveModelConfiguration(modelID: string, vendorModelVendorID?: string): AIModelConfiguration | null {
+        return this.Base.GetEffectiveModelConfiguration(modelID, vendorModelVendorID);
+    }
+
     // Modality helper methods - delegated from AIEngineBase
     public GetModalityByName(name: string): MJAIModalityEntity | undefined {
         return this.Base.GetModalityByName(name);
     }
-    public GetAgentModalitiesByDirection(agentId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
-        return this.Base.GetAgentModalities(agentId, direction);
+    public GetAgentModalitiesByDirection(agentId: string, direction: 'Input' | 'Output', modelId?: string): MJAIModalityEntity[] {
+        return this.Base.GetAgentModalities(agentId, direction, modelId);
     }
     public GetModelModalitiesByDirection(modelId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
         return this.Base.GetModelModalities(modelId, direction);
     }
-    public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
-        return this.Base.AgentSupportsModality(agentId, modalityName, direction);
+    public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output', modelId?: string): boolean {
+        return this.Base.AgentSupportsModality(agentId, modalityName, direction, modelId);
     }
     public ModelSupportsModality(modelId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
         return this.Base.ModelSupportsModality(modelId, modalityName, direction);
     }
-    public AgentSupportsAttachments(agentId: string): boolean {
-        return this.Base.AgentSupportsAttachments(agentId);
+    public AgentSupportsAttachments(agentId: string, modelId?: string): boolean {
+        return this.Base.AgentSupportsAttachments(agentId, modelId);
     }
-    public GetAgentSupportedInputModalities(agentId: string): string[] {
-        return this.Base.GetAgentSupportedInputModalities(agentId);
+    public GetAgentSupportedInputModalities(agentId: string, modelId?: string): string[] {
+        return this.Base.GetAgentSupportedInputModalities(agentId, modelId);
+    }
+
+    // Persona getters - delegated from AIEngineBase
+    public get Personas(): MJAIPersonaEntity[] { return this.Base.Personas; }
+    public get PersonaVendors(): MJAIPersonaVendorEntity[] { return this.Base.PersonaVendors; }
+    public get ModelPersonas(): MJAIModelPersonaEntity[] { return this.Base.ModelPersonas; }
+    public get AgentPersonas(): MJAIAgentPersonaEntity[] { return this.Base.AgentPersonas; }
+
+    // Persona helper methods - delegated from AIEngineBase
+    public GetModelPersonas(modelId: string, modalityName = 'Audio', vendorId?: string): ResolvedModelPersona[] {
+        return this.Base.GetModelPersonas(modelId, modalityName, vendorId);
+    }
+    public GetModelPersonaExclusions(modelId: string, modalityName = 'Audio', vendorId?: string): string[] {
+        return this.Base.GetModelPersonaExclusions(modelId, modalityName, vendorId);
+    }
+    public GetAgentPersonas(agentId: string): ResolvedAgentPersona[] {
+        return this.Base.GetAgentPersonas(agentId);
+    }
+    public ResolveAgentPersona(
+        agentId: string,
+        options?: { modelId?: string; vendorId?: string; modalityName?: string }
+    ): EffectiveAgentPersona | null {
+        return this.Base.ResolveAgentPersona(agentId, options);
     }
 
     // Delegate AIEngineBase public methods
@@ -663,21 +708,19 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
     /**
      * Refresh the vector service with the latest persisted vectors that are stored in the Agent Notes
-     * table. This does **not** calculate embeddings, that is done by the AI Agent Note sub-class upon save 
-     * as needed. This method simply uses the stored vectors and parses them from their JSON serialized format into
-     * vectors that are used by the vector service.
+     * table. This does **not** calculate embeddings, that is done by the AI Agent Note sub-class upon save
+     * as needed. This method simply reads the stored vectors — the binary `EmbeddingVectorBinary` column when
+     * it holds a valid vector, else the JSON `EmbeddingVector` column (see `ReadStoredVector`) — and loads them
+     * into the vector service. Notes with neither are skipped.
      */
     public async RefreshNoteEmbeddings(contextUser?: UserInfo): Promise<void> {
         try {
-            const notes = this.AgentNotes.filter(n => IsInjectableNoteStatus(n.Status) && n.EmbeddingVector);
+            const notes = this.AgentNotes.filter(n => IsInjectableNoteStatus(n.Status));
+            const entries = this.toVectorEntries(notes, note => note.EmbeddingVectorBinary, note => note.EmbeddingVector,
+                note => this.packageNoteMetadata(note));
 
-            const entries = notes.map(note => ({
-                key: note.ID,
-                vector: JSON.parse(note.EmbeddingVector!),
-                metadata: this.packageNoteMetadata(note)
-            }));
-
-            this._noteVectorService = new SimpleVectorService();
+            // float32: embeddings are float32 at the source, and it halves the pool's memory
+            this._noteVectorService = new SimpleVectorService({ Precision: 'float32' });
             this._noteVectorService.LoadVectors(entries);
         } catch (error) {
             LogError(`AIEngine: Failed to load note embeddings: ${error instanceof Error ? error.message : String(error)}`);
@@ -706,7 +749,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      */
     public AddOrUpdateSingleNoteEmbedding(note: MJAIAgentNoteEntity) {
         if (this._noteVectorService) {
-            this._noteVectorService.AddOrUpdateVector(note.ID, JSON.parse(note.EmbeddingVector),  this.packageNoteMetadata(note));
+            const vector = ReadStoredVector(note.EmbeddingVectorBinary, note.EmbeddingVector);
+            if (vector) this._noteVectorService.AddOrUpdateVector(note.ID, vector, this.packageNoteMetadata(note));
+            else this._noteVectorService.RemoveVector(note.ID); // no usable vector — never keep a stale one
         }
         else {
             throw new Error('note vector service not initialized, error state')
@@ -748,7 +793,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      */
     public AddOrUpdateSingleExampleEmbedding(example: MJAIAgentExampleEntity) {
         if (this._exampleVectorService) {
-            this._exampleVectorService.AddOrUpdateVector(example.ID, JSON.parse(example.EmbeddingVector), this.packageExampleMetadata(example));
+            const vector = ReadStoredVector(example.EmbeddingVectorBinary, example.EmbeddingVector);
+            if (vector) this._exampleVectorService.AddOrUpdateVector(example.ID, vector, this.packageExampleMetadata(example));
+            else this._exampleVectorService.RemoveVector(example.ID); // no usable vector — never keep a stale one
         }
         else {
             throw new Error('example vector service not initialized, error state')
@@ -768,27 +815,46 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
     /**
      * Refresh the vector service with the latest persisted vectors that are stored in the Agent Examples
-     * table. This does **not** calculate embeddings, that is done by the AI Agent Example sub-class upon save 
-     * as needed. This method simply uses the stored vectors and parses them from their JSON serialized format into
-     * vectors that are used by the vector service.
+     * table. This does **not** calculate embeddings, that is done by the AI Agent Example sub-class upon save
+     * as needed. This method simply reads the stored vectors — binary `EmbeddingVectorBinary` first, JSON
+     * `EmbeddingVector` as the fallback (see `ReadStoredVector`) — and loads them into the vector service.
      */
     public async RefreshExampleEmbeddings(contextUser?: UserInfo): Promise<void> {
         try {
-            const examples = this.AgentExamples.filter(e => e.Status === 'Active' && e.EmbeddingVector);
+            const examples = this.AgentExamples.filter(e => e.Status === 'Active');
+            const entries = this.toVectorEntries(examples, example => example.EmbeddingVectorBinary, example => example.EmbeddingVector,
+                example => this.packageExampleMetadata(example));
 
-            const entries = examples.map(example => ({
-                key: example.ID,
-                vector: JSON.parse(example.EmbeddingVector!),
-                metadata: this.packageExampleMetadata(example)
-            }));
-
-            this._exampleVectorService = new SimpleVectorService();
+            this._exampleVectorService = new SimpleVectorService({ Precision: 'float32' });
             this._exampleVectorService.LoadVectors(entries);
         } catch (error) {
             LogError(`AIEngine: Failed to load example embeddings: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
  
+    /**
+     * Turns records that persist an embedding into vector-service entries, reading each record's vector with
+     * {@link ReadStoredVector} (binary column first, JSON column as the fallback). Records with no usable
+     * vector are skipped, so one corrupt or not-yet-embedded row never fails the whole load.
+     * @param records - The records to index
+     * @param binaryOf - Reads a record's binary (base64 float32) vector column
+     * @param jsonOf - Reads a record's JSON vector column
+     * @param metadataOf - Builds the metadata stored alongside the vector
+     */
+    protected toVectorEntries<TRecord extends { ID: string }, TMetadata>(
+        records: TRecord[],
+        binaryOf: (record: TRecord) => string | null,
+        jsonOf: (record: TRecord) => string | null,
+        metadataOf: (record: TRecord) => TMetadata,
+    ): Array<VectorInputEntry<TMetadata>> {
+        const entries: Array<VectorInputEntry<TMetadata>> = [];
+        for (const record of records) {
+            const vector = ReadStoredVector(binaryOf(record), jsonOf(record));
+            if (vector) entries.push({ key: record.ID, vector, metadata: metadataOf(record) });
+        }
+        return entries;
+    }
+
     // ========================================================================
     // LLM Utility Methods
     // ========================================================================
@@ -997,6 +1063,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      *                            an equivalent inference is already in flight)
      *
      * Empty/whitespace `text` short-circuits to `null` without invoking the embedding provider.
+     *
+     * @param apiKey optional API key override; when omitted, the key for `model.DriverClass` is
+     *               resolved with `GetAIAPIKey` (local drivers ignore it)
      */
     public async EmbedText(
         model: MJAIModelEntityExtended,
@@ -1027,10 +1096,11 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                 model: model.APIName
             };
 
+            // BaseEmbeddings used directly: AIEngine sits below @memberjunction/ai-prompts in the dependency hierarchy.
             const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
                 BaseEmbeddings,
                 model.DriverClass,
-                apiKey
+                apiKey || GetAIAPIKey(model.DriverClass)
             );
 
             if (!embedding) {
@@ -1076,7 +1146,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      *
      * @param model   the embedding model to use (provides DriverClass + APIName)
      * @param content text, or interleaved text+media blocks, to embed into one fused vector
-     * @param apiKey  optional API key override
+     * @param apiKey  optional API key override; when omitted, the key for `model.DriverClass` is
+     *                resolved with `GetAIAPIKey`
      * @returns the embedding result, or null if the provider instance couldn't be created
      */
     public async EmbedContent(
@@ -1089,10 +1160,11 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             return this.EmbedText(model, content, apiKey);
         }
 
+        // BaseEmbeddings used directly: AIEngine sits below @memberjunction/ai-prompts in the dependency hierarchy.
         const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
             BaseEmbeddings,
             model.DriverClass,
-            apiKey
+            apiKey || GetAIAPIKey(model.DriverClass)
         );
 
         if (!embedding) {
@@ -1139,7 +1211,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
         const composedFilter = this.composeNoteFilters(agentId, userId, companyId, additionalFilter);
 
-        const results = this._noteVectorService.FindNearest(
+        // Async: on a server the scan runs off the event loop (worker pool / native backend)
+        const results = await this._noteVectorService.FindNearestAsync(
             queryEmbedding.result.vector,
             topK,
             minSimilarity,
@@ -1211,7 +1284,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
         // Sort by creation date (most recent first) and take topK
         const sorted = notes
-            .sort((a, b) => (b.__mj_CreatedAt?.getTime() || 0) - (a.__mj_CreatedAt?.getTime() || 0))
+            .sort((a, b) => ToEpochMs(b.__mj_CreatedAt) - ToEpochMs(a.__mj_CreatedAt))
             .slice(0, topK);
 
         // Return with similarity of 0 to indicate no semantic ranking was applied
@@ -1252,7 +1325,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
         const composedFilter = this.composeExampleFilters(agentId, userId, companyId, additionalFilter);
 
-        const results = this._exampleVectorService.FindNearest(
+        const results = await this._exampleVectorService.FindNearestAsync(
             queryEmbedding.result.vector,
             topK,
             minSimilarity,
@@ -1321,7 +1394,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                 const scoreA = a.SuccessScore ?? 0;
                 const scoreB = b.SuccessScore ?? 0;
                 if (scoreB !== scoreA) return scoreB - scoreA;
-                return (b.__mj_CreatedAt?.getTime() || 0) - (a.__mj_CreatedAt?.getTime() || 0);
+                return ToEpochMs(b.__mj_CreatedAt) - ToEpochMs(a.__mj_CreatedAt);
             })
             .slice(0, topK);
 
@@ -1435,7 +1508,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             markupTokens.forEach(token => {
                 const fieldName = token.replace('{','').replace('}','');
                 const fieldValue = entityRecord.Get(fieldName);
-                temp = temp.replace(token, fieldValue ? fieldValue : '');
+                // Function replacement — field data may contain `$`. See issue #3171.
+                const replacement = fieldValue ? String(fieldValue) : '';
+                temp = temp.replace(token, () => replacement);
             });
         }
         return temp;

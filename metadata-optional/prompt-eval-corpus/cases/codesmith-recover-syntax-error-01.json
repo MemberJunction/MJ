@@ -1,0 +1,39 @@
+{
+  "id": "codesmith-recover-syntax-error-01",
+  "agent": "Codesmith Agent",
+  "tags": [
+    "error-recovery"
+  ],
+  "description": "The prior code threw. The agent must retry with corrected code rather than reporting failure on the first stumble — loop resilience.",
+  "input": {
+    "payload": {
+      "iterations": 1,
+      "errors": [
+        "SyntaxError: Unexpected token '}'"
+      ]
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Group the records by category and count them."
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Execute Code FAILED: SyntaxError: Unexpected token '}' at line 3."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Execute Code",
+        "params": {
+          "code": {
+            "matcher": "nonEmpty"
+          }
+        }
+      }
+    ]
+  }
+}

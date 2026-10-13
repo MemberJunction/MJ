@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT91 - FLS Lifecycle and System-User Guards",
+    "Description": "The Field-Level Security LIFECYCLE and the system-user configuration guards, run live (mutation tier, RUN_MUTATION_TESTS=1) — ported from the throwaway verification scripts that first proved them so the evidence stops resting on scratch files. The fls-lifecycle bundle mutates aggressively (direct-SQL resets, forced mid-write failures, system-user role juggling); its lifecycle captures the system user's and the seeded multi user's role sets up front and restores them in teardown even after a mid-check failure. Nine ordered checks: LC1 the EnableFieldLevelSecurity flip is ATOMIC — a permission row planted by direct SQL (invisible to the metadata-driven delta) forces a unique-key collision mid-snapshot, the save reports failure, the flag rolls back to 0 and no snapshot rows survive; LC2 reconciliation is idempotent — a non-dirty re-save writes nothing; LC3 disabling keeps every row and stops enforcement, and re-enabling adds nothing while a pre-disable tightening SURVIVES the cycle; LC4 the No-Access lockout vector — setting every system-user role's rule on a field to No Access one at a time writes no Deny anywhere yet would end in a lockout, so the guard (which judges the projected aggregate read from the DATABASE, because metadata lags the writes) must refuse at least the last edit and the system user keeps reading the field; LC5 the delete vector — removing the system user's Allow rows one at a time, the last delete is refused; LC6 a Deny aimed at a system-user role is refused outright; LC7 the role-REMOVAL half — taking a role off the system user is permitted while its Allows are duplicated, REFUSED when it carries the last Allow, and permitted for a role contributing nothing; LC8 ordinary users' role removal is untouched by the guard; LC9 the startup sweep reports zero violations on a clean database, catches a lockout written by DIRECT SQL that no entity-layer guard ever saw, and the SystemUserFieldAccessCheck singleton reports the same count. Skips-as-pass loudly when the seeded FLS principals are absent or the entity is already FLS-enabled by an administrator.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The FLS flag flip is atomic and idempotent, disable/re-enable preserves configuration, all four system-user lockout vectors are refused (judged by the projected aggregate from the database), ordinary roles/users stay unaffected, and the startup sweep catches direct-SQL lockouts."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "fls-lifecycle"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "FCF9C089-5612-4C87-AA3F-F6E4F882FB37"
+  },
+  "sync": {
+    "lastModified": "2026-09-09T11:23:36.447Z",
+    "checksum": "913624a467b3ff6d982d4b219855a3f3faa5af9f138f883498749ff4e37f93ef"
+  }
+}

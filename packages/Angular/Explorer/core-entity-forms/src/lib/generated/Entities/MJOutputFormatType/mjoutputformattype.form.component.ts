@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { MJOutputFormatTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Output Format Types') // Tell MemberJunction about this class
 @Component({
@@ -17,8 +16,7 @@ export class MJOutputFormatTypeFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'formatDetails', sectionName: 'Format Details', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false }
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
 }

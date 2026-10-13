@@ -47,7 +47,7 @@ export class SearchEnricher {
         if (results.length === 0) return;
 
         const md = this.Provider;
-        this.addEntityIcons(results, md);
+        this.addEntityMetadata(results, md);
         await this.resolveRecordNames(results, md, contextUser);
     }
 
@@ -86,13 +86,21 @@ export class SearchEnricher {
     }
 
     /**
-     * Remove Content Item results that originated from Entity-type content sources.
-     * These are redundant because the underlying entity records are already
-     * vectorized and searchable directly.
+     * Handles Content Item results by promoting entity-sourced content items to their
+     * underlying entity records (Option B), or excluding redundant entity-sourced items,
+     * while preserving genuine external unstructured content items (PDFs, URLs, Markdown files).
+     *
+     * When a content item originated from an Entity content source (or links to an
+     * Entity Record Document):
+     * 1. If its underlying entity record can be resolved, it is promoted to that target
+     *    entity (EntityName, RecordID), carrying its score and snippet forward.
+     * 2. If it cannot be resolved, it is excluded to avoid surfacing detached internal items.
+     *
+     * Genuine external content items (ContentSourceType !== 'Entity') remain as 'MJ: Content Items'.
      *
      * @param results - All search results
      * @param contextUser - The user performing the search
-     * @returns Filtered results without redundant Content Item entries
+     * @returns Processed results with entity-sourced content items promoted or excluded
      */
     public async ExcludeEntitySourcedContentItems(
         results: SearchResultItem[],
@@ -101,31 +109,143 @@ export class SearchEnricher {
         const contentItemResults = results.filter(r => r.EntityName === 'MJ: Content Items');
         if (contentItemResults.length === 0) return results;
 
-        await KnowledgeHubMetadataEngine.Instance.Config(false, contextUser);
+        try {
+            await KnowledgeHubMetadataEngine.Instance.Config(false, contextUser);
+        } catch {
+            // Non-fatal if KnowledgeHubMetadataEngine fails to load
+        }
         const engine = KnowledgeHubMetadataEngine.Instance;
 
-        const entitySourceType = engine.ContentSourceTypes.find(st => st.Name === 'Entity');
-        if (!entitySourceType) return results;
-
+        const entitySourceType = engine.ContentSourceTypes?.find(st => st.Name === 'Entity');
         const entitySourceIDs = new Set(
-            engine.ContentSources
-                .filter(cs => UUIDsEqual(cs.ContentSourceTypeID, entitySourceType.ID))
+            (engine.ContentSources ?? [])
+                .filter(cs => entitySourceType && UUIDsEqual(cs.ContentSourceTypeID, entitySourceType.ID))
                 .map(cs => cs.ID.toLowerCase())
         );
-        if (entitySourceIDs.size === 0) return results;
 
-        return results.filter(r => {
-            if (r.EntityName !== 'MJ: Content Items') return true;
-            if (!r.RawMetadata) return true;
-            try {
-                const meta = JSON.parse(r.RawMetadata) as Record<string, string>;
-                const sourceID = meta.ContentSourceID;
-                if (!sourceID) return true;
-                return !entitySourceIDs.has(sourceID.toLowerCase());
-            } catch {
-                return true;
+        // Map of ContentItemID -> { EntityName: string; RecordID: string }
+        const resolvedEntityRecords = new Map<string, { EntityName: string; RecordID: string }>();
+        const unpromotableItemIDs = new Set<string>();
+
+        // Step 1: Check if RawMetadata on vector results already specifies Entity and RecordID,
+        // or identifies an entity source
+        const itemsNeedingDbLookup: string[] = [];
+
+        for (const r of contentItemResults) {
+            let handled = false;
+            if (r.RawMetadata) {
+                try {
+                    const meta = JSON.parse(r.RawMetadata) as Record<string, string>;
+                    if (meta.Entity && meta.RecordID) {
+                        resolvedEntityRecords.set(r.RecordID.toLowerCase(), {
+                            EntityName: meta.Entity,
+                            RecordID: meta.RecordID
+                        });
+                        handled = true;
+                    } else if (meta.ContentSourceID && entitySourceIDs.has(meta.ContentSourceID.toLowerCase())) {
+                        itemsNeedingDbLookup.push(r.RecordID);
+                        handled = true;
+                    }
+                } catch {
+                    // Ignore parse errors
+                }
             }
-        });
+            if (!handled && r.RecordID) {
+                itemsNeedingDbLookup.push(r.RecordID);
+            }
+        }
+
+        // Step 2: For items needing DB lookup, check MJ: Content Items and MJ: Entity Record Documents
+        if (itemsNeedingDbLookup.length > 0) {
+            try {
+                const uniqueIDs = Array.from(new Set(itemsNeedingDbLookup)).map(id => `'${id.replace(/'/g, "''")}'`);
+                const rv = new RunView();
+                const contentItemsRes = await rv.RunView<{ ID: string; ContentSourceID: string; EntityRecordDocumentID: string | null }>({
+                    EntityName: 'MJ: Content Items',
+                    Fields: ['ID', 'ContentSourceID', 'EntityRecordDocumentID'],
+                    ExtraFilter: `ID IN (${uniqueIDs.join(',')})`,
+                    ResultType: 'simple'
+                }, contextUser);
+
+                if (contentItemsRes.Success && contentItemsRes.Results) {
+                    const erdLookups: Array<{ itemID: string; erdID: string }> = [];
+                    for (const ci of contentItemsRes.Results) {
+                        const isEntitySource = ci.ContentSourceID && entitySourceIDs.has(ci.ContentSourceID.toLowerCase());
+                        if (ci.EntityRecordDocumentID) {
+                            erdLookups.push({ itemID: ci.ID.toLowerCase(), erdID: ci.EntityRecordDocumentID });
+                        } else if (isEntitySource) {
+                            unpromotableItemIDs.add(ci.ID.toLowerCase());
+                        }
+                    }
+
+                    if (erdLookups.length > 0) {
+                        const erdIDList = Array.from(new Set(erdLookups.map(l => `'${l.erdID.replace(/'/g, "''")}'`)));
+                        const erdRes = await rv.RunView<{ ID: string; Entity: string; RecordID: string }>({
+                            EntityName: 'MJ: Entity Record Documents',
+                            Fields: ['ID', 'Entity', 'RecordID'],
+                            ExtraFilter: `ID IN (${erdIDList.join(',')})`,
+                            ResultType: 'simple'
+                        }, contextUser);
+
+                        if (erdRes.Success && erdRes.Results) {
+                            const erdMap = new Map<string, { Entity: string; RecordID: string }>();
+                            for (const erd of erdRes.Results) {
+                                if (erd.Entity && erd.RecordID) {
+                                    erdMap.set(erd.ID.toLowerCase(), { Entity: erd.Entity, RecordID: erd.RecordID });
+                                }
+                            }
+
+                            for (const lookup of erdLookups) {
+                                const target = erdMap.get(lookup.erdID.toLowerCase());
+                                if (target) {
+                                    resolvedEntityRecords.set(lookup.itemID, {
+                                        EntityName: target.Entity,
+                                        RecordID: target.RecordID
+                                    });
+                                } else {
+                                    unpromotableItemIDs.add(lookup.itemID);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                LogError(`SearchEnricher: Failed to resolve entity-sourced content items: ${error}`);
+            }
+        }
+
+        // Step 3: Promote resolved entity records, drop unpromotable entity-sourced items,
+        // and preserve external unstructured content items
+        const output: SearchResultItem[] = [];
+        for (const r of results) {
+            if (r.EntityName !== 'MJ: Content Items') {
+                output.push(r);
+                continue;
+            }
+
+            const recIdLower = r.RecordID.toLowerCase();
+            const promotion = resolvedEntityRecords.get(recIdLower);
+            if (promotion) {
+                const entityInfo = this.Provider.EntityByName(promotion.EntityName);
+                const entityDisplayName = entityInfo?.DisplayName || promotion.EntityName;
+                output.push({
+                    ...r,
+                    ID: promotion.RecordID,
+                    EntityName: promotion.EntityName,
+                    EntityDisplayName: entityDisplayName,
+                    RecordID: promotion.RecordID,
+                    ResultType: 'entity-record',
+                    Title: `${entityDisplayName} Record`,
+                    EntityIcon: entityInfo?.Icon ?? undefined
+                });
+            } else if (unpromotableItemIDs.has(recIdLower)) {
+                continue;
+            } else {
+                output.push(r);
+            }
+        }
+
+        return output;
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -133,15 +253,20 @@ export class SearchEnricher {
     // ────────────────────────────────────────────────────────────────
 
     /**
-     * Add entity icons for results that don't already have them from vector metadata.
+     * Add entity icons and display names for results that don't already have them.
      */
-    private addEntityIcons(results: SearchResultItem[], md: IMetadataProvider): void {
+    private addEntityMetadata(results: SearchResultItem[], md: IMetadataProvider): void {
         for (const result of results) {
-            if (!result.EntityIcon) {
-                const entity = md.EntityByName(result.EntityName);
-                if (entity?.Icon) {
+            const entity = md.EntityByName(result.EntityName);
+            if (entity) {
+                if (!result.EntityIcon && entity.Icon) {
                     result.EntityIcon = entity.Icon;
                 }
+                if (!result.EntityDisplayName) {
+                    result.EntityDisplayName = entity.DisplayName || entity.Name;
+                }
+            } else if (!result.EntityDisplayName) {
+                result.EntityDisplayName = result.EntityName;
             }
         }
     }
@@ -149,7 +274,7 @@ export class SearchEnricher {
     /**
      * Resolve record names for results that don't already have them.
      * Vector results from enriched metadata should already have names;
-     * this handles FTS and entity results.
+     * this handles FTS, tag, and entity results.
      */
     private async resolveRecordNames(
         results: SearchResultItem[],
@@ -157,7 +282,11 @@ export class SearchEnricher {
         contextUser: UserInfo
     ): Promise<void> {
         const needsName = results.filter(r =>
-            !r.RecordName || r.RecordName === `${r.EntityName} Record`
+            !r.RecordName ||
+            r.RecordName === `${r.EntityName} Record` ||
+            (r.EntityDisplayName && r.RecordName === `${r.EntityDisplayName} Record`) ||
+            r.Title === `${r.EntityName} Record` ||
+            (r.EntityDisplayName && r.Title === `${r.EntityDisplayName} Record`)
         );
         if (needsName.length === 0) return;
 
@@ -171,10 +300,16 @@ export class SearchEnricher {
             );
 
             for (let i = 0; i < names.length; i++) {
+                const resultIndex = indexedInputs[i].ResultIndex;
                 if (names[i].RecordName) {
-                    const resultIndex = indexedInputs[i].ResultIndex;
                     results[resultIndex].RecordName = names[i].RecordName;
                     results[resultIndex].Title = names[i].RecordName;
+                } else {
+                    // Fallback if record name could not be resolved from DB: ensure Title doesn't use the raw schema-qualified name
+                    const entityDisplayName = results[resultIndex].EntityDisplayName || results[resultIndex].EntityName;
+                    if (results[resultIndex].Title === `${results[resultIndex].EntityName} Record`) {
+                        results[resultIndex].Title = `${entityDisplayName} Record`;
+                    }
                 }
             }
         } catch (error) {

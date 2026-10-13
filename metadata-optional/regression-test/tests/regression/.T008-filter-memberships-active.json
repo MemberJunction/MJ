@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T008 - Data Explorer Filter Memberships by Status",
+    "Description": "Verifies that a column/value filter on the Memberships grid can restrict results to Status = Active.",
+    "InputDefinition": "{\n  \"goal\": \"Open the application switcher dropdown next to the logo (NOT the Ctrl+K global search) and go to Data Explorer, then its Data section. In the left-hand entity tree open the 'Memberships' entity. Wait patiently if the grid is slow to load (10-30s in this resource-constrained environment). Then apply a filter on the Status column (or via the grid's search/filter controls) so that only records with Status = 'Active' are shown. Success is reached when the grid is visibly filtered to active memberships.\",\n  \"startUrl\": \"http://localhost:4200/app/data-explorer\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 40,\n  \"judgeValidationCriteria\": [\n    \"The Memberships entity grid is open in the Data Explorer Data section\",\n    \"A filter restricting Status to 'Active' has been applied to the grid\",\n    \"The visible rows show Status = 'Active' (no other status values appear in the filtered results)\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,filter",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "28ADC23A-8A75-4E40-8F09-4E041B1CE362"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:52.988Z",
+    "checksum": "1d9c71b953703d952a4f97188550bf110757e145c1022572f5472df10f7ae00a"
+  }
+}

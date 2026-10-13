@@ -12,6 +12,27 @@ export abstract class BaseInfo {
     ID: any = null
 
     /**
+     * Whether `key` resolves to a settable accessor somewhere on the prototype chain.
+     *
+     * A `@deprecated` alias for a renamed field is a get/set pair on the prototype, not an own
+     * property, so `hasOwnProperty` does not see it. Without this the incoming value is silently
+     * dropped: the DB column `spCreate` stops reaching `SpCreate`, and the entity loads with its
+     * custom routine name missing rather than failing loudly.
+     *
+     * Only accessors that can be WRITTEN qualify. A read-only getter has nothing to assign to, and
+     * requiring a setter keeps inherited methods out of the copy.
+     */
+    private settableAccessor(key: string): boolean {
+        let target = Object.getPrototypeOf(this);
+        while (target && target !== Object.prototype) {
+            const descriptor = Object.getOwnPropertyDescriptor(target, key);
+            if (descriptor) return typeof descriptor.set === 'function';
+            target = Object.getPrototypeOf(target);
+        }
+        return false;
+    }
+
+    /**
      * Copies initialization data from a plain object to the class instance.
      * Only copies properties that already exist on the class to prevent creating new fields.
      * Special handling for DefaultValue fields to extract actual values from SQL Server syntax.
@@ -24,7 +45,7 @@ export abstract class BaseInfo {
             for (let j = 0; j < keys.length; j++) {
                 const key = keys[j];
                 // make sure it is one of our keys, we don't want to create NEW fields
-                if (Object.prototype.hasOwnProperty.call(this, key)) {
+                if (Object.prototype.hasOwnProperty.call(this, key) || this.settableAccessor(key)) {
                     // fast path for exact match first, fallback to length check + lowercasing
                     if ((key === 'DefaultValue' || (key.length === 12 && key.toLowerCase() === 'defaultvalue')) && initData[key]) {
                         // strip parens from default value from the DB, if they exist, for example defaults might be ((1)) or (getdate())   
@@ -35,6 +56,16 @@ export abstract class BaseInfo {
                     }
                     else {
                         (this as Record<string, unknown>)[key] = initData[key];
+                    }
+                }
+                else {
+                    const lowerUnderscoreKey = `_${key.charAt(0).toLowerCase()}${key.slice(1)}`;
+                    const underscoreKey = `_${key}`;
+                    if (Object.prototype.hasOwnProperty.call(this, lowerUnderscoreKey)) {
+                        (this as Record<string, unknown>)[lowerUnderscoreKey] = initData[key];
+                    }
+                    else if (Object.prototype.hasOwnProperty.call(this, underscoreKey)) {
+                        (this as Record<string, unknown>)[underscoreKey] = initData[key];
                     }
                 }
             }
@@ -60,6 +91,12 @@ export abstract class BaseInfo {
      * without a backing field (display-name formatters, derived flags) are intentionally skipped —
      * they can throw when source fields are null and don't belong on the wire anyway.
      *
+     * A `_`-backed getter that throws is omitted from the output rather than aborting the whole
+     * serialization. That omission is safe ONLY because such getters are recomputable: the backing
+     * field is a lazy cache over other serialized state (e.g. QueryInfo.CategoryPath over CategoryID),
+     * so the value is rebuilt on the next access after a warm boot. Do not add a `_`-backed getter
+     * whose value cannot be recomputed from the serialized fields — a throw would silently drop it.
+     *
      * Nested BaseInfo instances and arrays of them unwrap automatically via JSON.stringify's
      * native toJSON() protocol.
      *
@@ -75,13 +112,27 @@ export abstract class BaseInfo {
                 continue;
             }
             // Private backing field — expose via its public getter if one exists with the same name minus the underscore
-            const publicKey = key.slice(1);
-            if (!publicKey) continue;
+            const lowerKey = key.slice(1);
+            const pascalKey = lowerKey ? lowerKey.charAt(0).toUpperCase() + lowerKey.slice(1) : '';
+            if (!lowerKey) continue;
             let proto = Object.getPrototypeOf(this);
             while (proto && proto !== Object.prototype) {
-                const desc = Object.getOwnPropertyDescriptor(proto, publicKey);
+                const targetKey = Object.prototype.hasOwnProperty.call(proto, pascalKey) ? pascalKey : lowerKey;
+                const desc = Object.getOwnPropertyDescriptor(proto, targetKey);
                 if (desc && typeof desc.get === 'function') {
-                    result[publicKey] = self[publicKey];
+                    // A getter reached through a backing field must not abort the whole
+                    // serialization. The contract above already says computed getters can throw
+                    // when their sources are not ready; a `_`-backed getter can too — e.g.
+                    // QueryInfo.CategoryPath walks Metadata.Provider.QueryCategories, which does
+                    // not exist yet during the initial metadata load. Omitting one key is strictly
+                    // better than losing the entire snapshot: the value is recomputed lazily on
+                    // the next access, and the local metadata cache still gets written.
+                    try {
+                        result[targetKey] = self[targetKey];
+                    }
+                    catch {
+                        // intentionally omitted from the serialized shape
+                    }
                     break;
                 }
                 proto = Object.getPrototypeOf(proto);

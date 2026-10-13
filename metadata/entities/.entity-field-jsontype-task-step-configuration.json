@@ -1,0 +1,45 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on Task.Configuration (MJ: Tasks entity) so CodeGen emits a typed",
+      "ConfigurationObject accessor returning MJTaskEntity_ITaskStepConfiguration.",
+      "",
+      "A Task row IS a workflow step once a workflow is compiled onto the dispatcher. StepType and the",
+      "Agent/Action/Prompt/User keys are real columns because SQL routes on them; everything else about",
+      "a step — the loop definition, the payload mappings, the execution policy — lives in this bag, so",
+      "a new step kind or policy knob is a JSONType edit rather than another migration.",
+      "",
+      "ORDERING: the EntityField row for Task.Configuration is created by CodeGen's database pass over",
+      "the new column, so this @lookup cannot resolve until that has run. The sequence is",
+      "mj migrate -> mj codegen --skipfiles -> mj sync push -> mj codegen --skipdb.",
+      "Pushing before the first CodeGen fails with 'No record found in MJ: Entity Fields'."
+    ],
+    "fields": {
+      "Name": "MJ: Tasks"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "ITaskStepConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITaskStepConfiguration.ts"
+          },
+          "_comments": [
+            "Configuration field — everything about a workflow step that has no column of its own"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tasks&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-08-11T22:51:22.798Z",
+            "checksum": "ee1929103504183100308d36ee11e69a902822f6a17f06556c69947dc1bdc493"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tasks"
+    }
+  }
+]

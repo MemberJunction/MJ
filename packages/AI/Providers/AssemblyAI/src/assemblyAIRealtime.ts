@@ -3,6 +3,7 @@
 // MemberJunction AI core contract
 import {
     BaseRealtimeModel,
+    RealtimeDroppedInputReporter,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
@@ -12,8 +13,26 @@ import {
     type RealtimeUsage,
     type RealtimeSessionError,
     type JSONObject,
+    type JSONValue,
+    type RealtimeVoiceOption,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
+
+/**
+ * A config-bag entry as a usable string, or `undefined` when it is absent, blank, or not a string.
+ *
+ * Blank-is-absent is the rule every neutral config key in the realtime driver family follows: an
+ * empty opening utterance or voice id is not a value to send, it is the setting being unset — and
+ * providers reject or silently ignore the empty form anyway.
+ */
+function resolveTrimmedString(value: JSONValue | undefined): string | undefined {
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+}
 
 /** The single Voice Agent websocket endpoint (auth rides as a `?token=` query parameter). */
 export const ASSEMBLYAI_AGENT_WS_URL = 'wss://agents.assemblyai.com/v1/ws';
@@ -157,6 +176,15 @@ type FetchLike = (
 @RegisterClass(BaseRealtimeModel, 'AssemblyAIRealtime')
 export class AssemblyAIRealtime extends BaseRealtimeModel {
     /**
+     * The voices the AssemblyAI Voice Agent API can speak with — used to populate the voice picker.
+     */
+    public override get SupportedVoices(): RealtimeVoiceOption[] {
+        return [
+            { ID: 'ivy', Name: 'Ivy' },
+            { ID: 'james', Name: 'James' },
+        ];
+    }
+    /**
      * Opens a server-bridged session: connects the agent websocket authenticated with the
      * API key, sends the full session config as the FIRST frame (`session.update` — prompt,
      * tools, voice, turn detection), and resolves only once the server's `session.ready`
@@ -217,8 +245,9 @@ export class AssemblyAIRealtime extends BaseRealtimeModel {
      *   conversation context rides the prompt.
      * - `tools`: the Core tool set mapped to the provider's `{ type: 'function', … }` schema.
      * - Recognized `params.Config` keys pass through to their wire slots: `voice` →
-     *   `output.voice`, `greeting` (spoken on connect; omitted = no auto-greeting),
-     *   `turn_detection` → `input.turn_detection`, `keyterms` → `input.keyterms`.
+     *   `output.voice`, `firstMessage` (or the legacy `greeting`) → `greeting` (spoken on connect;
+     *   omitted = no auto-greeting), `turn_detection` → `input.turn_detection`, `keyterms` →
+     *   `input.keyterms`.
      */
     public static BuildSessionObject(params: RealtimeSessionParams): JSONObject {
         const session: JSONObject = {
@@ -229,8 +258,9 @@ export class AssemblyAIRealtime extends BaseRealtimeModel {
             session['tools'] = tools.map((tool) => AssemblyAIRealtime.MapToolToFunction(tool));
         }
         const config = params.Config ?? {};
-        if (typeof config['greeting'] === 'string') {
-            session['greeting'] = config['greeting'];
+        const firstMessage = AssemblyAIRealtime.ResolveFirstMessage(config);
+        if (firstMessage) {
+            session['greeting'] = firstMessage;
         }
         if (typeof config['voice'] === 'string') {
             session['output'] = { voice: config['voice'] };
@@ -246,6 +276,24 @@ export class AssemblyAIRealtime extends BaseRealtimeModel {
             session['input'] = input;
         }
         return session;
+    }
+
+    /**
+     * Reads the session's opening utterance out of the config bag — this driver's `greeting` wire
+     * slot, fed from the driver-NEUTRAL `firstMessage` key (issue #3557) that a persona authors
+     * without knowing which vendor will run. `greeting` predates the neutral name and is still
+     * accepted so existing configs keep working.
+     *
+     * Both keys go through the SAME trim-and-drop-blank rule the ElevenLabs driver applies, so one
+     * authored value means the same thing on either provider. That rule is also why the neutral key
+     * only wins when it carries something: a blank `firstMessage` must not suppress a valid legacy
+     * `greeting` — it is an absent opening utterance, not an empty one.
+     *
+     * @param config The session's open config bag.
+     * @returns The trimmed opening utterance, or `undefined` when neither key carries one.
+     */
+    public static ResolveFirstMessage(config: JSONObject): string | undefined {
+        return resolveTrimmedString(config['firstMessage']) ?? resolveTrimmedString(config['greeting']);
     }
 
     /** Folds optional prior context into the system prompt (no history channel exists). */
@@ -416,6 +464,9 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
      */
     private currentToolsFingerprint = AssemblyAIRealtime.ToolSetFingerprint([]);
 
+    /** Reports the frames {@link SendInput} drops, once per kind and type. */
+    private readonly droppedInput = new RealtimeDroppedInputReporter('AssemblyAIRealtime', 'this session sends audio only');
+
     constructor(sessionObject: JSONObject) {
         this.sessionObject = sessionObject;
         this.basePrompt = typeof sessionObject['system_prompt'] === 'string' ? sessionObject['system_prompt'] : '';
@@ -453,9 +504,19 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
         return this.readyPromise;
     }
 
-    /** @inheritdoc — streams one PCM16 (24 kHz mono) frame as a base64 `input.audio` chunk. */
-    public SendInput(chunk: ArrayBuffer): void {
-        this.sendFrame({ type: 'input.audio', audio: Buffer.from(new Uint8Array(chunk)).toString('base64') });
+    /**
+     * @inheritdoc
+     *
+     * Streams one PCM16 (24 kHz mono) audio frame as a base64 `input.audio` chunk. The session sends audio only, so a
+     * frame of another kind (a camera or screen frame) is dropped, never sent as audio, and reported once per kind and
+     * type.
+     */
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind !== 'audio') {
+            this.droppedInput.Report(frame);
+            return;
+        }
+        this.sendFrame({ type: 'input.audio', audio: Buffer.from(new Uint8Array(frame.Data)).toString('base64') });
     }
 
     /**
@@ -663,7 +724,7 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
             return;
         }
         this.responseActive = true;
-        this.outputHandler?.(AssemblyAIRealtimeSession.Base64ToArrayBuffer(audioBase64));
+        this.outputHandler?.(AssemblyAIRealtimeSession.base64ToArrayBuffer(audioBase64));
     }
 
     /**
@@ -773,7 +834,7 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
     }
 
     /** Decodes a base64 audio payload into a freshly-allocated `ArrayBuffer`. */
-    private static Base64ToArrayBuffer(base64: string): ArrayBuffer {
+    private static base64ToArrayBuffer(base64: string): ArrayBuffer {
         const bytes = Buffer.from(base64, 'base64');
         const out = new ArrayBuffer(bytes.byteLength);
         new Uint8Array(out).set(bytes);

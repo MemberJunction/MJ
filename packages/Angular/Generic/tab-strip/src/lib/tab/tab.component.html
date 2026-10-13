@@ -1,6 +1,26 @@
-<div class="single-tab" [ngClass]="{'single-tab-selected': TabSelected}" (click)="selectTab()" (contextmenu)="handleContextMenu($event)">
-  <ng-content><!--CONTENT PROJECTION GOES HERE--></ng-content>
+<!-- role="tab" sits on the element that actually takes focus, and `tabindex` is owned by the
+     mjTabList directive on the parent (roving) — so it is deliberately not bound here. Chrome comes
+     from the global .mj-tabs* stylesheet, shared with the draft/workspace strip. The legacy
+     `single-tab` classes are kept alongside so existing selectors (incl. the test-utils example)
+     keep resolving. -->
+<div
+  class="single-tab mj-tabs__tab"
+  [ngClass]="{'single-tab-selected': TabSelected, 'mj-tabs__tab--active': TabSelected}"
+  role="tab"
+  [attr.aria-selected]="TabSelected"
+  (click)="selectTab()"
+  (contextmenu)="handleContextMenu($event)">
+  <span class="mj-tabs__label"><ng-content><!--CONTENT PROJECTION GOES HERE--></ng-content></span>
   @if (TabCloseable) {
-    <span class="tab-close-button" (click)="closeTab($event)" >✖</span>
+    <!-- tabindex="-1": the TAB is the focus stop and Delete closes it, so a second stop per tab
+         would double the strip's length in the page tab order. -->
+    <button
+      type="button"
+      class="tab-close-button mj-tabs__close"
+      tabindex="-1"
+      aria-label="Close tab"
+      (click)="closeTab($event)">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>
   }
 </div>

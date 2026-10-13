@@ -4,10 +4,76 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // Hoisted Mocks
 // ─────────────────────────────────────────────
 
-const { mockRunViewFn, mockRunViewsFn } = vi.hoisted(() => {
+const { mockRunViewFn, mockRunViewsFn, mockRunEmbeddingFn, testState, MockCompositeKey } = vi.hoisted(() => {
+    class MockCompositeKey {
+        static DefaultValueDelimiter = '||';
+        static FromURLSegment = vi.fn().mockImplementation(() => new MockCompositeKey());
+        static FromEntityRecord = vi.fn().mockImplementation(() => new MockCompositeKey());
+        KeyValuePairs: { FieldName: string; Value: string }[] = [{ FieldName: 'ID', Value: 'rec-1' }];
+        ToString = vi.fn().mockReturnValue('ID|rec-1');
+        Values = vi.fn().mockReturnValue('rec-1');
+        ToURLSegment = vi.fn().mockReturnValue('ID|rec-1');
+        ToCompactURLSegment = vi.fn().mockReturnValue('rec-1');
+        LoadFromConcatenatedString = vi.fn();
+        Equals(other: { KeyValuePairs: { FieldName: string; Value: string }[] }): boolean {
+            const a = this.KeyValuePairs, b = other?.KeyValuePairs ?? [];
+            return a.length === b.length && a.every((kv, i) =>
+                kv.FieldName.toLowerCase() === b[i].FieldName.toLowerCase() &&
+                String(kv.Value).toLowerCase() === String(b[i].Value).toLowerCase());
+        }
+    }
+
+    interface EntityDocumentStub {
+        ID: string;
+        Name: string;
+        EntityID: string;
+        AIModelID: string;
+        VectorDatabaseID: string;
+        VectorIndexID: string;
+        Type: string;
+        TemplateID: string;
+    }
+
+    interface TestState {
+        entityDocument: EntityDocumentStub | undefined;
+    }
+
+    const mockRecord = {
+        ID: 'rec-1',
+        Name: 'Alice',
+        PrimaryKey: new MockCompositeKey(),
+        GetAll: () => ({ ID: 'rec-1', Name: 'Alice' }),
+        Get: (_fieldName: string) => null,
+    };
+
+    const state: TestState = {
+        entityDocument: undefined,
+    };
+
     return {
-        mockRunViewFn: vi.fn().mockResolvedValue({ Success: true, Results: [], RowCount: 0 }),
+        MockCompositeKey,
+        mockRunViewFn: vi.fn().mockImplementation(async (params: { EntityName?: string; ResultType?: string }) => {
+            if (state.entityDocument) {
+                if (params.EntityName === 'MJ: List Details') {
+                    return { Success: true, Results: [{ RecordID: 'rec-1' }], RowCount: 1 };
+                }
+                if (params.ResultType === 'entity_object') {
+                    return { Success: true, Results: [mockRecord], RowCount: 1 };
+                }
+            }
+            return { Success: true, Results: [], RowCount: 0 };
+        }),
         mockRunViewsFn: vi.fn().mockResolvedValue([{ Success: true, Results: [], RowCount: 0 }]),
+        mockRunEmbeddingFn: vi.fn().mockImplementation(async (params: { Texts?: string[] }) => ({
+            Success: true,
+            Vectors: (params.Texts || []).map(() => [0.1, 0.2]),
+            PromptRunID: 'pr-mock',
+            TokensUsed: 10,
+            Cost: 0,
+            ErrorMessage: null,
+            ExecutionTimeMs: 1,
+        })),
+        testState: state,
     };
 });
 
@@ -21,11 +87,29 @@ vi.mock('@memberjunction/core', () => {
         RunViews = mockRunViewsFn;
     }
     class MockMetadata {
-        Entities = [{ ID: 'entity-1', Name: 'Contacts', FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true } }];
+        Entities = [{
+            ID: 'entity-1',
+            Name: 'Contacts',
+            FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+            Fields: [],
+        }];
         CurrentUser = { ID: 'user-1' };
         EntityByID = vi.fn().mockReturnValue({
-            ID: 'entity-1', Name: 'Contacts',
+            ID: 'entity-1',
+            Name: 'Contacts',
             FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+            Fields: [],
+            AllowRecordMerge: false,
+        });
+        EntityByName = vi.fn().mockReturnValue({
+            ID: 'entity-1',
+            Name: 'Contacts',
+            FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+            Fields: [],
+            AllowRecordMerge: false,
         });
         GetEntityObject = vi.fn().mockResolvedValue({
             Load: vi.fn().mockResolvedValue(true),
@@ -48,20 +132,8 @@ vi.mock('@memberjunction/core', () => {
         // KeyValuePair is referenced by the operation's key-mapping helper.
         BaseRemotableOperation: class {},
         KeyValuePair: class { FieldName = ''; Value = ''; },
-        CompositeKey: class {
-            KeyValuePairs: { FieldName: string; Value: string }[] = [];
-            ToString = vi.fn().mockReturnValue('key-1');
-            Values = vi.fn().mockReturnValue('key-1');
-            LoadFromConcatenatedString = vi.fn();
-            // mirror the real CompositeKey.Equals semantics (case-insensitive UUID-safe compare)
-            Equals(other: { KeyValuePairs: { FieldName: string; Value: string }[] }): boolean {
-                const a = this.KeyValuePairs, b = other?.KeyValuePairs ?? [];
-                return a.length === b.length && a.every((kv, i) =>
-                    kv.FieldName.toLowerCase() === b[i].FieldName.toLowerCase() &&
-                    String(kv.Value).toLowerCase() === String(b[i].Value).toLowerCase());
-            }
-        },
-        UserInfo: vi.fn(),
+        CompositeKey: MockCompositeKey,
+        UserInfo: class { ID = 'user-1'; },
         EntityInfo: vi.fn(),
         PotentialDuplicateRequest: class {
             EntityID = '';
@@ -91,12 +163,15 @@ vi.mock('@memberjunction/core', () => {
             ProbabilityScore = 0;
             LoadFromConcatenatedString = vi.fn();
             ToString = vi.fn().mockReturnValue('match-key');
+            ToCompactURLSegment = vi.fn().mockReturnValue('match-1');
+            ToURLSegment = vi.fn().mockReturnValue('ID|match-1');
             KeyValuePairs: { FieldName: string; Value: string }[] = [];
             // Mirror the real CompositeKey.Values() — concatenated key values — so the
             // parse-time self-match filter (isSameRecord) can be exercised faithfully.
             Values(): string {
                 return this.KeyValuePairs.map(kv => String(kv.Value)).join('||');
             }
+            Equals = vi.fn().mockReturnValue(false);
         },
         RecordMergeRequest: class {
             EntityName = '';
@@ -113,6 +188,12 @@ vi.mock('@memberjunction/core', () => {
     };
 });
 
+vi.mock('@memberjunction/ai-prompts', () => ({
+    AIEmbeddingRunner: class {
+        RunEmbedding = mockRunEmbeddingFn;
+    },
+}));
+
 vi.mock('@memberjunction/ai', () => ({
     BaseEmbeddings: vi.fn(),
     GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
@@ -123,24 +204,29 @@ vi.mock('@memberjunction/ai-vectordb', () => ({
     BaseResponse: vi.fn(),
 }));
 
-vi.mock('@memberjunction/global', () => ({
-    MJGlobal: {
-        Instance: {
-            ClassFactory: {
-                CreateInstance: vi.fn().mockReturnValue({
-                    EmbedTexts: vi.fn().mockResolvedValue({ vectors: [[0.1, 0.2], [0.3, 0.4]] }),
-                    queryIndex: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
-                    HybridQuery: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
-                    SupportsHybridSearch: false,
-                }),
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+        MJGlobal: {
+            Instance: {
+                ClassFactory: {
+                    CreateInstance: vi.fn().mockReturnValue({
+                        EmbedTexts: vi.fn().mockResolvedValue({ vectors: [[0.1, 0.2], [0.3, 0.4]] }),
+                        queryIndex: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
+                        QueryIndex: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
+                        HybridQuery: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
+                        SupportsHybridSearch: false,
+                    }),
+                },
             },
         },
-    },
-    UUIDsEqual: vi.fn((a: string, b: string) => a === b),
-    // No-op decorator stub — the Compare Remote Operation (transitively loaded via
-    // @memberjunction/record-comparison) is decorated with @RegisterClass at module load.
-    RegisterClass: () => () => { /* no-op */ },
-}));
+        UUIDsEqual: vi.fn((a: string, b: string) => a === b),
+        // No-op decorator stub — the Compare Remote Operation (transitively loaded via
+        // @memberjunction/record-comparison) is decorated with @RegisterClass at module load.
+        RegisterClass: () => () => { /* no-op */ },
+    };
+});
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJDuplicateRunDetailEntity: vi.fn(),
@@ -157,13 +243,7 @@ vi.mock('@memberjunction/core-entities', () => ({
             Config: vi.fn().mockResolvedValue(undefined),
             EntityDocuments: [],
             VectorIndexes: [],
-            GetEntityDocumentByID: vi.fn().mockReturnValue(undefined),
-            GetVectorIndexByID: vi.fn().mockReturnValue({
-                ID: 'vi-1',
-                Name: 'mj-knowledge-index',
-                VectorDatabaseID: 'vdb-1',
-                EmbeddingModelID: 'model-1',
-            }),
+            GetEntityDocumentByID: vi.fn().mockImplementation(() => testState.entityDocument),
         },
     },
 }));
@@ -173,11 +253,33 @@ vi.mock('@memberjunction/ai-vectors', () => {
         VectorBase: class VectorBase {
             _runView = { RunView: mockRunViewFn, RunViews: mockRunViewsFn };
             _metadata = {
-                Entities: [{ ID: 'entity-1', Name: 'Contacts', FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true } }],
+                Entities: [{
+                    ID: 'entity-1',
+                    Name: 'Contacts',
+                    FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+                    PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+                    Fields: [],
+                }],
                 CurrentUser: { ID: 'user-1' },
                 EntityByID: vi.fn().mockReturnValue({
-                    ID: 'entity-1', Name: 'Contacts',
+                    ID: 'entity-1',
+                    Name: 'Contacts',
                     FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+                    PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+                    Fields: [],
+                    AllowRecordMerge: false,
+                }),
+                EntityByName: vi.fn().mockReturnValue({
+                    ID: 'entity-1',
+                    Name: 'Contacts',
+                    FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+                    PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+                    Fields: [],
+                    AllowRecordMerge: false,
+                }),
+                // ProcessAutoMerges consults the entity's merge policy by NAME.
+                EntityByName: vi.fn().mockReturnValue({
+                    ID: 'entity-1', Name: 'Contacts', AllowRecordMerge: true,
                 }),
                 GetEntityObject: vi.fn().mockResolvedValue({
                     Load: vi.fn().mockResolvedValue(true),
@@ -211,12 +313,21 @@ vi.mock('@memberjunction/ai-vector-sync', () => {
                 Parse: vi.fn().mockResolvedValue('parsed template text'),
             }),
         },
+        // Rendering's related-data step is covered by duplicateRecordDetectorTemplateText.test.ts;
+        // here each record renders its own values, as for a template with no Entity params.
+        EntityDocumentTemplateDataBuilder: class {
+            LoadRelatedData = vi.fn().mockResolvedValue([]);
+            MissingRelatedParams = vi.fn().mockReturnValue([]);
+            BuildTemplateData = vi.fn((_entity: unknown, record: Record<string, unknown>) => ({ ...record }));
+        },
         EntityVectorSyncer: class {
             CurrentUser = null;
             GetEntityDocument = vi.fn().mockResolvedValue(null);
             VectorizeEntity = vi.fn().mockResolvedValue(undefined);
         },
         VectorizeEntityParams: class {},
+        // No record filter: the filter's own behavior is covered by duplicateRecordDetectorRecordFilter.test.ts.
+        GetEntityDocumentRecordFilter: vi.fn().mockReturnValue(null),
     };
 });
 
@@ -225,6 +336,14 @@ vi.mock('@memberjunction/aiengine', () => ({
         Instance: {
             Models: [{ ID: 'model-1', AIModelType: 'Embeddings', DriverClass: 'TestDriver' }],
             VectorDatabases: [{ ID: 'vdb-1', ClassKey: 'TestVDB' }],
+            GetVectorIndexByID: vi.fn().mockReturnValue({
+                ID: 'vi-1',
+                Name: 'mj-knowledge-index',
+                VectorDatabaseID: 'vdb-1',
+                EmbeddingModelID: 'model-1',
+            }),
+            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+            GetProviderIndexName: vi.fn((v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name),
         },
     },
 }));
@@ -253,12 +372,14 @@ vi.mock('@memberjunction/templates', () => ({
 // ─────────────────────────────────────────────
 
 import { DuplicateRecordDetector } from '../duplicateRecordDetector';
+import { CompositeKey, PotentialDuplicateRequest, UserInfo } from '@memberjunction/core';
 
 describe('DuplicateRecordDetector', () => {
     let detector: DuplicateRecordDetector;
 
     beforeEach(() => {
         vi.clearAllMocks();
+        testState.entityDocument = undefined;
         detector = new DuplicateRecordDetector();
     });
 
@@ -384,6 +505,33 @@ describe('DuplicateRecordDetector', () => {
             expect(result.Status).toBe('Error');
             expect(result.ErrorMessage).toContain('No active Entity Document');
         });
+
+        it('passes entity document AIModelID as ModelID to AIEmbeddingRunner for batch detection', async () => {
+            testState.entityDocument = {
+                ID: 'doc-1',
+                Name: 'Contacts Doc',
+                EntityID: 'entity-1',
+                AIModelID: 'model-1',
+                VectorDatabaseID: 'vdb-1',
+                VectorIndexID: 'vi-1',
+                Type: 'Template',
+                TemplateID: 'tmpl-1',
+            };
+            const user = new UserInfo();
+            const req = new PotentialDuplicateRequest();
+            req.EntityID = 'entity-1';
+            req.EntityDocumentID = 'doc-1';
+            req.ListID = 'list-1';
+
+            const response = await detector.GetDuplicateRecords(req, user);
+            expect(response.Status).toBe('Success');
+            expect(mockRunEmbeddingFn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    ModelID: 'model-1',
+                    Description: expect.stringContaining('Duplicate detection batch'),
+                })
+            );
+        });
     });
 
     describe('CheckSingleRecord', () => {
@@ -391,6 +539,55 @@ describe('DuplicateRecordDetector', () => {
             await expect(
                 detector.CheckSingleRecord('doc-1', { ToString: () => 'key-1', KeyValuePairs: [] } as never, {}, { ID: 'user-1' } as never)
             ).rejects.toThrow('No active Entity Document');
+        });
+
+        it('passes entity document AIModelID as ModelID to AIEmbeddingRunner', async () => {
+            testState.entityDocument = {
+                ID: 'doc-1',
+                Name: 'Contacts Doc',
+                EntityID: 'entity-1',
+                AIModelID: 'model-1',
+                VectorDatabaseID: 'vdb-1',
+                VectorIndexID: 'vi-1',
+                Type: 'Template',
+                TemplateID: 'tmpl-1',
+            };
+            const user = new UserInfo();
+            const key = new CompositeKey();
+            await detector.CheckSingleRecord('doc-1', key, {}, user);
+
+            expect(mockRunEmbeddingFn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    ModelID: 'model-1',
+                    Description: expect.stringContaining('Duplicate detection single record'),
+                })
+            );
+        });
+
+        it('queries the vector index by the engine-resolved provider name, not its MJ display Name', async () => {
+            const { AIEngine } = await import('@memberjunction/aiengine');
+            const vectorIndex = {
+                ID: 'vi-1',
+                Name: 'Contacts Index (Pinecone)',
+                ExternalID: 'contacts-index',
+                VectorDatabaseID: 'vdb-1',
+                EmbeddingModelID: 'model-1',
+            };
+            vi.mocked(AIEngine.Instance.GetVectorIndexByID).mockReturnValueOnce(vectorIndex as never);
+            testState.entityDocument = {
+                ID: 'doc-1',
+                Name: 'Contacts Doc',
+                EntityID: 'entity-1',
+                AIModelID: 'model-1',
+                VectorDatabaseID: 'vdb-1',
+                VectorIndexID: 'vi-1',
+                Type: 'Template',
+                TemplateID: 'tmpl-1',
+            };
+            await detector.CheckSingleRecord('doc-1', new CompositeKey(), {}, new UserInfo());
+
+            expect(AIEngine.Instance.GetProviderIndexName).toHaveBeenCalledWith(vectorIndex);
+            expect((detector as unknown as { indexName: string }).indexName).toBe('contacts-index');
         });
     });
 
@@ -530,6 +727,7 @@ describe('DuplicateRecordDetector', () => {
                 PrimaryKey: {
                     KeyValuePairs: [{ FieldName: 'ID', Value: 'rec-1' }],
                     Values: () => 'rec-1',
+                    ToCompactURLSegment: () => 'rec-1',
                 },
                 Get: (fieldName: string) => {
                     const data: Record<string, string> = {
@@ -568,6 +766,7 @@ describe('DuplicateRecordDetector', () => {
                 PrimaryKey: {
                     KeyValuePairs: [{ FieldName: 'ID', Value: 'item-1' }],
                     Values: () => 'item-1',
+                    ToCompactURLSegment: () => 'item-1',
                 },
                 Get: (fieldName: string) => {
                     if (fieldName === 'Description') return 'A test item';
@@ -599,6 +798,7 @@ describe('DuplicateRecordDetector', () => {
                 PrimaryKey: {
                     KeyValuePairs: [{ FieldName: 'ID', Value: 'note-1' }],
                     Values: () => 'note-1',
+                    ToCompactURLSegment: () => 'note-1',
                 },
                 Get: (fieldName: string) => {
                     if (fieldName === 'Description') return longText;
@@ -642,6 +842,7 @@ describe('DuplicateRecordDetector', () => {
                 PrimaryKey: {
                     KeyValuePairs: [{ FieldName: 'ID', Value: 'p-1' }],
                     Values: () => 'p-1',
+                    ToCompactURLSegment: () => 'p-1',
                 },
                 Get: (fieldName: string) => {
                     if (fieldName === 'Name') return 'Alice';
@@ -673,6 +874,7 @@ describe('DuplicateRecordDetector', () => {
                 PrimaryKey: {
                     KeyValuePairs: [{ FieldName: 'ID', Value: 'c-1' }],
                     Values: () => 'c-1',
+                    ToCompactURLSegment: () => 'c-1',
                 },
                 Get: (fieldName: string) => {
                     const data: Record<string, string> = {
@@ -711,6 +913,7 @@ describe('DuplicateRecordDetector', () => {
                 PrimaryKey: {
                     KeyValuePairs: [{ FieldName: 'ID', Value: 'old-1' }],
                     Values: () => 'old-1',
+                    ToCompactURLSegment: () => 'old-1',
                 },
                 Get: (fieldName: string) => {
                     if (fieldName === 'Title') return 'Legacy Record';
@@ -965,5 +1168,127 @@ describe('DuplicateRecordDetector', () => {
             expect(filtered[0].ProbabilityScore).toBe(0.95);
             expect(filtered[1].ProbabilityScore).toBe(0.80);
         });
+    });
+});
+
+// ─────────────────────────────────────────────
+// Bounded result retention (whole-entity runs)
+// ─────────────────────────────────────────────
+
+/**
+ * A whole-entity run batches its WORK (500 records at a time) but used to accumulate its RESULTS
+ * for the entire run — O(records), not O(batch). On a 61,671-record entity that alone exhausted an
+ * 8 GB heap: the process died before the run could finish, so whole-entity detection could not
+ * complete at all.
+ *
+ * Retaining them was never load-bearing. processBatch already persists every result as
+ * `Duplicate Run Detail` / `Duplicate Run Detail Match` rows, so the array was a second copy of
+ * durable data, kept only to feed the post-pass auto-merge and one `.length` read.
+ *
+ * These drive the REAL batch loop with the expensive setup stubbed, and assert the two properties
+ * that matter: retention is bounded while the reported total stays honest, and auto-merge still
+ * sees exactly the candidates it saw before — once, after the whole pass.
+ */
+describe('GetDuplicateRecords — bounded result retention', () => {
+    /** Mirrors MAX_RETAINED_RESULTS in the detector; a change there should fail here loudly. */
+    const MAX_RETAINED_RESULTS = 1000;
+    const BATCH_SIZE = 500;
+
+    function makeResult(i: number, score: number) {
+        return {
+            RecordCompositeKey: { ToString: () => `rec-${i}`, Values: () => `rec-${i}`, KeyValuePairs: [] },
+            Duplicates: [{ ProbabilityScore: score, ToString: () => `dup-${i}` }],
+            DuplicateRunDetailMatchRecordIDs: [`match-${i}`],
+            EntityID: 'entity-1',
+        };
+    }
+
+    /** Stub only the seams the loop depends on; retention and auto-merge wiring stay real. */
+    function makeDetector(totalRecords: number, score: number, allowMerge = true) {
+        const d = new DuplicateRecordDetector() as unknown as Record<string, any>;
+        d.ValidateEntityDocument = vi.fn().mockResolvedValue({
+            ID: 'doc-1', Entity: 'Contacts', EntityID: 'entity-1',
+            AbsoluteMatchThreshold: 0.95, PotentialMatchThreshold: 0.9,
+            EnableLLMReasoning: false, AutomationLevel: 'AutoMergeAboveAbsolute',
+        });
+        d.InitializeProviders = vi.fn().mockResolvedValue(undefined);
+        d.ResolveOrCreateDuplicateRun = vi.fn().mockResolvedValue({
+            ID: 'run-1', LastProcessedOffset: 0, CancellationRequested: false,
+            Load: vi.fn().mockResolvedValue(true),
+        });
+        d.LoadRecordIDsToCheck = vi.fn().mockResolvedValue(
+            Array.from({ length: totalRecords }, (_, i) => `rec-${i}`));
+        d.SaveEntity = vi.fn().mockResolvedValue(true);
+        d.Metadata.EntityByName = vi.fn().mockReturnValue({
+            ID: 'entity-1', Name: 'Contacts', AllowRecordMerge: allowMerge,
+        });
+        d.Metadata.MergeRecords = vi.fn().mockResolvedValue({ Success: true });
+
+        const order: string[] = [];
+        let seq = 0;
+        d.processBatch = vi.fn(async (batchIDs: string[]) => {
+            order.push('batch');
+            return { Results: batchIDs.map(() => makeResult(seq++, score)), MatchesFound: batchIDs.length };
+        });
+        const realAutoMerge = d.ProcessAutoMerges.bind(d);
+        d.ProcessAutoMerges = vi.fn(async (...a: unknown[]) => { order.push('automerge'); return realAutoMerge(...a); });
+
+        return { d, order, merge: d.Metadata.MergeRecords as ReturnType<typeof vi.fn> };
+    }
+
+    const params = { EntityID: 'entity-1', EntityDocumentID: 'doc-1', ListID: '', RecordIDs: [], Options: {} };
+    const user = { ID: 'user-1' };
+    const run = (d: Record<string, any>) => (d as never as DuplicateRecordDetector)
+        .GetDuplicateRecords(params as never, user as never);
+
+    it('caps retained results and still reports the honest total', async () => {
+        const { d } = makeDetector(2500, 0.5);
+        const res = await run(d);
+        expect(res.PotentialDuplicateResult.length).toBe(MAX_RETAINED_RESULTS);
+        expect((res as never as { ResultsTruncated?: boolean }).ResultsTruncated).toBe(true);
+        expect((res as never as { TotalRecordsWithDuplicates?: number }).TotalRecordsWithDuplicates).toBe(2500);
+    });
+
+    it('retained footprint does not grow with the size of the run', async () => {
+        const a = await run(makeDetector(2500, 0.5).d);
+        const b = await run(makeDetector(10000, 0.5).d);
+        // 4x the records, identical retained size — the property the OOM violated.
+        expect(a.PotentialDuplicateResult.length).toBe(b.PotentialDuplicateResult.length);
+        expect((b as never as { TotalRecordsWithDuplicates?: number }).TotalRecordsWithDuplicates).toBe(10000);
+    });
+
+    it('leaves a small run exactly as it was', async () => {
+        const res = await run(makeDetector(300, 0.5).d);
+        expect(res.PotentialDuplicateResult.length).toBe(300);
+        expect((res as never as { ResultsTruncated?: boolean }).ResultsTruncated).toBeUndefined();
+    });
+
+    it('still merges every eligible candidate even when results were truncated', async () => {
+        // Eligibility must not depend on whether a result fitted under the retention cap.
+        const { d, merge } = makeDetector(2500, 0.99);
+        await run(d);
+        expect(merge).toHaveBeenCalledTimes(2500);
+    });
+
+    it('merges nothing when no candidate clears the absolute threshold', async () => {
+        const { d, merge } = makeDetector(2500, 0.5);
+        await run(d);
+        expect(merge).not.toHaveBeenCalled();
+    });
+
+    it('runs auto-merge ONCE, after every batch — never interleaved', async () => {
+        // Interleaving would let later batches detect against a partly-merged dataset.
+        const { d, order } = makeDetector(1500, 0.99);
+        await run(d);
+        const batches = Math.ceil(1500 / BATCH_SIZE);
+        expect(order.filter((c) => c === 'automerge')).toHaveLength(1);
+        expect(order.slice(0, batches).every((c) => c === 'batch')).toBe(true);
+        expect(order[order.length - 1]).toBe('automerge');
+    });
+
+    it('carries nothing for auto-merge when the entity forbids merging', async () => {
+        const { d, merge } = makeDetector(2500, 0.99, false);
+        await run(d);
+        expect(merge).not.toHaveBeenCalled();
     });
 });

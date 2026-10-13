@@ -1,6 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSocialMediaAction, MediaFile, SocialPost, SearchParams, SocialAnalytics } from '../../base/base-social.action';
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import { HttpClient, HttpError, HttpPost, HttpPut } from '@memberjunction/network-utils';
 import { ActionParam } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
@@ -21,62 +21,51 @@ export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
     }
 
     /**
-     * Axios instance for making HTTP requests
+     * HTTP client for making requests
      */
-    private _axiosInstance: AxiosInstance | null = null;
+    private _httpClient: HttpClient | null = null;
 
     /**
-     * Get or create axios instance with interceptors
+     * Get or create the HTTP client. `OnRequest` / `OnResponse` / `OnRetry` replace what were
+     * axios-era interceptors: bearer-token injection, rate-limit logging, and 429 back-off + retry.
      */
-    protected get axiosInstance(): AxiosInstance {
-        if (!this._axiosInstance) {
-            this._axiosInstance = axios.create({
-                baseURL: this.apiBaseUrl,
-                timeout: 30000,
-                headers: {
+    protected get httpClient(): HttpClient {
+        if (!this._httpClient) {
+            this._httpClient = new HttpClient({
+                BaseURL: this.apiBaseUrl,
+                Timeout: 30000,
+                Headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                     'X-Restli-Protocol-Version': '2.0.0' // LinkedIn specific header
-                }
-            });
-
-            // Add request interceptor for auth
-            this._axiosInstance.interceptors.request.use(
-                (config) => {
+                },
+                OnRequest: (config) => {
                     const token = this.getAccessToken();
                     if (token) {
-                        config.headers.Authorization = `Bearer ${token}`;
+                        return { ...config, Headers: { ...config.Headers, Authorization: `Bearer ${token}` } };
                     }
                     return config;
                 },
-                (error) => Promise.reject(error)
-            );
-
-            // Add response interceptor for rate limit handling
-            this._axiosInstance.interceptors.response.use(
-                (response) => {
+                OnResponse: (response) => {
                     // Log rate limit info
-                    const rateLimitInfo = this.parseRateLimitHeaders(response.headers);
+                    const rateLimitInfo = this.parseRateLimitHeaders(response.Headers);
                     if (rateLimitInfo) {
                         LogStatus(`LinkedIn Rate Limit - Remaining: ${rateLimitInfo.remaining}/${rateLimitInfo.limit}, Reset: ${rateLimitInfo.reset}`);
                     }
-                    return response;
                 },
-                async (error: AxiosError) => {
-                    if (error.response?.status === 429) {
+                OnRetry: async (error) => {
+                    if (error.Status === 429) {
                         // Rate limit exceeded
-                        const retryAfter = error.response.headers['retry-after'];
+                        const retryAfter = error.Headers['retry-after'];
                         const waitTime = retryAfter ? parseInt(retryAfter) : 60;
                         await this.handleRateLimit(waitTime);
-                        
-                        // Retry the request
-                        return this._axiosInstance!.request(error.config!);
+                        return true;
                     }
-                    return Promise.reject(error);
+                    return false;
                 }
-            );
+            });
         }
-        return this._axiosInstance;
+        return this._httpClient;
     }
 
     /**
@@ -89,7 +78,7 @@ export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
         }
 
         try {
-            const response = await axios.post('https://www.linkedin.com/oauth/v2/accessToken', 
+            const response = await HttpPost<LinkedInTokenResponse>('https://www.linkedin.com/oauth/v2/accessToken', 
                 new URLSearchParams({
                     grant_type: 'refresh_token',
                     refresh_token: refreshToken,
@@ -97,13 +86,13 @@ export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
                     client_secret: this.getCustomAttribute(3) || '' // Client Secret stored in CustomAttribute3
                 }).toString(),
                 {
-                    headers: {
+                    Headers: {
                         'Content-Type': 'application/x-www-form-urlencoded'
                     }
                 }
             );
 
-            const { access_token, refresh_token: newRefreshToken, expires_in } = response.data;
+            const { access_token, refresh_token: newRefreshToken, expires_in } = response.Data;
 
             // Update stored tokens
             await this.updateStoredTokens(
@@ -124,8 +113,8 @@ export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
      */
     protected async getCurrentUserUrn(): Promise<string> {
         try {
-            const response = await this.axiosInstance.get('/me');
-            return `urn:li:person:${response.data.id}`;
+            const response = await this.httpClient.Get<LinkedInProfile>('/me');
+            return `urn:li:person:${response.Data.id}`;
         } catch (error) {
             LogError(`Failed to get current user URN: ${error instanceof Error ? error.message : 'Unknown error'}`);
             throw error;
@@ -137,8 +126,8 @@ export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
      */
     protected async getAdminOrganizations(): Promise<LinkedInOrganization[]> {
         try {
-            const response = await this.axiosInstance.get('/organizationalEntityAcls', {
-                params: {
+            const response = await this.httpClient.Get<LinkedInCollectionResponse<LinkedInOrganizationAcl>>('/organizationalEntityAcls', {
+                Query: {
                     q: 'roleAssignee',
                     role: 'ADMINISTRATOR',
                     projection: '(elements*(*,organizationalTarget~(localizedName)))'
@@ -146,8 +135,8 @@ export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
             });
 
             const organizations: LinkedInOrganization[] = [];
-            if (response.data.elements) {
-                for (const element of response.data.elements) {
+            if (response.Data.elements) {
+                for (const element of response.Data.elements) {
                     if (element.organizationalTarget) {
                         organizations.push({
                             urn: element.organizationalTarget,
@@ -171,7 +160,7 @@ export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
     protected async uploadSingleMedia(file: MediaFile): Promise<string> {
         try {
             // Step 1: Register upload
-            const registerResponse = await this.axiosInstance.post('/assets?action=registerUpload', {
+            const registerResponse = await this.httpClient.Post<LinkedInRegisterUploadResponse>('/assets?action=registerUpload', {
                 registerUploadRequest: {
                     recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
                     owner: await this.getCurrentUserUrn(),
@@ -182,16 +171,16 @@ export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
                 }
             });
 
-            const uploadUrl = registerResponse.data.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'].uploadUrl;
-            const asset = registerResponse.data.value.asset;
+            const uploadUrl = registerResponse.Data.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'].uploadUrl;
+            const asset = registerResponse.Data.value.asset;
 
             // Step 2: Upload the file
             const fileData = typeof file.data === 'string' 
                 ? Buffer.from(file.data, 'base64') 
                 : file.data;
 
-            await axios.put(uploadUrl, fileData, {
-                headers: {
+            await HttpPut(uploadUrl, fileData, {
+                Headers: {
                     'Authorization': `Bearer ${this.getAccessToken()}`,
                     'Content-Type': file.mimeType
                 }
@@ -232,10 +221,10 @@ export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
      */
     protected async createShare(shareData: LinkedInShareData): Promise<string> {
         try {
-            const response = await this.axiosInstance.post('/ugcPosts', shareData);
-            return response.data.id;
+            const response = await this.httpClient.Post<{ id: string }>('/ugcPosts', shareData);
+            return response.Data.id;
         } catch (error) {
-            this.handleLinkedInError(error as AxiosError);
+            this.handleLinkedInError(error as HttpError);
         }
     }
 
@@ -244,8 +233,8 @@ export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
      */
     protected async getShares(authorUrn: string, count: number = 50, start: number = 0): Promise<LinkedInShare[]> {
         try {
-            const response = await this.axiosInstance.get('/ugcPosts', {
-                params: {
+            const response = await this.httpClient.Get<LinkedInCollectionResponse<LinkedInShare>>('/ugcPosts', {
+                Query: {
                     q: 'authors',
                     authors: `List(${authorUrn})`,
                     count: count,
@@ -253,7 +242,7 @@ export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
                 }
             });
 
-            return response.data.elements || [];
+            return response.Data.elements || [];
         } catch (error) {
             LogError(`Failed to get shares: ${error instanceof Error ? error.message : 'Unknown error'}`);
             throw error;
@@ -318,9 +307,10 @@ export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
     /**
      * Handle LinkedIn-specific errors
      */
-    protected handleLinkedInError(error: AxiosError): never {
-        if (error.response) {
-            const { status, data } = error.response;
+    protected handleLinkedInError(error: HttpError): never {
+        if (error.Status) {
+            const status = error.Status;
+            const data = error.Data;
             const errorData = data as any;
 
             switch (status) {
@@ -341,7 +331,7 @@ export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
                 default:
                     throw new Error(`LinkedIn API Error (${status}): ${errorData.message || 'Unknown error'}`);
             }
-        } else if (error.request) {
+        } else if (error.IsTimeout) {
             throw new Error('Network Error: No response from LinkedIn');
         } else {
             throw new Error(`Request Error: ${error.message}`);
@@ -385,6 +375,87 @@ export abstract class LinkedInBaseAction extends BaseSocialMediaAction {
 /**
  * LinkedIn-specific interfaces
  */
+/**
+ * LinkedIn's collection envelope: results under `elements`, with `paging` metadata.
+ * Used by `/organizationalEntityAcls`, `/ugcPosts`, `/organizationalEntity*Statistics`, etc.
+ */
+export interface LinkedInCollectionResponse<T> {
+    elements: T[];
+    paging?: { start?: number; count?: number; total?: number };
+}
+
+/** A localized string field, e.g. `firstName.localized.en_US`. */
+export interface LinkedInLocalizedString {
+    localized?: Record<string, string>;
+    preferredLocale?: { country?: string; language?: string };
+}
+
+/** The authenticated member's profile from `/me`. */
+export interface LinkedInProfile {
+    id: string;
+    firstName?: LinkedInLocalizedString;
+    lastName?: LinkedInLocalizedString;
+    headline?: LinkedInLocalizedString;
+    publicProfileUrl?: string;
+    followerCount?: number;
+}
+
+/** Response from the OAuth2 token endpoint. */
+export interface LinkedInTokenResponse {
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+}
+
+/** Response from `POST /assets?action=registerUpload`. */
+export interface LinkedInRegisterUploadResponse {
+    value: {
+        asset: string;
+        mediaArtifact?: string;
+        uploadMechanism: {
+            'com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest': {
+                uploadUrl: string;
+                headers?: Record<string, string>;
+            };
+        };
+    };
+}
+
+/** An ACL row from `/organizationalEntityAcls`, naming an organization the member administers. */
+export interface LinkedInOrganizationAcl {
+    organizationalTarget: string;
+    role?: string;
+    state?: string;
+}
+
+/** An element of `/organizationalEntityFollowerStatistics`. */
+export interface LinkedInFollowerStatistics {
+    followerCounts?: {
+        organicFollowerCount?: number;
+        paidFollowerCount?: number;
+    };
+    followerGains?: {
+        organicFollowerGains?: number;
+        paidFollowerGains?: number;
+    };
+    organizationalEntity?: string;
+    /**
+     * Demographic breakdowns, present only when the statistics are requested without a
+     * time-bound (LinkedIn returns lifetime demographics or time-series gains, not both).
+     */
+    followerCountsByFunction?: Array<Record<string, unknown>>;
+    followerCountsBySeniority?: Array<Record<string, unknown>>;
+    followerCountsByIndustry?: Array<Record<string, unknown>>;
+    followerCountsByRegion?: Array<Record<string, unknown>>;
+    followerCountsByCountry?: Array<Record<string, unknown>>;
+}
+
+/** Engagement summaries returned alongside a UGC post. */
+export interface LinkedInPostSummary {
+    likesSummary?: { totalLikes?: number };
+    commentsSummary?: { totalComments?: number };
+}
+
 export interface LinkedInOrganization {
     urn: string;
     name: string;

@@ -6,7 +6,7 @@ import type { CompositeKey } from '@memberjunction/core';
 import { renderComponentFixture, query, text, attr, hasClass, click, capture } from '@memberjunction/ng-test-utils';
 import { TreeDropdownComponent } from './tree-dropdown.component';
 import { TreeComponent } from '../tree/tree.component';
-import { createDefaultTreeNode, TreeNode, TreeBranchConfig } from '../models/tree-types';
+import { CreateDefaultTreeNode, TreeNode, TreeBranchConfig } from '../models/tree-types';
 
 /**
  * DOM tests for the mj-tree-dropdown component — the CLOSED-trigger surface only.
@@ -46,7 +46,7 @@ function renderDropdown(
 }
 
 function leaf(partial: Partial<TreeNode>): TreeNode {
-  return createDefaultTreeNode({ Type: 'leaf', ...partial });
+  return CreateDefaultTreeNode({ Type: 'leaf', ...partial });
 }
 
 describe('TreeDropdownComponent (DOM, closed trigger surface)', () => {

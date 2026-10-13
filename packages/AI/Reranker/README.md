@@ -90,20 +90,45 @@ import { createLLMReranker } from '@memberjunction/ai-reranker';
 const reranker = createLLMReranker(modelId, contextUser);
 ```
 
+### DecisionReranker
+
+Scores each document with one typed-decision Likelihood question ("This note bears on the request: <document text>"), asked through `AIDecisionRunner` with the query as the state. A document's score is the answer's probability. An agent opts in by pointing `RerankerConfiguration.rerankerModelId` at the `Decision Reranker` model.
+
+- **Runs:** its decision runs are children of the rerank's `MJ: AI Prompt Runs` row, whose `TotalCost` and token rollups include them, so the agent run counts the rerank.
+- **Batching:** a decision call carries at most the smallest `Decision.MaxQuestionsPerCall` its prompt's models declare, or, when none declares one, 20 documents (`decisionMaxDocumentsPerCall`). Larger reranks are split across parallel calls.
+- **Time budget:** the calls share one budget, 15 seconds unless `decisionTimeoutMS` sets another. When it runs out the calls are aborted and the rerank fails, so the agent falls back as `fallbackOnError` says.
+- **Threshold:** its probabilities are not calibrated, so set `minRelevanceThreshold` low; 0.1 is the recommended start.
+- **Failures:** a failed call, or a missing or invalid answer for any document, fails the whole rerank. No score is invented.
+
 ### RerankerConfiguration
 
-Configuration type stored as JSON on agent entities:
+Configuration type stored as JSON in the agent's `RerankerConfiguration` column:
 
 ```typescript
 interface RerankerConfiguration {
-    /** Whether reranking is enabled for this agent */
+    /** Master switch for reranking */
     enabled: boolean;
-    /** AI model ID to use for reranking */
-    modelId?: string;
-    /** Maximum number of results to return after reranking */
-    topK?: number;
-    /** Minimum relevance score threshold (0-1) */
-    minScore?: number;
+    /** ID of the AI Model (type 'Reranker') to rerank with */
+    rerankerModelId: string;
+    /** Fetch N * retrievalMultiplier candidates, then rerank to the top N. Default: 3 */
+    retrievalMultiplier: number;
+    /**
+     * Minimum relevance score (0-1) to keep a result. When none reaches it, the agent keeps the
+     * vector search results instead. Default: 0.5; for a DecisionReranker, 0.1 is recommended.
+     */
+    minRelevanceThreshold: number;
+    /** The prompt a prompt-backed reranker runs: LLMReranker's chat prompt, or DecisionReranker's decision prompt */
+    rerankPromptID?: string;
+    /** Extra note fields to include in each document's text */
+    contextFields?: string[];
+    /** On a failed rerank, use the vector search results (true) or throw (false). Default: true */
+    fallbackOnError: boolean;
+    /** Rerank examples too, with the same reranker and threshold. Default: false */
+    rerankExamples?: boolean;
+    /** DecisionReranker's time budget, in milliseconds. Default: 15000 */
+    decisionTimeoutMS?: number;
+    /** DecisionReranker's documents per call when no model declares a limit. Default: 20 */
+    decisionMaxDocumentsPerCall?: number;
 }
 ```
 
@@ -136,10 +161,13 @@ const result = await RerankerService.Instance.rerankNotes(
     {
         agentRunID: runId,        // Link to agent run
         parentStepID: stepId,     // Parent step for hierarchy
-        stepNumber: 3             // Step sequence number
+        stepNumber: 3,            // Step sequence number
+        OnStepCreated: step => run.Steps.push(step) // Count the rerank in the agent run
     }
 );
 ```
+
+`RerankExamples` takes the same options and records a `Rerank Examples` step. The step's `PromptRun` is the rerank's run, so an agent that adds the step to its run's steps counts the rerank's cost and tokens toward `MaxCostPerRun` and `MaxTokensPerRun`; `BaseAgent` does this.
 
 ## How Two-Stage Retrieval Works
 

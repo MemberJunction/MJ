@@ -3,12 +3,17 @@
 **Status:** Adopted at the 2026-04-29 cross-app migration meeting; applies prospectively from each app's next published version going forward.
 **Applies to:** All MemberJunction OpenApps.
 **Source of record:** §3.2 of [plans/cross-app-migration-ordering.md](https://github.com/MemberJunction/MJ/blob/plan/cross-app-migration-ordering/plans/cross-app-migration-ordering.md).
+**Amended:** 2026-08-06, per [plans/lts-process.md](../../plans/lts-process.md) §3.2/§17 (the P.8 amendment that document required at its merge) — app majors now track the MJ platform era, so the additive-only schema rule scopes to **eras**, and app-level **code API** breaking changes ship as minors signaled through version ranges. Until an app completes its one-time era alignment (lts-process.md Appendix C), read "major version" below as the app's own current major.
 
 ## The rule
 
 Once an OpenApp version is **published**, within that major version the app's schema is **immutable except for additive changes**. The exhaustive list of what is and isn't allowed is below.
 
-This is a hard rule, not a guideline. Breaking it forces a major version bump (1.x → 2.0), which is a manual upgrade path — not an automatic one.
+This is a hard rule, not a guideline. Breaking it requires a major version bump — and because app majors track the MJ platform era ([plans/lts-process.md](../../plans/lts-process.md) §3.2), that means waiting for the next era: schema-breaking changes ship only when the app's major moves with the platform (5.x → 6.x), a manual upgrade path — not an automatic one.
+
+## Scope: schema, not code API
+
+This policy governs the **published schema** — tables, columns, stored procedures, entities, relationships. App-level **code API** breaking changes (TypeScript exports, function signatures, component contracts) are deliberately *not* majors under era alignment: they ship as **minors**, signaled through version ranges — consumers pin or range accordingly, and `mj bump` writes exact, mutually consistent pins. The major is reserved for the platform era. This supersedes any reading of this document under which a code-level break forces a major bump; the resolution is recorded in lts-process.md §3.2.
 
 ## What's not allowed within a published major version
 
@@ -45,17 +50,17 @@ A deprecated entity or column:
 - **Continues to function** at runtime. Reads, writes, and SP calls behave identically.
 - **Is flagged as not-for-new-use.** Tooling, documentation, and developer awareness should steer new code away from it.
 
-Deprecation does NOT mean "scheduled for deletion in version X.Y." Once deprecated within a published major version, a thing stays present indefinitely. If the app eventually bumps a major version, that's the moment when accumulated deprecations can be physically removed; some apps may never bump major, and that's fine — the deprecated columns are harmless dead weight.
+Deprecation does NOT mean "scheduled for deletion in version X.Y." Once deprecated within a published major version, a thing stays present indefinitely. When the app follows the platform to a new era — its major bump — that's the moment accumulated deprecations can be physically removed; an app may also stay on an era for a long time, and that's fine — the deprecated columns are harmless dead weight.
 
 To physically remove a deprecated entity or column, you need a major version bump (see below).
 
-## Breaking changes force a major version bump
+## Breaking schema changes ride an era bump
 
-When an app genuinely needs to make a breaking change — drop, narrow, rename, or anything else from the Forbidden list — the path is a major version bump:
+When an app genuinely needs a breaking schema change — drop, narrow, rename, or anything else from the Forbidden list — the path is the next **platform era bump**. Apps no longer choose the timing of their own majors: every Open App's major matches the MJ major it runs on (lts-process.md §3.2), so accumulated breaking changes ship together when the app follows the platform across an era boundary (5.x → 6.x):
 
-- **OpenApp 1.x → 2.0** is allowed to drop tables, drop columns, narrow types, rename entities, etc.
-- The 2.0 release is treated as a new app from the customer's perspective. Installation is a manual migration path — typically a one-time hand-authored "open-heart surgery" migration that walks an existing 1.x customer to 2.0. There is no parallel 1.x maintenance track once 2.0 ships.
-- 2.0 does not automatically upgrade an existing 1.x installation. The customer (or the release team on the customer's behalf) explicitly opts into the upgrade.
+- **The new era's major** is allowed to drop tables, drop columns, narrow types, rename entities, etc.
+- The new-era release is treated as a new app from the customer's perspective. Installation is a manual migration path — typically a one-time hand-authored "open-heart surgery" migration that walks an existing prior-era customer forward. The app has no parallel prior-era maintenance track beyond what the platform line's own support window provides (patches on a certified line stay additive-only per this policy).
+- The new era does not automatically upgrade an existing installation. The customer (or the release team on the customer's behalf) explicitly opts into the upgrade.
 
 ## Why this works
 
@@ -128,7 +133,7 @@ ALTER TABLE ${flyway:defaultSchema}.MyTable ALTER COLUMN MyText nvarchar(50);
 
 Existing rows may have values longer than 50 characters; the migration would fail or truncate. Downstream callers may pass strings up to 255 characters; their writes would now fail.
 
-**Correct path:** if you genuinely need to narrow, ship a v2.0 with the new type and a migration that either truncates with explicit consent or rejects rows that don't fit.
+**Correct path:** if you genuinely need to narrow, ship it at the next era bump with the new type and a migration that either truncates with explicit consent or rejects rows that don't fit.
 
 ### Example 5: Removing an SP parameter (by dropping its underlying column)
 

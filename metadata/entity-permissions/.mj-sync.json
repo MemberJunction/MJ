@@ -12,7 +12,7 @@
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
-    "filter": "RoleID IN (SELECT ID FROM __mj.Role WHERE Name IN ('Magic Link Baseline', 'Widget Guest'))",
+    "filter": "RoleID IN (SELECT ID FROM __mj.Role WHERE Name IN ('Magic Link Baseline', 'Widget Guest')) OR (RoleID IN (SELECT ID FROM __mj.Role WHERE Name = 'Developer') AND EntityID IN (SELECT ID FROM __mj.Entity WHERE Name = 'MJ: Row Level Security Filters') AND Type = 'Allow')",
     "externalizeFields": [],
     "ignoreNullFields": true,
     "ignoreVirtualFields": true,

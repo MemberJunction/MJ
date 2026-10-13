@@ -10,13 +10,13 @@ import { Colors, Radius, Type } from '@/theme/tokens';
  */
 export type AttachmentChipProps = {
     /** The attachment to preview. */
-    attachment: CapturedAttachment;
+    Attachment: CapturedAttachment;
     /** Called when the user taps the remove (x) control. */
-    onRemove: () => void;
+    OnRemove: () => void;
 };
 
 /** Preview chip for a pending attachment. See {@link AttachmentChipProps}. */
-export function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
+export function AttachmentChip({ Attachment: attachment, OnRemove: onRemove }: AttachmentChipProps) {
     const isImage = attachment.kind === 'image';
     return (
         <View style={styles.chip}>

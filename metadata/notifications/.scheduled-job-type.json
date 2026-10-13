@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "Name": "Scheduled Job",
+    "Description": "Sent when a scheduled job (MJ: Scheduled Jobs) finishes and the job's NotifyOnSuccess/NotifyOnFailure toggles ask for it — delivered to the job's NotifyUser, or its owner when none is set. The job's own NotifyViaEmail/NotifyViaInApp toggles act as a ceiling on the channels resolved here, so a recipient can decline a channel the job asked for but the job can never add one it did not.",
+    "DefaultInApp": true,
+    "DefaultEmail": false,
+    "DefaultSMS": false,
+    "AllowUserPreference": true,
+    "Icon": "fa-calendar-check",
+    "Color": "#00897B",
+    "AutoExpireDays": 14,
+    "Priority": 20
+  },
+  "primaryKey": {
+    "ID": "E56D003D-90CC-4B1C-BF1D-3C9413C02282"
+  },
+  "sync": {
+    "lastModified": "2026-08-07T23:58:27.746Z",
+    "checksum": "08930a1f7bcabd1b2efa8dd88158cebac8dc4fe4ad5c83ddfc5df90faf6b96f8"
+  }
+}

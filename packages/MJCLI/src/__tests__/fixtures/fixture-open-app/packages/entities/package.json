@@ -1,0 +1,8 @@
+{
+  "name": "@mj-fixture/app-entities",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Test fixture: the shared entities package of a fake Open App. Registers a BaseEntity subclass on import.",
+  "type": "module",
+  "main": "index.js"
+}

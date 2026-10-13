@@ -3,7 +3,12 @@ import { LoopAgentType } from '../agent-types/loop-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 
 // Mock dependencies that LoopAgentType imports but doesn't use in DetermineNextStep logic
-vi.mock('@memberjunction/core', () => ({
+// Partial mock: LoopAgentType now imports a RUNTIME value from the ai-core-plus barrel (the pure
+// task-graph validator), which pulls @memberjunction/core-entities — and therefore BaseEntity —
+// into the module graph. A total mock would have to restate every export core-entities touches, so
+// spread the real module and override only the logging functions these tests care about.
+vi.mock('@memberjunction/core', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/core')>()),
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     LogStatusEx: vi.fn(),

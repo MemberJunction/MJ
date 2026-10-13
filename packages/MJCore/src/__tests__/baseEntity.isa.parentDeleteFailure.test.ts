@@ -79,9 +79,6 @@ function createChildWithFailingParentDelete(parentResult: { Message?: string; Er
     const mockProvider = {
         Delete: vi.fn().mockResolvedValue(true),
         FindISAChildEntities: vi.fn(),
-        BeginISATransaction: vi.fn().mockResolvedValue({ id: 'mock-txn' }),
-        CommitISATransaction: vi.fn().mockResolvedValue(undefined),
-        RollbackISATransaction: vi.fn().mockResolvedValue(undefined),
         ProviderType: 'Database',
     };
 

@@ -10,10 +10,14 @@ import { ActionListItemComponent } from './action-list-item.component';
  * exposing the fields the template reads (Name/Description/Type/Status/Params/CategoryID); the
  * Categories map resolves the category name. Row/category/edit/run clicks emit their outputs.
  * mjButton is imported for the Edit/Run buttons. No DI/async; single synchronous render.
+ *
+ * `Params` is a `DeclareRelatedRecords` collection, not an array — the template reads
+ * `Action.Params.Items.length`, so the stand-in must expose `.Items`. A bare `[]` here renders as
+ * `undefined.length` and throws inside the template.
  */
 
 const makeAction = (over: Partial<Record<string, unknown>> = {}) =>
-  ({ Name: 'Send Email', Description: 'Sends an email', Type: 'Custom', Status: 'Active', Params: [], CategoryID: 'c1', ...over }) as unknown as MJActionEntityExtended;
+  ({ Name: 'Send Email', Description: 'Sends an email', Type: 'Custom', Status: 'Active', Params: { Items: [] }, CategoryID: 'c1', ...over }) as unknown as MJActionEntityExtended;
 
 const CATEGORIES = new Map<string, MJActionCategoryEntity>([['c1', { Name: 'Communication' } as MJActionCategoryEntity]]);
 

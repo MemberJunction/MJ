@@ -206,6 +206,140 @@ describe('ConversationUtility', () => {
         });
     });
 
+    describe('record links', () => {
+        it('parses a single-ID record token without requiring id', () => {
+            const text = '@{"_mode":"mention","type":"record","entityName":"Customers","name":"Acme Corp","ID":"abc-123"}';
+            const tokens = ConversationUtility.ParseSpecialContent(text);
+            expect(tokens).toHaveLength(1);
+            expect(tokens[0].mode).toBe('mention');
+            const content = tokens[0].content as { type: string; entityName: string; ID: string };
+            expect(content.type).toBe('record');
+            expect(content.entityName).toBe('Customers');
+            expect(content.ID).toBe('abc-123');
+        });
+
+        it('parses composite PK siblings', () => {
+            const text = '@{"_mode":"mention","type":"record","entityName":"Order Details","name":"Widget × 12","OrderID":"ord-1","LineNumber":4}';
+            const tokens = ConversationUtility.ParseSpecialContent(text);
+            expect(tokens).toHaveLength(1);
+            const ck = ConversationUtility.CompositeKeyFromRecordLink(
+                tokens[0].content as import('../conversation-utility').MentionContent,
+                ['OrderID', 'LineNumber']
+            );
+            expect(ck?.KeyValuePairs).toEqual([
+                { FieldName: 'OrderID', Value: 'ord-1' },
+                { FieldName: 'LineNumber', Value: '4' },
+            ]);
+        });
+
+        it('CreateRecordLink emits ID as a sibling', () => {
+            const token = ConversationUtility.CreateRecordLink('Customers', 'Acme Corp', { ID: 'abc-123' });
+            expect(token).toContain('"type":"record"');
+            expect(token).toContain('"entityName":"Customers"');
+            expect(token).toContain('"ID":"abc-123"');
+            expect(token).not.toContain('"id":');
+        });
+
+        it('CreateRecordLink puts reserved PK names in nested keys', () => {
+            const token = ConversationUtility.CreateRecordLink('Weird', 'Row', { type: 'x', ID: '1' });
+            expect(token).toContain('"ID":"1"');
+            expect(token).toContain('"keys":{"type":"x"}');
+        });
+
+        it('accepts id as an alias for ID', () => {
+            const text = '@{"_mode":"mention","type":"record","entityName":"Customers","name":"Acme","id":"abc"}';
+            const tokens = ConversationUtility.ParseSpecialContent(text);
+            const ck = ConversationUtility.CompositeKeyFromRecordLink(
+                tokens[0].content as import('../conversation-utility').MentionContent,
+                ['ID']
+            );
+            expect(ck?.KeyValuePairs).toEqual([{ FieldName: 'ID', Value: 'abc' }]);
+        });
+
+        it('returns null when a composite part is missing', () => {
+            const text = '@{"_mode":"mention","type":"record","entityName":"Order Details","name":"X","OrderID":"ord-1"}';
+            const tokens = ConversationUtility.ParseSpecialContent(text);
+            const ck = ConversationUtility.CompositeKeyFromRecordLink(
+                tokens[0].content as import('../conversation-utility').MentionContent,
+                ['OrderID', 'LineNumber']
+            );
+            expect(ck).toBeNull();
+        });
+
+        it('plain-text of a record link is the display name', () => {
+            const text = 'See @{"_mode":"mention","type":"record","entityName":"Customers","name":"Acme Corp","ID":"abc"}';
+            expect(ConversationUtility.ToPlainText(text)).toBe('See Acme Corp');
+        });
+
+        it('parses a record token with no name (icon-only)', () => {
+            const text = '@{"_mode":"mention","type":"record","entityName":"Customers","ID":"abc-123"}';
+            const tokens = ConversationUtility.ParseSpecialContent(text);
+            expect(tokens).toHaveLength(1);
+            const content = tokens[0].content as { type: string; entityName: string; name?: string; ID: string };
+            expect(content.type).toBe('record');
+            expect(content.entityName).toBe('Customers');
+            expect(content.name).toBeUndefined();
+            expect(content.ID).toBe('abc-123');
+        });
+
+        it('parses a record token with empty name as icon-only', () => {
+            const text = '@{"_mode":"mention","type":"record","entityName":"Customers","name":"","ID":"abc-123"}';
+            const tokens = ConversationUtility.ParseSpecialContent(text);
+            expect(tokens).toHaveLength(1);
+            expect((tokens[0].content as { type: string }).type).toBe('record');
+        });
+
+        it('CreateRecordLink omits name when it is empty', () => {
+            const token = ConversationUtility.CreateRecordLink('Customers', '', { ID: 'abc-123' });
+            expect(token).toContain('"entityName":"Customers"');
+            expect(token).toContain('"ID":"abc-123"');
+            expect(token).not.toMatch(/"name"\s*:/);
+        });
+
+        it('CreateRecordLink omits name when it is null', () => {
+            const token = ConversationUtility.CreateRecordLink('Customers', null, { ID: 'abc-123' });
+            expect(token).not.toMatch(/"name"\s*:/);
+        });
+
+        it('plain-text of an icon-only record link falls back to entityName', () => {
+            const text = 'See @{"_mode":"mention","type":"record","entityName":"Customers","ID":"abc"}';
+            expect(ConversationUtility.ToPlainText(text)).toBe('See Customers');
+        });
+
+        it('agent context keeps entity name and PK', () => {
+            const text = '@{"_mode":"mention","type":"record","entityName":"Customers","name":"Acme Corp","ID":"abc"}';
+            expect(ConversationUtility.ToAgentContext(text)).toBe('Acme Corp [Customers; ID=abc]');
+        });
+
+        it('agent context of an icon-only record link uses entityName as the label', () => {
+            const text = '@{"_mode":"mention","type":"record","entityName":"Customers","ID":"abc"}';
+            expect(ConversationUtility.ToAgentContext(text)).toBe('Customers [Customers; ID=abc]');
+        });
+
+        it('CompositeKeyFromOpenResource uses keys then resourceId', () => {
+            const composite = ConversationUtility.CompositeKeyFromOpenResource(
+                { keys: { OrderID: 'ord-1', LineNumber: 4 } },
+                ['OrderID', 'LineNumber']
+            );
+            expect(composite?.KeyValuePairs).toEqual([
+                { FieldName: 'OrderID', Value: 'ord-1' },
+                { FieldName: 'LineNumber', Value: '4' },
+            ]);
+
+            const single = ConversationUtility.CompositeKeyFromOpenResource(
+                { resourceId: 'abc-123' },
+                ['ID']
+            );
+            expect(single?.KeyValuePairs).toEqual([{ FieldName: 'ID', Value: 'abc-123' }]);
+
+            const missing = ConversationUtility.CompositeKeyFromOpenResource(
+                { resourceId: 'only-one' },
+                ['OrderID', 'LineNumber']
+            );
+            expect(missing).toBeNull();
+        });
+    });
+
     describe('CreateFormResponse', () => {
         it('should create a valid form response token', () => {
             const result = ConversationUtility.CreateFormResponse(

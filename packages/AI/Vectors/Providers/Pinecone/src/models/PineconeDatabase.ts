@@ -1,4 +1,4 @@
-import { pineconeDefaultIndex } from '../config';
+import { PineconeDefaultIndex } from '../config';
 import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
 import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database/pinecone';
@@ -29,10 +29,15 @@ export class PineconeDatabase extends VectorDBBase {
         throw new Error('Method not implemented.');
     }
 
-    get pinecone(): Pinecone { return this._pinecone; }
+    get Pinecone(): Pinecone { return this._pinecone; }
+
+    /** @deprecated Use {@link Pinecone}. */
+    get pinecone(): Pinecone {
+        return this.Pinecone;
+    }
 
     public async GetIndexDescription(params: BaseRequestParams): Promise<IndexDescription> {
-        const description: IndexDescription = await this.pinecone.describeIndex(params.id);
+        const description: IndexDescription = await this.Pinecone.describeIndex(params.id);
         return description;
     }
 
@@ -41,8 +46,8 @@ export class PineconeDatabase extends VectorDBBase {
             return this._defaultIndex;
         }
 
-        if(pineconeDefaultIndex){
-            let defaultIndex = this.pinecone.Index(pineconeDefaultIndex);
+        if(PineconeDefaultIndex){
+            let defaultIndex = this.Pinecone.Index(PineconeDefaultIndex);
             if(defaultIndex){
                 this._defaultIndex = defaultIndex;
                 return defaultIndex;
@@ -52,7 +57,7 @@ export class PineconeDatabase extends VectorDBBase {
         const indexList = await this.ListIndexes();
         if(indexList && indexList.indexes && indexList.indexes.length > 0){
             const indexName: string = indexList.indexes[0].name;
-            this._defaultIndex = this.pinecone.index(indexName);
+            this._defaultIndex = this.Pinecone.index(indexName);
             return this._defaultIndex;
         }
 
@@ -61,7 +66,7 @@ export class PineconeDatabase extends VectorDBBase {
     }
 
     public async ListIndexes(): Promise<IndexList> {
-        const indexes: IndexList = await this.pinecone.listIndexes();
+        const indexes: IndexList = await this.Pinecone.listIndexes();
         return indexes;
     }
 
@@ -70,7 +75,7 @@ export class PineconeDatabase extends VectorDBBase {
      * defined in the environment variables instead.
      */
     public GetIndex(params?: BaseRequestParams): BaseResponse {
-        const name: string = params?.id || pineconeDefaultIndex;
+        const name: string = params?.id || PineconeDefaultIndex;
         if(!name){
             throw new Error("id not found in params and PINECONE_DEFAULT_INDEX not found in env variables");
         }
@@ -78,7 +83,7 @@ export class PineconeDatabase extends VectorDBBase {
         const result: BaseResponse = {
             message: "",
             success: true,
-            data: this.pinecone.Index(name)
+            data: this.Pinecone.Index(name)
         };
 
         return result;
@@ -93,7 +98,7 @@ export class PineconeDatabase extends VectorDBBase {
      */
     public async CreateIndex(options: CreateIndexParams): Promise<BaseResponse> {
         try{
-            const result = await this.pinecone.createIndex({
+            const result = await this.Pinecone.createIndex({
                 name: options.id,
                 dimension: options.dimension,
                 metric: options.metric,
@@ -110,7 +115,7 @@ export class PineconeDatabase extends VectorDBBase {
 
     public async DeleteIndex(params: BaseRequestParams): Promise<BaseResponse> {
         try{
-            await this.pinecone.deleteIndex(params.id);
+            await this.Pinecone.deleteIndex(params.id);
             return this.wrapSuccessResponse(null);
         }
         catch(ex){
@@ -159,23 +164,51 @@ export class PineconeDatabase extends VectorDBBase {
     }
 
     /**
+     * Declares `namespaceField` as a source-record dependency so calling pipelines resolve it
+     * onto the record before {@link BuildProviderDirectives} runs. The configured value may be
+     * a plain field name (`"OrganizationID"`) or a single-hop dotted path through a foreign key
+     * (`"ContentSourceID.OrganizationID"`) — dotted paths are resolved by the pipeline and
+     * injected under the full path key, so the directive lookup below works unchanged.
+     */
+    public override GetSourceRecordFieldPaths(providerConfig: Record<string, unknown>): string[] {
+        const namespaceField = this.resolveNamespaceFieldConfig(providerConfig);
+        return namespaceField ? [namespaceField] : [];
+    }
+
+    /**
      * Derives the Pinecone namespace for a source record from VectorIndex.ProviderConfig.
      *
-     * Reads `providerConfig.namespaceField` — the name of the source-record field whose
-     * value becomes the namespace (e.g. `"OrganizationID"` → namespace `"org-uuid"`).
-     * The resolved namespace is returned as `{ namespace: '<value>' }` so CreateRecords
-     * can route the vector without embedding org data in the stored metadata.
+     * Reads `providerConfig.namespaceField` — the name of the source-record field (or resolved
+     * path key, see {@link GetSourceRecordFieldPaths}) whose value becomes the namespace
+     * (e.g. `"OrganizationID"` → namespace `"org-uuid"`). The resolved namespace is returned as
+     * `{ namespace: '<value>' }` so CreateRecords can route the vector without embedding org
+     * data in the stored metadata.
+     *
+     * Fail-closed: when `namespaceField` IS configured but the record supplies no usable value,
+     * this THROWS to reject the record rather than returning `{}` — an empty directive would
+     * silently route the vector into the index's default namespace, breaching the tenant wall
+     * namespacing exists to build. Pipelines treat the throw as a per-record failure and the
+     * rest of the batch proceeds.
      */
     public override BuildProviderDirectives(
         sourceRecord: Record<string, unknown>,
         providerConfig: Record<string, unknown>,
     ): Record<string, unknown> {
-        const namespaceField = typeof providerConfig['namespaceField'] === 'string'
-            ? providerConfig['namespaceField'] as string : undefined;
-        if (namespaceField && sourceRecord[namespaceField] != null) {
-            return { namespace: String(sourceRecord[namespaceField]) };
+        const namespaceField = this.resolveNamespaceFieldConfig(providerConfig);
+        if (!namespaceField) {
+            return {};
         }
-        return {};
+        const value = sourceRecord[namespaceField];
+        if (value == null || String(value).trim().length === 0) {
+            throw new Error(`Pinecone namespaceField "${namespaceField}" is configured but this record has no value for it — refusing to write to the default namespace`);
+        }
+        return { namespace: String(value) };
+    }
+
+    /** The trimmed `namespaceField` config string, or undefined when not configured. */
+    private resolveNamespaceFieldConfig(providerConfig: Record<string, unknown>): string | undefined {
+        const nf = providerConfig['namespaceField'];
+        return typeof nf === 'string' && nf.trim().length > 0 ? nf.trim() : undefined;
     }
 
     public async CreateRecord(params: VectorRecord, indexName?: string, providerConfig?: Record<string, unknown>): Promise<BaseResponse> {
@@ -276,7 +309,11 @@ export class PineconeDatabase extends VectorDBBase {
     public async DeleteRecord(record: VectorRecord, indexName?: string): Promise<BaseResponse> {
         try{
             const index: Index = this.GetIndex(indexName ? { id: indexName } : undefined).data;
-            let result = index.deleteOne(record.id);
+            // Honor per-record namespace routing set by BuildProviderDirectives — Pinecone deletes
+            // are namespace-scoped, so an unrouted delete of a namespaced vector silently no-ops.
+            const ns = record.providerTemporaryDirectives?.['namespace'];
+            const target = ns != null && String(ns).length > 0 ? index.namespace(String(ns)) : index;
+            const result = await target.deleteOne(record.id);
             return this.wrapSuccessResponse(result);
         }
         catch(ex){
@@ -288,11 +325,32 @@ export class PineconeDatabase extends VectorDBBase {
     public async DeleteRecords(records: VectorRecord[], indexName?: string): Promise<BaseResponse> {
         try{
             const index: Index = this.GetIndex(indexName ? { id: indexName } : undefined).data;
+
+            // Multi-namespace path: mirror CreateRecords — group ids by the per-record namespace
+            // set by BuildProviderDirectives and delete each group inside its own namespace.
+            // Pinecone deletes are namespace-scoped and report success even for ids that don't
+            // exist, so deleting namespaced vectors without routing silently removes nothing.
+            const hasPerRecordNamespace = records.some(r => r.providerTemporaryDirectives?.['namespace'] != null);
+            if (hasPerRecordNamespace) {
+                const groups = new Map<string, string[]>();
+                for (const record of records) {
+                    const ns = String(record.providerTemporaryDirectives?.['namespace'] ?? '');
+                    const existing = groups.get(ns);
+                    if (existing) { existing.push(record.id); } else { groups.set(ns, [record.id]); }
+                }
+                for (const [ns, ids] of groups) {
+                    const target = ns ? index.namespace(ns) : index;
+                    await target.deleteMany(ids);
+                }
+                return this.wrapSuccessResponse(null);
+            }
+
             const IDMap: string[] = records.map((record: VectorRecord) => record.id);
-            let result = index.deleteMany(IDMap);
+            const result = await index.deleteMany(IDMap);
             return this.wrapSuccessResponse(result);
         }
         catch(ex){
+            LogError("Error deleting records", undefined, ex);
             return this.wrapFailureResponse();
         }
     }

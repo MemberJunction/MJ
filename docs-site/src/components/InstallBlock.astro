@@ -1,0 +1,79 @@
+---
+/**
+ * "Install from source" panel on the landing page: the install sequence with a
+ * copy button and the prerequisite line.
+ *
+ * The commands mirror the Quick Start in the repo README (which is what the
+ * /overview/ page renders). MJ has no downloadable archive installer — cloning
+ * and running InstallMJ.js IS the install path — so this block has to carry the
+ * whole sequence, not just the clone.
+ *
+ * The rendered <pre> is the single source of truth — the copy button reads its
+ * text back out and strips the "$ " prompts, so the visible commands and the
+ * clipboard payload cannot drift apart.
+ *
+ * `npm install` is correct for the line this site documents (lts/5 ships
+ * package-lock.json + packageManager npm@11). It becomes `pnpm install` when a
+ * 6.x line certifies as LTS and the docs.yml ref moves; that workflow detects
+ * the package manager from the lockfile, but this string does not.
+ */
+---
+
+<div class="mjd-install">
+  <div class="mjd-install__bar">
+    <svg class="mjd-install__glyph" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 17l6-5-6-5"></path><path d="M12 19h8"></path>
+    </svg>
+    <span class="mjd-install__label">Download &amp; Install</span>
+    <button class="mjd-install__copy" type="button" data-copy-install>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="9" y="9" width="12" height="12" rx="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+      <span data-copy-label>Copy</span>
+    </button>
+  </div>
+
+  <pre class="mjd-install__code" data-install-commands><span class="mjd-install__prompt">$ </span>git clone https://github.com/MemberJunction/MJ.git
+<span class="mjd-install__prompt">$ </span>cd MJ
+<span class="mjd-install__prompt">$ </span>npm install
+<span class="mjd-install__prompt">$ </span>cp install.config.json.example install.config.json
+<span class="mjd-install__comment"># add your database and auth settings to install.config.json</span>
+<span class="mjd-install__prompt">$ </span>node InstallMJ.js</pre>
+
+  <p class="mjd-install__note">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01M11 12h1v5h1"></path>
+    </svg>
+    Requires Node.js 20+ and SQL Server 2019+ / Azure SQL, or PostgreSQL
+  </p>
+</div>
+
+<script>
+  const button = document.querySelector('[data-copy-install]');
+  const label = button?.querySelector('[data-copy-label]');
+  const source = document.querySelector('[data-install-commands]');
+
+  if (button && label && source) {
+    let reset;
+
+    button.addEventListener('click', async () => {
+      // Strip the rendered "$ " prompts so the clipboard holds runnable lines.
+      const commands = (source.textContent ?? '')
+        .split('\n')
+        .map((line) => line.replace(/^\s*\$\s?/, '').trim())
+        .filter(Boolean)
+        .join('\n');
+
+      try {
+        await navigator.clipboard.writeText(commands);
+        label.textContent = 'Copied';
+      } catch {
+        label.textContent = 'Press ⌘C';
+      }
+
+      clearTimeout(reset);
+      reset = setTimeout(() => { label.textContent = 'Copy'; }, 1600);
+    });
+  }
+</script>

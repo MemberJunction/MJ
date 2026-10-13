@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -22,7 +22,7 @@ export class PropStateSyncRule extends BaseLintRule {
   Test(ast: t.File, _componentName: string): Violation[] {
     const violations: Violation[] = [];
 
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
         if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useEffect') {
           const effectBody = path.node.arguments[0];

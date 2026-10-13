@@ -10,10 +10,14 @@ import {
 } from '@memberjunction/core';
 import { MJComponentEntity, MJComponentRegistryEntity } from '@memberjunction/core-entities';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
 import sql from 'mssql';
-import { configInfo, componentRegistrySettings, dbDatabase, dbHost, dbPort, dbUsername, dbReadOnlyUsername, dbReadOnlyPassword } from './config.js';
+import { configInfo, componentRegistrySettings, dbDatabase, dbHost, dbPort, dbUsername, DbReadOnlyUsername, DbReadOnlyPassword } from './config.js';
 import createMSSQLConfig from './orm.js';
 import { DataSourceInfo, ComponentRegistryServerOptions, ComponentFeedbackParams, ComponentFeedbackResponse, FeedbackHandler } from './types.js';
+
+/** Process ID this server identifies itself with to the dynamic-package loader (entry `Processes` filters match it). */
+export const COMPONENT_REGISTRY_PROCESS_ID = 'component-registry';
 
 /**
  * Base class for the Component Registry API Server.
@@ -86,7 +90,7 @@ export class ComponentRegistryAPIServer {
    * @returns The Express Router with all registry routes configured
    * @throws Error if called in standalone mode
    */
-  public getRouter(): express.Router {
+  public GetRouter(): express.Router {
     if (this.options.mode !== 'router') {
       throw new Error('getRouter() is only available in router mode');
     }
@@ -96,6 +100,11 @@ export class ComponentRegistryAPIServer {
     return this.router;
   }
 
+  /** @deprecated Use {@link GetRouter}. */
+  public getRouter(): express.Router {
+    return this.GetRouter();
+  }
+
   /**
    * Initialize the server, including database connection, middleware, and routes.
    * This method should be called before starting the server.
@@ -103,7 +112,7 @@ export class ComponentRegistryAPIServer {
    * @returns Promise that resolves when initialization is complete
    * @throws Error if database connection fails or registry cannot be loaded
    */
-  public async initialize(): Promise<void> {
+  public async Initialize(): Promise<void> {
     // Setup database connection only if not skipped
     if (!this.options.skipDatabaseSetup) {
       await this.setupDatabase();
@@ -118,6 +127,11 @@ export class ComponentRegistryAPIServer {
     this.setupMiddleware();
     this.setupRoutes();
   }
+
+  /** @deprecated Use {@link Initialize}. */
+  public async initialize(): Promise<void> {
+    return this.Initialize();
+  }
   
   /**
    * Start the Express server on the configured port.
@@ -125,7 +139,7 @@ export class ComponentRegistryAPIServer {
    *
    * @returns Promise that resolves when the server is listening
    */
-  public async start(): Promise<void> {
+  public async Start(): Promise<void> {
     if (this.options.mode !== 'standalone') {
       throw new Error('start() is only available in standalone mode. Use getRouter() in router mode.');
     }
@@ -144,6 +158,11 @@ export class ComponentRegistryAPIServer {
       });
     });
   }
+
+  /** @deprecated Use {@link Start}. */
+  public async start(): Promise<void> {
+    return this.Start();
+  }
   
   /**
    * Set up the database connection using MemberJunction's SQL Server provider.
@@ -153,8 +172,22 @@ export class ComponentRegistryAPIServer {
    * @virtual
    */
   protected async setupDatabase(): Promise<void> {
+    // Load installed Open App server packages (and the host's generated packages) BEFORE the
+    // provider exists, as MJAPI does, so component/entity work constructs the apps' real
+    // subclasses. configInfo is Zod-parsed and drops `dynamicPackages`; re-discover the raw config.
+    const raw = DiscoverMJConfig();
+    await LoadDynamicPackages({ processId: COMPONENT_REGISTRY_PROCESS_ID, tier: 'server', config: raw.config, configFilePath: raw.configFilePath });
+
     // Create the main connection pool using the same config pattern as MJServer
     this.pool = new sql.ConnectionPool(createMSSQLConfig());
+
+    // Handle connection-level errors from dead/stale connections in the pool.
+    // Without this handler, when the DB drops idle TCP connections, an unhandled
+    // 'error' event crashes the process instead of letting the pool recover.
+    this.pool.on('error', (err) => {
+      LogError(`[ConnectionPool] Pool-level connection error (stale connection evicted): ${err.message}`);
+    });
+
     await this.pool.connect();
     
     // Get cache refresh interval from config (default to 0 if not set)
@@ -179,13 +212,16 @@ export class ComponentRegistryAPIServer {
     })];
     
     // Establish a second read-only connection if credentials are provided
-    if (dbReadOnlyUsername && dbReadOnlyPassword) {
+    if (DbReadOnlyUsername && DbReadOnlyPassword) {
       const readOnlyConfig = {
         ...createMSSQLConfig(),
-        user: dbReadOnlyUsername,
-        password: dbReadOnlyPassword,
+        user: DbReadOnlyUsername,
+        password: DbReadOnlyPassword,
       };
       this.readOnlyPool = new sql.ConnectionPool(readOnlyConfig);
+      this.readOnlyPool.on('error', (err) => {
+        LogError(`[ConnectionPool] Read-only pool-level connection error (stale connection evicted): ${err.message}`);
+      });
       await this.readOnlyPool.connect();
       
       // Add read-only pool to data sources
@@ -195,7 +231,7 @@ export class ComponentRegistryAPIServer {
         host: dbHost, 
         port: dbPort, 
         database: dbDatabase, 
-        userName: dbReadOnlyUsername
+        userName: DbReadOnlyUsername
       }));
       LogStatus('Read-only connection pool has been initialized.');
     }
@@ -677,8 +713,13 @@ export class ComponentRegistryAPIServer {
    * });
    * ```
    */
-  public setFeedbackHandler(handler: FeedbackHandler): void {
+  public SetFeedbackHandler(handler: FeedbackHandler): void {
     this.feedbackHandler = handler;
+  }
+
+  /** @deprecated Use {@link SetFeedbackHandler}. */
+  public setFeedbackHandler(handler: FeedbackHandler): void {
+    return this.SetFeedbackHandler(handler);
   }
 
   /**
@@ -730,7 +771,7 @@ export class ComponentRegistryAPIServer {
  * @returns Promise that resolves when the server is running
  * @throws Error if initialization or startup fails
  */
-export async function startComponentRegistryServer(): Promise<void> {
+export async function StartComponentRegistryServer(): Promise<void> {
   if (!componentRegistrySettings?.enableRegistry) {
     LogStatus('Component Registry Server is disabled in configuration');
     return;
@@ -739,4 +780,9 @@ export async function startComponentRegistryServer(): Promise<void> {
   const server = new ComponentRegistryAPIServer();
   await server.initialize();
   await server.start();
+}
+
+/** @deprecated Use {@link StartComponentRegistryServer}. */
+export async function startComponentRegistryServer(): Promise<void> {
+  return StartComponentRegistryServer();
 }

@@ -1,0 +1,84 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.wf-list {
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  overflow: hidden;
+  background: var(--mj-bg-surface);
+}
+
+.wf-row {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-4);
+  width: 100%;
+  text-align: left;
+  padding: var(--mj-space-3) var(--mj-space-4);
+  border: none;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.wf-row:last-child {
+  border-bottom: none;
+}
+
+.wf-row:hover {
+  background: var(--mj-bg-hover);
+}
+
+.wf-row:focus-visible {
+  outline: 2px solid var(--mj-color-primary);
+  outline-offset: -2px;
+}
+
+.wf-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.wf-row-name {
+  display: block;
+  font-weight: var(--mj-font-weight-semibold);
+  color: var(--mj-text-primary);
+}
+
+.wf-row-desc {
+  display: block;
+  margin-top: var(--mj-space-1);
+  font-size: var(--mj-font-size-sm);
+  color: var(--mj-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-row-trigger {
+  font-size: var(--mj-font-size-xs);
+  color: var(--mj-text-tertiary);
+  flex: none;
+}
+
+.wf-row-status {
+  font-size: var(--mj-font-size-xs);
+  font-weight: var(--mj-font-weight-semibold);
+  color: var(--mj-text-secondary);
+  flex: none;
+}
+
+.wf-row-status-active {
+  color: var(--mj-color-success);
+}
+
+/* The embedded canvas fills the body — it is the whole working surface while a draft is open. */
+.wf-canvas {
+  display: block;
+  height: 100%;
+  min-height: 480px;
+}

@@ -1,0 +1,80 @@
+/* Design tokens only — no hardcoded colors. */
+.mj-wpc {
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-md, 6px);
+  background: var(--mj-bg-surface);
+  overflow: hidden;
+}
+
+.mj-wpc__header {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-sm, 0.5rem);
+  width: 100%;
+  padding: var(--mj-space-sm, 0.5rem) var(--mj-space-md, 1rem);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--mj-text-primary);
+}
+
+.mj-wpc__title {
+  font-weight: 600;
+}
+
+.mj-wpc__summary {
+  flex: 1 1 auto;
+  font-size: var(--mj-font-size-sm, 0.8125rem);
+  color: var(--mj-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-wpc__done {
+  color: var(--mj-color-success);
+}
+
+.mj-wpc__body {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--mj-border-subtle);
+}
+
+/* A plan card sits inline in a conversation — a bounded height keeps it from dominating the thread. */
+.mj-wpc__canvas {
+  height: 320px;
+  min-height: 0;
+}
+
+.mj-wpc__actions {
+  display: flex;
+  justify-content: flex-start;
+  padding: var(--mj-space-sm, 0.5rem) var(--mj-space-md, 1rem);
+  border-top: 1px solid var(--mj-border-subtle);
+}
+
+/* Name it inline (④): one field and a button, so capture stays a two-second act. */
+.mj-wpc__name {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--mj-border-strong);
+  border-radius: var(--mj-radius-md);
+  padding: var(--mj-space-2) var(--mj-space-3);
+  font: inherit;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+}
+
+.mj-wpc__name:focus-visible {
+  outline: 2px solid var(--mj-color-primary);
+  outline-offset: -1px;
+}
+
+/* States the default plainly, so nobody goes looking for a schedule field that is not there. */
+.mj-wpc__note {
+  margin-top: var(--mj-space-2);
+  font-size: var(--mj-font-size-xs);
+  color: var(--mj-text-tertiary);
+}

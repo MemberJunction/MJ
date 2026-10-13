@@ -2,8 +2,8 @@ import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef } from '
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { DevToolsPrefs } from './dev-tools-prefs';
-import { buildLazyModuleStatusAgentContext } from './dev-tools-agent-context';
-import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
+import { BuildLazyModuleStatusAgentContext } from './dev-tools-agent-context';
+import { AgentToolResult, ValidateStringParam } from '../shared/agent-tool-validation';
 
 interface LazyChunk {
     /** A friendly label derived from the chunk id. */
@@ -63,7 +63,7 @@ export class LazyModuleStatusComponent extends BaseResourceComponent implements 
     public ngOnInit(): void {
         const prefs = DevToolsPrefs.Get<{ filter?: 'all' | 'loaded' | 'not-loaded'; expanded?: string[] }>('lazyModule');
         if (prefs?.filter) this.Filter = prefs.filter;
-        this.refresh();
+        this.Refresh();
         if (prefs?.expanded) {
             for (const c of this.Chunks) c.expanded = prefs.expanded.includes(c.chunkId);
         }
@@ -92,7 +92,7 @@ export class LazyModuleStatusComponent extends BaseResourceComponent implements 
     public override async GetResourceDisplayName(): Promise<string> { return 'Lazy Loading'; }
     public override async GetResourceIconClass(): Promise<string> { return 'fa-solid fa-puzzle-piece'; }
 
-    public refresh(): void {
+    public Refresh(): void {
         const reg = (globalThis as { __mj_lazy_registry__?: LazyRegistryShape }).__mj_lazy_registry__;
         if (!reg || typeof reg.GetSnapshot !== 'function') {
             this.Available = false;
@@ -125,6 +125,11 @@ export class LazyModuleStatusComponent extends BaseResourceComponent implements 
         this.LastRefreshed = new Date();
         this.cdr.markForCheck();
         this.publishAgentContext();
+    }
+
+    /** @deprecated Use {@link Refresh}. */
+    public refresh(): void {
+        return this.Refresh();
     }
 
     public OnFilterClick(filter: 'all' | 'loaded' | 'not-loaded'): void {
@@ -160,7 +165,7 @@ export class LazyModuleStatusComponent extends BaseResourceComponent implements 
         try {
             await reg.ForceLoad(chunk.keys[0]); // any key in the chunk loads the same chunk
             // Re-read snapshot to get authoritative state
-            this.refresh();
+            this.Refresh();
         } catch {
             chunk.loading = false;
             this.cdr.markForCheck();
@@ -220,7 +225,7 @@ export class LazyModuleStatusComponent extends BaseResourceComponent implements 
     /** Publish the current lazy-module status to the AI agent. */
     private publishAgentContext(): void {
         const visible = this.FilteredChunks;
-        const context = buildLazyModuleStatusAgentContext({
+        const context = BuildLazyModuleStatusAgentContext({
             Available: this.Available,
             TotalModules: this.Stats.chunkCount,
             LoadedModules: this.Stats.loadedChunks,
@@ -249,7 +254,7 @@ export class LazyModuleStatusComponent extends BaseResourceComponent implements 
                 Description: 'Re-read the lazy-loading registry snapshot to reflect any modules loaded since the last refresh.',
                 ParameterSchema: { type: 'object', properties: {} },
                 Handler: async () => {
-                    this.refresh();
+                    this.Refresh();
                     return { Success: true };
                 },
             },
@@ -258,7 +263,7 @@ export class LazyModuleStatusComponent extends BaseResourceComponent implements 
 
     /** Apply (or clear, on empty string) the lazy-module search query. */
     private toolSearch(params: Record<string, unknown>): AgentToolResult {
-        const validated = validateStringParam(params['query'], 'query');
+        const validated = ValidateStringParam(params['query'], 'query');
         if (!validated.ok) {
             return validated.result;
         }

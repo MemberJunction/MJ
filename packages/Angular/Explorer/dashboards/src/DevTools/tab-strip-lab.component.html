@@ -1,0 +1,74 @@
+<div class="mj-inspector mj-inspector--solo">
+    <mj-page-header-interior
+        Role="region"
+        AriaLabel="Tab strip lab"
+        Title="Tab Strip Lab"
+        Subtitle="MJ's two tab strips over the same labels — they must be indistinguishable">
+        <div actions>
+            <button mjButton variant="secondary" size="sm" (click)="ResetDraftTabs()" title="Restore the seeded tabs">
+                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                <span class="mj-action-label">Reset</span>
+            </button>
+        </div>
+    </mj-page-header-interior>
+
+    <div class="mj-inspector__content">
+        <p class="tsl-note">
+            Both strips draw from the one global <code>.mj-tabs*</code> stylesheet and get their keyboard
+            behaviour from the one <code>mjTabList</code> directive. Any visual or behavioural difference
+            between the two below is a bug in that sharing, not a styling choice.
+            <strong>Keyboard:</strong> Tab into a strip (it is a single tab stop), then
+            <kbd>←</kbd>/<kbd>→</kbd> to move, <kbd>Home</kbd>/<kbd>End</kbd> for the ends,
+            <kbd>Delete</kbd> to close a closeable tab.
+        </p>
+
+        <!-- 1. Projected-children strip ------------------------------------------------------ -->
+        <section class="tsl-case">
+            <header class="tsl-case__head">
+                <h4 class="tsl-case__title">&lt;mj-tabstrip&gt;</h4>
+                <span class="tsl-case__meta">projected children · addressed by index · owns its bodies</span>
+            </header>
+            <div class="tsl-case__stage">
+                <mj-tabstrip (TabSelected)="OnProjectedTabSelect($event)" (TabClosed)="OnProjectedTabClosed($event)">
+                    @for (label of ProjectedLabels; track label) {
+                        <mj-tab [TabCloseable]="true">{{ label }}</mj-tab>
+                    }
+                    @for (label of ProjectedLabels; track label) {
+                        <mj-tab-body>
+                            <div class="tsl-body">Body for <strong>{{ label }}</strong></div>
+                        </mj-tab-body>
+                    }
+                </mj-tabstrip>
+            </div>
+        </section>
+
+        <!-- 2. Data-driven strip -------------------------------------------------------------- -->
+        <section class="tsl-case">
+            <header class="tsl-case__head">
+                <h4 class="tsl-case__title">&lt;mj-workspace-tab-strip&gt;</h4>
+                <span class="tsl-case__meta">data array · addressed by id · projects nothing · drag to reorder</span>
+            </header>
+            <div class="tsl-case__stage">
+                <mj-workspace-tab-strip
+                    [Tabs]="DraftTabs"
+                    [ActiveId]="Store.ActiveId"
+                    NewTabLabel="New draft"
+                    (TabSelected)="OnDraftSelected($event)"
+                    (TabClosed)="OnDraftClosed($event)"
+                    (TabReordered)="OnDraftReordered($event)"
+                    (NewTabRequested)="OnDraftNew()">
+                </mj-workspace-tab-strip>
+                <!-- This strip projects no bodies: the host renders whatever the active tab means.
+                     Shown here so the two cases are visually comparable end to end. -->
+                <div class="tsl-body">
+                    @if (Store.ActiveTab) {
+                        Body for <strong>{{ Store.ActiveTab.Label }}</strong>
+                        <span class="tsl-state">status: {{ Store.ActiveTab.Status }}{{ Store.ActiveTab.Dirty ? ' · unsaved' : '' }}</span>
+                    } @else {
+                        <em>No tab selected — close them all to see the empty state.</em>
+                    }
+                </div>
+            </div>
+        </section>
+    </div>
+</div>

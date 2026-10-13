@@ -20,19 +20,19 @@ import {
 import { RelationshipDiscoveryConfig, AIConfig } from '../types/config.js';
 
 export interface DiscoveryEngineOptions {
-  driver: BaseAutoDocDriver;
-  config: RelationshipDiscoveryConfig;
-  aiConfig: AIConfig;
-  schemas: SchemaDefinition[];
-  onProgress?: (message: string, data?: any) => void;
-  onCheckpoint?: (phase: RelationshipDiscoveryPhase) => Promise<void>;
+  Driver: BaseAutoDocDriver;
+  Config: RelationshipDiscoveryConfig;
+  AiConfig: AIConfig;
+  schemas: SchemaDefinition[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  OnProgress?: (message: string, data?: any) => void;
+  OnCheckpoint?: (phase: RelationshipDiscoveryPhase) => Promise<void>;
 }
 
 export interface DiscoveryResult {
-  phase: RelationshipDiscoveryPhase;
-  guardrailsReached: boolean;
-  guardrailReason?: string;
-  statsCache: ColumnStatsCache; // Return the stats cache for persistence
+  Phase: RelationshipDiscoveryPhase;
+  guardrailsReached: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  GuardrailReason?: string;
+  StatsCache: ColumnStatsCache; // Return the stats cache for persistence
 }
 
 export class DiscoveryEngine {
@@ -49,12 +49,12 @@ export class DiscoveryEngine {
   private sanityChecker?: LLMSanityChecker;
 
   constructor(options: DiscoveryEngineOptions) {
-    this.driver = options.driver;
-    this.config = options.config;
-    this.aiConfig = options.aiConfig;
+    this.driver = options.Driver;
+    this.config = options.Config;
+    this.aiConfig = options.AiConfig;
     this.schemas = options.schemas;
-    this.onProgress = options.onProgress || (() => {});
-    this.onCheckpoint = options.onCheckpoint || (async () => {});
+    this.onProgress = options.OnProgress || (() => {});
+    this.onCheckpoint = options.OnCheckpoint || (async () => {});
 
     // Create stats cache and detectors
     this.statsCache = new ColumnStatsCache();
@@ -79,14 +79,19 @@ export class DiscoveryEngine {
   /**
    * Get the column statistics cache
    */
-  public getStatsCache(): ColumnStatsCache {
+  public GetStatsCache(): ColumnStatsCache {
     return this.statsCache;
+  }
+
+  /** @deprecated Use {@link GetStatsCache}. */
+  public getStatsCache(): ColumnStatsCache {
+    return this.GetStatsCache();
   }
 
   /**
    * Analyze if discovery should be triggered based on schema state
    */
-  public analyzeTrigger(): DiscoveryTriggerAnalysis {
+  public AnalyzeTrigger(): DiscoveryTriggerAnalysis {
     let totalTables = 0;
     let tablesWithPK = 0;
     let totalFKs = 0;
@@ -133,9 +138,9 @@ export class DiscoveryEngine {
     }
 
     return {
-      shouldRun,
+      ShouldRun: shouldRun,
       reason: shouldRun ? reason : 'Discovery not needed - schema is well-defined',
-      details: {
+      Details: {
         totalTables,
         tablesWithPK,
         tablesWithoutPK,
@@ -147,10 +152,15 @@ export class DiscoveryEngine {
     };
   }
 
+  /** @deprecated Use {@link AnalyzeTrigger}. */
+  public analyzeTrigger(): DiscoveryTriggerAnalysis {
+    return this.AnalyzeTrigger();
+  }
+
   /**
    * Execute the discovery process
    */
-  public async discover(
+  public async Discover(
     maxTokens: number,
     triggerAnalysis: DiscoveryTriggerAnalysis,
     existingPhase?: RelationshipDiscoveryPhase
@@ -232,11 +242,20 @@ export class DiscoveryEngine {
     });
 
     return {
-      phase,
+      Phase: phase,
       guardrailsReached,
-      guardrailReason,
-      statsCache: this.statsCache
+      GuardrailReason: guardrailReason,
+      StatsCache: this.statsCache
     };
+  }
+
+  /** @deprecated Use {@link Discover}. */
+  public async discover(
+    maxTokens: number,
+    triggerAnalysis: DiscoveryTriggerAnalysis,
+    existingPhase?: RelationshipDiscoveryPhase
+  ): Promise<DiscoveryResult> {
+    return this.Discover(maxTokens, triggerAnalysis, existingPhase);
   }
 
   /**
@@ -252,10 +271,10 @@ export class DiscoveryEngine {
       triggered: true,
       triggerReason,
       triggerDetails: {
-        tablesWithoutPK: triggerAnalysis.details.tablesWithoutPK,
-        expectedFKs: triggerAnalysis.details.expectedMinFKs,
-        actualFKs: triggerAnalysis.details.totalFKs,
-        fkDeficitPercentage: triggerAnalysis.details.fkDeficitPercentage
+        tablesWithoutPK: triggerAnalysis.Details.tablesWithoutPK,
+        expectedFKs: triggerAnalysis.Details.expectedMinFKs,
+        actualFKs: triggerAnalysis.Details.totalFKs,
+        fkDeficitPercentage: triggerAnalysis.Details.fkDeficitPercentage
       },
       startedAt: new Date().toISOString(),
       tokenBudget: {
@@ -299,8 +318,8 @@ export class DiscoveryEngine {
   private determineTriggerReason(
     analysis: DiscoveryTriggerAnalysis
   ): 'missing_pks' | 'insufficient_fks' | 'both' | 'manual' {
-    const hasMissingPKs = analysis.details.tablesWithoutPK > 0;
-    const hasInsufficientFKs = analysis.details.fkDeficitPercentage >= this.config.triggers.fkDeficitThreshold;
+    const hasMissingPKs = analysis.Details.tablesWithoutPK > 0;
+    const hasInsufficientFKs = analysis.Details.fkDeficitPercentage >= this.config.triggers.fkDeficitThreshold;
 
     if (hasMissingPKs && hasInsufficientFKs) {
       return 'both';
@@ -382,8 +401,8 @@ export class DiscoveryEngine {
 
       const sanityResult = await this.sanityChecker.reviewCandidates(newPKs, newFKs);
       iterationResult.tokensUsed += sanityResult.tokensUsed;
-      iterationResult.inputTokens += sanityResult.inputTokens || 0;
-      iterationResult.outputTokens += sanityResult.outputTokens || 0;
+      iterationResult.inputTokens += sanityResult.InputTokens || 0;
+      iterationResult.outputTokens += sanityResult.OutputTokens || 0;
 
       // Remove invalid PKs
       if (sanityResult.invalidPKs.length > 0) {
@@ -418,9 +437,9 @@ export class DiscoveryEngine {
       }
 
       // Log suggestions
-      if (sanityResult.suggestions.length > 0) {
+      if (sanityResult.Suggestions.length > 0) {
         console.log(`[DiscoveryEngine] Sanity check suggestions:`);
-        for (const suggestion of sanityResult.suggestions) {
+        for (const suggestion of sanityResult.Suggestions) {
           console.log(`  - ${suggestion}`);
         }
       }
@@ -735,8 +754,8 @@ export class DiscoveryEngine {
         );
 
         tokensUsed += result.tokensUsed;
-        iteration.inputTokens += result.inputTokens || 0;
-        iteration.outputTokens += result.outputTokens || 0;
+        iteration.inputTokens += result.InputTokens || 0;
+        iteration.outputTokens += result.OutputTokens || 0;
 
         if (!result.validated) {
           this.onProgress(`LLM validation failed for ${tableKey}: ${result.reasoning}`);
@@ -744,7 +763,7 @@ export class DiscoveryEngine {
         }
 
         // Process LLM recommendations — enforce eligibility constraints
-        for (const rec of result.recommendations) {
+        for (const rec of result.Recommendations) {
           const recId = `${rec.target}:${rec.schemaName}.${rec.tableName}.${rec.columnName}`;
 
           // Gate: LLM cannot add or confirm PKs/FKs for ineligible columns
@@ -1087,7 +1106,7 @@ export class DiscoveryEngine {
   /**
    * Apply discovered relationships to state
    */
-  public applyDiscoveriesToState(
+  public ApplyDiscoveriesToState(
     state: DatabaseDocumentation,
     phase: RelationshipDiscoveryPhase
   ): void {
@@ -1140,6 +1159,14 @@ export class DiscoveryEngine {
 
     // Store discovery phase in state (new phases structure)
     state.phases.keyDetection = phase;
+  }
+
+  /** @deprecated Use {@link ApplyDiscoveriesToState}. */
+  public applyDiscoveriesToState(
+    state: DatabaseDocumentation,
+    phase: RelationshipDiscoveryPhase
+  ): void {
+    return this.ApplyDiscoveriesToState(state, phase);
   }
 
   /**

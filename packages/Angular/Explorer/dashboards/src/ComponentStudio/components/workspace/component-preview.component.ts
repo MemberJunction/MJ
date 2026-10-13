@@ -250,20 +250,25 @@ export class ComponentPreviewComponent implements OnInit, OnDestroy {
     try {
       const rv = RunView.FromMetadataProvider(this.State.Provider);
       const entityInfo = this.State.Provider.EntityByName(entityName);
-      const nameField = entityInfo?.NameField?.Name ?? 'ID';
-      const fields = nameField === 'ID' ? ['ID'] : ['ID', nameField];
+      if (!entityInfo) {
+        throw new Error(`entity '${entityName}' not found in metadata`);
+      }
+      // The target entity is arbitrary: select its real key column(s) rather than assuming one named ID
+      const pkFields = entityInfo.PrimaryKeys.map(pk => pk.Name);
+      const nameField = entityInfo.NameField?.Name;
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entityName,
-        Fields: fields,
+        Fields: nameField ? [...pkFields, nameField] : pkFields,
         OrderBy: '__mj_UpdatedAt DESC',
         MaxRows: 10,
         ResultType: 'simple',
       });
       if (result.Success && Array.isArray(result.Results)) {
-        this.RecentRecords = result.Results.map(r => ({
-          ID: String(r['ID'] ?? ''),
-          Display: String(r[nameField] ?? r['ID'] ?? ''),
-        })).filter(r => r.ID.length > 0);
+        this.RecentRecords = result.Results.map(r => {
+          // Compact key segment: the raw value for a single-column key, "F1|v1||F2|v2" for a composite one
+          const id = CompositeKey.FromEntityRecord(entityInfo, r).ToCompactURLSegment();
+          return { ID: id, Display: String((nameField ? r[nameField] : undefined) ?? id) };
+        }).filter(r => r.ID.length > 0);
       }
     } catch (err) {
       LogError(`ComponentPreview.maybeRefreshRecentRecords: ${err instanceof Error ? err.message : String(err)}`);
@@ -292,7 +297,8 @@ export class ComponentPreviewComponent implements OnInit, OnDestroy {
     try {
       const provider = this.State.Provider;
       const entity = await provider.GetEntityObject<BaseEntity>(entityName, provider.CurrentUser);
-      const compositeKey = CompositeKey.FromID(id);
+      // `id` is the compact key segment built in maybeRefreshRecentRecords; resolve it against the entity's own key column(s)
+      const compositeKey = CompositeKey.FromURLSegment(entity.EntityInfo, id);
       const loaded = await entity.InnerLoad(compositeKey);
       if (loaded) {
         const values: Record<string, unknown> = {};

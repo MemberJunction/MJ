@@ -8,10 +8,11 @@
  * @module @memberjunction/search-engine
  */
 
-import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeEntityConstraint } from './search.types';
+import { EnvIntOverride } from './env-config';
 
 /**
  * Provides entity-level LIKE-based search using RunView + UserSearchString.
@@ -40,17 +41,30 @@ export class EntitySearchProvider extends BaseSearchProvider {
      * many candidates; the engine still trims the fused, relevance-sorted result set back to
      * `topK`, so the returned count is unchanged — we only widen the candidate pool per entity.
      * Public + static so a deployment can tune it at startup (larger entity counts may lower it
-     * to bound the row-materialization cost of the parallel fan-out).
+     * to bound the row-materialization cost of the parallel fan-out), or override the default at
+     * process start via the `MJ_SEARCH_PER_ENTITY_FETCH_DEPTH` environment variable.
      */
-    public static PerEntityFetchDepth = 15;
+    public static PerEntityFetchDepth = EnvIntOverride('MJ_SEARCH_PER_ENTITY_FETCH_DEPTH', 15);
 
     /**
-     * Per-entity hard timeout. If one entity's RunView is taking longer than this,
-     * we drop its results rather than hold the entire fan-out hostage. The query
-     * keeps running in SQL Server until completion (we can't cancel mssql Requests
-     * here), but other entities' results still land for the user.
+     * Per-entity hard timeout, in milliseconds. If one entity's RunView takes longer
+     * than this, we drop its results rather than hold the entire fan-out hostage. The
+     * query keeps running in SQL Server until completion (we can't cancel mssql
+     * Requests here), but the other entities' results still land for the user.
+     *
+     * Public + static so a deployment can tune it at startup — mirroring
+     * {@link PerEntityFetchDepth}. The 3s default keeps interactive/omnibar fan-outs
+     * responsive by dropping a pathological entity promptly instead of stalling the
+     * whole fan-out; deployments doing large unindexed LIKE scans can raise it, either
+     * by overriding the default at process start via the `MJ_SEARCH_PER_ENTITY_TIMEOUT_MS`
+     * environment variable or by assigning the static before serving:
+     *
+     * ```ts
+     * import { EntitySearchProvider } from '@memberjunction/search-engine';
+     * EntitySearchProvider.PerEntityTimeoutMS = 30_000;
+     * ```
      */
-    private static readonly PER_ENTITY_TIMEOUT_MS = 30_000;
+    public static PerEntityTimeoutMS = EnvIntOverride('MJ_SEARCH_PER_ENTITY_TIMEOUT_MS', 3000);
 
     /**
      * Execute an entity search across all entities with AllowUserSearchAPI=true.
@@ -123,9 +137,8 @@ export class EntitySearchProvider extends BaseSearchProvider {
             );
 
             // Search all entities in parallel, threading per-entity ExtraFilter + UserSearchString
-            // override; each call is gated by a hard PER_ENTITY_TIMEOUT_MS timeout (next PR #2532)
-            // so a slow entity cannot hold up the whole fan-out — partial results from the other
-            // entities still land.
+            // override; each call is gated by a hard PerEntityTimeoutMS timeout so a slow entity
+            // cannot hold up the whole fan-out — partial results from the other entities still land.
             const searchPromises = scoped.map(item =>
                 this.searchOneEntity(
                     item.EntityName,
@@ -181,12 +194,38 @@ export class EntitySearchProvider extends BaseSearchProvider {
 
     /**
      * Get the list of entities eligible for search, optionally filtered by name.
+     *
+     * `AllowUserSearchAPI` alone is not enough. An entity can carry that flag while declaring
+     * no `IncludeInUserSearchAPI` field at all — CodeGen defaults the entity flag to true, but
+     * the field flags are only set when smart-field analysis runs, so any entity created
+     * without it starts search-enabled with nothing to search. For those, `UserSearchString`
+     * is a documented no-op (MJ#4581/#4582): the provider ignores the term and returns the
+     * UNFILTERED table. The scorer then discards every row, because none of them matched
+     * anything — so the round-trip can only ever produce load, never a result.
+     *
+     * `HasSearchFields` is the same predicate the data provider uses to tell "this entity has
+     * no search surface" from "every candidate field dropped out at runtime" (FLS-denied, or
+     * not a text-search target). The latter still gets queried: it returns `(1=0)` cheaply and
+     * is a real, if empty, answer. Only the no-surface case is skipped here.
+     *
+     * A full-text-search entity with no per-field flags is deliberately NOT exempted here, even
+     * though `createViewUserSearchSQL` would happily take its FTS branch. This provider could not
+     * use the rows: `convertResults` scores by counting which `IncludeInUserSearchAPI` fields
+     * contain the query, so with none declared `matchedFields` is 0 and every row is dropped.
+     * Exempting them buys a per-keystroke round-trip whose results are discarded. Full-text
+     * entities are served by `FullTextSearchProvider`, which calls the provider's `FullTextSearch`
+     * directly and emits `SourceType: 'fulltext'` — that is where their coverage comes from.
+     *
+     * Note this is a screen, not a substitute for the metadata being right — `AllowUserSearchAPI`
+     * should be off on such an entity (see `metadata/entities/.entity-search-exclusions.json`).
+     * It is the backstop that keeps a newly-added entity from silently costing every keystroke
+     * a round-trip until someone notices and adds it to that list.
      */
     private getSearchableEntities(
         md: IMetadataProvider,
         filters: SearchFilters | undefined
     ): { Name: string }[] {
-        let entities = md.Entities.filter(e => e.AllowUserSearchAPI);
+        let entities = md.Entities.filter(e => e.AllowUserSearchAPI && e.HasSearchFields);
 
         if (filters?.EntityNames?.length) {
             const allowedNames = new Set(filters.EntityNames.map(n => n.toLowerCase()));
@@ -198,7 +237,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
 
     /**
      * Search a single entity using RunView with UserSearchString. Wraps the
-     * underlying RunView in a hard PER_ENTITY_TIMEOUT_MS timeout so a slow
+     * underlying RunView in a hard PerEntityTimeoutMS timeout so a slow
      * entity cannot hold up the whole fan-out — partial results from the
      * other entities still land.
      *
@@ -217,9 +256,9 @@ export class EntitySearchProvider extends BaseSearchProvider {
         let timer: ReturnType<typeof setTimeout> | undefined;
         const timeout = new Promise<SearchResultItem[]>(resolve => {
             timer = setTimeout(() => {
-                LogError(`EntitySearchProvider: timeout (${EntitySearchProvider.PER_ENTITY_TIMEOUT_MS}ms) searching "${entityName}"`);
+                LogError(`EntitySearchProvider: timeout (${EntitySearchProvider.PerEntityTimeoutMS}ms) searching "${entityName}"`);
                 resolve([]);
-            }, EntitySearchProvider.PER_ENTITY_TIMEOUT_MS);
+            }, EntitySearchProvider.PerEntityTimeoutMS);
         });
         try {
             return await Promise.race([work, timeout]);
@@ -278,7 +317,15 @@ export class EntitySearchProvider extends BaseSearchProvider {
         const totalSearchableFields = Math.max(searchFields.length, 1);
 
         return records.map((record) => {
-            const recordID = String(record.ID ?? '');
+            // Build the key from the entity's actual primary-key column(s) and emit it in compact
+            // CompositeKey form: the bare value for a single-column key (whatever it is called),
+            // "F1|v1||F2|v2" for a composite one. Reading `record.ID` yielded '' for any entity whose
+            // key isn't named ID, and SearchFusion drops empty RecordIDs — so this lane silently
+            // contributed nothing for those entities. RunView always returns the PK columns, even
+            // with an explicit Fields list, so the values are guaranteed present on the row.
+            const recordID = entityInfo
+                ? CompositeKey.FromEntityRecord(entityInfo, record).ToCompactURLSegment()
+                : String(record.ID ?? '');
             const title = this.extractTitle(record, entityInfo);
             const snippet = this.extractSnippet(record, entityInfo);
 
@@ -295,6 +342,11 @@ export class EntitySearchProvider extends BaseSearchProvider {
                 }
             }
 
+            // If zero searchable fields matched the query in memory, do not assign a baseline score — drop the record.
+            if (matchedFields === 0) {
+                return null;
+            }
+
             // Score: base from field match ratio, boost for name field matches
             // Range: ~0.15 (weak match in one field) to ~0.95 (name field + multiple fields)
             const fieldRatio = matchedFields / totalSearchableFields;
@@ -302,21 +354,25 @@ export class EntitySearchProvider extends BaseSearchProvider {
             const nameBoost = nameFieldMatch ? 0.35 : 0;  // +0.35 for name field match
             const score = Math.min(baseScore + nameBoost, 0.95);
 
-            return {
+            const entityDisplayName = entityInfo?.DisplayName || entityName;
+            const resultItem: SearchResultItem = {
                 ID: recordID,
                 EntityName: entityName,
+                EntityDisplayName: entityDisplayName,
                 RecordID: recordID,
                 SourceType: 'entity',
-                ResultType: 'entity-record' as SearchResultType,
+                ResultType: 'entity-record',
                 Title: title,
                 Snippet: snippet,
                 Score: Math.round(score * 100) / 100, // Round to 2 decimal places
                 ScoreBreakdown: { Entity: Math.round(score * 100) / 100 },
                 Tags: [],
                 EntityIcon: entityInfo?.Icon ?? undefined,
+                RecordName: title !== 'Record' ? title : undefined,
                 MatchedAt: new Date()
             };
-        });
+            return resultItem;
+        }).filter((item): item is SearchResultItem => item != null);
     }
 
     /**

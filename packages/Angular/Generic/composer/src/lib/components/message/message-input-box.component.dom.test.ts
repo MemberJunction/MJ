@@ -57,16 +57,16 @@ type Fx = ReturnType<typeof render>;
 
 describe('MessageInputBoxComponent (DOM)', () => {
   it('hides the plan-mode button when plan mode is disabled', () => {
-    expect(query(render({ enablePlanMode: false }), '.plan-mode-button-icon')).toBeNull();
+    expect(query(render({ EnablePlanMode: false }), '.plan-mode-button-icon')).toBeNull();
   });
 
   it('renders the plan-mode button when plan mode is enabled', () => {
-    expect(query(render({ enablePlanMode: true }), '.plan-mode-button-icon')).not.toBeNull();
+    expect(query(render({ EnablePlanMode: true }), '.plan-mode-button-icon')).not.toBeNull();
   });
 
   it('emits planModeToggle when the plan-mode button is clicked and reflects the active state', () => {
-    const f = render({ enablePlanMode: true, planModeActive: true });
-    const out = capture(f.componentInstance.planModeToggle);
+    const f = render({ EnablePlanMode: true, PlanModeActive: true });
+    const out = capture(f.componentInstance.PlanModeToggle);
     const btn = query(f, '.plan-mode-button-icon') as HTMLElement;
     expect(btn.classList.contains('plan-mode-button-icon--active')).toBe(true);
     btn.click();
@@ -74,45 +74,45 @@ describe('MessageInputBoxComponent (DOM)', () => {
   });
 
   it('renders the voice button when realtime is enabled and emits voiceRequested on click', () => {
-    const f = render({ enableRealtime: true, voiceActive: true });
+    const f = render({ EnableRealtime: true, VoiceActive: true });
     const btn = query(f, '.voice-button-icon') as HTMLElement;
     expect(btn).not.toBeNull();
     expect(btn.classList.contains('voice-button-icon--active')).toBe(true);
-    const out = capture(f.componentInstance.voiceRequested);
+    const out = capture(f.componentInstance.VoiceRequested);
     btn.click();
     expect(out.length).toBe(1);
   });
 
   it('emits voiceOptionsRequested from the voice-options button', () => {
-    const f = render({ enableRealtime: true });
-    const out = capture(f.componentInstance.voiceOptionsRequested);
+    const f = render({ EnableRealtime: true });
+    const out = capture(f.componentInstance.VoiceOptionsRequested);
     (query(f, '.voice-options-button-icon') as HTMLElement).click();
     expect(out.length).toBe(1);
   });
 
   it('hides the attach / voice / plan-mode buttons when their flags are off', () => {
-    const f = render({ enableAttachments: false, enableRealtime: false, enablePlanMode: false });
+    const f = render({ EnableAttachments: false, EnableRealtime: false, EnablePlanMode: false });
     expect(query(f, '.attach-buttons')).toBeNull();
   });
 
   it('submits the editor text via textSubmitted when send is clicked with content', () => {
-    const f = render({ value: 'hi' });
-    const out = capture(f.componentInstance.textSubmitted);
+    const f = render({ Value: 'hi' });
+    const out = capture(f.componentInstance.TextSubmitted);
     (query(f, '.send-button-icon') as HTMLElement).click();
     expect(out).toEqual(['hi [json]']); // from the stub's getPlainTextWithJsonMentions()
   });
 
   it('does not submit when there is no content (canSend false)', () => {
-    const f = render({ value: '' });
-    const out = capture(f.componentInstance.textSubmitted);
+    const f = render({ Value: '' });
+    const out = capture(f.componentInstance.TextSubmitted);
     (query(f, '.send-button-icon') as HTMLElement).click();
     expect(out.length).toBe(0);
   });
 
   it('relays the editor valueChange through valueChange', () => {
-    const f = render({ value: '' });
-    const out = capture(f.componentInstance.valueChange);
-    f.componentInstance.onValueChange('typed');
+    const f = render({ Value: '' });
+    const out = capture(f.componentInstance.ValueChange);
+    f.componentInstance.OnValueChange('typed');
     expect(out).toContain('typed');
   });
 });

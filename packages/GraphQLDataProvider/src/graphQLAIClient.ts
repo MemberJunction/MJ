@@ -2,7 +2,8 @@ import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
-import { SafeJSONParse, CleanAndParseJSON } from "@memberjunction/global";
+import type { DecisionAnswer, DecisionQuestion } from "@memberjunction/ai";
+import { SafeJSONParse, CleanAndParseJSON, UUIDsEqual } from "@memberjunction/global";
 import { FireAndForgetHelper, StallDecision } from "./fireAndForgetHelper";
 
 /** Mutable holder for the most recent run id observed on the PubSub stream. */
@@ -270,6 +271,172 @@ export class GraphQLAIClient {
     }
 
     /**
+     * Run a typed decision (Likelihood, Choice, Score) on the server in one round trip.
+     *
+     * This calls the `RunDecision` mutation, the fast path for browser features with a tight latency
+     * budget such as routing a message or checking for a duplicate: it carries none of the
+     * `Run Decision` action's execution overhead. The questions and the state are serialized for the
+     * wire and the answers parsed back.
+     *
+     * The method never throws. A failure on the server or in transport is `Success: false` with an
+     * `ErrorMessage` and empty `Answers`.
+     *
+     * @param params The questions, the state, and optionally the prompt and a timeout
+     * @returns A Promise that resolves to the answers by question key, or the reason there are none
+     *
+     * @example
+     * ```typescript
+     * const result = await aiClient.RunDecision({
+     *   State: { message: "Show me last quarter's renewals" },
+     *   Questions: {
+     *     route: {
+     *       Kind: 'Choice',
+     *       Instructions: 'Which agent should answer this message?',
+     *       Options: [
+     *         { Value: 'sage', Description: 'General questions about the product' },
+     *         { Value: 'analyst', Description: 'Questions about data and reports' }
+     *       ]
+     *     }
+     *   },
+     *   TimeoutMS: 250
+     * });
+     *
+     * const route = result.Answers.route;
+     * if (result.Success && route?.Kind === 'Choice') {
+     *   console.log(`Route to ${route.Value} (confidence ${route.Confidence})`);
+     * }
+     * ```
+     */
+    public async RunDecision(params: RunDecisionParams): Promise<RunDecisionResult> {
+        try {
+            const mutation = gql`
+                mutation RunDecision(
+                    $state: String!,
+                    $questions: String!,
+                    $promptId: String,
+                    $promptName: String,
+                    $timeoutMS: Int
+                ) {
+                    RunDecision(
+                        state: $state,
+                        questions: $questions,
+                        promptId: $promptId,
+                        promptName: $promptName,
+                        timeoutMS: $timeoutMS
+                    ) {
+                        success
+                        errorMessage
+                        answersJSON
+                        promptRunId
+                        modelName
+                        resolvedModel
+                        executionTimeMs
+                    }
+                }
+            `;
+
+            const variables = this.prepareDecisionVariables(params);
+            const result: RunDecisionResponse | null | undefined = await this._dataProvider.ExecuteGQL(mutation, variables);
+            return this.processDecisionResult(result);
+        } catch (e) {
+            return this.handleDecisionError(e);
+        }
+    }
+
+    /**
+     * Prepares the variables for the decision mutation: the questions as JSON, and the state as-is
+     * when it is text or as JSON when it is an object.
+     */
+    private prepareDecisionVariables(params: RunDecisionParams): RunDecisionVariables {
+        const variables: RunDecisionVariables = {
+            state: typeof params.State === 'string' ? params.State : JSON.stringify(params.State),
+            questions: JSON.stringify(params.Questions)
+        };
+        if (params.PromptID !== undefined) variables.promptId = params.PromptID;
+        if (params.PromptName !== undefined) variables.promptName = params.PromptName;
+        if (params.TimeoutMS !== undefined) variables.timeoutMS = params.TimeoutMS;
+        return variables;
+    }
+
+    /**
+     * Maps the decision mutation's result. The answers are returned only on success, so a caller
+     * never acts on partial ones; answers that cannot be read turn the result into a failure.
+     */
+    private processDecisionResult(result: RunDecisionResponse | null | undefined): RunDecisionResult {
+        const decision = result?.RunDecision;
+        if (!decision) {
+            throw new Error('Invalid response from server');
+        }
+        const details = {
+            PromptRunID: decision.promptRunId ?? undefined,
+            ModelName: decision.modelName ?? undefined,
+            ResolvedModel: decision.resolvedModel ?? undefined,
+            ExecutionTimeMs: decision.executionTimeMs ?? undefined
+        };
+        if (!decision.success) {
+            return { ...details, Success: false, ErrorMessage: decision.errorMessage || 'Decision execution failed', Answers: {} };
+        }
+        const answers = this.parseDecisionAnswers(decision.answersJSON);
+        if (typeof answers === 'string') {
+            return { ...details, Success: false, ErrorMessage: answers, Answers: {} };
+        }
+        return { ...details, Success: true, Answers: answers };
+    }
+
+    /** Parses the answers the server sent, or returns why they cannot be used. */
+    private parseDecisionAnswers(answersJSON: string | null | undefined): Record<string, DecisionAnswer> | string {
+        if (!answersJSON) {
+            return 'The server returned no answers';
+        }
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(answersJSON);
+        } catch (e) {
+            return `The server returned answers that are not valid JSON: ${e instanceof Error ? e.message : String(e)}`;
+        }
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+            return 'The server returned answers that are not an object';
+        }
+        const answers: Record<string, DecisionAnswer> = {};
+        for (const [key, answer] of Object.entries(parsed)) {
+            if (!this.isDecisionAnswer(answer)) {
+                return `The server returned an answer for '${key}' that is not a Likelihood, Choice or Score answer`;
+            }
+            answers[key] = answer;
+        }
+        return answers;
+    }
+
+    /** Whether a parsed value has the shape of a Likelihood, Choice or Score answer. */
+    private isDecisionAnswer(value: unknown): value is DecisionAnswer {
+        if (typeof value !== 'object' || value === null) {
+            return false;
+        }
+        const answer = value as Record<string, unknown>;
+        switch (answer.Kind) {
+            case 'Likelihood':
+                return typeof answer.Probability === 'number';
+            case 'Choice':
+                return typeof answer.Value === 'string' && typeof answer.Confidence === 'number';
+            case 'Score':
+                return typeof answer.Value === 'number' && typeof answer.Confidence === 'number';
+            default:
+                return false;
+        }
+    }
+
+    /** Maps a transport or parsing error to a failed decision result. */
+    private handleDecisionError(e: unknown): RunDecisionResult {
+        const message = e instanceof Error ? e.message : String(e);
+        LogError(`Error running decision: ${message}`);
+        return {
+            Success: false,
+            ErrorMessage: message || 'Unknown error occurred',
+            Answers: {}
+        };
+    }
+
+    /**
      * Run an AI agent with the specified parameters.
      *
      * This method invokes an AI agent on the server through GraphQL and returns the result.
@@ -308,6 +475,7 @@ export class GraphQLAIClient {
         sourceArtifactId?: string,
         sourceArtifactVersionId?: string
     ): Promise<ExecuteAgentResult> {
+        let requestAcknowledged = false;
         try {
             const mutation = this.buildRunAIAgentMutation();
             const variables = this.prepareAgentVariables(params, sourceArtifactId, sourceArtifactVersionId);
@@ -321,7 +489,13 @@ export class GraphQLAIClient {
                 variables,
                 mutationFieldName: 'RunAIAgent',
                 operationLabel: 'RunAIAgent',
-                validateAck: (ack) => ack?.success === true,
+                validateAck: (ack) => {
+                    const ok = ack?.success === true;
+                    if (ok) {
+                        requestAcknowledged = true;
+                    }
+                    return ok;
+                },
                 isCompletionEvent: (parsed) => this.isAgentCompletionEvent(parsed),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
                 // Headless clients (no PushStatusUpdates channel) run synchronously; the resolver
@@ -331,11 +505,12 @@ export class GraphQLAIClient {
                     this.captureAgentRunId(parsed, runIdRef);
                     if (params.onProgress) this.forwardAgentProgress(parsed, params.onProgress);
                 },
+                isRelevantMessage: (parsed) => this.isMessageForAgentRun(parsed, runIdRef),
                 onStall: () => this.reconcileAgentRun(runIdRef.id ? `ID='${runIdRef.id}'` : undefined),
-                createErrorResult: (msg) => this.createAgentErrorResult(msg),
+                createErrorResult: (msg) => this.createAgentErrorResult(msg, requestAcknowledged),
             });
         } catch (e) {
-            return this.handleAgentError(e);
+            return this.handleAgentError(e, requestAcknowledged);
         }
     }
 
@@ -361,7 +536,8 @@ export class GraphQLAIClient {
                 $sourceArtifactVersionId: String,
                 $fireAndForget: Boolean,
                 $planMode: Boolean,
-                $requestedSkillIDs: [String!]
+                $requestedSkillIDs: [String!],
+                $taskGraphDebug: String
             ) {
                 RunAIAgent(
                     agentId: $agentId,
@@ -380,7 +556,8 @@ export class GraphQLAIClient {
                     sourceArtifactVersionId: $sourceArtifactVersionId,
                     fireAndForget: $fireAndForget,
                     planMode: $planMode,
-                    requestedSkillIDs: $requestedSkillIDs
+                    requestedSkillIDs: $requestedSkillIDs,
+                    taskGraphDebug: $taskGraphDebug
                 ) {
                     success
                     errorMessage
@@ -435,6 +612,9 @@ export class GraphQLAIClient {
         // Per-request Plan Mode + user-requested skills (symmetric with the conversation-detail path).
         if (params.planMode !== undefined) variables.planMode = params.planMode;
         if (params.requestedSkillIDs !== undefined) variables.requestedSkillIDs = params.requestedSkillIDs;
+        if (params.taskGraphDebug !== undefined) {
+            variables.taskGraphDebug = JSON.stringify(params.taskGraphDebug);
+        }
 
         return variables;
     }
@@ -455,19 +635,22 @@ export class GraphQLAIClient {
      * @returns An error result
      * @private
      */
-    private handleAgentError(e: unknown): ExecuteAgentResult {
+    private handleAgentError(e: unknown, requestAcknowledged = false): ExecuteAgentResult {
         const error = e as Error;
         const errorMessage = error?.message || String(e);
         LogError(`Error running AI agent: ${errorMessage}`);
 
-        // Provide a meaningful error message that helps the user understand what happened.
         // CORS/network errors from Azure proxy timeouts appear as "Failed to fetch".
+        // That string also fires when the initial mutation never leaves the browser —
+        // only rewrite it to "may still be running" when the server already ACKed.
         const isFetchError = errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError');
         const isTimeoutError = errorMessage.includes('timed out') || errorMessage.includes('timeout');
 
         let userMessage: string;
-        if (isFetchError) {
+        if (isFetchError && requestAcknowledged) {
             userMessage = 'Lost connection to the server. The agent may still be running. Please refresh to check the latest status.';
+        } else if (isFetchError) {
+            userMessage = 'Could not reach the server. The request may not have started. Please try again.';
         } else if (isTimeoutError) {
             userMessage = errorMessage; // Already has a helpful message from the completion timeout
         } else {
@@ -477,7 +660,8 @@ export class GraphQLAIClient {
         return {
             success: false,
             agentRun: undefined,
-            errorMessage: userMessage
+            errorMessage: userMessage,
+            requestAcknowledged,
         } as ExecuteAgentResult;
     }
 
@@ -510,8 +694,9 @@ export class GraphQLAIClient {
     public async RunAIAgentFromConversationDetail(
         params: RunAIAgentFromConversationDetailParams
     ): Promise<ExecuteAgentResult> {
+        let requestAcknowledged = false;
         try {
-            const mutation = this.buildConversationDetailMutation();
+            const mutation = this.buildConversationDetailMutation(params.agentHistoryFrom != null);
             const variables = this.prepareConversationDetailVariables(params);
 
             return await FireAndForgetHelper.Execute<ExecuteAgentResult>({
@@ -520,7 +705,13 @@ export class GraphQLAIClient {
                 variables,
                 mutationFieldName: 'RunAIAgentFromConversationDetail',
                 operationLabel: 'RunAIAgentFromConversationDetail',
-                validateAck: (ack) => ack?.success === true,
+                validateAck: (ack) => {
+                    const ok = ack?.success === true;
+                    if (ok) {
+                        requestAcknowledged = true;
+                    }
+                    return ok;
+                },
                 isCompletionEvent: (parsed) =>
                     this.isConversationDetailCompletionEvent(parsed, params.conversationDetailId),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
@@ -533,18 +724,27 @@ export class GraphQLAIClient {
                 // Reconcile by the caller-known ConversationDetailID rather than a run id scraped off
                 // the shared session stream: that key is operation-specific, so concurrent
                 // conversation-detail runs on one session can never cross-resolve to each other.
+                isRelevantMessage: (parsed) =>
+                    this.isMessageForConversationDetail(parsed, params.conversationDetailId),
                 onStall: () => this.reconcileAgentRun(`ConversationDetailID='${params.conversationDetailId}'`),
-                createErrorResult: (msg) => this.createAgentErrorResult(msg),
+                createErrorResult: (msg) => this.createAgentErrorResult(msg, requestAcknowledged),
             });
         } catch (e) {
-            return this.handleAgentError(e);
+            return this.handleAgentError(e, requestAcknowledged);
         }
     }
 
     /**
      * Build the RunAIAgentFromConversationDetail mutation document.
+     *
+     * @param includeAgentHistoryFrom Whether to declare and pass `agentHistoryFrom`. It is left out
+     * of the document unless the caller set it: GraphQL validates every argument a document names,
+     * so a server that predates the argument would reject the whole mutation even with the
+     * variable unset.
      */
-    private buildConversationDetailMutation(): string {
+    private buildConversationDetailMutation(includeAgentHistoryFrom: boolean): string {
+        const historyFromVariable = includeAgentHistoryFrom ? ',\n                $agentHistoryFrom: String' : '';
+        const historyFromArgument = includeAgentHistoryFrom ? ',\n                    agentHistoryFrom: $agentHistoryFrom' : '';
         return gql`
             mutation RunAIAgentFromConversationDetail(
                 $conversationDetailId: String!,
@@ -562,7 +762,7 @@ export class GraphQLAIClient {
                 $createNotification: Boolean,
                 $sourceArtifactId: String,
                 $sourceArtifactVersionId: String,
-                $fireAndForget: Boolean
+                $fireAndForget: Boolean${historyFromVariable}
             ) {
                 RunAIAgentFromConversationDetail(
                     conversationDetailId: $conversationDetailId,
@@ -580,7 +780,7 @@ export class GraphQLAIClient {
                     createNotification: $createNotification,
                     sourceArtifactId: $sourceArtifactId,
                     sourceArtifactVersionId: $sourceArtifactVersionId,
-                    fireAndForget: $fireAndForget
+                    fireAndForget: $fireAndForget${historyFromArgument}
                 ) {
                     success
                     errorMessage
@@ -620,6 +820,7 @@ export class GraphQLAIClient {
         if (params.createNotification !== undefined) variables.createNotification = params.createNotification;
         if (params.sourceArtifactId !== undefined) variables.sourceArtifactId = params.sourceArtifactId;
         if (params.sourceArtifactVersionId !== undefined) variables.sourceArtifactVersionId = params.sourceArtifactVersionId;
+        if (params.agentHistoryFrom != null) variables.agentHistoryFrom = params.agentHistoryFrom.toISOString();
 
         return variables;
     }
@@ -650,6 +851,53 @@ export class GraphQLAIClient {
             parsed.type === 'StreamingContent' &&
             data?.type === 'complete' &&
             data?.conversationDetailId === conversationDetailId;
+    }
+
+    /**
+     * Does this PubSub message belong to the operation watching `conversationDetailId`?
+     *
+     * FAILS OPEN by design (see `FireAndForgetConfig.isRelevantMessage`): a message carrying no
+     * operation identifier at all — a server-wide notice, a shape we do not recognise — counts as
+     * activity, preserving the pre-#4222 behaviour. Only a message that positively identifies a
+     * DIFFERENT conversation detail or a different agent run is ignored.
+     */
+    private isMessageForConversationDetail(
+        parsed: Record<string, unknown>,
+        conversationDetailId: string
+    ): boolean {
+        const data = parsed.data as Record<string, unknown> | undefined;
+        if (!data) {
+            return true;
+        }
+        const detailId = data.conversationDetailId as string | undefined;
+        if (detailId) {
+            return UUIDsEqual(detailId, conversationDetailId);
+        }
+        // Liveness pulses carry a runId but no conversationDetailId, so they cannot be attributed
+        // to a specific conversation detail from the payload alone. Fail open — treating a
+        // heartbeat as someone else's traffic would let a healthy long run time out.
+        return true;
+    }
+
+    /**
+     * Does this PubSub message belong to the agent run tracked by `ref`?
+     *
+     * Before any run id has been observed the operation has no identity to compare against, so
+     * everything counts (fail open). Once known, a message naming a different run is ignored.
+     */
+    private isMessageForAgentRun(parsed: Record<string, unknown>, ref: RunIdRef): boolean {
+        if (!ref.id) {
+            return true;
+        }
+        const data = parsed.data as Record<string, unknown> | undefined;
+        if (!data) {
+            return true;
+        }
+        const messageRunId = (data.agentRunId ?? data.runId) as string | undefined;
+        if (!messageRunId || messageRunId === 'unknown') {
+            return true;
+        }
+        return UUIDsEqual(messageRunId, ref.id);
     }
 
     // ===== Agent Run Reconciliation (idle-stall recovery) =====
@@ -727,12 +975,25 @@ export class GraphQLAIClient {
         const data = parsed.data as Record<string, unknown>;
         const resultJson = data.result as string | undefined;
         if (resultJson) {
-            return SafeJSONParse(resultJson) as ExecuteAgentResult;
+            const parsedResult = SafeJSONParse(resultJson) as ExecuteAgentResult | null;
+            if (parsedResult) {
+                if (!parsedResult.errorMessage && typeof data.errorMessage === 'string') {
+                    parsedResult.errorMessage = data.errorMessage;
+                }
+                return parsedResult;
+            }
         }
-        // Fallback: construct a minimal result from the event data
+        // Fallback: construct a minimal result from the event data. Only stamp an
+        // errorMessage when the event is not a success — a successful completion
+        // with no payload is still success, not a failure.
+        const success = Boolean(data.success);
+        const fromEvent = (typeof data.errorMessage === 'string' && data.errorMessage)
+            ? data.errorMessage
+            : undefined;
         return {
-            success: data.success as boolean,
+            success,
             agentRun: undefined,
+            errorMessage: fromEvent ?? (success ? undefined : 'Agent execution ended without a result payload'),
         } as ExecuteAgentResult;
     }
 
@@ -825,11 +1086,12 @@ export class GraphQLAIClient {
     /**
      * Create an error ExecuteAgentResult for fire-and-forget failures.
      */
-    private createAgentErrorResult(errorMessage: string): ExecuteAgentResult {
+    private createAgentErrorResult(errorMessage: string, requestAcknowledged = false): ExecuteAgentResult {
         return {
             success: false,
             agentRun: undefined,
             errorMessage,
+            requestAcknowledged,
         } as ExecuteAgentResult;
     }
 
@@ -1392,6 +1654,106 @@ export class GraphQLAIClient {
             };
         }
     }
+
+    /**
+     * Check the values a person is entering for a new record against the entity's existing records,
+     * and get back the ones to flag as possible duplicates.
+     *
+     * This calls the `CheckDuplicateEntry` mutation. The server finds vector candidates for the
+     * values, keeps those the current user can read, and asks a typed decision about them. It only
+     * flags: nothing is saved, merged or blocked. An entity whose documents do not turn the check on
+     * answers `NotConfigured`; a caller who may not run the check answers `NotAuthorized`.
+     *
+     * The method never throws. A failure on the server or in transport is `Status: 'Failed'` with an
+     * `ErrorMessage` and no candidates. It sets no timeout of its own: a caller with a latency budget
+     * abandons the promise when the budget runs out. The server bounds each check with its own
+     * budget, a little above the form's, so it stops working on an abandoned check soon after.
+     *
+     * @param params The entity and the values entered so far
+     * @returns The flagged candidates, most probable first, or why there are none
+     *
+     * @example
+     * ```typescript
+     * const result = await aiClient.CheckDuplicateEntry({
+     *   EntityName: 'Accounts',
+     *   Values: { Name: 'Acme', City: 'Boston' }
+     * });
+     * if (result.Status === 'Checked') {
+     *   result.Candidates.forEach(c => console.log(`${c.DisplayName} (${c.Probability})`));
+     * }
+     * ```
+     */
+    public async CheckDuplicateEntry(params: DuplicateEntryCheckParams): Promise<DuplicateEntryCheckResult> {
+        try {
+            const mutation = gql`
+                mutation CheckDuplicateEntry(
+                    $entityName: String!,
+                    $valuesJSON: String!
+                ) {
+                    CheckDuplicateEntry(
+                        entityName: $entityName,
+                        valuesJSON: $valuesJSON
+                    ) {
+                        Status
+                        ErrorMessage
+                        ElapsedMs
+                        Candidates {
+                            RecordID
+                            DisplayName
+                            VectorScore
+                            Probability
+                        }
+                    }
+                }
+            `;
+
+            const variables = { entityName: params.EntityName, valuesJSON: JSON.stringify(params.Values) };
+            const result: DuplicateEntryCheckResponse | null | undefined = await this._dataProvider.ExecuteGQL(mutation, variables);
+            return this.processDuplicateEntryCheckResult(result);
+        } catch (e) {
+            return this.handleDuplicateEntryCheckError(e);
+        }
+    }
+
+    /**
+     * Maps the entry-check mutation's result. A status the client does not know is a failure, so a
+     * caller never acts on a result it cannot read.
+     */
+    private processDuplicateEntryCheckResult(result: DuplicateEntryCheckResponse | null | undefined): DuplicateEntryCheckResult {
+        const check = result?.CheckDuplicateEntry;
+        if (!check) {
+            throw new Error('Invalid response from server');
+        }
+        const elapsed = check.ElapsedMs ?? undefined;
+        if (!this.isDuplicateEntryCheckStatus(check.Status)) {
+            return { Status: 'Failed', ErrorMessage: `The server returned an unknown status '${check.Status}'`, Candidates: [], ElapsedMs: elapsed };
+        }
+        const mapped: DuplicateEntryCheckResult = {
+            Status: check.Status,
+            Candidates: (check.Candidates ?? []).map(c => ({
+                RecordID: c.RecordID,
+                DisplayName: c.DisplayName,
+                VectorScore: c.VectorScore,
+                Probability: c.Probability ?? null,
+            })),
+            ElapsedMs: elapsed,
+        };
+        if (check.ErrorMessage) {
+            mapped.ErrorMessage = check.ErrorMessage;
+        }
+        return mapped;
+    }
+
+    private isDuplicateEntryCheckStatus(status: string): status is DuplicateEntryCheckStatus {
+        return status === 'Checked' || status === 'NotConfigured' || status === 'NotAuthorized' || status === 'Failed';
+    }
+
+    /** Maps a transport or parsing error to a failed entry-check result. */
+    private handleDuplicateEntryCheckError(e: unknown): DuplicateEntryCheckResult {
+        const message = e instanceof Error ? e.message : String(e);
+        LogError(`Error checking for a duplicate entry: ${message}`);
+        return { Status: 'Failed', ErrorMessage: message || 'Unknown error occurred', Candidates: [] };
+    }
 }
 
 /** Result from RunAutotagPipeline */
@@ -1453,11 +1815,11 @@ export interface VectorizeEntityResult {
 /** Parameters for FetchEntityVectors */
 export interface FetchEntityVectorsParams {
     /** The ID of the EntityDocument whose vectors to fetch */
-    entityDocumentID: string;
+    entityDocumentID: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Maximum number of vectors to return (default 1000) */
-    maxRecords?: number;
+    maxRecords?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Optional additional filter string */
-    filter?: string;
+    filter?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** A single vector record with its embedding and metadata */
@@ -1477,6 +1839,104 @@ export interface FetchEntityVectorsResult {
     TotalCount: number;
     ElapsedMs: number;
     ErrorMessage?: string;
+}
+
+/**
+ * Parameters for {@link GraphQLAIClient.CheckDuplicateEntry}
+ */
+export interface DuplicateEntryCheckParams {
+    /**
+     * The entity the new record belongs to
+     */
+    EntityName: string;
+
+    /**
+     * The values entered so far, by field name (sent as JSON). The server ignores fields the entity
+     * does not have.
+     */
+    Values: Record<string, unknown>;
+}
+
+/**
+ * How an entry-time duplicate check ended.
+ * - `Checked`: the check ran; `Candidates` holds the flagged records, and may be empty.
+ * - `NotConfigured`: the entity's documents do not turn the check on. Nothing else ran.
+ * - `NotAuthorized`: the caller may not run the check (an API key without the scopes, or a user who
+ *   cannot read the entity). Nothing else ran; `ErrorMessage` says why.
+ * - `Failed`: the check could not finish; `ErrorMessage` says why, and nothing is flagged.
+ */
+export type DuplicateEntryCheckStatus = 'Checked' | 'NotConfigured' | 'NotAuthorized' | 'Failed';
+
+/**
+ * An existing record flagged as a possible duplicate of the values being entered
+ */
+export interface DuplicateEntryCandidate {
+    /**
+     * The candidate's primary key as a compact URL segment. `CompositeKey.FromURLSegment` reads it back.
+     */
+    RecordID: string;
+
+    /**
+     * The candidate's name, or its key when the current user may not read a name
+     */
+    DisplayName: string;
+
+    /**
+     * The vector similarity score that surfaced the candidate
+     */
+    VectorScore: number;
+
+    /**
+     * The decision's probability that the candidate is the same real-world entity, or null when it
+     * gave no answer for it
+     */
+    Probability: number | null;
+}
+
+/**
+ * Result from {@link GraphQLAIClient.CheckDuplicateEntry}
+ */
+export interface DuplicateEntryCheckResult {
+    /**
+     * How the check ended
+     */
+    Status: DuplicateEntryCheckStatus;
+
+    /**
+     * Why the check failed, when `Status` is `Failed`
+     */
+    ErrorMessage?: string;
+
+    /**
+     * The flagged candidates, most probable first. Empty unless `Status` is `Checked`.
+     */
+    Candidates: DuplicateEntryCandidate[];
+
+    /**
+     * How long the check took on the server, in milliseconds, when the server answered
+     */
+    ElapsedMs?: number;
+}
+
+/** One candidate of the `CheckDuplicateEntry` mutation's result, as the server sends it. */
+interface DuplicateEntryCandidateWireResult {
+    RecordID: string;
+    DisplayName: string;
+    VectorScore: number;
+    Probability?: number | null;
+}
+
+/** The `CheckDuplicateEntry` mutation's result fields as the server sends them: nullable fields arrive as null. */
+interface DuplicateEntryCheckWireResult {
+    Status: string;
+    ErrorMessage?: string | null;
+    ElapsedMs?: number | null;
+    Candidates?: DuplicateEntryCandidateWireResult[] | null;
+}
+
+/** The `CheckDuplicateEntry` mutation's response. */
+interface DuplicateEntryCheckResponse {
+    CheckDuplicateEntry?: DuplicateEntryCheckWireResult | null;
 }
 
 /**
@@ -1750,6 +2210,109 @@ export interface RunAIPromptResult {
 }
 
 /**
+ * Parameters for {@link GraphQLAIClient.RunDecision}
+ */
+export interface RunDecisionParams {
+    /**
+     * The questions, keyed by a short label for code, answered together in one call.
+     * Write the instructions and option descriptions for the model: it never reads the keys.
+     */
+    Questions: Record<string, DecisionQuestion>;
+
+    /**
+     * The state the questions are about: text, or an object (sent as JSON).
+     * Keep it to what the questions need.
+     */
+    State: string | Record<string, unknown>;
+
+    /**
+     * The ID of the Decision-typed prompt to run. Takes precedence over `PromptName`.
+     */
+    PromptID?: string;
+
+    /**
+     * The name of the Decision-typed prompt to run, matched case-insensitively.
+     * The server uses `Default Decision` when neither this nor `PromptID` is set.
+     */
+    PromptName?: string;
+
+    /**
+     * Bounds each model call on the server, in milliseconds. Unset or not positive, the server uses
+     * its default, `RunDecisionResolver.DEFAULT_TIMEOUT_MS`; a value over
+     * `RunDecisionResolver.MAX_TIMEOUT_MS` is cut to it. A call is never unbounded.
+     */
+    TimeoutMS?: number;
+}
+
+/**
+ * Result from {@link GraphQLAIClient.RunDecision}
+ */
+export interface RunDecisionResult {
+    /**
+     * Whether the decision ran and its answers were read
+     */
+    Success: boolean;
+
+    /**
+     * Why the decision failed, when `Success` is false
+     */
+    ErrorMessage?: string;
+
+    /**
+     * The answers by question key. Empty on failure, so a caller never acts on partial answers.
+     */
+    Answers: Record<string, DecisionAnswer>;
+
+    /**
+     * ID of the `MJ: AI Prompt Runs` record the server wrote, when the run got that far
+     */
+    PromptRunID?: string;
+
+    /**
+     * The model that answered, or the one selected when the call failed
+     */
+    ModelName?: string;
+
+    /**
+     * The exact model behind `ModelName`, as its driver reports it: the vendor's dated model for a
+     * vendor decision model (`typesafe/jev-1.13-20260917`), the chat model for LLM Decision
+     * (`GPT-OSS-120B`). A calibration fitted on one model applies only to that model's answers, so a
+     * consumer that calibrates needs both names. Absent when the driver reports none.
+     */
+    ResolvedModel?: string;
+
+    /**
+     * Server-side execution time in milliseconds
+     */
+    ExecutionTimeMs?: number;
+}
+
+/** The `RunDecision` mutation's variables. */
+type RunDecisionVariables = {
+    state: string;
+    questions: string;
+    promptId?: string;
+    promptName?: string;
+    timeoutMS?: number;
+};
+
+/** The `RunDecision` mutation's result fields as the server sends them: nullable fields arrive as null. */
+interface RunDecisionWireResult {
+    success: boolean;
+    errorMessage?: string | null;
+    answersJSON?: string | null;
+    promptRunId?: string | null;
+    modelName?: string | null;
+    resolvedModel?: string | null;
+    executionTimeMs?: number | null;
+}
+
+/** The `RunDecision` mutation's response. */
+interface RunDecisionResponse {
+    RunDecision?: RunDecisionWireResult | null;
+}
+
+/**
  * Parameters for running an AI agent from an existing conversation detail.
  * This is the optimized method that loads conversation history server-side.
  */
@@ -1824,6 +2387,15 @@ export interface RunAIAgentFromConversationDetailParams {
      * Source artifact version ID for versioning
      */
     sourceArtifactVersionId?: string;
+
+    /**
+     * The first moment of the conversation this run may read. When set, the server loads the
+     * agent's history from there and skips its summary of earlier messages.
+     *
+     * Sent only when set: the argument is left out of the mutation document entirely otherwise,
+     * so a server that predates it (and would reject an unknown argument) keeps working.
+     */
+    agentHistoryFrom?: Date | null; // case-violation-ok-legacy-back-compat: mirrors the mutation's `agentHistoryFrom` argument, like every other member of this interface
 
     /**
      * Optional callback for progress updates

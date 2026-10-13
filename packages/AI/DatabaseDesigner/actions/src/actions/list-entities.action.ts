@@ -6,12 +6,12 @@
  * then joins with Entities metadata to build a human-readable summary.
  */
 
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RunView, Metadata, UserInfo } from '@memberjunction/core';
 
-import { UDT_SETTINGS, escapeSqlLiteral } from '@memberjunction/database-designer-core';
+import { UDT_SETTINGS } from '@memberjunction/database-designer-core';
 
 import { BaseDatabaseDesignerAction } from './base-database-designer.action.js';
 
@@ -38,6 +38,9 @@ interface EntitySummary {
  */
 @RegisterClass(BaseAction, 'List My Entities')
 export class ListMyEntitiesAction extends BaseDatabaseDesignerAction {
+    /** Reads only the caller's own entities, with the caller's permissions. */
+    public static readonly AuthorizesCaller = true;
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const userID = params.ContextUser?.ID;
@@ -74,7 +77,7 @@ export class ListMyEntitiesAction extends BaseDatabaseDesignerAction {
         const rv = new RunView();
         const settingsResult = await rv.RunView<{ EntityID: string }>({
             EntityName: 'MJ: Entity Settings',
-            ExtraFilter: `Name = '${UDT_SETTINGS.OWNER_KEY}' AND Value = '${escapeSqlLiteral(userID)}'`,
+            ExtraFilter: `Name = '${UDT_SETTINGS.OWNER_KEY}' AND Value = '${EscapeSQLString(userID)}'`,
             Fields: ['EntityID'],
             ResultType: 'simple',
         }, params.ContextUser);

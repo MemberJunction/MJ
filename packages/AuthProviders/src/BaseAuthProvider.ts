@@ -17,8 +17,16 @@ export abstract class BaseAuthProvider implements IAuthProvider {
   jwksUri: string;
   /** OAuth client ID for this provider (used by OAuth proxy for upstream auth) */
   clientId?: string;
+  /** Provider domain hosting the OAuth endpoints when they aren't on the issuer (used by OAuth proxy) */
+  domain?: string;
   protected config: AuthProviderConfig;
   protected jwksClient: jwksClient.JwksClient;
+  /**
+   * The keep-alive HTTP agent backing `jwksClient`'s requests. Retained (rather than left as a
+   * constructor-local) so {@link Dispose} can release its socket pool when this provider instance
+   * is replaced or the registry is torn down — see `AuthProviderFactory.register()`/`clear()`.
+   */
+  private readonly requestAgent: https.Agent | http.Agent;
 
   constructor(config: AuthProviderConfig) {
     this.config = config;
@@ -27,9 +35,10 @@ export abstract class BaseAuthProvider implements IAuthProvider {
     this.audience = config.audience;
     this.jwksUri = config.jwksUri;
     this.clientId = config.clientId;
+    this.domain = config.domain;
 
     // Create HTTP agent with keep-alive to prevent socket hangups
-    const agent = this.jwksUri.startsWith('https')
+    this.requestAgent = this.jwksUri.startsWith('https')
       ? new https.Agent({
           keepAlive: true,
           keepAliveMsecs: 30000,
@@ -52,8 +61,16 @@ export abstract class BaseAuthProvider implements IAuthProvider {
       cacheMaxEntries: 5,
       cacheMaxAge: 600000, // 10 minutes
       timeout: 60000, // 60 seconds (increased from default 30s)
-      requestAgent: agent
+      requestAgent: this.requestAgent
     });
+  }
+
+  /**
+   * Destroys this provider's keep-alive HTTP agent, closing any open/idle sockets immediately
+   * instead of waiting for their own idle timeout. Safe to call more than once.
+   */
+  Dispose(): void {
+    this.requestAgent.destroy();
   }
 
   /**

@@ -1,6 +1,9 @@
 import { UUIDsEqual } from '@memberjunction/global';
 import {
+  AppliedMessageFilters,
   BaseCommunicationProvider,
+  CombineFilterClauses,
+  MessageRetrievalCapabilities,
   CreateDraftParams,
   CreateDraftResult,
   ForwardMessageParams,
@@ -132,8 +135,31 @@ interface GmailPushData {
 /**
  * Implementation of the Gmail provider for sending and receiving messages
  */
+/**
+ * Gmail's `after:` / `before:` accept epoch SECONDS as well as `YYYY/MM/DD`. Seconds are used
+ * deliberately: the date form is day-granular in the mailbox's own timezone, which would move an
+ * instant-based bound by up to a day without saying so.
+ *
+ * Both operators are EXCLUSIVE, while `ReceivedAfter` / `ReceivedBefore` are documented as
+ * inclusive. Each bound is therefore widened by one second so the boundary message is returned
+ * rather than dropped. That errs toward returning one extra message, which a caller de-duplicates;
+ * the opposite error loses mail silently, which it cannot detect at all.
+ */
+function GmailBoundSeconds(when: Date, bound: 'after' | 'before'): number {
+  const seconds = Math.floor(when.getTime() / 1000);
+  return bound === 'after' ? seconds - 1 : seconds + 1;
+}
+
 @RegisterClass(BaseCommunicationProvider, 'Gmail')
 export class GmailProvider extends BaseCommunicationProvider {
+  /**
+   * Gmail filters both server-side via search operators, so neither is emulated here. Note the date
+   * bound is approximate at second granularity — see `GmailBoundSeconds`.
+   */
+  public override get MessageRetrieval(): MessageRetrievalCapabilities {
+    return { FilterByReceivedDate: true, FilterByUnread: true };
+  }
+
   /** Cached Gmail client for environment credentials */
   private envGmailClient: CachedGmailClient | null = null;
 
@@ -259,19 +285,29 @@ export class GmailProvider extends BaseCommunicationProvider {
   }
 
   /**
+   * SECURITY: strips CR/LF from a value before it is interpolated into an RFC-2822
+   * header line. Without this, a caller-controlled To/Cc/Bcc/Subject/From containing
+   * "\r\n" injects arbitrary additional headers (or body content) into the raw message.
+   */
+  private sanitizeHeaderValue(value: string | null | undefined): string {
+    if (!value) return '';
+    return String(value).replace(/[\r\n]+/g, ' ');
+  }
+
+  /**
    * Encode and format email content for Gmail API
    */
   private createEmailContent(message: ProcessedMessage, creds: ResolvedGmailCredentials): string {
-    // Get sender email
-    const from = message.From || creds.serviceAccountEmail;
-    const fromName = message.FromName || '';
+    // Get sender email — sanitize every header value against CRLF header injection
+    const from = this.sanitizeHeaderValue(message.From || creds.serviceAccountEmail);
+    const fromName = this.sanitizeHeaderValue(message.FromName);
     const fromHeader = fromName ? `${fromName} <${from}>` : from;
 
     // Create email content
-    const subject = message.ProcessedSubject;
-    const to = message.To;
-    const cc = message.CCRecipients?.join(', ') || '';
-    const bcc = message.BCCRecipients?.join(', ') || '';
+    const subject = this.sanitizeHeaderValue(message.ProcessedSubject);
+    const to = this.sanitizeHeaderValue(message.To);
+    const cc = this.sanitizeHeaderValue(message.CCRecipients?.join(', '));
+    const bcc = this.sanitizeHeaderValue(message.BCCRecipients?.join(', '));
     
     // Headers
     let emailContent = [
@@ -419,15 +455,32 @@ export class GmailProvider extends BaseCommunicationProvider {
         };
       }
 
-      // Build query
-      let query = '';
+      // Build query. COMPOSED, not assigned. The ContextData branch below used to overwrite the
+      // whole query, so a caller passing it alongside UnreadOnly silently got read mail back. Every
+      // term now narrows: Gmail joins search terms with an implicit AND, hence the space operator.
+      const applied: AppliedMessageFilters = { ReceivedAfter: false, ReceivedBefore: false, UnreadOnly: false };
+      const clauses: string[] = [];
+
       if (params.UnreadOnly) {
-        query = 'is:unread';
+        clauses.push('is:unread');
+        applied.UnreadOnly = true;
+      }
+
+      if (params.ReceivedAfter) {
+        clauses.push(`after:${GmailBoundSeconds(params.ReceivedAfter, 'after')}`);
+        applied.ReceivedAfter = true;
+      }
+
+      if (params.ReceivedBefore) {
+        clauses.push(`before:${GmailBoundSeconds(params.ReceivedBefore, 'before')}`);
+        applied.ReceivedBefore = true;
       }
 
       if (params.ContextData?.query) {
-        query = params.ContextData.query as string;
+        clauses.push(String(params.ContextData.query));
       }
+
+      const query: string = CombineFilterClauses(clauses, ' ');
 
       // Get messages
       const response = await cached.client.users.messages.list({
@@ -437,9 +490,13 @@ export class GmailProvider extends BaseCommunicationProvider {
       });
 
       if (!response.data.messages || response.data.messages.length === 0) {
+        // AppliedFilters belongs on the EMPTY result too. Zero messages is precisely when a caller
+        // cannot tell "the narrowing worked and nothing matched" from "the narrowing was ignored
+        // and the mailbox is empty", so omitting it here would defeat the field's whole purpose.
         return {
           Success: true,
-          Messages: []
+          Messages: [],
+          AppliedFilters: applied
         };
       }
 
@@ -499,7 +556,8 @@ export class GmailProvider extends BaseCommunicationProvider {
       return {
         Success: true,
         Messages: processedMessages,
-        SourceData: fullMessages
+        SourceData: fullMessages,
+        AppliedFilters: applied
       };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Error getting messages';
@@ -621,15 +679,15 @@ export class GmailProvider extends BaseCommunicationProvider {
       // Convert raw message to proper format
       const rawContent = Buffer.from(originalMessage.data.raw, 'base64').toString('utf-8');
 
-      // Build forwarded message
-      const userEmail = await this.getUserEmail(cached);
-      const to = params.ToRecipients.join(', ');
-      const cc = params.CCRecipients?.join(', ') || '';
-      const bcc = params.BCCRecipients?.join(', ') || '';
+      // Build forwarded message — sanitize every header value against CRLF header injection
+      const userEmail = this.sanitizeHeaderValue(await this.getUserEmail(cached));
+      const to = this.sanitizeHeaderValue(params.ToRecipients.join(', '));
+      const cc = this.sanitizeHeaderValue(params.CCRecipients?.join(', '));
+      const bcc = this.sanitizeHeaderValue(params.BCCRecipients?.join(', '));
 
       // Parse the original email to extract subject
       const subjectMatch = rawContent.match(/Subject: (.*?)(\r?\n)/);
-      const subject = subjectMatch ? `Fwd: ${subjectMatch[1]}` : 'Fwd: ';
+      const subject = this.sanitizeHeaderValue(subjectMatch ? `Fwd: ${subjectMatch[1]}` : 'Fwd: ');
 
       // Headers for new message
       const emailContent = [

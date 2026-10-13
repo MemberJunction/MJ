@@ -11,7 +11,7 @@ import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewChi
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { BaseEntity, BaseEntityEvent, CompositeKey, RunView } from '@memberjunction/core';
-import { ResourceData, KnowledgeHubMetadataEngine, MJScheduledActionEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, KnowledgeHubMetadataEngine, MJScheduledJobEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID, MJGlobal, MJEventType } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
@@ -26,9 +26,9 @@ import { ClassifySetupWizardComponent } from './dialogs/classify-setup-wizard.co
 
 // ── Shared types (extracted to ./shared/classify.types.ts) ──
 import { TabName, NavItem, KPIMetric, PipelineStageInfo, FeedItem, SourceMini, SourceCard, ContentTypeCard, TagCloudItem, ContentDuplicateRow, RunDetailRow, WeightedTag, ItemPipelineStatus, ContentItemDetail } from './shared/classify.types';
-import { formatNumber, formatDate, getSourceTypeIcon, mapRunDetailRecords, deriveDisplayName } from './shared/classify.format';
-import { buildAutotagAgentContext, isValidAutotagTab } from './autotagging-agent-context';
-import { validateStringParam } from '../../../shared/agent-tool-validation';
+import { FormatNumber, FormatDate, GetSourceTypeIcon, MapRunDetailRecords, DeriveDisplayName } from './shared/classify.format';
+import { BuildAutotagAgentContext, IsValidAutotagTab } from './autotagging-agent-context';
+import { ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 @RegisterClass(BaseResourceComponent, 'AutotaggingPipelineResource')
 @Component({
@@ -217,8 +217,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // The quick-schedule dialog (state + save/remove logic) moved to
     // ClassifySourcesTabComponent.
 
-    /** Cached ScheduledAction entities, keyed by normalized ID */
-    private scheduledActionsCache = new Map<string, MJScheduledActionEntity>();
+    /** Cached Scheduled Job entities, keyed by normalized ID */
+    private scheduledJobsCache = new Map<string, MJScheduledJobEntity>();
 
     // ── Detail panels ──
     // The Source Detail slide-in (state, pagination, status filter, retry, badge
@@ -278,9 +278,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public get TotalRunHistoryCount(): number {
         return this.totalRunHistoryCount;
     }
-    /** Exposes the cached ScheduledAction entities to the Sources tab via `[ScheduledActions]`. */
-    public get ScheduledActionsCache(): Map<string, MJScheduledActionEntity> {
-        return this.scheduledActionsCache;
+    /** Exposes the cached Scheduled Job entities to the Sources tab via `[ScheduledJobs]`. */
+    public get ScheduledJobsCache(): Map<string, MJScheduledJobEntity> {
+        return this.scheduledJobsCache;
     }
     /** Exposes the EntityRecordDocument ID→RecordID cache to the Sources tab via `[EntityRecordDocCache]`. */
     public get EntityRecordDocCacheMap(): Map<string, string> {
@@ -446,7 +446,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     /** Report current classify dashboard state to the agent (deep, bounded). */
     private emitAgentContext(): void {
-        this.navigationService.SetAgentContext(this, buildAutotagAgentContext({
+        this.navigationService.SetAgentContext(this, BuildAutotagAgentContext({
             ActiveTab: this.ActiveTab,
             SourceCount: this.contentSourcesRaw.length,
             ContentItemCount: this.contentItemsRaw.length,
@@ -512,7 +512,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 },
                 Handler: async (params: Record<string, unknown>) => {
                     const tab = params['tab'];
-                    if (!isValidAutotagTab(tab)) {
+                    if (!IsValidAutotagTab(tab)) {
                         return { Success: false, ErrorMessage: `Invalid tab "${String(tab)}". Expected one of: pipeline, sources, types, tags, taxonomy, inbox, health, history.` };
                     }
                     await this.SwitchTab(tab as TabName);
@@ -545,7 +545,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                     required: ['query'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['query'], 'query');
+                    const v = ValidateStringParam(params['query'], 'query');
                     if (!v.ok) return v.result;
                     // Ensure the Tag Library tab is active + rendered so its
                     // ViewChild resolves, then delegate the search to it.
@@ -604,13 +604,18 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * tab switching (badge counts / IsRunning resolving mid-CD-cycle). A stable
      * reference until inputs change eliminates that.
      */
-    public get navSections(): MJLeftNavSection[] {
+    public get NavSections(): MJLeftNavSection[] {
         const signature = this.computeNavSectionsSignature();
         if (signature !== this._navSectionsSignature) {
             this._navSectionsSignature = signature;
             this._navSections = this.buildNavSections();
         }
         return this._navSections;
+    }
+
+    /** @deprecated Use {@link NavSections}. */
+    public get navSections(): MJLeftNavSection[] {
+        return this.NavSections;
     }
 
     /** Cheap stable fingerprint of every value that feeds {@link buildNavSections}. */
@@ -663,10 +668,15 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * Fired by the Inbox tab after a suggestion is approved/merged/rejected.
      * Refreshes the nav badge count.
      */
-    public async onInboxResolved(): Promise<void> {
+    public async OnInboxResolved(): Promise<void> {
         await this.loadInboxPendingCount();
         this.emitAgentContext();
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnInboxResolved}. */
+    public async onInboxResolved(): Promise<void> {
+        return this.OnInboxResolved();
     }
 
     /**
@@ -689,10 +699,15 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * Fired by the Health tab after a merge/deprecate/dismiss. Refreshes the
      * Health nav badge count.
      */
-    public async onHealthResolved(): Promise<void> {
+    public async OnHealthResolved(): Promise<void> {
         await this.loadHealthPendingCount();
         this.emitAgentContext();
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnHealthResolved}. */
+    public async onHealthResolved(): Promise<void> {
+        return this.OnHealthResolved();
     }
 
     /**
@@ -700,13 +715,23 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * Taxonomy tab has no public select-tag input today, so this simply switches
      * to it; selecting the specific node is a future enhancement.
      */
-    public onOpenInTaxonomyRequested(_tagID: string): void {
+    public OnOpenInTaxonomyRequested(_tagID: string): void {
         void this.SwitchTab('taxonomy');
     }
 
+    /** @deprecated Use {@link OnOpenInTaxonomyRequested}. */
+    public onOpenInTaxonomyRequested(_tagID: string): void {
+        return this.OnOpenInTaxonomyRequested(_tagID);
+    }
+
     /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
-    public onNavItemClicked(item: MJLeftNavItem): void {
+    public OnNavItemClicked(item: MJLeftNavItem): void {
         void this.SwitchTab(item.id as TabName);
+    }
+
+    /** @deprecated Use {@link OnNavItemClicked}. */
+    public onNavItemClicked(item: MJLeftNavItem): void {
+        return this.OnNavItemClicked(item);
     }
 
     public async SwitchTab(tab: TabName): Promise<void> {
@@ -788,8 +813,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount : 0;
             this.totalRunHistoryCount = runsResult.Success ? runsResult.TotalRowCount : 0;
 
-            // Load ScheduledAction entities referenced by sources so cron descriptions are available
-            await this.loadScheduledActionsForSources();
+            // Load Scheduled Job entities referenced by sources so cron descriptions are available
+            await this.loadScheduledJobsForSources();
 
             this.buildNavItems();
             this.buildKPIMetrics();
@@ -871,10 +896,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const normalizedId = NormalizeUUID(itemId);
             const itemTags = this.getTopTagsForItem(itemId, 3);
             return {
-                Name: deriveDisplayName({ Name: item['Name'] as string | null, Description: item['Description'] as string | null }),
+                Name: DeriveDisplayName({ Name: item['Name'] as string | null, Description: item['Description'] as string | null }),
                 SourceName: (item['ContentSource'] as string) ?? 'Unknown',
                 Tags: itemTags,
-                TimeAgo: this.formatRelativeTime(item['__mj_UpdatedAt'] as string),
+                TimeAgo: this.FormatRelativeTime(item['__mj_UpdatedAt'] as string),
                 Status: this.inferItemStatus(tagsByItem.get(normalizedId) ?? 0)
             };
         });
@@ -892,8 +917,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             return {
                 ID: id,
                 Name: (source['Name'] as string) ?? 'Unnamed',
-                Icon: getSourceTypeIcon(typeName),
-                Meta: `${formatNumber(itemCount)} items`,
+                Icon: GetSourceTypeIcon(typeName),
+                Meta: `${FormatNumber(itemCount)} items`,
                 StatusClass: 'active' as const
             };
         });
@@ -954,7 +979,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     // buildSourceCards() + the source-detail/schedule helpers
     // (resolveEntityRecordID, resolveEntityName, countTagsBySource,
-    // getLastRunBySource, getScheduledActionCron, resolveEmbeddingModelName,
+    // getLastRunBySource, getScheduledJobCron, resolveEmbeddingModelName,
     // resolveVectorIndexName, loadContentItemsForSource, loadRunHistoryForSource)
     // moved to ClassifySourcesTabComponent.
 
@@ -1070,7 +1095,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             ResultType: 'simple',
         });
         if (result.Success) {
-            this.LiveRunDetailRows = mapRunDetailRecords(result.Results);
+            this.LiveRunDetailRows = MapRunDetailRecords(result.Results);
         }
 
         this.IsLoadingLiveDetails = false;
@@ -1145,8 +1170,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     /** After the wizard creates a source, reload the shared source list. */
-    public async onWizardCreated(_event: { SourceID: string }): Promise<void> {
+    public async OnWizardCreated(_event: { SourceID: string }): Promise<void> {
         await this.refreshSourcesTab();
+    }
+
+    /** @deprecated Use {@link OnWizardCreated}. */
+    public async onWizardCreated(_event: { SourceID: string }): Promise<void> {
+        return this.OnWizardCreated(_event);
     }
 
     public OpenEditSourceForm(card: SourceCard): void {
@@ -1166,7 +1196,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * Reload the relevant shared data after the slide-in form saves. The form
      * dialog closes itself; the host only re-pulls the cards' source data.
      */
-    public async onFormSaved(event: { kind: 'source' | 'type' }): Promise<void> {
+    public async OnFormSaved(event: { kind: 'source' | 'type' }): Promise<void> {
         if (event.kind === 'source') {
             await this.refreshSourcesTab();
         } else {
@@ -1174,48 +1204,58 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         }
     }
 
+    /** @deprecated Use {@link OnFormSaved}. */
+    public async onFormSaved(event: { kind: 'source' | 'type' }): Promise<void> {
+        return this.OnFormSaved(event);
+    }
+
     /**
      * The form dialog's "Open advanced settings" link bubbles up here so the host
      * (which owns NavigationService) can open the full entity form.
      */
-    public async onFormNavigateToRecord(event: { entityName: string; key: CompositeKey }): Promise<void> {
+    public async OnFormNavigateToRecord(event: { entityName: string; key: CompositeKey }): Promise<void> {
         await this.navigationService.OpenEntityRecord(event.entityName, event.key);
     }
 
+    /** @deprecated Use {@link OnFormNavigateToRecord}. */
+    public async onFormNavigateToRecord(event: { entityName: string; key: CompositeKey }): Promise<void> {
+        return this.OnFormNavigateToRecord(event);
+    }
+
     // DeleteSource(), the quick-schedule dialog (Open/Close/Save/Remove + cron
-    // label/preview helpers + getScheduledActionCron, findAutotagActionID,
+    // label/preview helpers + getScheduledJobCron, findAutotagActionID,
     // createSourceIDParam, linkScheduleToSource) moved to
-    // ClassifySourcesTabComponent. loadScheduledActionsForSources() stays here
+    // ClassifySourcesTabComponent. loadScheduledJobsForSources() stays here
     // because the host's LoadPipelineData / refreshSourcesTab populate the cache
-    // it exposes to the tab via [ScheduledActions].
+    // it exposes to the tab via [ScheduledJobs].
 
     /**
-     * Loads ScheduledAction entities referenced by content sources into the local cache.
+     * Loads Scheduled Job entities referenced by content sources into the local cache.
      * Called during initial data load so cron descriptions are available for card rendering.
      */
-    private async loadScheduledActionsForSources(): Promise<void> {
+    private async loadScheduledJobsForSources(): Promise<void> {
         const actionIDs = this.contentSourcesRaw
-            .map(s => s['ScheduledActionID'] as string | null)
+            .map(s => s['ScheduledJobID'] as string | null)
             .filter((id): id is string => id != null);
 
         if (actionIDs.length === 0) return;
 
         const uniqueIDs = [...new Set(actionIDs.map(id => NormalizeUUID(id)))];
         // Skip IDs already cached
-        const toLoad = uniqueIDs.filter(id => !this.scheduledActionsCache.has(id));
+        const toLoad = uniqueIDs.filter(id => !this.scheduledJobsCache.has(id));
         if (toLoad.length === 0) return;
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const filter = toLoad.map(id => `'${id}'`).join(',');
-        const result = await rv.RunView<MJScheduledActionEntity>({
-            EntityName: 'MJ: Scheduled Actions',
+        const result = await rv.RunView<MJScheduledJobEntity>({
+            EntityName: 'MJ: Scheduled Jobs',
             ExtraFilter: `ID IN (${filter})`,
             ResultType: 'entity_object',
         });
 
         if (result.Success) {
             for (const action of result.Results) {
-                this.scheduledActionsCache.set(NormalizeUUID(action.ID), action);
+                this.scheduledJobsCache.set(NormalizeUUID(action.ID), action);
             }
         }
     }
@@ -1576,7 +1616,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // HELPER — Formatting
     // ════════════════════════════════════════════
 
-    public formatRelativeTime(dateStr: string | null | undefined): string {
+    public FormatRelativeTime(dateStr: string | null | undefined): string {
         if (!dateStr) return 'Never';
         const now = new Date();
         const then = new Date(dateStr);
@@ -1589,6 +1629,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         if (diffHours < 24) return `${diffHours}h ago`;
         const diffDays = Math.floor(diffHours / 24);
         return `${diffDays}d ago`;
+    }
+
+    /** @deprecated Use {@link FormatRelativeTime}. */
+    public formatRelativeTime(dateStr: string | null | undefined): string {
+        return this.FormatRelativeTime(dateStr);
     }
 
     // formatNumber / formatDate / getSourceTypeIcon / mapRunDetailRecords are now
@@ -1614,7 +1659,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({ EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' });
         if (result.Success) this.contentSourcesRaw = result.Results;
-        await this.loadScheduledActionsForSources();
+        await this.loadScheduledJobsForSources();
         // The new contentSourcesRaw reference flows to ClassifySourcesTabComponent
         // via [Sources]="ContentSourcesRaw", which rebuilds its cards on input change.
         this.buildNavItems();
@@ -1682,8 +1727,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             TextContent: (rawItem['Text'] as string) ?? '',
             Checksum: (rawItem['Checksum'] as string) ?? '',
             Tags: allTags,
-            CreatedAt: formatDate((rawItem['__mj_CreatedAt'] as string) ?? ''),
-            UpdatedAt: formatDate((rawItem['__mj_UpdatedAt'] as string) ?? ''),
+            CreatedAt: FormatDate((rawItem['__mj_CreatedAt'] as string) ?? ''),
+            UpdatedAt: FormatDate((rawItem['__mj_UpdatedAt'] as string) ?? ''),
             ContentSourceID: (rawItem['ContentSourceID'] as string) ?? '',
             ContentSourceTypeID: contentSourceTypeID,
             StatusDot: feed.Status,
@@ -1736,7 +1781,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const statuses2 = this.inferPipelineStatuses(rawItem, allTags.length);
         this.SelectedFeedItem = {
             ID: itemId,
-            Name: deriveDisplayName({ Name: rawItem['Name'] as string | null, Description: rawItem['Description'] as string | null }),
+            Name: DeriveDisplayName({ Name: rawItem['Name'] as string | null, Description: rawItem['Description'] as string | null }),
             SourceName: (rawItem['ContentSource'] as string) ?? 'Unknown',
             SourceTypeName: (rawItem['ContentSourceType'] as string) ?? 'Unknown',
             ContentTypeName: (rawItem['ContentType'] as string) ?? 'Unknown',
@@ -1745,8 +1790,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             TextContent: (rawItem['Text'] as string) ?? '',
             Checksum: (rawItem['Checksum'] as string) ?? '',
             Tags: allTags,
-            CreatedAt: formatDate((rawItem['__mj_CreatedAt'] as string) ?? ''),
-            UpdatedAt: formatDate((rawItem['__mj_UpdatedAt'] as string) ?? ''),
+            CreatedAt: FormatDate((rawItem['__mj_CreatedAt'] as string) ?? ''),
+            UpdatedAt: FormatDate((rawItem['__mj_UpdatedAt'] as string) ?? ''),
             ContentSourceID: (rawItem['ContentSourceID'] as string) ?? '',
             ContentSourceTypeID: contentSourceTypeID,
             StatusDot: allTags.length > 0 ? 'complete' : 'processing',
@@ -1787,28 +1832,21 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * source, prompt run, entity record document). The host owns NavigationService.
      */
     public OpenDrilldownRecord(event: { entityName: string; recordID: string }): void {
-        const pkey = new CompositeKey();
-        pkey.KeyValuePairs = [{ FieldName: 'ID', Value: event.recordID }];
+        // The drilldown can name any entity — resolve its key column(s) from metadata.
+        const pkey = CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(event.entityName), event.recordID);
         this.navigationService.OpenEntityRecord(event.entityName, pkey);
     }
 
     public OpenRecordFromItem(item: ContentItemDetail): void {
         const md = this.ProviderToUse;
-        const pkey = new CompositeKey();
 
         // For entity sources: navigate to the actual entity record, not the ContentItem
         if (item.EntityName && item.EntityRecordID) {
-            const entityInfo = md.Entities.find(e => e.Name === item.EntityName);
-            if (entityInfo) {
-                pkey.LoadFromURLSegment(entityInfo, item.EntityRecordID);
-            } else {
-                pkey.KeyValuePairs = [{ FieldName: 'ID', Value: item.EntityRecordID }];
-            }
+            const pkey = CompositeKey.FromURLSegment(md.EntityByName(item.EntityName), item.EntityRecordID);
             this.navigationService.OpenEntityRecord(item.EntityName, pkey);
         } else {
             // For non-entity sources: open the ContentItem record
-            pkey.KeyValuePairs = [{ FieldName: 'ID', Value: item.ID }];
-            this.navigationService.OpenEntityRecord('MJ: Content Items', pkey);
+            this.navigationService.OpenEntityRecord('MJ: Content Items', CompositeKey.FromID(item.ID));
         }
     }
 

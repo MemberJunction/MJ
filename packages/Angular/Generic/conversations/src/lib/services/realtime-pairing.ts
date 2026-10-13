@@ -200,31 +200,45 @@ export function BuildRealtimeModelOptions(models: ReadonlyArray<VoiceModelCandid
 
 /**
  * Builds the `configOverridesJson` payload for the `StartRealtimeClientSession` mint from
- * what the (authorization-gated) pickers chose — an explicit realtime model preference and/or a
- * per-provider voice. The envelope (`{"realtime":{"modelPreference":"<id>","voice":{"providers":
- * {"openai":{"voice":"<v>"}}}}}`) is the pinned server contract, merged into the effective config
- * server-side (highest precedence).
+ * what the (authorization-gated) pickers chose — an explicit realtime model preference, a
+ * voice, and the avatar that comes with that voice. The envelope
+ * (`{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}},"video":{"avatarId":"<a>"}}}`)
+ * is the pinned server contract, merged into the effective config server-side (highest precedence).
+ *
+ * The voice is filed PROVIDER-AGNOSTICALLY: the browser has a model id, never a vendor `DriverClass`
+ * (`GetRealtimeModelVoices` does not return one), so naming a provider here would be a guess that
+ * silently voided the setting for every non-OpenAI vendor. The server files it onto whichever driver
+ * it resolves. A picked avatar leaves video to the agent: the server shows it only when the voiced
+ * agent's own video setting is on (else the call says why, reason `video-off`), and only when it names
+ * a Video binding on the vendor it resolves. Kept in lockstep with the server-side
+ * `BuildRealtimeOverridesJson` in `@memberjunction/ai-agents` by `realtime-convergence-drift.test.ts`.
+ * See issue #3530.
  *
  * @param preferredModelId The explicit `MJ: AI Models` id, or null/empty for none.
  * @param preferredVoice The provider-native voice id (e.g. `echo`), or null/empty for none.
+ * @param preferredAvatarId The avatar that comes with the picked voice (`RealtimeVoiceOption.AvatarID`), or null/empty for none.
  * @returns The JSON string, or `null` when nothing was overridden (keeps the mint identical to default).
  */
 export function BuildRealtimeConfigOverridesJson(
   preferredModelId: string | null | undefined,
   preferredVoice?: string | null | undefined,
+  preferredAvatarId?: string | null | undefined,
 ): string | null {
   const modelId = preferredModelId?.trim() ?? '';
   const voice = preferredVoice?.trim() ?? '';
-  if (modelId.length === 0 && voice.length === 0) {
+  const avatarId = preferredAvatarId?.trim() ?? '';
+  if (modelId.length === 0 && voice.length === 0 && avatarId.length === 0) {
     return null;
   }
-  const realtime: { modelPreference?: string; voice?: { providers: Record<string, { voice: string }> } } = {};
+  const realtime: { modelPreference?: string; voice?: { default: { voice: string } }; video?: { avatarId: string } } = {};
   if (modelId.length > 0) {
     realtime.modelPreference = modelId;
   }
   if (voice.length > 0) {
-    // Per-provider voice shape matches GetProviderVoiceSettings; `openai` is the realtime provider today.
-    realtime.voice = { providers: { openai: { voice } } };
+    realtime.voice = { default: { voice } };
+  }
+  if (avatarId.length > 0) {
+    realtime.video = { avatarId };
   }
   return JSON.stringify({ realtime });
 }

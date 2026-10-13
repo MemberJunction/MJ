@@ -2,6 +2,24 @@
   <!-- Header -->
   <div class="providers-header">
     <span class="header-title">Storage Accounts</span>
+    @if (userCanManage) {
+      <div class="admin-header-actions">
+        <button
+          type="button"
+          class="admin-action-btn"
+          title="Add Storage Account"
+          (click)="openAdminDialog('accounts')">
+          <i class="fa-solid fa-plus"></i>
+        </button>
+        <button
+          type="button"
+          class="admin-action-btn"
+          title="Manage Storage Providers & Accounts"
+          (click)="openAdminDialog('accounts')">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+      </div>
+    }
   </div>
 
   <!-- Loading State -->
@@ -26,21 +44,30 @@
     <mj-empty-state
       class="storage-providers-empty-fill"
       Icon="fa-solid fa-folder-plus"
-      Title="No storage accounts configured"
-      Message="Contact your administrator to set up file storage accounts"
-      Size="compact" />
+      [Title]="userCanManage ? 'No storage accounts configured' : 'No storage accounts available'"
+      [Message]="userCanManage ? 'Configure storage accounts to connect MemberJunction to cloud storage providers.' : 'Contact your administrator to set up file storage accounts.'"
+      Size="compact">
+      @if (userCanManage) {
+        <button
+          type="button"
+          class="mj-empty-action-btn"
+          (click)="openAdminDialog('accounts')">
+          <i class="fa-solid fa-plus"></i>
+          <span>Configure Account</span>
+        </button>
+      }
+    </mj-empty-state>
   }
 
   <!-- Account List -->
   @if (!isLoading && !errorMessage && accounts.length > 0) {
     <div class="providers-container">
-      @for (item of accounts; track item) {
+      @for (item of accounts; track item.account.ID) {
         <div
           class="provider-item"
           [class.selected]="isSelected(item)"
           (click)="selectAccount(item)"
-          [title]="item.account.Description || item.account.Name"
-          >
+          [title]="item.account.Description || item.account.Name">
           <div class="provider-icon">
             <i [class]="getProviderIcon(item.provider.Name)"></i>
           </div>
@@ -71,8 +98,27 @@
               }
             </div>
           </div>
+          @if (userCanManage) {
+            <button
+              type="button"
+              class="provider-edit-btn"
+              title="Edit Storage Account"
+              (click)="onEditAccountClick(item, $event)">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+          }
         </div>
       }
     </div>
   }
 </div>
+
+<!-- Storage Administration Dialog -->
+@if (isManageDialogOpen) {
+  <mj-storage-admin-dialog
+    [Visible]="isManageDialogOpen"
+    [ActiveTab]="adminDialogTab"
+    (Close)="closeAdminDialog()"
+    (AccountsChanged)="onAdminAccountsChanged()">
+  </mj-storage-admin-dialog>
+}

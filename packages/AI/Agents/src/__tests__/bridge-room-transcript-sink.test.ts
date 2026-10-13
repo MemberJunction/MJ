@@ -116,4 +116,35 @@ describe('CreateBridgeRoomTranscriptSink', () => {
         await sink({ RoomKey: 'r', AgentSessionID: 's', IsAgentSpeech: true, Text: 't' }, undefined, undefined);
         expect(runViewMock).not.toHaveBeenCalled();
     });
+
+    /**
+     * Round 16 memory-leak fix: `roomToConversation` and `writeChains` were plain `Map`s inside this
+     * closure, bound once at process startup and never evicted — every meeting room ever transcribed
+     * left a permanent entry. Fixed by converting both to `MJLruCache` (10,000 entries / 24h TTL).
+     * This test proves the bound is real: past the configured size, the oldest room is evicted (LRU)
+     * and re-resolved on its next line, while a recently-touched room stays cached.
+     */
+    it('bounds the room→conversation cache so a very old room eventually gets evicted and re-resolved', async () => {
+        runViewMock.mockResolvedValue({ Success: true, Results: [] }); // every lookup is a "not found" miss
+        const conv = makeFakeEntity('conv-bounded');
+        const { provider } = makeProvider(conv);
+        const sink = CreateBridgeRoomTranscriptSink({ ConversationType: 'Meeting Room' });
+
+        const ROOM_CACHE_MAX_SIZE = 10_000; // must match roomToConversation's MJLruCache maxSize in the sink
+
+        for (let i = 0; i < ROOM_CACHE_MAX_SIZE + 5; i++) {
+            await sink({ RoomKey: `room-${i}`, AgentSessionID: 's1', IsAgentSpeech: true, Text: 'x' }, user, provider);
+        }
+        const queriesAfterFill = runViewMock.mock.calls.length;
+        expect(queriesAfterFill).toBe(ROOM_CACHE_MAX_SIZE + 5); // every room was a cache miss the first time
+
+        // The very first room inserted should have been LRU-evicted — visiting it again re-queries.
+        await sink({ RoomKey: 'room-0', AgentSessionID: 's1', IsAgentSpeech: true, Text: 'y' }, user, provider);
+        expect(runViewMock.mock.calls.length).toBe(queriesAfterFill + 1);
+
+        // A room visited just before the eviction check should still be cached — no re-query.
+        const recentRoom = `room-${ROOM_CACHE_MAX_SIZE + 4}`;
+        await sink({ RoomKey: recentRoom, AgentSessionID: 's1', IsAgentSpeech: true, Text: 'z' }, user, provider);
+        expect(runViewMock.mock.calls.length).toBe(queriesAfterFill + 1);
+    }, 20_000);
 });

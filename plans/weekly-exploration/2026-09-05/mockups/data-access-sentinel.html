@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Access Sentinel</title>
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-brand-primary-soft: #eef2fb;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+
+  .content { padding: 22px 28px 40px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+  .kpi { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px 18px; }
+  .kpi .label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; font-weight: 800; }
+  .kpi .value.err { color: var(--mj-status-error); }
+  .kpi .delta { font-size: 12px; font-weight: 600; margin-top: 4px; color: var(--mj-text-muted); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1.05fr; gap: 20px; align-items: start; }
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+
+  /* anomaly feed */
+  .anomaly-row { display: flex; gap: 12px; padding: 13px 18px; border-bottom: 1px solid var(--mj-border-subtle); cursor: default; }
+  .anomaly-row:last-child { border-bottom: none; }
+  .anomaly-row.active { background: var(--mj-brand-primary-soft); }
+  .sev-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .sev-critical { background: var(--mj-status-error); }
+  .sev-warning { background: var(--mj-status-warning); }
+  .sev-info { background: var(--mj-status-info); }
+  .anomaly-title { font-weight: 700; font-size: 13px; }
+  .anomaly-sub { font-size: 12px; color: var(--mj-text-secondary); margin-top: 2px; }
+  .anomaly-tag { display:inline-flex; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing:.03em; color: var(--mj-text-muted); background: var(--mj-bg-surface-sunken); padding: 1px 7px; border-radius: 4px; margin-top: 5px; }
+  .anomaly-time { margin-left: auto; font-size: 11px; color: var(--mj-text-muted); white-space: nowrap; }
+
+  /* timeline */
+  .timeline-wrap { padding: 18px; }
+  .tl-legend { display: flex; gap: 18px; font-size: 11.5px; color: var(--mj-text-secondary); margin-bottom: 10px; }
+  .tl-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  /* evidence panel */
+  .evidence-row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px dashed var(--mj-border-subtle); font-size: 12.5px; }
+  .evidence-row:last-child { border-bottom: none; }
+  .evidence-row .k { color: var(--mj-text-muted); }
+  .evidence-row .v { font-weight: 600; font-family: ui-monospace, monospace; font-size: 12px; }
+  .triage-actions { display: flex; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+  .triage-actions button { flex: 1; }
+  .btn-danger { background: var(--mj-status-error-bg); border-color: color-mix(in srgb, var(--mj-status-error) 30%, transparent); color: var(--mj-status-error); }
+  .btn-success { background: var(--mj-status-success-bg); border-color: color-mix(in srgb, var(--mj-status-success) 30%, transparent); color: var(--mj-status-success); }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-cube"></i> MJ Explorer</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item"><i class="fa-solid fa-users"></i> Members</div>
+    <div class="nav-item"><i class="fa-solid fa-heart-pulse"></i> Data Health</div>
+    <div class="nav-item"><i class="fa-solid fa-sitemap"></i> Federation &amp; Chapters</div>
+    <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Suppression &amp; Safety</div>
+    <div class="nav-item active"><i class="fa-solid fa-eye"></i> Data Access Sentinel</div>
+    <div class="nav-section">Configuration</div>
+    <div class="nav-item"><i class="fa-solid fa-table-list"></i> Entities</div>
+    <div class="nav-item"><i class="fa-solid fa-lock"></i> Permissions</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-eye"></i> Data Access Sentinel</h1>
+        <div class="sub">Detection &amp; alerting only — nothing here blocks access automatically</div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn"><i class="fa-solid fa-arrows-rotate"></i> Recompute baselines</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="kpi-row">
+        <div class="kpi"><div class="label">Open anomalies</div><div class="value err">4</div><div class="delta">1 critical, 2 warning, 1 info</div></div>
+        <div class="kpi"><div class="label">Principals monitored</div><div class="value">212</div><div class="delta">184 users, 28 API keys</div></div>
+        <div class="kpi"><div class="label">Confirmed this quarter</div><div class="value">3</div><div class="delta">all false-positive-reviewed process</div></div>
+        <div class="kpi"><div class="label">False positives marked</div><div class="value">11</div><div class="delta">tuning baseline thresholds</div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><h2><i class="fa-solid fa-list"></i> Anomaly Feed</h2><span style="font-size:11.5px;color:var(--mj-text-muted)">newest first</span></div>
+          <div>
+            <div class="anomaly-row active">
+              <div class="sev-dot sev-critical"></div>
+              <div style="flex:1">
+                <div class="anomaly-title">Volume spike — donor giving-history export</div>
+                <div class="anomaly-sub">j.reyes@svc-account · ran a view returning 41,206 rows, typical is 60</div>
+                <div class="anomaly-tag">VolumeSpike</div>
+              </div>
+              <div class="anomaly-time">Today, 2:14 AM</div>
+            </div>
+            <div class="anomaly-row">
+              <div class="sev-dot sev-warning"></div>
+              <div style="flex:1">
+                <div class="anomaly-title">Off-hours access — full Contact entity</div>
+                <div class="anomaly-sub">m.dubois · logged in and viewed 340 records between 1–3 AM local, typical hours are 8 AM–6 PM</div>
+                <div class="anomaly-tag">OffHoursAccess</div>
+              </div>
+              <div class="anomaly-time">Yesterday, 1:52 AM</div>
+            </div>
+            <div class="anomaly-row">
+              <div class="sev-dot sev-warning"></div>
+              <div style="flex:1">
+                <div class="anomaly-title">New entity scope for API key</div>
+                <div class="anomaly-sub">key "grants-portal-sync" read the Donor entity for the first time in its 14-month history</div>
+                <div class="anomaly-tag">NewEntityScope</div>
+              </div>
+              <div class="anomaly-time">2 days ago</div>
+            </div>
+            <div class="anomaly-row">
+              <div class="sev-dot sev-info"></div>
+              <div style="flex:1">
+                <div class="anomaly-title">Dormant account reactivated</div>
+                <div class="anomaly-sub">t.brooks · no activity for 96 days, then a single normal-volume view run</div>
+                <div class="anomaly-tag">DormantAccountReactivated</div>
+              </div>
+              <div class="anomaly-time">4 days ago</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-chart-line"></i> j.reyes@svc-account — 30-day activity</h2></div>
+            <div class="timeline-wrap">
+              <div class="tl-legend">
+                <span><span class="swatch" style="background:var(--mj-brand-primary-soft); border:1px solid var(--mj-brand-primary);"></span> Typical range (baseline band)</span>
+                <span><span class="swatch" style="background:var(--mj-status-error);"></span> Flagged event</span>
+              </div>
+              <svg width="100%" height="170" viewBox="0 0 560 170" xmlns="http://www.w3.org/2000/svg">
+                <!-- baseline band -->
+                <rect x="0" y="118" width="560" height="30" fill="#264FAF" opacity="0.10"/>
+                <line x1="0" y1="118" x2="560" y2="118" stroke="#264FAF" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>
+                <line x1="0" y1="148" x2="560" y2="148" stroke="#264FAF" stroke-width="1" stroke-dasharray="3,3" opacity="0.5"/>
+                <!-- axis -->
+                <line x1="0" y1="160" x2="560" y2="160" stroke="#e2e8f0" stroke-width="1"/>
+                <!-- bars: 30 days, most within band (~40-70 rows), last one spikes -->
+                <!-- generate a plausible pattern manually -->
+                <g fill="#94a3b8">
+                  <rect x="4"  y="130" width="12" height="30" rx="2"/>
+                  <rect x="22" y="135" width="12" height="25" rx="2"/>
+                  <rect x="40" y="125" width="12" height="35" rx="2"/>
+                  <rect x="58" y="138" width="12" height="22" rx="2"/>
+                  <rect x="76" y="128" width="12" height="32" rx="2"/>
+                  <rect x="94" y="132" width="12" height="28" rx="2"/>
+                  <rect x="112" y="140" width="12" height="20" rx="2"/>
+                  <rect x="130" y="124" width="12" height="36" rx="2"/>
+                  <rect x="148" y="133" width="12" height="27" rx="2"/>
+                  <rect x="166" y="129" width="12" height="31" rx="2"/>
+                  <rect x="184" y="137" width="12" height="23" rx="2"/>
+                  <rect x="202" y="126" width="12" height="34" rx="2"/>
+                  <rect x="220" y="131" width="12" height="29" rx="2"/>
+                  <rect x="238" y="135" width="12" height="25" rx="2"/>
+                  <rect x="256" y="127" width="12" height="33" rx="2"/>
+                  <rect x="274" y="139" width="12" height="21" rx="2"/>
+                  <rect x="292" y="130" width="12" height="30" rx="2"/>
+                  <rect x="310" y="124" width="12" height="36" rx="2"/>
+                  <rect x="328" y="133" width="12" height="27" rx="2"/>
+                  <rect x="346" y="128" width="12" height="32" rx="2"/>
+                  <rect x="364" y="136" width="12" height="24" rx="2"/>
+                  <rect x="382" y="129" width="12" height="31" rx="2"/>
+                  <rect x="400" y="132" width="12" height="28" rx="2"/>
+                  <rect x="418" y="126" width="12" height="34" rx="2"/>
+                  <rect x="436" y="134" width="12" height="26" rx="2"/>
+                  <rect x="454" y="130" width="12" height="30" rx="2"/>
+                  <rect x="472" y="128" width="12" height="32" rx="2"/>
+                  <rect x="490" y="133" width="12" height="27" rx="2"/>
+                  <rect x="508" y="131" width="12" height="29" rx="2"/>
+                </g>
+                <!-- the flagged spike, today -->
+                <rect x="526" y="18" width="14" height="142" rx="2" fill="#dc2626"/>
+                <text x="533" y="12" font-size="10" fill="#dc2626" font-weight="700" text-anchor="middle">41,206</text>
+                <text x="10" y="14" font-size="10" fill="#94a3b8">rows returned</text>
+                <text x="10" y="168" font-size="9" fill="#94a3b8">30 days ago</text>
+                <text x="500" y="168" font-size="9" fill="#94a3b8" text-anchor="end">today</text>
+              </svg>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-magnifying-glass"></i> Evidence — why this was flagged</h2></div>
+            <div style="padding: 4px 18px 0;">
+              <div class="evidence-row"><span class="k">Anomaly type</span><span class="v">VolumeSpike</span></div>
+              <div class="evidence-row"><span class="k">Observed value</span><span class="v">41,206 rows</span></div>
+              <div class="evidence-row"><span class="k">Baseline (P95)</span><span class="v">60 rows</span></div>
+              <div class="evidence-row"><span class="k">Source log</span><span class="v">MJ: User View Runs #a291f0…</span></div>
+              <div class="evidence-row"><span class="k">View executed</span><span class="v">"All Donors — Giving History YTD"</span></div>
+              <div class="evidence-row"><span class="k">Principal</span><span class="v">j.reyes@svc-account (API Key)</span></div>
+            </div>
+            <div class="triage-actions">
+              <button class="btn btn-success"><i class="fa-solid fa-check"></i> Acknowledge</button>
+              <button class="btn btn-danger"><i class="fa-solid fa-triangle-exclamation"></i> Confirm incident</button>
+              <button class="btn"><i class="fa-solid fa-xmark"></i> False positive</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

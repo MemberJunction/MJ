@@ -107,15 +107,25 @@ export class NewActionPanelComponent extends BaseAngularComponent implements OnI
     this.IsSaving = false;
   }
 
-  public onClose(): void {
+  public OnClose(): void {
     this.StateService.closeNewActionPanel();
     this.Close.emit();
   }
 
-  public onBackdropClick(event: MouseEvent): void {
+  /** @deprecated Use {@link OnClose}. */
+  public onClose(): void {
+    return this.OnClose();
+  }
+
+  public OnBackdropClick(event: MouseEvent): void {
     if ((event.target as HTMLElement).classList.contains('panel-backdrop')) {
-      this.onClose();
+      this.OnClose();
     }
+  }
+
+  /** @deprecated Use {@link OnBackdropClick}. */
+  public onBackdropClick(event: MouseEvent): void {
+    return this.OnBackdropClick(event);
   }
 
   public validate(): boolean {
@@ -136,7 +146,7 @@ export class NewActionPanelComponent extends BaseAngularComponent implements OnI
     return Object.keys(this.Errors).length === 0;
   }
 
-  public async onSave(): Promise<void> {
+  public async OnSave(): Promise<void> {
     if (!this.validate()) {
       this.cdr.markForCheck();
       return;
@@ -162,8 +172,7 @@ export class NewActionPanelComponent extends BaseAngularComponent implements OnI
         this.StateService.closeNewActionPanel();
 
         // Open the full action record for editing
-        const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
-        this.navigationService.OpenEntityRecord('MJ: Actions', key);
+        this.navigationService.OpenEntityRecord('MJ: Actions', CompositeKey.FromID(action.ID));
       } else {
         this.Errors['general'] = 'Failed to save action. Please try again.';
       }
@@ -176,11 +185,21 @@ export class NewActionPanelComponent extends BaseAngularComponent implements OnI
     }
   }
 
-  public selectType(type: ActionType): void {
+  /** @deprecated Use {@link OnSave}. */
+  public async onSave(): Promise<void> {
+    return this.OnSave();
+  }
+
+  public SelectType(type: ActionType): void {
     this.Type = type;
   }
 
-  public getCategoryOptions(): Array<{ text: string; value: string }> {
+  /** @deprecated Use {@link SelectType}. */
+  public selectType(type: ActionType): void {
+    return this.SelectType(type);
+  }
+
+  public GetCategoryOptions(): Array<{ text: string; value: string }> {
     const options: Array<{ text: string; value: string }> = [];
 
     // Sort categories by path for easier selection
@@ -196,6 +215,11 @@ export class NewActionPanelComponent extends BaseAngularComponent implements OnI
     });
 
     return options;
+  }
+
+  /** @deprecated Use {@link GetCategoryOptions}. */
+  public getCategoryOptions(): Array<{ text: string; value: string }> {
+    return this.GetCategoryOptions();
   }
 
   private getCategoryPath(category: MJActionCategoryEntity): string {

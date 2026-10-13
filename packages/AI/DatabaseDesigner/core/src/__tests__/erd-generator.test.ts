@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateERDMermaid } from '../erd-generator.js';
+import { GenerateERDMermaid } from '../erd-generator.js';
 import type { TableDefinition } from '@memberjunction/schema-engine';
 
 const PRODUCTS_TABLE: TableDefinition = {
@@ -46,39 +46,39 @@ describe('generateERDMermaid', () => {
 
     describe('single table — no FKs', () => {
         it('returns null (no diagram needed for isolated table)', () => {
-            expect(generateERDMermaid([PRODUCTS_TABLE])).toBeNull();
+            expect(GenerateERDMermaid([PRODUCTS_TABLE])).toBeNull();
         });
     });
 
     describe('single table — with FKs to existing entity', () => {
         it('returns a non-null mermaid string', () => {
-            expect(generateERDMermaid([ORDERS_TABLE])).not.toBeNull();
+            expect(GenerateERDMermaid([ORDERS_TABLE])).not.toBeNull();
         });
 
         it('starts with erDiagram', () => {
-            const result = generateERDMermaid([ORDERS_TABLE])!;
+            const result = GenerateERDMermaid([ORDERS_TABLE])!;
             expect(result.startsWith('erDiagram')).toBe(true);
         });
 
         it('includes the table entity block', () => {
-            const result = generateERDMermaid([ORDERS_TABLE])!;
+            const result = GenerateERDMermaid([ORDERS_TABLE])!;
             expect(result).toContain('CustomerOrders {');
         });
 
         it('tags FK column with FK marker', () => {
-            const result = generateERDMermaid([ORDERS_TABLE])!;
+            const result = GenerateERDMermaid([ORDERS_TABLE])!;
             expect(result).toContain('CustomerID FK');
         });
 
         it('strips parentheses from RawSqlType for mermaid compatibility', () => {
-            const result = generateERDMermaid([ORDERS_TABLE])!;
+            const result = GenerateERDMermaid([ORDERS_TABLE])!;
             // DECIMAL(18,4) → DECIMAL, NVARCHAR(50) → NVARCHAR
             expect(result).toContain('DECIMAL TotalAmount');
             expect(result).toContain('NVARCHAR Status');
         });
 
         it('draws a relationship line to the referenced table', () => {
-            const result = generateERDMermaid([ORDERS_TABLE])!;
+            const result = GenerateERDMermaid([ORDERS_TABLE])!;
             expect(result).toContain('User ||--o{ CustomerOrders');
         });
     });
@@ -86,17 +86,17 @@ describe('generateERDMermaid', () => {
     describe('multi-table batch — cross-table FKs', () => {
         it('returns a non-null mermaid string for multi-table (even without external FKs)', () => {
             // Products has no FKs, but multi-table always generates an ERD
-            expect(generateERDMermaid([PRODUCTS_TABLE, ORDER_LINES_TABLE])).not.toBeNull();
+            expect(GenerateERDMermaid([PRODUCTS_TABLE, ORDER_LINES_TABLE])).not.toBeNull();
         });
 
         it('includes entity blocks for all tables', () => {
-            const result = generateERDMermaid([ORDERS_TABLE, ORDER_LINES_TABLE])!;
+            const result = GenerateERDMermaid([ORDERS_TABLE, ORDER_LINES_TABLE])!;
             expect(result).toContain('CustomerOrders {');
             expect(result).toContain('OrderLines {');
         });
 
         it('draws FK relationships from OrderLines to both referenced tables', () => {
-            const result = generateERDMermaid([ORDERS_TABLE, ORDER_LINES_TABLE])!;
+            const result = GenerateERDMermaid([ORDERS_TABLE, ORDER_LINES_TABLE])!;
             expect(result).toContain('CustomerOrders ||--o{ OrderLines');
             expect(result).toContain('Products ||--o{ OrderLines');
         });
@@ -110,7 +110,7 @@ describe('generateERDMermaid', () => {
                     { ColumnName: 'OrderID', ReferencedSchema: '__mj_UDT', ReferencedTable: 'CustomerOrders', ReferencedColumn: 'ID', IsSoft: true },
                 ],
             };
-            const result = generateERDMermaid([tableWithDuplicateFKs])!;
+            const result = GenerateERDMermaid([tableWithDuplicateFKs])!;
             const matches = result.match(/CustomerOrders \|\|--o\{ OrderLines/g) ?? [];
             expect(matches.length).toBe(1);
         });
@@ -118,13 +118,13 @@ describe('generateERDMermaid', () => {
 
     describe('empty input', () => {
         it('returns null for an empty array', () => {
-            expect(generateERDMermaid([])).toBeNull();
+            expect(GenerateERDMermaid([])).toBeNull();
         });
     });
 
     describe('type mapping', () => {
         it('maps abstract uuid type to UNIQUEIDENTIFIER', () => {
-            const result = generateERDMermaid([ORDERS_TABLE])!;
+            const result = GenerateERDMermaid([ORDERS_TABLE])!;
             expect(result).toContain('UNIQUEIDENTIFIER CustomerID');
         });
 
@@ -136,7 +136,7 @@ describe('generateERDMermaid', () => {
                     { Name: 'RefID', Type: 'uuid', IsNullable: false },
                 ],
             };
-            const result = generateERDMermaid([table])!;
+            const result = GenerateERDMermaid([table])!;
             expect(result).toContain('DECIMAL Amount');
             expect(result).toContain('UNIQUEIDENTIFIER RefID');
         });

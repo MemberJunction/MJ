@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -165,7 +165,7 @@ function recordResultVariable(
 function collectResultVariables(ast: t.File): Map<string, ResultVarInfo> {
   const resultVariables = new Map<string, ResultVarInfo>();
 
-  traverse(ast, {
+  Traverse(ast, {
     AwaitExpression(path: NodePath<t.AwaitExpression>) {
       const callExpr = path.node.argument;
 
@@ -262,7 +262,7 @@ function blockContainsReturn(node: t.Statement): boolean {
 function isDescendantOf(targetNode: t.Node, containerNode: t.Node): boolean {
   if (targetNode === containerNode) return true;
   let found = false;
-  traverse(containerNode, {
+  Traverse(containerNode, {
     enter(innerPath: NodePath) {
       if (innerPath.node === targetNode) { found = true; innerPath.stop(); }
     },
@@ -388,7 +388,7 @@ export class DataResultValidationRule extends BaseLintRule {
     const resultVarNames = new Set(resultVariables.keys());
 
     // Phase 2: Validate usage
-    traverse(ast, {
+    Traverse(ast, {
       // ── Array methods + setState + array-expecting funcs ──────
       CallExpression(path: NodePath<t.CallExpression>) {
         const callee = path.node.callee;

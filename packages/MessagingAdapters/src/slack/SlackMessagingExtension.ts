@@ -48,13 +48,14 @@ import { SocketModeClient } from '@slack/socket-mode';
 import {
     BaseServerExtension,
     ServerExtensionConfig,
+    ServerExtensionPhase,
     ExtensionInitResult,
     ExtensionHealthResult
 } from '@memberjunction/server-extensions-core';
 import { SlackAdapter } from './SlackAdapter.js';
 import { MessagingAdapterSettings, RequestWithRawBody } from '../base/types.js';
-import { verifySlackSignature } from './slack-routes.js';
-import { handleSlackInteraction } from './slack-interactivity.js';
+import { VerifySlackSignature } from './slack-routes.js';
+import { HandleSlackInteraction } from './slack-interactivity.js';
 
 /**
  * Server Extension that registers Slack webhook routes and delegates
@@ -73,6 +74,11 @@ import { handleSlackInteraction } from './slack-interactivity.js';
  */
 @RegisterClass(BaseServerExtension, 'SlackMessagingExtension')
 export class SlackMessagingExtension extends BaseServerExtension {
+    /** Slack webhooks arrive unsigned from Slack servers; run in pre-auth phase. */
+    public override get DefaultPhase(): ServerExtensionPhase {
+        return 'pre-auth';
+    }
+
     /** The Slack adapter handling message processing. */
     private adapter: SlackAdapter | null = null;
 
@@ -240,7 +246,8 @@ export class SlackMessagingExtension extends BaseServerExtension {
         return {
             Success: true,
             Message: `Slack extension loaded (HTTP mode) for agent ${settings.DefaultAgentName}`,
-            RegisteredRoutes: registeredRoutes
+            RegisteredRoutes: registeredRoutes,
+            Service: this.adapter ?? undefined
         };
     }
 
@@ -254,7 +261,7 @@ export class SlackMessagingExtension extends BaseServerExtension {
      */
     private async handleWebhook(req: Request, res: Response): Promise<void> {
         // 1. Verify signature
-        if (this.signingSecret && !verifySlackSignature(req, this.signingSecret)) {
+        if (this.signingSecret && !VerifySlackSignature(req, this.signingSecret)) {
             res.status(401).send('Invalid signature');
             return;
         }
@@ -302,13 +309,49 @@ export class SlackMessagingExtension extends BaseServerExtension {
             await this.processSlackEvent(event as Record<string, unknown>);
         });
 
+        // Interactivity. Only 'message' and 'app_mention' were subscribed, so in Socket Mode every
+        // interactive element the block builder renders — the "Fill Out Form" button, choice
+        // buttons, action buttons — was inert: the click produced an event nothing listened for,
+        // and a human-in-the-loop agent could not be answered at all. `handleSlackInteraction`
+        // (with its full modal build/submit path) was wired only to the HTTP route, which
+        // additionally needs a SigningSecret that Socket Mode deployments have no reason to set.
+        //
+        // Only the envelope type is subscribed. @slack/socket-mode emits the INNER event type for
+        // an `events_api` envelope and the ENVELOPE type for everything else, and Slack labels
+        // every block action and view submission `interactive` — so 'block_actions' and
+        // 'view_submission' subscriptions never fire, and had they fired, a view submission would
+        // have run the agent twice.
+        const handleInteractiveEnvelope = async ({ body, ack }: { body?: Record<string, unknown>; ack: () => Promise<void> }) => {
+            await ack();
+            if (!this.interactClient || !this.adapter) {
+                LogStatus('Slack interact: extension not fully initialized');
+                return;
+            }
+            try {
+                // handleSlackInteraction parses a JSON string (its HTTP contract); Socket Mode
+                // hands us the payload already parsed.
+                const payload = body?.['payload'];
+                const raw = typeof payload === 'string' ? payload : JSON.stringify(payload ?? body ?? {});
+                await HandleSlackInteraction(raw, this.interactClient, this.adapter);
+            } catch (error) {
+                LogError('Error handling Slack interaction (Socket Mode):', undefined, error);
+            }
+        };
+        // Only 'interactive'. For an events_api envelope the SDK emits the INNER event type
+        // (`message`, `app_mention`); for every other envelope it emits the envelope type itself,
+        // and Slack labels all block actions and view submissions `interactive`. Subscribing to
+        // 'block_actions'/'view_submission' as well never fired — and had it fired, a view
+        // submission would have run the agent twice.
+        this.socketModeClient.on('interactive', handleInteractiveEnvelope);
+
         await this.socketModeClient.start();
         LogStatus('Slack Socket Mode connected');
 
         return {
             Success: true,
             Message: `Slack extension loaded (Socket Mode) for agent ${settings.DefaultAgentName}`,
-            RegisteredRoutes: ['WebSocket (Socket Mode)']
+            RegisteredRoutes: ['WebSocket (Socket Mode)'],
+            Service: this.adapter ?? undefined
         };
     }
 
@@ -334,7 +377,7 @@ export class SlackMessagingExtension extends BaseServerExtension {
         }
 
         try {
-            await handleSlackInteraction(payloadStr, this.interactClient, this.adapter);
+            await HandleSlackInteraction(payloadStr, this.interactClient, this.adapter);
         } catch (error) {
             LogError('Error handling Slack interaction:', undefined, error);
         }

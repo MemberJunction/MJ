@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { deduplicateEntityFieldSequences } from '../rules/SequenceDeduplicator.js';
+import { DeduplicateEntityFieldSequences } from '../rules/SequenceDeduplicator.js';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -91,7 +91,7 @@ describe('SequenceDeduplicator', () => {
     writeFileSync(join(tmpDir, 'V002__file2.pg.sql'),
       makeEntityFieldInsert('AAA', 100002, 'Field2'));
 
-    const result = deduplicateEntityFieldSequences(tmpDir, true);
+    const result = DeduplicateEntityFieldSequences(tmpDir, true);
     expect(result.totalCollisions).toBe(0);
     expect(result.fixes).toHaveLength(0);
     expect(result.totalInserts).toBe(2);
@@ -104,7 +104,7 @@ describe('SequenceDeduplicator', () => {
     writeFileSync(join(tmpDir, 'V002__file2.pg.sql'),
       makeEntityFieldInsert('AAA', 100048, 'Field2'));
 
-    const result = deduplicateEntityFieldSequences(tmpDir, true);
+    const result = DeduplicateEntityFieldSequences(tmpDir, true);
     expect(result.totalCollisions).toBe(1);
     expect(result.fixes).toHaveLength(1);
     expect(result.fixes[0].originalSequence).toBe(100048);
@@ -118,7 +118,7 @@ describe('SequenceDeduplicator', () => {
     writeFileSync(join(tmpDir, 'V002__file2.pg.sql'),
       makeEntityFieldInsert('BBB', 100048, 'Field2'));
 
-    const result = deduplicateEntityFieldSequences(tmpDir, true);
+    const result = DeduplicateEntityFieldSequences(tmpDir, true);
     expect(result.totalCollisions).toBe(0);
   });
 
@@ -134,7 +134,7 @@ describe('SequenceDeduplicator', () => {
     writeFileSync(join(tmpDir, 'V001__file1.pg.sql'), file1);
     writeFileSync(join(tmpDir, 'V002__file2.pg.sql'), file2);
 
-    const result = deduplicateEntityFieldSequences(tmpDir, true);
+    const result = DeduplicateEntityFieldSequences(tmpDir, true);
     expect(result.totalCollisions).toBe(1);
     expect(result.fixes[0].newSequence).toBe(100051); // next after 100050
   });
@@ -146,7 +146,7 @@ describe('SequenceDeduplicator', () => {
       makeEntityFieldInsert('AAA', 100048, 'Field2'));
 
     // Apply
-    const result = deduplicateEntityFieldSequences(tmpDir, false);
+    const result = DeduplicateEntityFieldSequences(tmpDir, false);
     expect(result.totalCollisions).toBe(1);
 
     // Verify file was modified
@@ -162,7 +162,7 @@ describe('SequenceDeduplicator', () => {
       makeEntityFieldInsert('AAA', 100048, 'Field1'));
     writeFileSync(join(tmpDir, 'V002__file2.pg.sql'), originalContent);
 
-    deduplicateEntityFieldSequences(tmpDir, true);
+    DeduplicateEntityFieldSequences(tmpDir, true);
 
     const content = readFileSync(join(tmpDir, 'V002__file2.pg.sql'), 'utf-8');
     expect(content).toBe(originalContent);
@@ -175,10 +175,10 @@ describe('SequenceDeduplicator', () => {
       makeEntityFieldInsert('AAA', 100048, 'Field2'));
 
     // First run: fix
-    deduplicateEntityFieldSequences(tmpDir, false);
+    DeduplicateEntityFieldSequences(tmpDir, false);
 
     // Second run: verify clean
-    const result = deduplicateEntityFieldSequences(tmpDir, true);
+    const result = DeduplicateEntityFieldSequences(tmpDir, true);
     expect(result.totalCollisions).toBe(0);
   });
 
@@ -188,7 +188,7 @@ describe('SequenceDeduplicator', () => {
     writeFileSync(join(tmpDir, 'V002__file2.pg.sql'),
       makeEntityFieldInsert('f3c49fe2-b5d9-40d4-8562-6596261772a0', 100048, 'Field2'));
 
-    const result = deduplicateEntityFieldSequences(tmpDir, true);
+    const result = DeduplicateEntityFieldSequences(tmpDir, true);
     expect(result.totalCollisions).toBe(1);
   });
 
@@ -198,7 +198,7 @@ describe('SequenceDeduplicator', () => {
     writeFileSync(join(tmpDir, 'V001__earlier.pg.sql'),
       makeEntityFieldInsert('AAA', 100048, 'EarlierField'));
 
-    const result = deduplicateEntityFieldSequences(tmpDir, true);
+    const result = DeduplicateEntityFieldSequences(tmpDir, true);
     expect(result.totalCollisions).toBe(1);
     // Later file (V002) should be the one bumped
     expect(result.fixes[0].file).toContain('V002');

@@ -248,9 +248,28 @@ export function checkPrTransitions(base, head) {
     errors.push(...checkLineTransition(key, baseLines[key], headLines[key]));
   }
   for (const key of Object.keys(headLines)) {
-    if (!(key in baseLines) && headLines[key].status !== 'candidate') {
-      errors.push(`pr: new line ${key} must start as "candidate", not "${headLines[key].status}"`);
-    }
+    if (key in baseLines) continue;
+    const line = headLines[key];
+    if (line.status === 'candidate') continue;
+    // A line may arrive already past `candidate` ONLY if it carries the candidateDate
+    // proving it was one. The rule exists to stop a line being declared certified without
+    // ever having been a candidate; it is not meant to stop a line whose candidacy happened
+    // before this branch could see it.
+    //
+    // That distinction is load-bearing because `main` only ever advances by release merges,
+    // and every push to `main` publishes. A line certified on `next` between two releases
+    // therefore cannot be walked through candidate->certified on `main` in two PRs: each PR
+    // would be a separate push, and each push a separate npm publish. Line 5.51 hit exactly
+    // this -- cut 2026-07-31, certified 2026-08-14, and v6.1.0-edge.2 merged 2026-08-12, so
+    // the next release PR was the first to carry it and had no legal way to.
+    //
+    // candidateDate is the right evidence: `checkLineTransition` holds it immutable once
+    // set, so a line cannot acquire a backdated candidacy later, and the schema constrains
+    // it to a real date. A line still cannot appear as `certified` out of nowhere.
+    if (line.candidateDate) continue;
+    errors.push(
+      `pr: new line ${key} must start as "candidate" (or carry candidateDate showing it was one), not "${line.status}"`,
+    );
   }
   return errors;
 }

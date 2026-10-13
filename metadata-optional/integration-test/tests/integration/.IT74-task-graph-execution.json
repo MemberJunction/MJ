@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT74 - Task Graph Execution",
+    "Description": "The durable dispatcher actually EXECUTING graphs against the live database, bundle 'task-graph-execution', TX1-TX7. IT71 covers submission and persistence — nine of its checks assert metadata and nine verify the rows a save produces — but not one of them runs a graph, so everything from 'the rows are correct' onward was unit-tested against fixtures and never against SQL Server. This bundle closes that. A stub TaskAgentRunner is injected through the dispatcher's existing seam, so the real claim protocol, condition evaluator, failure propagation and rollup all run with NO model calls, no tokens and no network — what is under test is the dispatcher, not the agent. TX1: a submitted graph is claimed, executed and rolled up to Complete with the runner's output persisted to OutputPayload. TX2: a diamond graph proves the AND-join WAITED — start order is recorded, because 'everything reached Complete' is a far weaker claim than 'D ran after B and C' — and the join receives both dependency outputs. TX3: a failed step propagates to Blocked on its dependents and the graph SETTLES; the failure that matters is not the failed task but a graph that hangs forever on a prerequisite that can never arrive. TX4: an edge whose condition evaluates false skips its branch and the graph still settles, which is TaskDependency.Condition end to end rather than as a column. TX5: the dispatcher emits TaskStarted/TaskCompleted/GraphSettled frames, every one addressed to its ParentTaskID and carrying an OwnerUserID — without which the delivery filter fails closed and every frame reaches nobody. TX6: TWO dispatchers race one graph and every task executes exactly once; the CAS claim guarantee IS the database's atomicity, so no in-memory mock can test it. TX7: a claim orphaned by a crash (held by a dead instance with an expired lease) is reclaimed and the graph finishes — 'work resumes after a crash' was a comment until this. Mutation-class throughout: creates Tasks, Task Dependencies and Task Types, and FK-ordered-deletes all of them.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Submitted graphs are actually executed: claimed atomically, run in dependency order with joins that wait, failures propagated to Blocked rather than deadlocking, conditional branches skipped, lifecycle frames emitted with the addressing and ownership a subscriber needs, every task executed exactly once under concurrent dispatchers, and orphaned claims reclaimed after a crash."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "task-graph-execution"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "306F80CF-A65E-406A-A1C7-B6A6A41A1885"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T05:11:54.382Z",
+    "checksum": "533114ec613cdf22375d2b174b73a939240ea84cd13e84b99e331e26fcdfe4fa"
+  }
+}

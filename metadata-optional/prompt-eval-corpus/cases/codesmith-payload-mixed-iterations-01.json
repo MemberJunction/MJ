@@ -1,0 +1,17 @@
+{
+  "id": "codesmith-payload-mixed-iterations-01",
+  "agent": "Codesmith Agent",
+  "tags": ["payload-change", "mixed-decision", "n2"],
+  "description": "Nothing has run yet. Executing is the decision; the prompt also asks for iterations to be incremented each time code executes, which a mixed turn (action + payload write) can do at once. Either is accepted; the mixed form is what the payload arm measures.",
+  "input": {
+    "payload": { "task": "sum the values", "inputData": { "values": [1, 2, 3] }, "iterations": 0 },
+    "conversationMessages": [{ "role": "user", "content": "Sum the values." }]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      { "kind": "action", "actions": [{ "name": "Execute Code" }], "allowAdditionalActions": true, "payload": { "updateElements.iterations": { "matcher": "typeOf", "type": "number" } } },
+      { "kind": "action", "actions": [{ "name": "Execute Code" }], "allowAdditionalActions": true }
+    ]
+  }
+}

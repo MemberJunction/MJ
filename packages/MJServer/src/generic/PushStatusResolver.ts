@@ -1,5 +1,5 @@
 import { Arg, Field, ID, ObjectType, PubSubEngine, Resolver, ResolverFilterData, Root, Subscription } from 'type-graphql';
-import { UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { UserPayload } from '../types.js';
 
 export const PUSH_STATUS_UPDATES_TOPIC = 'PUSH_STATUS_UPDATES';
@@ -7,13 +7,13 @@ export const PUSH_STATUS_UPDATES_TOPIC = 'PUSH_STATUS_UPDATES';
 @ObjectType()
 export class PushStatusNotification {
   @Field(() => String, { nullable: true })
-  message?: string;
+  message?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field((_type) => Date)
-  date!: Date;
+  date!: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field((_type) => ID)
-  sessionId!: string;
+  sessionId!: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -32,6 +32,89 @@ export interface PushStatusNotificationPayload {
   sessionId: string;
   /** Authenticated user the update belongs to. Server-side filter key; never sent to the client. */
   ownerUserId: string;
+  /**
+   * `MJGlobal.ProcessUUID` of the instance that first published this update. Used only for
+   * cross-instance echo suppression: an instance that receives its own message back from the
+   * message bus must drop it, or every push is delivered twice.
+   */
+  SourceServerId?: string;
+}
+
+/** Receives every locally-published status update, for fan-out to other server instances. */
+export type PushStatusPublishHook = (payload: PushStatusNotificationPayload) => void;
+
+let _publishHook: PushStatusPublishHook | undefined;
+
+/**
+ * Register (or clear, with no arg) the cross-instance fan-out hook.
+ *
+ * Inversion of control, deliberately: this module must not know that Redis exists. The server
+ * registers the hook at startup only when a message bus is configured, so a single-instance
+ * deployment behaves exactly as before.
+ */
+export function SetPushStatusPublishHook(hook?: PushStatusPublishHook): void {
+  _publishHook = hook;
+}
+
+/**
+ * Validate an update received from the cross-instance message bus.
+ *
+ * The bus carries messages from other processes, so every field is type-checked before the update
+ * is republished onto the local topic, where {@link StatusUpdatesFilter} compares `ownerUserId`
+ * with the connection's user.
+ *
+ * @param raw The JSON text taken off the bus.
+ * @param localServerId This process's `MJGlobal.ProcessUUID`, used to drop our own echo.
+ * @returns The update to republish, or `null` to drop it.
+ */
+export function ParseReplicatedStatusUpdate(raw: string, localServerId: string): PushStatusNotificationPayload | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return null;
+  }
+
+  const { sessionId, ownerUserId, message, SourceServerId } = parsed as Record<string, unknown>;
+  const source = typeof SourceServerId === 'string' ? SourceServerId : undefined;
+  const body = typeof message === 'string' ? message : undefined;
+  if ((SourceServerId != null && source === undefined) || (message != null && body === undefined)) {
+    return null; // a present field of the wrong type
+  }
+  if (source === localServerId) {
+    return null; // our own message, echoed back
+  }
+  if (typeof sessionId !== 'string' || !sessionId || typeof ownerUserId !== 'string' || !ownerUserId) {
+    return null; // fail closed: an update with no valid identity can never be routed safely
+  }
+
+  return { sessionId, ownerUserId, message: body, SourceServerId: source };
+}
+
+/**
+ * Whether an update is worth sending to other server instances.
+ *
+ * Streaming content is excluded. It arrives at hundreds of messages per second and each one carries
+ * a full serialized agent run, so replicating it would cost far more bandwidth than the delivery it
+ * buys — and a token delta is worthless to a client that has already missed the ones before it.
+ * Progress and completion are low-rate and each is individually meaningful, which is exactly the
+ * kind of message that must survive landing on the wrong replica.
+ */
+export function ShouldReplicateStatusUpdate(message?: string): boolean {
+  if (!message) {
+    return false;
+  }
+  try {
+    const parsed: unknown = JSON.parse(message);
+    const type = (parsed as { type?: unknown })?.type;
+    return type !== 'StreamingContent';
+  } catch {
+    // A plain-string message (not the resolvers' JSON envelope) is rare and low-rate. Replicate it.
+    return true;
+  }
 }
 
 interface PushStatusNotificationArgs {
@@ -55,13 +138,31 @@ export interface StatusUpdateParams {
  * payload shape and the required-identity guarantee live in exactly one place. Adding a field to
  * the push is a one-line change here; a new publisher physically cannot omit `ownerUserId`.
  */
-export function publishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdateParams): void {
+export function PublishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdateParams): void {
   const payload: PushStatusNotificationPayload = {
     sessionId: params.sessionId,
     ownerUserId: params.ownerUserId,
     message: params.message,
+    SourceServerId: MJGlobal.Instance.ProcessUUID,
   };
   pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, payload);
+
+  // Fan out to other instances. Only reached by updates originating HERE: a message arriving from
+  // the bus is republished straight onto the local topic and never comes back through this
+  // function, so there is no loop to break beyond the SourceServerId check on the receiving side.
+  if (_publishHook && ShouldReplicateStatusUpdate(params.message)) {
+    try {
+      _publishHook(payload);
+    } catch {
+      // Fan-out is an optimization over the durable tail query. A message bus that is down must
+      // never break local delivery, which is the path that works for the common case.
+    }
+  }
+}
+
+/** @deprecated Use {@link PublishStatusUpdate}. */
+export function publishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdateParams): void {
+  return PublishStatusUpdate(pubSub, params);
 }
 
 /** Minimal shape of the subscription's connection context needed by the filter. */
@@ -82,7 +183,7 @@ export interface StatusUpdatesFilterContext {
  * `sessionId` is no longer sufficient. Fails CLOSED — a missing owner or connection identity never
  * matches.
  */
-export function statusUpdatesFilter(data: {
+export function StatusUpdatesFilter(data: {
   payload: PushStatusNotificationPayload;
   args: PushStatusNotificationArgs;
   context: StatusUpdatesFilterContext | undefined;
@@ -98,14 +199,23 @@ export function statusUpdatesFilter(data: {
   return UUIDsEqual(payload.ownerUserId, connectionUserId);
 }
 
+/** @deprecated Use {@link StatusUpdatesFilter}. */
+export function statusUpdatesFilter(data: {
+  payload: PushStatusNotificationPayload;
+  args: PushStatusNotificationArgs;
+  context: StatusUpdatesFilterContext | undefined;
+}): boolean {
+  return StatusUpdatesFilter(data);
+}
+
 @Resolver()
 export class PushStatusResolver {
   @Subscription(() => PushStatusNotification, {
     topics: PUSH_STATUS_UPDATES_TOPIC,
     filter: (data: ResolverFilterData<PushStatusNotificationPayload, PushStatusNotificationArgs, StatusUpdatesFilterContext>) =>
-      statusUpdatesFilter(data),
+      StatusUpdatesFilter(data),
   })
-  statusUpdates(
+  statusUpdates(  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     @Root() { message }: PushStatusNotificationPayload,
     @Arg('sessionId', () => String) sessionId: string
   ): PushStatusNotification {

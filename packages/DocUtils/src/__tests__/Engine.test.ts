@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('axios', () => ({
-  default: { get: vi.fn() },
+vi.mock('@memberjunction/network-utils', () => ({
+  HttpGet: vi.fn(),
 }));
 
 vi.mock('jsdom', () => ({

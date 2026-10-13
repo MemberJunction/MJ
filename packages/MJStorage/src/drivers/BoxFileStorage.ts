@@ -1,4 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
+import { DrainResponseBody } from '@memberjunction/network-utils';
 import env from 'env-var';
 import mime from 'mime-types';
 import {
@@ -17,7 +18,7 @@ import {
 } from '../generic/FileStorageBase';
 import { BoxDeveloperTokenAuth, BoxClient } from 'box-node-sdk';
 import { Readable } from 'stream';
-import { getProviderConfig } from '../config';
+import { GetProviderConfig } from '../config';
 
 interface BoxTokenResponse {
   access_token: string;
@@ -57,6 +58,76 @@ interface BoxConfig extends StorageProviderConfig {
    * This callback must be used to persist the new token.
    */
   onTokenRefresh?: TokenRefreshCallback;
+}
+
+/**
+ * The diagnostic fields worth logging from a failed Box API call.
+ *
+ * Deliberately an allowlist rather than a redaction of the raw error. A
+ * `BoxApiError` carries `requestInfo.headers`, and that map contains the live
+ * `Authorization` bearer token. The SDK does redact it on both of its own
+ * serialisation paths (`toJSON()` and its `util.inspect.custom` hook run every
+ * header through `DataSanitizer`), so logging the whole object prints
+ * `"authorization": "---[redacted]---"` today — but that is the SDK's promise,
+ * not ours, and it does not cover `requestInfo.body`, which `toJSON()` passes
+ * through untouched. Naming the fields we want makes the logged set a property
+ * of this file, so an SDK upgrade cannot widen it.
+ */
+interface BoxErrorDiagnostics {
+  statusCode?: number;
+  code?: string;
+  message?: string;
+  requestId?: string;
+  helpUrl?: string;
+  contextInfo?: unknown;
+}
+
+/**
+ * Shape of the errors thrown by `box-node-sdk` v10 (the generated SDK).
+ *
+ * Status, code and context live under `responseInfo`. The flat `statusCode` /
+ * `code` / `context_info` properties this driver used to read are the **v3**
+ * shape and are `undefined` on v10 — which silently disabled the 409-conflict
+ * handling in `PutObject` and half of the condition in `CreateDirectory`.
+ */
+interface BoxApiErrorShape {
+  message?: string;
+  responseInfo?: {
+    statusCode?: number;
+    code?: string;
+    requestId?: string;
+    helpUrl?: string;
+    contextInfo?: unknown;
+  };
+  /** Legacy v3 fields, still read so a downgrade degrades rather than breaks. */
+  statusCode?: number;
+  code?: string;
+  context_info?: unknown;
+}
+
+/**
+ * Builds a log-safe, bounded description of a Box SDK error.
+ *
+ * Reads the v10 `responseInfo` shape and falls back to the legacy flat fields,
+ * so it is correct on either. Never returns the error object itself.
+ */
+function describeBoxError(error: unknown): BoxErrorDiagnostics {
+  const e = (error ?? {}) as BoxApiErrorShape;
+  const info = e.responseInfo;
+  return {
+    statusCode: info?.statusCode ?? e.statusCode,
+    code: info?.code ?? e.code,
+    message: e.message,
+    requestId: info?.requestId,
+    helpUrl: info?.helpUrl,
+    contextInfo: info?.contextInfo ?? e.context_info,
+  };
+}
+
+/** True when a Box error reports the "an item with that name already exists" conflict. */
+function isBoxNameConflict(error: unknown): boolean {
+  const { statusCode, code, message } = describeBoxError(error);
+  return statusCode === 409 || code === 'item_name_in_use' || !!message?.includes('item_name_in_use');
 }
 
 /**
@@ -181,7 +252,7 @@ export class BoxFileStorage extends FileStorageBase {
     super();
 
     // Try to get config from centralized configuration
-    const config = getProviderConfig('box');
+    const config = GetProviderConfig('box');
 
     // Box auth can be via access token or refresh token
     this._accessToken = config?.accessToken || env.get('STORAGE_BOX_ACCESS_TOKEN').asString();
@@ -325,6 +396,7 @@ export class BoxFileStorage extends FileStorageBase {
       });
 
       if (!response.ok) {
+        await DrainResponseBody(response);
         throw new Error(`Failed to get access token: ${response.status} ${response.statusText}`);
       }
 
@@ -360,6 +432,7 @@ export class BoxFileStorage extends FileStorageBase {
       });
 
       if (!response.ok) {
+        await DrainResponseBody(response);
         throw new Error(`Failed to refresh token: ${response.status} ${response.statusText}`);
       }
 
@@ -979,8 +1052,12 @@ export class BoxFileStorage extends FileStorageBase {
   }
 
   /**
-   * Ensures we have a valid access token, refreshing if necessary.
+   * Ensures we have a valid access token, renewing it if necessary.
    * Also reinitializes the Box client with the new token.
+   *
+   * Renewal uses the same grant `initialize()` authenticated with: the refresh-token grant when a
+   * refresh token is configured, otherwise the client-credentials grant. Client-credentials
+   * tokens carry no refresh token, so renewing one means requesting a new token outright.
    */
   private async _ensureValidToken(): Promise<void> {
     // Check if token is expired or about to expire (within 5 minutes)
@@ -993,15 +1070,21 @@ export class BoxFileStorage extends FileStorageBase {
         const tokenData = await this._refreshAccessToken();
         this._accessToken = tokenData.access_token;
         this._tokenExpiresAt = Date.now() + tokenData.expires_in * 1000 - 60000;
-
-        // Reinitialize the Box client with the new token
-        const auth = new BoxDeveloperTokenAuth({ token: this._accessToken });
-        this._client = new BoxClient({ auth });
-
-        console.log('[Box] Token refreshed successfully');
+      } else if (this._clientId && this._clientSecret && this._enterpriseId) {
+        // _getAccessToken sets _accessToken and _tokenExpiresAt itself
+        await this._getAccessToken();
       } else {
-        throw new Error('Cannot refresh Box token: missing credentials');
+        throw new Error(
+          'Cannot refresh Box token: missing credentials (need a refresh token with client ID and secret, ' +
+            'or client ID, secret and enterprise ID)'
+        );
       }
+
+      // Reinitialize the Box client with the new token
+      const auth = new BoxDeveloperTokenAuth({ token: this._accessToken });
+      this._client = new BoxClient({ auth });
+
+      console.log('[Box] Token refreshed successfully');
     }
   }
 
@@ -1096,12 +1179,12 @@ export class BoxFileStorage extends FileStorageBase {
         return true;
       } catch (error) {
         // Handle conflicts - if the folder already exists, that's a success
-        if (error.statusCode === 409 || (error.message && error.message.includes('item_name_in_use'))) {
+        if (isBoxNameConflict(error)) {
           console.log(`Folder already exists (conflict): ${normalizedPath}`);
           return true;
         }
 
-        console.error(`Error creating folder: ${error.message || JSON.stringify(error)}`);
+        console.error(`Error creating folder: ${normalizedPath}`, describeBoxError(error));
         return false;
       }
     } catch (error) {
@@ -1415,6 +1498,14 @@ export class BoxFileStorage extends FileStorageBase {
     return true;
   }
 
+  public override get SupportsPreAuthUpload(): boolean {
+    return false;
+  }
+
+  public override get SupportsPreAuthDownload(): boolean {
+    return true;
+  }
+
   /**
    * Streams a file's content from Box, optionally honoring a byte range.
    *
@@ -1589,15 +1680,8 @@ export class BoxFileStorage extends FileStorageBase {
         }
         return true;
       } catch (uploadError: unknown) {
-        const error = uploadError as { statusCode?: number; message?: string; code?: string; context_info?: unknown };
-        console.error(`[Box PutObject] Error uploading file:`, {
-          statusCode: error.statusCode,
-          message: error.message,
-          code: error.code,
-          contextInfo: error.context_info,
-          fullError: uploadError,
-        });
-        if (error.statusCode === 409) {
+        console.error(`[Box PutObject] Error uploading file:`, describeBoxError(uploadError));
+        if (isBoxNameConflict(uploadError)) {
           console.log(`[Box PutObject] File already exists (conflict): ${objectName}`);
           return true;
         }

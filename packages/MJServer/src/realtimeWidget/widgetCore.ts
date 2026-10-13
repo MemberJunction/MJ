@@ -12,7 +12,7 @@
  * @module @memberjunction/server/widget
  */
 
-import { buildSessionClaims } from '../auth/magicLink/magicLinkCore.js';
+import { BuildSessionClaims } from '../auth/magicLink/magicLinkCore.js';
 import type { MagicLinkJWTClaims } from '../auth/magicLink/types.js';
 
 /**
@@ -46,7 +46,7 @@ export interface WidgetInstanceEligibilityInput {
  * comma-separated string (tolerated). Returns an empty array for null/blank/garbage
  * — which makes the allowlist FAIL-CLOSED (no origin is allowed) by construction.
  */
-export function parseAllowedOrigins(allowedOrigins: string | null | undefined): string[] {
+export function ParseAllowedOrigins(allowedOrigins: string | null | undefined): string[] {
   const raw = allowedOrigins?.trim();
   if (!raw) {
     return [];
@@ -64,6 +64,11 @@ export function parseAllowedOrigins(allowedOrigins: string | null | undefined): 
   return list.filter((s): s is string => typeof s === 'string').map(normalizeOrigin).filter((s): s is string => !!s);
 }
 
+/** @deprecated Use {@link ParseAllowedOrigins}. */
+export function parseAllowedOrigins(allowedOrigins: string | null | undefined): string[] {
+  return ParseAllowedOrigins(allowedOrigins);
+}
+
 /** Lowercases + trims an origin and strips a trailing slash for stable comparison. */
 function normalizeOrigin(origin: string): string {
   return origin.trim().toLowerCase().replace(/\/+$/, '');
@@ -74,7 +79,7 @@ function normalizeOrigin(origin: string): string {
  * JSON array (preferred, e.g. `["Whiteboard"]`) or a comma-separated string (tolerated). Returns an
  * empty array for null/blank/garbage — the backwards-compatible default (no channels attached).
  */
-export function parseEnabledChannels(enabledChannels: string | null | undefined): string[] {
+export function ParseEnabledChannels(enabledChannels: string | null | undefined): string[] {
   const raw = enabledChannels?.trim();
   if (!raw) {
     return [];
@@ -89,12 +94,17 @@ export function parseEnabledChannels(enabledChannels: string | null | undefined)
   }
 }
 
+/** @deprecated Use {@link ParseEnabledChannels}. */
+export function parseEnabledChannels(enabledChannels: string | null | undefined): string[] {
+  return ParseEnabledChannels(enabledChannels);
+}
+
 /**
  * FAIL-CLOSED origin check. The request's `Origin` header must exactly match one of
  * the widget's allowed origins (after normalization). A missing request origin, or
  * an empty allowlist, is rejected — a public mint endpoint must never accept "*".
  */
-export function isOriginAllowed(requestOrigin: string | null | undefined, allowedOrigins: readonly string[]): boolean {
+export function IsOriginAllowed(requestOrigin: string | null | undefined, allowedOrigins: readonly string[]): boolean {
   if (!requestOrigin || allowedOrigins.length === 0) {
     return false;
   }
@@ -102,13 +112,23 @@ export function isOriginAllowed(requestOrigin: string | null | undefined, allowe
   return allowedOrigins.some((o) => o === candidate);
 }
 
+/** @deprecated Use {@link IsOriginAllowed}. */
+export function isOriginAllowed(requestOrigin: string | null | undefined, allowedOrigins: readonly string[]): boolean {
+  return IsOriginAllowed(requestOrigin, allowedOrigins);
+}
+
 /** True when the requested modality (or the widget's default render) is enabled by the instance. */
-export function isModalityEnabled(widgetModality: string, requested: 'Text' | 'Voice'): boolean {
+export function IsModalityEnabled(widgetModality: string, requested: 'Text' | 'Voice'): boolean {
   const m = widgetModality.trim().toLowerCase();
   if (m === 'both') {
     return true;
   }
   return m === requested.toLowerCase();
+}
+
+/** @deprecated Use {@link IsModalityEnabled}. */
+export function isModalityEnabled(widgetModality: string, requested: 'Text' | 'Voice'): boolean {
+  return IsModalityEnabled(widgetModality, requested);
 }
 
 /**
@@ -117,17 +137,25 @@ export function isModalityEnabled(widgetModality: string, requested: 'Text' | 'V
  * router can map it to a precise HTTP status. Modality is checked separately by the
  * voice path (W4) since a text mint is always permitted for an enabled widget.
  */
-export function evaluateWidgetMint(
+export function EvaluateWidgetMint(
   widget: WidgetInstanceEligibilityInput,
   requestOrigin: string | null | undefined,
 ): { ok: boolean; errorCode?: WidgetMintErrorCode } {
   if (widget.Status.trim().toLowerCase() !== 'active') {
     return { ok: false, errorCode: 'disabled' };
   }
-  if (!isOriginAllowed(requestOrigin, parseAllowedOrigins(widget.AllowedOrigins))) {
+  if (!IsOriginAllowed(requestOrigin, ParseAllowedOrigins(widget.AllowedOrigins))) {
     return { ok: false, errorCode: 'origin_not_allowed' };
   }
   return { ok: true };
+}
+
+/** @deprecated Use {@link EvaluateWidgetMint}. */
+export function evaluateWidgetMint(
+  widget: WidgetInstanceEligibilityInput,
+  requestOrigin: string | null | undefined,
+): { ok: boolean; errorCode?: WidgetMintErrorCode } {
+  return EvaluateWidgetMint(widget, requestOrigin);
 }
 
 /**
@@ -148,12 +176,17 @@ const BOT_USER_AGENT_MARKERS = [
  * known automation marker. Deliberately conservative to avoid false positives on real browsers; pair
  * with the origin allowlist + rate limits, which are the hard controls.
  */
-export function looksLikeBot(userAgent: string | null | undefined): boolean {
+export function LooksLikeBot(userAgent: string | null | undefined): boolean {
   const ua = (userAgent ?? '').trim().toLowerCase();
   if (!ua) {
     return true;
   }
   return BOT_USER_AGENT_MARKERS.some((marker) => ua.includes(marker));
+}
+
+/** @deprecated Use {@link LooksLikeBot}. */
+export function looksLikeBot(userAgent: string | null | undefined): boolean {
+  return LooksLikeBot(userAgent);
 }
 
 /**
@@ -163,7 +196,7 @@ export function looksLikeBot(userAgent: string | null | undefined): boolean {
  * principal is locked to one widget instance. The role name carried here is the
  * widget's restricted guest role (D5 backstop).
  */
-export function buildWidgetGuestClaims(args: {
+export function BuildWidgetGuestClaims(args: {
   issuer: string;
   audience: string;
   widgetId: string;
@@ -191,7 +224,7 @@ export function buildWidgetGuestClaims(args: {
     linkedRecordId?: string;
   };
 }): MagicLinkJWTClaims {
-  const claims = buildSessionClaims({
+  const claims = BuildSessionClaims({
     issuer: args.issuer,
     audience: args.audience,
     // No invite row for a direct-mint guest; the opaque session id stands in as the
@@ -228,4 +261,36 @@ export function buildWidgetGuestClaims(args: {
     claims.mj_linked_record_id = args.returningVisitor.linkedRecordId;
   }
   return claims;
+}
+
+/** @deprecated Use {@link BuildWidgetGuestClaims}. */
+export function buildWidgetGuestClaims(args: {
+  issuer: string;
+  audience: string;
+  widgetId: string;
+  sessionId: string;
+  anonymousEmail: string;
+  applicationId: string;
+  guestRoleName: string;
+  nowSeconds: number;
+  ttlSeconds: number;
+  /**
+   * Host-asserted identity for a `host-identity` session. Its email/name are carried as
+   * INFORMATIONAL claims only — the principal-resolving `email`/`sub` remain the shared
+   * Anonymous principal, so a host can never escalate a guest into a real account.
+   */
+  hostIdentity?: { email: string; firstName?: string; lastName?: string };
+  /**
+   * Returning-visitor anchor + linked identity (RV1/RV2/RV4) carried as claims so the VOICE path
+   * (server-created conversation) stamps the same fields the text path stamps client-side. Set only
+   * when the widget remembers returning visitors. Omitted ⇒ no returning-visitor claims (default off).
+   */
+  returningVisitor?: {
+    visitorKey?: string;
+    lastConversationId?: string;
+    linkedEntityId?: string;
+    linkedRecordId?: string;
+  };
+}): MagicLinkJWTClaims {
+  return BuildWidgetGuestClaims(args);
 }

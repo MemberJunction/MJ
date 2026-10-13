@@ -268,25 +268,35 @@ export interface ValidationWarning {
 /**
  * Creates a default dashboard configuration with empty layout
  */
-export function createDefaultDashboardConfig(): DashboardConfig {
+export function CreateDefaultDashboardConfig(): DashboardConfig {
     return {
         layout: null,
         settings: { ...DEFAULT_DASHBOARD_SETTINGS }
     };
 }
 
+/** @deprecated Use {@link CreateDefaultDashboardConfig}. */
+export function createDefaultDashboardConfig(): DashboardConfig {
+    return CreateDefaultDashboardConfig();
+}
+
 /**
  * Generates a unique panel ID
  */
-export function generatePanelId(): string {
+export function GeneratePanelId(): string {
     return `panel-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
+
+/** @deprecated Use {@link GeneratePanelId}. */
+export function generatePanelId(): string {
+    return GeneratePanelId();
 }
 
 /**
  * Extract all panels from a Golden Layout config.
  * Walks the layout tree and extracts DashboardPanel from each component's componentState.
  */
-export function extractPanelsFromLayout(layout: ResolvedLayoutConfig | null): DashboardPanel[] {
+export function ExtractPanelsFromLayout(layout: ResolvedLayoutConfig | null): DashboardPanel[] {
     if (!layout?.root) {
         return [];
     }
@@ -317,11 +327,21 @@ export function extractPanelsFromLayout(layout: ResolvedLayoutConfig | null): Da
     return panels;
 }
 
+/** @deprecated Use {@link ExtractPanelsFromLayout}. */
+export function extractPanelsFromLayout(layout: ResolvedLayoutConfig | null): DashboardPanel[] {
+    return ExtractPanelsFromLayout(layout);
+}
+
 /**
  * Find a panel in the layout by ID
  */
-export function findPanelInLayout(layout: ResolvedLayoutConfig | null, panelId: string): DashboardPanel | null {
-    const panels = extractPanelsFromLayout(layout);
+export function FindPanelInLayout(layout: ResolvedLayoutConfig | null, panelId: string): DashboardPanel | null {
+    const panels = ExtractPanelsFromLayout(layout);
     return panels.find(p => p.id === panelId) || null;
+}
+
+/** @deprecated Use {@link FindPanelInLayout}. */
+export function findPanelInLayout(layout: ResolvedLayoutConfig | null, panelId: string): DashboardPanel | null {
+    return FindPanelInLayout(layout, panelId);
 }
 

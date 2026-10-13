@@ -7,7 +7,7 @@ import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus } from '@memb
 import { MJContentSourceEntity, MJContentItemEntity, MJContentSourceEntity_IContentSourceConfiguration } from '@memberjunction/core-entities';
 import * as cheerio from 'cheerio';
 import type { AnyNode } from 'domhandler';
-import axios from 'axios';
+import { HttpGet, HttpHead } from '@memberjunction/network-utils';
 import { URL } from 'url';
 import dotenv from 'dotenv';
 dotenv.config({ quiet: true })
@@ -270,7 +270,7 @@ export class AutotagWebsite extends AutotagBase {
      * The canonical implementation lives here; the array-returning
      * `SetContentItemsToProcess` is a thin collector wrapper around this.
      */
-    public async *streamContentItemsToProcess(contentSources: MJContentSourceEntity[]): AsyncIterable<MJContentItemEntity> {
+    public async *streamContentItemsToProcess(contentSources: MJContentSourceEntity[]): AsyncIterable<MJContentItemEntity> {  // case-violation-ok-legacy-back-compat: generator — a delegating stub would return the generator, not yield from it
         for (const contentSource of contentSources) {
             // Reset instance state to defaults before applying per-source overrides.
             // Without this, knobs set on the previous source would leak into the next.
@@ -382,14 +382,14 @@ export class AutotagWebsite extends AutotagBase {
      * MJContentItem if the page is new or changed (caller should hand it off
      * to the LLM stage), or `null` if the page is unchanged.
      *
-     * One axios.get per URL: the same response body provides both the
+     * One HTTP GET per URL: the same response body provides both the
      * change-detection hash and the page text. Compare with `byChecksum`
      * scoped to the current ContentSource so identical boilerplate (404 pages,
      * shared error templates) from a *different* source can't silently mask
      * legitimate pages here.
      */
     protected async processSingleURL(url: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity | null> {
-        const { text, checksum: newHash } = await this.fetchAndExtract(url);
+        const { text, checksum: newHash } = await this.FetchAndExtract(url);
 
         const rv = new RunView();
         const results = await rv.RunViews<MJContentItemEntity>([
@@ -424,7 +424,10 @@ export class AutotagWebsite extends AutotagBase {
             await contentItem.Load(existing.ID);
             contentItem.Checksum = newHash;
             contentItem.Text = text;
-            await contentItem.Save();
+            if (!await contentItem.Save()) {
+                console.error(`[autotag-website] Failed to update content item for ${url}: ${contentItem.LatestResult?.Message ?? 'unknown error'}`);
+                return null;
+            }
             return contentItem;
         }
 
@@ -440,16 +443,24 @@ export class AutotagWebsite extends AutotagBase {
         contentItem.Checksum = newHash;
         contentItem.URL = url;
         contentItem.Text = text;
-        await contentItem.Save();
+        if (!await contentItem.Save()) {
+            console.error(`[autotag-website] Failed to save content item for ${url}: ${contentItem.LatestResult?.Message ?? 'unknown error'}`);
+            return null;
+        }
         return contentItem;
     }
 
-    public async fetchPageContent(url: string): Promise<string> {
-        const { data } = await axios.get(url);
+    public async FetchPageContent(url: string): Promise<string> {
+        const { Data: data } = await HttpGet<string>(url, { ResponseType: 'text' });
         return data;
     }
 
-    public getTextWithLineBreaks(element: AnyNode, $: cheerio.CheerioAPI): string {
+    /** @deprecated Use {@link FetchPageContent}. */
+    public async fetchPageContent(url: string): Promise<string> {
+        return this.FetchPageContent(url);
+    }
+
+    public GetTextWithLineBreaks(element: AnyNode, $: cheerio.CheerioAPI): string {
         let text = '';
         const children = $(element).contents();
 
@@ -458,23 +469,28 @@ export class AutotagWebsite extends AutotagBase {
             if (el.type === 'text') {
                 text += $(el).text().trim() + ' ';
             } else if (el.type === 'tag') {
-                text += '\n' + this.getTextWithLineBreaks(el, $) + '\n';
+                text += '\n' + this.GetTextWithLineBreaks(el, $) + '\n';
             }
         }
 
         return text;
     }
 
+    /** @deprecated Use {@link GetTextWithLineBreaks}. */
+    public getTextWithLineBreaks(element: AnyNode, $: cheerio.CheerioAPI): string {
+        return this.GetTextWithLineBreaks(element, $);
+    }
+
     /**
      * Pure helper: extract clean body text from raw HTML. No IO. Exposed as
      * a protected method so subclasses and unit tests can exercise it without
-     * monkey-patching axios.
+     * monkey-patching the HTTP layer.
      */
     protected extractTextFromHTML(html: string): string {
         const $ = cheerio.load(html);
         const body = $('body')[0];
         if (!body) return '';
-        return this.getTextWithLineBreaks(body, $);
+        return this.GetTextWithLineBreaks(body, $);
     }
 
     /**
@@ -489,11 +505,16 @@ export class AutotagWebsite extends AutotagBase {
      * extracted text is what users actually mean by "did the content
      * change?"
      */
-    public async fetchAndExtract(url: string): Promise<{ text: string; checksum: string }> {
-        const { data } = await axios.get(url);
+    public async FetchAndExtract(url: string): Promise<{ text: string; checksum: string }> {
+        const { Data: data } = await HttpGet<string>(url, { ResponseType: 'text' });
         const text = this.extractTextFromHTML(String(data));
         const checksum = await this.engine.getChecksumFromText(text);
         return { text, checksum };
+    }
+
+    /** @deprecated Use {@link FetchAndExtract}. */
+    public async fetchAndExtract(url: string): Promise<{ text: string; checksum: string }> {
+        return this.FetchAndExtract(url);
     }
 
     /**
@@ -501,15 +522,20 @@ export class AutotagWebsite extends AutotagBase {
      * that just want the text — internal change-detection now uses
      * `fetchAndExtract` to avoid redundant fetches.
      */
-    public async parseWebPage(url: string): Promise<string> {
+    public async ParseWebPage(url: string): Promise<string> {
         try {
-            const pageContent: string = await this.fetchPageContent(url);
+            const pageContent: string = await this.FetchPageContent(url);
             return this.extractTextFromHTML(pageContent);
         }
         catch (error) {
             console.error(`Error processing ${url}:`, error);
             return '';
         }
+    }
+
+    /** @deprecated Use {@link ParseWebPage}. */
+    public async parseWebPage(url: string): Promise<string> {
+        return this.ParseWebPage(url);
     }
 
     /**
@@ -571,7 +597,7 @@ export class AutotagWebsite extends AutotagBase {
 
         const discovered: string[] = [];
         try {
-            const { data } = await axios.get(url);
+            const { Data: data } = await HttpGet<string>(url, { ResponseType: 'text' });
             const $ = cheerio.load(data);
             $('a').each((_, element) => {
                 const link = $(element).attr('href');
@@ -674,8 +700,8 @@ export class AutotagWebsite extends AutotagBase {
 
     protected async urlIsValid(url: string): Promise<boolean> {
         try { 
-            const response = await axios.head(url);
-            return response.status === 200;
+            const response = await HttpHead(url, { ThrowOnError: false });
+            return response.Status === 200;
         }
         catch (e) {
             console.error(`Invalid URL: ${url}`);
@@ -705,7 +731,7 @@ export class AutotagWebsite extends AutotagBase {
 
             const extractedLinks: string[] = [];
 
-            const { data } = await axios.get(url);
+            const { Data: data } = await HttpGet<string>(url, { ResponseType: 'text' });
             const $ = cheerio.load(data);
 
             $('a').each((_, element) => {

@@ -24,11 +24,11 @@ import { TagEngineBase } from '@memberjunction/tag-engine-base';
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { SourceCard, DryRunDispositionCount, DryRunEstimate } from '../shared/classify.types';
 import {
-    previewDispositions, DryRunInput, DryRunConfig, DryRunRow, ResolveResult, Disposition,
+    PreviewDispositions, DryRunInput, DryRunConfig, DryRunRow, ResolveResult, Disposition,
 } from '../shared/classify.dryrun';
 
 /** Default routing config when a source has no explicit Configuration blob. */
-const DEFAULT_MODE: DryRunConfig['mode'] = 'auto-grow';
+const DEFAULT_MODE: DryRunConfig['Mode'] = 'auto-grow';
 const DEFAULT_MATCH_THRESHOLD = 0.85;
 /** Illustrative per-item token estimate for the (non-binding) cost line. */
 const EST_TOKENS_PER_ITEM = 840;
@@ -83,7 +83,7 @@ export class ClassifyDryRunPreviewDialogComponent extends BaseAngularComponent {
     public Counts: DryRunDispositionCount = { AutoApply: 0, RouteToInbox: 0, CreateNew: 0, Reject: 0 };
     public Estimate: DryRunEstimate = { ItemsSampled: 0, EstimatedTokens: 0, EstimatedCost: 0 };
     /** Effective config used for this preview (mirrored for the "effective values" line). */
-    public EffectiveMode: DryRunConfig['mode'] = DEFAULT_MODE;
+    public EffectiveMode: DryRunConfig['Mode'] = DEFAULT_MODE;
     public EffectiveMatchThreshold = DEFAULT_MATCH_THRESHOLD;
     public EffectiveSuggestThreshold = DEFAULT_MATCH_THRESHOLD - 0.05;
     /** True when the sampled source has no extracted tags yet. */
@@ -110,9 +110,9 @@ export class ClassifyDryRunPreviewDialogComponent extends BaseAngularComponent {
             await KnowledgeHubMetadataEngine.Instance.Config(false, p.CurrentUser, p);
 
             const cfg = this.resolveSourceConfig(card.ID);
-            this.EffectiveMode = cfg.mode;
-            this.EffectiveMatchThreshold = cfg.matchThreshold;
-            this.EffectiveSuggestThreshold = cfg.suggestThreshold;
+            this.EffectiveMode = cfg.Mode;
+            this.EffectiveMatchThreshold = cfg.MatchThreshold;
+            this.EffectiveSuggestThreshold = cfg.SuggestThreshold;
 
             const inputs = await this.loadSampleTags(card.ID);
             if (inputs.length === 0) {
@@ -122,7 +122,7 @@ export class ClassifyDryRunPreviewDialogComponent extends BaseAngularComponent {
             }
 
             const resolve = this.buildResolver();
-            this.Rows = previewDispositions(inputs, cfg, resolve);
+            this.Rows = PreviewDispositions(inputs, cfg, resolve);
             this.Counts = this.tally(this.Rows);
             this.Estimate = this.estimate(inputs.length);
         } catch (error) {
@@ -185,7 +185,7 @@ export class ClassifyDryRunPreviewDialogComponent extends BaseAngularComponent {
         const matchThreshold = config?.TagMatchThreshold ?? DEFAULT_MATCH_THRESHOLD;
         const suggestThreshold = config?.SuggestThreshold ?? matchThreshold - 0.05;
 
-        return { mode, matchThreshold, suggestThreshold };
+        return { Mode: mode, MatchThreshold: matchThreshold, SuggestThreshold: suggestThreshold };
     }
 
     /**
@@ -227,15 +227,15 @@ export class ClassifyDryRunPreviewDialogComponent extends BaseAngularComponent {
             const lower = tag.trim().toLowerCase();
 
             const syn = synonymMap.get(lower);
-            if (syn) return { tagId: syn.id, tagName: syn.name, score: 1.0, tier: 'synonym' };
+            if (syn) return { TagId: syn.id, TagName: syn.name, Score: 1.0, Tier: 'synonym' };
 
             const exact = exactMap.get(lower);
-            if (exact) return { tagId: exact.id, tagName: exact.name, score: 1.0, tier: 'exact' };
+            if (exact) return { TagId: exact.id, TagName: exact.name, Score: 1.0, Tier: 'exact' };
 
             const fuzzy = normalizedMap.get(this.normalize(tag));
-            if (fuzzy) return { tagId: fuzzy.id, tagName: fuzzy.name, score: 0.8, tier: 'fuzzy' };
+            if (fuzzy) return { TagId: fuzzy.id, TagName: fuzzy.name, Score: 0.8, Tier: 'fuzzy' };
 
-            return { tagId: null, tagName: null, score: null, tier: 'none' };
+            return { TagId: null, TagName: null, Score: null, Tier: 'none' };
         };
     }
 
@@ -249,7 +249,7 @@ export class ClassifyDryRunPreviewDialogComponent extends BaseAngularComponent {
     private tally(rows: DryRunRow[]): DryRunDispositionCount {
         const counts: DryRunDispositionCount = { AutoApply: 0, RouteToInbox: 0, CreateNew: 0, Reject: 0 };
         for (const r of rows) {
-            switch (r.disposition) {
+            switch (r.Disposition) {
                 case 'auto-apply': counts.AutoApply++; break;
                 case 'route-to-inbox': counts.RouteToInbox++; break;
                 case 'create-new': counts.CreateNew++; break;
@@ -299,7 +299,7 @@ export class ClassifyDryRunPreviewDialogComponent extends BaseAngularComponent {
         return `$${cost.toFixed(2)}`;
     }
 
-    public ModeLabel(mode: DryRunConfig['mode']): string {
+    public ModeLabel(mode: DryRunConfig['Mode']): string {
         switch (mode) {
             case 'constrained': return 'Constrained';
             case 'auto-grow': return 'Auto-grow';

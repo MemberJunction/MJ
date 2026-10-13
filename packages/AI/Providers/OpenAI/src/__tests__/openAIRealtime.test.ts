@@ -21,7 +21,15 @@ vi.mock('@memberjunction/ai', async () => {
     // rather than stubbing it, so this driver test asserts against shipped behavior. It lives in its
     // own module precisely so importing it here can't cascade into other mocked packages.
     const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
-    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation };
+    // Same reasoning for ResolveResponseDoneUsage — it is PURE and dependency-free, and it encodes
+    // the provider-specific rule for WHERE usage lives on a response.done frame. Stubbing it would
+    // let this test restate that rule and drift from reality, which is exactly how the xAI
+    // top-level-usage bug survived: the sibling xAI test asserted against a hand-written
+    // OpenAI-shaped frame and passed while real Grok sessions recorded nothing.
+    const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
+    // Same for RealtimeDroppedInputReporter: dependency-free, and the drop tests assert its real once-per-type report.
+    const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
+    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -37,7 +45,7 @@ vi.mock('openai', () => ({
     }),
 }));
 
-import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection, MapEffortLevelToOpenAIRealtime, OPENAI_REALTIME_PROFILE, MapUsageModalityDetail } from '../models/openAIRealtime';
+import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection, MapEffortLevelToOpenAIRealtime, OPENAI_REALTIME_PROFILE, MapUsageModalityDetail, MapNormalizedTurnDetection, ExtractRealtimeFeatures } from '../models/openAIRealtime';
 import type { OpenAIRealtimeError } from 'openai/realtime/index';
 import type { RealtimeServerEvent, RealtimeClientEvent } from 'openai/resources/realtime/realtime';
 import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'openai/resources/realtime/client-secrets';
@@ -328,11 +336,32 @@ describe('OpenAIRealtime', () => {
         it('SendInput appends base64 audio', async () => {
             const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
             const bytes = new Uint8Array([1, 2, 3, 4]);
-            session.SendInput(bytes.buffer);
+            session.SendInput({ Data: bytes.buffer, Kind: 'audio' });
             const append = driver.Fake.Sent.find((e) => e.type === 'input_audio_buffer.append');
             expect(append).toBeDefined();
             if (append?.type === 'input_audio_buffer.append') {
                 expect(append.audio).toBe(Buffer.from(bytes).toString('base64'));
+            }
+        });
+
+        it('SendInput drops a video frame instead of appending it as audio, reports it once, and still appends audio (#5091)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
+                driver.Fake.Sent = [];
+                const jpeg = new Uint8Array([0xff, 0xd8, 0xff]);
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+
+                expect(driver.Fake.Sent).toEqual([]);
+                const drops = warn.mock.calls.filter((call) => String(call[0]).startsWith('[openaiRealtime] Dropped video input of type image/jpeg'));
+                expect(drops).toHaveLength(1);
+
+                const audio = new Uint8Array([1, 2, 3, 4]);
+                session.SendInput({ Data: audio.buffer, Kind: 'audio' });
+                expect(driver.Fake.Sent).toEqual([{ type: 'input_audio_buffer.append', audio: Buffer.from(audio).toString('base64') }]);
+            } finally {
+                warn.mockRestore();
             }
         });
 
@@ -382,7 +411,7 @@ describe('OpenAIRealtime', () => {
             expect(driver.Fake.Sent.some((e) => e.type === 'response.create')).toBe(false);
         });
 
-        it('RequestSpokenUpdate sends response.create with per-response instructions when idle', async () => {
+        it('RequestSpokenUpdate sends response.create carrying the session prompt AHEAD of the direction', async () => {
             const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
             driver.Fake.Sent = [];
             session.RequestSpokenUpdate('Briefly say the report agent is drafting.');
@@ -390,7 +419,43 @@ describe('OpenAIRealtime', () => {
             const respond = driver.Fake.Sent[0];
             expect(respond.type).toBe('response.create');
             if (respond.type === 'response.create') {
-                expect(respond.response?.instructions).toBe('Briefly say the report agent is drafting.');
+                expect(respond.response?.instructions).toBe('sys\n\nBriefly say the report agent is drafting.');
+            }
+        });
+
+        /**
+         * #4591 · bizapps-caliber#397 — the identity half of the rule the BLANK case already knew.
+         *
+         * `response.instructions` is a full override of the session prompt, so a non-blank direction
+         * wipes the co-agent identity exactly as `''` would. The visible symptom downstream was an
+         * interviewer opening a hiring assessment as "ChatGPT" on the one turn that rides this method,
+         * while every other turn in the same session gave her configured name.
+         */
+        it('RequestSpokenUpdate never sends a direction that would wipe the session identity', async () => {
+            const session = (await driver.StartSession({
+                Model: 'gpt-realtime',
+                SystemPrompt: 'You are Sam Rivera, Support Team Lead.',
+            })) as OpenAIRealtimeSession;
+            driver.Fake.Sent = [];
+            session.RequestSpokenUpdate('Open the conversation: greet them and introduce yourself.');
+            const respond = driver.Fake.Sent[0];
+            expect(respond.type).toBe('response.create');
+            if (respond.type === 'response.create') {
+                expect(respond.response?.instructions).toContain('Sam Rivera');
+                // The direction stays LAST — the most recent line is the one the model weights hardest.
+                expect(respond.response?.instructions).toMatch(/Sam Rivera[\s\S]*Open the conversation/);
+            }
+        });
+
+        it('RequestSpokenUpdate sends the direction alone when the session carried no prompt', async () => {
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: '' })) as OpenAIRealtimeSession;
+            driver.Fake.Sent = [];
+            session.RequestSpokenUpdate('progress update');
+            const respond = driver.Fake.Sent[0];
+            expect(respond.type).toBe('response.create');
+            if (respond.type === 'response.create') {
+                // Nothing to preserve, so nothing is prepended — a leading blank line would be noise.
+                expect(respond.response?.instructions).toBe('progress update');
             }
         });
 
@@ -725,6 +790,36 @@ describe('OpenAIRealtime', () => {
             } as RealtimeServerEvent);
             expect(fn).not.toHaveBeenCalled();
         });
+
+        it('clears every registered callback-handler field on Close, mirroring Gemini/ElevenLabs', async () => {
+            // A handler closure typically captures the caller's dispatch/UI context. If Close()
+            // left these set, that context would stay reachable for as long as the caller happens
+            // to retain the closed session object — the gap this test guards against.
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
+            session.OnOutput(vi.fn());
+            session.OnTranscript(vi.fn());
+            session.OnToolCall(vi.fn());
+            session.OnInterruption(vi.fn());
+            session.OnUsage(vi.fn());
+            session.OnError(vi.fn());
+            session.OnClose(vi.fn());
+
+            await session.Close();
+
+            const handlerFields = [
+                'outputHandler',
+                'transcriptHandler',
+                'toolCallHandler',
+                'interruptionHandler',
+                'usageHandler',
+                'errorHandler',
+                'closeHandler',
+            ] as const;
+            const privateSession = session as unknown as Record<(typeof handlerFields)[number], unknown>;
+            for (const field of handlerFields) {
+                expect(privateSession[field]).toBeUndefined();
+            }
+        });
     });
 });
 
@@ -755,6 +850,19 @@ describe('OpenAIRealtime GA features (reasoning effort / parallel tool calls / M
         const session = await startAndGetSession({ reasoningEffort: 'ultra' });
         expect(session.reasoning).toBeUndefined();
         expect(session.reasoningEffort).toBeUndefined();
+    });
+
+    /**
+     * `firstMessage` is a NEUTRAL MJ key (issue #3557): a persona authors an opening utterance
+     * without naming a vendor, and `GetProviderVoiceSettings` files it onto whichever driver
+     * resolves — including this one, which has no opening-utterance concept. An unconsumed neutral
+     * key must be scrubbed, not forwarded: this endpoint rejects a malformed session object
+     * wholesale, taking the prompt and tools down with it.
+     */
+    it('never sends the neutral firstMessage key, which it does not consume', async () => {
+        const session = await startAndGetSession({ firstMessage: 'Good morning, thanks for joining.' });
+        expect(session.firstMessage).toBeUndefined();
+        expect(session.first_message).toBeUndefined();
     });
 
     it('translates Config.parallelToolCalls to session parallel_tool_calls (and never sends the raw key)', async () => {
@@ -833,6 +941,7 @@ describe('OpenAIRealtime GA features (reasoning effort / parallel tool calls / M
                 parallelToolCalls: true,
                 mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
                 voice: 'sage',
+                firstMessage: 'Good morning, thanks for joining.',
             },
         });
         const sc = cfg.SessionConfig as Record<string, unknown>;
@@ -847,6 +956,9 @@ describe('OpenAIRealtime GA features (reasoning effort / parallel tool calls / M
         expect(sc.parallelToolCalls).toBeUndefined();
         expect(sc.mcpTools).toBeUndefined();
         expect(sc.voice).toBeUndefined();
+        // The minted client-direct session is built from the SAME residual bag as the
+        // server-bridged session.update, so an unscrubbed neutral key leaks on both paths.
+        expect(sc.firstMessage).toBeUndefined();
     });
 });
 
@@ -1022,11 +1134,17 @@ describe('OpenAIRealtime config extraction hardening', () => {
         expect((blank.audio as { output?: unknown }).output).toBeUndefined();
     });
 
-    it('scrubs MJ-side transport keys (endpoint/sampleRate/proxyBaseUrl) even on OpenAI', async () => {
-        const session = await startAndGetSession({ endpoint: 'ws://x:1/v1/realtime', sampleRate: 24000, proxyBaseUrl: 'https://p' });
+    it('scrubs MJ-side transport keys (endpoint/sampleRate/proxyBaseUrl/brokerBaseUrl) even on OpenAI', async () => {
+        const session = await startAndGetSession({
+            endpoint: 'ws://x:1/v1/realtime',
+            sampleRate: 24000,
+            proxyBaseUrl: 'https://p',
+            brokerBaseUrl: 'https://b',
+        });
         expect(session.endpoint).toBeUndefined();
         expect(session.sampleRate).toBeUndefined();
         expect(session.proxyBaseUrl).toBeUndefined();
+        expect(session.brokerBaseUrl).toBeUndefined();
     });
 
     it('honors a per-session inputTranscriptionModel override from the Config bag', async () => {
@@ -1151,7 +1269,7 @@ describe('QA hardening regressions (plan A-items)', () => {
     describe('A2: profile-gated live reconfigure', () => {
         it('OpenAI still advertises and performs live reconfigure with its transcription model', async () => {
             const session = (await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
-            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true });
+            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
             const before = driver.Fake.Sent.length;
             session.Reconfigure({ DisableAutoResponse: true });
             const frame = driver.Fake.Sent.slice(before)[0];
@@ -1168,7 +1286,7 @@ describe('QA hardening regressions (plan A-items)', () => {
                 ...OPENAI_REALTIME_PROFILE,
                 supportsLiveReconfigure: false,
             });
-            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: false });
+            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: false, SupportsDynamicToolSet: true });
             const before = driver.Fake.Sent.length;
             session.Reconfigure({ DisableAutoResponse: true });
             expect(driver.Fake.Sent.length).toBe(before);
@@ -1421,6 +1539,181 @@ describe('SEAM-4: config-tuning bag → driver session payload (end-to-end shape
             expect(audio.input?.transcription?.model).toBe('whisper-1');
         } else {
             throw new Error('expected realtime session.update');
+        }
+    });
+});
+
+/**
+ * Catalog-driven turn detection: the normalized `turnDetection` bag key (sourced from the
+ * `ModelConfiguration` cascade and/or the agent/app `realtime.session` cascade) translated onto
+ * the OpenAI-protocol wire block, gated by each profile's declared `supportedTurnModes`.
+ */
+describe('MapNormalizedTurnDetection — normalized vocabulary → wire block', () => {
+    const openaiProfile = { providerKey: OPENAI_REALTIME_PROFILE.providerKey, supportedTurnModes: OPENAI_REALTIME_PROFILE.supportedTurnModes };
+
+    it('returns undefined when nothing is requested, so the caller applies its own default', () => {
+        expect(MapNormalizedTurnDetection(openaiProfile, false, undefined)).toBeUndefined();
+        expect(MapNormalizedTurnDetection(openaiProfile, false, {})).toBeUndefined();
+    });
+
+    it("treats Mode 'default' as 'no request' (byte-for-byte the pre-catalog behavior)", () => {
+        expect(MapNormalizedTurnDetection(openaiProfile, false, { Mode: 'default', Eagerness: 'high' })).toBeUndefined();
+    });
+
+    it('maps semanticVad with its eagerness tuning', () => {
+        expect(MapNormalizedTurnDetection(openaiProfile, false, { Mode: 'semanticVad', Eagerness: 'auto' })).toEqual({
+            type: 'semantic_vad',
+            eagerness: 'auto',
+            create_response: true,
+            interrupt_response: true,
+        });
+    });
+
+    it('omits eagerness when the catalog did not specify one', () => {
+        expect(MapNormalizedTurnDetection(openaiProfile, false, { Mode: 'semanticVad' })).toEqual({
+            type: 'semantic_vad',
+            create_response: true,
+            interrupt_response: true,
+        });
+    });
+
+    it('maps serverVad with threshold + silence tuning', () => {
+        expect(MapNormalizedTurnDetection(openaiProfile, false, { Mode: 'serverVad', Threshold: 0.65, SilenceDurationMs: 900 })).toEqual({
+            type: 'server_vad',
+            threshold: 0.65,
+            silence_duration_ms: 900,
+            create_response: true,
+            interrupt_response: true,
+        });
+    });
+
+    it('ignores server-VAD tuning that does not apply to the chosen mode', () => {
+        // Threshold is meaningless for semantic VAD — it must not leak onto the wire block.
+        expect(MapNormalizedTurnDetection(openaiProfile, false, { Mode: 'semanticVad', Threshold: 0.4 })).toEqual({
+            type: 'semantic_vad',
+            create_response: true,
+            interrupt_response: true,
+        });
+    });
+
+    it('composes meeting mode on top of whatever mode wins (the bridge keeps floor control)', () => {
+        expect(MapNormalizedTurnDetection(openaiProfile, true, { Mode: 'semanticVad', Eagerness: 'low' })).toEqual({
+            type: 'semantic_vad',
+            eagerness: 'low',
+            create_response: false,
+            interrupt_response: true,
+        });
+        expect(MapNormalizedTurnDetection(openaiProfile, true, { Mode: 'serverVad' })).toEqual({
+            type: 'server_vad',
+            create_response: false,
+            interrupt_response: true,
+        });
+    });
+
+    it('falls back (never rejects) when the profile does not support the requested mode', () => {
+        // A SHARED catalog must be safe on every provider: an inherited semanticVad reaching a
+        // server_vad-only profile degrades to that profile's default rather than failing the session.
+        const serverVadOnly = { providerKey: 'xai', supportedTurnModes: ['serverVad'] as const };
+        expect(MapNormalizedTurnDetection(serverVadOnly, false, { Mode: 'semanticVad' })).toBeUndefined();
+
+        const noModes = { providerKey: 'huggingface', supportedTurnModes: [] as const };
+        expect(MapNormalizedTurnDetection(noModes, false, { Mode: 'serverVad' })).toBeUndefined();
+    });
+
+    it("falls back for 'native' when a profile declares it supported but ships no mapping", () => {
+        const declaresNative = { providerKey: 'xai', supportedTurnModes: ['serverVad', 'native'] as const };
+        expect(MapNormalizedTurnDetection(declaresNative, false, { Mode: 'native' })).toBeUndefined();
+    });
+});
+
+describe('ExtractRealtimeFeatures — turnDetection is normalized and ALWAYS scrubbed', () => {
+    it('extracts a well-formed request and removes it from the passthrough bag', () => {
+        const features = ExtractRealtimeFeatures({ turnDetection: { Mode: 'semanticVad', Eagerness: 'high' }, someWireField: 1 });
+        expect(features.turnDetection).toEqual({ Mode: 'semanticVad', Eagerness: 'high' });
+        // The normalized shape is MJ vocabulary — it is not a wire field on any provider.
+        expect(features.rest.turnDetection).toBeUndefined();
+        expect(features.rest.someWireField).toBe(1);
+    });
+
+    it('drops unrecognized and wrong-typed knobs, keeping the valid remainder', () => {
+        const features = ExtractRealtimeFeatures({
+            turnDetection: { Mode: 'notAMode', Eagerness: 'nuclear', Threshold: 'high', SilenceDurationMs: 700, Bogus: true },
+        });
+        expect(features.turnDetection).toEqual({ SilenceDurationMs: 700 });
+    });
+
+    it('yields undefined for absent / non-object / empty-after-validation values, and still scrubs', () => {
+        expect(ExtractRealtimeFeatures({}).turnDetection).toBeUndefined();
+        expect(ExtractRealtimeFeatures({ turnDetection: null }).turnDetection).toBeUndefined();
+        expect(ExtractRealtimeFeatures({ turnDetection: 'serverVad' }).turnDetection).toBeUndefined();
+        expect(ExtractRealtimeFeatures({ turnDetection: [{ Mode: 'serverVad' }] }).turnDetection).toBeUndefined();
+
+        const garbage = ExtractRealtimeFeatures({ turnDetection: { Mode: 42 } });
+        expect(garbage.turnDetection).toBeUndefined();
+        expect(garbage.rest.turnDetection).toBeUndefined();
+    });
+
+    it('rejects non-finite numeric tuning', () => {
+        expect(ExtractRealtimeFeatures({ turnDetection: { Threshold: Number.NaN } }).turnDetection).toBeUndefined();
+        expect(ExtractRealtimeFeatures({ turnDetection: { SilenceDurationMs: Number.POSITIVE_INFINITY } }).turnDetection).toBeUndefined();
+    });
+});
+
+describe('catalog turn detection end-to-end through the session', () => {
+    it('a catalog semanticVad request reaches the wire as semantic_vad', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        await driver.StartSession({
+            Model: 'gpt-realtime-2.1',
+            SystemPrompt: 'sys',
+            Config: { turnDetection: { Mode: 'semanticVad', Eagerness: 'auto' } },
+        });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            const session = update.session as Record<string, unknown>;
+            // The normalized key must never survive onto the wire.
+            expect(session.turnDetection).toBeUndefined();
+            const td = (session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+            expect(td).toMatchObject({ type: 'semantic_vad', eagerness: 'auto', create_response: true });
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+    });
+
+    it('a live Reconfigure PRESERVES the resolved mode instead of downgrading to server_vad', async () => {
+        // Regression: Reconfigure used to hardcode server_vad, so a meeting-mode flip silently
+        // downgraded a semantic session's turn detection.
+        const driver = new TestableOpenAIRealtime('k');
+        const session = await driver.StartSession({
+            Model: 'gpt-realtime-2.1',
+            SystemPrompt: 'sys',
+            Config: { turnDetection: { Mode: 'semanticVad', Eagerness: 'auto' } },
+        });
+
+        session.Reconfigure?.({ DisableAutoResponse: true });
+
+        const updates = driver.Fake.Sent.filter((e) => e.type === 'session.update');
+        const last = updates[updates.length - 1];
+        if (last?.type === 'session.update' && last.session.type === 'realtime') {
+            const td = (last.session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+            expect(td).toMatchObject({ type: 'semantic_vad', eagerness: 'auto', create_response: false, interrupt_response: true });
+        } else {
+            throw new Error('expected realtime session.update from Reconfigure');
+        }
+    });
+
+    it('a session with no catalog request still reconfigures to explicit server_vad (unchanged behavior)', async () => {
+        const driver = new TestableOpenAIRealtime('k');
+        const session = await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' });
+
+        session.Reconfigure?.({ DisableAutoResponse: true });
+
+        const updates = driver.Fake.Sent.filter((e) => e.type === 'session.update');
+        const last = updates[updates.length - 1];
+        if (last?.type === 'session.update' && last.session.type === 'realtime') {
+            const td = (last.session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+            expect(td).toMatchObject({ type: 'server_vad', create_response: false, interrupt_response: true });
+        } else {
+            throw new Error('expected realtime session.update from Reconfigure');
         }
     });
 });

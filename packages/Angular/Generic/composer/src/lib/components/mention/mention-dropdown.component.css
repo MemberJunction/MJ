@@ -6,7 +6,9 @@
   border-radius: 8px;
   box-shadow: var(--mj-shadow-lg);
   min-width: 280px;
-  max-width: 400px;
+  /* Viewport-relative rather than a fixed cap: desktop keeps 400px, a phone caps at the viewport
+     minus a 16px gutter each side, and the 280px min-width still clears a 320px device. */
+  max-width: min(400px, calc(100vw - 32px));
   max-height: 300px;
   overflow-y: auto;
   transform-origin: top left; /* Default: grows downward from top-left */
@@ -19,6 +21,19 @@
 .mention-dropdown.show-above {
   transform: translateY(-100%); /* Shift entire dropdown up by its own height */
   transform-origin: bottom left; /* Grows upward from bottom-left */
+}
+
+/* Right-align against an anchor. Done as a transform because the width is content-based, so the
+   left edge is not known until layout. Composes with show-above rather than overriding it: the
+   combined selector below must stay, or one transform silently wins and the menu misplaces. */
+.mention-dropdown.align-right {
+  transform: translateX(-100%);
+  transform-origin: top right;
+}
+
+.mention-dropdown.show-above.align-right {
+  transform: translate(-100%, -100%);
+  transform-origin: bottom right;
 }
 
 .mention-suggestions {

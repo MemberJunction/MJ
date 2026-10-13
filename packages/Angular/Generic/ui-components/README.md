@@ -26,7 +26,7 @@ Components attach styles one of three ways, and one of them needs host cooperati
 
 1. **Inline `styles` in the component** (most components) — nothing to do.
 2. **`styleUrls` compiled into the component** (`page-header`, `slide-panel`) — nothing to do.
-3. **Global stylesheets shipped as assets** — the form controls and overlay chrome (`button`, `dialog`, `dropdown`, `combobox`, `input`, `datepicker`, `splitter`, `accordion`, `window`, `chip`, `switch`/`progress`) ship their `.scss` to `dist` and expect the **host application** to import them globally.
+3. **Global stylesheets shipped as assets** — the form controls and overlay chrome (`button`, `dialog`, `dropdown`, `combobox`, `input`, `datepicker`, `splitter`, `accordion`, `window`, `chip`, `switch`/`progress`, `tabs`) ship their `.scss` to `dist` and expect the **host application** to import them globally.
 
 **If your app runs inside MJ Explorer (`explorer-app`), category 3 is already handled** — the shell imports all of them. A standalone host must add these to its global stylesheet:
 
@@ -42,13 +42,35 @@ Components attach styles one of three ways, and one of them needs host cooperati
 @import '@memberjunction/ng-ui-components/dist/lib/splitter/splitter';
 @import '@memberjunction/ng-ui-components/dist/lib/accordion/accordion';
 @import '@memberjunction/ng-ui-components/dist/lib/window/window';
+@import '@memberjunction/ng-ui-components/dist/lib/tabs/tabs';
 ```
+
+`tabs` is the shared `.mj-tabs*` chrome consumed by BOTH `mj-workspace-tab-strip` (this package) and `mj-tabstrip` (`@memberjunction/ng-tabstrip`) — without it either strip renders as unstyled divs, so a standalone host using tab strips must include it.
 
 All colors resolve through `--mj-*` semantic tokens, so light/dark theming requires zero component-level work.
 
 ## Forms integration
 
 `mj-combobox`, `mj-dropdown`, `mj-datepicker`, `mj-numeric-input`, and `mj-switch` all implement `ControlValueAccessor` — they work with `[(ngModel)]` and reactive forms, including `setDisabledState`.
+
+## Accessible names — one contract across every control
+
+`mj-combobox`, `mj-dropdown`, `mj-datepicker`, `mj-numeric-input`, `mj-page-search` and `mj-switch` share four optional inputs, from `MJNamedControlBase`. **Name every one of them**: without a name a control announces as its role and state alone — "combobox, collapsed", "switch, on" — which fails WCAG 2.1 4.1.2 (Name, Role, Value).
+
+| input | for |
+|---|---|
+| **`AriaLabelledBy`** | the id of a **visible** label — the preferred wiring when one exists |
+| `AriaLabel` | when no visible label exists |
+| `AriaDescribedBy` | hint and error text |
+| `InputId` | an id on the focusable element, so other markup can reference it |
+
+Three things hold across all six:
+
+- **Absent beats empty** — an unset input renders no attribute at all. `aria-label=""` is worse than nothing, because an explicitly empty name overrides every other naming source.
+- **The name reaches the whole control** — the popup listbox, the calendar grid, the filter box, the toggle and clear buttons all take their name from the same source, so a form with six filterable dropdowns does not present six identical "Filter options" boxes. Under `AriaLabelledBy` this works through an `aria-labelledby` id list, the only mechanism that can compose a fixed word with a visible label's own text.
+- **`InputId` is a `<label for>` target wherever the focusable element is labelable** — the four input-backed controls (`mj-combobox`, `mj-datepicker`, `mj-numeric-input`, `mj-page-search`) and `mj-switch`, whose `<button>` is labelable too and gains click-to-focus from it. The exception is **`mj-dropdown`**, whose trigger is a `div[role=combobox]`: `label[for]` does not associate with it, so the visible-label path there is `AriaLabelledBy`.
+
+**A control that renders with no accessible name warns in dev mode** (`WarnIfUnnamed`, alongside the existing `mjButton` and `mjClickable` guards) and is silent in production. It fires when the name would be genuinely empty — including an `aria-labelledby` whose ids resolve to nothing, which names the control no better than no attribute at all. A `placeholder` does **not** count as a name for a form control, since it disappears the moment the user types; `mj-page-search` is the one control that opts into counting it, because its placeholder is the caller's statement of what the box searches.
 
 ---
 
@@ -66,40 +88,50 @@ Attribute directive that styles a **native** button or anchor. Variants: `primar
 ```
 
 ### `mj-combobox` — MJComboboxComponent
-Editable text-input combobox (CDK overlay): type-to-filter, keyboard nav, optional custom values (`[AllowCustom]`). Inputs: `Data`, `TextField`, `ValueField`, `ValuePrimitive`, `Filterable` (default true), `Placeholder`, `Disabled`. Outputs: `ValueChange`, `FilterChange`. Custom item template via `<ng-template #mjComboboxItem>`.
+Editable text-input combobox (CDK overlay): type-to-filter, keyboard nav, optional custom values (`[AllowCustom]`). Inputs: `Data`, `TextField`, `ValueField`, `ValuePrimitive`, `Filterable` (default true), `Placeholder`, `Disabled`, plus the four naming inputs above. Outputs: `ValueChange`, `FilterChange`. Custom item template via `<ng-template #mjComboboxItem>`.
+
+`role="combobox"` and its state attributes (`aria-expanded`, `aria-controls`, `aria-activedescendant`) sit on the **input** — the element that takes focus — not on the wrapper. The toggle and clear buttons take their names from the combobox's own name.
 
 ```html
-<mj-combobox [Data]="categories" TextField="text" ValueField="value"
+<mj-combobox AriaLabel="Category" [Data]="categories" TextField="text" ValueField="value"
              [(ngModel)]="selected" [ValuePrimitive]="true" [AllowCustom]="true" />
 ```
 
 ### `mj-dropdown` — MJDropdownComponent
-Non-editable select (CDK overlay) with optional in-panel filter (`[Filterable]`, default false) and `DefaultItem` clear option. Same `Data`/`TextField`/`ValueField`/`ValuePrimitive` contract as combobox. Custom item template via `<ng-template #mjDropdownItem>`.
+Non-editable select (CDK overlay) with optional in-panel filter (`[Filterable]`, default false) and `DefaultItem` clear option. Same `Data`/`TextField`/`ValueField`/`ValuePrimitive` contract as combobox. Custom item template via `<ng-template #mjDropdownItem>`. Tab in an open panel closes it, puts focus back on the field, and leaves the key to the browser, so Tab moves on from the field.
+
+**Give every dropdown an accessible name** — see [Accessible names](#accessible-names--one-contract-across-every-control). The trigger is a `div[role=combobox]`, so `<label for>` neither names nor focuses it: the visible-label path here is `AriaLabelledBy`, not `InputId`. The name is applied to the popup listbox as well as the trigger, and a filterable panel's filter box takes its name from the same source.
 
 ```html
-<mj-dropdown [Data]="items" TextField="name" ValueField="id"
+<!-- A visible label already on screen (preferred) -->
+<span id="persona-label">Interview persona</span>
+<mj-dropdown AriaLabelledBy="persona-label" [Data]="items" TextField="name" ValueField="id"
+             [(ngModel)]="selectedId" [ValuePrimitive]="true" />
+
+<!-- No visible label -->
+<mj-dropdown AriaLabel="Interview persona" [Data]="items" TextField="name" ValueField="id"
              [(ngModel)]="selectedId" [ValuePrimitive]="true" />
 ```
 
 ### `mj-datepicker` — MJDatepickerComponent
-Text input + calendar popup with `Min`/`Max` range disabling and typed-input parsing. Accepts `Date | string | null` through forms; emits `ValueChange: Date | null`. (Display format is currently fixed at `MM/dd/yyyy`.)
+Text input + calendar popup with `Min`/`Max` range disabling and typed-input parsing. Accepts `Date | string | null` through forms; emits `ValueChange: Date | null`. (Display format is currently fixed at `MM/dd/yyyy`.) The toggle button and the calendar grid take their names from the field's own name, so two pickers on one form do not present two grids both called "Calendar". Tab in an open calendar closes it, puts focus back on the field, and leaves the key to the browser, so Tab moves on from the field.
 
 ```html
-<mj-datepicker [(ngModel)]="dueDate" [Min]="minDate" [Max]="maxDate" Placeholder="Select a date" />
+<mj-datepicker AriaLabel="Due date" [(ngModel)]="dueDate" [Min]="minDate" [Max]="maxDate" Placeholder="Select a date" />
 ```
 
 ### `mj-numeric-input` — MJNumericInputComponent
 Native number input that clamps to `Min`/`Max`, rounds to `Decimals`, and formats on blur. Value flows through forms only (no separate output).
 
 ```html
-<mj-numeric-input [(ngModel)]="quantity" [Min]="0" [Max]="100" [Decimals]="2" />
+<mj-numeric-input AriaLabel="Quantity" [(ngModel)]="quantity" [Min]="0" [Max]="100" [Decimals]="2" />
 ```
 
 ### `mj-switch` — MJSwitchComponent
-Boolean toggle with `role="switch"`, optional `OnLabel`/`OffLabel`.
+Boolean toggle with `role="switch"`, optional `OnLabel`/`OffLabel`. Name it: `OnLabel`/`OffLabel` render inside the button, so an unnamed switch is named after its own **state** — "Off, switch, off" — and `AriaLabel`/`AriaLabelledBy` is what replaces that with its purpose.
 
 ```html
-<mj-switch [(ngModel)]="isEnabled" OnLabel="On" OffLabel="Off" />
+<mj-switch AriaLabel="Email notifications" [(ngModel)]="isEnabled" OnLabel="On" OffLabel="Off" />
 ```
 
 ### `[mjClickable]` — MJClickableDirective
@@ -159,13 +191,55 @@ Inputs: `Padding` (default true; false removes the gutter), `Flex` (default fals
 The same pair for **sub-pages inside a left-nav shell** — card-like chrome, responsive padding. Header-interior adds `Role`/`AriaLabel` inputs and the same three slots.
 
 ### `mj-left-nav` / `mj-left-nav-content` — MJLeftNavComponent
-Canonical left rail: sections, flat + tree items (badges, descriptions, disabled), off-canvas drawer at ≤700px. Inputs: `Sections: MJLeftNavSection[]`, `ActiveId`, `ExpandedIds`, `Width` (240), `MobileTitle`. Outputs: `ItemClicked`, `ItemToggled`. Slots: `[header]`, `[footer]`. Pair with `mj-left-nav-content`, which provides `Loading`/`Error` states and hides (not destroys) content while busy.
+Canonical left rail: sections, flat + tree items (badges, descriptions, disabled), off-canvas drawer at ≤700px. Inputs: `Sections: MJLeftNavSection[]`, `ActiveId`, `ExpandedIds`, `Width` (240), `MobileTitle`, `IconOnly` (per-item tooltips + accessible names for an externally-narrowed rail). Outputs: `ItemClicked`, `ItemToggled`. Slots: `[header]`, `[footer]`. Pair with `mj-left-nav-content`, which provides `Loading`/`Error` states and hides (not destroys) content while busy.
+
+**Desktop collapse (opt-in):** set `[Collapsible]="true"` and bind `[(Collapsed)]` — the rail renders a locked-position double-angle toggle chip and, when collapsed, becomes a `CollapsedWidth` (60px) icons-only strip: labels visually hidden but kept in the a11y tree, section labels folded to divider lines, badges docked on the icon corner, item tooltips auto-enabled. The component owns presentation only — the consumer owns + persists the state (same split as `ExpandedIds`). Desktop-only; the ≤700px drawer is unaffected. There is deliberately no hover-to-peek.
+
+```html
+<mj-left-nav [Sections]="sections" [ActiveId]="activeId" [Collapsible]="true"
+             [(Collapsed)]="railCollapsed" (CollapsedChange)="persist($event)" />
+```
+
+Collapsing a rail whose content is richer than a flat icon list:
+
+| Content | Collapsed behavior |
+|---|---|
+| **Tree sections** (`item.children`) | Fold to top-level items only — no chevrons, no indentation, children hidden. A top-level item paints active (`aria-current="true"`) when the active item is one of its descendants, so the rail still shows where you are. `ExpandedIds` is untouched, so the tree returns exactly as the user left it on expand. |
+| **Items with no `icon`** | Render an uppercase monogram from the label, so an item never collapses to a blank-but-clickable button. |
+| **`[header]` / `[footer]` slots** | **Yours to handle.** The rail can't restyle projected content, so a wide header overflows a 60px strip — bind the same collapsed flag in your consumer and project a compact variant. |
 
 ### `mj-tab-nav` — MJTabNavComponent
 Data-driven tab strip. `Tabs: TabConfig[]` (`key`, `label`, `icon?`, `badge?`, `badgeVariant?: 'default'|'error'|'warning'|'success'`), `ActiveKey`, `(TabChange)` emits the key.
 
+### `mjTabList` — MJTabListDirective
+The ARIA tabs keyboard contract, shared by every MJ tab strip. Apply to the element holding the tabs; mark each tab `role="tab"` and keep `aria-selected` truthful. Owns `role="tablist"`, the roving `tabindex` (one stop per strip), Arrow/Home/End navigation with focus-follows-selection, Enter/Space activation, and Delete/Backspace close. Emits `(TabActivateRequested)` / `(TabCloseRequested)` with the tab's index in the full list plus the element, so index-addressed and id-addressed hosts both map it onto their own model. Skips `display:none` tabs; leaves keys alone inside editable content.
+
+### `mj-workspace-card` / `mj-workspace-tab-strip` — MJWorkspaceCardComponent, MJWorkspaceTabStripComponent
+The **workspace** pattern: a screen where the user builds several drafts in parallel, each in a browser-style tab (open, switch, drag-reorder via CDK, close, dirty-dot, rejected/complete states). `MJWorkspaceTabStore<TState>` is the pure state machine (open-activates-existing, neighbour activation on close, reorder, lifecycle + dirty tracking — exhaustively unit-tested); `mj-workspace-tab-strip` is dumb presentation over it (renders tabs, emits intent); `mj-workspace-card` is the slotted frame — card surface, tab-strip row, `[workspaceHeader]` identity band, a single scrolling body (default slot), and an opt-in standardized footer (`ShowFooter`: primary confirm + save-as-draft + discard, only the labels vary; `[workspaceFooterNote]` caption slot). Tabs carry an opaque `State` the host owns — no app types in the framework. v1 is session-scoped (no DB persistence).
+
+The card is a **query container** (`container-type: size`): size content inside it with `cqh`/`cqw`, never `vh`/`vw` (viewport units break the moment the card sits in a split or a smaller pane).
+
+```html
+<mj-workspace-card [Tabs]="store.Tabs" [ActiveId]="store.ActiveId" NewTabLabel="New entry"
+    [ShowFooter]="true" ConfirmLabel="Create entry"
+    (TabSelected)="store.Activate($event)" (TabClosed)="onClose($event)"
+    (NewTabRequested)="openBlank()" (TabReordered)="store.Reorder($event.previousIndex, $event.currentIndex)"
+    (Confirm)="create()" (SaveDraft)="keep()" (Discard)="discard()">
+  <div workspaceHeader><!-- per-workshop identity badges --></div>
+  <!-- the workshop's form/body -->
+</mj-workspace-card>
+```
+
+### `mjTip` — MJWorkspaceTipDirective
+Delayed (~450ms still-pointer), non-interactive, token-themed hover tooltip that by default shows only when the host is truncated (`scrollWidth > clientWidth`); `mjTipAlways` forces it for hosts whose truncation can't be measured (a native `<select>`). Used by the workspace tab strip for full labels on capped tabs.
+
 ### `mj-page-search` — MJPageSearchComponent
-Compact toolbar search input. `Placeholder`, `Value`, `Icon`; `(ValueChange)` on input.
+Compact toolbar search input. `Placeholder`, `Value`, `Icon`, plus the four naming inputs above; `(ValueChange)` on input. The placeholder is the name of last resort — it is what the name computation falls back to, and it disappears the moment the user types — so pass `AriaLabel` for a name that survives having text in the box.
+
+```html
+<mj-page-search AriaLabel="Search templates" Placeholder="Search templates..."
+                [Value]="q" (ValueChange)="q = $event" />
+```
 
 ### `mj-slide-panel` — MjSlidePanelComponent
 Chrome-only slide-in panel from the right (resizable) or centered dialog (`Mode: 'slide' | 'dialog'`). Inputs include `Title`, `Visible`, `Resizable`, `MinWidthPx`, `MaxWidthRatio`, `WidthPx`, and a `CanClose` guard callback. Outputs: `Closed`, `WidthChanged`. Dialog-mode body projects into `[dialog-content]`.
@@ -181,7 +255,7 @@ Re-export of `angular-split` — use `<as-split>` / `<as-split-area>` directly:
 ```
 
 ### `mj-accordion-panel` — MJAccordionPanelComponent (+ directives)
-Collapsible panel replacing Kendo panelbar/expansion panel. Inputs: `Title`, `Expanded` (+`ExpandedChange`), `Disabled`, `Variant: 'default'|'primary'|'secondary'`, `Size: 'sm'|'md'`, `Bare`, `FlushBody`, `Fill` (consume leftover height). Rich content via structural directives — `*mjAccordionTitle`, `*mjAccordionActions` (rendered outside the toggle button), and `*mjAccordionBody` (**lazy — instantiated on first expand, then kept alive**). Import `MJAccordionModule` to get the panel plus all three directives in one symbol.
+Collapsible panel replacing Kendo panelbar/expansion panel. Inputs: `Title`, `Expanded` (+`ExpandedChange`), `Disabled`, `Variant: 'default'|'primary'|'secondary'`, `Size: 'sm'|'md'`, `Bare` (no border, header background, body fill or row hover fill, for a panel inside a card or a section directly on a page; on a device that can hover, pointing at the title or chevron gives both the brand color), `HeadingLevel: 1–6 | null` (wraps the toggle in a `role="heading"` element with that `aria-level`; null, the default, adds no wrapper), `FlushBody`, `Fill` (consume leftover height). Rich content via structural directives — `*mjAccordionTitle`, `*mjAccordionActions` (rendered outside the toggle button), and `*mjAccordionBody` (**lazy — instantiated on first expand, then kept alive**). Import `MJAccordionModule` to get the panel plus all three directives in one symbol.
 
 ```html
 <mj-accordion-panel [Expanded]="open" (ExpandedChange)="open = $event">
@@ -194,6 +268,13 @@ Collapsible panel replacing Kendo panelbar/expansion panel. Inputs: `Title`, `Ex
 
 ### `mj-dialog` — MJDialogComponent
 Modal with backdrop, Esc/backdrop close (`Closeable`), body scroll lock. Inputs: `Visible`, `Title`, `Size: 'sm'|'md'|'lg'|'xl'|'auto'` (400/600/800/1000px), `Width`/`Height`/`MinWidth`, `Role: 'dialog'|'alertdialog'`. Output: `Close`. **`Visible` is not two-way** — set it false in your `(Close)` handler. Slots: default body, `mj-dialog-titlebar`, `mj-dialog-actions`.
+
+Focus inputs, each on by default:
+
+- `AutoFocus` (default `true`) moves focus into the dialog on open: `[data-autofocus]`, else the first field, else the first body or actions button (never the close button), else the container.
+- `TrapFocus` (default `true`) wraps only. The browser moves Tab between stops. Tab on the last stop wraps to the first, and Shift+Tab on the first stop or the container wraps to the last. Only the topmost visible dialog brings a Tab in, and only when it traps focus. Focus in another modal, or in an overlay panel, keeps its Tab. When a dropdown or calendar on the first or last stop hands focus back to its field, the dialog wraps. Stops skip `display: none`, `[hidden]`, `visibility: hidden`, disabled controls, hidden inputs, and `tabindex="-1"`. A `contenteditable` region is a stop unless `contenteditable="false"`. A nested dialog handles its own Tab first.
+- `RestoreFocus` (default `true`) returns focus to the element that opened the dialog.
+- `AriaLabel` names the dialog when `Title` is empty. A title uses `aria-labelledby` and does not also set `aria-label`.
 
 ```html
 <mj-dialog [Visible]="show" Title="Confirm" Size="md" (Close)="show = false">

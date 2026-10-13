@@ -1,0 +1,62 @@
+.claim-redeem-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: var(--mj-brand-primary);
+    padding: 1rem;
+}
+
+.claim-redeem-card {
+    background: var(--mj-bg-surface);
+    padding: 3rem;
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    text-align: center;
+    max-width: 450px;
+    width: 100%;
+}
+
+.claim-status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.claim-status h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.claim-status p {
+    margin: 0;
+    color: var(--mj-text-muted);
+    line-height: 1.6;
+}
+
+.icon-container {
+    font-size: 3rem;
+}
+
+.success-icon {
+    color: var(--mj-status-success);
+}
+
+.error-icon {
+    color: var(--mj-status-error);
+}
+
+.error-message {
+    color: var(--mj-text-secondary);
+}
+
+.button-group {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}

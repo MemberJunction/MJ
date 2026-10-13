@@ -1,4 +1,5 @@
 import { Command, Flags } from '@oclif/core';
+import { TEST_FORMAT_FLAG, TEST_FORMAT_MAP, ResolveLegacyFormat } from '../../lib/format-compat.js';
 
 export default class TestList extends Command {
   static description = 'List available tests, suites, and types';
@@ -32,12 +33,7 @@ export default class TestList extends Command {
       char: 's',
       description: 'Filter by status',
     }),
-    format: Flags.string({
-      char: 'f',
-      description: 'Output format',
-      options: ['console', 'json', 'markdown'],
-      default: 'console',
-    }),
+    format: TEST_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
       description: 'Output file path',
@@ -64,7 +60,12 @@ export default class TestList extends Command {
         type: flags.type,
         tag: flags.tag,
         status: flags.status,
-        format: flags.format as 'console' | 'json' | 'markdown',
+        format: ResolveLegacyFormat({
+          Format: flags.format,
+          Legacy: 'console' as const,
+          LegacyDefault: 'console' as const,
+          Map: TEST_FORMAT_MAP,
+        }),
         output: flags.output,
         verbose: flags.verbose,
       });

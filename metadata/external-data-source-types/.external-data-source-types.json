@@ -145,5 +145,26 @@
       "lastModified": "2026-07-07T15:18:41.036Z",
       "checksum": "d76cbad4281f68d5f487b4932388e873df68b191a7b893c5090b0fd6507858f6"
     }
+  },
+  {
+    "fields": {
+      "Name": "Databricks SQL Warehouse (External)",
+      "Description": "Live, read-only proxied access to a Databricks SQL Warehouse via the official @databricks/sql SDK (always HTTPS). Personal Access Token (access-token) or OAuth M2M service-principal (databricks-oauth) auth. ANSI SQL with backtick identifier quoting and LIMIT/OFFSET paging, and Unity Catalog information_schema introspection (tables, columns, and informational NOT ENFORCED primary/foreign keys).",
+      "DriverClass": "DatabricksExternalDriver",
+      "MetadataIntrospectionStrategy": "InformationSchema",
+      "FilterDialect": "ansi",
+      "PagingStrategy": "LimitOffset",
+      "SupportsSchemaIntrospection": true,
+      "SupportsNativeQueries": true,
+      "SupportsReadWrite": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B478BBE3-9907-4C8B-8F6D-E9E4561EAD04"
+    },
+    "sync": {
+      "lastModified": "2026-08-07T23:58:30.364Z",
+      "checksum": "7177db27b57d49bee0e8f51ae25ce0a4713cf6b490785f5cfa30bad0e334bc57"
+    }
   }
 ]

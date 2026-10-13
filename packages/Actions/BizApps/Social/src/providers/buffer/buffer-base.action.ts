@@ -1,9 +1,10 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSocialMediaAction, SocialPost, SocialAnalytics, MediaFile } from '../../base/base-social.action';
-import { LogStatus } from '@memberjunction/core';
-import axios from 'axios';
+import { LogStatus, RunView } from '@memberjunction/core';
+import { HttpPost, IsHttpError } from '@memberjunction/network-utils';
 import { BaseAction } from '@memberjunction/actions';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { CredentialEngine } from '@memberjunction/credentials';
 
 // ---------------------------------------------------------------------------
 // Buffer API string unions
@@ -51,10 +52,29 @@ export interface BufferChannel {
   serviceId: string;
 }
 
+/**
+ * The assets shape Buffer **returns** on a post: one object with a list per kind.
+ */
 export interface BufferAssets {
   images?: Array<{ url: string; thumbnailUrl?: string }>;
   videos?: Array<{ url: string; thumbnailUrl?: string }>;
   documents?: Array<{ url: string; title?: string }>;
+  link?: { url: string; title?: string; description?: string; thumbnailUrl?: string };
+}
+
+/**
+ * The assets shape Buffer **accepts** on createPost: `[AssetInput!]`, one entry per
+ * attachment, each naming its kind.
+ *
+ * This is deliberately not `BufferAssets`. Buffer switched createPost's input to the
+ * array form on 2026-05-25 and rejects the old `{ images: [...] }` object, but keeps
+ * returning the object form on reads — so input and output genuinely differ and
+ * sharing one type here would break one direction or the other.
+ */
+export interface BufferAssetInput {
+  image?: { url: string; thumbnailUrl?: string };
+  video?: { url: string; thumbnailUrl?: string };
+  document?: { url: string; title?: string };
   link?: { url: string; title?: string; description?: string; thumbnailUrl?: string };
 }
 
@@ -231,8 +251,18 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
 
   /** Common params shared by all Buffer actions. */
   protected get bufferCommonParams(): ActionParam[] {
-    return [...this.commonSocialParams, { Name: 'OrganizationID', Type: 'Input', Value: null }];
+    return [
+      ...this.commonSocialParams,
+      { Name: 'OrganizationID', Type: 'Input', Value: null },
+      { Name: 'CredentialID', Type: 'Input', Value: null },
+    ];
   }
+
+  /**
+   * A token resolved from the `CredentialID` param, standing in for the
+   * CompanyIntegration's own token for the rest of this action run.
+   */
+  private _credentialAccessToken: string | null = null;
 
   // -----------------------------------------------------------------------
   // Action helpers — reduce boilerplate in subclasses
@@ -245,6 +275,10 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
    * threaded into `initializeOAuth` (multi-tenant correctness — every entity load/save
    * inside the OAuth flow binds to the request's connection, not the global default).
    *
+   * `CompanyIntegrationID` stays required even when `CredentialID` is given: it is what
+   * identifies *which* Buffer integration this is, and the org/channel context still
+   * comes from it. `CredentialID` only changes whose token the calls are made with.
+   *
    * Returns null on success, or an error result.
    */
   protected async ensureAuthenticated(params: RunActionParams): Promise<ActionResultSimple | null> {
@@ -255,7 +289,87 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
     if (!(await this.initializeOAuth(companyIntegrationId, params))) {
       return { Success: false, ResultCode: 'INVALID_TOKEN', Message: 'Failed to initialize Buffer connection', Params: params.Params };
     }
+
+    const credentialId = this.getParamValue(params.Params, 'CredentialID');
+    if (credentialId) {
+      const resolved = await this.resolveCredentialAccessToken(String(credentialId), params);
+      if (typeof resolved !== 'string') return resolved;
+      this._credentialAccessToken = resolved;
+    }
     return null;
+  }
+
+  /**
+   * Load an access token out of an `MJ: Credentials` row.
+   *
+   * This is the seam for acting as an identity other than the tenant's own Buffer
+   * connection — publishing to an employee's personal channel, reading the queue of
+   * the person who owns it. The token stays in the credential store; only its ID
+   * travels through action params.
+   *
+   * A `CredentialID` that was supplied but cannot be read is **fatal**, never a
+   * silent fallback to the CompanyIntegration token: falling back would publish
+   * under the wrong identity, and the caller would have no way to notice.
+   *
+   * Returns the token, or an error result to hand straight back to the caller.
+   */
+  protected async resolveCredentialAccessToken(
+    credentialId: string,
+    params: RunActionParams,
+  ): Promise<string | ActionResultSimple> {
+    const notUsable = (detail: string): ActionResultSimple => ({
+      Success: false,
+      ResultCode: 'INVALID_CREDENTIAL',
+      Message: `CredentialID ${credentialId} cannot be used for Buffer: ${detail}`,
+      Params: params.Params,
+    });
+
+    // Resolved through CredentialEngine rather than a direct RunView, which buys three things a
+    // raw read cannot: an ACCESS AUDIT TRAIL (`logAccess` writes an `MJ: Audit Logs` row carrying
+    // the credential's EntityID/RecordID, and stamps LastUsedAt), JSON-schema validation of Values
+    // against the credential type, and the engine's cache instead of a query per invocation.
+    //
+    // The audit row is the part that matters most here: this seam exists to publish under ANOTHER
+    // IDENTITY, and "who posted as whom, when" should not be unrecorded.
+    await CredentialEngine.Instance.Config(false, params.ContextUser);
+
+    // IsActive is still checked HERE. CredentialEngine's by-name path filters on it, but the
+    // by-ID path (`resolveCredential` -> `getCredentialById`) does not — so dropping this check
+    // while switching would have quietly widened what this accepts.
+    const credential = CredentialEngine.Instance.Credentials.find(
+      (c) => c.ID.toLowerCase() === credentialId.toLowerCase(),
+    );
+    if (!credential) {
+      return notUsable('not found');
+    }
+    if (!credential.IsActive) {
+      return notUsable('not active');
+    }
+
+    let resolved: { values?: Record<string, string> };
+    try {
+      resolved = await CredentialEngine.Instance.getCredential<Record<string, string>>(credential.Name, {
+        credentialId,
+        contextUser: params.ContextUser,
+        subsystem: 'Buffer',
+      });
+    } catch (err) {
+      return notUsable(`it could not be resolved (${err instanceof Error ? err.message : String(err)})`);
+    }
+
+    const token = resolved.values?.accessToken;
+    if (typeof token !== 'string' || token.length === 0) {
+      return notUsable('its Values carry no accessToken');
+    }
+    return token;
+  }
+
+  /**
+   * The token every Buffer call is made with: the `CredentialID` token when one was
+   * supplied, otherwise the CompanyIntegration's own.
+   */
+  protected override getAccessToken(): string | null {
+    return this._credentialAccessToken ?? super.getAccessToken();
   }
 
   /** Set an output parameter value by name. */
@@ -298,25 +412,25 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
     }
 
     try {
-      const response = await axios.post<GraphQLResponse<T>>(
+      const response = await HttpPost<GraphQLResponse<T>>(
         this.apiBaseUrl,
         { query, variables },
         {
-          headers: {
+          Headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          timeout: 30000,
+          Timeout: 30000,
         },
       );
 
-      this.throwOnGraphQLErrors(response.data);
+      this.throwOnGraphQLErrors(response.Data);
 
-      if (!response.data.data) {
+      if (!response.Data.data) {
         throw new Error('No data in Buffer GraphQL response');
       }
 
-      return response.data.data;
+      return response.Data.data;
     } catch (error) {
       return this.handleExecutionError<T>(error, query, variables, 0);
     }
@@ -332,11 +446,11 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
   private async handleExecutionError<T>(error: unknown, query: string, variables: Record<string, unknown> | undefined, retryCount: number): Promise<T> {
     if (error instanceof BufferGraphQLError) throw error;
 
-    if (axios.isAxiosError(error) && error.response?.status === 429) {
+    if (IsHttpError(error) && error.Status === 429) {
       if (retryCount >= MAX_RATE_LIMIT_RETRIES) {
         throw new Error(`Buffer API rate limit exceeded after ${MAX_RATE_LIMIT_RETRIES} retries`);
       }
-      const retryAfter = error.response.headers['retry-after'];
+      const retryAfter = error.Headers['retry-after'];
       const seconds = retryAfter ? parseInt(String(retryAfter)) || 60 : 60;
       await this.handleRateLimit(seconds);
       try {
@@ -428,15 +542,23 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
     return input;
   }
 
-  /** Create a post via the createPost mutation. */
+  /**
+   * Create a post via the createPost mutation.
+   *
+   * `metadata` is Buffer's per-service extras channel, keyed by service name — e.g.
+   * `{ linkedin: { annotations: [...] } }` for @mention annotations. It is passed
+   * through untouched rather than modelled, because its shape belongs to whichever
+   * network the channel points at and Buffer adds to it independently of this package.
+   */
   protected async createBufferPost(input: {
     channelId: string;
     text: string;
     mode?: BufferShareMode;
     dueAt?: string;
     schedulingType?: string;
-    assets?: BufferAssets;
+    assets?: BufferAssetInput[];
     tagIds?: string[];
+    metadata?: Record<string, unknown>;
   }): Promise<BufferPost> {
     const data = await this.executeGraphQL<CreatePostMutationData>(CREATE_POST_MUTATION, { input });
 
@@ -639,8 +761,8 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
     if (error instanceof BufferGraphQLError) {
       return this.mapGraphQLErrorCode(error);
     }
-    if (axios.isAxiosError(error) && error.response) {
-      return this.mapHttpStatusCode(error.response.status, error.response.data);
+    if (IsHttpError(error) && error.Status) {
+      return this.mapHttpStatusCode(error.Status, error.Data);
     }
     return 'PLATFORM_ERROR';
   }

@@ -44,6 +44,55 @@ export interface UserStorageDriverOptions {
 }
 
 /**
+ * Resolves the storage driver registered for a provider's `ServerDriverKey` and instantiates it.
+ *
+ * This is the ONE place a `ServerDriverKey` becomes a driver object. It exists because the failure
+ * mode it replaces was so expensive: `ClassFactory.CreateInstance` does not return `null` for an
+ * unregistered key — it falls back to the anchor base class — so an unresolvable key used to yield
+ * a `FileStorageBase` whose every method is `undefined`. Nothing complained until some distant
+ * subsystem called one, producing `driver.GetObject is not a function` with no mention of storage
+ * configuration, the provider, or the key. `TryCreateInstance` reports resolution EXPLICITLY, so a
+ * configuration problem is reported here, as a configuration problem, naming the key.
+ *
+ * @param providerEntity The provider whose `ServerDriverKey` names the driver class.
+ * @returns A newly constructed, UNINITIALIZED driver — callers must still `initialize()` it.
+ * @throws Error naming the provider, the unresolved `ServerDriverKey`, the keys that ARE
+ *         registered, and how to fix it.
+ */
+export function ResolveStorageDriver(providerEntity: MJFileStorageProviderEntity): FileStorageBase {
+  const driverKey = providerEntity.ServerDriverKey;
+  const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<FileStorageBase>(FileStorageBase, driverKey);
+  if (resolution.Resolved && resolution.Instance) {
+    return resolution.Instance;
+  }
+
+  // The registered-key list is the highest-value part of the diagnostic: a typo'd key and a driver
+  // whose module was never imported look identical until you see what the factory actually knows.
+  const registeredKeys = Array.from(
+    new Set(
+      MJGlobal.Instance.ClassFactory.GetAllRegistrations(FileStorageBase)
+        .map((r) => r.Key)
+        .filter((k): k is string => k != null),
+    ),
+  ).sort();
+  const knownText = registeredKeys.length > 0 ? registeredKeys.map((k) => `'${k}'`).join(', ') : '(none)';
+
+  throw new Error(
+    `MJStorage: no file storage driver is registered for ServerDriverKey '${driverKey ?? '(null)'}' ` +
+      `(provider "${providerEntity.Name}", ID ${providerEntity.ID}). ` +
+      `Registered driver keys: ${knownText}. ` +
+      `Fix by either (a) importing the package that declares the driver so its @RegisterClass decorator runs ` +
+      `in THIS process — a driver whose module is never imported is never registered — or ` +
+      `(b) correcting 'MJ: File Storage Providers'.ServerDriverKey to one of the registered keys above.`,
+  );
+}
+
+/** @deprecated Use {@link ResolveStorageDriver}. */
+export function resolveStorageDriver(providerEntity: MJFileStorageProviderEntity): FileStorageBase {
+  return ResolveStorageDriver(providerEntity);
+}
+
+/**
  * @deprecated This function is being replaced by the enterprise file storage model.
  * Use FileStorageAccount with Credential Engine instead.
  *
@@ -58,8 +107,8 @@ export interface UserStorageDriverOptions {
 export async function initializeDriverWithUserCredentials(options: UserStorageDriverOptions): Promise<FileStorageBase> {
   const { providerEntity } = options;
 
-  // Create the driver instance
-  const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
+  // Create the driver instance (throws, naming the key, when the ServerDriverKey resolves to nothing)
+  const driver = ResolveStorageDriver(providerEntity);
 
   // Check if this provider requires OAuth authentication
   if (providerEntity.RequiresOAuth) {
@@ -134,15 +183,12 @@ export interface AccountStorageDriverOptions {
  * const objects = await driver.ListObjects('/');
  * ```
  */
-export async function initializeDriverWithAccountCredentials(options: AccountStorageDriverOptions): Promise<FileStorageBase> {
+export async function InitializeDriverWithAccountCredentials(options: AccountStorageDriverOptions): Promise<FileStorageBase> {
   const { accountEntity, providerEntity, contextUser } = options;
 
-  // Create the driver instance using the provider's driver key
-  const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
-
-  if (!driver) {
-    throw new Error(`Failed to create storage driver for provider "${providerEntity.Name}" ` + `with driver key "${providerEntity.ServerDriverKey}"`);
-  }
+  // Create the driver instance using the provider's driver key. Resolution failure throws here,
+  // naming the key — it is NEVER allowed to yield a hollow base instance that fails later.
+  const driver = ResolveStorageDriver(providerEntity);
 
   // Build the base config with account information (required in enterprise model)
   const baseConfig: StorageProviderConfig = {
@@ -226,6 +272,11 @@ export async function initializeDriverWithAccountCredentials(options: AccountSto
   return driver;
 }
 
+/** @deprecated Use {@link InitializeDriverWithAccountCredentials}. */
+export async function initializeDriverWithAccountCredentials(options: AccountStorageDriverOptions): Promise<FileStorageBase> {
+  return InitializeDriverWithAccountCredentials(options);
+}
+
 /**
  * Extended user context options that can also include account information
  * for the enterprise credential model.
@@ -250,7 +301,7 @@ export interface ExtendedUserContextOptions extends UserContextOptions {
 async function initializeDriver(providerEntity: MJFileStorageProviderEntity, userContext?: ExtendedUserContextOptions): Promise<FileStorageBase> {
   // Enterprise model: Use account-based credentials if accountEntity is provided
   if (userContext?.accountEntity) {
-    return initializeDriverWithAccountCredentials({
+    return InitializeDriverWithAccountCredentials({
       accountEntity: userContext.accountEntity,
       providerEntity,
       contextUser: userContext.contextUser,
@@ -267,7 +318,7 @@ async function initializeDriver(providerEntity: MJFileStorageProviderEntity, use
   }
 
   // No user context - use admin/legacy initialization
-  const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
+  const driver = ResolveStorageDriver(providerEntity);
 
   // Check if this provider requires OAuth but no user context was provided
   if (providerEntity.RequiresOAuth) {
@@ -333,7 +384,7 @@ async function initializeDriver(providerEntity: MJFileStorageProviderEntity, use
  * console.log(result.UploadUrl);
  * ```
  */
-export const createUploadUrl = async <TInput extends { ID: string; Name: string; ProviderID: string; ContentType?: string; ProviderKey?: string }>(
+export const CreateUploadUrl = async <TInput extends { ID: string; Name: string; ProviderID: string; ContentType?: string; ProviderKey?: string }>(
   providerEntity: MJFileStorageProviderEntity,
   input: TInput,
   userContext?: UserContextOptions,
@@ -356,6 +407,9 @@ export const createUploadUrl = async <TInput extends { ID: string; Name: string;
 
   return { updatedInput, UploadUrl };
 };
+
+/** @deprecated Use {@link CreateUploadUrl}. */
+export const createUploadUrl = CreateUploadUrl;
 
 /**
  * Creates a pre-authenticated download URL for a file from the specified file storage provider.
@@ -386,7 +440,7 @@ export const createUploadUrl = async <TInput extends { ID: string; Name: string;
  * console.log(downloadUrl);
  * ```
  */
-export const createDownloadUrl = async (
+export const CreateDownloadUrl = async (
   providerEntity: MJFileStorageProviderEntity,
   providerKeyOrName: string,
   userContext?: UserContextOptions,
@@ -394,6 +448,9 @@ export const createDownloadUrl = async (
   const driver = await initializeDriver(providerEntity, userContext);
   return driver.CreatePreAuthDownloadUrl(providerKeyOrName);
 };
+
+/** @deprecated Use {@link CreateDownloadUrl}. */
+export const createDownloadUrl = CreateDownloadUrl;
 
 /**
  * Moves an object from one location to another within the specified file storage provider.
@@ -429,7 +486,7 @@ export const createDownloadUrl = async (
  * }
  * ```
  */
-export const moveObject = async (
+export const MoveObject = async (
   providerEntity: MJFileStorageProviderEntity,
   oldProviderKeyOrName: string,
   newProviderKeyOrName: string,
@@ -438,6 +495,9 @@ export const moveObject = async (
   const driver = await initializeDriver(providerEntity, userContext);
   return driver.MoveObject(oldProviderKeyOrName, newProviderKeyOrName);
 };
+
+/** @deprecated Use {@link MoveObject}. */
+export const moveObject = MoveObject;
 
 /**
  * Copies an object from one location to another within the specified file storage provider.
@@ -469,7 +529,7 @@ export const moveObject = async (
  * }
  * ```
  */
-export const copyObject = async (
+export const CopyObject = async (
   providerEntity: MJFileStorageProviderEntity,
   sourceProviderKeyOrName: string,
   destinationProviderKeyOrName: string,
@@ -478,6 +538,9 @@ export const copyObject = async (
   const driver = await initializeDriver(providerEntity, userContext);
   return driver.CopyObject(sourceProviderKeyOrName, destinationProviderKeyOrName);
 };
+
+/** @deprecated Use {@link CopyObject}. */
+export const copyObject = CopyObject;
 
 /**
  * Deletes a file from the specified file storage provider.
@@ -510,7 +573,7 @@ export const copyObject = async (
  * }
  * ```
  */
-export const deleteObject = async (
+export const DeleteObject = async (
   providerEntity: MJFileStorageProviderEntity,
   providerKeyOrName: string,
   userContext?: UserContextOptions,
@@ -535,6 +598,9 @@ export const deleteObject = async (
 
   return result;
 };
+
+/** @deprecated Use {@link DeleteObject}. */
+export const deleteObject = DeleteObject;
 
 /**
  * Lists objects (files) and prefixes (directories) in a storage provider at the specified path.
@@ -571,7 +637,7 @@ export const deleteObject = async (
  * const docsResult = await listObjects(fileStorageProvider, 'documents/', '/', userContext);
  * ```
  */
-export const listObjects = async (
+export const ListObjects = async (
   providerEntity: MJFileStorageProviderEntity,
   prefix: string,
   delimiter: string = '/',
@@ -600,6 +666,9 @@ export const listObjects = async (
 
   return result;
 };
+
+/** @deprecated Use {@link ListObjects}. */
+export const listObjects = ListObjects;
 
 /**
  * Result of a cross-provider copy operation
@@ -660,7 +729,7 @@ export interface CopyBetweenProvidersOptions {
  * }
  * ```
  */
-export const copyObjectBetweenProviders = async (
+export const CopyObjectBetweenProviders = async (
   sourceProviderEntity: MJFileStorageProviderEntity,
   destinationProviderEntity: MJFileStorageProviderEntity,
   sourcePath: string,
@@ -749,6 +818,9 @@ export const copyObjectBetweenProviders = async (
     return result;
   }
 };
+
+/** @deprecated Use {@link CopyObjectBetweenProviders}. */
+export const copyObjectBetweenProviders = CopyObjectBetweenProviders;
 
 /**
  * Result from a single provider's search attempt
@@ -840,7 +912,7 @@ export interface SearchAcrossProvidersOptions {
  * }
  * ```
  */
-export const searchAcrossProviders = async (
+export const SearchAcrossProviders = async (
   providerEntities: MJFileStorageProviderEntity[],
   query: string,
   options?: SearchAcrossProvidersOptions,
@@ -946,6 +1018,9 @@ export const searchAcrossProviders = async (
   return aggregatedResult;
 };
 
+/** @deprecated Use {@link SearchAcrossProviders}. */
+export const searchAcrossProviders = SearchAcrossProviders;
+
 /**
  * Information needed to search a single account
  */
@@ -1043,7 +1118,7 @@ export interface SearchAcrossAccountsOptions {
  * }
  * ```
  */
-export const searchAcrossAccounts = async (
+export const SearchAcrossAccounts = async (
   accounts: AccountSearchInput[],
   query: string,
   options: SearchAcrossAccountsOptions,
@@ -1085,7 +1160,7 @@ export const searchAcrossAccounts = async (
       }
 
       // Initialize driver with account-based credentials
-      const driver = await initializeDriverWithAccountCredentials({
+      const driver = await InitializeDriverWithAccountCredentials({
         accountEntity,
         providerEntity,
         contextUser: options.contextUser,
@@ -1153,3 +1228,6 @@ export const searchAcrossAccounts = async (
 
   return aggregatedResult;
 };
+
+/** @deprecated Use {@link SearchAcrossAccounts}. */
+export const searchAcrossAccounts = SearchAcrossAccounts;

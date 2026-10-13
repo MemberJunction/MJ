@@ -22,7 +22,7 @@ vi.mock('@memberjunction/storage', () => ({
     },
 }));
 
-import { writeRecordingPeaksSidecar } from '../realtime/realtime-recording-store';
+import { WriteRecordingPeaksSidecar } from '../realtime/realtime-recording-store';
 import { UserInfo } from '@memberjunction/core';
 
 const fakeUser = {} as UserInfo;
@@ -35,7 +35,7 @@ describe('writeRecordingPeaksSidecar', () => {
 
     it('writes peaks.json into the session folder with a JSON array payload and application/json type', async () => {
         const peaks = [0, 0.5, 1, 0.25];
-        const ok = await writeRecordingPeaksSidecar('sess-123', 'acct-1', peaks, fakeUser);
+        const ok = await WriteRecordingPeaksSidecar('sess-123', 'acct-1', peaks, fakeUser);
 
         expect(ok).toBe(true);
         expect(getDriverMock).toHaveBeenCalledWith('acct-1', fakeUser);
@@ -49,14 +49,14 @@ describe('writeRecordingPeaksSidecar', () => {
     });
 
     it('is a no-op (no driver call) when peaks is undefined or empty', async () => {
-        expect(await writeRecordingPeaksSidecar('s', 'a', undefined, fakeUser)).toBe(false);
-        expect(await writeRecordingPeaksSidecar('s', 'a', [], fakeUser)).toBe(false);
+        expect(await WriteRecordingPeaksSidecar('s', 'a', undefined, fakeUser)).toBe(false);
+        expect(await WriteRecordingPeaksSidecar('s', 'a', [], fakeUser)).toBe(false);
         expect(getDriverMock).not.toHaveBeenCalled();
         expect(putObjectMock).not.toHaveBeenCalled();
     });
 
     it('never throws — a driver failure is swallowed and returns false', async () => {
         getDriverMock.mockRejectedValueOnce(new Error('boom'));
-        await expect(writeRecordingPeaksSidecar('s', 'a', [0.1, 0.2], fakeUser)).resolves.toBe(false);
+        await expect(WriteRecordingPeaksSidecar('s', 'a', [0.1, 0.2], fakeUser)).resolves.toBe(false);
     });
 });

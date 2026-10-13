@@ -27,6 +27,9 @@ export interface FormToolbarConfig {
   /** Show the Delete button in read mode. Default: true */
   ShowDeleteButton: boolean;
 
+  /** Show the Refresh button in read mode (reloads record from database). Default: true */
+  ShowRefreshButton: boolean;
+
   /** Show the Favorite/Unfavorite button. Default: true */
   ShowFavoriteButton: boolean;
 
@@ -38,6 +41,16 @@ export interface FormToolbarConfig {
 
   /** Show the Tags button for viewing/managing tags on this record. Default: true */
   ShowTagsButton: boolean;
+
+  /** Show the Attachments button for viewing/managing linked file attachments. Default: true */
+  ShowAttachmentsButton: boolean;
+
+  /**
+   * Show the Clone action for saved records, which opens the `ng-record-clone` slide-in.
+   * The button still appears only when the entity's `Configuration.Clone.Enabled` is true
+   * and `RecordClone.Describe` says the user may clone it. Omitted means off.
+   */
+  ShowCloneButton?: boolean;
 
   /**
    * Show the **form-variant picker** button — a right-side toolbar button
@@ -73,8 +86,9 @@ export interface FormToolbarConfig {
 
   /**
    * Show the Expand-All and Collapse-All chevron buttons. Only relevant for
-   * forms that render MJ collapsible panels — custom layouts that manage
-   * their own open/closed state should set this to false. Default: true
+   * accordion chrome — left-nav / right-nav hide these even when true.
+   * Custom layouts that manage their own open/closed state should set this
+   * to false. Default: true
    */
   ShowExpandCollapseAllButtons: boolean;
 
@@ -89,6 +103,18 @@ export interface FormToolbarConfig {
 
   /** Show the "Manage Sections" button (section manager drawer). Default: true */
   ShowSectionManager: boolean;
+
+  /**
+   * How many pinnable actions a user may pin as toolbar buttons; the rest are in the More menu.
+   * The same for every user and screen width. Default: 3.
+   */
+  MaxPinnedActions?: number;
+
+  /**
+   * Pinnable actions shown as buttons for a user who has not chosen their own pins yet.
+   * Default: `['favorite', 'history']`.
+   */
+  DefaultPinnedActions?: string[];
 
   // ---- Behavior ----
 
@@ -120,10 +146,13 @@ export interface FormToolbarConfig {
 export const DEFAULT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowEditButton: true,
   ShowDeleteButton: true,
+  ShowRefreshButton: true,
   ShowFavoriteButton: true,
   ShowHistoryButton: true,
   ShowListButton: true,
   ShowTagsButton: true,
+  ShowAttachmentsButton: true,
+  ShowCloneButton: true,
   ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: true,
@@ -147,10 +176,13 @@ export const DEFAULT_TOOLBAR_CONFIG: FormToolbarConfig = {
 export const EXPLORER_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowEditButton: true,
   ShowDeleteButton: true,
+  ShowRefreshButton: true,
   ShowFavoriteButton: true,
   ShowHistoryButton: true,
   ShowListButton: true,
   ShowTagsButton: true,
+  ShowAttachmentsButton: true,
+  ShowCloneButton: true,
   ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: true,
@@ -178,10 +210,13 @@ export const EXPLORER_TOOLBAR_CONFIG: FormToolbarConfig = {
 export const CUSTOM_LAYOUT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowEditButton: true,
   ShowDeleteButton: true,
+  ShowRefreshButton: true,
   ShowFavoriteButton: true,
   ShowHistoryButton: true,
   ShowListButton: true,
   ShowTagsButton: true,
+  ShowAttachmentsButton: true,
+  ShowCloneButton: true,
   ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: false,            // ← hides the whole right group

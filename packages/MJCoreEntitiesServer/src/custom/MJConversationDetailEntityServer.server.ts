@@ -1,6 +1,6 @@
 import { BaseEntity, EntitySaveOptions } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { MJConversationDetailEntity } from "@memberjunction/core-entities";
+import { MJConversationDetailEntityExtended } from "@memberjunction/core-entities";
 
 /**
  * Server-side subclass of MJConversationDetailEntity that automatically tracks
@@ -14,9 +14,21 @@ import { MJConversationDetailEntity } from "@memberjunction/core-entities";
  * UI can derive "edited after summarization" from the flag plus the row's Sequence
  * being below the current summary boundary — no summary regeneration required (the
  * summary is explicitly lossy; agents page in exact rows via the retrieval tools).
+ *
+ * Extends {@link MJConversationDetailEntityExtended} rather than the generated entity
+ * directly. Both classes register for `BaseEntity` under the key
+ * `'MJ: Conversation Details'`, and `@RegisterClass` passes `priority = 0`, which routes
+ * to the auto-increment branch — so whichever registers LAST wins outright. On the server
+ * this package loads after `@memberjunction/core-entities`, which meant this class replaced
+ * the Extended one and its `Save`/`Delete` permission gate never ran. That gate is the check
+ * that only a conversation's owner may set `UserRating` / `UserFeedback`, and that a
+ * non-owner without a resource grant cannot write at all — and it is explicitly designed to
+ * run server-side (`ProviderType === 'Database'`), which is exactly where it was being
+ * shadowed out. Inheriting composes the two behaviors instead: this class flags the edit,
+ * then delegates to the permission gate via `super.Save`.
  */
 @RegisterClass(BaseEntity, "MJ: Conversation Details")
-export class MJConversationDetailEntityServer extends MJConversationDetailEntity {
+export class MJConversationDetailEntityServer extends MJConversationDetailEntityExtended {
     /**
      * Override Save to detect message changes and set the OriginalMessageChanged flag.
      * This is done as pre-processing before calling super.Save() to ensure it's a single DB round trip.

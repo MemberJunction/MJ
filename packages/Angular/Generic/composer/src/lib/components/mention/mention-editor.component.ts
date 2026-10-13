@@ -9,7 +9,8 @@ import {
   forwardRef,
   OnInit,
   ViewEncapsulation,
-  ChangeDetectorRef
+  ChangeDetectorRef,
+  HostListener
 } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import {
@@ -70,13 +71,58 @@ export interface PendingAttachment {
   ]
 })
 export class MentionEditorComponent implements OnInit, AfterViewInit, ControlValueAccessor {
-  @ViewChild('editor', { static: false }) editorRef!: ElementRef<HTMLDivElement>;
+  @ViewChild('editor', { static: false }) EditorRef!: ElementRef<HTMLDivElement>;
 
-  @Input() placeholder: string = 'Type @ to mention agents or users, # for entities...';
-  @Input() disabled: boolean = false;
-  @Input() currentUser?: UserInfo;
+  /** @deprecated Use {@link EditorRef}. */
+  get editorRef(): ElementRef<HTMLDivElement> {
+    return this.EditorRef;
+  }
+  /** @deprecated Use {@link EditorRef}. */
+  set editorRef(value: ElementRef<HTMLDivElement>) {
+    this.EditorRef = value;
+  }
+
+  @Input() Placeholder: string = 'Type @ to mention agents or users, # for entities...';
+
+  /** @deprecated Use {@link Placeholder}. */
+  @Input() set placeholder(value: string) {
+    this.Placeholder = value;
+  }
+  /** @deprecated Use {@link Placeholder}. */
+  get placeholder(): string {
+    return this.Placeholder;
+  }
+  @Input() Disabled: boolean = false;
+
+  /** @deprecated Use {@link Disabled}. */
+  @Input() set disabled(value: boolean) {
+    this.Disabled = value;
+  }
+  /** @deprecated Use {@link Disabled}. */
+  get disabled(): boolean {
+    return this.Disabled;
+  }
+  @Input() CurrentUser?: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo | undefined) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo | undefined {
+    return this.CurrentUser;
+  }
   /** Master switch for all mention/command triggers. When false no providers are consulted. */
-  @Input() enableMentions: boolean = true;
+  @Input() EnableMentions: boolean = true;
+
+  /** @deprecated Use {@link EnableMentions}. */
+  @Input() set enableMentions(value: boolean) {
+    this.EnableMentions = value;
+  }
+  /** @deprecated Use {@link EnableMentions}. */
+  get enableMentions(): boolean {
+    return this.EnableMentions;
+  }
   /**
    * Explicit trigger-provider list — when bound, EXACTLY these providers are active
    * (explicit list wins over discovery). Leave null to discover providers registered
@@ -91,44 +137,237 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   /** Optional metadata provider scoping this editor (multi-provider hosts); passed through to trigger providers. */
   @Input() Provider: IMetadataProvider | null = null;
   /** Auto-focus the editor after view init (the composer default). Disable when embedded in forms. */
-  @Input() autoFocus: boolean = true;
+  @Input() AutoFocus: boolean = true;
+
+  /** @deprecated Use {@link AutoFocus}. */
+  @Input() set autoFocus(value: boolean) {
+    this.AutoFocus = value;
+  }
+  /** @deprecated Use {@link AutoFocus}. */
+  get autoFocus(): boolean {
+    return this.AutoFocus;
+  }
 
   // Attachment settings
-  @Input() enableAttachments: boolean = true;
-  @Input() maxAttachments: number = 10;
-  @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // 20MB default
-  @Input() acceptedFileTypes: string = 'image/*'; // MIME types to accept
+  @Input() EnableAttachments: boolean = true;
 
-  @Output() valueChange = new EventEmitter<string>();
-  @Output() mentionSelected = new EventEmitter<MentionSuggestion>();
-  @Output() enterPressed = new EventEmitter<string>();
-  @Output() attachmentsChanged = new EventEmitter<PendingAttachment[]>();
-  @Output() attachmentError = new EventEmitter<string>();
-  @Output() attachmentClicked = new EventEmitter<PendingAttachment>();
+  /** @deprecated Use {@link EnableAttachments}. */
+  @Input() set enableAttachments(value: boolean) {
+    this.EnableAttachments = value;
+  }
+  /** @deprecated Use {@link EnableAttachments}. */
+  get enableAttachments(): boolean {
+    return this.EnableAttachments;
+  }
+  @Input() MaxAttachments: number = 10;
+
+  /** @deprecated Use {@link MaxAttachments}. */
+  @Input() set maxAttachments(value: number) {
+    this.MaxAttachments = value;
+  }
+  /** @deprecated Use {@link MaxAttachments}. */
+  get maxAttachments(): number {
+    return this.MaxAttachments;
+  }
+  @Input() MaxAttachmentSizeBytes: number = 20 * 1024 * 1024;
+
+  /** @deprecated Use {@link MaxAttachmentSizeBytes}. */
+  @Input() set maxAttachmentSizeBytes(value: number) {
+    this.MaxAttachmentSizeBytes = value;
+  }
+  /** @deprecated Use {@link MaxAttachmentSizeBytes}. */
+  get maxAttachmentSizeBytes(): number {
+    return this.MaxAttachmentSizeBytes;
+  } // 20MB default
+  @Input() AcceptedFileTypes: string = 'image/*';
+
+  /** @deprecated Use {@link AcceptedFileTypes}. */
+  @Input() set acceptedFileTypes(value: string) {
+    this.AcceptedFileTypes = value;
+  }
+  /** @deprecated Use {@link AcceptedFileTypes}. */
+  get acceptedFileTypes(): string {
+    return this.AcceptedFileTypes;
+  } // MIME types to accept
+
+  @Output() ValueChange = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link ValueChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (valueChange) keeps working. Must stay AFTER ValueChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() valueChange = this.ValueChange;
+  @Output() MentionSelected = new EventEmitter<MentionSuggestion>();
+
+  /**
+   * @deprecated Use {@link MentionSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (mentionSelected) keeps working. Must stay AFTER MentionSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() mentionSelected = this.MentionSelected;
+  @Output() EnterPressed = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link EnterPressed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (enterPressed) keeps working. Must stay AFTER EnterPressed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() enterPressed = this.EnterPressed;
+  @Output() AttachmentsChanged = new EventEmitter<PendingAttachment[]>();
+
+  /**
+   * @deprecated Use {@link AttachmentsChanged}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (attachmentsChanged) keeps working. Must stay AFTER AttachmentsChanged: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() attachmentsChanged = this.AttachmentsChanged;
+  @Output() AttachmentError = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link AttachmentError}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (attachmentError) keeps working. Must stay AFTER AttachmentError: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() attachmentError = this.AttachmentError;
+  @Output() AttachmentClicked = new EventEmitter<PendingAttachment>();
+
+  /**
+   * @deprecated Use {@link AttachmentClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (attachmentClicked) keeps working. Must stay AFTER AttachmentClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() attachmentClicked = this.AttachmentClicked;
   /** Fires when the contenteditable loses focus (hosts persist drafts on this). */
-  @Output() editorBlurred = new EventEmitter<void>();
+  @Output() EditorBlurred = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link EditorBlurred}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (editorBlurred) keeps working. Must stay AFTER EditorBlurred: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() editorBlurred = this.EditorBlurred;
 
   // Pending attachments state
-  public pendingAttachments: PendingAttachment[] = [];
-  public isDragOver: boolean = false;
+  public PendingAttachments: PendingAttachment[] = [];
+
+  /** @deprecated Use {@link PendingAttachments}. */
+  public get pendingAttachments(): PendingAttachment[] {
+    return this.PendingAttachments;
+  }
+  /** @deprecated Use {@link PendingAttachments}. */
+  public set pendingAttachments(value: PendingAttachment[]) {
+    this.PendingAttachments = value;
+  }
+  public IsDragOver: boolean = false;
+
+  /** @deprecated Use {@link IsDragOver}. */
+  public get isDragOver(): boolean {
+    return this.IsDragOver;
+  }
+  /** @deprecated Use {@link IsDragOver}. */
+  public set isDragOver(value: boolean) {
+    this.IsDragOver = value;
+  }
 
   // Mention dropdown state
-  public showMentionDropdown: boolean = false;
-  public mentionSuggestions: MentionSuggestion[] = [];
-  public mentionDropdownPosition: { top: number; left: number } = { top: 0, left: 0 };
-  public mentionDropdownShowAbove: boolean = false;
+  public ShowMentionDropdown: boolean = false;
+
+  /** @deprecated Use {@link ShowMentionDropdown}. */
+  public get showMentionDropdown(): boolean {
+    return this.ShowMentionDropdown;
+  }
+  /** @deprecated Use {@link ShowMentionDropdown}. */
+  public set showMentionDropdown(value: boolean) {
+    this.ShowMentionDropdown = value;
+  }
+  public MentionSuggestions: MentionSuggestion[] = [];
+
+  /** @deprecated Use {@link MentionSuggestions}. */
+  public get mentionSuggestions(): MentionSuggestion[] {
+    return this.MentionSuggestions;
+  }
+  /** @deprecated Use {@link MentionSuggestions}. */
+  public set mentionSuggestions(value: MentionSuggestion[]) {
+    this.MentionSuggestions = value;
+  }
+  public MentionDropdownPosition: { top: number; left: number } = { top: 0, left: 0 };
+
+  /** @deprecated Use {@link MentionDropdownPosition}. */
+  public get mentionDropdownPosition(): { top: number; left: number } {
+    return this.MentionDropdownPosition;
+  }
+  /** @deprecated Use {@link MentionDropdownPosition}. */
+  public set mentionDropdownPosition(value: { top: number; left: number }) {
+    this.MentionDropdownPosition = value;
+  }
+  public MentionDropdownShowAbove: boolean = false;
+
+  /** @deprecated Use {@link MentionDropdownShowAbove}. */
+  public get mentionDropdownShowAbove(): boolean {
+    return this.MentionDropdownShowAbove;
+  }
+  /** @deprecated Use {@link MentionDropdownShowAbove}. */
+  public set mentionDropdownShowAbove(value: boolean) {
+    this.MentionDropdownShowAbove = value;
+  }
+  /** Right-align the dropdown against its anchor. Only the button path sets this. */
+  public MentionDropdownAlignRight: boolean = false;
+
+  /** @deprecated Use {@link MentionDropdownAlignRight}. */
+  public get mentionDropdownAlignRight(): boolean {
+    return this.MentionDropdownAlignRight;
+  }
+  /** @deprecated Use {@link MentionDropdownAlignRight}. */
+  public set mentionDropdownAlignRight(value: boolean) {
+    this.MentionDropdownAlignRight = value;
+  }
 
   private mentionStartIndex: number = -1;
   private mentionQuery: string = '';
   /** The trigger char that opened the current mention dropdown */
   private activeTrigger: string = '@';
   /**
+   * Set while a dropdown was opened by {@link OpenTrigger} rather than by typing.
+   *
+   * In this mode the trigger character is NOT in the editor — there is nothing to strip on
+   * dismissal, and nothing for the user to see until they pick something. It also changes how the
+   * query and the chip insertion are measured, since neither can anchor on a character that is not
+   * there; {@link virtualTriggerBaseline} stands in for it.
+   */
+  private virtualTriggerOpen: boolean = false;
+  /** Text length at the moment a virtual trigger opened — the origin for its query and deletion. */
+  private virtualTriggerBaseline: number = 0;
+  /**
+   * The control that opened a virtual trigger, used to anchor the dropdown to it.
+   *
+   * STICKY for the whole session on purpose. `positionMentionDropdown()` re-runs on every keystroke
+   * while the user filters, and once there is text the caret measures real coordinates — so
+   * anchoring only on first paint would open at the button and then jump to the far-left caret on
+   * the first keypress, which is worse than not anchoring at all.
+   */
+  private virtualTriggerAnchor: HTMLElement | null = null;
+  /**
    * Monotonic sequence guarding the async suggestion fetch — a response only applies
    * when no newer keystroke (or dropdown close) has superseded it.
    */
   private suggestionRequestSeq: number = 0;
   /** Cap on the suggestions displayed; passed to providers as `MaxResults`. */
-  private static readonly MaxSuggestions: number = 50;
+  private static readonly maxSuggestions: number = 50;
 
   /**
    * The trigger providers this editor consults: the explicit `TriggerProviders` list
@@ -137,7 +376,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * behaves as a plain text editor.
    */
   private get activeProviders(): ComposerTriggerProvider[] {
-    if (!this.enableMentions) {
+    if (!this.EnableMentions) {
       return [];
     }
     return this.TriggerProviders ?? DiscoverComposerTriggerProviders(this.ExcludedTriggerKeys);
@@ -155,19 +394,61 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   }
 
   private onChange: (value: string) => void = () => {};
-  public onTouched: () => void = () => {};
+  public OnTouched: () => void = () => {};
+
+  /** @deprecated Use {@link OnTouched}. */
+  public get onTouched(): () => void {
+    return this.OnTouched;
+  }
+  /** @deprecated Use {@link OnTouched}. */
+  public set onTouched(value: () => void) {
+    this.OnTouched = value;
+  }
   /** Value written via writeValue() before the view (editorRef) exists — applied in ngAfterViewInit. */
   private pendingWriteValue: string | null = null;
 
   constructor(
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private hostRef: ElementRef<HTMLElement>
   ) {}
+
+  /**
+   * Close the dropdown when the pointer goes down anywhere outside it.
+   *
+   * Dismissal previously relied entirely on the editor's blur, which is not enough: clicking a
+   * non-focusable area (the message list, page background) does not blur a contenteditable, so the
+   * dropdown stayed open with nothing to close it. That was always true for a typed trigger; the
+   * Skills button makes it easy to hit, because the button deliberately keeps focus in the editor
+   * so the user's next click is the FIRST thing that could dismiss it.
+   *
+   * `mousedown` rather than `click`: it fires before the browser moves focus, so this decides
+   * before blur's own 200ms timer gets involved and the two cannot race.
+   *
+   * The dropdown renders with fixed positioning but stays inside this component's host, so the
+   * containment check covers a click on a suggestion row — which must select, not dismiss.
+   */
+  @HostListener('document:mousedown', ['$event'])
+  onDocumentMouseDown(event: MouseEvent): void {
+    // Also fires for a press still awaiting suggestions: on a cold session the provider load takes
+    // hundreds of ms, and without this the user's dismissing click is ignored and the menu pops
+    // open afterwards, unbidden. closeMentionDropdown bumps the request sequence, which drops the
+    // in-flight response.
+    if (!this.ShowMentionDropdown && !this.virtualTriggerOpen) {
+      return;
+    }
+    const target = event.target as Node | null;
+    if (target && this.hostRef.nativeElement.contains(target)) {
+      return;
+    }
+    this.CloseMentionDropdown();
+    this.cdr.markForCheck();
+  }
 
   async ngOnInit(): Promise<void> {
     // Warm up the active providers (best-effort — a provider that fails to warm
     // simply serves its first real request cold).
-    if (this.enableMentions) {
-      const user = this.currentUser ?? null;
+    if (this.EnableMentions) {
+      const user = this.CurrentUser ?? null;
       await Promise.all(
         this.activeProviders.map((p) => p.Initialize(user).catch(() => undefined))
       );
@@ -183,9 +464,9 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     }
 
     // Auto-focus the editor
-    if (this.autoFocus) {
+    if (this.AutoFocus) {
       setTimeout(() => {
-        this.editorRef?.nativeElement?.focus();
+        this.EditorRef?.nativeElement?.focus();
       }, 100);
     }
   }
@@ -193,9 +474,9 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   /**
    * Handle clicks on the container - focus the editor if clicking outside the contentEditable
    */
-  onContainerClick(event: MouseEvent): void {
+  OnContainerClick(event: MouseEvent): void {
     const target = event.target as HTMLElement;
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
 
     // Don't handle clicks on the dropdown or its children
     if (target.closest('mj-mention-dropdown')) {
@@ -219,43 +500,58 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     }
   }
 
+  /** @deprecated Use {@link OnContainerClick}. */
+  onContainerClick(event: MouseEvent): void {
+    return this.OnContainerClick(event);
+  }
+
   /**
    * Handle input changes in contentEditable
    */
-  onInput(): void {
+  OnInput(): void {
     const plainText = this.getPlainText();
     this.onChange(plainText);
-    this.valueChange.emit(plainText);
+    this.ValueChange.emit(plainText);
 
     // Handle mention/command autocomplete via the active trigger providers
-    if (this.enableMentions) {
+    if (this.EnableMentions) {
       this.handleMentionInput();
     }
+  }
+
+  /** @deprecated Use {@link OnInput}. */
+  onInput(): void {
+    return this.OnInput();
   }
 
   /**
    * Handle blur event - close dropdown when editor loses focus
    */
-  onBlur(): void {
+  OnBlur(): void {
     // Call form control touched callback
-    this.onTouched();
-    this.editorBlurred.emit();
+    this.OnTouched();
+    this.EditorBlurred.emit();
 
     // Close dropdown when editor loses focus
     // Use setTimeout to allow mousedown events on dropdown to fire first
     setTimeout(() => {
-      if (this.showMentionDropdown) {
-        this.closeMentionDropdown();
+      if (this.ShowMentionDropdown || this.virtualTriggerOpen) {
+        this.CloseMentionDropdown();
       }
     }, 200);
+  }
+
+  /** @deprecated Use {@link OnBlur}. */
+  onBlur(): void {
+    return this.OnBlur();
   }
 
   /**
    * Handle paste event - images or plain text
    */
-  onPaste(event: ClipboardEvent): void {
+  OnPaste(event: ClipboardEvent): void {
     // Check for image data in clipboard
-    if (this.enableAttachments && event.clipboardData?.items) {
+    if (this.EnableAttachments && event.clipboardData?.items) {
       const items = Array.from(event.clipboardData.items);
       const imageItems = items.filter(item => item.type.startsWith('image/'));
 
@@ -299,18 +595,30 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     selection.addRange(range);
 
     // Trigger input event to update model
-    this.onInput();
+    this.OnInput();
+  }
+
+  /** @deprecated Use {@link OnPaste}. */
+  onPaste(event: ClipboardEvent): void {
+    return this.OnPaste(event);
   }
 
   /**
    * Handle keydown events
    */
-  onKeyDown(event: KeyboardEvent): void {
-    // Enter alone: Send message (if dropdown not showing)
-    if (event.key === 'Enter' && !event.shiftKey && !this.showMentionDropdown) {
+  OnKeyDown(event: KeyboardEvent): void {
+    // Enter alone: Send message. The dropdown only earns Enter when it has something to pick. A
+    // button-opened menu stays open on an empty result set (so the press is not a silent no-op),
+    // which made "showing but empty" reachable for the first time — and there Enter was neither
+    // handled nor prevented, so it fell through to the contenteditable and inserted a newline
+    // instead of sending.
+    if (event.key === 'Enter' && !event.shiftKey && (!this.ShowMentionDropdown || this.MentionSuggestions.length === 0)) {
       event.preventDefault();
+      if (this.ShowMentionDropdown) {
+        this.CloseMentionDropdown();
+      }
       const plainText = this.getPlainText();
-      this.enterPressed.emit(plainText);
+      this.EnterPressed.emit(plainText);
       return;
     }
 
@@ -320,10 +628,15 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     }
 
     // Handle mention dropdown navigation
-    if (this.showMentionDropdown) {
+    if (this.ShowMentionDropdown) {
       // Let the dropdown handle arrow keys, enter, escape
       // (We'll pass these through to mention-dropdown component)
     }
+  }
+
+  /** @deprecated Use {@link OnKeyDown}. */
+  onKeyDown(event: KeyboardEvent): void {
+    return this.OnKeyDown(event);
   }
 
   /**
@@ -336,7 +649,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
     const activeTriggers = this.mentionTriggers;
     if (activeTriggers.length === 0) {
-      this.closeMentionDropdown();
+      this.CloseMentionDropdown();
       return;
     }
 
@@ -344,26 +657,53 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     const textBeforeCursor = this.getTextBeforeCursor(range);
 
     // Find the nearest active trigger char before the cursor — whichever is closest wins
+    // A button-opened session only recognises trigger characters typed AFTER it opened. Without
+    // this floor the scan runs over the whole message, so a URL ('.../docs'), an email ('a@b.io')
+    // or a date ('9/11') already in the box is found instead, and the first keystroke either closes
+    // the menu the button just opened or filters it by the wrong query. searchFrom is 0 on the
+    // typed path, which leaves that path's behaviour byte-for-byte unchanged.
+    const searchFrom = this.virtualTriggerOpen ? this.virtualTriggerBaseline : 0;
     let triggerIndex = -1;
     let triggerChar = '@';
     for (const t of activeTriggers) {
       const idx = textBeforeCursor.lastIndexOf(t);
-      if (idx > triggerIndex) {
+      if (idx >= searchFrom && idx > triggerIndex) {
         triggerIndex = idx;
         triggerChar = t;
       }
     }
 
     if (triggerIndex === -1) {
-      this.closeMentionDropdown();
+      // A virtual trigger has no character in the text, so the search above finds nothing. Keep it
+      // open and measure the query from where it opened, otherwise the first keystroke after
+      // clicking the button would dismiss the list the button just produced.
+      if (this.virtualTriggerOpen && textBeforeCursor.length >= this.virtualTriggerBaseline) {
+        const query = textBeforeCursor.substring(this.virtualTriggerBaseline);
+        if (!query.includes(' ')) {
+          this.mentionQuery = query;
+          void this.fetchSuggestions(this.activeTrigger, query);
+          return;
+        }
+      }
+      this.CloseMentionDropdown();
       return;
     }
 
     // Check if there's a space between the trigger and cursor (means mention was completed)
     const textAfterTrigger = textBeforeCursor.substring(triggerIndex + 1);
     if (textAfterTrigger.includes(' ')) {
-      this.closeMentionDropdown();
+      this.CloseMentionDropdown();
       return;
+    }
+
+    // A real trigger character now owns the session, so the virtual one must let go: otherwise
+    // chip insertion still takes the virtual branch and deletes only the typed tail, orphaning the
+    // trigger text, and the menu stays pinned to the button instead of the caret.
+    if (this.virtualTriggerOpen) {
+      this.virtualTriggerOpen = false;
+      this.virtualTriggerBaseline = 0;
+      this.virtualTriggerAnchor = null;
+      this.MentionDropdownAlignRight = false;
     }
 
     // Extract query
@@ -386,8 +726,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
     const request: ComposerSuggestionRequest = {
       Query: query,
-      MaxResults: MentionEditorComponent.MaxSuggestions,
-      ContextUser: this.currentUser ?? null,
+      MaxResults: MentionEditorComponent.maxSuggestions,
+      ContextUser: this.CurrentUser ?? null,
       Provider: this.Provider
     };
 
@@ -399,14 +739,21 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
       return; // superseded by a newer keystroke or an explicit close
     }
 
-    const merged = resultSets.flat().slice(0, MentionEditorComponent.MaxSuggestions);
-    this.mentionSuggestions = merged;
+    const merged = resultSets.flat().slice(0, MentionEditorComponent.maxSuggestions);
+    this.MentionSuggestions = merged;
 
     if (merged.length > 0) {
-      this.showMentionDropdown = true;
+      this.ShowMentionDropdown = true;
+      this.positionMentionDropdown();
+    } else if (this.virtualTriggerOpen) {
+      // A button press must never be a silent no-op. Closing on empty results is right for a TYPED
+      // trigger (the user is mid-word and nothing matched yet), but a host with zero skills clicking
+      // the button would get no feedback at all and read it as broken. Staying open surfaces the
+      // dropdown's own empty state, which was otherwise unreachable.
+      this.ShowMentionDropdown = true;
       this.positionMentionDropdown();
     } else {
-      this.closeMentionDropdown();
+      this.CloseMentionDropdown();
     }
     this.cdr.detectChanges();
   }
@@ -416,7 +763,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    */
   private getTextBeforeCursor(range: Range): string {
     const tempRange = range.cloneRange();
-    tempRange.selectNodeContents(this.editorRef.nativeElement);
+    tempRange.selectNodeContents(this.EditorRef.nativeElement);
     tempRange.setEnd(range.startContainer, range.startOffset);
     return tempRange.toString();
   }
@@ -425,7 +772,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Position the mention dropdown
    */
   private positionMentionDropdown(): void {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) return;
 
     // Get the parent container (message-input-box-container) for alignment
@@ -435,43 +782,135 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
 
+    // A button-opened trigger anchors to the BUTTON, not the caret. On the typed path the user's
+    // eyes and query are at the caret so the caret is right; on the button path nobody is looking at
+    // the caret, they are looking at the control they just pressed. Sticky for the session (see
+    // virtualTriggerAnchor) so filtering does not yank the menu to the caret on the first keystroke.
+    if (this.virtualTriggerOpen && this.virtualTriggerAnchor) {
+      this.positionToAnchor(this.virtualTriggerAnchor, containerRect);
+      return;
+    }
+
     const range = selection.getRangeAt(0);
-    const cursorRect = range.getBoundingClientRect();
+    let cursorRect = range.getBoundingClientRect();
+
+    // A collapsed range in an EMPTY editor measures 0x0 at 0,0 in every browser, which pinned the
+    // dropdown to the bottom-left corner of the viewport and ran it off screen. Rare while typing
+    // (there is text to measure) but the normal case when a BUTTON opens the trigger on an empty
+    // composer. Fall back to the editor's own box so the menu lands over the composer either way.
+    if (cursorRect.width === 0 && cursorRect.height === 0 && cursorRect.top === 0 && cursorRect.left === 0) {
+      const editorRect = editor.getBoundingClientRect();
+      cursorRect = editorRect as DOMRect;
+    }
 
     // Check space below vs above
     const spaceBelow = window.innerHeight - cursorRect.bottom;
     const spaceAbove = cursorRect.top;
-    const dropdownHeight = Math.min(this.mentionSuggestions.length * 56, 300);
+    const dropdownHeight = Math.min(this.MentionSuggestions.length * 56, 300);
 
-    this.mentionDropdownShowAbove = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+    // Prefer ABOVE. The composer sits at the bottom of the chat, so a dropdown that grows downward
+    // lands on top of the very text being typed. Below is the fallback for the rare host that
+    // mounts the composer high in a tall viewport.
+    this.MentionDropdownAlignRight = false;
+    this.MentionDropdownShowAbove = spaceAbove >= dropdownHeight || spaceAbove > spaceBelow;
 
-    if (this.mentionDropdownShowAbove) {
+    if (this.MentionDropdownShowAbove) {
       // Position above, aligning with container top if possible
-      this.mentionDropdownPosition = {
-        top: containerRect ? containerRect.top + window.scrollY : cursorRect.top + window.scrollY - 4,
+      this.MentionDropdownPosition = {
+        top: (containerRect ? containerRect.top : cursorRect.top) + window.scrollY - 8,
         left: cursorRect.left + window.scrollX
       };
     } else {
       // Position below cursor, but align bottom edge with container top
-      this.mentionDropdownPosition = {
+      this.MentionDropdownPosition = {
         top: containerRect ? containerRect.top + window.scrollY : cursorRect.bottom + window.scrollY + 4,
         left: cursorRect.left + window.scrollX
       };
     }
   }
 
+
+  /**
+   * Right-align the dropdown above a trigger control, matching where the voice-options picker puts
+   * its popover so two buttons in the same strip do not open menus on opposite corners.
+   *
+   * Right alignment is applied as a transform in CSS (`align-right`) rather than computed here,
+   * because the dropdown's width is content-based; `left` is still clamped so no anchor position can
+   * push it off the left edge on a narrow viewport.
+   */
+  private positionToAnchor(anchor: HTMLElement, containerRect: DOMRect | undefined): void {
+    const GUTTER = 16;
+    const rect = anchor.getBoundingClientRect();
+    // The dropdown is rendered with `useFixedPositioning`, so `top`/`left` are VIEWPORT coordinates.
+    // Never add window.scrollX/scrollY here — getBoundingClientRect is already viewport-relative, and
+    // adding scroll converts to document coordinates, which under `position: fixed` drags the menu
+    // off by exactly the scroll offset.
+
+    // HORIZONTAL. Align the box's LEFT edge to the button's left edge and let it grow rightward.
+    // Right-alignment is wrong for this control: the Skills button sits in `.attach-buttons` on the
+    // LEFT of the composer, so pinning the box's right edge to the button's right edge sends a
+    // 280-400px menu off the left of the screen, and clamping it back parks it over the middle of
+    // the composer. Flip to right-aligned only when growing right would overflow the viewport,
+    // which is what a menu anchored to a right-hand control needs.
+    const assumedWidth = Math.min(400, window.innerWidth - GUTTER * 2);
+    const overflowsRight = rect.left + assumedWidth > window.innerWidth - GUTTER;
+    this.MentionDropdownAlignRight = overflowsRight;
+    // align-right shifts the box back by its own width, so `left` is then its RIGHT edge; otherwise
+    // `left` is its left edge. Clamp both forms inside the gutter.
+    //
+    // When flipping, align to the CONTAINER's right edge, not the button's. `.attach-buttons` is
+    // pinned to the composer's bottom-right and Skills is the leftmost of five icons, so pinning the
+    // box to that one button's right edge hangs its whole 400px body out to the left of the icon the
+    // user pressed. Aligning to the composer instead puts the menu above the button cluster, which is
+    // what "above the button" means when the menu is ten times the button's width.
+    const flippedRightEdge = containerRect
+      ? Math.min(containerRect.right, window.innerWidth - GUTTER)
+      : Math.min(rect.right, window.innerWidth - GUTTER);
+    const left = overflowsRight
+      ? Math.max(assumedWidth + GUTTER, flippedRightEdge)
+      : Math.min(Math.max(GUTTER, rect.left), window.innerWidth - GUTTER - assumedWidth);
+
+    // VERTICAL. Prefer the composer's top edge so the menu clears the whole input box rather than
+    // overlapping the text the user is composing; fall back to the button when there is no container.
+    // Not unconditional: `show-above` lifts the box by its own height, so forcing it where there is
+    // no room renders it off the top of the viewport where it cannot be reached.
+    const anchorTop = containerRect ? containerRect.top : rect.top;
+    const dropdownHeight = Math.min(Math.max(this.MentionSuggestions.length, 1) * 56, 300);
+    // Prefer above, but when it does not fit, take whichever side has MORE room rather than
+    // dropping below unconditionally — the composer is bottom-docked, so below is usually the worse
+    // side. In a short viewport (a popped-out chat, or mobile with the keyboard up) that difference
+    // is the whole menu versus a clipped sliver.
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const showAbove = anchorTop >= dropdownHeight + GUTTER || anchorTop > spaceBelow;
+    this.MentionDropdownShowAbove = showAbove;
+    // Above: `top` is the box's BOTTOM edge (the transform lifts it). Below: it is the top edge.
+    // Clamped either way, because dropdownHeight is an estimate (rows with descriptions run taller
+    // than 56px) and an underestimate would otherwise clip the first row off the top of the screen.
+    const rawTop = showAbove ? anchorTop - 8 : rect.bottom + 8;
+    const top = showAbove
+      ? Math.max(GUTTER + dropdownHeight, Math.min(rawTop, window.innerHeight - GUTTER))
+      : Math.max(GUTTER, Math.min(rawTop, window.innerHeight - GUTTER - dropdownHeight));
+
+    this.MentionDropdownPosition = { top, left };
+  }
+
   /**
    * Handle mention selection from dropdown
    */
-  onMentionSelected(suggestion: MentionSuggestion): void {
+  OnMentionSelected(suggestion: MentionSuggestion): void {
     this.insertMentionChip(suggestion);
-    this.closeMentionDropdown();
-    this.mentionSelected.emit(suggestion);
+    this.CloseMentionDropdown();
+    this.MentionSelected.emit(suggestion);
 
     // Refocus the editor after selection
     setTimeout(() => {
-      this.editorRef?.nativeElement?.focus();
+      this.EditorRef?.nativeElement?.focus();
     }, 50);
+  }
+
+  /** @deprecated Use {@link OnMentionSelected}. */
+  onMentionSelected(suggestion: MentionSuggestion): void {
+    return this.OnMentionSelected(suggestion);
   }
 
   /**
@@ -489,7 +928,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    */
   /** Focuses the editor and places the caret at the very end of its content. */
   public FocusCaretAtEnd(): boolean {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) {
       return false;
     }
@@ -505,14 +944,72 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     return true;
   }
 
+  /**
+   * Open the suggestion dropdown for a trigger character, exactly as if the user had typed it.
+   *
+   * Exists so a trigger can have a BUTTON as well as a keystroke. `/` commands were previously
+   * reachable only by knowing to type `/`, which is not an affordance — nothing on screen says the
+   * feature is there.
+   *
+   * Deliberately inserts the character and re-runs the normal input path rather than opening the
+   * dropdown directly. Everything downstream (which providers own the char, permission filtering,
+   * the query the user then types, replacing the char with the chosen chip) is already driven by
+   * that path; short-circuiting it would fork the flow and leave `mentionStartIndex` /
+   * `activeTrigger` unset, so the first selection would insert in the wrong place.
+   *
+   * @returns false when the editor is disabled, unavailable, or no active provider owns the char.
+   */
+  public OpenTrigger(triggerChar: string, anchorEl?: HTMLElement | null): boolean {
+    const editor = this.EditorRef?.nativeElement;
+    if (!editor || this.Disabled) {
+      return false;
+    }
+    if (!this.mentionTriggers.includes(triggerChar)) {
+      return false;
+    }
+    if (!this.FocusCaretAtEnd()) {
+      return false;
+    }
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return false;
+    }
+
+    // NOTHING is written into the editor. An earlier version inserted the trigger character to
+    // reuse the typed path, and cleaned it up on dismissal — but a character the user never typed,
+    // appearing and then vanishing, is visible churn in their own message. The dropdown is opened
+    // directly instead, and the character only ever exists as the chip the user chooses.
+    this.virtualTriggerOpen = true;
+    this.virtualTriggerAnchor = anchorEl ?? null;
+    this.virtualTriggerBaseline = this.getTextBeforeCursor(selection.getRangeAt(0)).length;
+    this.activeTrigger = triggerChar;
+    this.mentionQuery = '';
+    void this.fetchSuggestions(triggerChar, '');
+    return true;
+  }
+
+  /**
+   * True when the suggestion dropdown is open FOR THIS trigger character.
+   *
+   * Lets a control that opens a trigger render its own pressed state without duplicating the
+   * editor's state. Both halves matter: `showMentionDropdown` alone would light the Skills button
+   * while an unrelated `@` mention dropdown is open.
+   */
+  public IsTriggerOpen(triggerChar: string): boolean {
+    // virtualTriggerOpen covers the window between the press and the provider's response. Reporting
+    // "closed" there makes the second press of a quick double-click re-run the open path instead of
+    // toggling, re-emitting the Before/After pair.
+    return (this.ShowMentionDropdown || this.virtualTriggerOpen) && this.activeTrigger === triggerChar;
+  }
+
   /** True when keyboard focus currently sits inside this editor. */
   public get HasFocus(): boolean {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     return !!editor && (editor === document.activeElement || editor.contains(document.activeElement));
   }
 
   public InsertMention(suggestion: MentionSuggestion, focus: boolean = true): boolean {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) {
       return false;
     }
@@ -538,7 +1035,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     if (!focus) {
       editor.blur();
     }
-    this.onInput();
+    this.OnInput();
     return true;
   }
 
@@ -548,13 +1045,18 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
     const range = selection.getRangeAt(0);
 
-    // Delete the trigger + query text (use the active trigger char)
+    // Delete the trigger + query text (use the active trigger char). A VIRTUAL trigger has no
+    // character in the editor, so the span to remove is only what the user typed since it opened —
+    // anchoring on the trigger char here would delete an unrelated earlier one, or nothing.
     const textBeforeCursor = this.getTextBeforeCursor(range);
-    const lastAtIndex = textBeforeCursor.lastIndexOf(this.activeTrigger);
-    const deleteLength = textBeforeCursor.length - lastAtIndex;
+    const deleteLength = this.virtualTriggerOpen
+      ? Math.max(0, textBeforeCursor.length - this.virtualTriggerBaseline)
+      : textBeforeCursor.length - textBeforeCursor.lastIndexOf(this.activeTrigger);
 
-    range.setStart(range.startContainer, range.startOffset - deleteLength);
-    range.deleteContents();
+    if (deleteLength > 0) {
+      range.setStart(range.startContainer, range.startOffset - deleteLength);
+      range.deleteContents();
+    }
 
     // Create mention chip element
     const chip = this.createMentionChip(suggestion);
@@ -574,7 +1076,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     selection.addRange(range);
 
     // Trigger change detection
-    this.onInput();
+    this.OnInput();
   }
 
   /**
@@ -946,7 +1448,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
       if (prevNode && (prevNode as HTMLElement).classList?.contains('mention-chip')) {
         event.preventDefault();
         prevNode.remove();
-        this.onInput();
+        this.OnInput();
       }
     }
   }
@@ -954,21 +1456,32 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   /**
    * Close mention dropdown
    */
-  closeMentionDropdown(): void {
+  CloseMentionDropdown(): void {
+    // No text cleanup: a virtual trigger never wrote anything into the editor, which is the whole
+    // point of it. Dismissing leaves the message exactly as the user left it.
+    this.virtualTriggerOpen = false;
+    this.virtualTriggerBaseline = 0;
+    this.virtualTriggerAnchor = null;
+    this.MentionDropdownAlignRight = false;
     // Invalidate any in-flight suggestion fetch so a late response can't reopen the dropdown
     this.suggestionRequestSeq++;
-    this.showMentionDropdown = false;
-    this.mentionSuggestions = [];
+    this.ShowMentionDropdown = false;
+    this.MentionSuggestions = [];
     this.mentionStartIndex = -1;
     this.mentionQuery = '';
     this.activeTrigger = '@';
+  }
+
+  /** @deprecated Use {@link CloseMentionDropdown}. */
+  closeMentionDropdown(): void {
+    return this.CloseMentionDropdown();
   }
 
   /**
    * Convert editor HTML to plain text with @mentions
    */
   private getPlainText(): string {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) return '';
 
     let text = '';
@@ -1043,7 +1556,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * strings (no tokens) take the fast path.
    */
   private setEditorContent(text: string): void {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) return;
 
     const segments = MentionEditorComponent.ParseSerializedMentions(text);
@@ -1153,7 +1666,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
 
   // ControlValueAccessor implementation
   writeValue(value: string): void {
-    const editor = this.editorRef?.nativeElement;
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) {
       // View not created yet — buffer the value; ngAfterViewInit applies it
       this.pendingWriteValue = value ?? '';
@@ -1171,40 +1684,50 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   }
 
   registerOnTouched(fn: () => void): void {
-    this.onTouched = fn;
+    this.OnTouched = fn;
   }
 
   setDisabledState(isDisabled: boolean): void {
-    this.disabled = isDisabled;
-    if (this.editorRef?.nativeElement) {
-      this.editorRef.nativeElement.contentEditable = (!isDisabled).toString();
+    this.Disabled = isDisabled;
+    if (this.EditorRef?.nativeElement) {
+      this.EditorRef.nativeElement.contentEditable = (!isDisabled).toString();
     }
   }
 
   /**
    * Focus the editor
    */
+  public Focus(): void {
+    this.EditorRef?.nativeElement?.focus();
+  }
+
+  /** @deprecated Use {@link Focus}. */
   public focus(): void {
-    this.editorRef?.nativeElement?.focus();
+    return this.Focus();
   }
 
   /**
    * Clear the editor content and pending attachments
    */
-  public clear(): void {
-    if (this.editorRef?.nativeElement) {
-      this.editorRef.nativeElement.textContent = '';
-      this.onInput();
+  public Clear(): void {
+    if (this.EditorRef?.nativeElement) {
+      this.EditorRef.nativeElement.textContent = '';
+      this.OnInput();
     }
-    this.clearPendingAttachments();
+    this.ClearPendingAttachments();
+  }
+
+  /** @deprecated Use {@link Clear}. */
+  public clear(): void {
+    return this.Clear();
   }
 
   /**
    * Extract mention chips with their configuration data
    * Returns array of objects containing mention info and preset configuration
    */
-  public getMentionChipsData(): Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> {
-    const editor = this.editorRef?.nativeElement;
+  public GetMentionChipsData(): Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> {
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) return [];
 
     const chips: Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> = [];
@@ -1230,13 +1753,18 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     return chips;
   }
 
+  /** @deprecated Use {@link GetMentionChipsData}. */
+  public getMentionChipsData(): Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> {
+    return this.GetMentionChipsData();
+  }
+
   /**
    * Get the plain text value with mentions encoded as JSON
    * This format preserves configuration information when messages are saved
    * Format: @{type:"agent",id:"uuid",name:"Agent Name",configId:"uuid",config:"High"}
    */
-  public getPlainTextWithJsonMentions(): string {
-    const editor = this.editorRef?.nativeElement;
+  public GetPlainTextWithJsonMentions(): string {
+    const editor = this.EditorRef?.nativeElement;
     if (!editor) return '';
 
     let plainText = '';
@@ -1289,37 +1817,52 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     return plainText;
   }
 
+  /** @deprecated Use {@link GetPlainTextWithJsonMentions}. */
+  public getPlainTextWithJsonMentions(): string {
+    return this.GetPlainTextWithJsonMentions();
+  }
+
   // ==================== Attachment Handling Methods ====================
 
   /**
    * Handle drag over event
    */
-  onDragOver(event: DragEvent): void {
-    if (!this.enableAttachments) return;
+  OnDragOver(event: DragEvent): void {
+    if (this.Disabled || !this.EnableAttachments) return;
 
     event.preventDefault();
     event.stopPropagation();
-    this.isDragOver = true;
+    this.IsDragOver = true;
+  }
+
+  /** @deprecated Use {@link OnDragOver}. */
+  onDragOver(event: DragEvent): void {
+    return this.OnDragOver(event);
   }
 
   /**
    * Handle drag leave event
    */
-  onDragLeave(event: DragEvent): void {
+  OnDragLeave(event: DragEvent): void {
     event.preventDefault();
     event.stopPropagation();
-    this.isDragOver = false;
+    this.IsDragOver = false;
+  }
+
+  /** @deprecated Use {@link OnDragLeave}. */
+  onDragLeave(event: DragEvent): void {
+    return this.OnDragLeave(event);
   }
 
   /**
    * Handle drop event
    */
-  onDrop(event: DragEvent): void {
-    if (!this.enableAttachments) return;
+  OnDrop(event: DragEvent): void {
+    if (this.Disabled || !this.EnableAttachments) return;
 
     event.preventDefault();
     event.stopPropagation();
-    this.isDragOver = false;
+    this.IsDragOver = false;
 
     if (event.dataTransfer?.files) {
       const files = Array.from(event.dataTransfer.files);
@@ -1331,10 +1874,15 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     }
   }
 
+  /** @deprecated Use {@link OnDrop}. */
+  onDrop(event: DragEvent): void {
+    return this.OnDrop(event);
+  }
+
   /**
    * Handle file input change (from file picker)
    */
-  onFileSelected(event: Event): void {
+  OnFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files) {
       const files = Array.from(input.files);
@@ -1346,6 +1894,11 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     }
   }
 
+  /** @deprecated Use {@link OnFileSelected}. */
+  onFileSelected(event: Event): void {
+    return this.OnFileSelected(event);
+  }
+
   /**
    * Process a file for attachment
    */
@@ -1353,14 +1906,14 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     // Validate file
     const validation = this.validateFile(file);
     if (!validation.valid) {
-      this.attachmentError.emit(validation.error!);
+      this.AttachmentError.emit(validation.error!);
       return;
     }
 
     // Read file as data URL
     const dataUrl = await this.readFileAsDataUrl(file);
     if (!dataUrl) {
-      this.attachmentError.emit('Failed to read file');
+      this.AttachmentError.emit('Failed to read file');
       return;
     }
 
@@ -1388,8 +1941,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     };
 
     // Add to pending attachments
-    this.pendingAttachments.push(attachment);
-    this.attachmentsChanged.emit([...this.pendingAttachments]);
+    this.PendingAttachments.push(attachment);
+    this.AttachmentsChanged.emit([...this.PendingAttachments]);
     this.cdr.detectChanges();
   }
 
@@ -1398,16 +1951,16 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    */
   private validateFile(file: File): { valid: boolean; error?: string } {
     // Check count limit
-    if (this.pendingAttachments.length >= this.maxAttachments) {
+    if (this.PendingAttachments.length >= this.MaxAttachments) {
       return {
         valid: false,
-        error: `Maximum ${this.maxAttachments} attachments allowed`
+        error: `Maximum ${this.MaxAttachments} attachments allowed`
       };
     }
 
     // Check size limit
-    if (file.size > this.maxAttachmentSizeBytes) {
-      const maxMB = (this.maxAttachmentSizeBytes / (1024 * 1024)).toFixed(1);
+    if (file.size > this.MaxAttachmentSizeBytes) {
+      const maxMB = (this.MaxAttachmentSizeBytes / (1024 * 1024)).toFixed(1);
       const fileMB = (file.size / (1024 * 1024)).toFixed(1);
       return {
         valid: false,
@@ -1430,11 +1983,11 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Check if file type is accepted
    */
   private isAcceptedFile(file: File): boolean {
-    if (this.acceptedFileTypes === '*' || this.acceptedFileTypes === '*/*') {
+    if (this.AcceptedFileTypes === '*' || this.AcceptedFileTypes === '*/*') {
       return true;
     }
 
-    const acceptedTypes = this.acceptedFileTypes.split(',').map(t => t.trim());
+    const acceptedTypes = this.AcceptedFileTypes.split(',').map(t => t.trim());
 
     for (const accepted of acceptedTypes) {
       // Handle universal wildcard */* anywhere in the list
@@ -1499,20 +2052,30 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   /**
    * Remove a pending attachment by ID
    */
-  public removeAttachment(id: string): void {
-    const index = this.pendingAttachments.findIndex(a => a.id === id);
+  public RemoveAttachment(id: string): void {
+    const index = this.PendingAttachments.findIndex(a => a.id === id);
     if (index !== -1) {
-      this.pendingAttachments.splice(index, 1);
-      this.attachmentsChanged.emit([...this.pendingAttachments]);
+      this.PendingAttachments.splice(index, 1);
+      this.AttachmentsChanged.emit([...this.PendingAttachments]);
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link RemoveAttachment}. */
+  public removeAttachment(id: string): void {
+    return this.RemoveAttachment(id);
   }
 
   /**
    * Get all pending attachments
    */
+  public GetPendingAttachments(): PendingAttachment[] {
+    return [...this.PendingAttachments];
+  }
+
+  /** @deprecated Use {@link GetPendingAttachments}. */
   public getPendingAttachments(): PendingAttachment[] {
-    return [...this.pendingAttachments];
+    return this.GetPendingAttachments();
   }
 
   /**
@@ -1534,44 +2097,64 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
       source: 'artifact',
       artifactVersionId: artifact.artifactVersionId
     };
-    this.pendingAttachments.push(attachment);
-    this.attachmentsChanged.emit([...this.pendingAttachments]);
+    this.PendingAttachments.push(attachment);
+    this.AttachmentsChanged.emit([...this.PendingAttachments]);
     return attachment;
   }
 
   /**
    * Clear all pending attachments
    */
-  public clearPendingAttachments(): void {
-    this.pendingAttachments = [];
-    this.attachmentsChanged.emit([]);
+  public ClearPendingAttachments(): void {
+    this.PendingAttachments = [];
+    this.AttachmentsChanged.emit([]);
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link ClearPendingAttachments}. */
+  public clearPendingAttachments(): void {
+    return this.ClearPendingAttachments();
   }
 
   /**
    * Handle click on an attachment thumbnail
    */
+  public OnAttachmentClick(attachment: PendingAttachment): void {
+    this.AttachmentClicked.emit(attachment);
+  }
+
+  /** @deprecated Use {@link OnAttachmentClick}. */
   public onAttachmentClick(attachment: PendingAttachment): void {
-    this.attachmentClicked.emit(attachment);
+    return this.OnAttachmentClick(attachment);
   }
 
   /**
    * Check if there are any pending attachments
    */
+  public HasAttachments(): boolean {
+    return this.PendingAttachments.length > 0;
+  }
+
+  /** @deprecated Use {@link HasAttachments}. */
   public hasAttachments(): boolean {
-    return this.pendingAttachments.length > 0;
+    return this.HasAttachments();
   }
 
   /**
    * Trigger file picker programmatically
    */
-  public openFilePicker(): void {
+  public OpenFilePicker(): void {
     const input = document.createElement('input');
     input.type = 'file';
     // If */* is in the list, accept all files (some browsers don't handle */* correctly)
-    input.accept = this.acceptedFileTypes.includes('*/*') ? '' : this.acceptedFileTypes;
+    input.accept = this.AcceptedFileTypes.includes('*/*') ? '' : this.AcceptedFileTypes;
     input.multiple = true;
-    input.onchange = (e) => this.onFileSelected(e);
+    input.onchange = (e) => this.OnFileSelected(e);
     input.click();
+  }
+
+  /** @deprecated Use {@link OpenFilePicker}. */
+  public openFilePicker(): void {
+    return this.OpenFilePicker();
   }
 }

@@ -3,8 +3,8 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass, MJGlobal, MJEvent } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { DevToolsPrefs } from './dev-tools-prefs';
-import { buildEventMonitorAgentContext } from './dev-tools-agent-context';
-import { AgentToolResult, validateStringParam, validateEnumParam } from '../shared/agent-tool-validation';
+import { BuildEventMonitorAgentContext } from './dev-tools-agent-context';
+import { AgentToolResult, ValidateStringParam, ValidateEnumParam } from '../shared/agent-tool-validation';
 
 interface EventMonitorPrefs {
     filter?: string;
@@ -345,7 +345,7 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
     /** Publish the current Event Monitor capture state to the AI agent. */
     private publishAgentContext(): void {
         const filtered = this.FilteredEvents;
-        const context = buildEventMonitorAgentContext({
+        const context = BuildEventMonitorAgentContext({
             EventCount: this.Stats.captured,
             BufferedCount: this.Stats.kept,
             EventsPerSecond: this.Stats.perSecond,
@@ -447,7 +447,7 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
 
     /** Apply (or clear, on empty string) the event-type filter. */
     private toolFilterByType(params: Record<string, unknown>): AgentToolResult {
-        const validated = validateStringParam(params['type'], 'type');
+        const validated = ValidateStringParam(params['type'], 'type');
         if (!validated.ok) {
             return validated.result;
         }
@@ -460,7 +460,7 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
 
     /** Apply (or clear, on empty string) the component-name filter. */
     private toolFilterByComponent(params: Record<string, unknown>): AgentToolResult {
-        const validated = validateStringParam(params['component'], 'component');
+        const validated = ValidateStringParam(params['component'], 'component');
         if (!validated.ok) {
             return validated.result;
         }
@@ -473,11 +473,11 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
 
     /** Set the sort field + direction from validated enum params. */
     private toolSetSort(params: Record<string, unknown>): AgentToolResult {
-        const field = validateEnumParam<SortField>(params['field'], ['time', 'type', 'eventCode', 'component'], 'field');
+        const field = ValidateEnumParam<SortField>(params['field'], ['time', 'type', 'eventCode', 'component'], 'field');
         if (!field.ok) {
             return field.result;
         }
-        const dir = validateEnumParam<SortDir>(params['direction'], ['asc', 'desc'], 'direction');
+        const dir = ValidateEnumParam<SortDir>(params['direction'], ['asc', 'desc'], 'direction');
         if (!dir.ok) {
             return dir.result;
         }

@@ -28,7 +28,8 @@ import 'dotenv/config';
 // Side-effect import: registers ALL @memberjunction classes (providers, entity subclasses, engines).
 import '@memberjunction/server-bootstrap/mj-class-registrations';
 import sql from 'mssql';
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { Metadata, UserInfo, LogStatus, BaseEntity } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import type {
@@ -88,7 +89,7 @@ async function bootstrapProvider(): Promise<sql.ConnectionPool> {
         user: process.env.CODEGEN_DB_USERNAME || process.env.DB_USERNAME,
         password: process.env.CODEGEN_DB_PASSWORD || process.env.DB_PASSWORD,
         options: {
-            encrypt: (process.env.DB_HOST || '').includes('.database.windows.net'),
+            encrypt: (process.env.DB_HOST || '').endsWith('.database.windows.net'),
             trustServerCertificate: true,
             enableArithAbort: true
         }

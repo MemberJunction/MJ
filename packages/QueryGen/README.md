@@ -716,4 +716,4 @@ npm run format
 
 ## License
 
-MIT License - see LICENSE file for details
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

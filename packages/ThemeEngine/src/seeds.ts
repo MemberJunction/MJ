@@ -66,7 +66,7 @@ export const MJ_DEFAULT_SEEDS: ThemeSeeds = {
 };
 
 /** Fill in seed defaults. */
-export function resolveSeeds(seeds: ThemeSeeds): ResolvedSeeds {
+export function ResolveSeeds(seeds: ThemeSeeds): ResolvedSeeds {
   const accent = seeds.accent ?? seeds.primary;
   return {
     primary: seeds.primary,
@@ -80,4 +80,9 @@ export function resolveSeeds(seeds: ThemeSeeds): ResolvedSeeds {
     fontFamilyMono: seeds.fontFamilyMono ?? MJ_FONT_MONO,
     vizPalette: seeds.vizPalette,
   };
+}
+
+/** @deprecated Use {@link ResolveSeeds}. */
+export function resolveSeeds(seeds: ThemeSeeds): ResolvedSeeds {
+  return ResolveSeeds(seeds);
 }

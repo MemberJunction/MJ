@@ -16,7 +16,6 @@ export class MJEnvironmentFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'technicalMetadata', sectionName: 'Technical Metadata', isExpanded: false },
             { sectionKey: 'environmentDefinition', sectionName: 'Environment Definition', isExpanded: true },
             { sectionKey: 'environmentSettings', sectionName: 'Environment Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
@@ -25,7 +24,6 @@ export class MJEnvironmentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJProjects', sectionName: 'Projects', isExpanded: false },
             { sectionKey: 'mJDashboards', sectionName: 'Dashboards', isExpanded: false },
             { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
-            { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false },
             { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
             { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false }
         ]);

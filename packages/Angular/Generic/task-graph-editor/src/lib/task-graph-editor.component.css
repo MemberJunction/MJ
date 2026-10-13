@@ -1,0 +1,69 @@
+/* Design tokens only — no hardcoded colors (see .claude/rules/design-tokens.md). */
+
+/* Same reason as the flow editor's host: a custom element is inline with auto height, so the
+   `height: 100%` on `.mj-tge` below had nothing to resolve against. */
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+.mj-tge {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--mj-bg-page);
+}
+
+.mj-tge__validation {
+  flex: 0 0 auto;
+  margin: var(--mj-space-sm, 0.5rem);
+}
+
+.mj-tge__validation-list {
+  margin: var(--mj-space-xs, 0.25rem) 0 0;
+  padding-inline-start: 1.25rem;
+}
+
+/* Canvas + properties side by side; the row takes the remaining height. */
+.mj-tge__workspace {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The canvas takes the remaining width; min-width:0 is what lets it actually shrink inside flex. */
+.mj-tge__canvas {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.mj-tge__properties {
+  flex: 0 0 auto;
+  width: 300px;
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--mj-border-default);
+}
+
+@media (max-width: 900px) {
+  /* Below this the two side by side leave neither usable; the panel drops under the canvas. */
+  .mj-tge__workspace {
+    flex-direction: column;
+  }
+
+  .mj-tge__properties {
+    width: 100%;
+    max-height: 40%;
+    border-left: 0;
+    border-top: 1px solid var(--mj-border-default);
+  }
+}
+
+/* Shown above a usable, empty canvas — the palette stays reachable so the hint's advice is followable. */
+.mj-tge__empty-hint {
+  margin: var(--mj-space-2) var(--mj-space-3) 0;
+}

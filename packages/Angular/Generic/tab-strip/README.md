@@ -1,6 +1,14 @@
 # @memberjunction/ng-tabstrip
 
-A lightweight, zero-dependency Angular tab strip component for MemberJunction applications. Provides dynamic tab management with closeable tabs, scroll overflow handling, context menus, and programmatic tab control.
+A projected-children Angular tab strip (`<mj-tabstrip>` / `<mj-tab>` / `<mj-tab-body>`) with closeable tabs, scroll overflow handling, context menus, and programmatic tab control.
+
+**Appearance and keyboard behaviour are shared, not local.** Tabs are styled by the global `.mj-tabs*` chrome and driven by the `mjTabList` ARIA directive, both from `@memberjunction/ng-ui-components` — one definition shared with `mj-workspace-tab-strip`, so MJ's tab strips cannot drift apart. Inside MJ Explorer the chrome is already loaded; a **standalone host must import it globally** or tabs render as unstyled divs:
+
+```scss
+@import '@memberjunction/ng-ui-components/dist/lib/tabs/tabs';
+```
+
+The strip sizes to its content — the host owns region sizing (the old viewport-height behavior is gone; give your container a height if you want an internally-scrolling tab region). For data-driven tabs, prefer `mj-tab-nav` or `mj-workspace-tab-strip` from `ng-ui-components`.
 
 ## Installation
 

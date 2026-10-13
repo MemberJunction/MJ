@@ -29,13 +29,31 @@ export class HelloMJComponent {
   /**
    * Tracks the number of entities loaded from MemberJunction's metadata
    */
-  public entityCount: number = 0;
+  public EntityCount: number = 0;
+
+  /** @deprecated Use {@link EntityCount}. */
+  public get entityCount(): number {
+    return this.EntityCount;
+  }
+  /** @deprecated Use {@link EntityCount}. */
+  public set entityCount(value: number) {
+    this.EntityCount = value;
+  }
   
   /**
    * Event emitter that sends entity information to listeners
    * When used as a web component, this becomes a standard DOM event
    */
-  @Output() display = new EventEmitter();
+  @Output() Display = new EventEmitter();
+
+  /**
+   * @deprecated Use {@link Display}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (display) keeps working. Must stay AFTER Display: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() display = this.Display;
   
   constructor() {}
 
@@ -51,23 +69,23 @@ export class HelloMJComponent {
    * The emitted event can be captured in standard JavaScript when this
    * component is used as a custom element.
    */
-  async showInfo() {
+  async ShowInfo() {
     // First, we need to make sure we've logged in, so wait for that event
     MJGlobal.Instance.GetEventListener(true).subscribe((event) => {
       // This will fire off each time if we've already logged in, but if we've not yet, it will wait here until we do
       if (event.event === MJEventType.LoggedIn) {  
         // Emit a loading message
-        this.display.emit('Loading Metadata...')
+        this.Display.emit('Loading Metadata...')
         
         // Get metadata from MemberJunction
         const md = new Metadata(); // global-provider-ok: test/demo harness, single-provider context
         // Create a string with all entity names
         const entityListString = md.Entities.map((e) => e.Name).join('\n');
         // Store the count for display in the template
-        this.entityCount = md.Entities.length;
+        this.EntityCount = md.Entities.length;
         
         // Emit the entity list to any listeners
-        this.display.emit(entityListString);
+        this.Display.emit(entityListString);
     
         // Also raise a global MemberJunction event that other MJ components can listen for
         MJGlobal.Instance.RaiseEvent({
@@ -78,6 +96,11 @@ export class HelloMJComponent {
         });
       }
     });
+  }
+
+  /** @deprecated Use {@link ShowInfo}. */
+  async showInfo() {
+    return this.ShowInfo();
   }
 
   // Commented out method - keeping for reference

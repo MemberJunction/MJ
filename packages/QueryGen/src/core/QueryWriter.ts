@@ -9,8 +9,8 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { UserInfo, LogStatus } from '@memberjunction/core';
 import { QueryGenConfig } from '../cli/config';
-import { extractErrorMessage } from '../utils/error-handlers';
-import { executePromptWithOverrides } from '../utils/prompt-helpers';
+import { ExtractErrorMessage } from '../utils/error-handlers';
+import { ExecutePromptWithOverrides } from '../utils/prompt-helpers';
 import { BusinessQuestion, GeneratedQuery, EntityMetadataForPrompt, GoldenQuery } from '../data/schema';
 import { PROMPT_SQL_QUERY_WRITER } from '../prompts/PromptNames';
 
@@ -33,7 +33,7 @@ export class QueryWriter {
    * @param fewShotExamples - Similar golden queries for few-shot learning
    * @returns Generated SQL query with parameters and output schema
    */
-  async generateQuery(
+  async GenerateQuery(
     businessQuestion: BusinessQuestion,
     entityMetadata: EntityMetadataForPrompt[],
     fewShotExamples: GoldenQuery[]
@@ -64,9 +64,18 @@ export class QueryWriter {
       return generatedQuery;
     } catch (error: unknown) {
       throw new Error(
-        extractErrorMessage(error, 'QueryWriter.generateQuery')
+        ExtractErrorMessage(error, 'QueryWriter.generateQuery')
       );
     }
+  }
+
+  /** @deprecated Use {@link GenerateQuery}. */
+  async generateQuery(
+    businessQuestion: BusinessQuestion,
+    entityMetadata: EntityMetadataForPrompt[],
+    fewShotExamples: GoldenQuery[]
+  ): Promise<GeneratedQuery> {
+    return this.GenerateQuery(businessQuestion, entityMetadata, fewShotExamples);
   }
 
   /**
@@ -105,7 +114,7 @@ export class QueryWriter {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         // Execute AI prompt
-        const result = await executePromptWithOverrides<GeneratedQuery>(
+        const result = await ExecutePromptWithOverrides<GeneratedQuery>(
           prompt,
           promptData,
           this.contextUser,

@@ -5,7 +5,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 import { DataSnapshot, RunView } from '@memberjunction/core';
 import { MJArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
-import { createJsonSnapshot } from '../../snapshot-helpers';
+import { CreateJsonSnapshot } from '../../snapshot-helpers';
 
 /**
  * Viewer component for JSON artifacts.
@@ -35,11 +35,15 @@ import { createJsonSnapshot } from '../../snapshot-helpers';
       <!-- Display content: priority order = displayHtml > displayMarkdown > JSON editor -->
       <div class="display-content">
         @if (displayHtml && htmlBlobUrl) {
-          <!-- Sandboxed iframe for rich HTML using blob URL -->
+          <!-- Sandboxed iframe for rich HTML using blob URL.
+               SECURITY: never add allow-same-origin here — a blob: URL inherits the app origin,
+               so allow-same-origin + allow-scripts on LLM-produced HTML is in-origin XSS
+               (script in the artifact could read the app's storage/cookies and DOM).
+               Same pattern as whiteboard-srcdoc.pipe.ts. -->
           <iframe
             #htmlFrame
             [src]="htmlBlobUrl"
-            sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals"
+            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals"
             class="html-iframe"
             (load)="onIframeLoad()">
           </iframe>
@@ -112,6 +116,10 @@ import { createJsonSnapshot } from '../../snapshot-helpers';
       border: none;
       background: var(--mj-bg-surface);
       display: block;
+      /* The frame is cross-origin (sandbox without allow-same-origin), so script-driven
+         auto-resize is unavailable — fill the container instead. */
+      flex: 1;
+      min-height: 0;
     }
 
     .markdown-content {
@@ -131,12 +139,57 @@ import { createJsonSnapshot } from '../../snapshot-helpers';
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'JsonArtifactViewerPlugin')
 export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, OnDestroy {
-  @ViewChild('htmlFrame') htmlFrame?: ElementRef<HTMLIFrameElement>;
+  @ViewChild('htmlFrame') HtmlFrame?: ElementRef<HTMLIFrameElement>;
 
-  public jsonContent = '';
-  public displayMarkdown: string | null = null;
-  public displayHtml: string | null = null;
-  public htmlBlobUrl: SafeResourceUrl | null = null;
+  /** @deprecated Use {@link HtmlFrame}. */
+  get htmlFrame(): ElementRef<HTMLIFrameElement> | undefined {
+    return this.HtmlFrame;
+  }
+  /** @deprecated Use {@link HtmlFrame}. */
+  set htmlFrame(value: ElementRef<HTMLIFrameElement> | undefined) {
+    this.HtmlFrame = value;
+  }
+
+  public JsonContent = '';
+
+  /** @deprecated Use {@link JsonContent}. */
+  public get jsonContent() {
+    return this.JsonContent;
+  }
+  /** @deprecated Use {@link JsonContent}. */
+  public set jsonContent(value) {
+    this.JsonContent = value;
+  }
+  public DisplayMarkdown: string | null = null;
+
+  /** @deprecated Use {@link DisplayMarkdown}. */
+  public get displayMarkdown(): string | null {
+    return this.DisplayMarkdown;
+  }
+  /** @deprecated Use {@link DisplayMarkdown}. */
+  public set displayMarkdown(value: string | null) {
+    this.DisplayMarkdown = value;
+  }
+  public DisplayHtml: string | null = null;
+
+  /** @deprecated Use {@link DisplayHtml}. */
+  public get displayHtml(): string | null {
+    return this.DisplayHtml;
+  }
+  /** @deprecated Use {@link DisplayHtml}. */
+  public set displayHtml(value: string | null) {
+    this.DisplayHtml = value;
+  }
+  public HtmlBlobUrl: SafeResourceUrl | null = null;
+
+  /** @deprecated Use {@link HtmlBlobUrl}. */
+  public get htmlBlobUrl(): SafeResourceUrl | null {
+    return this.HtmlBlobUrl;
+  }
+  /** @deprecated Use {@link HtmlBlobUrl}. */
+  public set htmlBlobUrl(value: SafeResourceUrl | null) {
+    this.HtmlBlobUrl = value;
+  }
   private versionAttributes: MJArtifactVersionAttributeEntity[] = [];
   private unsafeBlobUrl: string | null = null; // Keep unsafe URL for cleanup
 
@@ -159,12 +212,12 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     if (this.unsafeBlobUrl) {
       URL.revokeObjectURL(this.unsafeBlobUrl);
       this.unsafeBlobUrl = null;
-      this.htmlBlobUrl = null;
+      this.HtmlBlobUrl = null;
     }
   }
 
   async ngOnInit(): Promise<void> {
-    this.jsonContent = this.getContent();
+    this.JsonContent = this.getContent();
 
     // Load version attributes to check for extract rules
     await this.loadVersionAttributes();
@@ -178,7 +231,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    * Returns false when showing raw JSON editor (no extract rules available).
    */
   public override get isShowingElevatedDisplay(): boolean {
-    return !!(this.displayHtml || this.displayMarkdown);
+    return !!(this.DisplayHtml || this.DisplayMarkdown);
   }
 
   /**
@@ -223,25 +276,25 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         console.log(`📦 displayMarkdownAttr:`, displayMarkdownAttr ? { name: displayMarkdownAttr.Name, valueLength: displayMarkdownAttr.Value?.length } : 'not found');
 
         // Parse attribute values - fix "null" string bug
-        this.displayHtml = this.parseAttributeValue(displayHtmlAttr?.Value);
-        this.displayMarkdown = this.parseAttributeValue(displayMarkdownAttr?.Value);
+        this.DisplayHtml = this.parseAttributeValue(displayHtmlAttr?.Value);
+        this.DisplayMarkdown = this.parseAttributeValue(displayMarkdownAttr?.Value);
 
         // Clean up double-escaped characters in HTML (from LLM generation)
-        if (this.displayHtml) {
-          this.displayHtml = this.cleanEscapedCharacters(this.displayHtml);
+        if (this.DisplayHtml) {
+          this.DisplayHtml = this.cleanEscapedCharacters(this.DisplayHtml);
         }
 
         // Create blob URL for HTML to avoid srcdoc sanitization issues
-        if (this.displayHtml) {
-          const blob = new Blob([this.displayHtml], { type: 'text/html' });
+        if (this.DisplayHtml) {
+          const blob = new Blob([this.DisplayHtml], { type: 'text/html' });
           this.unsafeBlobUrl = URL.createObjectURL(blob);
           // Sanitize the blob URL so Angular trusts it in the iframe
-          this.htmlBlobUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.unsafeBlobUrl);
+          this.HtmlBlobUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.unsafeBlobUrl);
         }
 
         // Note: Markdown rendering is now handled by <mj-markdown> component in template
 
-        console.log(`📦 JSON Plugin: displayHtml=${!!this.displayHtml} (${this.displayHtml?.length || 0} chars), displayMarkdown=${!!this.displayMarkdown} (${this.displayMarkdown?.length || 0} chars)`);
+        console.log(`📦 JSON Plugin: displayHtml=${!!this.DisplayHtml} (${this.DisplayHtml?.length || 0} chars), displayMarkdown=${!!this.DisplayMarkdown} (${this.DisplayMarkdown?.length || 0} chars)`);
         console.log(`📦 isShowingElevatedDisplay=${this.isShowingElevatedDisplay}`);
       } else {
         console.log(`📦 JSON Plugin: No attributes found or query failed. Success=${result.Success}, ResultsLength=${result.Results?.length}`);
@@ -276,11 +329,27 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     }
   }
 
-  onIframeLoad(): void {
+  /**
+   * Returns the iframe's document when accessible, or null.
+   * With allow-same-origin removed from the sandbox (see template), the frame is
+   * cross-origin to the app: contentDocument returns null or the access throws a
+   * SecurityError depending on the browser. Both outcomes are tolerated — the
+   * style/resize enhancements below are optional niceties, not requirements.
+   */
+  private getIframeDocument(): Document | null {
+    try {
+      const iframe = this.HtmlFrame?.nativeElement;
+      if (!iframe) return null;
+      return iframe.contentDocument || iframe.contentWindow?.document || null;
+    } catch {
+      return null;
+    }
+  }
+
+  OnIframeLoad(): void {
     // Inject base styles if HTML doesn't have them
-    if (this.htmlFrame) {
-      const iframe = this.htmlFrame.nativeElement;
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (this.HtmlFrame) {
+      const iframeDoc = this.getIframeDocument();
 
       if (iframeDoc) {
         // Check if HTML already has styles
@@ -335,10 +404,17 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     }
   }
 
+  /** @deprecated Use {@link OnIframeLoad}. */
+  onIframeLoad(): void {
+    return this.OnIframeLoad();
+  }
+
   private resizeIframeToContent(): void {
-    if (this.htmlFrame) {
-      const iframe = this.htmlFrame.nativeElement;
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (this.HtmlFrame) {
+      const iframe = this.HtmlFrame.nativeElement;
+      // Cross-origin (sandboxed) frames yield no document — the CSS flex sizing on
+      // .html-iframe is the fallback in that case.
+      const iframeDoc = this.getIframeDocument();
 
       if (iframeDoc && iframeDoc.body) {
         // Get the actual content height
@@ -357,30 +433,47 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     }
   }
 
-  openInNewWindow(): void {
-    if (this.displayHtml) {
+  OpenInNewWindow(): void {
+    if (this.DisplayHtml) {
       const newWindow = window.open('', '_blank');
       if (newWindow) {
-        newWindow.document.write(this.displayHtml);
+        newWindow.document.write(this.DisplayHtml);
         newWindow.document.close();
       }
     }
   }
 
-  printHtml(): void {
-    if (this.htmlFrame) {
-      const iframe = this.htmlFrame.nativeElement;
-      const iframeWindow = iframe.contentWindow;
-      if (iframeWindow) {
-        iframeWindow.focus();
-        iframeWindow.print();
+  /** @deprecated Use {@link OpenInNewWindow}. */
+  openInNewWindow(): void {
+    return this.OpenInNewWindow();
+  }
+
+  PrintHtml(): void {
+    if (this.HtmlFrame) {
+      try {
+        const iframe = this.HtmlFrame.nativeElement;
+        const iframeWindow = iframe.contentWindow;
+        if (iframeWindow) {
+          iframeWindow.focus();
+          iframeWindow.print();
+        }
+      } catch {
+        // The sandboxed frame is cross-origin, so scripting into it can throw a
+        // SecurityError in some browsers. Fall back to printing the host page,
+        // which includes the rendered iframe content.
+        window.print();
       }
     }
   }
 
-  onCopy(): void {
+  /** @deprecated Use {@link PrintHtml}. */
+  printHtml(): void {
+    return this.PrintHtml();
+  }
+
+  OnCopy(): void {
     // Copy based on what's being displayed - prioritize displayHtml
-    const content = this.displayHtml || this.displayMarkdown || this.jsonContent;
+    const content = this.DisplayHtml || this.DisplayMarkdown || this.JsonContent;
     if (content) {
       navigator.clipboard.writeText(content).then(() => {
         console.log('✅ Copied content to clipboard');
@@ -390,8 +483,13 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     }
   }
 
+  /** @deprecated Use {@link OnCopy}. */
+  onCopy(): void {
+    return this.OnCopy();
+  }
+
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
-    return createJsonSnapshot(this.getRawContent(), this.getDisplayTitle());
+    return CreateJsonSnapshot(this.getRawContent(), this.getDisplayTitle());
   }
 
   /**

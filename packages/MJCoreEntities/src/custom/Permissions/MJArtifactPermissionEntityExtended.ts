@@ -3,10 +3,10 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 
 import { MJArtifactPermissionEntity } from '../../generated/entity_subclasses';
 import {
-    assertCallerMayCreateShare,
-    buildActionsSummary,
-    checkShareManagePermission,
-    dispatchShareNotificationAfterSave,
+    AssertCallerMayCreateShare,
+    BuildActionsSummary,
+    CheckShareManagePermission,
+    DispatchShareNotificationAfterSave,
 } from './BaseShareEntityExtended';
 
 /**
@@ -18,14 +18,14 @@ export class MJArtifactPermissionEntityExtended extends MJArtifactPermissionEnti
     override CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
         if (type === EntityPermissionType.Update || type === EntityPermissionType.Delete) {
             const user = this.ActiveUser;
-            if (user && checkShareManagePermission(user, this.SharedByUserID)) return true;
+            if (user && CheckShareManagePermission(user, this.SharedByUserID)) return true;
         }
         return super.CheckPermissions(type, throwError);
     }
 
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const isNewShare = !this.IsSaved;
-        const allowed = await assertCallerMayCreateShare(
+        const allowed = await AssertCallerMayCreateShare(
             this,
             isNewShare,
             () => this.callerMayShareArtifact(),
@@ -35,7 +35,7 @@ export class MJArtifactPermissionEntityExtended extends MJArtifactPermissionEnti
 
         const saved = await super.Save(options);
         if (saved) {
-            await dispatchShareNotificationAfterSave(this, isNewShare, this.SharedByUserID, async (provider, grantorId) => {
+            await DispatchShareNotificationAfterSave(this, isNewShare, this.SharedByUserID, async (provider, grantorId) => {
                 // The Artifact view doesn't denormalize Name onto the permission row — look it up.
                 const artifactName = await this.fetchArtifactName();
                 return {
@@ -56,7 +56,7 @@ export class MJArtifactPermissionEntityExtended extends MJArtifactPermissionEnti
     }
 
     private actionsSummary(): string {
-        return buildActionsSummary({
+        return BuildActionsSummary({
             view: this.CanRead,
             edit: this.CanEdit,
             delete: this.CanDelete,

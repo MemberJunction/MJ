@@ -2,14 +2,13 @@ import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 @Component({
-  selector: 'app-home',
-  standalone: true,
-  imports: [RouterLink],
-  template: `
+    selector: 'app-home',
+    imports: [RouterLink],
+    template: `
     <div class="home-container">
       <header class="home-header">
-        <h1>Transformers.js AI Demo</h1>
-        <p class="subtitle">Run AI models entirely in your browser — no server, no API costs, complete privacy</p>
+        <h1>In-Browser AI Demo</h1>
+        <p class="subtitle">Run AI models entirely in your browser — Transformers.js on WebGPU, or Chrome's built-in Gemma 4 — no server, no API costs, complete privacy</p>
       </header>
 
       <div class="mode-cards">
@@ -34,6 +33,17 @@ import { RouterLink } from '@angular/router';
             <li>Text-to-Speech (SpeechT5)</li>
           </ul>
         </a>
+
+        <a routerLink="/builtin-chat" class="mode-card">
+          <div class="icon">⚡</div>
+          <h2>Chrome Built-in AI</h2>
+          <p>Chat with the model that ships inside Chrome via the Prompt API (Gemma 4 dev trial)</p>
+          <ul class="features">
+            <li>Zero download in-app — model is part of Chrome</li>
+            <li>Streaming + JSON-schema constrained output</li>
+            <li>Router probe: local intent / agent classification</li>
+          </ul>
+        </a>
       </div>
 
       <footer class="home-footer">
@@ -43,12 +53,13 @@ import { RouterLink } from '@angular/router';
         </p>
         <p class="tech-stack">
           Built with <a href="https://huggingface.co/docs/transformers.js" target="_blank">Transformers.js</a>
-          + <a href="https://angular.dev" target="_blank">Angular 18</a>
+          + <a href="https://developer.chrome.com/docs/ai/prompt-api" target="_blank">Chrome Prompt API</a>
+          + <a href="https://angular.dev" target="_blank">Angular 21</a>
         </p>
       </footer>
     </div>
   `,
-  styles: [`
+    styles: [`
     :host {
       display: flex;
       flex-direction: column;

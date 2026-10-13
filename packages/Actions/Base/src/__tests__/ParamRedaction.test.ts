@@ -26,6 +26,7 @@ const MockBaseEntity = BaseEntity as unknown as new (data: Record<string, unknow
 import {
     RedactParams,
     RedactParamsToJSON,
+    RedactParamsToRecord,
     IsRedactedParam,
     MAX_REDACTED_KEYS,
     RedactedParam,
@@ -286,6 +287,62 @@ describe('RedactParams', () => {
             const json = RedactParamsToJSON([actionParam('Mode', 'fast')], [definition('p1', 'Mode')]);
             expect(JSON.parse(json)).toEqual([{ Name: 'Mode', Value: 'fast', Type: 'Input' }]);
         });
+    });
+});
+
+describe('RedactParamsToRecord', () => {
+    it('produces a name→value record for logged params, not an array', () => {
+        const result = RedactParamsToRecord(
+            [actionParam('TypeCode', 'SystemEvent'), actionParam('Title', 'Person created')],
+            [definition('p1', 'TypeCode'), definition('p2', 'Title')]
+        );
+        expect(result).toEqual({ TypeCode: 'SystemEvent', Title: 'Person created' });
+        expect(Array.isArray(result)).toBe(false);
+    });
+
+    it('omits a parameter suppressed by rule 1 — whole-record ValueType', () => {
+        const result = RedactParamsToRecord(
+            [actionParam('Secret', { ID: 'x' }), actionParam('Mode', 'fast')],
+            [definition('p1', 'Secret'), definition('p2', 'Mode')],
+            [binding('p1', 'Entity Object')]
+        );
+        expect('Secret' in result).toBe(false);
+        expect(result).toEqual({ Mode: 'fast' });
+    });
+
+    it('omits a parameter suppressed by rule 2 — binding LogValue=false', () => {
+        const result = RedactParamsToRecord(
+            [actionParam('Secret', 'private message'), actionParam('Mode', 'fast')],
+            [definition('p1', 'Secret'), definition('p2', 'Mode')],
+            [binding('p1', 'Static', false)]
+        );
+        expect('Secret' in result).toBe(false);
+        expect(result).toEqual({ Mode: 'fast' });
+    });
+
+    it('omits a parameter suppressed by rule 3 — definition LogValue=false', () => {
+        const result = RedactParamsToRecord(
+            [actionParam('Secret', 'hidden'), actionParam('Mode', 'fast')],
+            [definition('p1', 'Secret', false), definition('p2', 'Mode')]
+        );
+        expect('Secret' in result).toBe(false);
+        expect(result).toEqual({ Mode: 'fast' });
+    });
+
+    it('returns {} for a null params array', () => {
+        expect(RedactParamsToRecord(null)).toEqual({});
+    });
+
+    it('returns {} for an undefined params array', () => {
+        expect(RedactParamsToRecord(undefined)).toEqual({});
+    });
+
+    it('survives JSON.parse(JSON.stringify(result)) unchanged', () => {
+        const result = RedactParamsToRecord(
+            [actionParam('TypeCode', 'SystemEvent'), actionParam('Payload', { rows: [1, 2] })],
+            [definition('p1', 'TypeCode'), definition('p2', 'Payload')]
+        );
+        expect(JSON.parse(JSON.stringify(result))).toEqual(result);
     });
 });
 

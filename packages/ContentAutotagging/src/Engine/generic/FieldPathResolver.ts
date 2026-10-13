@@ -1,0 +1,272 @@
+import { BaseEngineRegistry, BaseEntity, EntityInfo, IMetadataProvider, IRunViewProvider, LogError, UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+
+/**
+ * Resolves per-record values for field paths rooted at a batch of records — the generic
+ * machinery behind provider-declared source-record dependencies (see
+ * `VectorDBBase.GetSourceRecordFieldPaths`), usable for any config that needs a value living
+ * on a related record.
+ *
+ * Two path forms are supported:
+ * - **Plain field** (`"OrganizationID"`): the value is read directly off the record's own
+ *   field set.
+ * - **Single-hop path** (`"ContentSourceID.OrganizationID"`): the first segment names a
+ *   foreign-key field on the root entity; the second names a field on the related entity. The
+ *   related record is loaded and — when the related entity is an IS-A parent type — its
+ *   child-type rows (shared primary key) are loaded and merged over it, so a field that
+ *   physically lives on an IS-A extension entity (e.g. `myschema.ContentSource.OrganizationID`)
+ *   resolves without the configuration ever naming the child entity.
+ *
+ * Only single-valued FK hops are traversed (never 1:N relationships) and path depth is capped
+ * at one hop, which keeps resolution O(distinct FK values) per pass. Deeper paths are a
+ * configuration error: they log and resolve nothing, which callers treat per their own policy.
+ *
+ * Resolution is lazy and batched: callers create one resolver per pass and call
+ * {@link ResolveForItems} per record batch. Distinct FK values are loaded with a single
+ * `IN (...)` query per entity (base + each IS-A child) and cached for the resolver's lifetime,
+ * so a related record referenced by ten thousand rows is loaded once per pass.
+ */
+export class FieldPathResolver {
+    /** Merged related-record cache for this pass, keyed by normalized FK value. `null` = load attempted and failed/missing. */
+    private recordCache = new Map<string, Record<string, unknown> | null>();
+
+    constructor(
+        private provider: IMetadataProvider,
+        private contextUser: UserInfo,
+        /** Entity whose records the paths are rooted at (e.g. 'MJ: Content Items'). */
+        private rootEntityName: string
+    ) {}
+
+    /**
+     * Resolve the path value for each record. Accepts any BaseEntity batch whose entity matches
+     * the resolver's root entity. Returns a map keyed by the record's normalized primary-key
+     * value; a missing/null entry means the value could not be resolved for that record —
+     * callers decide what that means (one unresolvable record never poisons the rest).
+     */
+    public async ResolveForItems(
+        items: BaseEntity[],
+        fieldPath: string
+    ): Promise<Map<string, unknown>> {
+        const result = new Map<string, unknown>();
+        if (items.length === 0) return result;
+
+        const segments = fieldPath.split('.').map(s => s.trim());
+        if (segments.length === 1 && segments[0].length > 0) {
+            for (const item of items) {
+                const all = item.GetAll() as Record<string, unknown>;
+                result.set(this.recordKey(item), this.readField(all, segments[0]));
+            }
+            return result;
+        }
+
+        if (segments.length !== 2 || segments.some(s => s.length === 0)) {
+            LogError(`FieldPathResolver: unsupported field path "${fieldPath}" — only a plain field name or a single-hop "<FKField>.<Field>" path is supported`);
+            return result;
+        }
+
+        const [fkFieldName, targetFieldName] = segments;
+        const targetEntity = this.resolveTargetEntity(fkFieldName, fieldPath);
+        if (!targetEntity) return result;
+
+        // Batch-load the distinct related records this batch actually references (cache-aware).
+        const fkValueByItem = new Map<string, string>();
+        for (const item of items) {
+            const all = item.GetAll() as Record<string, unknown>;
+            const fkValue = this.readField(all, fkFieldName);
+            if (fkValue != null && String(fkValue).trim().length > 0) {
+                fkValueByItem.set(this.recordKey(item), String(fkValue));
+            }
+        }
+        await this.loadRelatedRecords(targetEntity, [...new Set(fkValueByItem.values())]);
+
+        for (const item of items) {
+            const fkValue = fkValueByItem.get(this.recordKey(item));
+            const related = fkValue ? this.recordCache.get(this.cacheKey(fkValue)) : undefined;
+            result.set(this.recordKey(item), related ? this.readField(related, targetFieldName) : undefined);
+        }
+        return result;
+    }
+
+    /**
+     * The result-map key for a root record: its primary key as a compact URL segment, normalized —
+     * the bare value for a single-column key (so callers keyed by `NormalizeUUID(item.ID)` keep
+     * working) and `F1|v1||F2|v2` for a composite key, so two records sharing a first column never collide.
+     */
+    private recordKey(item: BaseEntity): string {
+        return NormalizeUUID(item.PrimaryKey.ToCompactURLSegment());
+    }
+
+    /**
+     * Validate the FK segment against the root entity's metadata and resolve the entity it points
+     * at. Logs and returns null on any misconfiguration (unknown field, not a foreign key, target
+     * entity missing) so callers see the paths as unresolvable.
+     */
+    private resolveTargetEntity(fkFieldName: string, fieldPath: string): EntityInfo | null {
+        const rootEntity = this.provider.EntityByName(this.rootEntityName);
+        if (!rootEntity) {
+            LogError(`FieldPathResolver: root entity "${this.rootEntityName}" not found in metadata`);
+            return null;
+        }
+        const fkField = rootEntity.Fields.find(f => f.Name.trim().toLowerCase() === fkFieldName.toLowerCase());
+        if (!fkField) {
+            LogError(`FieldPathResolver: field path "${fieldPath}" — field "${fkFieldName}" does not exist on "${this.rootEntityName}"`);
+            return null;
+        }
+        if (!fkField.RelatedEntityID) {
+            LogError(`FieldPathResolver: field path "${fieldPath}" — field "${fkFieldName}" is not a foreign key, cannot traverse`);
+            return null;
+        }
+        const target = this.provider.Entities.find(e => UUIDsEqual(e.ID, fkField.RelatedEntityID));
+        if (!target) {
+            LogError(`FieldPathResolver: related entity ${fkField.RelatedEntityID} for "${fkFieldName}" not found in metadata`);
+            return null;
+        }
+        return target;
+    }
+
+    /**
+     * Load the given related records into the cache: one `IN (...)` query against the target
+     * entity, plus one per IS-A child entity (shared PK), merging child fields over the parent's
+     * so IS-A extension fields resolve transparently. Values already cached are skipped. A failed
+     * load caches `null` for the affected keys so items referencing them resolve to undefined
+     * rather than retrying within the pass.
+     */
+    private async loadRelatedRecords(targetEntity: EntityInfo, fkValues: string[]): Promise<void> {
+        const toLoad = fkValues.filter(v => !this.recordCache.has(this.cacheKey(v)));
+        if (toLoad.length === 0) return;
+
+        const baseRows = await this.loadRowsByPK(targetEntity, toLoad);
+        if (baseRows === null) {
+            for (const v of toLoad) this.recordCache.set(this.cacheKey(v), null);
+            return;
+        }
+
+        const merged = new Map<string, Record<string, unknown>>();
+        const pkName = targetEntity.FirstPrimaryKey.Name; // first-pk-ok: FK target — reached through a single-valued FK column, so its key is one column by design
+        for (const row of baseRows) {
+            const pk = this.readField(row, pkName);
+            if (pk != null) merged.set(this.cacheKey(String(pk)), { ...row });
+        }
+
+        // IS-A downcast: merge each child-type row (shared PK) over its parent record. Children
+        // are merged in metadata order; with disjoint subtypes at most one child row exists per
+        // record, so ordering only matters for (rare) overlapping-subtype field collisions.
+        for (const child of targetEntity.ChildEntities) {
+            const childRows = await this.loadRowsByPK(child, toLoad);
+            if (childRows === null) continue; // child load failure degrades to parent fields only
+            const childPKName = child.FirstPrimaryKey.Name; // first-pk-ok: IS-A child shares the FK-target parent's single-column key
+            for (const row of childRows) {
+                const pk = this.readField(row, childPKName);
+                if (pk == null) continue;
+                const existing = merged.get(this.cacheKey(String(pk)));
+                if (existing) Object.assign(existing, row);
+            }
+        }
+
+        for (const v of toLoad) {
+            this.recordCache.set(this.cacheKey(v), merged.get(this.cacheKey(v)) ?? null);
+        }
+    }
+
+    /**
+     * Load rows for a set of PK values. Per MJ convention, a loaded engine's full-set cache is
+     * consulted first (BaseEngineRegistry) — e.g. ContentSources are already cached by
+     * KnowledgeHubMetadataEngine, so the common hop resolves with zero queries. Any key the cache
+     * does not hold is then fetched with one `PK IN (...)` RunView. Returns null (not []) on query
+     * failure with nothing cached to fall back on.
+     *
+     * ── A CACHE MISS IS "UNKNOWN", NOT "ABSENT" ─────────────────────────────────────────────────
+     * This used to return the cache's answer whole whenever any engine cached the entity. That
+     * answer is a FILTERED SUBSET, so a key the cache had never heard of came back as an empty
+     * result — indistinguishable from "no such row" — and the RunView that would have found it was
+     * never reached.
+     *
+     * A `BaseEngine` full-set cache is complete only as of the moment it loaded. It refreshes on
+     * local entity saves, but unless Redis cross-server cache sync is configured, nothing tells it
+     * about a row another PROCESS inserted. So on any deployment that writes through a second
+     * process — a worker, an importer, a sibling API instance — every record created after the
+     * reader booted resolves to nothing for the lifetime of that process.
+     *
+     * That is not a cosmetic miss. This resolver feeds `GetSourceRecordFieldPaths`, whose values
+     * route a record to its tenant partition, and a driver that requires one is entitled to fail
+     * closed when it is missing — so the symptom is a total, silent refusal to write, reported as
+     * if the related record did not exist. Observed in production 2026-09-24: a content source
+     * created after the vectorization worker booted left every one of its items unembeddable, with
+     * a correct row sitting in the database the whole time.
+     *
+     * The fast path is unchanged when the cache genuinely covers the batch; only the keys it did
+     * not produce are queried, so a cold row costs one extra `IN (...)` rather than a full reload.
+     *
+     * Expected cost, not a regression: for an engine-cached IS-A CHILD entity, most keys are
+     * legitimately absent (with disjoint subtypes a record has a row in at most one child), so each
+     * such key now counts as missing and costs one `IN (...)` per child per batch where it used to
+     * cost nothing. It is bounded by the per-pass `recordCache` (a key is fetched at most once per
+     * resolver), and only engine-cached child entities pay it at all.
+     */
+    private async loadRowsByPK(entity: EntityInfo, pkValues: string[]): Promise<Record<string, unknown>[] | null> {
+        if (pkValues.length === 0) return [];
+
+        const pkName = entity.FirstPrimaryKey.Name; // first-pk-ok: entity is an FK target or its IS-A child (see loadRelatedRecords) — single-column key by design
+        const cached = this.readRowsFromRegistryCache(entity, pkValues) ?? [];
+        // Keyed off what the cache actually PRODUCED, not off how many rows came back: a cached row
+        // whose PK field is unreadable must count as a miss, or it would suppress the query for a
+        // key nothing has resolved.
+        const served = new Set(
+            cached
+                .map(r => this.readField(r, pkName))
+                .filter((v): v is string | number => v !== null && v !== undefined)
+                .map(v => this.cacheKey(String(v)))
+        );
+        const missing = pkValues.filter(v => !served.has(this.cacheKey(v)));
+        if (missing.length === 0) return cached;
+
+        const idList = missing.map(v => `'${EscapeSQLString(v)}'`).join(',');
+        const rv = this.provider as unknown as IRunViewProvider;
+        const result = await rv.RunView<Record<string, unknown>>({
+            EntityName: entity.Name,
+            ExtraFilter: `${pkName} IN (${idList})`,
+            ResultType: 'simple'
+        }, this.contextUser);
+        if (!result.Success) {
+            LogError(`FieldPathResolver: failed to load "${entity.Name}" records for path resolution: ${result.ErrorMessage}`);
+            // Whatever the cache did serve still resolves; only the keys this query would have
+            // answered stay unresolved. `null` is reserved for "nothing to offer at all", which is
+            // what the caller turns into a failed load.
+            return cached.length > 0 ? cached : null;
+        }
+        return cached.length > 0 ? [...cached, ...result.Results] : result.Results;
+    }
+
+    /**
+     * Serve the requested rows from an already-loaded engine's full-set cache when one exists
+     * (read-only — the donor's live array is never mutated). Returns null when no engine caches
+     * the entity or the cached rows aren't entity objects, so the caller queries instead.
+     *
+     * The result is a SUBSET, never an answer about the keys it omits — a key absent from it may
+     * simply postdate the cache's load. `loadRowsByPK` owns that distinction; do not treat a short
+     * return here as "those rows do not exist".
+     */
+    private readRowsFromRegistryCache(entity: EntityInfo, pkValues: string[]): Record<string, unknown>[] | null {
+        const rows = BaseEngineRegistry.Instance.TryGetCachedRecords(entity.Name, { unfilteredOnly: true });
+        if (!rows) return null;
+        if (rows.length > 0 && typeof (rows[0] as Partial<BaseEntity>).GetAll !== 'function') return null;
+
+        const wanted = new Set(pkValues.map(v => this.cacheKey(v)));
+        return rows
+            .filter(r => wanted.has(this.cacheKey(String(r.FirstPrimaryKey.Value)))) // first-pk-ok: cached rows of an FK-target entity — single-column key by design
+            .map(r => r.GetAll() as Record<string, unknown>);
+    }
+
+    /** Read a field from a plain record: exact name first, then case-insensitive fallback. */
+    private readField(record: Record<string, unknown>, fieldName: string): unknown {
+        if (fieldName in record) return record[fieldName];
+        const lower = fieldName.toLowerCase();
+        const key = Object.keys(record).find(k => k.toLowerCase() === lower);
+        return key !== undefined ? record[key] : undefined;
+    }
+
+    /** Normalized cache key for an FK value (UUIDs compare case-insensitively in MJ). */
+    private cacheKey(value: string): string {
+        return NormalizeUUID(value.trim());
+    }
+}

@@ -376,6 +376,50 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
             expect(params.conversationMessages[2].content).toContain('ChildAgent2');
         });
 
+        it('answers natively-called parallel sub-agents with one tool turn, no delegation annotations', async () => {
+            const params: ExecuteAgentParams<any> = {
+                agent: { ID: 'parent-agent-id', Name: 'ParentAgent' } as any,
+                contextUser: { ID: 'user-1' } as any,
+                conversationMessages: [],
+                onProgress: vi.fn(),
+            };
+            const previousDecision: BaseAgentNextStep<any, any> = {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: { val: 10 },
+                subAgents: [
+                    { name: 'ChildAgent1', message: 'Do job 1', terminateAfter: false, toolCallId: 'call_a' },
+                    { name: 'ChildAgent2', message: 'Do job 2', terminateAfter: false, toolCallId: 'call_b' }
+                ],
+                nativeTurn: {
+                    text: '',
+                    toolCalls: [
+                        { id: 'call_a', name: 'delegate_to_childagent1', arguments: {} },
+                        { id: 'call_b', name: 'delegate_to_childagent2', arguments: {} }
+                    ],
+                    sendResultsNatively: true
+                }
+            } as BaseAgentNextStep<any, any>;
+            agent.mockExecuteSubAgentResult = (name: string) => ({
+                success: name === 'ChildAgent1',
+                payload: name === 'ChildAgent1' ? { child1Result: 'data1' } : { child2Result: 'data2' },
+                agentRun: { FinalStep: name === 'ChildAgent1' ? 'Success' : 'Failed', Steps: [{ ID: name }] } as any
+            });
+
+            await agent.testProcessSubAgentStep(params, previousDecision);
+
+            // No "[You delegated …]" user turns, no "Parallel Sub-Agents Completed" user message: one tool turn.
+            expect(params.conversationMessages.length).toBe(1);
+            const turn = params.conversationMessages[0] as { role: string; content: Array<{ type: string; toolCallId: string; toolName: string; isError: boolean; content: string }> };
+            expect(turn.role).toBe('tool');
+            expect(turn.content.map((b) => [b.type, b.toolCallId, b.toolName, b.isError])).toEqual([
+                ['tool_result', 'call_a', 'delegate_to_childagent1', false],
+                ['tool_result', 'call_b', 'delegate_to_childagent2', true]
+            ]);
+            expect(turn.content[0].content).toContain('ChildAgent1');
+            expect(turn.content[1].content).toContain('ChildAgent2');
+        });
+
         it('should correctly scope child payload inputs and merge scoped outputs', async () => {
             const params: ExecuteAgentParams<any> = {
                 agent: {

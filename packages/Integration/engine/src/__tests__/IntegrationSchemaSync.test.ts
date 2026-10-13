@@ -18,54 +18,82 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { decideBooleanOverlay, decidePKPromotion, decideAbsentDeactivations, decideSchemaLimitViolations, decideLengthOverlay, decideSemanticOverlay, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { DecideTypeOverlay, DecideNullabilityOverlay, DecideBooleanOverlay, DecidePKPromotion, DecideAbsentDeactivations, DecideSchemaLimitViolations, DecideLengthOverlay, DecideSemanticOverlay, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
 
 describe('decideLengthOverlay (U2 — width overlay grows, never shrinks)', () => {
     it('GROWS a persisted width when the rediscovered sample is wider', () => {
-        const r = decideLengthOverlay(128, 512);
+        const r = DecideLengthOverlay(128, 512);
         expect(r.Length).toBe(512);
         expect(r.changed).toBe(true);
     });
 
     it('NEVER shrinks: a narrower rediscovery keeps the persisted (wider) width', () => {
         // The bug: a narrower sample used to overwrite 512 with 128 → catalog drifts below the column.
-        const r = decideLengthOverlay(512, 128);
+        const r = DecideLengthOverlay(512, 128);
         expect(r.Length).toBe(512);
         expect(r.changed).toBe(false);
     });
 
     it('adopts the measured width when nothing was persisted yet', () => {
-        const r = decideLengthOverlay(null, 256);
+        const r = DecideLengthOverlay(null, 256);
         expect(r.Length).toBe(256);
         expect(r.changed).toBe(true);
     });
 
     it('treats a null/undefined source width as "no opinion" — keeps the persisted width (never clears to MAX)', () => {
-        expect(decideLengthOverlay(512, null)).toEqual({ Length: 512, changed: false });
-        expect(decideLengthOverlay(512, undefined)).toEqual({ Length: 512, changed: false });
+        expect(DecideLengthOverlay(512, null)).toEqual({ Length: 512, changed: false });
+        expect(DecideLengthOverlay(512, undefined)).toEqual({ Length: 512, changed: false });
     });
 
     it('is a no-op when the widths already match', () => {
-        expect(decideLengthOverlay(255, 255)).toEqual({ Length: 255, changed: false });
+        expect(DecideLengthOverlay(255, 255)).toEqual({ Length: 255, changed: false });
+    });
+
+    // -1 is MAX/unbounded — the convention both dialects already render as `(MAX)`
+    // (sqlServerDialect/postgresqlDialect: `length === -1` → unbounded). It is the WIDEST width,
+    // so a numeric `>` comparison ranks it as the narrowest and gets the grow-only rule backwards.
+    it('keeps an explicit MAX (-1) — a sampled width must never narrow it', () => {
+        // The failure this prevents: an operator widens a column to MAX because real values exceed
+        // any bounded width, the next discovery samples 4000 chars and silently narrows it back,
+        // and records too long for the column are then SKIPPED WHOLE rather than truncated — so the
+        // data stops arriving with no error on the row.
+        expect(DecideLengthOverlay(-1, 4000)).toEqual({ Length: -1, changed: false });
+        expect(DecideLengthOverlay(-1, 255)).toEqual({ Length: -1, changed: false });
+    });
+
+    it('adopts MAX when the source itself reports unbounded', () => {
+        expect(DecideLengthOverlay(4000, -1)).toEqual({ Length: -1, changed: true });
+        expect(DecideLengthOverlay(null, -1)).toEqual({ Length: -1, changed: true });
+    });
+
+    it('is a no-op when both sides are already MAX', () => {
+        expect(DecideLengthOverlay(-1, -1)).toEqual({ Length: -1, changed: false });
+    });
+
+    it('still treats "no opinion" as no-op when the persisted width is MAX', () => {
+        expect(DecideLengthOverlay(-1, null)).toEqual({ Length: -1, changed: false });
+        expect(DecideLengthOverlay(-1, undefined)).toEqual({ Length: -1, changed: false });
     });
 });
 
 describe('decideBooleanOverlay', () => {
     describe('undefined discovered (no-opinion case — the bug class)', () => {
         it('keeps Declared true when discovered is undefined', () => {
-            const r = decideBooleanOverlay(true, undefined);
+            const r = DecideBooleanOverlay(true, undefined);
             expect(r.value).toBe(true);
             expect(r.winner).toBe('Declared');
         });
 
         it('keeps Declared false when discovered is undefined', () => {
-            const r = decideBooleanOverlay(false, undefined);
+            const r = DecideBooleanOverlay(false, undefined);
             expect(r.value).toBe(false);
             expect(r.winner).toBe('Declared');
         });
 
         it('keeps Declared undefined when both are undefined', () => {
-            const r = decideBooleanOverlay(undefined, undefined);
+            const r = DecideBooleanOverlay(undefined, undefined);
             expect(r.value).toBeUndefined();
             expect(r.winner).toBe('Declared');
         });
@@ -73,13 +101,13 @@ describe('decideBooleanOverlay', () => {
 
     describe('defined discovered, matches declared (no-op case)', () => {
         it('Declared wins when both are true', () => {
-            const r = decideBooleanOverlay(true, true);
+            const r = DecideBooleanOverlay(true, true);
             expect(r.value).toBe(true);
             expect(r.winner).toBe('Declared');
         });
 
         it('Declared wins when both are false', () => {
-            const r = decideBooleanOverlay(false, false);
+            const r = DecideBooleanOverlay(false, false);
             expect(r.value).toBe(false);
             expect(r.winner).toBe('Declared');
         });
@@ -87,19 +115,19 @@ describe('decideBooleanOverlay', () => {
 
     describe('defined discovered, differs from declared (legitimate overlay)', () => {
         it('Discovered wins when source says true but declared was false', () => {
-            const r = decideBooleanOverlay(false, true);
+            const r = DecideBooleanOverlay(false, true);
             expect(r.value).toBe(true);
             expect(r.winner).toBe('Discovered');
         });
 
         it('Discovered wins when source says false but declared was true (e.g. column became nullable)', () => {
-            const r = decideBooleanOverlay(true, false);
+            const r = DecideBooleanOverlay(true, false);
             expect(r.value).toBe(false);
             expect(r.winner).toBe('Discovered');
         });
 
         it('Discovered wins when declared was undefined and source has a value', () => {
-            const r = decideBooleanOverlay(undefined, true);
+            const r = DecideBooleanOverlay(undefined, true);
             expect(r.value).toBe(true);
             expect(r.winner).toBe('Discovered');
         });
@@ -110,13 +138,13 @@ describe('decideBooleanOverlay', () => {
             // HubSpot's DiscoverFields maps Properties API output without setting
             // IsPrimaryKey on the result objects — so srcField.IsPrimaryKey is
             // `undefined`.  Pre-fix, this nuked the declared PK to false.
-            const result = decideBooleanOverlay(true, undefined);
+            const result = DecideBooleanOverlay(true, undefined);
             expect(result.value).toBe(true);
             expect(result.winner).toBe('Declared');
         });
 
         it("Salesforce's Id (Declared PK=true) stays PK when describe omits IsPrimaryKey", () => {
-            const result = decideBooleanOverlay(true, undefined);
+            const result = DecideBooleanOverlay(true, undefined);
             expect(result.value).toBe(true);
             expect(result.winner).toBe('Declared');
         });
@@ -125,9 +153,9 @@ describe('decideBooleanOverlay', () => {
             // The fix replaced four sites with the same helper. Asserting one
             // call site's behavior here documents that the rule applies
             // uniformly across all four guarded attributes.
-            const required = decideBooleanOverlay(true, undefined);
-            const unique = decideBooleanOverlay(true, undefined);
-            const readonly = decideBooleanOverlay(true, undefined);
+            const required = DecideBooleanOverlay(true, undefined);
+            const unique = DecideBooleanOverlay(true, undefined);
+            const readonly = DecideBooleanOverlay(true, undefined);
             expect(required.winner).toBe('Declared');
             expect(unique.winner).toBe('Declared');
             expect(readonly.winner).toBe('Declared');
@@ -141,6 +169,7 @@ describe('decideAbsentDeactivations (§7 — authoritative-gated deactivation)',
         IsAuthoritative: true,
         DiscoveredObjectNames: [],
         DiscoveredFieldNamesByObject: {},
+        FieldsAuthoritativeByObject: {},
         ActiveObjects: [],
         ActiveFieldsByObjectID: {},
         ObjectIDByName: {},
@@ -148,7 +177,7 @@ describe('decideAbsentDeactivations (§7 — authoritative-gated deactivation)',
     });
 
     it('SAFETY: not authoritative -> deactivates NOTHING even when objects are absent', () => {
-        const out = decideAbsentDeactivations(
+        const out = DecideAbsentDeactivations(
             base({ IsAuthoritative: false, DiscoveredObjectNames: ['Keep'], ActiveObjects: [{ ID: 'o1', Name: 'Keep' }, { ID: 'o2', Name: 'Gone' }] }),
         );
         expect(out.ObjectIDsToDeactivate).toEqual([]);
@@ -156,27 +185,28 @@ describe('decideAbsentDeactivations (§7 — authoritative-gated deactivation)',
     });
 
     it('SAFETY: DeactivateAbsent=false -> deactivates nothing', () => {
-        const out = decideAbsentDeactivations(base({ DeactivateAbsent: false, DiscoveredObjectNames: ['Keep'], ActiveObjects: [{ ID: 'o2', Name: 'Gone' }] }));
+        const out = DecideAbsentDeactivations(base({ DeactivateAbsent: false, DiscoveredObjectNames: ['Keep'], ActiveObjects: [{ ID: 'o2', Name: 'Gone' }] }));
         expect(out.ObjectIDsToDeactivate).toEqual([]);
     });
 
     it('authoritative + requested: deactivates an ACTIVE object ABSENT from discovery, keeps present ones', () => {
-        const out = decideAbsentDeactivations(
+        const out = DecideAbsentDeactivations(
             base({ DiscoveredObjectNames: ['Keep'], ActiveObjects: [{ ID: 'o1', Name: 'Keep' }, { ID: 'o2', Name: 'Gone' }] }),
         );
         expect(out.ObjectIDsToDeactivate).toEqual(['o2']);
     });
 
     it('object matching is case-insensitive (discovered "Contacts" keeps active "contacts")', () => {
-        const out = decideAbsentDeactivations(base({ DiscoveredObjectNames: ['Contacts'], ActiveObjects: [{ ID: 'o1', Name: 'contacts' }] }));
+        const out = DecideAbsentDeactivations(base({ DiscoveredObjectNames: ['Contacts'], ActiveObjects: [{ ID: 'o1', Name: 'contacts' }] }));
         expect(out.ObjectIDsToDeactivate).toEqual([]);
     });
 
-    it('FIELD-level: deactivates an ACTIVE field absent from the discovered field set (case-insensitive)', () => {
-        const out = decideAbsentDeactivations(
+    it('FIELD-level: deactivates an ACTIVE field absent from a DECLARED-COMPLETE field set (case-insensitive)', () => {
+        const out = DecideAbsentDeactivations(
             base({
                 DiscoveredObjectNames: ['Contacts'],
                 DiscoveredFieldNamesByObject: { Contacts: ['id', 'Name'] },
+                FieldsAuthoritativeByObject: { Contacts: true },
                 ObjectIDByName: { contacts: 'o1' },
                 ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'ID' }, { ID: 'f2', Name: 'name' }, { ID: 'f3', Name: 'oldcol' }] },
             }),
@@ -185,12 +215,59 @@ describe('decideAbsentDeactivations (§7 — authoritative-gated deactivation)',
     });
 
     it('FIELD-level SAFETY: an object discovered with ZERO fields never has its columns disabled', () => {
-        const out = decideAbsentDeactivations(
+        const out = DecideAbsentDeactivations(
             base({
                 DiscoveredObjectNames: ['Stub'],
-                DiscoveredFieldNamesByObject: { Stub: [] }, // DiscoverFields found nothing -> not authoritative for columns
+                DiscoveredFieldNamesByObject: { Stub: [] },
+                FieldsAuthoritativeByObject: { Stub: true }, // even a claim of completeness cannot mean "all of them"
                 ObjectIDByName: { stub: 'o1' },
                 ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'anything' }] },
+            }),
+        );
+        expect(out.FieldIDsToDeactivate).toEqual([]);
+    });
+
+    it('FIELD-level: a CUSTOM-ONLY source never loses its standard columns', () => {
+        // The case the old non-empty-list inference could not see. A source that returns only the
+        // account's custom columns is ADDITIVE — the standard columns still exist, it just did not
+        // restate them. Inferring completeness from "the list is non-empty" deactivated them.
+        const out = DecideAbsentDeactivations(
+            base({
+                DiscoveredObjectNames: ['Contacts'],
+                DiscoveredFieldNamesByObject: { Contacts: ['custom_score'] },
+                FieldsAuthoritativeByObject: { Contacts: false },
+                ObjectIDByName: { contacts: 'o1' },
+                ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'id' }, { ID: 'f2', Name: 'email' }] },
+            }),
+        );
+        expect(out.FieldIDsToDeactivate).toEqual([]);
+    });
+
+    it('FIELD-level: an AUTHORITATIVE connector still retires columns its describe no longer returns', () => {
+        // The full-mapping case. A connector that affirms a complete gamut is affirming it for the
+        // fields the same describe returned, so a column absent from it is genuinely gone. Requiring
+        // a separate per-object opt-in would mean no connector ever retires a column.
+        const out = DecideAbsentDeactivations(
+            base({
+                DiscoveredObjectNames: ['Contacts'],
+                DiscoveredFieldNamesByObject: { Contacts: ['id'] },
+                FieldsAuthoritativeByObject: { Contacts: true },
+                ObjectIDByName: { contacts: 'o1' },
+                ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'id' }, { ID: 'f2', Name: 'gone_from_source' }] },
+            }),
+        );
+        expect(out.FieldIDsToDeactivate).toEqual(['f2']);
+    });
+
+    it('FIELD-level: an object that has explicitly opted OUT is left alone', () => {
+        // Absence of evidence is not evidence of absence — the same rule the key search follows.
+        const out = DecideAbsentDeactivations(
+            base({
+                DiscoveredObjectNames: ['Contacts'],
+                DiscoveredFieldNamesByObject: { Contacts: ['id'] },
+                FieldsAuthoritativeByObject: { Contacts: false },
+                ObjectIDByName: { contacts: 'o1' },
+                ActiveFieldsByObjectID: { o1: [{ ID: 'f1', Name: 'id' }, { ID: 'f2', Name: 'email' }] },
             }),
         );
         expect(out.FieldIDsToDeactivate).toEqual([]);
@@ -201,23 +278,23 @@ describe('decideSchemaLimitViolations (§B — operator/env table+column caps at
     const cols = (...counts: Array<[string, number]>) => counts.map(([Name, ColumnCount]) => ({ Name, ColumnCount }));
 
     it('DEFAULT (both caps null = unbounded) -> no violation regardless of size', () => {
-        const v = decideSchemaLimitViolations({ TableCount: 9999, ColumnCountByTable: cols(['big', 9999]), MaxTables: null, MaxColumnsPerTable: null });
+        const v = DecideSchemaLimitViolations({ TableCount: 9999, ColumnCountByTable: cols(['big', 9999]), MaxTables: null, MaxColumnsPerTable: null });
         expect(v).toEqual([]);
     });
 
     it('rejects when the table count exceeds MaxTables', () => {
-        const v = decideSchemaLimitViolations({ TableCount: 12, ColumnCountByTable: [], MaxTables: 10, MaxColumnsPerTable: null });
+        const v = DecideSchemaLimitViolations({ TableCount: 12, ColumnCountByTable: [], MaxTables: 10, MaxColumnsPerTable: null });
         expect(v.length).toBe(1);
         expect(v[0]).toContain('MJ_INTEGRATION_MAX_TABLES limit (10)');
     });
 
     it('allows a selection at exactly the table cap (boundary)', () => {
-        const v = decideSchemaLimitViolations({ TableCount: 10, ColumnCountByTable: [], MaxTables: 10, MaxColumnsPerTable: null });
+        const v = DecideSchemaLimitViolations({ TableCount: 10, ColumnCountByTable: [], MaxTables: 10, MaxColumnsPerTable: null });
         expect(v).toEqual([]);
     });
 
     it('rejects + names the table(s) whose column count exceeds MaxColumnsPerTable', () => {
-        const v = decideSchemaLimitViolations({
+        const v = DecideSchemaLimitViolations({
             TableCount: 2,
             ColumnCountByTable: cols(['ok', 5], ['fat', 80], ['alsofat', 90]),
             MaxTables: null,
@@ -231,50 +308,50 @@ describe('decideSchemaLimitViolations (§B — operator/env table+column caps at
     });
 
     it('reports BOTH violations when table-count AND a column-count are over', () => {
-        const v = decideSchemaLimitViolations({ TableCount: 12, ColumnCountByTable: cols(['fat', 80]), MaxTables: 10, MaxColumnsPerTable: 50 });
+        const v = DecideSchemaLimitViolations({ TableCount: 12, ColumnCountByTable: cols(['fat', 80]), MaxTables: 10, MaxColumnsPerTable: 50 });
         expect(v.length).toBe(2);
     });
 
     it('within both caps -> no violation', () => {
-        const v = decideSchemaLimitViolations({ TableCount: 3, ColumnCountByTable: cols(['a', 10], ['b', 20]), MaxTables: 10, MaxColumnsPerTable: 50 });
+        const v = DecideSchemaLimitViolations({ TableCount: 3, ColumnCountByTable: cols(['a', 10], ['b', 20]), MaxTables: 10, MaxColumnsPerTable: 50 });
         expect(v).toEqual([]);
     });
 });
 
 describe('decideSemanticOverlay (external-wins-when-present for semantic attributes)', () => {
     it('a returned description OVERRIDES the curated one (the worked example)', () => {
-        const r = decideSemanticOverlay('Curated description', 'Vendor-returned description');
+        const r = DecideSemanticOverlay('Curated description', 'Vendor-returned description');
         expect(r.value).toBe('Vendor-returned description');
         expect(r.changed).toBe(true);
         expect(r.winner).toBe('Discovered');
     });
 
     it('a SILENT source keeps the curated value (undefined)', () => {
-        const r = decideSemanticOverlay('Curated description', undefined);
+        const r = DecideSemanticOverlay('Curated description', undefined);
         expect(r.value).toBe('Curated description');
         expect(r.changed).toBe(false);
         expect(r.winner).toBe('Declared');
     });
 
     it('a SILENT source keeps the curated value (null)', () => {
-        expect(decideSemanticOverlay('Curated', null).changed).toBe(false);
+        expect(DecideSemanticOverlay('Curated', null).changed).toBe(false);
     });
 
     it('an EMPTY string is silence, never an instruction to blank the curated value', () => {
-        const r = decideSemanticOverlay('Curated', '');
+        const r = DecideSemanticOverlay('Curated', '');
         expect(r.value).toBe('Curated');
         expect(r.changed).toBe(false);
         expect(r.winner).toBe('Declared');
     });
 
     it('identical values → no change, Declared credited', () => {
-        const r = decideSemanticOverlay('Same', 'Same');
+        const r = DecideSemanticOverlay('Same', 'Same');
         expect(r.changed).toBe(false);
         expect(r.winner).toBe('Declared');
     });
 
     it('fills an empty curated slot from the source', () => {
-        const r = decideSemanticOverlay(null, 'From describe');
+        const r = DecideSemanticOverlay(null, 'From describe');
         expect(r.value).toBe('From describe');
         expect(r.changed).toBe(true);
         expect(r.winner).toBe('Discovered');
@@ -289,15 +366,15 @@ describe('decideSemanticOverlay (external-wins-when-present for semantic attribu
 describe('decidePKPromotion', () => {
     describe('no declared PK — stream picker is the authority', () => {
         it('discovered=true promotes the field', () => {
-            expect(decidePKPromotion({ objectHasDeclaredPK: false, fieldIsDiscovered: true, existingIsPrimaryKey: false, discoveredIsPrimaryKey: true }))
+            expect(DecidePKPromotion({ objectHasDeclaredPK: false, fieldIsDiscovered: true, existingIsPrimaryKey: false, discoveredIsPrimaryKey: true }))
                 .toEqual({ value: true, winner: 'Discovered' });
         });
         it('discovered=false leaves it non-PK', () => {
-            expect(decidePKPromotion({ objectHasDeclaredPK: false, fieldIsDiscovered: true, existingIsPrimaryKey: false, discoveredIsPrimaryKey: false }))
+            expect(DecidePKPromotion({ objectHasDeclaredPK: false, fieldIsDiscovered: true, existingIsPrimaryKey: false, discoveredIsPrimaryKey: false }))
                 .toEqual({ value: false, winner: 'Discovered' });
         });
         it('discovered=undefined keeps existing (no fabrication)', () => {
-            expect(decidePKPromotion({ objectHasDeclaredPK: false, fieldIsDiscovered: false, existingIsPrimaryKey: true, discoveredIsPrimaryKey: undefined }))
+            expect(DecidePKPromotion({ objectHasDeclaredPK: false, fieldIsDiscovered: false, existingIsPrimaryKey: true, discoveredIsPrimaryKey: undefined }))
                 .toEqual({ value: true, winner: 'Declared' });
         });
     });
@@ -305,22 +382,110 @@ describe('decidePKPromotion', () => {
     describe('declared PK exists — either/or (declared wins)', () => {
         it('the declared PK field itself stays PK', () => {
             // e.g. HubSpot companies.id (declared, non-discovered) — discovery may not flip it off
-            expect(decidePKPromotion({ objectHasDeclaredPK: true, fieldIsDiscovered: false, existingIsPrimaryKey: true, discoveredIsPrimaryKey: undefined }))
+            expect(DecidePKPromotion({ objectHasDeclaredPK: true, fieldIsDiscovered: false, existingIsPrimaryKey: true, discoveredIsPrimaryKey: undefined }))
                 .toEqual({ value: true, winner: 'Declared' });
         });
         it('a NEW discovered field is NOT promoted to PK (blocks fabricated composite)', () => {
             // e.g. HubSpot companies.hs_object_id first seen by discovery with a declared id present
-            expect(decidePKPromotion({ objectHasDeclaredPK: true, fieldIsDiscovered: true, existingIsPrimaryKey: false, discoveredIsPrimaryKey: true }))
+            expect(DecidePKPromotion({ objectHasDeclaredPK: true, fieldIsDiscovered: true, existingIsPrimaryKey: false, discoveredIsPrimaryKey: true }))
                 .toEqual({ value: false, winner: 'Declared' });
         });
         it('an already-persisted Discovered PK is DEMOTED (self-heal of prior corruption)', () => {
             // hs_object_id was wrongly persisted as a Discovered PK next to declared id — heal it
-            expect(decidePKPromotion({ objectHasDeclaredPK: true, fieldIsDiscovered: true, existingIsPrimaryKey: true, discoveredIsPrimaryKey: true }))
+            expect(DecidePKPromotion({ objectHasDeclaredPK: true, fieldIsDiscovered: true, existingIsPrimaryKey: true, discoveredIsPrimaryKey: true }))
                 .toEqual({ value: false, winner: 'Declared' });
         });
         it('a declared non-PK field is not promoted even if discovery claims PK', () => {
-            expect(decidePKPromotion({ objectHasDeclaredPK: true, fieldIsDiscovered: false, existingIsPrimaryKey: false, discoveredIsPrimaryKey: true }))
+            expect(DecidePKPromotion({ objectHasDeclaredPK: true, fieldIsDiscovered: false, existingIsPrimaryKey: false, discoveredIsPrimaryKey: true }))
                 .toEqual({ value: false, winner: 'Declared' });
         });
+    });
+});
+
+describe('the persist call site passes the CONNECTOR\'s authority, not a constant', () => {
+    // decideAbsentDeactivations is pure and well covered, but it only ever sees what the call site
+    // hands it — and that site hardcoded `IsAuthoritative: true`, overriding every connector that
+    // declares its discovery partial. A source that cannot prove absence was still having its
+    // objects disabled on refresh. Pinned against the source because the defect was an argument
+    // value, which no test of the pure function can see.
+    const source = readFileSync(join(__dirname, '..', 'IntegrationSchemaSync.ts'), 'utf8');
+
+    it('does not hardcode IsAuthoritative', () => {
+        expect(source).not.toMatch(/IsAuthoritative:\s*true\s*,/);
+        expect(source).toMatch(/IsAuthoritative:\s*SourceSchema\.IsAuthoritative === true/);
+    });
+
+    it('gates object and field deactivation on the same claim', () => {
+        // If these ever diverge again, one level retires on evidence the other rejects.
+        expect(source).toMatch(/FieldsAreAuthoritative \?\? SourceSchema\.IsAuthoritative === true/);
+    });
+});
+
+describe('decideTypeOverlay — silence keeps the declaration (§ no fabrication)', () => {
+    // MapSourceType answers EVERY input, including '' and undefined, because its fallback has to
+    // produce something for a genuinely unknown column. That made it unable to distinguish "the
+    // source says text" from "the source said nothing" — and the caller used its answer either way,
+    // so a describe with no type opinion rewrote a curated datetimeoffset to nvarchar. Types are
+    // hard constraints (real DDL), so a wrong one is a migration, not a cosmetic drift.
+
+    it('a SILENT source leaves a declared type alone', () => {
+        for (const silent of ['', '   ', undefined, null]) {
+            const out = DecideTypeOverlay('datetimeoffset', silent);
+            expect(out.value).toBe('datetimeoffset');
+            expect(out.winner).toBe('Declared');
+        }
+    });
+
+    it('a source that STATES a type wins over the declaration', () => {
+        const out = DecideTypeOverlay('nvarchar', 'datetime');
+        expect(out.value).toBe('datetimeoffset');
+        expect(out.winner).toBe('Discovered');
+    });
+
+    it('agreement is credited to the declaration, not the describe', () => {
+        expect(DecideTypeOverlay('bit', 'boolean')).toEqual({ value: 'bit', winner: 'Declared' });
+    });
+
+    it('an UNDECLARED field still takes the mapped value, fallback included', () => {
+        // Nothing curated to protect, and something has to be written.
+        expect(DecideTypeOverlay(null, 'string').value).toBe('nvarchar');
+        expect(DecideTypeOverlay('', undefined).value).toBe('nvarchar');
+    });
+
+    it('does not silently downgrade a declared large-text column', () => {
+        // The nvarchar(MAX) → nvarchar direction is the one that drops records at sync time.
+        expect(DecideTypeOverlay('nvarchar(MAX)', undefined).value).toBe('nvarchar(MAX)');
+        expect(DecideTypeOverlay('nvarchar(MAX)', '').value).toBe('nvarchar(MAX)');
+    });
+});
+
+describe('decideNullabilityOverlay — both-silent keeps the declaration', () => {
+    // `AllowsNull ?? !IsRequired` computed TRUE when the source stated neither, because !undefined
+    // is true. A describe with no opinion on either attribute unconditionally overwrote a declared
+    // AllowsNull:false — a required column silently became optional, and the DDL followed.
+
+    it('keeps a declared NOT NULL when the source states neither attribute', () => {
+        const out = DecideNullabilityOverlay(false, undefined, undefined);
+        expect(out.value).toBe(false);
+        expect(out.winner).toBe('Declared');
+    });
+
+    it('an explicit AllowsNull from the source wins', () => {
+        expect(DecideNullabilityOverlay(false, true, undefined)).toEqual({ value: true, winner: 'Discovered' });
+        expect(DecideNullabilityOverlay(true, false, undefined)).toEqual({ value: false, winner: 'Discovered' });
+    });
+
+    it('IsRequired still derives nullability — that is a statement, just an indirect one', () => {
+        expect(DecideNullabilityOverlay(true, undefined, true)).toEqual({ value: false, winner: 'Discovered' });
+        expect(DecideNullabilityOverlay(false, undefined, false)).toEqual({ value: true, winner: 'Discovered' });
+    });
+
+    it('agreement is credited to the declaration', () => {
+        expect(DecideNullabilityOverlay(false, false, undefined).winner).toBe('Declared');
+    });
+
+    it('defaults to permissive only when there is no declaration to keep', () => {
+        expect(DecideNullabilityOverlay(null, undefined, undefined)).toEqual({ value: true, winner: 'Declared' });
+        expect(DecideNullabilityOverlay(undefined, undefined, undefined).value).toBe(true);
     });
 });

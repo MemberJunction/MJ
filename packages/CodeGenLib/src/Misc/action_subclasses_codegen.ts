@@ -1,14 +1,20 @@
 import { CodeNameFromString, EntityFieldValueListType, EntityInfo, Metadata, SeverityType, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
-import { makeDir } from '../Misc/util';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { MakeDir } from '../Misc/util';
+import { RegisterClass, UUIDsEqual, ordinalCompare } from '@memberjunction/global';
 import { MJActionEntity, MJActionLibraryEntity } from '@memberjunction/core-entities';
 import { MJActionEntityServer } from '@memberjunction/core-entities-server';
-import { logError, logMessage, logStatus } from './status_logging';
+import { logError, LogMessage, logStatus } from './status_logging';
 import { mkdirSync } from 'fs';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { MJActionEntityExtended } from '@memberjunction/actions-base';
+
+interface ActionWithLibraries {
+    Libraries?: {
+        Items?: MJActionLibraryEntity[];
+    };
+}
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
@@ -19,14 +25,23 @@ export class ActionSubClassGeneratorBase {
         // get all of the libraries from the combination of distinct libraries from all of the actions we have here
         const allActionLibraries: {Library: string, LibraryID: string, ItemsUsedArray: string[]}[] = [];
         actions.forEach(action => {
-            // Libraries can be undefined if the engine cache hasn't populated it
-            // (e.g. accessed before/around Config); guard rather than crash codegen.
-            action.Libraries?.forEach(lib => {
+            // `Libraries` is a cache-sourced, lazy related-record collection: reading Items fills it
+            // from ActionEngineBase's cache on first access. It THROWS rather than returning empty if
+            // no engine caches Action Libraries — which during CodeGen means the engine has not been
+            // configured, so guard the whole read rather than crash a generation run.
+            const actionLibraries: MJActionLibraryEntity[] = (() => {
+                try {
+                    return (action as unknown as ActionWithLibraries).Libraries?.Items ?? [];
+                } catch {
+                    return [];
+                }
+            })();
+            actionLibraries.forEach((lib: MJActionLibraryEntity) => {
                 if (!allActionLibraries.find(l => UUIDsEqual(l.LibraryID, lib.LibraryID))) {
                     allActionLibraries.push({
                         Library: lib.Library ?? '',
                         LibraryID: lib.LibraryID,
-                        ItemsUsedArray: lib.ItemsUsed && lib.ItemsUsed.length > 0 ? lib.ItemsUsed.split(',').map(item => item.trim()) : []
+                        ItemsUsedArray: lib.ItemsUsed && lib.ItemsUsed.length > 0 ? lib.ItemsUsed.split(',').map((item: string) => item.trim()) : []
                     });
                 }
                 else {
@@ -34,9 +49,9 @@ export class ActionSubClassGeneratorBase {
                     // in the allActionLibraries array element
                     const existingLib = allActionLibraries.find(l => UUIDsEqual(l.LibraryID, lib.LibraryID));
                     if(existingLib && lib.ItemsUsed && lib.ItemsUsed.length > 0) {
-                        const itemsUsed = lib.ItemsUsed.split(',').map(item => item.trim());
+                        const itemsUsed: string[] = lib.ItemsUsed.split(',').map((item: string) => item.trim());
                         if(itemsUsed.length > 0) {
-                            itemsUsed.forEach(item => {
+                            itemsUsed.forEach((item: string) => {
                                 if (!existingLib.ItemsUsedArray.includes(item)) {
                                     existingLib.ItemsUsedArray.push(item);
                                 }
@@ -48,13 +63,13 @@ export class ActionSubClassGeneratorBase {
         });
         return allActionLibraries;
     }
-    public async generateActions(actions: MJActionEntityExtended[], directory: string): Promise<boolean> {
+    public async GenerateActions(actions: MJActionEntityExtended[], directory: string): Promise<boolean> {
         try {
             const actionFilePath = path.join(directory, 'action_subclasses.ts');
 
             // Sort actions alphabetically by name for consistent output across CodeGen runs
             // This prevents git diffs from showing random reordering when no actual changes occurred
-            const sortedActions = [...actions].sort((a, b) => a.Name.localeCompare(b.Name));
+            const sortedActions = [...actions].sort((a, b) => ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID));
 
             // get all of the libraries from the combination of distinct libraries from all of the actions we have here
             const allActionLibraries = this.getAllActionLibrariesAndUsedItems(sortedActions);
@@ -75,7 +90,7 @@ ${allActionLibraries.map(lib => `import { ${lib.ItemsUsedArray.map(item => item)
 `;
             let sCode: string = "";
             for (const action of sortedActions) {
-                sCode += await this.generateSingleAction(action, directory);
+                sCode += await this.GenerateSingleAction(action, directory);
             }
             let actionCode = actionHeader + sCode;
 
@@ -93,6 +108,11 @@ ${allActionLibraries.map(lib => `import { ${lib.ItemsUsedArray.map(item => item)
         }
     }
 
+    /** @deprecated Use {@link GenerateActions}. */
+    public async generateActions(actions: MJActionEntityExtended[], directory: string): Promise<boolean> {
+        return this.GenerateActions(actions, directory);
+    }
+
     /**
      * 
      * description: Generate a single Action
@@ -101,7 +121,7 @@ ${allActionLibraries.map(lib => `import { ${lib.ItemsUsedArray.map(item => item)
      * @param directory 
      * @returns 
      */
-    public async generateSingleAction(action: MJActionEntity, directory: string): Promise<string> {
+    public async GenerateSingleAction(action: MJActionEntity, directory: string): Promise<string> {
         if (action.Status !== 'Active' || action.CodeApprovalStatus !=='Approved' || action.Type !== 'Generated') {
             // either the action is not active, not approved, or is NOT a Generated action, so skip it
             return "";
@@ -135,5 +155,10 @@ export class ${actionClassName} extends BaseAction {
             logError(`Error generating action ${action.Name}`, e);
             throw e
         }
+    }
+
+    /** @deprecated Use {@link GenerateSingleAction}. */
+    public async generateSingleAction(action: MJActionEntity, directory: string): Promise<string> {
+        return this.GenerateSingleAction(action, directory);
     }
 }

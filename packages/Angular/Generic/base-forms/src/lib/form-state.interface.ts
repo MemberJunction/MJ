@@ -38,6 +38,10 @@ export interface FormState {
     widthModeExplicit?: boolean;
     /** Custom section ordering - array of sectionKeys in user's preferred order */
     sectionOrder?: string[];
+    /** User-moved sections that should live in More. */
+    moreSectionKeys?: string[];
+    /** User-moved sections that should stay first-class (out of More). */
+    firstClassSectionKeys?: string[];
 }
 
 /**

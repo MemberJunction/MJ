@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // data-provider and communication stacks in at module load. Stub those out;
 // this suite only exercises provisioning's console-log behavior, so
 // @memberjunction/core (the logging implementation) stays real.
-vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
+vi.mock('@memberjunction/generic-database-provider', () => ({
   UserCache: { Instance: { Users: [] } },
 }));
 vi.mock('@memberjunction/communication-engine', () => ({
@@ -15,6 +15,10 @@ vi.mock('@memberjunction/communication-types', () => ({
 }));
 vi.mock('../config.js', () => ({
   configInfo: {},
+}));
+const isolated = vi.hoisted(() => ({ provider: null as unknown }));
+vi.mock('../isolatedProvider.js', () => ({
+  CreateIsolatedProvider: async () => isolated.provider,
 }));
 
 import { Metadata, type IMetadataProvider, type RoleInfo, type UserInfo } from '@memberjunction/core';
@@ -62,6 +66,7 @@ describe('MagicLinkService provisioning log policy', () => {
       RollbackTransaction: async () => undefined,
       GetEntityObject: async (entityName: string) => makeMockEntity(`mock-${entityName}`),
     };
+    isolated.provider = provider;
     Metadata.Provider = provider as unknown as IMetadataProvider;
 
     service = new MagicLinkService('https://mj.example.com', {} as MagicLinkConfig);

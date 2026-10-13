@@ -274,7 +274,6 @@ describe('SharedService resource type mapping', () => {
     // baseline) — the 'MJ: ' prefix belongs to entity names, not resource types
     expect(svc.mapResourceTypeNameToRouteSegment('User Views')).toBe('view');
     expect(svc.mapResourceTypeNameToRouteSegment('Dashboards')).toBe('dashboard');
-    expect(svc.mapResourceTypeNameToRouteSegment('Reports')).toBe('report');
     expect(svc.mapResourceTypeNameToRouteSegment('Search Results')).toBe('search');
     expect(svc.mapResourceTypeNameToRouteSegment('Queries')).toBe('query');
     expect(svc.mapResourceTypeNameToRouteSegment('Lists')).toBe('list');

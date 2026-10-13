@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_EVALUATION_PREFERENCES,
   EVALUATION_PREFS_SETTING_KEY,
-  normalizeExecutionStatus,
-  getDisplayStatus,
-  calculateEvaluationMetrics,
-  getQualityColor,
-  getPrimaryDisplayValue,
-  getNeedsReviewItems
+  NormalizeExecutionStatus,
+  GetDisplayStatus,
+  CalculateEvaluationMetrics,
+  GetQualityColor,
+  GetPrimaryDisplayValue,
+  GetNeedsReviewItems
 } from '../lib/models/evaluation.types';
 import type { TestRunWithFeedback, EvaluationPreferences } from '../lib/models/evaluation.types';
 
@@ -27,48 +27,48 @@ describe('EVALUATION_PREFS_SETTING_KEY', () => {
 
 describe('normalizeExecutionStatus', () => {
   it('should normalize Passed to Completed', () => {
-    expect(normalizeExecutionStatus('Passed')).toBe('Completed');
+    expect(NormalizeExecutionStatus('Passed')).toBe('Completed');
   });
 
   it('should normalize Failed to Completed', () => {
-    expect(normalizeExecutionStatus('Failed')).toBe('Completed');
+    expect(NormalizeExecutionStatus('Failed')).toBe('Completed');
   });
 
   it('should keep Completed as Completed', () => {
-    expect(normalizeExecutionStatus('Completed')).toBe('Completed');
+    expect(NormalizeExecutionStatus('Completed')).toBe('Completed');
   });
 
   it('should keep Error as Error', () => {
-    expect(normalizeExecutionStatus('Error')).toBe('Error');
+    expect(NormalizeExecutionStatus('Error')).toBe('Error');
   });
 
   it('should keep Timeout as Timeout', () => {
-    expect(normalizeExecutionStatus('Timeout')).toBe('Timeout');
+    expect(NormalizeExecutionStatus('Timeout')).toBe('Timeout');
   });
 
   it('should keep Running as Running', () => {
-    expect(normalizeExecutionStatus('Running')).toBe('Running');
+    expect(NormalizeExecutionStatus('Running')).toBe('Running');
   });
 
   it('should keep Pending as Pending', () => {
-    expect(normalizeExecutionStatus('Pending')).toBe('Pending');
+    expect(NormalizeExecutionStatus('Pending')).toBe('Pending');
   });
 
   it('should keep Skipped as Skipped', () => {
-    expect(normalizeExecutionStatus('Skipped')).toBe('Skipped');
+    expect(NormalizeExecutionStatus('Skipped')).toBe('Skipped');
   });
 
   it('should default unknown statuses to Completed', () => {
-    expect(normalizeExecutionStatus('Unknown')).toBe('Completed');
-    expect(normalizeExecutionStatus('')).toBe('Completed');
+    expect(NormalizeExecutionStatus('Unknown')).toBe('Completed');
+    expect(NormalizeExecutionStatus('')).toBe('Completed');
   });
 });
 
 describe('getDisplayStatus', () => {
   it('should return the status as-is', () => {
-    expect(getDisplayStatus('Passed')).toBe('Passed');
-    expect(getDisplayStatus('Failed')).toBe('Failed');
-    expect(getDisplayStatus('Completed')).toBe('Completed');
+    expect(GetDisplayStatus('Passed')).toBe('Passed');
+    expect(GetDisplayStatus('Failed')).toBe('Failed');
+    expect(GetDisplayStatus('Completed')).toBe('Completed');
   });
 });
 
@@ -100,7 +100,7 @@ function createMockRun(overrides: Partial<TestRunWithFeedback> = {}): TestRunWit
 
 describe('calculateEvaluationMetrics', () => {
   it('should return zero metrics for empty runs', () => {
-    const metrics = calculateEvaluationMetrics([]);
+    const metrics = CalculateEvaluationMetrics([]);
     expect(metrics.totalRuns).toBe(0);
     expect(metrics.execCompletedCount).toBe(0);
     expect(metrics.humanReviewedCount).toBe(0);
@@ -115,7 +115,7 @@ describe('calculateEvaluationMetrics', () => {
       createMockRun({ executionStatus: 'Timeout' }),
       createMockRun({ executionStatus: 'Skipped' })
     ];
-    const metrics = calculateEvaluationMetrics(runs);
+    const metrics = CalculateEvaluationMetrics(runs);
     expect(metrics.totalRuns).toBe(5);
     expect(metrics.execCompletedCount).toBe(2);
     expect(metrics.execErrorCount).toBe(1);
@@ -130,7 +130,7 @@ describe('calculateEvaluationMetrics', () => {
       createMockRun({ hasHumanFeedback: true, humanRating: 6, humanIsCorrect: false }),
       createMockRun({ hasHumanFeedback: false })
     ];
-    const metrics = calculateEvaluationMetrics(runs);
+    const metrics = CalculateEvaluationMetrics(runs);
     expect(metrics.humanReviewedCount).toBe(2);
     expect(metrics.humanPendingCount).toBe(1);
     expect(metrics.humanAvgRating).toBe(7);
@@ -145,7 +145,7 @@ describe('calculateEvaluationMetrics', () => {
       createMockRun({ autoScore: 0.3 }),
       createMockRun({ autoScore: null })
     ];
-    const metrics = calculateEvaluationMetrics(runs);
+    const metrics = CalculateEvaluationMetrics(runs);
     expect(metrics.autoEvaluatedCount).toBe(2);
     expect(metrics.autoAvgScore).toBeCloseTo(0.6);
     expect(metrics.autoPassCount).toBe(1);
@@ -158,7 +158,7 @@ describe('calculateEvaluationMetrics', () => {
       createMockRun({ hasHumanFeedback: true, humanIsCorrect: true, autoScore: 0.9 }),
       createMockRun({ hasHumanFeedback: true, humanIsCorrect: false, autoScore: 0.8 }),
     ];
-    const metrics = calculateEvaluationMetrics(runs);
+    const metrics = CalculateEvaluationMetrics(runs);
     expect(metrics.agreementCount).toBe(1);
     expect(metrics.disagreementCount).toBe(1);
     expect(metrics.agreementRate).toBe(50);
@@ -174,38 +174,38 @@ describe('getQualityColor', () => {
 
   it('should prioritize human rating', () => {
     const run = createMockRun({ hasHumanFeedback: true, humanRating: 9 });
-    expect(getQualityColor(run, defaultPrefs)).toBe('success');
+    expect(GetQualityColor(run, defaultPrefs)).toBe('success');
   });
 
   it('should return warning for medium human rating', () => {
     const run = createMockRun({ hasHumanFeedback: true, humanRating: 6 });
-    expect(getQualityColor(run, defaultPrefs)).toBe('warning');
+    expect(GetQualityColor(run, defaultPrefs)).toBe('warning');
   });
 
   it('should return danger for low human rating', () => {
     const run = createMockRun({ hasHumanFeedback: true, humanRating: 3 });
-    expect(getQualityColor(run, defaultPrefs)).toBe('danger');
+    expect(GetQualityColor(run, defaultPrefs)).toBe('danger');
   });
 
   it('should fall back to auto score when no human feedback', () => {
     const run = createMockRun({ autoScore: 0.9 });
-    expect(getQualityColor(run, defaultPrefs)).toBe('success');
+    expect(GetQualityColor(run, defaultPrefs)).toBe('success');
   });
 
   it('should fall back to execution status when no scores', () => {
     const run = createMockRun({ executionStatus: 'Completed' });
-    expect(getQualityColor(run, defaultPrefs)).toBe('success');
+    expect(GetQualityColor(run, defaultPrefs)).toBe('success');
   });
 
   it('should return danger for error status', () => {
     const run = createMockRun({ executionStatus: 'Error' });
-    expect(getQualityColor(run, defaultPrefs)).toBe('danger');
+    expect(GetQualityColor(run, defaultPrefs)).toBe('danger');
   });
 
   it('should return neutral when all prefs disabled', () => {
     const prefs: EvaluationPreferences = { showExecution: false, showHuman: false, showAuto: false };
     const run = createMockRun({ executionStatus: 'Error' });
-    expect(getQualityColor(run, prefs)).toBe('neutral');
+    expect(GetQualityColor(run, prefs)).toBe('neutral');
   });
 });
 
@@ -218,21 +218,21 @@ describe('getPrimaryDisplayValue', () => {
 
   it('should show human rating when available', () => {
     const run = createMockRun({ hasHumanFeedback: true, humanRating: 8 });
-    const result = getPrimaryDisplayValue(run, defaultPrefs);
+    const result = GetPrimaryDisplayValue(run, defaultPrefs);
     expect(result.type).toBe('human');
     expect(result.value).toBe('8/10');
   });
 
   it('should show auto score when no human feedback', () => {
     const run = createMockRun({ autoScore: 0.75 });
-    const result = getPrimaryDisplayValue(run, defaultPrefs);
+    const result = GetPrimaryDisplayValue(run, defaultPrefs);
     expect(result.type).toBe('auto');
     expect(result.value).toBe('75%');
   });
 
   it('should show execution status as fallback', () => {
     const run = createMockRun({ originalStatus: 'Passed' });
-    const result = getPrimaryDisplayValue(run, defaultPrefs);
+    const result = GetPrimaryDisplayValue(run, defaultPrefs);
     expect(result.type).toBe('exec');
     expect(result.value).toBe('Passed');
   });
@@ -240,7 +240,7 @@ describe('getPrimaryDisplayValue', () => {
   it('should show none when all disabled', () => {
     const prefs: EvaluationPreferences = { showExecution: false, showHuman: false, showAuto: false };
     const run = createMockRun();
-    const result = getPrimaryDisplayValue(run, prefs);
+    const result = GetPrimaryDisplayValue(run, prefs);
     expect(result.type).toBe('none');
   });
 });
@@ -248,25 +248,25 @@ describe('getPrimaryDisplayValue', () => {
 describe('getNeedsReviewItems', () => {
   it('should return empty for all reviewed runs', () => {
     const runs = [createMockRun({ hasHumanFeedback: true })];
-    expect(getNeedsReviewItems(runs)).toHaveLength(0);
+    expect(GetNeedsReviewItems(runs)).toHaveLength(0);
   });
 
   it('should prioritize error runs as high', () => {
     const runs = [createMockRun({ executionStatus: 'Error' })];
-    const items = getNeedsReviewItems(runs);
+    const items = GetNeedsReviewItems(runs);
     expect(items[0].priority).toBe('high');
     expect(items[0].reason).toBe('Error occurred');
   });
 
   it('should prioritize timeout runs as high', () => {
     const runs = [createMockRun({ executionStatus: 'Timeout' })];
-    const items = getNeedsReviewItems(runs);
+    const items = GetNeedsReviewItems(runs);
     expect(items[0].priority).toBe('high');
   });
 
   it('should prioritize low auto score but passed as high', () => {
     const runs = [createMockRun({ autoScore: 0.3, originalStatus: 'Passed' })];
-    const items = getNeedsReviewItems(runs);
+    const items = GetNeedsReviewItems(runs);
     expect(items[0].priority).toBe('high');
   });
 
@@ -276,7 +276,7 @@ describe('getNeedsReviewItems', () => {
       createMockRun({ id: '2', executionStatus: 'Error' }),
       createMockRun({ id: '3', autoScore: 0.7 })
     ];
-    const items = getNeedsReviewItems(runs);
+    const items = GetNeedsReviewItems(runs);
     expect(items[0].priority).toBe('high');
     expect(items[1].priority).toBe('medium');
     expect(items[2].priority).toBe('low');

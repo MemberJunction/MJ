@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import type { Mermaid } from 'mermaid';
 import { MarkdownService } from './markdown.service';
 
 /**
@@ -14,6 +15,9 @@ import { MarkdownService } from './markdown.service';
  * rather than depending on which fixtures marked happens to miscode.
  */
 type UnwrapAccessor = { unwrapMiscodedHtml(html: string): string };
+
+/** Same private-member reach-in, for the lazily-loaded mermaid engine (see `loadMermaid`). */
+type MermaidLoaderAccessor = { loadMermaid(): Promise<Mermaid> };
 
 describe('MarkdownService (DOM)', () => {
   let service: MarkdownService;
@@ -111,6 +115,107 @@ describe('MarkdownService (DOM)', () => {
       // typescript is imported by the service; a made-up language is not.
       expect(service.isLanguageSupported('typescript')).toBe(true);
       expect(service.isLanguageSupported('definitely-not-a-language')).toBe(false);
+    });
+  });
+
+  describe('renderMermaid', () => {
+    /** Stub the private lazy loader — the point of these specs is WHEN it is called, not what it returns. */
+    const stubLoader = (impl: () => Promise<Mermaid>): void => {
+      (service as unknown as MermaidLoaderAccessor).loadMermaid = impl;
+    };
+
+    const containerWith = (html: string): HTMLElement => {
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      return container;
+    };
+
+    it('never loads the diagram engine when the document has no diagram', async () => {
+      let loads = 0;
+      stubLoader(async () => {
+        loads++;
+        throw new Error('the engine must not be fetched for a diagram-free document');
+      });
+
+      const result = await service.renderMermaid(containerWith('<p>no diagrams here</p>'));
+
+      expect(result).toBe(false);
+      expect(loads).toBe(0);
+    });
+
+    it('shows a visible failure on every block when the lazy chunk cannot be loaded', async () => {
+      stubLoader(() => Promise.reject(new Error('chunk fetch failed')));
+      const container = containerWith(
+        '<pre><code class="language-mermaid">graph TD; A-->B;</code></pre>' +
+        '<div class="mermaid">graph TD; C-->D;</div>',
+      );
+
+      const result = await service.renderMermaid(container);
+
+      expect(result).toBe(false);
+      const failed = container.querySelectorAll('.mermaid-error');
+      expect(failed.length).toBe(2);
+      for (const element of Array.from(failed)) {
+        expect(element.getAttribute('data-mermaid-error')).toBe('Diagram engine failed to load');
+      }
+    });
+
+    it('does nothing at all when mermaid is disabled by config', async () => {
+      let loads = 0;
+      stubLoader(async () => {
+        loads++;
+        throw new Error('the engine must not be fetched when mermaid is disabled');
+      });
+      service.configureMarked({ enableMermaid: false });
+
+      const result = await service.renderMermaid(
+        containerWith('<pre><code class="language-mermaid">graph TD; A-->B;</code></pre>'),
+      );
+
+      expect(result).toBe(false);
+      expect(loads).toBe(0);
+    });
+  });
+
+  describe('parse sanitizes unless scripts are explicitly enabled', () => {
+    it('strips handlers and script from passthrough HTML', () => {
+      const out = service.parse('<div><img src="x" onerror="alert(1)"><script>alert(2)</script></div>', { enableHtml: true });
+      expect(out).not.toContain('onerror');
+      expect(out).not.toContain('<script');
+      expect(out).toContain('<img');
+    });
+
+    it('leaves script in place when enableJavaScript is true (the opt-out)', () => {
+      const out = service.parse('<div>x</div><script>alert(1)</script>', { enableHtml: true, enableJavaScript: true });
+      expect(out).toContain('<script>');
+    });
+
+    it('sanitizeHtml is exposed for consumers that bind parse() output themselves', () => {
+      expect(service.sanitizeHtml('<a href="javascript:alert(1)" onclick="x()">x</a>')).toBe('<a>x</a>');
+    });
+  });
+
+  describe('unwrapMiscodedHtml is inert and keeps leading style', () => {
+    afterEach(() => vi.restoreAllMocks());
+    const miscoded = '<pre><code>&lt;style&gt;.card{color:red}&lt;/style&gt;&lt;div class="card"&gt;&lt;img src="x" onerror="alert(1)"&gt;&lt;p&gt;hi&lt;/p&gt;&lt;/div&gt;</code></pre>';
+
+    it('never creates elements on the live document while unwrapping', () => {
+      // Building the replacement on the live document would run image error handlers at
+      // parse time, before parse() sanitizes the returned string.
+      const createElement = vi.spyOn(document, 'createElement');
+      unwrap(miscoded);
+      expect(createElement).not.toHaveBeenCalled();
+    });
+
+    it('unwraps the structural HTML and keeps a leading <style>', () => {
+      const out = unwrap(miscoded);
+      expect(out).not.toContain('<pre>');
+      expect(out).toContain('<style>.card{color:red}</style>');
+      expect(out).toContain('<div class="card">');
+    });
+
+    it('returns markup for parse() to sanitize rather than executing it', () => {
+      expect(unwrap(miscoded)).toContain('onerror="alert(1)"');
     });
   });
 });

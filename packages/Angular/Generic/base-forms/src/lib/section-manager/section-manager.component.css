@@ -90,6 +90,34 @@
   padding: 8px 0;
 }
 
+.mj-sm-group-label {
+  padding: 12px 20px 6px;
+  font-size: 10px;
+  font-weight: var(--mj-font-semibold);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--mj-text-muted);
+}
+
+.mj-sm-empty {
+  padding: 8px 20px 12px;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-disabled);
+}
+
+.mj-sm-row.is-more {
+  background: color-mix(in srgb, var(--mj-bg-surface-sunken) 55%, transparent);
+}
+
+.mj-sm-row-badge--more {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-muted);
+}
+
+.mj-sm-move {
+  margin-left: 4px;
+}
+
 .mj-sm-row {
   display: flex;
   align-items: center;

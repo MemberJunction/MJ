@@ -9,12 +9,12 @@ import { z } from 'zod';
  * Minimal file info interface replacing Kendo's FileInfo.
  */
 export interface FileSelectInfo {
-  name: string;
-  size: number;
-  rawFile: File;
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  size: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  rawFile: File;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
-export type FileUploadEvent = { success: true; file: MJFileEntity } | { success: false; file: FileSelectInfo };
+export type FileUploadEvent = { success: true; file: MJFileEntity } | { success: false; file: FileSelectInfo };  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
 const FileFieldsFragment = gql`
   fragment FileFields on MJFile_ {
@@ -75,10 +75,37 @@ export class FileUploadComponent extends BaseAngularComponent implements OnInit 
 
   constructor() { super(); }
 
-  @Input() disabled = false;
+  @Input() Disabled = false;
+
+  /** @deprecated Use {@link Disabled}. */
+  @Input() set disabled(value: FileUploadComponent['Disabled']) {
+    this.Disabled = value;
+  }
+  /** @deprecated Use {@link Disabled}. */
+  get disabled(): FileUploadComponent['Disabled'] {
+    return this.Disabled;
+  }
   @Input() CategoryID: string | undefined = undefined;
-  @Output() uploadStarted = new EventEmitter<void>();
-  @Output() fileUpload = new EventEmitter<FileUploadEvent>();
+  @Output() UploadStarted = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link UploadStarted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (uploadStarted) keeps working. Must stay AFTER UploadStarted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() uploadStarted = this.UploadStarted;
+  @Output() FileUpload = new EventEmitter<FileUploadEvent>();
+
+  /**
+   * @deprecated Use {@link FileUpload}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (fileUpload) keeps working. Must stay AFTER FileUpload: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() fileUpload = this.FileUpload;
 
   ngOnInit(): void {
     this.Refresh();
@@ -111,7 +138,7 @@ export class FileUploadComponent extends BaseAngularComponent implements OnInit 
       await fileEntity.LoadFromData(fileRecord);
       await fileEntity.Delete();
 
-      this.fileUpload.emit({ success: false, file });
+      this.FileUpload.emit({ success: false, file });
     }
   }
 
@@ -124,7 +151,7 @@ export class FileUploadComponent extends BaseAngularComponent implements OnInit 
       return;
     }
 
-    this.uploadStarted.emit();
+    this.UploadStarted.emit();
 
     // Convert native File objects to our FileSelectInfo format
     for (let i = 0; i < input.files.length; i++) {
@@ -171,7 +198,7 @@ export class FileUploadComponent extends BaseAngularComponent implements OnInit 
         }
       } else {
         console.error('The API returned an unexpected result', parsedResult.error.issues);
-        this.fileUpload.emit({ success: false, file });
+        this.FileUpload.emit({ success: false, file });
       }
       file = this.UploadQueue.shift();
     }
@@ -193,12 +220,12 @@ export class FileUploadComponent extends BaseAngularComponent implements OnInit 
       await fileEntity.Save();
 
       // emit an event about a new file uploaded, include the file data
-      this.fileUpload.emit({ success: true, file: fileEntity });
+      this.FileUpload.emit({ success: true, file: fileEntity });
       // Could also emit a progress event with each iteration
     } catch (e) {
       console.error(e);
       // something failed when actually uploading or when updating the API, what do to about pending file?
-      this.fileUpload.emit({ success: false, file });
+      this.FileUpload.emit({ success: false, file });
     }
   }
 }

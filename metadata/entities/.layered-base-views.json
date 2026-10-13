@@ -1,0 +1,93 @@
+[
+  {
+    "_comments": [
+      "Adopts LAYERED base views for two core entities: CodeGen generates the full base view under",
+      "GeneratedBaseViewName, and the application owns BaseView, which wraps it as",
+      "SELECT g.*, <extras> FROM <inner> g.",
+      "",
+      "These two are the first adopters in MJ core. 18 more entities still carry fully custom base",
+      "views (BaseViewGenerated = 0 with no inner name) and should follow over time — each one is",
+      "hand-maintaining generated SQL, and between them 25 foreign keys have no display field at all",
+      "because nobody went back to add the join.",
+      "",
+      "MJ: Entities is deliberately NOT a candidate: vwEntities is what the metadata layer itself",
+      "reads, so layering the view CodeGen consults in order to decide whether to layer is a",
+      "chicken-and-egg best left alone.",
+      "",
+      "Version Installations is the simplest possible case — no foreign keys at all, one computed",
+      "column (CompleteVersion)."
+    ],
+    "fields": {
+      "Name": "MJ: Version Installations",
+      "GeneratedBaseViewName": "vwVersionInstallationsGenerated"
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Version Installations"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:34:42.063Z",
+      "checksum": "9fc721a4f85ae15cb5db87bbe382c5e9b66716a9d02759525a1ac1e2483040ba"
+    }
+  },
+  {
+    "_comments": [
+      "User View Run Details keeps two joins in its custom layer to surface UserViewID and EntityID,",
+      "which are two-hop ancestor keys rather than direct FK display fields — something CodeGen",
+      "cannot generate, and exactly the case layering exists for.",
+      "",
+      "Layering also recovers the UserViewRun display field, which the hand-written view never had."
+    ],
+    "fields": {
+      "Name": "MJ: User View Run Details",
+      "GeneratedBaseViewName": "vwUserViewRunDetailsGenerated"
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User View Run Details"
+    },
+    "sync": {
+      "lastModified": "2026-08-05T18:34:42.027Z",
+      "checksum": "48ed7e28083b07e028b0417bf44d9cf9a6bfb27975bd35e11096c93cc0894fb2"
+    }
+  },
+  {
+    "_comments": [
+      "Rubric Evaluations. CodeGen owns the inner view; the public view is the consensus",
+      "wrapper in V202609302344. BaseViewGenerated must be false in the same record as",
+      "GeneratedBaseViewName — the column check rejects an inner name while CodeGen still",
+      "owns the public view. New entities come out of CodeGen with BaseViewGenerated = 1,",
+      "unlike the two adopters above, which were already fully custom."
+    ],
+    "fields": {
+      "Name": "MJ: Rubric Evaluations",
+      "BaseViewGenerated": false,
+      "GeneratedBaseViewName": "vwRubricEvaluationsGenerated",
+      "AllowCaching": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluations"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:45.262Z",
+      "checksum": "19bd1eb45fab26b659bc4880e0bcb0137a1a58e21cd4fd0115fc8fcaf0b8d6c3"
+    }
+  },
+  {
+    "_comments": [
+      "Rubric Evaluation Scores. Same layering as Rubric Evaluations: the public view adds",
+      "per-criterion cohort columns that CodeGen cannot produce."
+    ],
+    "fields": {
+      "Name": "MJ: Rubric Evaluation Scores",
+      "BaseViewGenerated": false,
+      "GeneratedBaseViewName": "vwRubricEvaluationScoresGenerated",
+      "AllowCaching": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluation Scores"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:45.298Z",
+      "checksum": "f0e81335c2d15f27ad4575ca10a5e87b977af5c7fd2470b5e8e1837da4c625ec"
+    }
+  }
+]

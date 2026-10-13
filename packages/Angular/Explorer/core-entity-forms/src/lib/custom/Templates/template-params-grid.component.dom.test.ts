@@ -1,8 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { AgGridAngular } from 'ag-grid-angular';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { MJButtonDirective, MJConfirmService } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
 import { TemplateParamsGridComponent } from './template-params-grid.component';
+
+/** Analog + precompiled AgGridAngular crash with `firstCreatePass` of null here. */
+@Component({
+  selector: 'ag-grid-angular',
+  standalone: true,
+  template: '',
+})
+class AgGridAngularStub {
+  @Input() theme: unknown;
+  @Input() rowData: unknown;
+  @Input() columnDefs: unknown;
+  @Input() defaultColDef: unknown;
+  @Input() editType: unknown;
+  @Input() getRowId: unknown;
+  @Input() suppressClickEdit: unknown;
+  @Input() overlayNoRowsTemplate: unknown;
+  @Output() gridReady = new EventEmitter<unknown>();
+  @Output() rowEditingStopped = new EventEmitter<unknown>();
+}
 
 /**
  * DOM coverage for <mj-template-params-grid> — the editable grid of a template's parameters. ngOnInit
@@ -14,7 +33,7 @@ import { TemplateParamsGridComponent } from './template-params-grid.component';
 
 const render = (inputs: Record<string, unknown> = {}) =>
   renderComponentFixture(TemplateParamsGridComponent, {
-    imports: [AgGridAngular, MJButtonDirective],
+    imports: [AgGridAngularStub, MJButtonDirective],
     declarations: [TemplateParamsGridComponent],
     providers: [{ provide: MJConfirmService, useValue: { ConfirmDelete: async () => false } }],
     inputs,

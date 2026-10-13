@@ -55,6 +55,7 @@ export type PromoteModelOutcome =
   | { kind: 'refused-leakage'; topFeature?: string; topShare?: number }
   | { kind: 'signoff-reason-required'; topFeature?: string; topShare?: number }
   | { kind: 'invalid-transition'; currentStatus: string; targetStatus: PromotableStatus }
+  | { kind: 'needs-training'; message: string }
   | { kind: 'not-found' }
   | { kind: 'save-failed'; message: string };
 
@@ -67,7 +68,7 @@ export type PromoteModelOutcome =
  */
 export interface IModelPromotionGate {
   /** Attempt the promotion, enforcing the leakage sign-off gate. */
-  promote(request: PromoteModelRequest): Promise<PromoteModelOutcome>;
+  promote(request: PromoteModelRequest): Promise<PromoteModelOutcome>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -136,6 +137,8 @@ export class PredictiveStudioPromoteModelAction extends BasePredictiveStudioActi
           `Model ${modelId} cannot move from '${outcome.currentStatus}' to '${outcome.targetStatus}'. ` +
             'Allowed lifecycle: Draft → Validated → Published → Archived (with Published ↔ Archived).',
         );
+      case 'needs-training':
+        return this.fail('MODEL_NEEDS_TRAINING', outcome.message);
       case 'not-found':
         return this.fail('MODEL_NOT_FOUND', `ML Model '${modelId}' was not found.`);
       case 'save-failed':

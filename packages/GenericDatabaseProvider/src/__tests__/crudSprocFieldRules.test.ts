@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 import {
-    shouldIncludeFieldInParams,
-    needsClearCompanionBroadRule,
-    projectedParamCount,
-    useJsonArgShape,
+    ShouldIncludeFieldInParams,
+    NeedsClearCompanionBroadRule,
+    ProjectedParamCount,
+    UseJsonArgShape,
     CRUDSprocType,
 } from '../crudSprocFieldRules';
 
@@ -71,7 +71,7 @@ describe('crudSprocFieldRules', () => {
         for (const c of cases) {
             for (const verb of ['create', 'update', 'delete'] as CRUDSprocType[]) {
                 it(`${c.name} → ${verb}: ${c.expectedByVerb[verb]}`, () => {
-                    expect(shouldIncludeFieldInParams(field(c.field), verb)).toBe(c.expectedByVerb[verb]);
+                    expect(ShouldIncludeFieldInParams(field(c.field), verb)).toBe(c.expectedByVerb[verb]);
                 });
             }
         }
@@ -79,18 +79,18 @@ describe('crudSprocFieldRules', () => {
 
     describe('needsClearCompanionBroadRule', () => {
         it('returns true for nullable field', () => {
-            expect(needsClearCompanionBroadRule(field({ AllowsNull: true }))).toBe(true);
+            expect(NeedsClearCompanionBroadRule(field({ AllowsNull: true }))).toBe(true);
         });
 
         it('returns false for NOT NULL field', () => {
-            expect(needsClearCompanionBroadRule(field({ AllowsNull: false }))).toBe(false);
+            expect(NeedsClearCompanionBroadRule(field({ AllowsNull: false }))).toBe(false);
         });
 
         it('does NOT depend on HasDefaultValue (broad rule)', () => {
             // Narrow rule (the PG override being phased out) returns false here;
             // broad rule must return true regardless of default state.
-            expect(needsClearCompanionBroadRule(field({ AllowsNull: true, HasDefaultValue: false } as Partial<EntityFieldInfo>))).toBe(true);
-            expect(needsClearCompanionBroadRule(field({ AllowsNull: true, HasDefaultValue: true } as Partial<EntityFieldInfo>))).toBe(true);
+            expect(NeedsClearCompanionBroadRule(field({ AllowsNull: true, HasDefaultValue: false } as Partial<EntityFieldInfo>))).toBe(true);
+            expect(NeedsClearCompanionBroadRule(field({ AllowsNull: true, HasDefaultValue: true } as Partial<EntityFieldInfo>))).toBe(true);
         });
     });
 
@@ -101,7 +101,7 @@ describe('crudSprocFieldRules', () => {
                 field({ Name: 'Name', IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true }),
                 field({ Name: 'Description', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true }),
             ]);
-            expect(projectedParamCount(e, 'delete')).toBe(1);
+            expect(ProjectedParamCount(e, 'delete')).toBe(1);
         });
 
         it('counts base fields + _Clear companions for nullable non-PK fields on update', () => {
@@ -112,7 +112,7 @@ describe('crudSprocFieldRules', () => {
                 field({ Name: 'NullableCol2', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true }),
             ]);
             // 4 base fields included (PK + non-null + 2 nullable) + 2 _Clear companions for the nullables.
-            expect(projectedParamCount(e, 'update')).toBe(6);
+            expect(ProjectedParamCount(e, 'update')).toBe(6);
         });
 
         it('does not emit _Clear companions for PK fields even when AllowsNull is true', () => {
@@ -123,7 +123,7 @@ describe('crudSprocFieldRules', () => {
                 field({ Name: 'OtherNullable', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true }),
             ]);
             // 2 base + 1 _Clear (only the non-PK nullable).
-            expect(projectedParamCount(e, 'update')).toBe(3);
+            expect(ProjectedParamCount(e, 'update')).toBe(3);
         });
 
         it('excludes virtual and special-date fields from base count and _Clear count', () => {
@@ -134,7 +134,7 @@ describe('crudSprocFieldRules', () => {
                 field({ Name: 'RealCol', AllowsNull: true, AllowUpdateAPI: true }),
             ]);
             // Only ID + RealCol included; RealCol contributes 1 base + 1 _Clear.
-            expect(projectedParamCount(e, 'update')).toBe(3);
+            expect(ProjectedParamCount(e, 'update')).toBe(3);
         });
 
         it('excludes auto-increment PK on create but includes on update', () => {
@@ -142,8 +142,8 @@ describe('crudSprocFieldRules', () => {
                 field({ Name: 'ID', IsPrimaryKey: true, AutoIncrement: true, AllowsNull: false }),
                 field({ Name: 'Name', AllowsNull: false, AllowUpdateAPI: true }),
             ]);
-            expect(projectedParamCount(e, 'create')).toBe(1); // just Name; PK excluded
-            expect(projectedParamCount(e, 'update')).toBe(2); // ID + Name
+            expect(ProjectedParamCount(e, 'create')).toBe(1); // just Name; PK excluded
+            expect(ProjectedParamCount(e, 'update')).toBe(2); // ID + Name
         });
     });
 
@@ -155,7 +155,7 @@ describe('crudSprocFieldRules', () => {
                 fields.push(field({ Name: `Col${i}`, AllowsNull: true, AllowUpdateAPI: true }));
             }
             const e = entity(fields);
-            expect(useJsonArgShape(e, 'update', Infinity)).toBe(false);
+            expect(UseJsonArgShape(e, 'update', Infinity)).toBe(false);
         });
 
         it('returns true when projected count meets the limit exactly', () => {
@@ -167,9 +167,9 @@ describe('crudSprocFieldRules', () => {
                 field({ Name: 'C', AllowsNull: true, AllowUpdateAPI: true }),
                 field({ Name: 'D', AllowsNull: true, AllowUpdateAPI: true }),
             ]);
-            expect(projectedParamCount(e, 'update')).toBe(9);
-            expect(useJsonArgShape(e, 'update', 9)).toBe(true);
-            expect(useJsonArgShape(e, 'update', 10)).toBe(false);
+            expect(ProjectedParamCount(e, 'update')).toBe(9);
+            expect(UseJsonArgShape(e, 'update', 9)).toBe(true);
+            expect(UseJsonArgShape(e, 'update', 10)).toBe(false);
         });
 
         it('spDelete never busts a realistic limit', () => {
@@ -179,8 +179,8 @@ describe('crudSprocFieldRules', () => {
                 fields.push(field({ Name: `Col${i}`, AllowsNull: true, AllowUpdateAPI: true }));
             }
             const e = entity(fields);
-            expect(useJsonArgShape(e, 'delete', 90)).toBe(false);
-            expect(projectedParamCount(e, 'delete')).toBe(1);
+            expect(UseJsonArgShape(e, 'delete', 90)).toBe(false);
+            expect(ProjectedParamCount(e, 'delete')).toBe(1);
         });
 
         it('models the AIPromptRun-shaped wide entity (busts PG limit, not SS limit)', () => {
@@ -194,9 +194,9 @@ describe('crudSprocFieldRules', () => {
                 fields.push(field({ Name: `Nullable${i}`, AllowsNull: true, AllowUpdateAPI: true }));
             }
             const e = entity(fields);
-            expect(projectedParamCount(e, 'update')).toBe(180);
-            expect(useJsonArgShape(e, 'update', 90)).toBe(true); // PG → JSON-arg
-            expect(useJsonArgShape(e, 'update', Infinity)).toBe(false); // SS → typed-arg
+            expect(ProjectedParamCount(e, 'update')).toBe(180);
+            expect(UseJsonArgShape(e, 'update', 90)).toBe(true); // PG → JSON-arg
+            expect(UseJsonArgShape(e, 'update', Infinity)).toBe(false); // SS → typed-arg
         });
 
         it('models the ScheduledJob-shaped narrow entity (stays typed-arg on PG)', () => {
@@ -210,8 +210,8 @@ describe('crudSprocFieldRules', () => {
                 fields.push(field({ Name: `Nullable${i}`, AllowsNull: true, AllowUpdateAPI: true }));
             }
             const e = entity(fields);
-            expect(projectedParamCount(e, 'update')).toBe(45);
-            expect(useJsonArgShape(e, 'update', 90)).toBe(false); // PG → typed-arg with broad-rule _Clear
+            expect(ProjectedParamCount(e, 'update')).toBe(45);
+            expect(UseJsonArgShape(e, 'update', 90)).toBe(false); // PG → typed-arg with broad-rule _Clear
         });
     });
 });

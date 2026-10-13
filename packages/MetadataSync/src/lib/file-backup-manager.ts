@@ -64,7 +64,7 @@ export class FileBackupManager {
    * @returns Promise that resolves when initialization is complete
    * @throws Error if temporary directory creation fails
    */
-  async initialize(): Promise<void> {
+  async Initialize(): Promise<void> {
     if (this.initialized) {
       throw new Error('FileBackupManager already initialized');
     }
@@ -77,6 +77,11 @@ export class FileBackupManager {
     await fs.ensureDir(this.backupDir);
     this.initialized = true;
   }
+
+  /** @deprecated Use {@link Initialize}. */
+  async initialize(): Promise<void> {
+    return this.Initialize();
+  }
   
   /**
    * Create a backup of a file before modification
@@ -88,7 +93,7 @@ export class FileBackupManager {
    * @returns Promise that resolves when backup is complete
    * @throws Error if backup operation fails
    */
-  async backupFile(filePath: string): Promise<void> {
+  async BackupFile(filePath: string): Promise<void> {
     if (!this.initialized) {
       throw new Error('FileBackupManager not initialized. Call initialize() first.');
     }
@@ -117,7 +122,35 @@ export class FileBackupManager {
     
     this.backups.push(backupEntry);
   }
+
+  /** @deprecated Use {@link BackupFile}. */
+  async backupFile(filePath: string): Promise<void> {
+    return this.BackupFile(filePath);
+  }
   
+  /**
+   * Stop tracking a file so {@link rollback} leaves it as it is now.
+   *
+   * Used for files in an isolated directory whose records were already committed: restoring the
+   * old file would drop the primary keys and sync blocks of rows that stay in the database.
+   *
+   * @param filePath - Absolute path of a file previously passed to {@link backupFile}
+   * @returns true when a backup was tracked for this file
+   */
+  ReleaseBackup(filePath: string): boolean {
+    const index = this.backups.findIndex(b => b.originalPath === filePath);
+    if (index < 0) {
+      return false;
+    }
+    this.backups.splice(index, 1);
+    return true;
+  }
+
+  /** @deprecated Use {@link ReleaseBackup}. */
+  releaseBackup(filePath: string): boolean {
+    return this.ReleaseBackup(filePath);
+  }
+
   /**
    * Rollback all file changes by restoring from backups
    * 
@@ -128,7 +161,7 @@ export class FileBackupManager {
    * @returns Promise that resolves when rollback is complete
    * @throws Error if any rollback operation fails
    */
-  async rollback(): Promise<void> {
+  async Rollback(): Promise<void> {
     if (!this.initialized) {
       return; // Nothing to rollback
     }
@@ -156,7 +189,7 @@ export class FileBackupManager {
     
     // Clean up backup directory
     try {
-      await this.cleanup();
+      await this.Cleanup();
     } catch (error) {
       console.error('Failed to cleanup backup directory during rollback:', error);
     }
@@ -164,6 +197,11 @@ export class FileBackupManager {
     if (errors.length > 0) {
       throw new Error(`Rollback completed with errors:\n${errors.join('\n')}`);
     }
+  }
+
+  /** @deprecated Use {@link Rollback}. */
+  async rollback(): Promise<void> {
+    return this.Rollback();
   }
   
   /**
@@ -174,7 +212,7 @@ export class FileBackupManager {
    * 
    * @returns Promise that resolves when cleanup is complete
    */
-  async cleanup(): Promise<void> {
+  async Cleanup(): Promise<void> {
     if (!this.initialized || !this.backupDir) {
       return;
     }
@@ -190,17 +228,27 @@ export class FileBackupManager {
     this.initialized = false;
     this.backupDir = '';
   }
+
+  /** @deprecated Use {@link Cleanup}. */
+  async cleanup(): Promise<void> {
+    return this.Cleanup();
+  }
   
   /**
    * Get statistics about current backup session
    * 
    * @returns Object containing backup statistics
    */
-  getStats(): { totalBackups: number; backupDir: string; initialized: boolean } {
+  GetStats(): { totalBackups: number; backupDir: string; initialized: boolean } {
     return {
       totalBackups: this.backups.length,
       backupDir: this.backupDir,
       initialized: this.initialized
     };
+  }
+
+  /** @deprecated Use {@link GetStats}. */
+  getStats(): { totalBackups: number; backupDir: string; initialized: boolean } {
+    return this.GetStats();
   }
 }

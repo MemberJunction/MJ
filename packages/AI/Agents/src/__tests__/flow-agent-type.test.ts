@@ -19,7 +19,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FlowAgentType, FlowExecutionState } from '../agent-types/flow-agent-type';
 import { ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 
-vi.mock('@memberjunction/core', () => ({
+// Partial mock: FlowAgentType now imports the shared traversal engine and its adapters, which pull
+// @memberjunction/core-entities — and therefore BaseEntity — into the module graph. A total mock
+// would have to restate every export core-entities touches, so spread the real module and override
+// only the logging functions these tests care about.
+vi.mock('@memberjunction/core', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/core')>()),
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     LogStatusEx: vi.fn(),
@@ -56,6 +61,12 @@ describe('FlowExecutionState', () => {
         expect(state.completedStepIds.has('step-3')).toBe(false);
         expect(state.executionPath).toEqual(['step-1', 'step-2']);
         expect(state.stepResults.get('step-1')).toEqual({ Success: true });
+    });
+});
+
+describe('FlowAgentType — action circuit breaker opt-out', () => {
+    it('opts out of the run-scoped action circuit breaker: graph-chosen retries must not be blocked and no model reads a directive', () => {
+        expect(new FlowAgentType().UsesActionCircuitBreaker).toBe(false);
     });
 });
 

@@ -1,0 +1,71 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "research-dispatch-subagent-01 [gpt-5.6-luna@none · OpenAI · envelope]",
+    "Description": "First step for the research orchestrator with nothing gathered yet: search internal scope. Dispatching the Report Writer before there are findings would be premature synthesis.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Research what we know internally about churn among enterprise accounts."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "research-dispatch-subagent-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Scoped Search"
+          }
+        ],
+        "allowAdditionalActions": false,
+        "forbiddenActions": [
+          "Research Report Writer"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Research Agent",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Scoped Search"
+              }
+            ],
+            "allowAdditionalActions": false,
+            "forbiddenActions": [
+              "Research Report Writer"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "A77BF1FD-A61D-4F2D-AAA7-1DF46DA81DF6"
+  }
+}

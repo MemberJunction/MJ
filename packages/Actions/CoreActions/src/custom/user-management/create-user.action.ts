@@ -3,7 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { CreateRecordAction } from "../crud/create-record.action";
 import { BaseAction } from '@memberjunction/actions';
 import { RunView } from "@memberjunction/core";
-import { UserCache } from "@memberjunction/sqlserver-dataprovider";
+import { UserCache } from "@memberjunction/generic-database-provider";
 
 /**
  * Creates a new user in the MemberJunction system with validation and optional employee linking.

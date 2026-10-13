@@ -178,7 +178,7 @@
             <div class="sparkline-dots">
               @for (run of summary.RecentRuns; track run.ID) {
                 <span [class]="GetSparklineDotClass(run)"
-                      [title]="run.Status + ' - ' + (run.StartedAt ?? 'N/A')"></span>
+                      [title]="GetSparklineTooltip(run)"></span>
               }
               @if (summary.RecentRuns.length === 0) {
                 <span class="sparkline-none">No runs</span>

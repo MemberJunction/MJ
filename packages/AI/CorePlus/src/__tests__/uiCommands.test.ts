@@ -31,6 +31,20 @@ describe('OpenResourceCommand', () => {
         expect(cmd.mode).toBe('view');
     });
 
+    it('should accept composite keys instead of resourceId', () => {
+        const cmd: OpenResourceCommand = {
+            type: 'open:resource',
+            label: 'Open order line',
+            resourceType: 'Record',
+            entityName: 'Order Details',
+            keys: { OrderID: 'ord-1', LineNumber: 4 },
+            mode: 'view'
+        };
+        expect(cmd.resourceId).toBeUndefined();
+        expect(cmd.keys?.OrderID).toBe('ord-1');
+        expect(cmd.keys?.LineNumber).toBe(4);
+    });
+
     it('should work without optional fields', () => {
         const cmd: OpenResourceCommand = {
             type: 'open:resource',

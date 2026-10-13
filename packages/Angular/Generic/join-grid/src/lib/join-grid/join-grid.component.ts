@@ -7,17 +7,17 @@ import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { BaseAngularComponent, BaseFormComponentEvent, BaseFormComponentEventCodes, FormEditingCompleteEvent } from '@memberjunction/ng-base-types';
 
 export class JoinGridCell {
-  index!: number;
+  index!: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
   RowForeignKeyValue: any;
   ColumnForeignKeyValue?: any;
   /**
    * Used when the ColumnsMode is set to Entity. This is the BaseEntity object that represents the data in the JoinEntity that links the Row and Column entities together.
    */
-  data?: BaseEntity | undefined;
+  data?: BaseEntity | undefined;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   /**
    * Used when the ColumnsMode is set to Fields. This is an array of values from the JoinEntity that are displayed as columns in the grid.
    */
-  value?: any
+  value?: any  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 export class JoinGridRow {
   FirstColValue: any;
@@ -200,8 +200,26 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
 
 
   /*The below members are public because the Angular template needs access to them, but by naming convention we prefix with an _ so that it is clear they are not to be used outside of the component */
-  public _GridData: JoinGridRow[] = [];
-  public _IsLoading: boolean = false;
+  public GridData: JoinGridRow[] = [];
+
+  /** @deprecated Use {@link GridData}. */
+  public get _GridData(): JoinGridRow[] {
+    return this.GridData;
+  }
+  /** @deprecated Use {@link GridData}. */
+  public set _GridData(value: JoinGridRow[]) {
+    this.GridData = value;
+  }
+  public IsLoading: boolean = false;
+
+  /** @deprecated Use {@link IsLoading}. */
+  public get _IsLoading(): boolean {
+    return this.IsLoading;
+  }
+  /** @deprecated Use {@link IsLoading}. */
+  public set _IsLoading(value: boolean) {
+    this.IsLoading = value;
+  }
 
   /* protected internal members */
   protected _rowsEntityInfo: EntityInfo | null = null;
@@ -292,7 +310,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
     // go through all of the pending deletes and remove them from the array
     // and go through all of the pending inserts and remove them from the array
     // before removing stuff from arrays we need to go back through all of hte grid cells and restore to original data
-    this._GridData.forEach(row => {
+    this.GridData.forEach(row => {
       row.ColumnData.forEach(cell => {
         // for each cell, if we have a data object, look for a match in the pending inserts array, that means it is a NEW record
         if (cell.data) {
@@ -343,7 +361,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
    * This method is called automatically when the component is first loaded. Call the method anytime if you want to refresh the grid.
    */
   public async Refresh() {
-    this._IsLoading = true;    // turn on the loading spinner
+    this.IsLoading = true;    // turn on the loading spinner
     this.cdr.detectChanges(); // let angular know we have changes
 
     this._pendingDeletes = [];
@@ -352,22 +370,29 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
 
     // we are provided an array of Column and Row objects. We need to get the rows from the JoinEntity that link them up.
     const md = this.ProviderToUse;
+    // The join entity's JoinEntityRowForeignKey / JoinEntityColumnForeignKey are single foreign-key columns,
+    // so the rows and columns entities they reference must be single-column keyed — a composite key
+    // cannot be the target of one FK column. Fail loudly rather than silently truncating the key.
     if (this.ColumnsMode === 'Entity') {
       this._columnsEntityInfo = md.EntityByName(this.ColumnsEntityName) ?? null;
       if (!this._columnsEntityInfo)
         throw new Error('Invalid entity name provided for columns entity.');
+      if (this._columnsEntityInfo.PrimaryKeys.length !== 1)
+        throw new Error(`Columns entity '${this.ColumnsEntityName}' must have a single-column primary key to be referenced by ${this.JoinEntityColumnForeignKey}.`);
     }
     this._rowsEntityInfo = md.EntityByName(this.RowsEntityName) ?? null;
     if (!this._rowsEntityInfo)
       throw new Error('Invalid entity name provided for rows entity.');
+    if (this._rowsEntityInfo.PrimaryKeys.length !== 1)
+      throw new Error(`Rows entity '${this.RowsEntityName}' must have a single-column primary key to be referenced by ${this.JoinEntityRowForeignKey}.`);
 
     await this.PopulateRowsAndColsData();
 
-    const rowQuotes = this._rowsEntityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : "";
-    let filter = `${this.JoinEntityRowForeignKey} IN (${this._rowsEntityData!.map(obj => `${rowQuotes}${obj.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name)}${rowQuotes}`).join(',')})` 
+    const rowQuotes = this._rowsEntityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ""; // first-pk-ok: FK target — JoinEntityRowForeignKey references the rows entity's single-column key (guarded above)
+    let filter = `${this.JoinEntityRowForeignKey} IN (${this._rowsEntityData!.map(obj => `${rowQuotes}${obj.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name)}${rowQuotes}`).join(',')})`; // first-pk-ok: FK target — JoinEntityRowForeignKey references the rows entity's single-column key (guarded above)
     if (this.ColumnsMode === 'Entity' && this._columnsEntityInfo) {
-      const colQuotes = this._columnsEntityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : "";
-      filter += ` AND ${this.JoinEntityColumnForeignKey} IN (${this._columnsEntityData!.map(obj => `${colQuotes}${obj.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name)}${colQuotes}`).join(',')})`;
+      const colQuotes = this._columnsEntityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ""; // first-pk-ok: FK target — JoinEntityColumnForeignKey references the columns entity's single-column key (guarded above)
+      filter += ` AND ${this.JoinEntityColumnForeignKey} IN (${this._columnsEntityData!.map(obj => `${colQuotes}${obj.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name)}${colQuotes}`).join(',')})`; // first-pk-ok: FK target — JoinEntityColumnForeignKey references the columns entity's single-column key (guarded above)
     }
     if (this.JoinEntityExtraFilter) {
       filter = `(${filter}) AND (${this.JoinEntityExtraFilter})`;
@@ -385,7 +410,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
       this.PopulateGridData();
     }
 
-    this._IsLoading = false; // turn off the loading spinner
+    this.IsLoading = false; // turn off the loading spinner
     this.cdr.detectChanges(); // let Angular know we have changes
   }
 
@@ -437,7 +462,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
       let rowData: JoinGridRow = new JoinGridRow({
         FirstColValue: row.Get(this.RowsEntityDisplayField),
         JoinExists: false,
-        RowForeignKeyValue: row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name),
+        RowForeignKeyValue: row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name), // first-pk-ok: FK target — JoinEntityRowForeignKey references the rows entity's single-column key (guarded in Refresh)
         ColumnData: [] // start off with an empty array
       });
 
@@ -445,12 +470,12 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
       if (this.ColumnsMode === 'Entity') {
         for (let i = 0; i < this._columnsEntityData!.length; i++) {
           const column = this._columnsEntityData![i];
-          const join = this._joinEntityData!.find(j => j.Get(this.JoinEntityRowForeignKey) === row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name) && 
-                                                j.Get(this.JoinEntityColumnForeignKey) === column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name));
+          const join = this._joinEntityData!.find(j => j.Get(this.JoinEntityRowForeignKey) === row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name) && // first-pk-ok: FK target — JoinEntityRowForeignKey references the rows entity's single-column key (guarded in Refresh)
+                                                j.Get(this.JoinEntityColumnForeignKey) === column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name)); // first-pk-ok: FK target — JoinEntityColumnForeignKey references the columns entity's single-column key (guarded in Refresh)
           rowData.JoinExists = true;
           rowData.ColumnData.push({
             index: i,
-            ColumnForeignKeyValue: column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name),
+            ColumnForeignKeyValue: column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name), // first-pk-ok: FK target — JoinEntityColumnForeignKey references the columns entity's single-column key (guarded in Refresh)
             RowForeignKeyValue: rowData.RowForeignKeyValue,
             data: join          
           });
@@ -462,7 +487,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
 
         // we are display the values from the JoinEntity as columns from the JoinEntityDisplayColumns array
         this.JoinEntityDisplayColumns.forEach((col, i) => {
-          const joinData = this._joinEntityData!.find(jed => jed.Get(this.JoinEntityRowForeignKey) === row.FirstPrimaryKey.Value)
+          const joinData = this._joinEntityData!.find(jed => jed.Get(this.JoinEntityRowForeignKey) === row.FirstPrimaryKey.Value) // first-pk-ok: FK target — JoinEntityRowForeignKey references the rows entity's single-column key (guarded in Refresh)
           // joinData being undefined/null is a valid condition just means no join data for the row specified
           if (joinData) {
             rowData.JoinExists = true;
@@ -477,7 +502,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
 
       gridData.push(rowData);
     });
-    this._GridData = gridData;
+    this.GridData = gridData;
   }
  
 
@@ -485,7 +510,7 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
   protected _pendingInserts: BaseEntity[] = [];
  
 
-  public async _FlipRecord(event: MouseEvent, row: JoinGridRow, cell: JoinGridCell, stopPropagation: boolean = false) {
+  public async FlipRecord(event: MouseEvent, row: JoinGridRow, cell: JoinGridCell, stopPropagation: boolean = false) {
     if (stopPropagation)
         event.stopPropagation();
 
@@ -526,8 +551,18 @@ export class JoinGridComponent extends BaseAngularComponent implements AfterView
     this.cdr.detectChanges();
   }
 
-  public _IsColumnChecked(cell: JoinGridCell): boolean {
+  /** @deprecated Use {@link FlipRecord}. */
+  public async _FlipRecord(event: MouseEvent, row: JoinGridRow, cell: JoinGridCell, stopPropagation: boolean = false) {
+    return this.FlipRecord(event, row, cell, stopPropagation);
+  }
+
+  public IsColumnChecked(cell: JoinGridCell): boolean {
     return cell?.data !== undefined;
+  }
+
+  /** @deprecated Use {@link IsColumnChecked}. */
+  public _IsColumnChecked(cell: JoinGridCell): boolean {
+    return this.IsColumnChecked(cell);
   }
 
   public OnDropdownValueChange(row: JoinGridRow, colIndex: number, newValue: unknown): void {

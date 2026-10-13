@@ -23,16 +23,26 @@ export const VISUALIZATION_MODES = ['clusters', 'tagcloud'] as const;
 export type VisualizationModeId = (typeof VISUALIZATION_MODES)[number];
 
 /** Type-guard for a visualization mode id; keeps the switch tool tolerant. */
-export function isValidVisualizationMode(mode: unknown): mode is VisualizationModeId {
+export function IsValidVisualizationMode(mode: unknown): mode is VisualizationModeId {
     return typeof mode === 'string' && (VISUALIZATION_MODES as readonly string[]).includes(mode);
+}
+
+/** @deprecated Use {@link IsValidVisualizationMode}. */
+export function isValidVisualizationMode(mode: unknown): mode is VisualizationModeId {
+    return IsValidVisualizationMode(mode);
 }
 
 /** Upper bound on how many drilldown record summaries we publish. */
 export const VISUALIZE_CONTEXT_LIST_CAP = 25;
 
 /** Cap an array to {@link VISUALIZE_CONTEXT_LIST_CAP} entries. Pure; never mutates input. */
-export function capVisualizeList<T>(items: readonly T[]): T[] {
+export function CapVisualizeList<T>(items: readonly T[]): T[] {
     return items.slice(0, VISUALIZE_CONTEXT_LIST_CAP);
+}
+
+/** @deprecated Use {@link CapVisualizeList}. */
+export function capVisualizeList<T>(items: readonly T[]): T[] {
+    return CapVisualizeList(items);
 }
 
 /**
@@ -54,7 +64,7 @@ export interface DrilldownRecordCandidate {
  *
  * Pure + deterministic; returns the matched candidate, or null on a miss.
  */
-export function resolveDrilldownRecord<T extends DrilldownRecordCandidate>(
+export function ResolveDrilldownRecord<T extends DrilldownRecordCandidate>(
     input: string,
     candidates: readonly T[],
 ): T | null {
@@ -71,6 +81,14 @@ export function resolveDrilldownRecord<T extends DrilldownRecordCandidate>(
         return byTitle;
     }
     return candidates.find(c => c.Title.toLowerCase().includes(needle)) ?? null;
+}
+
+/** @deprecated Use {@link ResolveDrilldownRecord}. */
+export function resolveDrilldownRecord<T extends DrilldownRecordCandidate>(
+    input: string,
+    candidates: readonly T[],
+): T | null {
+    return ResolveDrilldownRecord(input, candidates);
 }
 
 /**
@@ -113,7 +131,7 @@ export interface VisualizeAgentContextInput {
  * @param input - the host's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildVisualizeAgentContext(input: VisualizeAgentContextInput): Record<string, unknown> {
+export function BuildVisualizeAgentContext(input: VisualizeAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         // Surfaced under the tool's parameter name so the agent can correlate
         // context with the SwitchVisualizationMode tool.
@@ -127,10 +145,15 @@ export function buildVisualizeAgentContext(input: VisualizeAgentContextInput): R
         context['DrilldownTitle'] = input.DrilldownTitle || null;
         context['DrilldownSubtitle'] = input.DrilldownSubtitle || null;
         if (input.DrilldownRecords.length > 0) {
-            context['DrilldownRecords'] = capVisualizeList(input.DrilldownRecords);
+            context['DrilldownRecords'] = CapVisualizeList(input.DrilldownRecords);
             context['DrilldownRecordCount'] = input.DrilldownRecords.length;
         }
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildVisualizeAgentContext}. */
+export function buildVisualizeAgentContext(input: VisualizeAgentContextInput): Record<string, unknown> {
+    return BuildVisualizeAgentContext(input);
 }

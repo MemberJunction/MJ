@@ -153,9 +153,12 @@ export class TwitterCreateThreadAction extends TwitterBaseAction {
         
         return tweets.map((tweet, index) => {
             const number = index + 1;
+            // Function replacements: the numbers can never contain `$` today, but a
+            // string replacement here is the shape that broke elsewhere (#3171), and
+            // `format` is user-supplied — keep the safe form.
             const threadNumber = format
-                .replace('{n}', number.toString())
-                .replace('{total}', total.toString());
+                .replace('{n}', () => number.toString())
+                .replace('{total}', () => total.toString());
             
             // Add number to beginning of tweet with a space
             return `${threadNumber} ${tweet}`;

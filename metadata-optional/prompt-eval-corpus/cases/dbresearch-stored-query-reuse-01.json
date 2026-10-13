@@ -1,0 +1,38 @@
+{
+  "id": "dbresearch-stored-query-reuse-01",
+  "agent": "Database Research Agent",
+  "tags": [
+    "mid-loop-action",
+    "disambiguation"
+  ],
+  "description": "The catalog already has a query that answers this. Reusing it beats writing ad-hoc SQL — a case where two actions are both plausible and one is better.",
+  "input": {
+    "payload": {
+      "queryCatalog": [
+        {
+          "name": "Active Agents By Type",
+          "id": "Q-100"
+        }
+      ]
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Break down active agents by type."
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Search Query Catalog succeeded. Found stored query 'Active Agents By Type' (ID Q-100) which groups active agents by their type."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Run Stored Query"
+      }
+    ],
+    "allowAdditionalActions": false
+  }
+}

@@ -302,9 +302,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Routine Runs','RoutineID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Routine Runs')"
+                [NewRecordValues]="NewRecordValues('MJ: User Routine Runs','RoutineID')"
                 [AllowLoad]="IsSectionExpanded('mJUserRoutineRuns')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserRoutineRuns', $event.totalRowCount)"
                 >
@@ -327,9 +327,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Routine Recipients','RoutineID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Routine Recipients')"
+                [NewRecordValues]="NewRecordValues('MJ: User Routine Recipients','RoutineID')"
                 [AllowLoad]="IsSectionExpanded('mJUserRoutineRecipients')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserRoutineRecipients', $event.totalRowCount)"
                 >

@@ -25,14 +25,15 @@ export class MJConversationFormComponent extends BaseFormComponent {
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
-            { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false },
             { sectionKey: 'mJConversationArtifacts', sectionName: 'Conversation Artifacts', isExpanded: false },
             { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
             { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
-            { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false }
+            { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false },
+            { sectionKey: 'mJConversationSkills', sectionName: 'Conversation Skills', isExpanded: false },
+            { sectionKey: 'mJMeetings', sectionName: 'Meetings', isExpanded: false }
         ]);
     }
 }

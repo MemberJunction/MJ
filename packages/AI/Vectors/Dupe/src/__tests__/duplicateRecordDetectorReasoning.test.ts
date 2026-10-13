@@ -71,9 +71,29 @@ vi.mock('@memberjunction/core', () => {
     };
 });
 
+vi.mock('@memberjunction/ai-prompts', () => ({
+    AIEmbeddingRunner: class {
+        async RunEmbedding(params: { Texts: string[] }) {
+            return {
+                Success: true,
+                Vectors: (params.Texts || []).map(() => [0.1, 0.2]),
+                PromptRunID: 'pr-mock',
+                TokensUsed: 10,
+                Cost: 0,
+                ErrorMessage: null,
+                ExecutionTimeMs: 1,
+            };
+        }
+    },
+}));
+
 vi.mock('@memberjunction/ai', () => ({
     BaseEmbeddings: vi.fn(),
     GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
+}));
+
+vi.mock('@memberjunction/aiengine', () => ({
+    AIEngine: { Instance: { Config: vi.fn(), GetVectorIndexByID: vi.fn(), GetProviderIndexName: vi.fn() } },
 }));
 
 vi.mock('@memberjunction/ai-vectordb', () => ({
@@ -81,18 +101,22 @@ vi.mock('@memberjunction/ai-vectordb', () => ({
     BaseResponse: vi.fn(),
 }));
 
-vi.mock('@memberjunction/global', () => ({
-    MJGlobal: {
-        Instance: {
-            ClassFactory: { CreateInstance: mockCreateInstanceFn },
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+        MJGlobal: {
+            Instance: {
+                ClassFactory: { CreateInstance: mockCreateInstanceFn },
+            },
         },
-    },
-    UUIDsEqual: vi.fn((a: string, b: string) => a === b),
-    NormalizeUUID: vi.fn((s: string) => String(s).toLowerCase()),
-    // No-op decorator stub — the Compare Remote Operation (transitively loaded via
-    // @memberjunction/record-comparison) is decorated with @RegisterClass at module load.
-    RegisterClass: () => () => { /* no-op */ },
-}));
+        UUIDsEqual: vi.fn((a: string, b: string) => a === b),
+        NormalizeUUID: vi.fn((s: string) => String(s).toLowerCase()),
+        // No-op decorator stub — the Compare Remote Operation (transitively loaded via
+        // @memberjunction/record-comparison) is decorated with @RegisterClass at module load.
+        RegisterClass: () => () => { /* no-op */ },
+    };
+});
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJDuplicateRunDetailEntity: vi.fn(),
@@ -278,8 +302,9 @@ describe('DuplicateRecordDetector — reasoning gate & automation', () => {
 
     // ── (d) AutomationLevel branching + (e) back-compat path proof ──
     describe('IsAutoMergeEligible', () => {
-        const eligible = (dupeScore: number, ed: unknown, rec?: string, absolute = 0.9) => {
-            const d = { ProbabilityScore: dupeScore };
+        /** The candidate's own verdict defaults to the set's, as when the set holds one candidate; null means it has none. */
+        const eligible = (dupeScore: number, ed: unknown, rec?: string, absolute = 0.9, candidateRec: string | null = rec ?? null) => {
+            const d = { ProbabilityScore: dupeScore, ReasoningRecommendation: candidateRec ?? undefined };
             const dupeResult = { ReasoningRecommendation: rec };
             return internals(detector).IsAutoMergeEligible(d, dupeResult, ed, absolute);
         };
@@ -313,6 +338,13 @@ describe('DuplicateRecordDetector — reasoning gate & automation', () => {
             expect(eligible(0.95, ed, 'NotDuplicate')).toBe(false);  // wrong recommendation
             expect(eligible(0.85, ed, 'Merge')).toBe(false);         // below absolute
             expect(eligible(0.95, ed, undefined)).toBe(false);       // no recommendation
+        });
+
+        it('reasoning on + AutoMergeAboveAbsolute: a set-level Merge never merges a candidate judged otherwise', () => {
+            const ed = entityDoc({ EnableLLMReasoning: true, AutomationLevel: 'AutoMergeAboveAbsolute' });
+            expect(eligible(0.99, ed, 'Merge', 0.9, 'NotDuplicate')).toBe(false);
+            expect(eligible(0.99, ed, 'Merge', 0.9, 'Uncertain')).toBe(false);
+            expect(eligible(0.99, ed, 'Merge', 0.9, null)).toBe(false);       // no verdict of its own
         });
     });
 

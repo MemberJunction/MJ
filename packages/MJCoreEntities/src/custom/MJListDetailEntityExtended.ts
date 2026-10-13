@@ -18,17 +18,8 @@ export class MJListDetailEntityExtended extends MJListDetailEntity  {
         this._sourceEntityInfo = entityInfo;
         const primaryKeys = entityInfo.PrimaryKeys;
 
-        if (primaryKeys.length === 1) {
-            // Single PK: store just the raw value
-            const pkField = primaryKeys[0].Name;
-            const value = record instanceof BaseEntity ? record.Get(pkField) : record[pkField];
-            this.RecordID = String(value);
-        } else {
-            // Composite PK: store concatenated format
-            const compositeKey = new CompositeKey();
-            compositeKey.LoadFromEntityInfoAndRecord(entityInfo, record);
-            this.RecordID = compositeKey.ToConcatenatedString();
-        }
+        // Compact CompositeKey segment: the raw value for a single-column key, "F1|v1||F2|v2" for composite.
+        this.RecordID = MJListDetailEntityExtended.BuildRecordID(entityInfo, record);
 
         // Clear cached composite key since RecordID changed
         this._recordCompositeKey = null;
@@ -55,22 +46,9 @@ export class MJListDetailEntityExtended extends MJListDetailEntity  {
             }
         }
 
-        this._recordCompositeKey = new CompositeKey();
-
-        if (effectiveEntityInfo && effectiveEntityInfo.PrimaryKeys.length === 1) {
-            // Single PK: RecordID is just the raw value
-            const pkField = effectiveEntityInfo.PrimaryKeys[0].Name;
-            this._recordCompositeKey.KeyValuePairs = [{ FieldName: pkField, Value: this.RecordID }];
-        } else {
-            // Composite PK or unknown: try to parse as concatenated string
-            this._recordCompositeKey.LoadFromConcatenatedString(this.RecordID);
-
-            // If parsing failed (no delimiters found), treat as single value
-            if (this._recordCompositeKey.KeyValuePairs.length === 0) {
-                const pkField = effectiveEntityInfo?.PrimaryKeys[0]?.Name || 'ID';
-                this._recordCompositeKey.KeyValuePairs = [{ FieldName: pkField, Value: this.RecordID }];
-            }
-        }
+        // RecordID is the compact segment BuildRecordID writes; FromURLSegment reads it back against the
+        // entity's real key column(s) — and falls back to an `ID` key only when the entity is unknown.
+        this._recordCompositeKey = CompositeKey.FromURLSegment(effectiveEntityInfo, this.RecordID);
 
         return this._recordCompositeKey;
     }
@@ -107,19 +85,8 @@ export class MJListDetailEntityExtended extends MJListDetailEntity  {
      * @returns The properly formatted RecordID string
      */
     public static BuildRecordID(entityInfo: EntityInfo, record: BaseEntity | Record<string, unknown>): string {
-        const primaryKeys = entityInfo.PrimaryKeys;
-
-        if (primaryKeys.length === 1) {
-            // Single PK: return just the raw value
-            const pkField = primaryKeys[0].Name;
-            const value = record instanceof BaseEntity ? record.Get(pkField) : record[pkField];
-            return String(value);
-        } else {
-            // Composite PK: return concatenated format
-            const compositeKey = new CompositeKey();
-            compositeKey.LoadFromEntityInfoAndRecord(entityInfo, record);
-            return compositeKey.ToConcatenatedString();
-        }
+        const key = record instanceof BaseEntity ? record.PrimaryKey : CompositeKey.FromEntityRecord(entityInfo, record);
+        return key.ToCompactURLSegment();
     }
 
     /**

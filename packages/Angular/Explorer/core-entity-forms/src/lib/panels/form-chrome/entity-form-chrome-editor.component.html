@@ -1,0 +1,79 @@
+<div class="mj-form-chrome-editor">
+  <div class="mj-form-chrome-knobs">
+    <label class="mj-form-chrome-field">
+      <span>Layout</span>
+      <mj-dropdown
+        [Data]="LayoutOptions"
+        TextField="text"
+        ValueField="value"
+        [ValuePrimitive]="true"
+        [ngModel]="Layout"
+        [Disabled]="!EditMode"
+        (ngModelChange)="OnLayoutChange($event)">
+      </mj-dropdown>
+    </label>
+    <label class="mj-form-chrome-field">
+      <span>Left-nav at</span>
+      <mj-numeric-input
+        [ngModel]="AutoLeftNavAt"
+        [Min]="1"
+        [Max]="40"
+        [Disabled]="!EditMode || Layout !== 'auto'"
+        (ngModelChange)="OnThresholdChange($event)">
+      </mj-numeric-input>
+    </label>
+    <label class="mj-form-chrome-field">
+      <span>Related role policy</span>
+      <mj-dropdown
+        [Data]="PolicyOptions"
+        TextField="text"
+        ValueField="value"
+        [ValuePrimitive]="true"
+        [ngModel]="Policy"
+        [Disabled]="!EditMode"
+        (ngModelChange)="OnPolicyChange($event)">
+      </mj-dropdown>
+    </label>
+    <label class="mj-form-chrome-field">
+      <span>Primary related budget</span>
+      <mj-numeric-input
+        [ngModel]="Budget"
+        [Min]="0"
+        [Max]="40"
+        [Disabled]="!EditMode || Policy !== 'smart'"
+        (ngModelChange)="OnBudgetChange($event)">
+      </mj-numeric-input>
+    </label>
+  </div>
+
+  <div class="mj-form-chrome-summary">
+    <span class="mj-form-chrome-pill is-primary">{{ PrimaryCount }} top-level</span>
+    <span class="mj-form-chrome-pill is-detail">{{ DetailCount }} in More</span>
+  </div>
+
+  <table class="mj-form-chrome-table">
+    <thead>
+      <tr>
+        <th>Relationship</th>
+        <th>Role</th>
+        <th>Why</th>
+        <th>Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of Assignments; track row.RelationshipID) {
+        <tr [class.is-detail]="row.Role === 'Detail'">
+          <td>{{ row.RelatedEntity }}</td>
+          <td>
+            <span class="mj-form-chrome-role" [class.is-detail]="row.Role === 'Detail'">{{ row.Role }}</span>
+          </td>
+          <td class="mj-form-chrome-reason">{{ row.Reason }}</td>
+          <td class="mj-form-chrome-score">{{ row.Score }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+  @if (Assignments.length === 0) {
+    <mj-empty-state Size="compact" Icon="fa-solid fa-link" Title="No related grids on this form" />
+  }
+</div>

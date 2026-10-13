@@ -247,8 +247,8 @@ describe('EntityInfo.ParentEntityFieldNames', () => {
 // ─── Fields & PrimaryKeys ──────────────────────────────────────────────────
 
 describe('EntityInfo Fields and PrimaryKeys', () => {
-    it('Products has 3 fields (ID, Name, Price)', () => {
-        expect(productEntity.Fields.length).toBe(3);
+    it('Products has 4 fields (ID, Name, Price, CategoryName)', () => {
+        expect(productEntity.Fields.length).toBe(4);
     });
 
     it('Products primary key is ID', () => {

@@ -736,7 +736,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
             (cacheManager as unknown as { _entityFingerprintIndex: Map<string, Set<string>> })
                 ._entityFingerprintIndex.set('MJ: Conversations', new Set([fp]));
 
-            const { CompositeKey } = await import('@memberjunction/core');
+            const { CompositeKey } = await import('../index');
 
             const keyA = new CompositeKey();
             keyA.KeyValuePairs = [{ FieldName: 'ID', Value: 'aaa' }];
@@ -775,7 +775,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
             (cacheManager as unknown as { _entityFingerprintIndex: Map<string, Set<string>> })
                 ._entityFingerprintIndex.set('MJ: Users', new Set([fp]));
 
-            const { CompositeKey } = await import('@memberjunction/core');
+            const { CompositeKey } = await import('../index');
 
             const key1 = new CompositeKey();
             key1.KeyValuePairs = [{ FieldName: 'ID', Value: '1' }];
@@ -813,7 +813,7 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
             (cacheManager as unknown as { _entityFingerprintIndex: Map<string, Set<string>> })
                 ._entityFingerprintIndex.set('MJ: Items', new Set([fp]));
 
-            const { CompositeKey } = await import('@memberjunction/core');
+            const { CompositeKey } = await import('../index');
 
             const keyX = new CompositeKey();
             keyX.KeyValuePairs = [{ FieldName: 'ID', Value: 'x' }];

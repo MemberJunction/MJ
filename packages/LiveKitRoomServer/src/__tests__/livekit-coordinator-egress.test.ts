@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- test mocks return minimal cast fixtures for the SDK/engine seams */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, type BridgeOps } from '../livekit-agent-room-coordinator';
-import { LiveKitEgressService, wsToHttpUrl, type EgressClientLike } from '../livekit-egress-service';
+import { LiveKitEgressService, WsToHttpUrl, type EgressClientLike } from '../livekit-egress-service';
 import { LiveKitTokenService } from '../livekit-token-service';
 
 const CONFIG = { ServerUrl: 'wss://test.livekit.cloud', ApiKey: 'devkey', ApiSecret: 'devsecretdevsecretdevsecret123456' };
@@ -145,8 +145,8 @@ describe('LiveKitAgentRoomCoordinator', () => {
 
 describe('wsToHttpUrl', () => {
   it('maps wss → https and ws → http', () => {
-    expect(wsToHttpUrl('wss://x.livekit.cloud')).toBe('https://x.livekit.cloud');
-    expect(wsToHttpUrl('ws://localhost:7880')).toBe('http://localhost:7880');
+    expect(WsToHttpUrl('wss://x.livekit.cloud')).toBe('https://x.livekit.cloud');
+    expect(WsToHttpUrl('ws://localhost:7880')).toBe('http://localhost:7880');
   });
 });
 

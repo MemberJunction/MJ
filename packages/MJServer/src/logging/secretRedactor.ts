@@ -1,5 +1,5 @@
 import type { IMetadataProvider } from '@memberjunction/core';
-import { shortenForLog } from './shortenForLog.js';
+import { ShortenForLog } from './shortenForLog.js';
 
 /**
  * Input to the redactor. Built per `@Arg` per resolver call by the variables-logging middleware.
@@ -15,11 +15,11 @@ import { shortenForLog } from './shortenForLog.js';
  *   this set (decorator-driven) when walking top-level keys.
  */
 export type RedactionContext = {
-  inputTypeName: string;
-  rawValue: unknown;
-  provider: IMetadataProvider;
-  noLogParameter: boolean;
-  noLogFields: ReadonlySet<string>;
+  inputTypeName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  rawValue: unknown;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  provider: IMetadataProvider;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  noLogParameter: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  noLogFields: ReadonlySet<string>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 // Delete is included so DeleteMJ*Input resolvers resolve to their entity (yielding an empty
@@ -33,7 +33,7 @@ const INPUT_TYPE_REGEX = /^(Create|Update|Delete)(?<name>.+)Input$/;
 // type-graphql allows @Field({ name: 'overrideName' }) to rename fields at the
 // GraphQL layer; MJ codegen does not use this. A future maintainer renaming an
 // encrypted field at the GraphQL layer would silently miss redaction.
-export function redactArg(ctx: RedactionContext): unknown {
+export function RedactArg(ctx: RedactionContext): unknown {
   if (ctx.noLogParameter) {
     return '<redacted>';
   }
@@ -51,6 +51,20 @@ export function redactArg(ctx: RedactionContext): unknown {
     const entity = ctx.provider.Entities.find((e) => e.ClassName === match.groups!.name);
     if (entity) {
       encryptedFieldNames = new Set(entity.EncryptedFields.map((f) => f.Name));
+    } else {
+      // The name matched the CRUD convention but resolves to no entity — so the
+      // metadata half of the redactor contributes nothing and, absent any @NoLog
+      // field, this arg falls through to shortenForLog with its values intact.
+      //
+      // This is the silent case: the boot audit tests only the NAME pattern, so an
+      // input like `CreateConnectionInput` is classified as metadata-bound and never
+      // warned about, while the lookup here quietly fails. Every hand-written
+      // `Create*Input` in the resolvers hits this — codegen inputs embed the entity
+      // ClassName (`CreateMJCredentialInput`), hand-written ones do not.
+      //
+      // Report it once per input type so the operator who enabled variables logging
+      // learns which args are unprotected, rather than discovering it in a log file.
+      WarnUnboundCrudInput(ctx.inputTypeName);
     }
   }
 
@@ -65,7 +79,7 @@ export function redactArg(ctx: RedactionContext): unknown {
     !Array.isArray(ctx.rawValue);
 
   if (!canWalk) {
-    return shortenForLog(ctx.rawValue);
+    return ShortenForLog(ctx.rawValue);
   }
 
   const result: Record<string, unknown> = {};
@@ -73,10 +87,44 @@ export function redactArg(ctx: RedactionContext): unknown {
     if (encryptedFieldNames.has(key) || ctx.noLogFields.has(key)) {
       result[key] = '<redacted>';
     } else {
-      result[key] = shortenForLog(value);
+      result[key] = ShortenForLog(value);
     }
   }
   return result;
 }
 
+/** @deprecated Use {@link RedactArg}. */
+export function redactArg(ctx: RedactionContext): unknown {
+  return RedactArg(ctx);
+}
+
 const EMPTY_SET: ReadonlySet<string> = new Set<string>();
+
+/**
+ * Input type names already reported by {@link WarnUnboundCrudInput}. Warning once
+ * per type keeps a hot mutation from flooding the log with the same diagnostic.
+ */
+const warnedUnboundInputTypes = new Set<string>();
+
+/**
+ * Reports, once per input type, that an arg named like a CRUD input resolves to no
+ * entity and is therefore logged unredacted unless its fields carry `@NoLog`.
+ *
+ * Exported for tests; not part of the redaction path's contract.
+ */
+export function WarnUnboundCrudInput(inputTypeName: string): void {
+  if (warnedUnboundInputTypes.has(inputTypeName)) {
+    return;
+  }
+  warnedUnboundInputTypes.add(inputTypeName);
+  console.warn(
+    `[MJServer] Variables logging: '${inputTypeName}' matches the Create/Update/Delete input ` +
+      `naming convention but maps to no entity, so encrypted-field redaction cannot apply to it. ` +
+      `Its values are being logged. Mark any sensitive @Field() on this input with @NoLog.`,
+  );
+}
+
+/** Test seam — clears the once-per-type warning state. */
+export function ResetUnboundCrudInputWarnings(): void {
+  warnedUnboundInputTypes.clear();
+}

@@ -24,12 +24,19 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import {
-    buildDuplicateAgentContext,
-    resolveEntityDoc,
-    resolveEntityFilter,
+    BuildDuplicateAgentContext,
+    ResolveEntityDoc,
+    ResolveEntityFilter,
     DupeEntityDocCandidate,
 } from './duplicate-detection-agent-context';
-import { validateStringParam } from '../../../shared/agent-tool-validation';
+import {
+    BuildMatchQueriesForDetailIDs,
+    BuildRunScopedDetailsQuery,
+    GroupMatchesByDetail,
+    PickDefaultEntityDocument,
+    SelectCurrentRunForEntity,
+} from './duplicate-detection-run-scope';
+import { ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 /**
  * Represents a group of duplicate matches for a single source record,
@@ -103,11 +110,20 @@ interface ComparisonMatchInfo {
     HasDisagreement: boolean;
 }
 
+/** One run's review rows, fetched as a unit so a superseded load can be discarded whole. */
+interface ReviewRows {
+    run: MJDuplicateRunEntity | null;
+    details: MJDuplicateRunDetailEntity[];
+    matches: MJDuplicateRunDetailMatchEntity[];
+}
+
 /** Lightweight entity document info for the picker dropdown */
 interface EntityDocumentOption {
     ID: string;
     Name: string;
     EntityName: string;
+    /** The entity the document describes; duplicate runs are matched to the document through it. */
+    EntityID: string;
     PotentialMatchThreshold: number;
     AbsoluteMatchThreshold: number;
     /** Master switch for the LLM reasoning layer (off = vector-only). */
@@ -148,6 +164,25 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     /** Whether the results area (runs/details/matches) is still loading */
     public IsLoadingResults = false;
     public IsSaving = false;
+    /** The run whose review rows are on the board: the selected entity document's current run. */
+    public CurrentRun: MJDuplicateRunEntity | null = null;
+    /** Set once the first run load completes; a later entity-document change reloads the review rows. */
+    private runDataLoaded = false;
+    /**
+     * True while the entity-document selection is the board's own default rather than a choice the
+     * user or the agent made; a refresh may then re-point it at the document that actually has runs.
+     */
+    private selectionIsDefault = true;
+    /**
+     * Bumped by every review-row load. A load whose generation is no longer current was superseded
+     * by a newer selection and must not write its rows (or clear the spinner) over the newer one.
+     */
+    private reviewLoadGeneration = 0;
+    /**
+     * How many times the first load will re-fetch because the selected document moved while the
+     * rows were in flight, before handing over to a single bounded reload (see loadRunData).
+     */
+    private static readonly MAX_INITIAL_LOAD_FETCHES = 5;
     // ── Comparison Panel State ──
     /** The group being compared (null = panel closed) */
     public ComparisonGroup: DuplicateGroup | null = null;
@@ -249,8 +284,25 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     private _selectedEntityDocumentID = '';
     public get SelectedEntityDocumentID(): string { return this._selectedEntityDocumentID; }
     public set SelectedEntityDocumentID(value: string) {
+        const changed = !UUIDsEqual(this._selectedEntityDocumentID || null, value || null);
+        this.applyEntityDocumentSelection(value);
+        if (!changed) {
+            return;
+        }
+        // Any change through this setter is the user's (or the agent's) choice, including one made
+        // while the first load is still running; the default pick must never override it. The
+        // board's own default goes through applyEntityDocumentSelection() directly.
+        this.selectionIsDefault = false;
+        // The board shows one document's current run, so a new selection means new review rows.
+        // During the first load, loadRunData() notices the selection moved and fetches again itself.
+        if (this.runDataLoaded) {
+            void this.reloadRunDataForSelection();
+        }
+    }
+
+    /** Store the selection and sync the per-document threshold controls; never triggers a reload. */
+    private applyEntityDocumentSelection(value: string): void {
         this._selectedEntityDocumentID = value;
-        // Sync threshold sliders from selected entity document
         const doc = this.EntityDocuments.find(d => UUIDsEqual(d.ID, value));
         if (doc) {
             this.RunPotentialThreshold = doc.PotentialMatchThreshold;
@@ -395,7 +447,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             return;
         }
         const selectedDoc = this.SelectedDocumentThresholds;
-        this.navigationService.SetAgentContext(this, buildDuplicateAgentContext({
+        this.navigationService.SetAgentContext(this, BuildDuplicateAgentContext({
             IsDetecting: this.IsDetecting,
             DetectionProgress: this.DetectionProgress,
             DetectionStage: this.DetectionStage,
@@ -449,14 +501,14 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     required: ['document'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['document'], 'document');
+                    const v = ValidateStringParam(params['document'], 'document');
                     if (!v.ok) return v.result;
-                    const resolved = resolveEntityDoc(v.value, this.getEntityDocCandidates());
-                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
-                    this.SelectedEntityDocumentID = resolved.value.ID;
+                    const resolved = ResolveEntityDoc(v.value, this.getEntityDocCandidates());
+                    if (!resolved.Ok) return { Success: false, ErrorMessage: resolved.Error };
+                    this.SelectedEntityDocumentID = resolved.Value.ID;
                     this.emitAgentContext();
                     this.cdr.detectChanges();
-                    return { Success: true, Data: { SelectedEntityDocID: resolved.value.ID, SelectedEntityDocName: resolved.value.Name } };
+                    return { Success: true, Data: { SelectedEntityDocID: resolved.Value.ID, SelectedEntityDocName: resolved.Value.Name } };
                 },
             },
             {
@@ -483,12 +535,12 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     required: ['entityName'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['entityName'], 'entityName');
+                    const v = ValidateStringParam(params['entityName'], 'entityName');
                     if (!v.ok) return v.result;
-                    const resolved = resolveEntityFilter(v.value, this.EntityNames);
-                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
-                    this.FilterByEntity(resolved.value);
-                    return { Success: true, Data: { EntityFilter: resolved.value || 'All', PendingCount: this.PendingGroups.length } };
+                    const resolved = ResolveEntityFilter(v.value, this.EntityNames);
+                    if (!resolved.Ok) return { Success: false, ErrorMessage: resolved.Error };
+                    this.FilterByEntity(resolved.Value);
+                    return { Success: true, Data: { EntityFilter: resolved.Value || 'All', PendingCount: this.PendingGroups.length } };
                 },
             },
             {
@@ -549,12 +601,15 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
      * Loads all duplicate run data and builds the Kanban groups.
      * Split into two phases so that controls become interactive immediately:
      *   Phase 1 - entity docs from KH engine cache (instant)
-     *   Phase 2 - runs/details/matches via RunViews (heavy)
+     *   Phase 2 - runs, then the selected document's current-run details/matches via RunViews (heavy)
      */
     public async LoadData(): Promise<void> {
         this.IsLoading = true;
         this.cdr.detectChanges();
 
+        // This load owns the review rows and the results spinner only while no newer load (a document
+        // switch) has started; see reviewLoadGeneration.
+        const generation = ++this.reviewLoadGeneration;
         try {
             // Phase 1: Populate entity document picker from cache (instant)
             await this.loadEntityDocuments();
@@ -565,12 +620,14 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             this.cdr.detectChanges();
 
             // Phase 2: Load heavy run/detail/match data
-            await this.loadRunData();
+            await this.loadRunData(generation);
         } catch (error) {
             console.error('Error loading duplicate detection data:', error);
         } finally {
             this.IsLoading = false;
-            this.IsLoadingResults = false;
+            if (generation === this.reviewLoadGeneration) {
+                this.IsLoadingResults = false;
+            }
             this.cdr.detectChanges();
         }
     }
@@ -582,55 +639,138 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.buildEntityDocumentOptionsFromEngine(engine.GetActiveEntityDocuments());
     }
 
-    /** Phase 2: Load runs, details, and matches via RunViews batch. */
-    private async loadRunData(): Promise<void> {
+    /**
+     * Phase 2: Load the runs, then the review rows (details + matches) of the selected document's
+     * current run. `generation` is the load this call belongs to (see reviewLoadGeneration).
+     */
+    private async loadRunData(generation: number): Promise<void> {
+        // Runs are one row each and cheap. The review rows (details + matches) are the heavy side,
+        // so they are loaded for ONE run only: the selected entity document's current run. See
+        // duplicate-detection-run-scope.ts for why, and why those two queries keep IgnoreMaxRows.
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const [runsResult, detailsResult, matchesResult] = await rv.RunViews([
-            {
-                EntityName: 'MJ: Duplicate Runs',
-                ExtraFilter: "ProcessingStatus IN ('Complete', 'Failed', 'In Progress')",
-                OrderBy: 'StartedAt DESC',
-                ResultType: 'entity_object'
-            },
-            {
-                EntityName: 'MJ: Duplicate Run Details',
-                ExtraFilter: "MatchStatus = 'Complete'",
-                OrderBy: '__mj_CreatedAt DESC',
-                // Details and matches MUST load as a consistent set — buildGroups() joins them by
-                // DuplicateRunDetailID. With both entities' UserViewMaxRows = 1000, details truncate
-                // to the newest 1000 (by date) while matches truncate to the top 1000 (by probability);
-                // those two sets diverge once total rows exceed 1000, leaving the newest details with
-                // NO loaded matches → every group is dropped → empty board. Load the full set so the
-                // join is complete. (Scaling note: this loads all review rows; a future run-scoped /
-                // paginated board should replace the unbounded load for large production volumes.)
-                IgnoreMaxRows: true,
-                ResultType: 'entity_object'
-            },
-            {
-                EntityName: 'MJ: Duplicate Run Detail Matches',
-                OrderBy: 'MatchProbability DESC',
-                IgnoreMaxRows: true,
-                ResultType: 'entity_object'
-            }
-        ]);
-
+        const runsResult = await rv.RunView<MJDuplicateRunEntity>({
+            EntityName: 'MJ: Duplicate Runs',
+            ExtraFilter: "ProcessingStatus IN ('Complete', 'Failed', 'In Progress')",
+            OrderBy: 'StartedAt DESC',
+            ResultType: 'entity_object'
+        });
         if (runsResult.Success) {
-            this.Runs = runsResult.Results as MJDuplicateRunEntity[];
-        }
-        if (detailsResult.Success) {
-            this.Details = detailsResult.Results as MJDuplicateRunDetailEntity[];
-        }
-        if (matchesResult.Success) {
-            this.Matches = matchesResult.Results as MJDuplicateRunDetailMatchEntity[];
+            this.Runs = runsResult.Results;
         }
 
+        // Until the user picks a document, point the board at the one that actually has runs, so a
+        // first visit does not land on an unrelated document and report "no results" beside a real run.
+        if (this.selectionIsDefault) {
+            const pick = PickDefaultEntityDocument(this.EntityDocuments, this.Runs);
+            if (pick && !UUIDsEqual(pick.ID, this.SelectedEntityDocumentID)) {
+                this.applyEntityDocumentSelection(pick.ID);
+            }
+        }
+
+        // The picker stays live while this runs. If the user picks another document before the rows
+        // land, the rows fetched for the old selection are not what the picker says; fetch again for
+        // the new one rather than show document A's run under document B's name.
+        let rows: ReviewRows;
+        let selectedAtFetch: string;
+        let fetches = 0;
+        do {
+            selectedAtFetch = this.SelectedEntityDocumentID;
+            rows = await this.fetchReviewRowsForSelectedDocument();
+            fetches++;
+        } while (
+            generation === this.reviewLoadGeneration &&
+            fetches < DuplicateDetectionResourceComponent.MAX_INITIAL_LOAD_FETCHES &&
+            !UUIDsEqual(selectedAtFetch || null, this.SelectedEntityDocumentID || null)
+        );
+        if (generation === this.reviewLoadGeneration) {
+            this.applyReviewRows(rows);
+        }
+        this.runDataLoaded = true;
+        this.rebuildBoard();
+        if (!UUIDsEqual(selectedAtFetch || null, this.SelectedEntityDocumentID || null)) {
+            // The selection outran the fetch cap (an agent switching documents faster than the rows
+            // load). One more reload, generation-guarded and not looped, brings the board to the
+            // current pick; now that runDataLoaded is set, any later change reloads on its own.
+            console.warn(`[DuplicateDetection] Selection changed during each of ${fetches} initial fetches; reloading once for the current document`);
+            void this.reloadRunDataForSelection();
+        }
+
+        // Reconnect to any in-progress detection run
+        this.reconnectToActiveRun();
+    }
+
+    /**
+     * Resolve the selected document's current run and fetch that run's details, then the matches for
+     * exactly those details. Two round trips on purpose: the match filter is a plain `IN (...)` of the
+     * detail IDs, so it runs on any database behind the API (see duplicate-detection-run-scope.ts).
+     * Returns the rows without touching component state; the caller decides whether they are still
+     * current (see reviewLoadGeneration).
+     */
+    private async fetchReviewRowsForSelectedDocument(): Promise<ReviewRows> {
+        const run = SelectCurrentRunForEntity(this.Runs, this.SelectedDocumentThresholds?.EntityID);
+        if (!run) {
+            return { run: null, details: [], matches: [] };
+        }
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const detailsResult = await rv.RunView<MJDuplicateRunDetailEntity>(BuildRunScopedDetailsQuery(run.ID));
+        if (!detailsResult.Success) {
+            console.error('[DuplicateDetection] Could not load run details:', detailsResult.ErrorMessage);
+            return { run, details: [], matches: [] };
+        }
+        const details = detailsResult.Results;
+        if (details.length === 0) {
+            return { run, details, matches: [] };
+        }
+        const matchResults = await rv.RunViews<MJDuplicateRunDetailMatchEntity>(
+            BuildMatchQueriesForDetailIDs(details.map(d => d.ID))
+        );
+        const failed = matchResults.find(r => !r.Success);
+        if (failed) {
+            console.error('[DuplicateDetection] Could not load run matches:', failed.ErrorMessage);
+        }
+        return { run, details, matches: matchResults.filter(r => r.Success).flatMap(r => r.Results) };
+    }
+
+    /** Make a fetched set of review rows the board's current rows. */
+    private applyReviewRows(rows: ReviewRows): void {
+        this.CurrentRun = rows.run;
+        this.Details = rows.details;
+        this.Matches = rows.matches;
+    }
+
+    /** Rebuild groups, entity names, ranges and columns from the loaded review rows. */
+    private rebuildBoard(): void {
         this.buildGroups();
         this.extractEntityNames();
         this.computeDataRanges();
         this.applyFilters();
+    }
 
-        // Reconnect to any in-progress detection run
-        this.reconnectToActiveRun();
+    /**
+     * The selected entity document changed after the first load: swap the review rows to that
+     * document's current run. Runs are already loaded, so only the bounded review queries re-run.
+     * A faster later selection supersedes this one: its rows, and the spinner, then belong to it.
+     */
+    private async reloadRunDataForSelection(): Promise<void> {
+        const generation = ++this.reviewLoadGeneration;
+        this.IsLoadingResults = true;
+        this.cdr.detectChanges();
+        try {
+            const rows = await this.fetchReviewRowsForSelectedDocument();
+            if (generation !== this.reviewLoadGeneration) {
+                return;
+            }
+            this.applyReviewRows(rows);
+            this.rebuildBoard();
+        } catch (error) {
+            console.error('Error loading duplicate results for the selected entity document:', error);
+        } finally {
+            if (generation === this.reviewLoadGeneration) {
+                this.IsLoadingResults = false;
+                this.emitAgentContext();
+                this.cdr.detectChanges();
+            }
+        }
     }
 
     /**
@@ -959,6 +1099,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             ID: d.ID,
             Name: d.Name ?? 'Unnamed',
             EntityName: d.Entity ?? '',
+            EntityID: d.EntityID,
             PotentialMatchThreshold: this.normalizeDupeThreshold(d.PotentialMatchThreshold, 0.70),
             AbsoluteMatchThreshold: this.normalizeDupeThreshold(d.AbsoluteMatchThreshold, 0.95),
             EnableLLMReasoning: d.EnableLLMReasoning ?? false,
@@ -967,7 +1108,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
         // Auto-select the first entity document if available
         if (this.EntityDocuments.length > 0 && !this.SelectedEntityDocumentID) {
-            this.SelectedEntityDocumentID = this.EntityDocuments[0].ID;
+            // Not through the setter: this is the board's own default, not a user choice, and
+            // loadRunData() may still move it to the document that has runs.
+            this.applyEntityDocumentSelection(this.EntityDocuments[0].ID);
         }
     }
 
@@ -1155,14 +1298,12 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         return stageMap[stage] ?? stage;
     }
 
-    /** Extract unique entity names from loaded runs */
+    /** Extract the entity names on the board: the displayed run's entity, plus any carried on the groups */
     private extractEntityNames(): void {
         const nameSet = new Set<string>();
-        // Extract from runs first
-        for (const run of this.Runs) {
-            if (run.Entity) {
-                nameSet.add(run.Entity);
-            }
+        // The board holds one run's rows, so only that run's entity belongs in the filter
+        if (this.CurrentRun?.Entity) {
+            nameSet.add(this.CurrentRun.Entity);
         }
         // Also extract from groups (covers cases where runs failed but details/matches exist)
         for (const group of this.AllGroups) {
@@ -1188,16 +1329,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             runMap.set(run.ID, run);
         }
 
-        const matchesByDetail = new Map<string, MJDuplicateRunDetailMatchEntity[]>();
-        for (const match of this.Matches) {
-            const key = match.DuplicateRunDetailID;
-            const existing = matchesByDetail.get(key);
-            if (existing) {
-                existing.push(match);
-            } else {
-                matchesByDetail.set(key, [match]);
-            }
-        }
+        const matchesByDetail = GroupMatchesByDetail(this.Matches);
 
         this.AllGroups = [];
         for (const detail of this.Details) {
@@ -1462,13 +1594,19 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const md = this.ProviderToUse;
             const relatedEntityInfo = md.Entities.find(e => e.Name === relatedEntityName);
-            const nameField = relatedEntityInfo?.NameField;
-            const pkFieldName = relatedEntityInfo?.FirstPrimaryKey?.Name || 'ID';
+            if (!relatedEntityInfo) {
+                LogStatus(`[DuplicateDetection] Related entity '${relatedEntityName}' not found in metadata; dependent records skipped`);
+                this.depRecordsCache.set(key, []);
+                return;
+            }
+            const nameField = relatedEntityInfo.NameField;
+            // The related entity is arbitrary — select every key column, not an assumed single ID
+            const pkFieldNames = relatedEntityInfo.PrimaryKeys.map(pk => pk.Name);
 
             const result = await rv.RunView<Record<string, unknown>>({
                 EntityName: relatedEntityName,
                 ExtraFilter: `${fkFieldName}='${parentKeyValue}'`,
-                Fields: nameField ? [pkFieldName, nameField.Name] : [pkFieldName],
+                Fields: nameField ? [...pkFieldNames, nameField.Name] : pkFieldNames,
                 MaxRows: 50,
                 ResultType: 'simple',
             });
@@ -1476,8 +1614,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             const records: Array<{ Name: string; PrimaryKey: CompositeKey; EntityName: string }> = [];
             if (result.Success && result.Results) {
                 for (const row of result.Results) {
-                    const pk = new CompositeKey([{ FieldName: pkFieldName, Value: String(row[pkFieldName] || '') }]);
-                    const name = nameField ? String(row[nameField.Name] || '') : String(row[pkFieldName] || '');
+                    const pk = CompositeKey.FromEntityRecord(relatedEntityInfo, row);
+                    const name = nameField ? String(row[nameField.Name] || '') : pk.Values();
                     records.push({ Name: name || pk.Values(), PrimaryKey: pk, EntityName: relatedEntityName });
                 }
             }
@@ -1944,13 +2082,17 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             // Get entity info to know primary key field name
             const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => e.Name === group.EntityName);
-            const pkFieldName = entityInfo?.FirstPrimaryKey?.Name || 'ID';
+            if (!entityInfo) {
+                LogStatus(`[DuplicateDetection] Entity '${group.EntityName}' not found in metadata; comparison records not indexed`);
+                return;
+            }
 
             for (const record of result.Results) {
-                const pkValue = String(record[pkFieldName] || '');
-                // Store keyed by both raw PK value and the composite key string format
-                this.comparisonRecords.set(pkValue, record);
-                this.comparisonRecords.set(`${pkFieldName}|${pkValue}`, record);
+                // Store keyed by both the compact segment (raw value for a single-column key) and the
+                // full "Field|Value" concatenated form so either record-id spelling resolves
+                const recordKey = CompositeKey.FromEntityRecord(entityInfo, record);
+                this.comparisonRecords.set(recordKey.ToCompactURLSegment(), record);
+                this.comparisonRecords.set(recordKey.ToConcatenatedString(), record);
             }
         }
     }

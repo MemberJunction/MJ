@@ -7,7 +7,7 @@ vi.mock('@memberjunction/global', () => ({
 
 // Mock @memberjunction/ai — provide BaseModel/BaseRealtimeModel base classes only. The realtime
 // type aliases (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
-vi.mock('@memberjunction/ai', () => {
+vi.mock('@memberjunction/ai', async () => {
     class BaseModel {
         private _apiKey: string;
         protected get apiKey(): string {
@@ -28,7 +28,20 @@ vi.mock('@memberjunction/ai', () => {
             throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
         }
     }
-    return { BaseModel, BaseRealtimeModel };
+    // A REPRESENTATIVE shared-key list, not the real one. Reaching for the real export here means
+    // `importOriginal`, which loads the whole @memberjunction/ai barrel — realtimeProxyRegistry then
+    // wants BaseSingleton off the mocked @memberjunction/global, and the mocks cascade. Which is why
+    // this mock exists in the first place.
+    //
+    // The split that keeps this honest: these tests pin the driver's MECHANISM (it consults the
+    // registry and skips every key in it), while membership of the registry — that `firstMessage` is
+    // in the shared vocabulary at all — is pinned in @memberjunction/ai's own suite. Neither test
+    // can drift without the other failing.
+    const REALTIME_SHARED_CONFIG_KEYS = ['voice', 'firstMessage', 'reasoningEffort', 'mcpTools'];
+    // The dropped-input reporter is dependency-free, so the REAL implementation loads from its own
+    // module without the barrel: the drop tests below assert against shipped behavior.
+    const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
+    return { BaseModel, BaseRealtimeModel, REALTIME_SHARED_CONFIG_KEYS, RealtimeDroppedInputReporter };
 });
 
 import {
@@ -209,6 +222,23 @@ describe('InworldRealtime', () => {
             expect(update.session?.['model']).toBe('anthropic/claude-opus-4-1');
         });
 
+        it('resolves the model id from Config.Reasoning.Remote.Ref when present', async () => {
+            await startReadySession(driver, {
+                Model: 'inworld-realtime',
+                Config: {
+                    Reasoning: {
+                        Plane: 'remote',
+                        Remote: {
+                            Kind: 'model',
+                            Ref: 'anthropic/claude-sonnet-4-6',
+                        },
+                    },
+                },
+            });
+            const update = driver.Fake.Find('session.update') as { session?: Record<string, unknown> };
+            expect(update.session?.['model']).toBe('anthropic/claude-sonnet-4-6');
+        });
+
         it('falls back to the default model id when params.Model is empty', async () => {
             await startReadySession(driver, { Model: '' });
             const update = driver.Fake.Find('session.update') as { session?: Record<string, unknown> };
@@ -231,6 +261,33 @@ describe('InworldRealtime', () => {
             await startReadySession(driver, { Config: { turn_detection: { type: 'server_vad', threshold: 0.6 } } });
             const update = driver.Fake.Find('session.update') as { session?: Record<string, JSONLike> };
             expect(update.session?.['turn_detection']).toEqual({ type: 'server_vad', threshold: 0.6 });
+        });
+
+        /**
+         * The raw-override loop forwards every unrecognized Config key straight onto the session,
+         * which makes it the leak path for any NEUTRAL MJ key this driver does not consume — the
+         * shared vocabulary declared in `REALTIME_SHARED_CONFIG_KEYS`, which the registry's own
+         * contract says non-OpenAI-protocol drivers MUST scrub before forwarding.
+         *
+         * `firstMessage` (issue #3557) is the case that exposed this: a persona authors an opening
+         * utterance without naming a vendor, so it is filed onto whichever driver resolves.
+         */
+        it('scrubs shared neutral MJ keys instead of forwarding them raw', async () => {
+            await startReadySession(driver, {
+                Config: { firstMessage: 'Good morning.', reasoningEffort: 'high', mcpTools: [{ type: 'mcp' }] },
+            });
+            const update = driver.Fake.Find('session.update') as { session?: Record<string, JSONLike> };
+            expect(update.session?.['firstMessage']).toBeUndefined();
+            expect(update.session?.['reasoningEffort']).toBeUndefined();
+            expect(update.session?.['mcpTools']).toBeUndefined();
+        });
+
+        it('still forwards genuinely provider-native passthrough keys', async () => {
+            // The scrub must be limited to the shared MJ vocabulary — the raw-override channel is
+            // how a caller reaches an Inworld-native field the driver has no shorthand for.
+            await startReadySession(driver, { Config: { some_inworld_native_field: 'keep me' } });
+            const update = driver.Fake.Find('session.update') as { session?: Record<string, JSONLike> };
+            expect(update.session?.['some_inworld_native_field']).toBe('keep me');
         });
 
         it('maps voice/stt/language shorthands into the audio block', async () => {
@@ -320,10 +377,31 @@ describe('InworldRealtime', () => {
             const session = await startReadySession(driver);
             driver.Fake.Reset();
             const bytes = new Uint8Array([1, 2, 3, 4]);
-            session.SendInput(bytes.buffer);
+            session.SendInput({ Data: bytes.buffer, Kind: 'audio' });
             const append = driver.Fake.Find('input_audio.append') as { audio?: string };
             expect(append).toBeDefined();
             expect(append.audio).toBe(Buffer.from(bytes).toString('base64'));
+        });
+
+        it('SendInput drops a video frame instead of appending it as audio, reports it once, and still sends audio (#5091)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const session = await startReadySession(driver);
+                driver.Fake.Reset();
+                const jpeg = new Uint8Array([0xff, 0xd8, 0xff]);
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+
+                expect(driver.Fake.Sent).toEqual([]);
+                const drops = warn.mock.calls.filter((call) => String(call[0]).startsWith('[InworldRealtime] Dropped video input of type image/jpeg'));
+                expect(drops).toHaveLength(1);
+
+                const audio = new Uint8Array([1, 2, 3, 4]);
+                session.SendInput({ Data: audio.buffer, Kind: 'audio' });
+                expect(driver.Fake.Sent).toEqual([{ type: 'input_audio.append', audio: Buffer.from(audio).toString('base64') }]);
+            } finally {
+                warn.mockRestore();
+            }
         });
 
         it('RegisterTools sends a mid-session session.update with mapped tools', async () => {
@@ -425,7 +503,7 @@ describe('InworldRealtime', () => {
         it('SendInput throws after the socket was released (Close)', async () => {
             const session = await startReadySession(driver);
             await session.Close();
-            expect(() => session.SendInput(new Uint8Array([1]).buffer)).toThrow(/not open/);
+            expect(() => session.SendInput({ Data: new Uint8Array([1]).buffer, Kind: 'audio' })).toThrow(/not open/);
         });
     });
 

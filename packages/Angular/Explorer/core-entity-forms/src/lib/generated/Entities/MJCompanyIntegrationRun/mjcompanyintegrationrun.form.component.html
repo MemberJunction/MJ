@@ -139,6 +139,64 @@
 
     </mj-collapsible-panel>
 
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="OwnerToken"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="LeaseExpiresAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="HeartbeatAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="FenceToken"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="CancelRequestedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ProgressJSON"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
     <!-- System Metadata Section -->
     <mj-collapsible-panel
         SectionKey="systemMetadata"
@@ -185,9 +243,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Run API Logs','CompanyIntegrationRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Company Integration Run API Logs')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integration Run API Logs','CompanyIntegrationRunID')"
                 [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationRunAPILogs')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationRunAPILogs', $event.totalRowCount)"
                 >
@@ -210,9 +268,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Run Details','CompanyIntegrationRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Company Integration Run Details')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integration Run Details','CompanyIntegrationRunID')"
                 [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationRunDetails')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationRunDetails', $event.totalRowCount)"
                 >
@@ -235,9 +293,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Error Logs','CompanyIntegrationRunID')"
-                [NewRecordValues]="NewRecordValues('MJ: Error Logs')"
+                [NewRecordValues]="NewRecordValues('MJ: Error Logs','CompanyIntegrationRunID')"
                 [AllowLoad]="IsSectionExpanded('mJErrorLogs')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJErrorLogs', $event.totalRowCount)"
                 >

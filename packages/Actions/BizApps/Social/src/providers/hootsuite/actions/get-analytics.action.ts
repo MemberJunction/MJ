@@ -94,8 +94,8 @@ export class HootSuiteGetAnalyticsAction extends HootSuiteBaseAction {
         if (startDate) params.startTime = this.formatHootSuiteDate(startDate);
         if (endDate) params.endTime = this.formatHootSuiteDate(endDate);
 
-        const response = await this.axiosInstance.get(`/analytics/posts/${postId}`, { params });
-        return response.data;
+        const response = await this.httpClient.Get<HootSuiteAnalytics>(`/analytics/posts/${postId}`, { Query: params });
+        return response.Data;
     }
 
     /**
@@ -115,8 +115,8 @@ export class HootSuiteGetAnalyticsAction extends HootSuiteBaseAction {
         if (endDate) params.endTime = this.formatHootSuiteDate(endDate);
         if (metricsType && metricsType !== 'all') params.metrics = this.getMetricsList(metricsType);
 
-        const response = await this.axiosInstance.get('/analytics/profiles', { params });
-        return response.data;
+        const response = await this.httpClient.Get<any>('/analytics/profiles', { Query: params });
+        return response.Data;
     }
 
     /**
@@ -144,8 +144,8 @@ export class HootSuiteGetAnalyticsAction extends HootSuiteBaseAction {
         if (metricsType && metricsType !== 'all') params.metrics = this.getMetricsList(metricsType);
         if (aggregateByProfile) params.groupBy = 'socialProfile';
 
-        const response = await this.axiosInstance.get('/analytics/profiles', { params });
-        return response.data;
+        const response = await this.httpClient.Get<any>('/analytics/profiles', { Query: params });
+        return response.Data;
     }
 
     /**

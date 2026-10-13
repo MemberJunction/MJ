@@ -218,9 +218,25 @@ export interface GridStateChangedEvent {
 }
 
 /**
+ * Chrome density for {@link EntityViewerConfig}.
+ *
+ * - `workspace` — Explorer record page: filter, view-mode toggle, count, pagination, grid toolbar.
+ * - `embedded` — dashboard / peek card: none of that chrome. Grid toolbar and pager are seeded off
+ *   as well so hosts do not have to know Grid's opaque view-type blob.
+ */
+export type EntityViewerChrome = 'workspace' | 'embedded';
+
+/**
  * Configuration options for the EntityViewer component
  */
 export interface EntityViewerConfig {
+  /**
+   * Chrome density. `embedded` fills in compact defaults (no filter, no view-mode toggle,
+   * no record count, no pagination, pageSize 8). Explicit booleans still win.
+   * @default 'workspace'
+   */
+  chrome?: EntityViewerChrome;
+
   /**
    * Whether to show the filter input box
    * @default true
@@ -442,6 +458,7 @@ export interface ViewSaveResult {
 }
 
 export const DEFAULT_VIEWER_CONFIG: Required<EntityViewerConfig> = {
+  chrome: 'workspace',
   showFilter: true,
   showViewModeToggle: true,
   selectionBehavior: 'emit-only',
@@ -467,3 +484,27 @@ export const DEFAULT_VIEWER_CONFIG: Required<EntityViewerConfig> = {
   defaultSortField: '',
   defaultSortDirection: 'asc'
 };
+
+/** Compact defaults applied when {@link EntityViewerConfig.chrome} is `embedded`. */
+export const EMBEDDED_VIEWER_CHROME: Partial<EntityViewerConfig> = {
+  showFilter: false,
+  showViewModeToggle: false,
+  showRecordCount: false,
+  showPagination: false,
+  pageSize: 8,
+};
+
+/**
+ * Merge viewer config: workspace defaults, then embedded preset when requested, then explicit fields.
+ * Explicit booleans always win over the chrome preset.
+ */
+export function ResolveViewerConfig(partial: Partial<EntityViewerConfig> = {}): Required<EntityViewerConfig> {
+  const chrome = partial.chrome ?? 'workspace';
+  const preset = chrome === 'embedded' ? EMBEDDED_VIEWER_CHROME : {};
+  return {
+    ...DEFAULT_VIEWER_CONFIG,
+    ...preset,
+    ...partial,
+    chrome,
+  };
+}

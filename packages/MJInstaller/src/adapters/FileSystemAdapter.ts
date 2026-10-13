@@ -27,6 +27,7 @@ import fsSync from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import AdmZip from 'adm-zip';
+import { ArchiveEntryRefusedError } from '../errors/ArchiveEntryRefusedError.js';
 
 /**
  * File system adapter providing all I/O operations needed by installer phases.
@@ -50,10 +51,18 @@ export class FileSystemAdapter {
    * a single root folder is detected, its contents are extracted directly
    * into `targetDir` without the wrapper folder.
    *
+   * Entries are written by hand rather than through adm-zip's `extractAllTo` /
+   * `extractEntryTo` on purpose: those sanitize an escaping entry by silently
+   * relocating it under the target, and a tampered release must fail, not be
+   * quietly repaired. Do not substitute them for the loop below.
+   *
    * @param zipPath - Absolute path to the ZIP file.
    * @param targetDir - Directory to extract into (created if it doesn't exist).
    * @returns List of top-level entry names in the target directory after extraction.
    * @throws Error if the ZIP file is corrupt or unreadable.
+   * @throws {ArchiveEntryRefusedError} if any entry would be written outside `targetDir` (a
+   *   "zip slip" archive). Entries are validated before anything is written, so a refused
+   *   archive leaves the target directory untouched.
    *
    * @example
    * ```typescript
@@ -64,19 +73,24 @@ export class FileSystemAdapter {
   async ExtractZip(zipPath: string, targetDir: string): Promise<string[]> {
     const zip = new AdmZip(zipPath);
     const entries = zip.getEntries();
+    const root = path.resolve(targetDir);
 
-    // Determine if ZIP has a single root folder (common for GitHub zipballs)
+    // Determine if ZIP has a single root folder (common for GitHub zipballs). A sole "root"
+    // of '', '.' or '..' means every entry is absolute or a traversal, not a wrapper folder:
+    // it is never stripped, so the containment check below refuses the archive instead of
+    // silently relocating it.
     const topLevelNames = new Set<string>();
     for (const entry of entries) {
-      const firstSegment = entry.entryName.split('/')[0];
-      topLevelNames.add(firstSegment);
+      topLevelNames.add(entry.entryName.split('/')[0]);
     }
+    const [soleRoot] = topLevelNames;
+    const hasSingleRoot =
+      topLevelNames.size === 1 && soleRoot !== '' && soleRoot !== '.' && soleRoot !== '..';
+    const rootPrefix = hasSingleRoot ? soleRoot + '/' : '';
 
-    const hasSingleRoot = topLevelNames.size === 1;
-    const rootPrefix = hasSingleRoot ? [...topLevelNames][0] + '/' : '';
-
-    await fs.mkdir(targetDir, { recursive: true });
-
+    // Resolve and validate every entry BEFORE touching the file system, so a hostile entry
+    // anywhere in the archive refuses the whole archive and nothing is written.
+    const planned: Array<{ entry: AdmZip.IZipEntry; fullPath: string }> = [];
     for (const entry of entries) {
       let relativePath = entry.entryName;
 
@@ -89,8 +103,17 @@ export class FileSystemAdapter {
         continue;
       }
 
-      const fullPath = path.join(targetDir, relativePath);
+      const fullPath = FileSystemAdapter.resolveWithinRoot(root, relativePath, entry.entryName);
+      if (fullPath === root) {
+        // '.', './' or 'wrapper/.' — the target directory itself; nothing to create.
+        continue;
+      }
+      planned.push({ entry, fullPath });
+    }
 
+    await fs.mkdir(root, { recursive: true });
+
+    for (const { entry, fullPath } of planned) {
       if (entry.isDirectory) {
         await fs.mkdir(fullPath, { recursive: true });
       } else {
@@ -100,8 +123,34 @@ export class FileSystemAdapter {
     }
 
     // Return the list of top-level items in the target dir after extraction
-    const extracted = await fs.readdir(targetDir);
+    const extracted = await fs.readdir(root);
     return extracted;
+  }
+
+  /**
+   * Resolve an archive entry against the extraction root and refuse any entry that would land
+   * outside it.
+   *
+   * Archive entry names are attacker-controlled: an entry named `../../.bashrc` or an absolute
+   * path would otherwise be written with the installer's privileges (CWE-22, "zip slip").
+   * The check is lexical — it never consults the file system — so it does not defend against
+   * a symbolic link that already exists under the target directory.
+   *
+   * @param root - The absolute, already-resolved extraction directory.
+   * @param relativePath - The entry name after any single-root-folder stripping.
+   * @param entryName - The original entry name, for the error message.
+   * @returns The absolute path to write, guaranteed (lexically) to be `root` or inside it.
+   * @throws {ArchiveEntryRefusedError} if the resolved path is not inside `root`.
+   */
+  private static resolveWithinRoot(root: string, relativePath: string, entryName: string): string {
+    const fullPath = path.resolve(root, relativePath);
+    const relative = path.relative(root, fullPath);
+    const escapes =
+      relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative);
+    if (escapes) {
+      throw new ArchiveEntryRefusedError(entryName);
+    }
+    return fullPath;
   }
 
   /**

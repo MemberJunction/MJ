@@ -3,18 +3,18 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
-    targetPathsFor,
-    parseSemverMajor,
-    detectMJMajor,
-    detectMJVersionString,
-    resolveLocalPackRoot,
-    buildRemoteUrlPrefix,
+    TargetPathsFor,
+    ParseSemverMajor,
+    DetectMJMajor,
+    DetectMJVersionString,
+    ResolveLocalPackRoot,
+    BuildRemoteUrlPrefix,
 } from '../../lib/claude-pack/PackPaths.js';
 
 describe('PackPaths', () => {
     describe('targetPathsFor', () => {
         it('builds every standard path under the target dir', () => {
-            const paths = targetPathsFor('/some/project');
+            const paths = TargetPathsFor('/some/project');
             // Use path.resolve to make assertions OS-agnostic
             const root = path.resolve('/some/project');
             expect(paths.Root).toBe(root);
@@ -30,7 +30,7 @@ describe('PackPaths', () => {
         });
 
         it('resolves relative paths to absolute', () => {
-            const paths = targetPathsFor('.');
+            const paths = TargetPathsFor('.');
             expect(path.isAbsolute(paths.Root)).toBe(true);
         });
     });
@@ -48,13 +48,13 @@ describe('PackPaths', () => {
             ['^10.0.0-beta.1', '10'],
             ['0.1.0', '0'],
         ])('extracts %s as major=%s', (input, expected) => {
-            expect(parseSemverMajor(input)).toBe(expected);
+            expect(ParseSemverMajor(input)).toBe(expected);
         });
 
         it.each([['next'], ['latest'], ['*'], [''], ['   '], ['workspace:*']])(
             'rejects non-numeric or empty: %s',
             (input) => {
-                expect(parseSemverMajor(input)).toBe(null);
+                expect(ParseSemverMajor(input)).toBe(null);
             }
         );
     });
@@ -76,7 +76,7 @@ describe('PackPaths', () => {
                     dependencies: { '@memberjunction/cli': '^5.33.0' },
                 })
             );
-            expect(detectMJMajor(tmp)).toBe('5');
+            expect(DetectMJMajor(tmp)).toBe('5');
         });
 
         it('reads major from devDependencies if not in dependencies', () => {
@@ -87,7 +87,7 @@ describe('PackPaths', () => {
                     devDependencies: { '@memberjunction/core': '~6.0.0' },
                 })
             );
-            expect(detectMJMajor(tmp)).toBe('6');
+            expect(DetectMJMajor(tmp)).toBe('6');
         });
 
         it('returns null when no @memberjunction/* dependency is declared', () => {
@@ -98,16 +98,16 @@ describe('PackPaths', () => {
                     dependencies: { lodash: '^4.0.0' },
                 })
             );
-            expect(detectMJMajor(tmp)).toBe(null);
+            expect(DetectMJMajor(tmp)).toBe(null);
         });
 
         it('returns null when package.json is absent', () => {
-            expect(detectMJMajor(tmp)).toBe(null);
+            expect(DetectMJMajor(tmp)).toBe(null);
         });
 
         it('returns null when package.json is malformed', () => {
             writeFileSync(path.join(tmp, 'package.json'), 'not json {');
-            expect(detectMJMajor(tmp)).toBe(null);
+            expect(DetectMJMajor(tmp)).toBe(null);
         });
 
         it('returns null when MJ dep version is non-semver (e.g., workspace:*)', () => {
@@ -118,7 +118,7 @@ describe('PackPaths', () => {
                     dependencies: { '@memberjunction/cli': 'workspace:*' },
                 })
             );
-            expect(detectMJMajor(tmp)).toBe(null);
+            expect(DetectMJMajor(tmp)).toBe(null);
         });
 
         // Distribution-style `mj install` produces a workspace layout where
@@ -144,7 +144,7 @@ describe('PackPaths', () => {
                     dependencies: { '@memberjunction/server': '^5.37.0' },
                 })
             );
-            expect(detectMJMajor(tmp)).toBe('5');
+            expect(DetectMJMajor(tmp)).toBe('5');
         });
 
         it('walks into packages/* when root package.json has no @memberjunction/* deps', () => {
@@ -164,7 +164,7 @@ describe('PackPaths', () => {
                     dependencies: { '@memberjunction/core-entities': '^6.0.0' },
                 })
             );
-            expect(detectMJMajor(tmp)).toBe('6');
+            expect(DetectMJMajor(tmp)).toBe('6');
         });
 
         it('prefers root package.json deps when both root and apps/* have @mj deps', () => {
@@ -185,7 +185,7 @@ describe('PackPaths', () => {
                 })
             );
             // Root wins — the workspace walk is a *fallback*, not an override.
-            expect(detectMJMajor(tmp)).toBe('5');
+            expect(DetectMJMajor(tmp)).toBe('5');
         });
 
         it('returns null when neither root nor workspace subdirs declare an @mj dep', () => {
@@ -202,7 +202,7 @@ describe('PackPaths', () => {
                 path.join(appDir, 'package.json'),
                 JSON.stringify({ name: 'frontend', dependencies: { react: '^18.0.0' } })
             );
-            expect(detectMJMajor(tmp)).toBe(null);
+            expect(DetectMJMajor(tmp)).toBe(null);
         });
 
         // The next few cases are defensive — making sure the workspace walk
@@ -223,7 +223,7 @@ describe('PackPaths', () => {
                 })
             );
             // workspace:* isn't a real version — rejected, no fallback elsewhere.
-            expect(detectMJMajor(tmp)).toBe(null);
+            expect(DetectMJMajor(tmp)).toBe(null);
         });
 
         it('tolerates a malformed package.json in one workspace dir (continues to next)', () => {
@@ -250,7 +250,7 @@ describe('PackPaths', () => {
             );
             // Walk hits 0-broken/package.json first (JSON.parse throws → catch
             // → continue), then mj-api/package.json (good → returns '5').
-            expect(detectMJMajor(tmp)).toBe('5');
+            expect(DetectMJMajor(tmp)).toBe('5');
         });
 
         it('tolerates `apps` being a file rather than a directory', () => {
@@ -261,7 +261,7 @@ describe('PackPaths', () => {
             // Simulate: someone shipped an `apps` text file by accident
             writeFileSync(path.join(tmp, 'apps'), 'this is a file, not a dir');
             // The walk should silently skip, returning null.
-            expect(detectMJMajor(tmp)).toBe(null);
+            expect(DetectMJMajor(tmp)).toBe(null);
         });
 
         it('tolerates a workspace subdir without any package.json', () => {
@@ -272,7 +272,7 @@ describe('PackPaths', () => {
             const emptyApp = path.join(tmp, 'apps', 'empty');
             mkdirSync(emptyApp, { recursive: true });
             // No package.json in apps/empty/ — should silently skip, not crash.
-            expect(detectMJMajor(tmp)).toBe(null);
+            expect(DetectMJMajor(tmp)).toBe(null);
         });
 
         // Regression guard: non-workspace consumer projects (the ORIGINAL happy
@@ -292,7 +292,7 @@ describe('PackPaths', () => {
                 })
             );
             // No apps/ or packages/ subdirs at all.
-            expect(detectMJMajor(tmp)).toBe('5');
+            expect(DetectMJMajor(tmp)).toBe('5');
         });
     });
 
@@ -313,7 +313,7 @@ describe('PackPaths', () => {
                     dependencies: { '@memberjunction/cli': '^5.33.0' },
                 })
             );
-            expect(detectMJVersionString(tmp)).toBe('5.33.0');
+            expect(DetectMJVersionString(tmp)).toBe('5.33.0');
         });
 
         it('walks into apps/* for workspace-style installs (same fallback as detectMJMajor)', () => {
@@ -333,7 +333,7 @@ describe('PackPaths', () => {
                     dependencies: { '@memberjunction/server': '^5.37.0' },
                 })
             );
-            expect(detectMJVersionString(tmp)).toBe('5.37.0');
+            expect(DetectMJVersionString(tmp)).toBe('5.37.0');
         });
 
         it('returns null when no MJ dep is reachable', () => {
@@ -341,7 +341,7 @@ describe('PackPaths', () => {
                 path.join(tmp, 'package.json'),
                 JSON.stringify({ name: 'user-project', dependencies: {} })
             );
-            expect(detectMJVersionString(tmp)).toBe(null);
+            expect(DetectMJVersionString(tmp)).toBe(null);
         });
     });
 
@@ -358,24 +358,24 @@ describe('PackPaths', () => {
             const distDir = path.join(tmp, 'templates', 'claude-pack', 'dist', 'v5');
             mkdirSync(distDir, { recursive: true });
             writeFileSync(path.join(distDir, 'CLAUDE.md'), '# pack');
-            expect(resolveLocalPackRoot(tmp, '5')).toBe(distDir);
+            expect(ResolveLocalPackRoot(tmp, '5')).toBe(distDir);
         });
 
         it('accepts an already-unpacked dist directory directly', () => {
             mkdirSync(path.join(tmp, '.claude', 'mj'), { recursive: true });
             writeFileSync(path.join(tmp, 'CLAUDE.md'), '# pack');
             writeFileSync(path.join(tmp, '.claude', 'mj', 'VERSION'), '5.1.0\n');
-            expect(resolveLocalPackRoot(tmp, '5')).toBe(path.resolve(tmp));
+            expect(ResolveLocalPackRoot(tmp, '5')).toBe(path.resolve(tmp));
         });
 
         it('returns null when neither shape matches', () => {
             // empty dir
-            expect(resolveLocalPackRoot(tmp, '5')).toBe(null);
+            expect(ResolveLocalPackRoot(tmp, '5')).toBe(null);
         });
 
         it('returns null when only CLAUDE.md is present (missing VERSION)', () => {
             writeFileSync(path.join(tmp, 'CLAUDE.md'), '# pack');
-            expect(resolveLocalPackRoot(tmp, '5')).toBe(null);
+            expect(ResolveLocalPackRoot(tmp, '5')).toBe(null);
         });
 
         it('returns the correct major when multiple v{N} dirs exist', () => {
@@ -385,32 +385,32 @@ describe('PackPaths', () => {
             mkdirSync(v6, { recursive: true });
             writeFileSync(path.join(v5, 'CLAUDE.md'), '# v5');
             writeFileSync(path.join(v6, 'CLAUDE.md'), '# v6');
-            expect(resolveLocalPackRoot(tmp, '5')).toBe(v5);
-            expect(resolveLocalPackRoot(tmp, '6')).toBe(v6);
+            expect(ResolveLocalPackRoot(tmp, '5')).toBe(v5);
+            expect(ResolveLocalPackRoot(tmp, '6')).toBe(v6);
         });
     });
 
     describe('buildRemoteUrlPrefix', () => {
         it('defaults to main branch', () => {
-            expect(buildRemoteUrlPrefix('5')).toBe(
+            expect(BuildRemoteUrlPrefix('5')).toBe(
                 'https://raw.githubusercontent.com/MemberJunction/MJ/main/templates/claude-pack/dist/v5/'
             );
         });
 
         it('accepts a specific tag', () => {
-            expect(buildRemoteUrlPrefix('5', 'v5.33.0')).toBe(
+            expect(BuildRemoteUrlPrefix('5', 'v5.33.0')).toBe(
                 'https://raw.githubusercontent.com/MemberJunction/MJ/v5.33.0/templates/claude-pack/dist/v5/'
             );
         });
 
         it('accepts a branch name', () => {
-            expect(buildRemoteUrlPrefix('6', 'develop')).toBe(
+            expect(BuildRemoteUrlPrefix('6', 'develop')).toBe(
                 'https://raw.githubusercontent.com/MemberJunction/MJ/develop/templates/claude-pack/dist/v6/'
             );
         });
 
         it('handles any major value', () => {
-            expect(buildRemoteUrlPrefix('10')).toContain('/dist/v10/');
+            expect(BuildRemoteUrlPrefix('10')).toContain('/dist/v10/');
         });
     });
 });

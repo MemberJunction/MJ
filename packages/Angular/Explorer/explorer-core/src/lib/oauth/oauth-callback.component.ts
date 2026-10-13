@@ -367,18 +367,28 @@ export class OAuthCallbackComponent extends BaseAngularComponent implements OnIn
     /**
      * Handle retry button click
      */
-    public onRetry(): void {
+    public OnRetry(): void {
         // Get the stored return URL and redirect there to start fresh
         const returnUrl = localStorage.getItem('oauth_return_url') || '/app/admin/MCP';
         this.clearStoredReturnUrls();
         this.router.navigateByUrl(returnUrl);
     }
 
+    /** @deprecated Use {@link OnRetry}. */
+    public onRetry(): void {
+      return this.OnRetry();
+    }
+
     /**
      * Handle close button click (return to MCP dashboard)
      */
-    public onClose(): void {
+    public OnClose(): void {
         this.clearStoredReturnUrls();
         this.router.navigate(['/app/admin/MCP']);
+    }
+
+    /** @deprecated Use {@link OnClose}. */
+    public onClose(): void {
+      return this.OnClose();
     }
 }

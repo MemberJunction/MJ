@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, Float, InputType, Int, ObjectType, Query, Resolver } from 'type-graphql';
 import { EntitySearchResult, SearchEntityParams } from '@memberjunction/core';
 import { AppContext } from '../types.js';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { GetReadOnlyProvider } from '../util.js';
 
 /**
@@ -114,7 +114,9 @@ export class SearchEntitiesResolver {
                     Groups: params.map(p => ({ EntityName: p.EntityName, Results: [] })),
                 };
             }
-            const md = GetReadOnlyProvider(providers);
+            // Search is a pure read, so the read-write pool is a valid fallback. Without it, a server
+            // with no read-only login configured gets `null` here and every search silently returns empty.
+            const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
             const user = UserCache.Instance.Users.find(
                 (u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase()
             );

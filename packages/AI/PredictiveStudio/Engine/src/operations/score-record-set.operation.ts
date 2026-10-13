@@ -31,7 +31,7 @@ import type {
   WriteBackDirective,
 } from '../actions/score-record-set.action';
 import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
-import { scoreRecordSetViaRunner, buildScoreRecordSetRunner } from './delegation';
+import { ScoreRecordSetViaRunner, BuildScoreRecordSetRunner } from './delegation';
 
 /**
  * Server implementation of `PredictiveStudio.ScoreRecordSet`. Extends the
@@ -63,7 +63,7 @@ export class PredictiveStudioScoreRecordSetServerOperation extends PredictiveStu
       Message: `Scoring records with model ${input.modelId}…`,
     });
 
-    const result = await scoreRecordSetViaRunner(
+    const result = await ScoreRecordSetViaRunner(
       {
         modelId: input.modelId,
         scope: scope as ScoringScope,
@@ -117,7 +117,7 @@ export class PredictiveStudioScoreRecordSetServerOperation extends PredictiveStu
     // Use the loader-wired factory so the runner can read the persisted model
     // artifact at score time (a bare `new ProductionScoreRecordSetRunner()` has
     // no artifact loader → "no artifact loader is configured").
-    return buildScoreRecordSetRunner();
+    return BuildScoreRecordSetRunner();
   }
 }
 

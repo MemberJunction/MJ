@@ -1,3 +1,5 @@
+import { DescribeTokenEndpointFailure } from '@memberjunction/global';
+
 /**
  * Configuration options for OAuth2Manager
  */
@@ -180,7 +182,7 @@ export class OAuth2Manager {
      * @param additionalParams - Additional query parameters to include
      * @returns The authorization URL
      */
-    public getAuthorizationUrl(state?: string, additionalParams?: Record<string, string>): string {
+    public GetAuthorizationUrl(state?: string, additionalParams?: Record<string, string>): string {
         if (!this.config.authorizationEndpoint) {
             throw new Error('Authorization endpoint not configured');
         }
@@ -206,13 +208,18 @@ export class OAuth2Manager {
         return `${this.config.authorizationEndpoint}?${params.toString()}`;
     }
 
+    /** @deprecated Use {@link GetAuthorizationUrl}. */
+    public getAuthorizationUrl(state?: string, additionalParams?: Record<string, string>): string {
+        return this.GetAuthorizationUrl(state, additionalParams);
+    }
+
     /**
      * Exchanges an authorization code for an access token
      *
      * @param code - The authorization code received from the authorization endpoint
      * @returns The token data
      */
-    public async exchangeAuthorizationCode(code: string): Promise<OAuth2TokenData> {
+    public async ExchangeAuthorizationCode(code: string): Promise<OAuth2TokenData> {
         const params: Record<string, string> = {
             grant_type: 'authorization_code',
             code,
@@ -227,12 +234,17 @@ export class OAuth2Manager {
         return this.requestToken(params);
     }
 
+    /** @deprecated Use {@link ExchangeAuthorizationCode}. */
+    public async exchangeAuthorizationCode(code: string): Promise<OAuth2TokenData> {
+        return this.ExchangeAuthorizationCode(code);
+    }
+
     /**
      * Obtains an access token using client credentials flow
      *
      * @returns The token data
      */
-    public async getClientCredentialsToken(): Promise<OAuth2TokenData> {
+    public async GetClientCredentialsToken(): Promise<OAuth2TokenData> {
         const params: Record<string, string> = {
             grant_type: 'client_credentials',
             client_id: this.config.clientId,
@@ -246,13 +258,18 @@ export class OAuth2Manager {
         return this.requestToken(params);
     }
 
+    /** @deprecated Use {@link GetClientCredentialsToken}. */
+    public async getClientCredentialsToken(): Promise<OAuth2TokenData> {
+        return this.GetClientCredentialsToken();
+    }
+
     /**
      * Refreshes the access token using the refresh token
      *
      * @returns The new token data
      * @throws Error if no refresh token is available
      */
-    public async refreshAccessToken(): Promise<OAuth2TokenData> {
+    public async RefreshAccessToken(): Promise<OAuth2TokenData> {
         if (!this.refreshToken) {
             throw new Error('No refresh token available');
         }
@@ -267,6 +284,11 @@ export class OAuth2Manager {
         return this.requestToken(params);
     }
 
+    /** @deprecated Use {@link RefreshAccessToken}. */
+    public async refreshAccessToken(): Promise<OAuth2TokenData> {
+        return this.RefreshAccessToken();
+    }
+
     /**
      * Gets a valid access token, automatically refreshing if needed
      *
@@ -276,9 +298,9 @@ export class OAuth2Manager {
      * @returns A valid access token
      * @throws Error if no token is available and cannot be obtained
      */
-    public async getAccessToken(): Promise<string> {
+    public async GetAccessToken(): Promise<string> {
         // If we have a valid token, return it
-        if (this.accessToken && this.isTokenValid()) {
+        if (this.accessToken && this.IsTokenValid()) {
             return this.accessToken;
         }
 
@@ -298,6 +320,11 @@ export class OAuth2Manager {
         }
     }
 
+    /** @deprecated Use {@link GetAccessToken}. */
+    public async getAccessToken(): Promise<string> {
+        return this.GetAccessToken();
+    }
+
     /**
      * Performs the actual token refresh operation
      *
@@ -310,10 +337,10 @@ export class OAuth2Manager {
 
             if (this.refreshToken) {
                 // Use refresh token if available
-                tokenData = await this.refreshAccessToken();
+                tokenData = await this.RefreshAccessToken();
             } else {
                 // Fall back to client credentials if no refresh token
-                tokenData = await this.getClientCredentialsToken();
+                tokenData = await this.GetClientCredentialsToken();
             }
 
             return tokenData.accessToken;
@@ -348,8 +375,15 @@ export class OAuth2Manager {
             });
 
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Token request failed: ${response.status} ${response.statusText} - ${errorText}`);
+                // SECURITY: never put the raw response body in the error message. Token
+                // endpoints routinely echo the failing request back in their error body,
+                // and that request carries `client_secret` (and, on a refresh, the
+                // refresh token). Only the RFC 6749 §5.2 error fields are surfaced —
+                // they describe the failure and by spec carry no credentials.
+                throw new Error(
+                    `Token request failed: ${response.status} ${response.statusText}` +
+                    `${DescribeTokenEndpointFailure(await response.text())}`
+                );
             }
 
             const responseData = await response.json();
@@ -397,7 +431,7 @@ export class OAuth2Manager {
      *
      * @returns True if the token is valid, false otherwise
      */
-    public isTokenValid(): boolean {
+    public IsTokenValid(): boolean {
         if (!this.accessToken) {
             return false;
         }
@@ -409,6 +443,11 @@ export class OAuth2Manager {
         return now < expiresWithBuffer;
     }
 
+    /** @deprecated Use {@link IsTokenValid}. */
+    public isTokenValid(): boolean {
+        return this.IsTokenValid();
+    }
+
     /**
      * Sets the access token directly (for cases where token is obtained externally)
      *
@@ -416,7 +455,7 @@ export class OAuth2Manager {
      * @param refreshToken - Optional refresh token
      * @param expiresIn - Optional expiration time in seconds
      */
-    public setTokens(accessToken: string, refreshToken?: string, expiresIn?: number): void {
+    public SetTokens(accessToken: string, refreshToken?: string, expiresIn?: number): void {
         this.accessToken = accessToken;
 
         if (refreshToken) {
@@ -437,13 +476,23 @@ export class OAuth2Manager {
         }
     }
 
+    /** @deprecated Use {@link SetTokens}. */
+    public setTokens(accessToken: string, refreshToken?: string, expiresIn?: number): void {
+        return this.SetTokens(accessToken, refreshToken, expiresIn);
+    }
+
     /**
      * Clears all stored tokens
      */
-    public clearTokens(): void {
+    public ClearTokens(): void {
         this.accessToken = null;
         this.refreshToken = null;
         this.tokenExpiresAt = 0;
+    }
+
+    /** @deprecated Use {@link ClearTokens}. */
+    public clearTokens(): void {
+        return this.ClearTokens();
     }
 
     /**
@@ -451,7 +500,7 @@ export class OAuth2Manager {
      *
      * @returns The current token data or null if no tokens are available
      */
-    public getTokenState(): OAuth2TokenData | null {
+    public GetTokenState(): OAuth2TokenData | null {
         if (!this.accessToken) {
             return null;
         }
@@ -461,5 +510,10 @@ export class OAuth2Manager {
             refreshToken: this.refreshToken || undefined,
             expiresAt: this.tokenExpiresAt
         };
+    }
+
+    /** @deprecated Use {@link GetTokenState}. */
+    public getTokenState(): OAuth2TokenData | null {
+        return this.GetTokenState();
     }
 }

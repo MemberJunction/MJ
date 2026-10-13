@@ -15,16 +15,17 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fetchPack, type HttpGetter, PackFetchError } from './PackFetcher.js';
-import { mergePack } from './PackMerger.js';
+import { FetchPack, type HttpGetter, PackFetchError } from './PackFetcher.js';
+import { MergePack } from './PackMerger.js';
 import {
+    BuildRemoteUrlPrefix,
     buildRemoteUrlPrefix,
-    detectMJMajor,
-    detectMJVersionString,
-    resolveLocalPackRoot,
+    DetectMJMajor,
+    DetectMJVersionString,
+    ResolveLocalPackRoot,
 } from './PackPaths.js';
 import {
-    emptyActionLog,
+    EmptyActionLog,
     type ActionLog,
     type InstallResult,
     type Manifest,
@@ -81,11 +82,11 @@ export interface InstallPackOptions {
 // Main entry point
 // ---------------------------------------------------------------------------
 
-export async function installPack(opts: InstallPackOptions): Promise<InstallResult> {
+export async function InstallPack(opts: InstallPackOptions): Promise<InstallResult> {
     const targetDir = path.resolve(opts.TargetDir);
     const onProgress = opts.OnProgress ?? (() => {});
 
-    const major = opts.Major ?? detectMJMajor(targetDir);
+    const major = opts.Major ?? DetectMJMajor(targetDir);
     if (!major) {
         return errorResult(
             null,
@@ -135,7 +136,7 @@ export async function installPack(opts: InstallPackOptions): Promise<InstallResu
     files.set('.claude/mj/MANIFEST.json', manifestBytes);
 
     onProgress('merging pack into target');
-    const { Actions, Warnings } = mergePack({
+    const { Actions, Warnings } = MergePack({
         TargetDir: targetDir,
         PackFiles: files,
         Manifest: manifest,
@@ -158,6 +159,11 @@ export async function installPack(opts: InstallPackOptions): Promise<InstallResu
     };
 }
 
+/** @deprecated Use {@link InstallPack}. */
+export async function installPack(opts: InstallPackOptions): Promise<InstallResult> {
+    return InstallPack(opts);
+}
+
 // ---------------------------------------------------------------------------
 // Source resolution
 // ---------------------------------------------------------------------------
@@ -168,7 +174,7 @@ async function resolvePack(
     onProgress: (m: string) => void
 ): Promise<{ manifest: Manifest; files: Map<string, Uint8Array> }> {
     if (opts.FromPath) {
-        const localRoot = resolveLocalPackRoot(opts.FromPath, major);
+        const localRoot = ResolveLocalPackRoot(opts.FromPath, major);
         if (!localRoot) {
             throw new Error(
                 `Could not find a Claude pack at --from path: ${opts.FromPath}. ` +
@@ -178,7 +184,7 @@ async function resolvePack(
         return loadLocalPack(localRoot, opts.CheckOnly ?? false);
     }
 
-    const fetched = await fetchPack({
+    const fetched = await FetchPack({
         Major: major,
         Ref: opts.Ref,
         HttpGet: opts.HttpGet,
@@ -247,7 +253,7 @@ function buildCheckResult(
         ? readFileSync(localVersionFile, 'utf8').trim()
         : null;
 
-    const actions: ActionLog = emptyActionLog();
+    const actions: ActionLog = EmptyActionLog();
     const warnings: string[] = [];
     const notes: string[] = [];
 
@@ -285,7 +291,7 @@ function errorResult(installedMJVersion: string | null, message: string): Instal
         ok: false,
         packVersion: '',
         installedMJVersion,
-        actions: { ...emptyActionLog(), errors: [message] },
+        actions: { ...EmptyActionLog(), errors: [message] },
         warnings: [],
         notes: [],
     };
@@ -296,7 +302,11 @@ function errorResult(installedMJVersion: string | null, message: string): Instal
  * to {@link detectMJVersionString} in PackPaths so the workspace-walk
  * behavior stays in sync with {@link detectMJMajor}.
  */
-const detectMJVersion = detectMJVersionString;
+const detectMJVersion = DetectMJVersionString;
 
 /** Re-export the default raw URL prefix for tests / verbose logging. */
-export { buildRemoteUrlPrefix };
+export {
+    BuildRemoteUrlPrefix,
+    /** @deprecated Use {@link BuildRemoteUrlPrefix} instead. */
+    buildRemoteUrlPrefix,
+};

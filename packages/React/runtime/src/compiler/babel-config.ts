@@ -51,8 +51,13 @@ export const DEVELOPMENT_CONFIG = {
  * @param production - Whether to use production configuration
  * @returns Babel configuration object
  */
-export function getBabelConfig(production: boolean = false) {
+export function GetBabelConfig(production: boolean = false) {
   return production ? PRODUCTION_CONFIG : DEVELOPMENT_CONFIG;
+}
+
+/** @deprecated Use {@link GetBabelConfig}. */
+export function getBabelConfig(production: boolean = false) {
+  return GetBabelConfig(production);
 }
 
 /**
@@ -60,13 +65,18 @@ export function getBabelConfig(production: boolean = false) {
  * @param babel - Babel instance to check
  * @returns true if all required presets are available
  */
-export function validateBabelPresets(babel: any): boolean {
+export function ValidateBabelPresets(babel: any): boolean {
   if (!babel || !babel.availablePresets) {
     return false;
   }
 
   // Check that React preset is available
   return 'react' in babel.availablePresets;
+}
+
+/** @deprecated Use {@link ValidateBabelPresets}. */
+export function validateBabelPresets(babel: any): boolean {
+  return ValidateBabelPresets(babel);
 }
 
 /**
@@ -88,10 +98,15 @@ export const JSX_PRAGMAS = {
  * @param reactVersion - React version (e.g., "18.2.0")
  * @returns JSX configuration options
  */
-export function getJSXConfig(reactVersion?: string) {
+export function GetJSXConfig(reactVersion?: string) {
   // React 17+ supports the new JSX transform
   if (reactVersion && parseInt(reactVersion.split('.')[0]) >= 17) {
     return JSX_PRAGMAS.automatic;
   }
   return JSX_PRAGMAS.classic;
+}
+
+/** @deprecated Use {@link GetJSXConfig}. */
+export function getJSXConfig(reactVersion?: string) {
+  return GetJSXConfig(reactVersion);
 }

@@ -24,9 +24,16 @@ import './generated/class-registrations-manifest.js';
 // See: /docs/examples/custom-user-creation/README.md
 // import './custom/customUserCreation';
 
+// Import telephony adapters to register server extensions and resolvers
+import { RESOLVER_PATHS as TELEPHONY_RESOLVER_PATHS, LoadTelephonyAdapters } from '@memberjunction/telephony-adapters';
+LoadTelephonyAdapters();
+
 // Resolve resolver paths relative to this file
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const resolverPaths = [resolve(__dirname, 'generated/generated.{js,ts}')];
+const resolverPaths = [
+  resolve(__dirname, 'generated/generated.{js,ts}'),
+  ...TELEPHONY_RESOLVER_PATHS,
+];
 
 // Start the server
 createMJServer({ resolverPaths }).catch(console.error);

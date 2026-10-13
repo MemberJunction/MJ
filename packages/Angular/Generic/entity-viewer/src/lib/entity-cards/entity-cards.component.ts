@@ -1,8 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ElementRef, AfterViewChecked, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, EntityFieldInfo, EntityFieldValueListType, RunView } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityFieldValueListType, RunView, CoerceImageSrc, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import { CardTemplate, CardDisplayField, CardFieldType, RecordSelectedEvent, RecordOpenedEvent } from '../types';
-import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
+import { BuildCompositeKey, BuildPkString, ComputeFieldsList } from '../utils/record.util';
 import { PillColorUtil } from '../pill/pill.component';
 import { HighlightUtil } from '../utils/highlight.util';
 
@@ -116,13 +116,31 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
   /**
    * Custom card template (optional - auto-generated if not provided)
    */
-  @Input() cardTemplate: CardTemplate | null = null;
+  @Input() CardTemplate: CardTemplate | null = null;
+
+  /** @deprecated Use {@link CardTemplate}. */
+  @Input() set cardTemplate(value: CardTemplate | null) {
+    this.CardTemplate = value;
+  }
+  /** @deprecated Use {@link CardTemplate}. */
+  get cardTemplate(): CardTemplate | null {
+    return this.CardTemplate;
+  }
 
   /**
    * Map of record IDs to hidden field names that matched the filter
    * Used to display an indicator when a match occurred in a non-visible field
    */
-  @Input() hiddenFieldMatches: Map<string, string> = new Map();
+  @Input() HiddenFieldMatches: Map<string, string> = new Map();
+
+  /** @deprecated Use {@link HiddenFieldMatches}. */
+  @Input() set hiddenFieldMatches(value: Map<string, string>) {
+    this.HiddenFieldMatches = value;
+  }
+  /** @deprecated Use {@link HiddenFieldMatches}. */
+  get hiddenFieldMatches(): Map<string, string> {
+    return this.HiddenFieldMatches;
+  }
 
   /**
    * Current filter text for highlighting matches
@@ -147,7 +165,16 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
   @Output() recordOpened = new EventEmitter<RecordOpenedEvent>();
 
   /** Auto-generated card template */
-  public autoCardTemplate: CardTemplate | null = null;
+  public AutoCardTemplate: CardTemplate | null = null;
+
+  /** @deprecated Use {@link AutoCardTemplate}. */
+  public get autoCardTemplate(): CardTemplate | null {
+    return this.AutoCardTemplate;
+  }
+  /** @deprecated Use {@link AutoCardTemplate}. */
+  public set autoCardTemplate(value: CardTemplate | null) {
+    this.AutoCardTemplate = value;
+  }
 
   /** Internal records when loading standalone */
   private internalRecords: Record<string, unknown>[] = [];
@@ -168,13 +195,22 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
    * buildPkString() allocations + 4 RegExp-building highlight calls that the
    * previous per-card-per-CD method bindings incurred.
    */
-  public cardViewModels: CardViewModel[] = [];
+  public CardViewModels: CardViewModel[] = [];
+
+  /** @deprecated Use {@link CardViewModels}. */
+  public get cardViewModels(): CardViewModel[] {
+    return this.CardViewModels;
+  }
+  /** @deprecated Use {@link CardViewModels}. */
+  public set cardViewModels(value: CardViewModel[]) {
+    this.CardViewModels = value;
+  }
 
   ngOnInit(): void {
     this.standaloneMode = this.records === null;
 
-    if (this.entity?.Fields && !this.effectiveTemplate) {
-      this.autoCardTemplate = this.generateCardTemplate(this.entity);
+    if (this.entity?.Fields && !this.EffectiveTemplate) {
+      this.AutoCardTemplate = this.generateCardTemplate(this.entity);
     }
 
     if (this.standaloneMode && this.entity) {
@@ -186,9 +222,9 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['entity'] && this.entity?.Fields) {
-      this.autoCardTemplate = this.generateCardTemplate(this.entity);
+      this.AutoCardTemplate = this.generateCardTemplate(this.entity);
     } else if (changes['entity'] && !this.entity) {
-      this.autoCardTemplate = null;
+      this.AutoCardTemplate = null;
     }
 
     if (changes['entity'] && this.standaloneMode && this.entity) {
@@ -251,8 +287,13 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
   /**
    * Get effective records (external or internal)
    */
-  get effectiveRecords(): Record<string, unknown>[] {
+  get EffectiveRecords(): Record<string, unknown>[] {
     return this.records ?? this.internalRecords;
+  }
+
+  /** @deprecated Use {@link EffectiveRecords}. */
+  get effectiveRecords(): Record<string, unknown>[] {
+    return this.EffectiveRecords;
   }
 
   /**
@@ -268,7 +309,7 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: this.entity.Name,
         ResultType: 'simple',
-        Fields: computeFieldsList(this.entity),
+        Fields: ComputeFieldsList(this.entity),
         MaxRows: this.pageSize
       });
 
@@ -286,8 +327,13 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
   /**
    * Get the effective card template (custom or auto-generated)
    */
+  get EffectiveTemplate(): CardTemplate | null {
+    return this.CardTemplate || this.AutoCardTemplate;
+  }
+
+  /** @deprecated Use {@link EffectiveTemplate}. */
   get effectiveTemplate(): CardTemplate | null {
-    return this.cardTemplate || this.autoCardTemplate;
+    return this.EffectiveTemplate;
   }
 
   // ========================================
@@ -385,7 +431,7 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
       displayFields.push({
         name: field.Name,
         type: this.getFieldType(field),
-        label: this.getFieldLabel(field)
+        label: this.GetFieldLabel(field)
       });
     }
 
@@ -400,7 +446,7 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
         displayFields.push({
           name: field.Name,
           type: this.getFieldType(field),
-          label: this.getFieldLabel(field)
+          label: this.GetFieldLabel(field)
         });
       }
     }
@@ -413,22 +459,14 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
    * Returns an array so we can fall back per-record if one is empty
    */
   private findThumbnailFields(fields: EntityFieldInfo[]): string[] {
-    const imageKeywords = ['image', 'photo', 'picture', 'thumbnail', 'avatar', 'logo', 'icon'];
-    const foundFields: string[] = [];
-    const foundFieldNames = new Set<string>();
-
-    for (const keyword of imageKeywords) {
-      const matchingFields = fields.filter(f =>
-        f.Name.toLowerCase().includes(keyword) &&
-        f.TSType === 'string' &&
-        !foundFieldNames.has(f.Name)
-      );
-      for (const field of matchingFields) {
-        foundFields.push(field.Name);
-        foundFieldNames.add(field.Name);
-      }
-    }
-    return foundFields;
+    const images = fields
+      .filter(f => f.ExtendedType === 'Image' && f.TSType === 'string')
+      .map(f => f.Name);
+    const imageSet = new Set(images);
+    const icons = fields
+      .filter(f => f.ExtendedType === 'Icon' && f.TSType === 'string' && !imageSet.has(f.Name))
+      .map(f => f.Name);
+    return [...images, ...icons];
   }
 
   private findBadgeField(fields: EntityFieldInfo[]): string | null {
@@ -451,14 +489,19 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
   // VALUE FORMATTING
   // ========================================
 
-  getFieldValue(record: Record<string, unknown>, fieldName: string | null): string {
+  GetFieldValue(record: Record<string, unknown>, fieldName: string | null): string {
     if (!fieldName) return '';
     const value = record[fieldName];
     if (value === null || value === undefined) return '';
     return String(value);
   }
 
-  getNumericValue(record: Record<string, unknown>, fieldName: string): string {
+  /** @deprecated Use {@link GetFieldValue}. */
+  getFieldValue(record: Record<string, unknown>, fieldName: string | null): string {
+    return this.GetFieldValue(record, fieldName);
+  }
+
+  GetNumericValue(record: Record<string, unknown>, fieldName: string): string {
     const value = record[fieldName];
     if (value === null || value === undefined) return '-';
 
@@ -476,7 +519,12 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
     return num.toLocaleString();
   }
 
-  getBooleanValue(record: Record<string, unknown>, fieldName: string): boolean {
+  /** @deprecated Use {@link GetNumericValue}. */
+  getNumericValue(record: Record<string, unknown>, fieldName: string): string {
+    return this.GetNumericValue(record, fieldName);
+  }
+
+  GetBooleanValue(record: Record<string, unknown>, fieldName: string): boolean {
     const value = record[fieldName];
     if (value === null || value === undefined) return false;
     if (typeof value === 'boolean') return value;
@@ -485,68 +533,117 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
     return Boolean(value);
   }
 
-  getTextValue(record: Record<string, unknown>, fieldName: string, maxLength: number = 50): string {
-    const value = this.getFieldValue(record, fieldName);
+  /** @deprecated Use {@link GetBooleanValue}. */
+  getBooleanValue(record: Record<string, unknown>, fieldName: string): boolean {
+    return this.GetBooleanValue(record, fieldName);
+  }
+
+  GetTextValue(record: Record<string, unknown>, fieldName: string, maxLength: number = 50): string {
+    const value = this.GetFieldValue(record, fieldName);
     if (!value) return '-';
     if (value.length <= maxLength) return value;
     return value.substring(0, maxLength) + '...';
   }
 
-  getDateValue(record: Record<string, unknown>, fieldName: string): string {
+  /** @deprecated Use {@link GetTextValue}. */
+  getTextValue(record: Record<string, unknown>, fieldName: string, maxLength: number = 50): string {
+    return this.GetTextValue(record, fieldName, maxLength);
+  }
+
+  GetDateValue(record: Record<string, unknown>, fieldName: string): string {
     const value = record[fieldName];
     if (value === null || value === undefined) return '-';
 
     try {
       const date = value instanceof Date ? value : new Date(value as string | number);
       if (isNaN(date.getTime())) return String(value);
-      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+      // A `date` column is a calendar day that arrives as UTC midnight; a local-zone formatter
+      // would land on the previous day for every reader west of Greenwich (MJ#4210). A timestamp
+      // names an instant and stays in local time.
+      if (this.isDateOnlyField(fieldName)) return FormatDateOnly(date, options);
+      return date.toLocaleDateString(undefined, options);
     } catch {
       return String(value);
     }
   }
 
+  /** @deprecated Use {@link GetDateValue}. */
+  getDateValue(record: Record<string, unknown>, fieldName: string): string {
+    return this.GetDateValue(record, fieldName);
+  }
+
+  private isDateOnlyField(fieldName: string): boolean {
+    return IsDateOnlySQLType(this.entity?.Fields.find(f => f.Name === fieldName)?.Type);
+  }
+
   /**
    * Get display label for a field using EntityFieldInfo's built-in DisplayNameOrName property
    */
-  getFieldLabel(field: EntityFieldInfo): string {
+  GetFieldLabel(field: EntityFieldInfo): string {
     return field.DisplayNameOrName;
+  }
+
+  /** @deprecated Use {@link GetFieldLabel}. */
+  getFieldLabel(field: EntityFieldInfo): string {
+    return this.GetFieldLabel(field);
   }
 
   // ========================================
   // CARD DISPLAY HELPERS
   // ========================================
 
-  getRecordTrackId(record: Record<string, unknown>, index: number): string {
+  GetRecordTrackId(record: Record<string, unknown>, index: number): string {
     if (!this.entity) return `record_${index}`;
     try {
-      const pk = buildPkString(record, this.entity);
+      const pk = BuildPkString(record, this.entity);
       if (pk && pk.trim().length > 0) return pk;
     } catch { /* ignore */ }
     return `record_${index}`;
   }
 
-  isSelected(record: Record<string, unknown>): boolean {
-    if (!this.entity) return false;
-    return buildPkString(record, this.entity) === this.selectedRecordId;
+  /** @deprecated Use {@link GetRecordTrackId}. */
+  getRecordTrackId(record: Record<string, unknown>, index: number): string {
+    return this.GetRecordTrackId(record, index);
   }
 
-  onCardClick(record: Record<string, unknown>): void {
+  IsSelected(record: Record<string, unknown>): boolean {
+    if (!this.entity) return false;
+    return BuildPkString(record, this.entity) === this.selectedRecordId;
+  }
+
+  /** @deprecated Use {@link IsSelected}. */
+  isSelected(record: Record<string, unknown>): boolean {
+    return this.IsSelected(record);
+  }
+
+  OnCardClick(record: Record<string, unknown>): void {
     if (!this.entity) return;
     this.recordSelected.emit({
       record,
       entity: this.entity,
-      compositeKey: buildCompositeKey(record, this.entity)
+      compositeKey: BuildCompositeKey(record, this.entity)
     });
   }
 
-  onOpenClick(event: Event, record: Record<string, unknown>): void {
+  /** @deprecated Use {@link OnCardClick}. */
+  onCardClick(record: Record<string, unknown>): void {
+    return this.OnCardClick(record);
+  }
+
+  OnOpenClick(event: Event, record: Record<string, unknown>): void {
     event.stopPropagation();
     if (!this.entity) return;
     this.recordOpened.emit({
       record,
       entity: this.entity,
-      compositeKey: buildCompositeKey(record, this.entity)
+      compositeKey: BuildCompositeKey(record, this.entity)
     });
+  }
+
+  /** @deprecated Use {@link OnOpenClick}. */
+  onOpenClick(event: Event, record: Record<string, unknown>): void {
+    return this.OnOpenClick(event, record);
   }
 
   // ========================================
@@ -560,8 +657,8 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
    * template method bindings avoids re-running it on every Angular CD cycle.
    */
   private buildCardViewModels(): void {
-    const records = this.effectiveRecords;
-    this.cardViewModels = records.map((record, index) => this.buildCardViewModel(record, index));
+    const records = this.EffectiveRecords;
+    this.CardViewModels = records.map((record, index) => this.buildCardViewModel(record, index));
   }
 
   /**
@@ -573,7 +670,7 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
    * compare per card with zero allocation or regex work.
    */
   private updateSelectionFlags(): void {
-    for (const vm of this.cardViewModels) {
+    for (const vm of this.CardViewModels) {
       vm.isSelected = vm.pkString.length > 0 && vm.pkString === this.selectedRecordId;
     }
   }
@@ -585,10 +682,10 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
   private buildCardViewModel(record: Record<string, unknown>, index: number): CardViewModel {
     const pkString = this.computePkString(record);
     const trackId = pkString && pkString.trim().length > 0 ? pkString : `record_${index}`;
-    const template = this.effectiveTemplate;
+    const template = this.EffectiveTemplate;
 
     const subtitleField = template?.subtitleField ?? null;
-    const subtitleValue = subtitleField ? this.getFieldValue(record, subtitleField) : '';
+    const subtitleValue = subtitleField ? this.GetFieldValue(record, subtitleField) : '';
     const descriptionField = template?.descriptionField ?? null;
 
     return {
@@ -597,17 +694,17 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
       trackId,
       isSelected: pkString.length > 0 && pkString === this.selectedRecordId,
       color: this.computeRecordColor(pkString),
-      thumbnailType: this.getThumbnailType(record),
-      thumbnailUrl: this.getThumbnailUrl(record),
-      initials: this.getInitials(record),
-      highlightedTitle: this.highlightMatch(this.getCombinedTitle(record)),
+      thumbnailType: this.GetThumbnailType(record),
+      thumbnailUrl: this.GetThumbnailUrl(record),
+      initials: this.GetInitials(record),
+      highlightedTitle: this.HighlightMatch(this.GetCombinedTitle(record)),
       subtitleValue,
-      highlightedSubtitle: this.highlightMatch(subtitleValue),
+      highlightedSubtitle: this.HighlightMatch(subtitleValue),
       highlightedDescription: descriptionField
-        ? this.highlightMatch(this.getTextValue(record, descriptionField, 100))
+        ? this.HighlightMatch(this.GetTextValue(record, descriptionField, 100))
         : '',
       displayFields: this.buildDisplayFieldVMs(record, template),
-      badgeValue: template?.badgeField ? this.getFieldValue(record, template.badgeField) : '',
+      badgeValue: template?.badgeField ? this.GetFieldValue(record, template.badgeField) : '',
       hasHiddenFieldMatch: this.computeHasHiddenFieldMatch(pkString),
       hiddenMatchFieldName: this.computeHiddenMatchFieldName(pkString)
     };
@@ -620,10 +717,10 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
     if (!template || template.displayFields.length === 0) return [];
     return template.displayFields.map(field => ({
       field,
-      booleanValue: this.getBooleanValue(record, field.name),
-      numericValue: this.getNumericValue(record, field.name),
-      dateValue: this.getDateValue(record, field.name),
-      highlightedText: this.highlightMatch(this.getTextValue(record, field.name, 40))
+      booleanValue: this.GetBooleanValue(record, field.name),
+      numericValue: this.GetNumericValue(record, field.name),
+      dateValue: this.GetDateValue(record, field.name),
+      highlightedText: this.HighlightMatch(this.GetTextValue(record, field.name, 40))
     }));
   }
 
@@ -634,7 +731,7 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
   private computePkString(record: Record<string, unknown>): string {
     if (!this.entity) return '';
     try {
-      return buildPkString(record, this.entity);
+      return BuildPkString(record, this.entity);
     } catch {
       return '';
     }
@@ -658,7 +755,7 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
    */
   private computeHasHiddenFieldMatch(pkString: string): boolean {
     if (!this.entity || !pkString) return false;
-    return this.hiddenFieldMatches.has(pkString);
+    return this.HiddenFieldMatches.has(pkString);
   }
 
   /**
@@ -666,7 +763,7 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
    */
   private computeHiddenMatchFieldName(pkString: string): string {
     if (!this.entity || !pkString) return '';
-    const fieldName = this.hiddenFieldMatches.get(pkString);
+    const fieldName = this.HiddenFieldMatches.get(pkString);
     if (!fieldName) return '';
     const field = this.entity.Fields.find(f => f.Name === fieldName);
     return field ? field.DisplayNameOrName : fieldName;
@@ -676,17 +773,22 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
    * Get the combined title from all title fields for a record.
    * Joins multiple IsNameField values with spaces (e.g., "Elizabeth Rodriguez").
    */
-  getCombinedTitle(record: Record<string, unknown>): string {
-    const template = this.effectiveTemplate;
+  GetCombinedTitle(record: Record<string, unknown>): string {
+    const template = this.EffectiveTemplate;
     if (!template?.titleFields || template.titleFields.length === 0) return '';
     const parts = template.titleFields
-      .map(f => this.getFieldValue(record, f))
+      .map(f => this.GetFieldValue(record, f))
       .filter(v => v && v.trim().length > 0);
     return parts.length > 0 ? parts.join(' ') : '';
   }
 
-  getInitials(record: Record<string, unknown>): string {
-    const title = this.getCombinedTitle(record);
+  /** @deprecated Use {@link GetCombinedTitle}. */
+  getCombinedTitle(record: Record<string, unknown>): string {
+    return this.GetCombinedTitle(record);
+  }
+
+  GetInitials(record: Record<string, unknown>): string {
+    const title = this.GetCombinedTitle(record);
     if (!title) return '?';
 
     const words = title.split(/\s+/).filter(w => w.length > 0);
@@ -694,36 +796,47 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
     return (words[0][0] + words[words.length - 1][0]).toUpperCase();
   }
 
+  /** @deprecated Use {@link GetInitials}. */
+  getInitials(record: Record<string, unknown>): string {
+    return this.GetInitials(record);
+  }
+
   /**
    * Get the thumbnail type for a record, with per-record fallback through thumbnailFields
    */
-  getThumbnailType(record: Record<string, unknown>): 'image' | 'icon' | 'none' {
+  GetThumbnailType(record: Record<string, unknown>): 'image' | 'icon' | 'none' {
     const fieldInfo = this.getEffectiveThumbnailField(record);
     if (!fieldInfo) return 'none';
 
     const { fieldName, value } = fieldInfo;
+    const fieldMeta = this.entity?.Fields.find(f => f.Name === fieldName);
 
-    // Check if value is an image URL
+    if (fieldMeta?.ExtendedType === 'Image' && CoerceImageSrc(value)) return 'image';
+    if (fieldMeta?.ExtendedType === 'Icon') return 'icon';
+
     if (this.isImageValue(value)) return 'image';
-
-    // Check if value looks like an icon class
     if (this.isIconClass(value)) return 'icon';
 
-    // If field name suggests it's an icon field, treat non-URL values as icon classes
-    const fieldNameLower = fieldName.toLowerCase();
-    if (fieldNameLower.includes('icon') || fieldNameLower.includes('class')) {
-      return 'icon';
-    }
-
     return 'none';
+  }
+
+  /** @deprecated Use {@link GetThumbnailType}. */
+  getThumbnailType(record: Record<string, unknown>): 'image' | 'icon' | 'none' {
+    return this.GetThumbnailType(record);
   }
 
   /**
    * Get the thumbnail URL/value for a record, with per-record fallback
    */
-  getThumbnailUrl(record: Record<string, unknown>): string {
+  GetThumbnailUrl(record: Record<string, unknown>): string {
     const fieldInfo = this.getEffectiveThumbnailField(record);
-    return fieldInfo?.value || '';
+    if (!fieldInfo) return '';
+    return CoerceImageSrc(fieldInfo.value) || fieldInfo.value;
+  }
+
+  /** @deprecated Use {@link GetThumbnailUrl}. */
+  getThumbnailUrl(record: Record<string, unknown>): string {
+    return this.GetThumbnailUrl(record);
   }
 
   /**
@@ -731,12 +844,12 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
    * Returns both the field name and value for type determination
    */
   private getEffectiveThumbnailField(record: Record<string, unknown>): { fieldName: string; value: string } | null {
-    const template = this.effectiveTemplate;
+    const template = this.EffectiveTemplate;
     if (!template?.thumbnailFields || template.thumbnailFields.length === 0) return null;
 
     // Try each field in priority order until we find one with a value
     for (const fieldName of template.thumbnailFields) {
-      const value = this.getFieldValue(record, fieldName);
+      const value = this.GetFieldValue(record, fieldName);
       if (value && value.trim() !== '') {
         return { fieldName, value };
       }
@@ -746,11 +859,7 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
   }
 
   private isImageValue(value: string): boolean {
-    if (!value) return false;
-    const trimmed = value.trim();
-    if (trimmed.startsWith('data:image/')) return true;
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return true;
-    return false;
+    return CoerceImageSrc(value) != null;
   }
 
   private isIconClass(value: string): boolean {
@@ -764,52 +873,87 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
     return false;
   }
 
-  getRecordColor(record: Record<string, unknown>): string {
+  GetRecordColor(record: Record<string, unknown>): string {
     return this.computeRecordColor(this.computePkString(record));
   }
 
-  isEnumField(fieldName: string): boolean {
+  /** @deprecated Use {@link GetRecordColor}. */
+  getRecordColor(record: Record<string, unknown>): string {
+    return this.GetRecordColor(record);
+  }
+
+  IsEnumField(fieldName: string): boolean {
     if (!this.entity) return false;
     const field = this.entity.Fields.find(f => f.Name === fieldName);
     if (!field) return false;
     return field.ValueListTypeEnum !== EntityFieldValueListType.None && field.EntityFieldValues.length > 0;
   }
 
-  get subtitleIsPill(): boolean {
-    const template = this.effectiveTemplate;
-    if (!template?.subtitleField || !this.entity) return false;
-    return this.isEnumField(template.subtitleField);
+  /** @deprecated Use {@link IsEnumField}. */
+  isEnumField(fieldName: string): boolean {
+    return this.IsEnumField(fieldName);
   }
 
-  getPillColorType(value: string): string {
+  get SubtitleIsPill(): boolean {
+    const template = this.EffectiveTemplate;
+    if (!template?.subtitleField || !this.entity) return false;
+    return this.IsEnumField(template.subtitleField);
+  }
+
+  /** @deprecated Use {@link SubtitleIsPill}. */
+  get subtitleIsPill(): boolean {
+    return this.SubtitleIsPill;
+  }
+
+  GetPillColorType(value: string): string {
     return PillColorUtil.getColorType(value);
+  }
+
+  /** @deprecated Use {@link GetPillColorType}. */
+  getPillColorType(value: string): string {
+    return this.GetPillColorType(value);
   }
 
   /**
    * Check if a record matched on a hidden field
    */
-  hasHiddenFieldMatch(record: Record<string, unknown>): boolean {
+  HasHiddenFieldMatch(record: Record<string, unknown>): boolean {
     if (!this.entity) return false;
-    return this.hiddenFieldMatches.has(buildPkString(record, this.entity));
+    return this.HiddenFieldMatches.has(BuildPkString(record, this.entity));
+  }
+
+  /** @deprecated Use {@link HasHiddenFieldMatch}. */
+  hasHiddenFieldMatch(record: Record<string, unknown>): boolean {
+    return this.HasHiddenFieldMatch(record);
   }
 
   /**
    * Get the display name of the hidden field that matched
    */
-  getHiddenMatchFieldName(record: Record<string, unknown>): string {
+  GetHiddenMatchFieldName(record: Record<string, unknown>): string {
     if (!this.entity) return '';
-    const fieldName = this.hiddenFieldMatches.get(buildPkString(record, this.entity));
+    const fieldName = this.HiddenFieldMatches.get(BuildPkString(record, this.entity));
     if (!fieldName || !this.entity) return '';
     // Look up the field in entity metadata and use DisplayNameOrName
     const field = this.entity.Fields.find(f => f.Name === fieldName);
     return field ? field.DisplayNameOrName : fieldName;
   }
 
+  /** @deprecated Use {@link GetHiddenMatchFieldName}. */
+  getHiddenMatchFieldName(record: Record<string, unknown>): string {
+    return this.GetHiddenMatchFieldName(record);
+  }
+
   /**
    * Highlight matching text in a string based on the filter text
    * Uses HighlightUtil which only highlights if the text actually matches the pattern
    */
-  highlightMatch(text: string): string {
+  HighlightMatch(text: string): string {
     return HighlightUtil.highlight(text, this.filterText, false);
+  }
+
+  /** @deprecated Use {@link HighlightMatch}. */
+  highlightMatch(text: string): string {
+    return this.HighlightMatch(text);
   }
 }

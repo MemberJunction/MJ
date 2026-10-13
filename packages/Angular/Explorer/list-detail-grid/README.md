@@ -96,4 +96,4 @@ cd packages/Angular/Explorer/list-detail-grid && npm run build
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../../LICENSE) for details.

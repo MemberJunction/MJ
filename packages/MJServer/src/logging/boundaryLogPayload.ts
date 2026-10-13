@@ -12,8 +12,15 @@
  *
  * See docs/adr/0001-graphql-variables-logging-tiered-by-verbose.md.
  */
-export function buildBoundaryLogPayload(
+export function BuildBoundaryLogPayload(
   operationName: string | undefined,
 ): { operationName: string | undefined } {
   return { operationName };
+}
+
+/** @deprecated Use {@link BuildBoundaryLogPayload}. */
+export function buildBoundaryLogPayload(
+  operationName: string | undefined,
+): { operationName: string | undefined } {
+  return BuildBoundaryLogPayload(operationName);
 }

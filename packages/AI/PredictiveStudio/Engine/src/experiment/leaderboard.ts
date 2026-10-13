@@ -21,13 +21,18 @@ import type { LeaderboardEntry } from '@memberjunction/predictive-studio-core';
  * @param entries the entries to rank (not mutated)
  * @returns a new array sorted best-first
  */
-export function rankLeaderboard(entries: LeaderboardEntry[]): LeaderboardEntry[] {
+export function RankLeaderboard(entries: LeaderboardEntry[]): LeaderboardEntry[] {
   return [...entries].sort((a, b) => {
     if (b.Metric !== a.Metric) {
       return b.Metric - a.Metric;
     }
     return a.IterationID.localeCompare(b.IterationID);
   });
+}
+
+/** @deprecated Use {@link RankLeaderboard}. */
+export function rankLeaderboard(entries: LeaderboardEntry[]): LeaderboardEntry[] {
+  return RankLeaderboard(entries);
 }
 
 /**
@@ -37,7 +42,7 @@ export function rankLeaderboard(entries: LeaderboardEntry[]): LeaderboardEntry[]
  *
  * @param entries the (unranked or ranked) entries
  */
-export function bestEntry(entries: LeaderboardEntry[]): LeaderboardEntry | null {
+export function BestEntry(entries: LeaderboardEntry[]): LeaderboardEntry | null {
   let best: LeaderboardEntry | null = null;
   for (const entry of entries) {
     if (best === null || entry.Metric > best.Metric || (entry.Metric === best.Metric && entry.IterationID.localeCompare(best.IterationID) < 0)) {
@@ -45,6 +50,11 @@ export function bestEntry(entries: LeaderboardEntry[]): LeaderboardEntry | null 
     }
   }
   return best;
+}
+
+/** @deprecated Use {@link BestEntry}. */
+export function bestEntry(entries: LeaderboardEntry[]): LeaderboardEntry | null {
+  return BestEntry(entries);
 }
 
 /**
@@ -62,7 +72,7 @@ export function bestEntry(entries: LeaderboardEntry[]): LeaderboardEntry | null 
  * @param opts the prune rules (either/both/none)
  * @returns the IterationIDs to mark `Pruned`
  */
-export function selectPrunedIterationIds(
+export function SelectPrunedIterationIds(
   entries: LeaderboardEntry[],
   opts: { keepTopK?: number; relativePruneThreshold?: number },
 ): Set<string> {
@@ -70,7 +80,7 @@ export function selectPrunedIterationIds(
   if (entries.length <= 1) {
     return pruned; // never prune the only branch
   }
-  const ranked = rankLeaderboard(entries);
+  const ranked = RankLeaderboard(entries);
   const best = ranked[0];
 
   // Rule 1: relative threshold.
@@ -91,6 +101,14 @@ export function selectPrunedIterationIds(
   }
 
   return pruned;
+}
+
+/** @deprecated Use {@link SelectPrunedIterationIds}. */
+export function selectPrunedIterationIds(
+  entries: LeaderboardEntry[],
+  opts: { keepTopK?: number; relativePruneThreshold?: number },
+): Set<string> {
+  return SelectPrunedIterationIds(entries, opts);
 }
 
 /** Clamp a fraction into [0, 1]. */

@@ -95,21 +95,26 @@ const others = items.filter(item => item.ID !== excludeId);
 const others = items.filter(item => !UUIDsEqual(item.ID, excludeId));
 ```
 
-### Pattern 5: Set/Map operations
+### Pattern 5: Sets and maps of UUIDs — `UUIDSet` / `UUIDMap`
 
-`Set.has()` and `Map.get()` use strict equality internally, so you must normalize UUIDs before inserting or looking up:
+A native `Set` or `Map` compares keys with `===`, so an upper-case ID never matches its lower-case twin. Use `UUIDSet` and `UUIDMap`: they normalize on **every** insert and **every** lookup, so there is no second side to forget.
 
 ```typescript
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { UUIDSet, UUIDMap } from '@memberjunction/global';
 
 // WRONG - Set uses === internally
 const idSet = new Set(items.map(i => i.ID));
 idSet.has(lookupId);  // fails if cases differ
 
-// CORRECT - Normalize on insert AND lookup
-const idSet = new Set(items.map(i => NormalizeUUID(i.ID)));
-idSet.has(NormalizeUUID(lookupId));  // always works
+// CORRECT
+const idSet = new UUIDSet(items.map(i => i.ID));
+idSet.Has(lookupId);  // any casing, surrounding whitespace ignored
+
+const roleNames = new UUIDMap(roles.map(r => [r.ID, r.Name]));
+roleNames.Get(permission.RoleID);
 ```
+
+A hand-built `new Set(ids.map(id => NormalizeUUID(id)))` also works if every lookup uses `NormalizeUUID` too. The types exist so nobody has to remember that. Both follow `NormalizeUUID` exactly, including `null`/`undefined` normalizing to `''`.
 
 ### Pattern 6: Angular template bindings
 
@@ -144,6 +149,35 @@ this.selectedId = (this.selectedId != null && UUIDsEqual(this.selectedId, itemId
   : itemId;
 ```
 
+### Pattern 8: Matching one list against another — use the set-based helpers
+
+`UUIDsEqual()` compares two IDs, so matching a list against a list with it means a nested scan: `n × m` comparisons. That's invisible with five items and pegs a CPU with a few hundred, especially in code that re-runs on every render (an Angular getter or a template-bound method). A single top-level `.find()` (Patterns 1–3) is fine.
+
+Every nested scan is one of four operations, and each has a helper that does it in one linear pass:
+
+| You want | Use |
+|---|---|
+| Items whose ID **is** in a list | `FilterByUUIDs(items, ids)` |
+| Items whose ID is **not** in a list | `ExcludeByUUIDs(items, ids)` |
+| How many items share each ID | `CountByUUID(items).Get(id) ?? 0` |
+| The item for an ID, looked up repeatedly | `IndexByUUID(items).Get(id)` (the first item wins, like `find`) |
+
+```typescript
+import { FilterByUUIDs, ExcludeByUUIDs, CountByUUID, IndexByUUID } from '@memberjunction/global';
+
+// SLOW - n x m comparisons
+const picked = roles.filter(r => selectedIds.some(id => UUIDsEqual(id, r.ID)));
+
+// CORRECT - linear
+const picked = FilterByUUIDs(roles, selectedIds);
+
+// A different ID field: pass a selector as the third argument
+const stillLoading = ExcludeByUUIDs(pending, loadedIds, p => p.artifactId);
+const perEntity = CountByUUID(relationships, r => r.RelatedEntityID);
+```
+
+Every helper keeps the items' own order, accepts IDs in any casing, and takes an existing `UUIDSet` in place of the ID list. The selector defaults to `item => item.ID`.
+
 ## When You Do NOT Need `UUIDsEqual()`
 
 Not every `.ID ===` comparison involves UUIDs. These patterns are safe with `===`:
@@ -169,13 +203,16 @@ Even if you're currently developing against only one database platform, using `U
 
 ### Static Analysis Test
 
-The file `packages/MJGlobal/src/__tests__/UUIDCompliance.test.ts` contains a static analysis test that scans all `packages/` source files for remaining `.ID ===` patterns that should use `UUIDsEqual()`. Run it with:
+`packages/MJGlobal/src/__tests__/UUIDCompliance.test.ts` scans all `packages/` source and fails on:
+
+1. **Direct comparisons** — `.ID ===` / `!==` / `.includes(x.ID)` patterns that should use `UUIDsEqual()` or a `UUIDSet`. A legitimate non-UUID comparison (e.g. a numeric ID) goes in `KNOWN_EXCEPTIONS`.
+2. **Nested scans** — a `.some` / `.every` / `.find` / `.findIndex` / `.filter` calling `UUIDsEqual` inside the callback of another array iteration or inside a loop (Pattern 8). Detection uses the TypeScript AST, so chaining (`list.filter(…).find(…)`) is not flagged. It only sees a **direct** `UUIDsEqual` call: a scan wrapped in a helper function and called from inside the iteration (for example `rows.filter(r => isChild(r))`, where `isChild` runs `.some(UUIDsEqual)`) is not detected, so review such helpers by hand. Sites that predate the check are recorded per file in `NESTED_SCAN_BASELINE`, which is a ratchet: a file may not gain sites, and when you fix one the check makes you lower the number.
+
+It runs uncached in the `Source guards` CI job. To run it locally:
 
 ```bash
-cd packages/MJGlobal && npx vitest run
+pnpm --filter @memberjunction/global exec vitest run --config ../../vitest.shared.ts --passWithNoTests=false src/__tests__/UUIDCompliance.test.ts
 ```
-
-If you have a legitimate `.ID ===` comparison that doesn't involve UUIDs (e.g., a numeric ID), add it to the `KNOWN_EXCEPTIONS` map in that test file.
 
 ### Cross-Database Integration Tests
 
@@ -190,15 +227,18 @@ The file `packages/MJCoreEntities/src/__tests__/UUIDCrossDbCompliance.test.ts` v
 | `items.find(x => x.ID === id)` | `items.find(x => UUIDsEqual(x.ID, id))` |
 | `items.filter(x => x.UserID === uid)` | `items.filter(x => UUIDsEqual(x.UserID, uid))` |
 | `items.some(x => x.ID === id)` | `items.some(x => UUIDsEqual(x.ID, id))` |
-| `new Set(ids); set.has(id)` | `new Set(ids.map(NormalizeUUID)); set.has(NormalizeUUID(id))` |
+| `new Set(ids); set.has(id)` | `new UUIDSet(ids); set.Has(id)` |
 | Template: `item.ID === selectedId` | Add component method using `UUIDsEqual()` |
+| `a.filter(x => b.some(y => UUIDsEqual(x.ID, y)))` | `FilterByUUIDs(a, b)` |
+| `a.filter(x => !b.some(y => UUIDsEqual(x.ID, y)))` | `ExcludeByUUIDs(a, b)` |
+| `for (…) { list.find(x => UUIDsEqual(x.ID, id)) }` | `const byID = IndexByUUID(list);` then `byID.Get(id)` |
 
 ## Import
 
-Both functions are exported from `@memberjunction/global`:
+Everything is exported from `@memberjunction/global`:
 
 ```typescript
-import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { UUIDsEqual, NormalizeUUID, UUIDSet, UUIDMap, FilterByUUIDs, ExcludeByUUIDs, CountByUUID, IndexByUUID } from '@memberjunction/global';
 ```
 
-Source: [packages/MJGlobal/src/util/UUIDUtils.ts](../packages/MJGlobal/src/util/UUIDUtils.ts)
+Sources: [packages/MJGlobal/src/util/UUIDUtils.ts](../packages/MJGlobal/src/util/UUIDUtils.ts), [packages/MJGlobal/src/util/UUIDCollections.ts](../packages/MJGlobal/src/util/UUIDCollections.ts)

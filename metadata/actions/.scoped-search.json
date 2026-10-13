@@ -74,7 +74,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Minimum relevance score threshold (0-1). Results below this score are excluded after RRF fusion. Overridden by AIAgentSearchScope.MinScore if set and greater.",
+            "Description": "Minimum semantic similarity (0-1), applied to the semantic (vector) lane before RRF fusion: semantic-only matches below it are dropped. Keyword, full-text, tag and storage matches are never filtered by it. Similarity scales differ by embedding model, so choose the value for the model in use. Overridden by AIAgentSearchScope.MinScore if set and greater.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -137,6 +137,24 @@
           "sync": {
             "lastModified": "2026-05-14T02:08:24.265Z",
             "checksum": "cbe93dff2bdf307826e7284e46f405863881179c5f0ed873115c1073749347f2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AISkillID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional AI Skill this search runs under. Pass it when the search should be scoped to the skill the agent is currently acting through; omit it otherwise and no skill principal applies. The skill is judged, not trusted: it must be one this agent can activate for this user, its own SearchScopeAccess is evaluated, and a value that is not a UUID or will not load is refused rather than ignored.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "008BC0E6-C9A7-435C-9331-A8F60B1DD2E1"
+          },
+          "sync": {
+            "lastModified": "2026-09-01T16:57:35.319Z",
+            "checksum": "be1ddb219e13d880e07bba3b116f239def112df4200b4cd85b160e26f509f619"
           }
         },
         {

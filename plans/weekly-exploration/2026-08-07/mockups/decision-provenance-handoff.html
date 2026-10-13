@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Handoff Brief — Decision Provenance</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.55; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .breadcrumb { color: var(--mj-text-muted); font-size: 13px; }
+  .breadcrumb b { color: var(--mj-text-primary); }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+  .topbar-actions { display: flex; gap: 8px; }
+
+  .handoff-banner { margin: 20px 28px 0; background: linear-gradient(90deg, color-mix(in srgb, var(--mj-brand-primary) 10%, white), color-mix(in srgb, var(--mj-status-info) 8%, white)); border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 20%, transparent); border-radius: 10px; padding: 16px 20px; display: flex; align-items: center; gap: 14px; }
+  .handoff-banner i.icon { font-size: 22px; color: var(--mj-brand-primary); }
+  .handoff-banner .msg { flex: 1; }
+  .handoff-banner .msg b { display: block; margin-bottom: 2px; }
+  .handoff-banner .msg span { font-size: 12.5px; color: var(--mj-text-secondary); }
+
+  .content { padding: 20px 28px 40px; display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+  .card-body { padding: 20px; }
+
+  .brief h3 { font-size: 13.5px; font-weight: 700; margin: 18px 0 8px; display:flex; align-items:center; gap:7px; color: var(--mj-text-primary); }
+  .brief h3:first-child { margin-top: 0; }
+  .brief h3 i { color: var(--mj-brand-primary); width: 16px; }
+  .brief p { color: var(--mj-text-secondary); font-size: 13.5px; margin-bottom: 6px; }
+  .brief ul { margin: 4px 0 4px 18px; color: var(--mj-text-secondary); font-size: 13.5px; }
+  .brief li { margin-bottom: 4px; }
+  .cite { font-size: 11px; color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 8%, white); padding: 1px 6px; border-radius: 4px; font-weight: 600; cursor: default; }
+  .watchout { background: var(--mj-status-warning-bg); border: 1px solid color-mix(in srgb, var(--mj-status-warning) 25%, transparent); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; color: #7c2d12; display:flex; gap:8px; margin-top: 6px; }
+  .watchout i { color: var(--mj-status-warning); margin-top: 1px; }
+
+  .brief-footer { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--mj-border-subtle); display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; color: var(--mj-text-muted); }
+  .brief-footer .btn { font-size: 12px; padding: 5px 11px; }
+
+  /* Timeline */
+  .timeline { position: relative; padding-left: 22px; }
+  .timeline::before { content: ''; position: absolute; left: 6px; top: 4px; bottom: 4px; width: 2px; background: var(--mj-border-default); }
+  .t-item { position: relative; padding-bottom: 18px; }
+  .t-item:last-child { padding-bottom: 0; }
+  .t-dot { position: absolute; left: -22px; top: 2px; width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--mj-bg-surface); }
+  .t-dot.decision { background: var(--mj-brand-primary); }
+  .t-dot.change { background: var(--mj-text-muted); }
+  .t-date { font-size: 11px; color: var(--mj-text-muted); font-weight: 600; margin-bottom: 2px; }
+  .t-title { font-size: 12.5px; font-weight: 700; color: var(--mj-text-primary); }
+  .t-sub { font-size: 12px; color: var(--mj-text-secondary); margin-top: 2px; }
+  .t-tag { display:inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 1px 6px; border-radius: 4px; margin-top: 4px; }
+  .t-tag.decision { background: color-mix(in srgb, var(--mj-brand-primary) 12%, white); color: var(--mj-brand-primary); }
+  .t-tag.change { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); }
+
+  .footer-note { padding: 0 28px 24px; color: var(--mj-text-muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-diagram-project"></i> MemberJunction</div>
+    <div class="nav-section">Explorer</div>
+    <div class="nav-item"><i class="fa-solid fa-house"></i> Home</div>
+    <div class="nav-item"><i class="fa-solid fa-hand-holding-dollar"></i> Grants</div>
+    <div class="nav-item active"><i class="fa-solid fa-file-shield"></i> Grant #GR-2291</div>
+    <div class="nav-section">Framework · New</div>
+    <div class="nav-item"><i class="fa-solid fa-comments"></i> Decision Records</div>
+    <div class="nav-item"><i class="fa-solid fa-people-arrows"></i> Record Stewardship</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="breadcrumb">Grants / GR-2291 — <b>Riverbend Youth Literacy Initiative</b></div>
+      <div class="topbar-actions">
+        <div class="btn"><i class="fa-solid fa-clock-rotate-left"></i> Full Change History</div>
+        <div class="btn btn-primary"><i class="fa-solid fa-wand-magic-sparkles"></i> Refresh Brief</div>
+      </div>
+    </div>
+
+    <div class="handoff-banner">
+      <i class="fa-solid fa-people-arrows icon"></i>
+      <div class="msg">
+        <b>This record was reassigned to you 2 days ago</b>
+        <span>Previous steward: Marcus Alvarez (Program Officer, departed 2026-07-28) → You (Priya Nandan). An AI handoff brief was generated automatically on reassignment.</span>
+      </div>
+      <span class="badge" style="background:var(--mj-status-success-bg); color:var(--mj-status-success); padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700;">Brief current</span>
+    </div>
+
+    <div class="content">
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-wand-magic-sparkles"></i> AI-Generated Handoff Brief</h2>
+          <span class="cite"><i class="fa-solid fa-robot"></i> Handoff Brief Agent</span>
+        </div>
+        <div class="card-body brief">
+          <h3><i class="fa-solid fa-signs-post"></i> Where things stand</h3>
+          <p>Riverbend Youth Literacy Initiative is in <b>Conditionally Approved</b> status pending a revised budget narrative from the grantee, due back <b>August 14</b>. Funding amount is confirmed at $85,000 over 12 months <span class="cite">Record Change · Aug 3</span>.</p>
+
+          <h3><i class="fa-solid fa-gavel"></i> Key decisions and why</h3>
+          <ul>
+            <li><b>Mar 3</b> — Moved from "Under Review" to "Conditionally Approved." Rationale: strong community-partner letters offset a thin evaluation plan; condition attached requiring a revised logic model. <span class="cite">Decision #4471</span></li>
+            <li><b>Jun 18</b> — Declined to increase award above $85K despite grantee's $110K request. Rationale: reserve fund allocation for Q3 was already committed to two other renewals. <span class="cite">Decision #4502</span></li>
+            <li><b>Jul 22</b> — Extended the budget-narrative deadline by 3 weeks after grantee reported a staffing gap. <span class="cite">Decision #4519 · supersedes #4488</span></li>
+          </ul>
+
+          <h3><i class="fa-solid fa-list-check"></i> Open items</h3>
+          <ul>
+            <li>Revised budget narrative due <b>Aug 14</b> — not yet received.</li>
+            <li>Site visit tentatively scheduled for September, unconfirmed with grantee.</li>
+          </ul>
+
+          <h3><i class="fa-solid fa-address-book"></i> Who to talk to</h3>
+          <p>Grantee contact is <b>Elena Torres</b> (Executive Director) — most responsive by email, typically replies within 48h. CC <b>Sam Whitcombe</b> (Board Treasurer) on anything involving the budget narrative — he flagged it twice in prior threads.</p>
+
+          <h3><i class="fa-solid fa-triangle-exclamation"></i> Watch-outs</h3>
+          <div class="watchout"><i class="fa-solid fa-triangle-exclamation"></i> This grantee's FY2024 renewal lapsed for 6 weeks over a missed reporting deadline before being reinstated. The Aug 14 deadline is the same failure pattern — consider a proactive check-in on Aug 10.</div>
+
+          <div class="brief-footer">
+            <span>Generated 2026-08-05 14:12 · Sources: 7 Record Changes, 3 Decision Records, 2 linked Conversations · <i class="fa-solid fa-shield-halved"></i> All claims cite a source record</span>
+            <div class="btn"><i class="fa-solid fa-thumbs-up"></i> Helpful</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-timeline"></i> Decision Timeline</h2>
+        </div>
+        <div class="card-body">
+          <div class="timeline">
+            <div class="t-item">
+              <div class="t-dot decision"></div>
+              <div class="t-date">Jul 22, 2026</div>
+              <div class="t-title">Deadline extended 3 weeks</div>
+              <div class="t-sub">Grantee reported staffing gap</div>
+              <span class="t-tag decision">Decision</span>
+            </div>
+            <div class="t-item">
+              <div class="t-dot change"></div>
+              <div class="t-date">Jul 20, 2026</div>
+              <div class="t-title">Status unchanged, note added</div>
+              <div class="t-sub">Marcus Alvarez</div>
+              <span class="t-tag change">System Change</span>
+            </div>
+            <div class="t-item">
+              <div class="t-dot decision"></div>
+              <div class="t-date">Jun 18, 2026</div>
+              <div class="t-title">Award amount held at $85,000</div>
+              <div class="t-sub">Reserve fund already committed</div>
+              <span class="t-tag decision">Decision</span>
+            </div>
+            <div class="t-item">
+              <div class="t-dot change"></div>
+              <div class="t-date">Jun 18, 2026</div>
+              <div class="t-title">FundingAmount field confirmed</div>
+              <div class="t-sub">$85,000.00</div>
+              <span class="t-tag change">System Change</span>
+            </div>
+            <div class="t-item">
+              <div class="t-dot decision"></div>
+              <div class="t-date">Mar 3, 2026</div>
+              <div class="t-title">Conditionally Approved</div>
+              <div class="t-sub">Community letters offset thin eval plan</div>
+              <span class="t-tag decision">Decision</span>
+            </div>
+            <div class="t-item">
+              <div class="t-dot change"></div>
+              <div class="t-date">Mar 3, 2026</div>
+              <div class="t-title">Status: Under Review → Conditionally Approved</div>
+              <div class="t-sub">Marcus Alvarez</div>
+              <span class="t-tag change">System Change</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">Mockup — MemberJunction Weekly Exploration, 2026-08-07 · Idea 2: Decision Provenance Layer &amp; AI-Generated Handoff Briefs · Illustrative data only.</div>
+  </div>
+</body>
+</html>

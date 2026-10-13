@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { seedCoreMetadataBooleanColumns } from '../rules/CoreMetadataBooleanColumns';
+import { SeedCoreMetadataBooleanColumns } from '../rules/CoreMetadataBooleanColumns';
 
 /**
  * The boolean-column catalog is a hand-maintained mirror of the PG baseline. When it drifts, a
@@ -70,7 +70,7 @@ describe('CoreMetadataBooleanColumns', () => {
     expect(expected.size).toBeGreaterThan(100); // sanity: the parser actually matched something
 
     const seeded = new Map<string, Map<string, string>>();
-    seedCoreMetadataBooleanColumns(seeded);
+    SeedCoreMetadataBooleanColumns(seeded);
 
     const gaps: string[] = [];
     for (const [table, columns] of expected) {
@@ -90,7 +90,7 @@ describe('CoreMetadataBooleanColumns', () => {
 
   it('seeds IntegrationObject with its per-operation CRUD flags', () => {
     const seeded = new Map<string, Map<string, string>>();
-    seedCoreMetadataBooleanColumns(seeded);
+    SeedCoreMetadataBooleanColumns(seeded);
     const cols = seeded.get('integrationobject');
     expect(cols).toBeDefined();
     for (const flag of ['supportswrite', 'supportscreate', 'supportsupdate', 'supportsdelete']) {
@@ -100,7 +100,7 @@ describe('CoreMetadataBooleanColumns', () => {
 
   it('never overrides a table the migration itself created', () => {
     const seeded = new Map<string, Map<string, string>>([['integrationobject', new Map([['custom', 'INTEGER']])]]);
-    seedCoreMetadataBooleanColumns(seeded);
+    SeedCoreMetadataBooleanColumns(seeded);
     expect(seeded.get('integrationobject')?.has('supportscreate')).toBe(false);
     expect(seeded.get('integrationobject')?.get('custom')).toBe('INTEGER');
   });

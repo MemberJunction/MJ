@@ -49,7 +49,7 @@ interface AgentSpec {
   Name: string;                             // Agent name (required, non-empty)
   StartingPayloadValidationMode: 'Fail' | 'Warn';  // REQUIRED: How to handle validation failures
   TypeID: string;                           // REQUIRED: Loop="F7926101-5099-4FA5-836A-479D9707C818" or Flow="4F6A189B-C068-4736-9F23-3FF540B40FDD"
-  Status: 'Active' | 'Inactive';            // REQUIRED: Set to "Active" for new agents
+  Status: 'Active' | 'Disabled' | 'Pending';  // REQUIRED: Set to "Active" for new agents
 
   // OPTIONAL BUT RECOMMENDED
   Description?: string;                     // What the agent does
@@ -70,7 +70,7 @@ interface AgentSpec {
   // ACTIONS - Array of actions this agent can use
   Actions?: Array<{
     ActionID: string;                       // ID from "Find Candidate Actions" results
-    Status?: 'Active' | 'Inactive';         // Default: 'Active'
+    Status?: 'Active' | 'Revoked' | 'Pending';  // Default: 'Active'
     ResultExpirationMode?: 'None' | 'Time' | 'RunEnd';
   }>;
 
@@ -101,14 +101,20 @@ interface AgentSpec {
     ID?: string;                    // Leave empty "" for new steps
     Name: string;                   // Step name (REQUIRED)
     Description?: string;           // What the step does
-    StepType: 'Prompt' | 'Action' | 'Sub-Agent';  // REQUIRED
+    StepType: 'Prompt' | 'Action' | 'Sub-Agent' | 'ForEach' | 'While' | 'Decision';  // REQUIRED
     StartingStep: boolean;          // Is this the first step? (REQUIRED)
     ActionID?: string;              // For Action type steps
     SubAgentID?: string;            // For Sub-Agent type steps
-    PromptID?: string;              // For Prompt type steps (can use existing prompt)
+    PromptID?: string;              // For Prompt type steps (can use existing prompt); for Decision steps, optional (empty = Default Decision)
     PromptText?: string;            // Or inline prompt text for Prompt type steps
     ActionInputMapping?: string | object;  // JSON string OR object: maps payload/static → action inputs
     ActionOutputMapping?: string | object; // JSON string OR object: maps action outputs → payload paths
+
+    // LOOP & DECISION FIELDS
+    // For ForEach / While steps: see "Loop Steps" below
+    // For Decision steps: see "Decision Steps" below
+    LoopBodyType?: 'Action' | 'Prompt' | 'Sub-Agent';  // REQUIRED for loops: what runs each pass
+    Configuration?: string | object;                    // REQUIRED for loops & decisions: bounds or decision config
   }>;
 
   Paths?: Array<{
@@ -120,6 +126,174 @@ interface AgentSpec {
     Priority: number;               // Higher = evaluated first (REQUIRED)
   }>;
 }
+```
+
+## Loop Steps — ForEach and While (Flow Agents Only)
+
+A loop step is a **wrapper**, not a leaf. It does not do work itself; it repeats one body many times.
+Two fields make it a loop:
+
+- **`LoopBodyType`** — `'Action' | 'Prompt' | 'Sub-Agent'`. What runs on each pass.
+- **`Configuration`** — the loop's bounds, as an object (or a JSON string).
+
+**The body's ID goes in the SAME field a plain step of that type would use.** A `ForEach` with
+`LoopBodyType: 'Action'` still puts its action in `ActionID`. There is no separate `LoopBodyActionID`.
+
+### ForEach — repeat once per item in a collection
+
+```json
+{
+  "ID": "",
+  "Name": "Score each lead",
+  "Description": "Runs the scoring action once per lead in the payload",
+  "StepType": "ForEach",
+  "StartingStep": false,
+  "LoopBodyType": "Action",
+  "ActionID": "<action id from Find Candidate Actions>",
+  "Configuration": {
+    "type": "ForEach",
+    "collectionPath": "leads",        // REQUIRED: payload path holding the items
+    "itemVariable": "lead",           // REQUIRED: what the body calls the current item
+    "indexVariable": "leadIndex",     // optional
+    "maxIterations": 1000,            // optional, defaults to 1000
+    "continueOnError": true           // optional: one bad item does not kill the pass
+  },
+  "ActionInputMapping": { "leadId": "payload.lead.id" }
+}
+```
+
+### While — repeat until a condition stops being true
+
+```json
+{
+  "ID": "",
+  "Name": "Poll until the import finishes",
+  "StepType": "While",
+  "StartingStep": false,
+  "LoopBodyType": "Action",
+  "ActionID": "<action id>",
+  "Configuration": {
+    "type": "While",
+    "condition": "payload.importStatus !== 'Complete'",  // REQUIRED: checked BEFORE each pass
+    "itemVariable": "attempt",                            // REQUIRED
+    "maxIterations": 100                                  // optional, defaults to 100 — LOWER than ForEach on purpose
+  }
+}
+```
+
+### Rules
+
+1. **`ForEach` requires `collectionPath`**; **`While` requires `condition`**. Both require `itemVariable`.
+2. **Both require `LoopBodyType`** and a body to run. A loop with neither saves cleanly and then
+   iterates over nothing — which at runtime looks like the agent doing no work, not like a broken step.
+3. `maxIterations` defaults are deliberately asymmetric — 1000 for `ForEach` (you know how many items
+   there are), 100 for `While` (you do not, so the ceiling is a safety net).
+4. **Prefer a loop over N copied steps.** If the design says "for every X, do Y", that is one `ForEach`
+   step, not a chain of near-identical steps.
+5. Paths in and out of a loop step work exactly as they do for any other step — the loop is one node
+   in the flow, however many times its body runs.
+
+## Decision Steps — Fast Typed Decisions (Flow Agents Only)
+
+A **Decision** step evaluates typed questions (classification, triage, rating, numeric scoring) to route execution deterministically. It is one fast typed decision, not an LLM turn, so it runs in a fraction of the time and cost.
+
+### When to Use
+
+- **Use one** to route on a classification ("which kind of request is this?"), to triage, or as a yes/no gate.
+- **Don't use one** for anything that needs free-text reasoning or writing. That is a Prompt step.
+
+### Step Fields
+
+- **`StepType`**: `"Decision"` (REQUIRED)
+- **`Configuration`**: Object (or JSON string) defining `key` and `questions`, and optionally `state` (REQUIRED)
+- **`PromptID`**: Optional. Leave it empty or omit it to use the built-in Default Decision prompt. If you set it, it must be the ID of an existing prompt whose model type is Decision; a chat (LLM) prompt cannot run a Decision step.
+
+### Configuration Schema
+
+- **`key`** (string, REQUIRED): Names this Decision step in path conditions, as `decisions.<key>.<question>` (e.g. `"triage"`). Unique among the flow's Decision steps. Letters, digits and underscores, not starting with a digit (`/^[A-Za-z_][A-Za-z0-9_]*$/`).
+- **`state`** (string, optional): What the questions are about. `"payload"` (the default) is the whole payload; `"payload.<path>"` is one value in it, such as `"payload.ticket"`. Point it at just what the questions need: a narrower state gives better answers.
+- **`questions`** (Record<string, QuestionDefinition>, REQUIRED): Map of question key to question definition. Must define at least one question. All of a step's questions are answered in one call, so put every question one fork needs on one step.
+  - **`instructions`** (string, REQUIRED): The instructions/guidance for what to evaluate (alias: `text`). The model never sees the question key, so everything it needs goes here.
+  - **`kind`** (string, REQUIRED): One of `"Choice"`, `"Likelihood"`, `"Score"`.
+  - **`options`** (Array<{ value: string, description: string }>, REQUIRED for `"Choice"`): Two or more allowable answers, each with a distinct `value` and a `description` (alias: `text`).
+  - **`levels`** (string[], REQUIRED for `"Score"`): Two or more levels, ordered from lowest to highest.
+  - **`minConfidence`** (number from 0 to 1, optional): Below this confidence the answer is not acted on: a path whose condition reads it is held, neither taken nor skipped, so the flow never routes on a guess. A Likelihood's confidence is how far its probability is from 0.5, so 0.05 is as sure as 0.95.
+
+### Outgoing Path Conditions
+
+A condition reads an answer as `decisions.<key>.<question>.<field>`. Each kind of answer has its own fields, and reading any other field is refused:
+
+| Kind | Fields | What they hold |
+|------|--------|----------------|
+| **Choice** | `value`, `confidence`, `probabilities` | `value` is the chosen option's `value`; `probabilities` maps each option's `value` to its probability |
+| **Likelihood** | `probability` | The probability, from 0 to 1, that the statement in `instructions` is true. A Likelihood has **no** `value` |
+| **Score** | `value`, `confidence`, `probabilities` | `value` is the level's position counted **from 0** (the lowest level) to one less than the number of levels, and can fall between two levels; `probabilities` maps each level to its probability |
+
+Examples:
+- **Choice**: `decisions.<key>.<question>.value === '<optionValue>'`
+- **Likelihood**: `decisions.<key>.<question>.probability >= 0.8`
+- **Score**: with `levels: ["low", "medium", "high"]`, `decisions.<key>.<question>.value >= 1` means medium or higher, and `>= 2` means high only
+
+**Prefer routing on a Choice's `value`.** Probabilities are calibrated per model, so the same threshold can mean different things on different models. Use a Likelihood threshold only when a yes/no gate needs one, and write it as `>= 0.8`.
+
+### Choice Fork Rule
+
+When two or more outgoing paths leave a step and every one of them tests the `value` of the same `Choice` question, they form a **Choice fork**, and the flow takes one of them. **A Choice fork must have a path for every option of that question**, or an unconditional path (no `Condition`) as the default for the rest. Otherwise, when the model picks an option with no path, every path loses and that branch of the flow ends silently.
+
+A single conditional path from a step is a gate, not a fork: it runs only when its option is picked.
+
+### Example
+
+```json
+{
+  "ID": "",
+  "Name": "Triage support ticket",
+  "Description": "Classifies the incoming ticket category to determine routing",
+  "StepType": "Decision",
+  "StartingStep": true,
+  "Configuration": {
+    "key": "triage",
+    "questions": {
+      "category": {
+        "instructions": "What category best fits this ticket?",
+        "kind": "Choice",
+        "options": [
+          { "value": "billing", "description": "Billing or invoice inquiries" },
+          { "value": "technical", "description": "Technical defects or bugs" },
+          { "value": "general", "description": "General inquiries and feedback" }
+        ]
+      },
+      "urgent": {
+        "instructions": "The customer cannot work until this is resolved.",
+        "kind": "Likelihood"
+      }
+    }
+  }
+}
+```
+
+With outgoing paths covering every choice option:
+```json
+[
+  {
+    "OriginStepID": "Triage support ticket",
+    "DestinationStepID": "Handle billing issue",
+    "Condition": "decisions.triage.category.value === 'billing'",
+    "Priority": 10
+  },
+  {
+    "OriginStepID": "Triage support ticket",
+    "DestinationStepID": "Route to engineering",
+    "Condition": "decisions.triage.category.value === 'technical'",
+    "Priority": 10
+  },
+  {
+    "OriginStepID": "Triage support ticket",
+    "DestinationStepID": "Standard response",
+    "Condition": "decisions.triage.category.value === 'general'",
+    "Priority": 10
+  }
+]
 ```
 
 ## Action I/O Mapping (Flow Agents Only)
@@ -269,7 +443,7 @@ When `payload.modificationPlan` does NOT exist, you're creating a new agent.
      - Loop: `"F7926101-5099-4FA5-836A-479D9707C818"` (use this exact string)
      - Flow: `"4F6A189B-C068-4736-9F23-3FF540B40FDD"` (use this exact string)
      - ❌ WRONG: `"@lookup:MJ: AI Agent Types.Name=Loop"` (metadata syntax - don't use)
-   - `Status` must be 'Active' or 'Inactive'
+   - `Status` must be 'Active', 'Disabled' or 'Pending'
    - `StartingPayloadValidationMode` must be 'Fail' or 'Warn'
    - `ID` must be empty string "" for new agents
    - `TechnicalDesign` must remain as plain markdown strings
@@ -297,6 +471,9 @@ When `payload.modificationPlan` does NOT exist, you're creating a new agent.
    - At least ONE step must have `StartingStep: true`
    - `Paths` array must exist
    - Each path needs OriginStepID, DestinationStepID, Priority
+   - **Loop steps** (`ForEach` / `While`) additionally need `LoopBodyType`, a body ID in the field
+     matching that type (`ActionID` / `PromptID` / `SubAgentID`), and a `Configuration` carrying
+     `itemVariable` plus `collectionPath` (ForEach) or `condition` (While) — see "Loop Steps" above
 7.  **Auto-correct minor issues**:
     - Fill in missing `Status: 'Active'`
     - Fill in missing `StartingPayloadValidationMode: 'Fail'`

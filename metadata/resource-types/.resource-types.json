@@ -55,24 +55,6 @@
   },
   {
     "fields": {
-      "Name": "Reports",
-      "DisplayName": "Reports",
-      "Description": "Reports are generated outputs from conversations a user has with the interface",
-      "Icon": "fa-solid fa-chart-simple",
-      "DriverClass": "ReportResource",
-      "EntityID": "@lookup:MJ: Entities.Name=MJ: Reports",
-      "CategoryEntityID": "@lookup:MJ: Entities.Name=MJ: Report Categories"
-    },
-    "primaryKey": {
-      "ID": "DBAFCCEC-6A37-EF11-86D4-000D3A4E707E"
-    },
-    "sync": {
-      "lastModified": "2026-02-13T21:08:23.841Z",
-      "checksum": "e58dac1ef6e0e3597745a1974834baed51983c4b5d8b8c113e5ff5b30ebf628c"
-    }
-  },
-  {
-    "fields": {
       "Name": "Search Results",
       "DisplayName": "Search Results",
       "Description": "Display the results of a user search",

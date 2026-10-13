@@ -47,7 +47,7 @@ export class LLMDiscoveryValidator {
   /**
    * Validate PK/FK candidates for a single table using LLM reasoning
    */
-  public async validateTableRelationships(
+  public async ValidateTableRelationships(
     schemaName: string,
     tableName: string,
     pkCandidates: PKCandidate[],
@@ -83,11 +83,11 @@ export class LLMDiscoveryValidator {
       return {
         validated: false,
         reasoning: `LLM call failed: ${chatResult.errorMessage}`,
-        confidenceAdjustment: 0,
-        recommendations: [],
+        ConfidenceAdjustment: 0,
+        Recommendations: [],
         tokensUsed: 0,
-        inputTokens: 0,
-        outputTokens: 0
+        InputTokens: 0,
+        OutputTokens: 0
       };
     }
 
@@ -119,23 +119,33 @@ export class LLMDiscoveryValidator {
       return {
         validated: result.validated,
         reasoning: result.reasoning,
-        confidenceAdjustment: 0, // Overall adjustment
-        recommendations: result.recommendations || [],
+        ConfidenceAdjustment: 0, // Overall adjustment
+        Recommendations: result.recommendations || [],
         tokensUsed: usage?.totalTokens || 0,
-        inputTokens: usage?.promptTokens || 0,
-        outputTokens: usage?.completionTokens || 0
+        InputTokens: usage?.promptTokens || 0,
+        OutputTokens: usage?.completionTokens || 0
       };
     } catch (parseError) {
       return {
         validated: false,
         reasoning: `Failed to parse LLM response: ${(parseError as Error).message}\n\nRaw content:\n${content}`,
-        confidenceAdjustment: 0,
-        recommendations: [],
+        ConfidenceAdjustment: 0,
+        Recommendations: [],
         tokensUsed: usage?.totalTokens || 0,
-        inputTokens: usage?.promptTokens || 0,
-        outputTokens: usage?.completionTokens || 0
+        InputTokens: usage?.promptTokens || 0,
+        OutputTokens: usage?.completionTokens || 0
       };
     }
+  }
+
+  /** @deprecated Use {@link ValidateTableRelationships}. */
+  public async validateTableRelationships(
+    schemaName: string,
+    tableName: string,
+    pkCandidates: PKCandidate[],
+    fkCandidates: FKCandidate[]
+  ): Promise<LLMValidationResult> {
+    return this.ValidateTableRelationships(schemaName, tableName, pkCandidates, fkCandidates);
   }
 
   /**
@@ -154,13 +164,13 @@ export class LLMDiscoveryValidator {
 
       // Return minimal context without column stats
       return {
-        targetTable: {
+        TargetTable: {
           schema: schemaName,
           table: tableName,
           rowCount: 0,
           columns: []
         },
-        relatedTables: [],
+        RelatedTables: [],
         pkCandidates: pkCandidates.map(pk => ({
           columnNames: pk.columnNames,
           confidence: pk.confidence,
@@ -180,7 +190,7 @@ export class LLMDiscoveryValidator {
     const targetTable = {
       schema: schemaName,
       table: tableName,
-      rowCount: tableStats.totalRows,
+      rowCount: tableStats.TotalRows,
       columns: Array.from(tableStats.columns.values()).map(col => ({
         name: col.columnName,
         type: col.dataType,
@@ -214,8 +224,8 @@ export class LLMDiscoveryValidator {
       }));
 
     return {
-      targetTable,
-      relatedTables,
+      TargetTable: targetTable,
+      RelatedTables: relatedTables,
       pkCandidates: pkContext,
       fkCandidates: fkContext
     };
@@ -291,7 +301,7 @@ export class LLMDiscoveryValidator {
         related.push({
           schema: otherTableStats.schemaName,
           table: otherTableStats.tableName,
-          rowCount: otherTableStats.totalRows,
+          rowCount: otherTableStats.TotalRows,
           potentialRelationships: potentialRelationships.sort(
             (a, b) => b.similarity - a.similarity
           ).slice(0, 5) // Top 5 relationships
@@ -517,11 +527,11 @@ export class LLMDiscoveryValidator {
     return `
 You are a database schema expert analyzing potential primary keys and foreign keys.
 
-## Target Table: ${context.targetTable.schema}.${context.targetTable.table}
-Row Count: ${context.targetTable.rowCount}
+## Target Table: ${context.TargetTable.schema}.${context.TargetTable.table}
+Row Count: ${context.TargetTable.rowCount}
 
 ### Columns and Statistics:
-${context.targetTable.columns
+${context.TargetTable.columns
   .map(
     col => `
 - **${col.name}** (${col.type})
@@ -535,10 +545,10 @@ ${context.targetTable.columns
   .join('\n')}
 
 ${
-  context.relatedTables && context.relatedTables.length > 0
+  context.RelatedTables && context.RelatedTables.length > 0
     ? `
 ### Related Tables (by column name similarity):
-${context.relatedTables
+${context.RelatedTables
   .map(
     table => `
 - **${table.schema}.${table.table}** (${table.rowCount} rows)

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { parseRange, rangesIntersect, pickRange } from '../check-explorer-external-deps.mjs';
+import { parseRange, rangesIntersect, pickRange, findNonConcreteDeclarations } from '../check-explorer-external-deps.mjs';
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'check-explorer-external-deps.mjs');
 
@@ -188,5 +188,68 @@ describe('list mode', () => {
         expect(code).toBe(0);
         expect(out).toContain('extdep\t^1.5.0\t@memberjunction/liba,@memberjunction/libb');
         expect(out).toContain('optpeer\t(optional-peer only — not declared)');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Non-concrete declarations (`latest`) — the one-way ratchet
+//
+// `parseRange('latest')` is `any`, and `rangesIntersect` returns true for `any`, so a `latest`
+// already in the app manifest can never be reported incompatible and `--write` would never
+// repair it. That is how `latest` specifiers for CodeMirror/Lezer persisted in MJExplorer's
+// manifest. These pin both halves of the fix: never write one, and fail when one exists.
+// ---------------------------------------------------------------------------
+
+describe('findNonConcreteDeclarations', () => {
+    const required = new Map([
+        ['extdep', [{ owner: 'liba', range: '^1.2.3' }]],
+        ['loose', [{ owner: 'liba', range: 'latest' }]],
+    ]);
+
+    it('flags a declared `latest` that the incompatible check structurally cannot catch', () => {
+        const manifest = { dependencies: { extdep: '^1.2.3', loose: 'latest' } };
+        // Precondition: `latest` DOES intersect the owner range — that is the trap.
+        expect(rangesIntersect(parseRange('latest'), parseRange('latest'))).toBe(true);
+        expect(findNonConcreteDeclarations(manifest, required)).toEqual([{ dep: 'loose', declaredRange: 'latest' }]);
+    });
+
+    it('accepts concrete ranges and ignores deps the closure does not require', () => {
+        const manifest = { dependencies: { extdep: '^1.2.3', loose: '^2.0.0', unrelated: 'latest' } };
+        expect(findNonConcreteDeclarations(manifest, required)).toEqual([]);
+    });
+});
+
+describe('CLI: non-concrete declarations', () => {
+    it('FAILS check mode when the app declares `latest`, naming reproducibility', () => {
+        put('packages/App/package.json', {
+            name: 'app',
+            dependencies: { '@memberjunction/liba': '1.0.0', declared: '^9.0.0', extdep: 'latest', otherext: '~2.0.1', peerx: '^3.0.0' },
+        });
+        const { code, err } = run();
+        expect(code).toBe(1);
+        expect(err).toContain('non-concrete: extdep@latest');
+        expect(err).toContain('not reproducible');
+    });
+
+    it('REFUSES to write `latest` when every owner declares it, leaving the gate failing', () => {
+        // Both owners say `latest`, so pickRange has nothing concrete to offer.
+        put('packages/LibA/package.json', {
+            name: '@memberjunction/liba',
+            dependencies: { '@memberjunction/libb': '1.0.0', extdep: 'latest', declared: '^9.1.0' },
+        });
+        put('packages/LibB/package.json', {
+            name: '@memberjunction/libb',
+            dependencies: { extdep: 'latest', otherext: '~2.0.1' },
+            peerDependencies: { peerx: '^3.0.0' },
+        });
+
+        const w = run('--write');
+        expect(w.out).toContain('refusing to write non-concrete');
+
+        const written = JSON.parse(readFileSync(join(root, 'packages/App/package.json'), 'utf8'));
+        expect(written.dependencies.extdep).toBeUndefined();
+
+        // Still failing afterwards — the fix belongs on the owners, and the gate keeps saying so.
+        expect(run().code).toBe(1);
     });
 });

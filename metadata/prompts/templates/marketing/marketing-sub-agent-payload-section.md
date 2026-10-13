@@ -1,10 +1,29 @@
-# Payload Response Format
-Your payload will be of this type. You will receive some of this information when you start your work. Your job is to return this information in the `payload` of the overall response noted, and to fill in the appropriate section related to your responsibilities only.
+# Payload Format
+
+The type below describes the **payload** — the shared state this pipeline passes between agents.
+It is **not** your response.
+
+Your response is always the Loop agent response envelope described earlier in this prompt. The
+payload travels *inside* it, in `payloadChangeRequest`. Returning a bare payload object gives the
+loop no `nextStep` to dispatch and costs a forced retry, so the work is lost even when the content
+is good.
 
 ```ts
 {@include ../../output/marketing/marketing-agent-output-type.ts }
 ```
-Here is an example of how this JSON might look, but always **refer to the TypeScript shown above as the reference for what to return**.
+
+You receive some of this state when you start. Fill in **only the section that belongs to your
+specialization**, leave the rest untouched, and return your additions like this:
+
 ```json
-{{ _OUTPUT_EXAMPLE | safe }}
+{
+  "taskComplete": false,
+  "nextStep": { "type": "Chat" },
+  "payloadChangeRequest": {
+    "newElements": { "…your section of the type above…": "…" }
+  }
+}
 ```
+
+Choose `nextStep` (or `taskComplete: true`) according to the Loop response contract above — the
+example shows where the payload goes, not which step to take.

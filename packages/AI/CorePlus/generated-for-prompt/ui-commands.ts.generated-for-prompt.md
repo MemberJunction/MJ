@@ -2,7 +2,8 @@
 type ActionableCommand =
     | OpenResourceCommand
     | OpenURLCommand
-    | CaptureDataSnapshotCommand;
+    | CaptureDataSnapshotCommand
+    | ComposeEmailCommand;
 
 interface OpenResourceCommand {
     type: 'open:resource';  // Command type identifier
@@ -10,7 +11,8 @@ interface OpenResourceCommand {
     icon?: string;  // Optional Font Awesome icon class to display on the button.
     resourceType: ResourceType;  // Type of resource to open.
     entityName?: string;  // Entity name (required for Record type).
-    resourceId: string;  // ID of the resource to open.
+    resourceId?: string;  // ID of the resource to open.
+    keys?: Record<string, string | number>;  // Composite (or explicit) primary-key fields for Record type.
     mode?: 'view' | 'edit';  // Mode for opening the resource.
     parameters?: Record<string, any>;  // Optional parameters to pass to the resource.
 }
@@ -57,5 +59,22 @@ interface ShowNotificationCommand {
     message: string;  // Message text to display.
     severity?: 'success' | 'info' | 'warning' | 'error';  // Severity level affecting icon and color:
     duration?: number;  // Duration in milliseconds before auto-dismissing.
+}
+
+interface ComposeEmailCommand {
+    type: 'compose:email';  // Command type identifier
+    label: string;  // Button label shown to the user.
+    icon?: string;  // Optional Font Awesome icon class to display on the button.
+    to?: string[];  // Recipient addresses.
+    cc?: string[];  // Carbon-copy addresses. Same rule as {@link to}: omit rather than guess.
+    bcc?: string[];  // Blind-carbon-copy addresses. Same rule as {@link to}: omit rather than guess.
+    subject?: string;  // Subject line.
+    body?: string;  // Body text. PLAIN TEXT only — see the note on this interface.
+    artifactId?: string;  // Optional artifact holding the full draft.
+}
+
+interface MailtoURLResult {
+    url: string;  // The built `mailto:` URL.
+    withinLimit: boolean;  // Whether {@link url} is short enough for a mail client to open without truncating the body.
 }
 ```

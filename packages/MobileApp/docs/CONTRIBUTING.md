@@ -43,7 +43,7 @@ Follows MJ's convention, not stock TypeScript:
 - Allowed exceptions (mirroring the code that already does this): the immersive
   dark surface in `voice-mode.tsx`, and static shadow neutrals inside `Shadow.*`.
 - Phase 1 is **light theme only**; a preference for appearance mode is persisted
-  now, but dark-theme *rendering* is a Phase 2 task.
+  now; dark-theme rendering across every surface remains outstanding.
 
 ### Functional decomposition
 - Keep functions small and single-purpose (~30–40 lines). The existing renderers

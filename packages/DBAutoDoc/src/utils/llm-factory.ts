@@ -33,7 +33,7 @@ const PROVIDER_TO_DRIVER_CLASS: Record<string, string> = {
  * @returns BaseLLM instance
  * @throws Error if provider is unknown or instance creation fails
  */
-export function createLLMInstance(provider: string, apiKey: string): BaseLLM {
+export function CreateLLMInstance(provider: string, apiKey: string): BaseLLM {
   const driverClass = PROVIDER_TO_DRIVER_CLASS[provider.toLowerCase()];
 
   if (!driverClass) {
@@ -58,19 +58,34 @@ export function createLLMInstance(provider: string, apiKey: string): BaseLLM {
   return llm;
 }
 
+/** @deprecated Use {@link CreateLLMInstance}. */
+export function createLLMInstance(provider: string, apiKey: string): BaseLLM {
+  return CreateLLMInstance(provider, apiKey);
+}
+
 /**
  * Get the driver class name for a provider
  *
  * @param provider - Provider name
  * @returns Driver class name or undefined if not found
  */
-export function getDriverClassName(provider: string): string | undefined {
+export function GetDriverClassName(provider: string): string | undefined {
   return PROVIDER_TO_DRIVER_CLASS[provider.toLowerCase()];
+}
+
+/** @deprecated Use {@link GetDriverClassName}. */
+export function getDriverClassName(provider: string): string | undefined {
+  return GetDriverClassName(provider);
 }
 
 /**
  * Get list of supported provider names
  */
-export function getSupportedProviders(): string[] {
+export function GetSupportedProviders(): string[] {
   return Object.keys(PROVIDER_TO_DRIVER_CLASS);
+}
+
+/** @deprecated Use {@link GetSupportedProviders}. */
+export function getSupportedProviders(): string[] {
+  return GetSupportedProviders();
 }

@@ -14,7 +14,7 @@
  * object. The dry-run-only boundary lives in the host components; nothing here can apply changes.
  */
 
-import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
+import { AgentToolResult, ValidateStringParam } from '../shared/agent-tool-validation';
 
 /** Minimal shape needed to resolve a row by ID — any row exposing a string `ID`. */
 export interface HasID {
@@ -37,9 +37,14 @@ export const AGENT_CONTEXT_NAME_LIST_CAP = 25;
  * @param names - the full list of names (the caller owns de-duplication / ordering)
  * @param cap - maximum entries to keep (defaults to {@link AGENT_CONTEXT_NAME_LIST_CAP})
  */
-export function capNames(names: readonly string[], cap: number = AGENT_CONTEXT_NAME_LIST_CAP): string[] {
+export function CapNames(names: readonly string[], cap: number = AGENT_CONTEXT_NAME_LIST_CAP): string[] {
     const safeCap = Number.isFinite(cap) && cap >= 0 ? Math.floor(cap) : AGENT_CONTEXT_NAME_LIST_CAP;
     return names.slice(0, safeCap);
+}
+
+/** @deprecated Use {@link CapNames}. */
+export function capNames(names: readonly string[], cap: number = AGENT_CONTEXT_NAME_LIST_CAP): string[] {
+    return CapNames(names, cap);
 }
 
 /**
@@ -52,13 +57,13 @@ export function capNames(names: readonly string[], cap: number = AGENT_CONTEXT_N
  * @param paramName - Name of the parameter, for clear error messages ('processID' | 'runID').
  * @param notFoundNoun - Human noun for the not-found message (e.g. 'bulk operation', 'bulk operation run').
  */
-export function resolveRowByID<T extends HasID>(
+export function ResolveRowByID<T extends HasID>(
     rows: readonly T[],
     rawID: unknown,
     paramName: string,
     notFoundNoun: string,
 ): { ok: true; value: T } | { ok: false; result: AgentToolResult } {
-    const check = validateStringParam(rawID, paramName);
+    const check = ValidateStringParam(rawID, paramName);
     if (!check.ok) {
         return check;
     }
@@ -72,6 +77,16 @@ export function resolveRowByID<T extends HasID>(
         return { ok: false, result: { Success: false, ErrorMessage: `No ${notFoundNoun} found with ID "${id}".` } };
     }
     return { ok: true, value: match };
+}
+
+/** @deprecated Use {@link ResolveRowByID}. */
+export function resolveRowByID<T extends HasID>(
+    rows: readonly T[],
+    rawID: unknown,
+    paramName: string,
+    notFoundNoun: string,
+): { ok: true; value: T } | { ok: false; result: AgentToolResult } {
+    return ResolveRowByID(rows, rawID, paramName, notFoundNoun);
 }
 
 /**
@@ -90,14 +105,14 @@ export function resolveRowByID<T extends HasID>(
  * @param notFoundNoun - human noun for the not-found message (e.g. 'bulk operation')
  * @param nameOf - accessor that yields the display name for a row (Process.Name / Run.ProcessName)
  */
-export function resolveRowByIDOrName<T extends HasID>(
+export function ResolveRowByIDOrName<T extends HasID>(
     rows: readonly T[],
     rawRef: unknown,
     paramName: string,
     notFoundNoun: string,
     nameOf: (row: T) => string,
 ): { ok: true; value: T } | { ok: false; result: AgentToolResult } {
-    const check = validateStringParam(rawRef, paramName);
+    const check = ValidateStringParam(rawRef, paramName);
     if (!check.ok) {
         return check;
     }
@@ -123,12 +138,23 @@ export function resolveRowByIDOrName<T extends HasID>(
         return { ok: true, value: byContains };
     }
 
-    const sample = capNames(rows.map((r) => nameOf(r)).filter((n) => !!n)).join(', ');
+    const sample = CapNames(rows.map((r) => nameOf(r)).filter((n) => !!n)).join(', ');
     const available = sample ? ` Available ${notFoundNoun}s include: ${sample}.` : '';
     return {
         ok: false,
         result: { Success: false, ErrorMessage: `No ${notFoundNoun} found matching "${ref}".${available}` },
     };
+}
+
+/** @deprecated Use {@link ResolveRowByIDOrName}. */
+export function resolveRowByIDOrName<T extends HasID>(
+    rows: readonly T[],
+    rawRef: unknown,
+    paramName: string,
+    notFoundNoun: string,
+    nameOf: (row: T) => string,
+): { ok: true; value: T } | { ok: false; result: AgentToolResult } {
+    return ResolveRowByIDOrName(rows, rawRef, paramName, notFoundNoun, nameOf);
 }
 
 /** A read-only projection of one process row the agent context cares about. */
@@ -161,7 +187,7 @@ export interface StudioContextSnapshot {
  * companion total when truncated), and — when the editor is open on an existing process — the editing
  * process's resolved Name / Entity / WorkType so the agent can refer to it by name rather than GUID.
  */
-export function buildStudioAgentContext(s: StudioContextSnapshot): Record<string, unknown> {
+export function BuildStudioAgentContext(s: StudioContextSnapshot): Record<string, unknown> {
     const visibleNames = s.Filtered.map((p) => p.Name).filter((n) => !!n);
     const editing = s.EditingID
         ? s.Filtered.find((p) => p.ID?.toLowerCase() === s.EditingID?.toLowerCase())
@@ -174,7 +200,7 @@ export function buildStudioAgentContext(s: StudioContextSnapshot): Record<string
         SearchQuery: s.Search ?? '',
         EditingProcessID: s.EditingID ?? null,
         IsRunning: s.IsRunning,
-        VisibleProcessNames: capNames(visibleNames),
+        VisibleProcessNames: CapNames(visibleNames),
     };
     if (visibleNames.length > AGENT_CONTEXT_NAME_LIST_CAP) {
         context['VisibleProcessNameCount'] = visibleNames.length;
@@ -190,6 +216,11 @@ export function buildStudioAgentContext(s: StudioContextSnapshot): Record<string
         }
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildStudioAgentContext}. */
+export function buildStudioAgentContext(s: StudioContextSnapshot): Record<string, unknown> {
+    return BuildStudioAgentContext(s);
 }
 
 /** A read-only projection of one run row the agent context cares about. */
@@ -220,7 +251,7 @@ export interface HistoryContextSnapshot {
  * agent can reason about what ran and whether it was a preview; the distinct status set; the count of
  * dry-run vs real runs; and — when drilled into a detail — the open run's resolved process name.
  */
-export function buildHistoryAgentContext(h: HistoryContextSnapshot): Record<string, unknown> {
+export function BuildHistoryAgentContext(h: HistoryContextSnapshot): Record<string, unknown> {
     const summaries = h.Runs.slice(0, AGENT_CONTEXT_NAME_LIST_CAP).map((r) => ({
         ID: r.ID,
         ProcessName: r.ProcessName ?? null,
@@ -248,4 +279,9 @@ export function buildHistoryAgentContext(h: HistoryContextSnapshot): Record<stri
         context['RecentRunCount'] = h.Runs.length;
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildHistoryAgentContext}. */
+export function buildHistoryAgentContext(h: HistoryContextSnapshot): Record<string, unknown> {
+    return BuildHistoryAgentContext(h);
 }

@@ -14,14 +14,14 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    buildDatabaseDesignerAgentContext,
-    buildEntityNotFoundError,
+    BuildDatabaseDesignerAgentContext,
+    BuildEntityNotFoundError,
     DATABASE_DESIGNER_NAME_LIST_CAP,
     DatabaseDesignerAgentContextInput,
-    entityDisplayName,
+    EntityDisplayName,
     EntityNameCandidate,
-    resolveEntityByIdOrName,
-    stripMJPrefix,
+    ResolveEntityByIdOrName,
+    StripMJPrefix,
 } from '../DatabaseDesigner/database-designer-agent-context';
 
 const baseInput: DatabaseDesignerAgentContextInput = {
@@ -45,20 +45,20 @@ const baseInput: DatabaseDesignerAgentContextInput = {
 
 describe('stripMJPrefix / entityDisplayName', () => {
     it('strips the "MJ: " prefix when present', () => {
-        expect(stripMJPrefix('MJ: AI Models')).toBe('AI Models');
-        expect(stripMJPrefix('Invoices')).toBe('Invoices');
+        expect(StripMJPrefix('MJ: AI Models')).toBe('AI Models');
+        expect(StripMJPrefix('Invoices')).toBe('Invoices');
     });
 
     it('prefers an explicit DisplayName, else the prefix-stripped Name', () => {
-        expect(entityDisplayName('MJ: AI Models')).toBe('AI Models');
-        expect(entityDisplayName('MJ: AI Models', 'Models')).toBe('Models');
-        expect(entityDisplayName('Invoices', null)).toBe('Invoices');
+        expect(EntityDisplayName('MJ: AI Models')).toBe('AI Models');
+        expect(EntityDisplayName('MJ: AI Models', 'Models')).toBe('Models');
+        expect(EntityDisplayName('Invoices', null)).toBe('Invoices');
     });
 });
 
 describe('buildDatabaseDesignerAgentContext', () => {
     it('forwards the browse-state snapshot fields verbatim', () => {
-        const ctx = buildDatabaseDesignerAgentContext({
+        const ctx = BuildDatabaseDesignerAgentContext({
             ...baseInput,
             EntityCount: 5,
             FilteredEntityCount: 5,
@@ -75,26 +75,26 @@ describe('buildDatabaseDesignerAgentContext', () => {
     });
 
     it('derives HasSearch false for empty / whitespace and true for a real term', () => {
-        expect(buildDatabaseDesignerAgentContext({ ...baseInput, SearchText: '' })['HasSearch']).toBe(false);
-        expect(buildDatabaseDesignerAgentContext({ ...baseInput, SearchText: '   ' })['HasSearch']).toBe(false);
-        const ctx = buildDatabaseDesignerAgentContext({ ...baseInput, SearchText: 'invoice' });
+        expect(BuildDatabaseDesignerAgentContext({ ...baseInput, SearchText: '' })['HasSearch']).toBe(false);
+        expect(BuildDatabaseDesignerAgentContext({ ...baseInput, SearchText: '   ' })['HasSearch']).toBe(false);
+        const ctx = BuildDatabaseDesignerAgentContext({ ...baseInput, SearchText: 'invoice' });
         expect(ctx['HasSearch']).toBe(true);
         expect(ctx['SearchText']).toBe('invoice');
     });
 
     it('derives HasActiveFilters from search, schema filter, or a narrowed count', () => {
-        expect(buildDatabaseDesignerAgentContext(baseInput)['HasActiveFilters']).toBe(false);
-        expect(buildDatabaseDesignerAgentContext({ ...baseInput, SchemaFilter: '__mj_UDT' })['HasActiveFilters']).toBe(true);
-        expect(buildDatabaseDesignerAgentContext({ ...baseInput, FilteredEntityCount: 3 })['HasActiveFilters']).toBe(true);
+        expect(BuildDatabaseDesignerAgentContext(baseInput)['HasActiveFilters']).toBe(false);
+        expect(BuildDatabaseDesignerAgentContext({ ...baseInput, SchemaFilter: '__mj_UDT' })['HasActiveFilters']).toBe(true);
+        expect(BuildDatabaseDesignerAgentContext({ ...baseInput, FilteredEntityCount: 3 })['HasActiveFilters']).toBe(true);
     });
 
     it('surfaces the schema filter only when set', () => {
-        expect(buildDatabaseDesignerAgentContext(baseInput)['SchemaFilter']).toBeUndefined();
-        expect(buildDatabaseDesignerAgentContext({ ...baseInput, SchemaFilter: '__mj_UDT' })['SchemaFilter']).toBe('__mj_UDT');
+        expect(BuildDatabaseDesignerAgentContext(baseInput)['SchemaFilter']).toBeUndefined();
+        expect(BuildDatabaseDesignerAgentContext({ ...baseInput, SchemaFilter: '__mj_UDT' })['SchemaFilter']).toBe('__mj_UDT');
     });
 
     it('includes selected-entity detail (schema, table, field count, fields, related) only when selected', () => {
-        const ctx = buildDatabaseDesignerAgentContext({
+        const ctx = BuildDatabaseDesignerAgentContext({
             ...baseInput,
             SelectedEntityId: 'e1',
             SelectedEntityName: 'MJ: AI Models',
@@ -117,7 +117,7 @@ describe('buildDatabaseDesignerAgentContext', () => {
     });
 
     it('omits selected-entity detail when nothing is selected', () => {
-        const ctx = buildDatabaseDesignerAgentContext({
+        const ctx = BuildDatabaseDesignerAgentContext({
             ...baseInput,
             SelectedEntitySchema: 'ignored',
             SelectedEntityFields: [{ Name: 'X', Type: 'INT', IsNullable: false }],
@@ -130,24 +130,24 @@ describe('buildDatabaseDesignerAgentContext', () => {
 
     it('bounds the available-entity list and reports the true total when truncated', () => {
         const names = Array.from({ length: DATABASE_DESIGNER_NAME_LIST_CAP + 7 }, (_, i) => `Entity ${i}`);
-        const ctx = buildDatabaseDesignerAgentContext({ ...baseInput, AvailableEntityNames: names });
+        const ctx = BuildDatabaseDesignerAgentContext({ ...baseInput, AvailableEntityNames: names });
         expect((ctx['AvailableEntities'] as string[]).length).toBe(DATABASE_DESIGNER_NAME_LIST_CAP);
         expect(ctx['AvailableEntityCount']).toBe(names.length);
     });
 
     it('does not report AvailableEntityCount when the list fits under the cap', () => {
-        const ctx = buildDatabaseDesignerAgentContext({ ...baseInput, AvailableEntityNames: ['A', 'B'] });
+        const ctx = BuildDatabaseDesignerAgentContext({ ...baseInput, AvailableEntityNames: ['A', 'B'] });
         expect(ctx['AvailableEntities']).toEqual(['A', 'B']);
         expect(ctx['AvailableEntityCount']).toBeUndefined();
     });
 
     it('bounds schema groups and reports the count only when over the cap', () => {
         const groups = Array.from({ length: DATABASE_DESIGNER_NAME_LIST_CAP + 3 }, (_, i) => ({ SchemaName: `s${i}`, EntityCount: i }));
-        const ctx = buildDatabaseDesignerAgentContext({ ...baseInput, SchemaGroups: groups });
+        const ctx = BuildDatabaseDesignerAgentContext({ ...baseInput, SchemaGroups: groups });
         expect((ctx['SchemaGroups'] as unknown[]).length).toBe(DATABASE_DESIGNER_NAME_LIST_CAP);
         expect(ctx['SchemaGroupCount']).toBe(groups.length);
 
-        const few = buildDatabaseDesignerAgentContext({ ...baseInput, SchemaGroups: [{ SchemaName: 's', EntityCount: 1 }] });
+        const few = BuildDatabaseDesignerAgentContext({ ...baseInput, SchemaGroups: [{ SchemaName: 's', EntityCount: 1 }] });
         expect(few['SchemaGroupCount']).toBeUndefined();
     });
 });
@@ -160,33 +160,33 @@ describe('resolveEntityByIdOrName', () => {
     ];
 
     it('resolves by exact ID (case-insensitive)', () => {
-        expect(resolveEntityByIdOrName('ID-AI', candidates)?.ID).toBe('id-ai');
+        expect(ResolveEntityByIdOrName('ID-AI', candidates)?.ID).toBe('id-ai');
     });
 
     it('resolves by registered name (case-insensitive)', () => {
-        expect(resolveEntityByIdOrName('invoices', candidates)?.ID).toBe('id-inv');
+        expect(ResolveEntityByIdOrName('invoices', candidates)?.ID).toBe('id-inv');
     });
 
     it('resolves the DISPLAY name the user reads ("AI Models", not "MJ: AI Models")', () => {
-        expect(resolveEntityByIdOrName('AI Models', candidates)?.ID).toBe('id-ai');
-        expect(resolveEntityByIdOrName('ai models', candidates)?.ID).toBe('id-ai');
+        expect(ResolveEntityByIdOrName('AI Models', candidates)?.ID).toBe('id-ai');
+        expect(ResolveEntityByIdOrName('ai models', candidates)?.ID).toBe('id-ai');
     });
 
     it('resolves an input that itself carries the "MJ: " prefix', () => {
-        expect(resolveEntityByIdOrName('MJ: AI Models', candidates)?.ID).toBe('id-ai');
+        expect(ResolveEntityByIdOrName('MJ: AI Models', candidates)?.ID).toBe('id-ai');
     });
 
     it('prefers an explicit DisplayName over the registered name', () => {
-        expect(resolveEntityByIdOrName('Clients', candidates)?.ID).toBe('id-cust');
+        expect(ResolveEntityByIdOrName('Clients', candidates)?.ID).toBe('id-cust');
     });
 
     it('falls back to a partial (contains) match on the display name', () => {
-        expect(resolveEntityByIdOrName('model', candidates)?.ID).toBe('id-ai');
+        expect(ResolveEntityByIdOrName('model', candidates)?.ID).toBe('id-ai');
     });
 
     it('returns null on a miss / blank input', () => {
-        expect(resolveEntityByIdOrName('nonexistent', candidates)).toBeNull();
-        expect(resolveEntityByIdOrName('   ', candidates)).toBeNull();
+        expect(ResolveEntityByIdOrName('nonexistent', candidates)).toBeNull();
+        expect(ResolveEntityByIdOrName('   ', candidates)).toBeNull();
     });
 });
 
@@ -196,7 +196,7 @@ describe('buildEntityNotFoundError', () => {
             { ID: '1', Name: 'MJ: AI Models', DisplayName: null },
             { ID: '2', Name: 'Invoices', DisplayName: null },
         ];
-        const msg = buildEntityNotFoundError('bogus', candidates);
+        const msg = BuildEntityNotFoundError('bogus', candidates);
         expect(msg).toContain('bogus');
         expect(msg).toContain('AI Models');
         expect(msg).toContain('Invoices');
@@ -204,6 +204,6 @@ describe('buildEntityNotFoundError', () => {
     });
 
     it('handles an empty candidate list gracefully', () => {
-        expect(buildEntityNotFoundError('x', [])).toContain('(none)');
+        expect(BuildEntityNotFoundError('x', [])).toContain('(none)');
     });
 });

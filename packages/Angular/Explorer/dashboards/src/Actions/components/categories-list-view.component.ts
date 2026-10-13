@@ -272,12 +272,48 @@ interface CategoryWithStats extends MJActionCategoryEntity {
   `]
 })
 export class CategoriesListViewComponent extends BaseAngularComponent implements OnInit, OnDestroy {
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
+  @Output() OpenEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
 
   public isLoading = true;
-  public categories: CategoryWithStats[] = [];
-  public filteredCategories: CategoryWithStats[] = [];
-  public searchTerm$ = new BehaviorSubject<string>('');
+  public Categories: CategoryWithStats[] = [];
+
+  /** @deprecated Use {@link Categories}. */
+  public get categories(): CategoryWithStats[] {
+    return this.Categories;
+  }
+  /** @deprecated Use {@link Categories}. */
+  public set categories(value: CategoryWithStats[]) {
+    this.Categories = value;
+  }
+  public FilteredCategories: CategoryWithStats[] = [];
+
+  /** @deprecated Use {@link FilteredCategories}. */
+  public get filteredCategories(): CategoryWithStats[] {
+    return this.FilteredCategories;
+  }
+  /** @deprecated Use {@link FilteredCategories}. */
+  public set filteredCategories(value: CategoryWithStats[]) {
+    this.FilteredCategories = value;
+  }
+  public SearchTerm$ = new BehaviorSubject<string>('');
+
+  /** @deprecated Use {@link SearchTerm$}. */
+  public get searchTerm$() {
+    return this.SearchTerm$;
+  }
+  /** @deprecated Use {@link SearchTerm$}. */
+  public set searchTerm$(value) {
+    this.SearchTerm$ = value;
+  }
 
   private destroy$ = new Subject<void>();
 
@@ -294,7 +330,7 @@ export class CategoriesListViewComponent extends BaseAngularComponent implements
   }
 
   private setupSearch(): void {
-    this.searchTerm$.pipe(
+    this.SearchTerm$.pipe(
       debounceTime(300),
       distinctUntilChanged(),
       takeUntil(this.destroy$)
@@ -333,7 +369,7 @@ export class CategoriesListViewComponent extends BaseAngularComponent implements
       console.log(`Loaded ${categories.length} categories and ${actions.length} actions`);
 
       // Calculate stats for each category
-      this.categories = categories.map(category => {
+      this.Categories = categories.map(category => {
         const categoryActions = actions.filter(a => UUIDsEqual(a.CategoryID, category.ID));
         return {
           ...category,
@@ -347,41 +383,56 @@ export class CategoriesListViewComponent extends BaseAngularComponent implements
     } catch (error) {
       console.error('Error loading categories data:', error);
       LogError('Failed to load categories data', undefined, error);
-      this.categories = [];
-      this.filteredCategories = [];
+      this.Categories = [];
+      this.FilteredCategories = [];
     } finally {
       this.isLoading = false;
     }
   }
 
   private applyFilter(): void {
-    const searchTerm = this.searchTerm$.value.toLowerCase();
+    const searchTerm = this.SearchTerm$.value.toLowerCase();
     
     if (!searchTerm) {
-      this.filteredCategories = [...this.categories];
+      this.FilteredCategories = [...this.Categories];
     } else {
-      this.filteredCategories = this.categories.filter(category => 
+      this.FilteredCategories = this.Categories.filter(category => 
         category.Name.toLowerCase().includes(searchTerm) ||
         (category.Description || '').toLowerCase().includes(searchTerm)
       );
     }
   }
 
-  public onSearchChange(searchTerm: string): void {
-    this.searchTerm$.next(searchTerm);
+  public OnSearchChange(searchTerm: string): void {
+    this.SearchTerm$.next(searchTerm);
   }
 
-  public openCategory(category: MJActionCategoryEntity): void {
-    this.openEntityRecord.emit({
+  /** @deprecated Use {@link OnSearchChange}. */
+  public onSearchChange(searchTerm: string): void {
+    return this.OnSearchChange(searchTerm);
+  }
+
+  public OpenCategory(category: MJActionCategoryEntity): void {
+    this.OpenEntityRecord.emit({
       entityName: 'MJ: Action Categories',
       recordId: category.ID
     });
   }
 
-  public viewActions(category: MJActionCategoryEntity, event: Event): void {
+  /** @deprecated Use {@link OpenCategory}. */
+  public openCategory(category: MJActionCategoryEntity): void {
+    return this.OpenCategory(category);
+  }
+
+  public ViewActions(category: MJActionCategoryEntity, event: Event): void {
     event.stopPropagation();
     // This could navigate to the actions list with a pre-applied category filter
     // For now, just open the category
-    this.openCategory(category);
+    this.OpenCategory(category);
+  }
+
+  /** @deprecated Use {@link ViewActions}. */
+  public viewActions(category: MJActionCategoryEntity, event: Event): void {
+    return this.ViewActions(category, event);
   }
 }

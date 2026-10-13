@@ -34,44 +34,260 @@ interface MatrixCell {
   styleUrls: ['./model-prompt-priority-matrix.component.css']
 })
 export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent implements OnInit, OnDestroy {
-  @Input() selectedPrompts: MJAIPromptEntityExtended[] = [];
-  @Input() selectedModels: MJAIModelEntityExtended[] = [];
+  @Input() SelectedPrompts: MJAIPromptEntityExtended[] = [];
+
+  /** @deprecated Use {@link SelectedPrompts}. */
+  @Input() set selectedPrompts(value: MJAIPromptEntityExtended[]) {
+    this.SelectedPrompts = value;
+  }
+  /** @deprecated Use {@link SelectedPrompts}. */
+  get selectedPrompts(): MJAIPromptEntityExtended[] {
+    return this.SelectedPrompts;
+  }
+  @Input() SelectedModels: MJAIModelEntityExtended[] = [];
+
+  /** @deprecated Use {@link SelectedModels}. */
+  @Input() set selectedModels(value: MJAIModelEntityExtended[]) {
+    this.SelectedModels = value;
+  }
+  /** @deprecated Use {@link SelectedModels}. */
+  get selectedModels(): MJAIModelEntityExtended[] {
+    return this.SelectedModels;
+  }
   @Input() readonly = false;
   
-  @Output() associationsChange = new EventEmitter<PromptModelAssociation[]>();
-  @Output() stateChange = new EventEmitter<any>();
-  @Output() promptSelected = new EventEmitter<MJAIPromptEntityExtended>();
+  @Output() AssociationsChange = new EventEmitter<PromptModelAssociation[]>();
+
+  /**
+   * @deprecated Use {@link AssociationsChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (associationsChange) keeps working. Must stay AFTER AssociationsChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() associationsChange = this.AssociationsChange;
+  @Output() StateChange = new EventEmitter<any>();
+
+  /**
+   * @deprecated Use {@link StateChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (stateChange) keeps working. Must stay AFTER StateChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() stateChange = this.StateChange;
+  @Output() PromptSelected = new EventEmitter<MJAIPromptEntityExtended>();
+
+  /**
+   * @deprecated Use {@link PromptSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (promptSelected) keeps working. Must stay AFTER PromptSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() promptSelected = this.PromptSelected;
   
   // Data
-  public prompts: MJAIPromptEntityExtended[] = [];
-  public models: MJAIModelEntityExtended[] = [];
-  public associations: PromptModelAssociation[] = [];
-  public matrix: MatrixCell[][] = [];
+  public Prompts: MJAIPromptEntityExtended[] = [];
+
+  /** @deprecated Use {@link Prompts}. */
+  public get prompts(): MJAIPromptEntityExtended[] {
+    return this.Prompts;
+  }
+  /** @deprecated Use {@link Prompts}. */
+  public set prompts(value: MJAIPromptEntityExtended[]) {
+    this.Prompts = value;
+  }
+  public Models: MJAIModelEntityExtended[] = [];
+
+  /** @deprecated Use {@link Models}. */
+  public get models(): MJAIModelEntityExtended[] {
+    return this.Models;
+  }
+  /** @deprecated Use {@link Models}. */
+  public set models(value: MJAIModelEntityExtended[]) {
+    this.Models = value;
+  }
+  public Associations: PromptModelAssociation[] = [];
+
+  /** @deprecated Use {@link Associations}. */
+  public get associations(): PromptModelAssociation[] {
+    return this.Associations;
+  }
+  /** @deprecated Use {@link Associations}. */
+  public set associations(value: PromptModelAssociation[]) {
+    this.Associations = value;
+  }
+  public Matrix: MatrixCell[][] = [];
+
+  /** @deprecated Use {@link Matrix}. */
+  public get matrix(): MatrixCell[][] {
+    return this.Matrix;
+  }
+  /** @deprecated Use {@link Matrix}. */
+  public set matrix(value: MatrixCell[][]) {
+    this.Matrix = value;
+  }
   
   // UI State
   public isLoading = false;
-  public loadingMessage = '';
+  public LoadingMessage = '';
+
+  /** @deprecated Use {@link LoadingMessage}. */
+  public get loadingMessage() {
+    return this.LoadingMessage;
+  }
+  /** @deprecated Use {@link LoadingMessage}. */
+  public set loadingMessage(value) {
+    this.LoadingMessage = value;
+  }
   public error: string | null = null;
-  public viewMode: 'matrix' | 'list' = 'matrix';
-  public sortBy: 'prompt' | 'model' | 'priority' = 'priority';
-  public sortDirection: 'asc' | 'desc' = 'asc';
-  public showInactiveAssociations = false;
+  public ViewMode: 'matrix' | 'list' = 'matrix';
+
+  /** @deprecated Use {@link ViewMode}. */
+  public get viewMode(): 'matrix' | 'list' {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  public set viewMode(value: 'matrix' | 'list') {
+    this.ViewMode = value;
+  }
+  public SortBy: 'prompt' | 'model' | 'priority' = 'priority';
+
+  /** @deprecated Use {@link SortBy}. */
+  public get sortBy(): 'prompt' | 'model' | 'priority' {
+    return this.SortBy;
+  }
+  /** @deprecated Use {@link SortBy}. */
+  public set sortBy(value: 'prompt' | 'model' | 'priority') {
+    this.SortBy = value;
+  }
+  public SortDirection: 'asc' | 'desc' = 'asc';
+
+  /** @deprecated Use {@link SortDirection}. */
+  public get sortDirection(): 'asc' | 'desc' {
+    return this.SortDirection;
+  }
+  /** @deprecated Use {@link SortDirection}. */
+  public set sortDirection(value: 'asc' | 'desc') {
+    this.SortDirection = value;
+  }
+  public ShowInactiveAssociations = false;
+
+  /** @deprecated Use {@link ShowInactiveAssociations}. */
+  public get showInactiveAssociations() {
+    return this.ShowInactiveAssociations;
+  }
+  /** @deprecated Use {@link ShowInactiveAssociations}. */
+  public set showInactiveAssociations(value) {
+    this.ShowInactiveAssociations = value;
+  }
   
   // Selection and editing
-  public selectedCells: Set<string> = new Set();
-  public editingCell: string | null = null;
-  public bulkEditMode = false;
-  public bulkEditPriority = 1;
-  public bulkEditStatus = 'Active';
+  public SelectedCells: Set<string> = new Set();
+
+  /** @deprecated Use {@link SelectedCells}. */
+  public get selectedCells(): Set<string> {
+    return this.SelectedCells;
+  }
+  /** @deprecated Use {@link SelectedCells}. */
+  public set selectedCells(value: Set<string>) {
+    this.SelectedCells = value;
+  }
+  public EditingCell: string | null = null;
+
+  /** @deprecated Use {@link EditingCell}. */
+  public get editingCell(): string | null {
+    return this.EditingCell;
+  }
+  /** @deprecated Use {@link EditingCell}. */
+  public set editingCell(value: string | null) {
+    this.EditingCell = value;
+  }
+  public BulkEditMode = false;
+
+  /** @deprecated Use {@link BulkEditMode}. */
+  public get bulkEditMode() {
+    return this.BulkEditMode;
+  }
+  /** @deprecated Use {@link BulkEditMode}. */
+  public set bulkEditMode(value) {
+    this.BulkEditMode = value;
+  }
+  public BulkEditPriority = 1;
+
+  /** @deprecated Use {@link BulkEditPriority}. */
+  public get bulkEditPriority() {
+    return this.BulkEditPriority;
+  }
+  /** @deprecated Use {@link BulkEditPriority}. */
+  public set bulkEditPriority(value) {
+    this.BulkEditPriority = value;
+  }
+  public BulkEditStatus = 'Active';
+
+  /** @deprecated Use {@link BulkEditStatus}. */
+  public get bulkEditStatus() {
+    return this.BulkEditStatus;
+  }
+  /** @deprecated Use {@link BulkEditStatus}. */
+  public set bulkEditStatus(value) {
+    this.BulkEditStatus = value;
+  }
   
   // Filtering
-  public promptFilter$ = new BehaviorSubject<string>('');
-  public modelFilter$ = new BehaviorSubject<string>('');
-  public statusFilter$ = new BehaviorSubject<string>('all');
+  public PromptFilter$ = new BehaviorSubject<string>('');
+
+  /** @deprecated Use {@link PromptFilter$}. */
+  public get promptFilter$() {
+    return this.PromptFilter$;
+  }
+  /** @deprecated Use {@link PromptFilter$}. */
+  public set promptFilter$(value) {
+    this.PromptFilter$ = value;
+  }
+  public ModelFilter$ = new BehaviorSubject<string>('');
+
+  /** @deprecated Use {@link ModelFilter$}. */
+  public get modelFilter$() {
+    return this.ModelFilter$;
+  }
+  /** @deprecated Use {@link ModelFilter$}. */
+  public set modelFilter$(value) {
+    this.ModelFilter$ = value;
+  }
+  public StatusFilter$ = new BehaviorSubject<string>('all');
+
+  /** @deprecated Use {@link StatusFilter$}. */
+  public get statusFilter$() {
+    return this.StatusFilter$;
+  }
+  /** @deprecated Use {@link StatusFilter$}. */
+  public set statusFilter$(value) {
+    this.StatusFilter$ = value;
+  }
   
   // Performance metrics
-  public performanceData: { [key: string]: any } = {};
-  public showPerformanceOverlay = false;
+  public PerformanceData: { [key: string]: any } = {};
+
+  /** @deprecated Use {@link PerformanceData}. */
+  public get performanceData(): { [key: string]: any } {
+    return this.PerformanceData;
+  }
+  /** @deprecated Use {@link PerformanceData}. */
+  public set performanceData(value: { [key: string]: any }) {
+    this.PerformanceData = value;
+  }
+  public ShowPerformanceOverlay = false;
+
+  /** @deprecated Use {@link ShowPerformanceOverlay}. */
+  public get showPerformanceOverlay() {
+    return this.ShowPerformanceOverlay;
+  }
+  /** @deprecated Use {@link ShowPerformanceOverlay}. */
+  public set showPerformanceOverlay(value) {
+    this.ShowPerformanceOverlay = value;
+  }
   
   private destroy$ = new Subject<void>();
   
@@ -90,7 +306,7 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
     try {
       this.isLoading = true;
       this.error = null;
-      this.loadingMessage = 'Loading prompts, models, and associations...';
+      this.LoadingMessage = 'Loading prompts, models, and associations...';
       
       const [prompts, models, associations] = await Promise.all([
         this.loadPrompts(),
@@ -98,8 +314,8 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
         this.loadAssociations()
       ]);
       
-      this.prompts = this.selectedPrompts.length > 0 ? this.selectedPrompts : prompts;
-      this.models = this.selectedModels.length > 0 ? this.selectedModels : models;
+      this.Prompts = this.SelectedPrompts.length > 0 ? this.SelectedPrompts : prompts;
+      this.Models = this.SelectedModels.length > 0 ? this.SelectedModels : models;
       
       this.buildAssociations(associations);
       this.buildMatrix();
@@ -168,15 +384,15 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
   }
   
   private buildAssociations(dbAssociations: MJAIPromptModelEntity[]): void {
-    this.associations = [];
+    this.Associations = [];
     
     // Create associations for existing database records
     dbAssociations.forEach(dbAssoc => {
-      const prompt = this.prompts.find(p => UUIDsEqual(p.ID, dbAssoc.PromptID));
-      const model = this.models.find(m => UUIDsEqual(m.ID, dbAssoc.ModelID));
+      const prompt = this.Prompts.find(p => UUIDsEqual(p.ID, dbAssoc.PromptID));
+      const model = this.Models.find(m => UUIDsEqual(m.ID, dbAssoc.ModelID));
       
       if (prompt && model) {
-        this.associations.push({
+        this.Associations.push({
           promptId: prompt.ID,
           promptName: prompt.Name,
           modelId: model.ID,
@@ -192,17 +408,17 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
   }
   
   private buildMatrix(): void {
-    this.matrix = [];
+    this.Matrix = [];
     
-    this.prompts.forEach((prompt, promptIndex) => {
-      this.matrix[promptIndex] = [];
+    this.Prompts.forEach((prompt, promptIndex) => {
+      this.Matrix[promptIndex] = [];
       
-      this.models.forEach((model, modelIndex) => {
-        const association = this.associations.find(a => 
+      this.Models.forEach((model, modelIndex) => {
+        const association = this.Associations.find(a => 
           UUIDsEqual(a.promptId, prompt.ID) && UUIDsEqual(a.modelId, model.ID)
         );
         
-        this.matrix[promptIndex][modelIndex] = {
+        this.Matrix[promptIndex][modelIndex] = {
           promptId: prompt.ID,
           modelId: model.ID,
           association: association || null,
@@ -221,11 +437,16 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
     return true;
   }
   
-  public getCellKey(promptIndex: number, modelIndex: number): string {
+  public GetCellKey(promptIndex: number, modelIndex: number): string {
     return `${promptIndex}-${modelIndex}`;
   }
+
+  /** @deprecated Use {@link GetCellKey}. */
+  public getCellKey(promptIndex: number, modelIndex: number): string {
+    return this.GetCellKey(promptIndex, modelIndex);
+  }
   
-  public getCellClass(cell: MatrixCell): string {
+  public GetCellClass(cell: MatrixCell): string {
     const classes = ['matrix-cell'];
     
     if (cell.association) {
@@ -251,65 +472,80 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
       classes.push('cannot-assign');
     }
     
-    const cellKey = this.getCellKey(
-      this.prompts.findIndex(p => UUIDsEqual(p.ID, cell.promptId)),
-      this.models.findIndex(m => UUIDsEqual(m.ID, cell.modelId))
+    const cellKey = this.GetCellKey(
+      this.Prompts.findIndex(p => UUIDsEqual(p.ID, cell.promptId)),
+      this.Models.findIndex(m => UUIDsEqual(m.ID, cell.modelId))
     );
     
-    if (this.selectedCells.has(cellKey)) {
+    if (this.SelectedCells.has(cellKey)) {
       classes.push('selected');
     }
     
-    if (this.editingCell === cellKey) {
+    if (this.EditingCell === cellKey) {
       classes.push('editing');
     }
     
     return classes.join(' ');
   }
+
+  /** @deprecated Use {@link GetCellClass}. */
+  public getCellClass(cell: MatrixCell): string {
+    return this.GetCellClass(cell);
+  }
   
-  public onCellClick(promptIndex: number, modelIndex: number, event: MouseEvent): void {
+  public OnCellClick(promptIndex: number, modelIndex: number, event: MouseEvent): void {
     if (this.readonly) return;
     
-    const cellKey = this.getCellKey(promptIndex, modelIndex);
-    const cell = this.matrix[promptIndex][modelIndex];
+    const cellKey = this.GetCellKey(promptIndex, modelIndex);
+    const cell = this.Matrix[promptIndex][modelIndex];
     
     if (event.ctrlKey || event.metaKey) {
       // Multi-select mode
-      if (this.selectedCells.has(cellKey)) {
-        this.selectedCells.delete(cellKey);
+      if (this.SelectedCells.has(cellKey)) {
+        this.SelectedCells.delete(cellKey);
       } else {
-        this.selectedCells.add(cellKey);
+        this.SelectedCells.add(cellKey);
       }
-    } else if (event.shiftKey && this.selectedCells.size > 0) {
+    } else if (event.shiftKey && this.SelectedCells.size > 0) {
       // Range select mode
       this.selectRange(promptIndex, modelIndex);
     } else {
       // Single select mode
-      this.selectedCells.clear();
+      this.SelectedCells.clear();
       if (cell.canAssign) {
-        this.selectedCells.add(cellKey);
+        this.SelectedCells.add(cellKey);
       }
     }
   }
+
+  /** @deprecated Use {@link OnCellClick}. */
+  public onCellClick(promptIndex: number, modelIndex: number, event: MouseEvent): void {
+    return this.OnCellClick(promptIndex, modelIndex, event);
+  }
   
-  public onCellDoubleClick(promptIndex: number, modelIndex: number): void {
+  public OnCellDoubleClick(promptIndex: number, modelIndex: number): void {
     if (this.readonly) return;
     
-    const cellKey = this.getCellKey(promptIndex, modelIndex);
-    const cell = this.matrix[promptIndex][modelIndex];
+    const cellKey = this.GetCellKey(promptIndex, modelIndex);
+    const cell = this.Matrix[promptIndex][modelIndex];
     
     if (cell.canAssign) {
-      this.editingCell = cellKey;
+      this.EditingCell = cellKey;
       
       if (!cell.association) {
         // Create new association
-        this.createAssociation(cell.promptId, cell.modelId);
+        this.CreateAssociation(cell.promptId, cell.modelId);
       }
     }
   }
+
+  /** @deprecated Use {@link OnCellDoubleClick}. */
+  public onCellDoubleClick(promptIndex: number, modelIndex: number): void {
+    return this.OnCellDoubleClick(promptIndex, modelIndex);
+  }
   
   private selectRange(endPromptIndex: number, endModelIndex: number): void {
-    const selectedKeys = Array.from(this.selectedCells);
+    const selectedKeys = Array.from(this.SelectedCells);
     if (selectedKeys.length === 0) return;
     
     const lastSelectedKey = selectedKeys[selectedKeys.length - 1];
@@ -320,21 +556,21 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
     const minModelIndex = Math.min(startModelIndex, endModelIndex);
     const maxModelIndex = Math.max(startModelIndex, endModelIndex);
     
-    this.selectedCells.clear();
+    this.SelectedCells.clear();
     
     for (let p = minPromptIndex; p <= maxPromptIndex; p++) {
       for (let m = minModelIndex; m <= maxModelIndex; m++) {
-        const cell = this.matrix[p][m];
+        const cell = this.Matrix[p][m];
         if (cell && cell.canAssign) {
-          this.selectedCells.add(this.getCellKey(p, m));
+          this.SelectedCells.add(this.GetCellKey(p, m));
         }
       }
     }
   }
   
-  public createAssociation(promptId: string, modelId: string, priority: number = 1): void {
-    const prompt = this.prompts.find(p => UUIDsEqual(p.ID, promptId));
-    const model = this.models.find(m => UUIDsEqual(m.ID, modelId));
+  public CreateAssociation(promptId: string, modelId: string, priority: number = 1): void {
+    const prompt = this.Prompts.find(p => UUIDsEqual(p.ID, promptId));
+    const model = this.Models.find(m => UUIDsEqual(m.ID, modelId));
     
     if (!prompt || !model) return;
     
@@ -350,18 +586,23 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
       isModified: false
     };
     
-    this.associations.push(newAssociation);
+    this.Associations.push(newAssociation);
     this.buildMatrix();
-    this.associationsChange.emit(this.associations);
+    this.AssociationsChange.emit(this.Associations);
+  }
+
+  /** @deprecated Use {@link CreateAssociation}. */
+  public createAssociation(promptId: string, modelId: string, priority: number = 1): void {
+    return this.CreateAssociation(promptId, modelId, priority);
   }
   
-  public updateAssociation(promptId: string, modelId: string, updates: Partial<PromptModelAssociation>): void {
-    const associationIndex = this.associations.findIndex(a => 
+  public UpdateAssociation(promptId: string, modelId: string, updates: Partial<PromptModelAssociation>): void {
+    const associationIndex = this.Associations.findIndex(a => 
       a.promptId === promptId && a.modelId === modelId
     );
     
     if (associationIndex >= 0) {
-      const association = this.associations[associationIndex];
+      const association = this.Associations[associationIndex];
       Object.assign(association, updates);
       
       if (!association.isNew) {
@@ -369,71 +610,91 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
       }
       
       this.buildMatrix();
-      this.associationsChange.emit(this.associations);
+      this.AssociationsChange.emit(this.Associations);
     }
   }
+
+  /** @deprecated Use {@link UpdateAssociation}. */
+  public updateAssociation(promptId: string, modelId: string, updates: Partial<PromptModelAssociation>): void {
+    return this.UpdateAssociation(promptId, modelId, updates);
+  }
   
-  public removeAssociation(promptId: string, modelId: string): void {
-    const associationIndex = this.associations.findIndex(a => 
+  public RemoveAssociation(promptId: string, modelId: string): void {
+    const associationIndex = this.Associations.findIndex(a => 
       a.promptId === promptId && a.modelId === modelId
     );
     
     if (associationIndex >= 0) {
-      this.associations.splice(associationIndex, 1);
+      this.Associations.splice(associationIndex, 1);
       this.buildMatrix();
-      this.associationsChange.emit(this.associations);
+      this.AssociationsChange.emit(this.Associations);
     }
   }
+
+  /** @deprecated Use {@link RemoveAssociation}. */
+  public removeAssociation(promptId: string, modelId: string): void {
+    return this.RemoveAssociation(promptId, modelId);
+  }
   
-  public bulkUpdateSelectedCells(): void {
-    if (this.selectedCells.size === 0) return;
+  public BulkUpdateSelectedCells(): void {
+    if (this.SelectedCells.size === 0) return;
     
-    this.selectedCells.forEach(cellKey => {
+    this.SelectedCells.forEach(cellKey => {
       const [promptIndex, modelIndex] = cellKey.split('-').map(Number);
-      const cell = this.matrix[promptIndex][modelIndex];
+      const cell = this.Matrix[promptIndex][modelIndex];
       
       if (cell && cell.canAssign) {
         if (cell.association) {
-          this.updateAssociation(cell.promptId, cell.modelId, {
-            priority: this.bulkEditPriority,
-            status: this.bulkEditStatus
+          this.UpdateAssociation(cell.promptId, cell.modelId, {
+            priority: this.BulkEditPriority,
+            status: this.BulkEditStatus
           });
         } else {
-          this.createAssociation(cell.promptId, cell.modelId, this.bulkEditPriority);
+          this.CreateAssociation(cell.promptId, cell.modelId, this.BulkEditPriority);
         }
       }
     });
     
-    this.selectedCells.clear();
-    this.bulkEditMode = false;
+    this.SelectedCells.clear();
+    this.BulkEditMode = false;
+  }
+
+  /** @deprecated Use {@link BulkUpdateSelectedCells}. */
+  public bulkUpdateSelectedCells(): void {
+    return this.BulkUpdateSelectedCells();
   }
   
-  public bulkRemoveSelectedCells(): void {
-    if (this.selectedCells.size === 0) return;
+  public BulkRemoveSelectedCells(): void {
+    if (this.SelectedCells.size === 0) return;
     
-    this.selectedCells.forEach(cellKey => {
+    this.SelectedCells.forEach(cellKey => {
       const [promptIndex, modelIndex] = cellKey.split('-').map(Number);
-      const cell = this.matrix[promptIndex][modelIndex];
+      const cell = this.Matrix[promptIndex][modelIndex];
       
       if (cell && cell.association) {
-        this.removeAssociation(cell.promptId, cell.modelId);
+        this.RemoveAssociation(cell.promptId, cell.modelId);
       }
     });
     
-    this.selectedCells.clear();
+    this.SelectedCells.clear();
+  }
+
+  /** @deprecated Use {@link BulkRemoveSelectedCells}. */
+  public bulkRemoveSelectedCells(): void {
+    return this.BulkRemoveSelectedCells();
   }
   
-  public async saveChanges(): Promise<void> {
+  public async SaveChanges(): Promise<void> {
     try {
       this.isLoading = true;
-      this.loadingMessage = 'Saving associations...';
+      this.LoadingMessage = 'Saving associations...';
       
       const md = this.ProviderToUse;
       if (!md) throw new Error('Metadata provider not available');
       
       const savePromises: Promise<boolean>[] = [];
       
-      for (const association of this.associations) {
+      for (const association of this.Associations) {
         if (association.isNew || association.isModified) {
           let entity: MJAIPromptModelEntity;
           
@@ -474,50 +735,90 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
       this.isLoading = false;
     }
   }
-  
-  public hasUnsavedChanges(): boolean {
-    return this.associations.some(a => a.isNew || a.isModified);
+
+  /** @deprecated Use {@link SaveChanges}. */
+  public async saveChanges(): Promise<void> {
+    return this.SaveChanges();
   }
   
-  public async discardChanges(): Promise<void> {
-    if (!this.hasUnsavedChanges()) return;
+  public HasUnsavedChanges(): boolean {
+    return this.Associations.some(a => a.isNew || a.isModified);
+  }
+
+  /** @deprecated Use {@link HasUnsavedChanges}. */
+  public hasUnsavedChanges(): boolean {
+    return this.HasUnsavedChanges();
+  }
+  
+  public async DiscardChanges(): Promise<void> {
+    if (!this.HasUnsavedChanges()) return;
 
     const confirmed = await this.confirmService.Confirm('Discard all unsaved changes?');
     if (confirmed) {
       this.loadData();
     }
   }
+
+  /** @deprecated Use {@link DiscardChanges}. */
+  public async discardChanges(): Promise<void> {
+    return this.DiscardChanges();
+  }
   
+  public GetAssociationCount(): number {
+    return this.Associations.filter(a => a.status === 'Active').length;
+  }
+
+  /** @deprecated Use {@link GetAssociationCount}. */
   public getAssociationCount(): number {
-    return this.associations.filter(a => a.status === 'Active').length;
+    return this.GetAssociationCount();
   }
   
+  public GetModelAssociationCount(modelId: string): number {
+    return this.Associations.filter(a => a.modelId === modelId && a.status === 'Active').length;
+  }
+
+  /** @deprecated Use {@link GetModelAssociationCount}. */
   public getModelAssociationCount(modelId: string): number {
-    return this.associations.filter(a => a.modelId === modelId && a.status === 'Active').length;
+    return this.GetModelAssociationCount(modelId);
   }
   
+  public GetPromptAssociationCount(promptId: string): number {
+    return this.Associations.filter(a => a.promptId === promptId && a.status === 'Active').length;
+  }
+
+  /** @deprecated Use {@link GetPromptAssociationCount}. */
   public getPromptAssociationCount(promptId: string): number {
-    return this.associations.filter(a => a.promptId === promptId && a.status === 'Active').length;
+    return this.GetPromptAssociationCount(promptId);
   }
   
-  public getCellTooltip(association: any): string {
+  public GetCellTooltip(association: any): string {
     if (!association) return 'No association';
     return `Priority: ${association.priority || 'Not set'}`;
   }
 
-  public getAveragePriority(): number {
-    const activeAssociations = this.associations.filter(a => a.status === 'Active');
+  /** @deprecated Use {@link GetCellTooltip}. */
+  public getCellTooltip(association: any): string {
+    return this.GetCellTooltip(association);
+  }
+
+  public GetAveragePriority(): number {
+    const activeAssociations = this.Associations.filter(a => a.status === 'Active');
     if (activeAssociations.length === 0) return 0;
     
     const sum = activeAssociations.reduce((total, a) => total + a.priority, 0);
     return Math.round((sum / activeAssociations.length) * 100) / 100;
   }
+
+  /** @deprecated Use {@link GetAveragePriority}. */
+  public getAveragePriority(): number {
+    return this.GetAveragePriority();
+  }
   
-  public sortAssociations(): void {
-    this.associations.sort((a, b) => {
+  public SortAssociations(): void {
+    this.Associations.sort((a, b) => {
       let comparison = 0;
       
-      switch (this.sortBy) {
+      switch (this.SortBy) {
         case 'prompt':
           comparison = a.promptName.localeCompare(b.promptName);
           break;
@@ -529,28 +830,43 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
           break;
       }
       
-      return this.sortDirection === 'desc' ? -comparison : comparison;
+      return this.SortDirection === 'desc' ? -comparison : comparison;
     });
     
     this.buildMatrix();
   }
+
+  /** @deprecated Use {@link SortAssociations}. */
+  public sortAssociations(): void {
+    return this.SortAssociations();
+  }
   
+  public ToggleSortDirection(): void {
+    this.SortDirection = this.SortDirection === 'asc' ? 'desc' : 'asc';
+    this.SortAssociations();
+  }
+
+  /** @deprecated Use {@link ToggleSortDirection}. */
   public toggleSortDirection(): void {
-    this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
-    this.sortAssociations();
+    return this.ToggleSortDirection();
   }
   
+  public OnViewModeChange(mode: 'matrix' | 'list'): void {
+    this.ViewMode = mode;
+    this.SelectedCells.clear();
+    this.EditingCell = null;
+  }
+
+  /** @deprecated Use {@link OnViewModeChange}. */
   public onViewModeChange(mode: 'matrix' | 'list'): void {
-    this.viewMode = mode;
-    this.selectedCells.clear();
-    this.editingCell = null;
+    return this.OnViewModeChange(mode);
   }
   
-  public exportMatrix(): void {
+  public ExportMatrix(): void {
     const exportData = {
-      prompts: this.prompts.map(p => ({ id: p.ID, name: p.Name })),
-      models: this.models.map(m => ({ id: m.ID, name: m.Name })),
-      associations: this.associations.map(a => ({
+      prompts: this.Prompts.map(p => ({ id: p.ID, name: p.Name })),
+      models: this.Models.map(m => ({ id: m.ID, name: m.Name })),
+      associations: this.Associations.map(a => ({
         promptId: a.promptId,
         promptName: a.promptName,
         modelId: a.modelId,
@@ -570,7 +886,17 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
     URL.revokeObjectURL(url);
   }
 
+  /** @deprecated Use {@link ExportMatrix}. */
+  public exportMatrix(): void {
+    return this.ExportMatrix();
+  }
+
+  public SelectPrompt(prompt: MJAIPromptEntityExtended): void {
+    this.PromptSelected.emit(prompt);
+  }
+
+  /** @deprecated Use {@link SelectPrompt}. */
   public selectPrompt(prompt: MJAIPromptEntityExtended): void {
-    this.promptSelected.emit(prompt);
+    return this.SelectPrompt(prompt);
   }
 }

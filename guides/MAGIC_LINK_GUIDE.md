@@ -89,7 +89,7 @@ module.exports = {
     //   Empty (default) ⇒ restricted-role-only. A caller-supplied roleId outside this
     //   set is rejected — this is what blocks granting Owner/Admin to an external user.
     grantableRoleNames: [],                    // e.g. ['Recruiter']
-    contextUserForProvisioning: 'system@yourco.com', // owns provisioning writes
+    contextUserForProvisioning: 'System',      // owns provisioning writes; matched against User.Name, then User.Email
     communicationProvider: 'SendGrid', // CommunicationEngine provider for invite emails
     fromAddress: 'no-reply@yourco.com',
     audience: 'mj-magic-link',
@@ -222,7 +222,7 @@ an `Application Role` record (metadata) so the app is reachable, and ensure the
 ### Step 4 — Push
 
 ```bash
-npx mj sync push --dir=metadata --include="roles,entity-permissions,application-roles"
+pnpm mj sync push --dir=metadata --include="roles,entity-permissions,application-roles"
 ```
 
 That's the whole scenario, version-controlled. To add another (say `Auditor` with
@@ -288,11 +288,18 @@ security scanners can't burn a single-use token by merely fetching the URL:
    fragment (`#token=…`); API clients add `?format=json` (or `Content-Type:
    application/json`) to get the JWT as JSON.
 
-Single-use is enforced **atomically**: a compare-and-swap `UPDATE` (guarded by
-`UseCount < MaxUses AND Status = 'Active' AND ExpiresAt > now`) runs *before* the
-token is minted, so two concurrent redemptions of a single-use link race on the
-row and exactly one wins (fail-closed). A losing/late redemption is rejected
-(`410 Gone`, `errorCode: "consumed"`).
+Single-use is enforced **atomically**: one guarded `UPDATE` (`UseCount < MaxUses
+AND Status = 'Active' AND ExpiresAt > now`) runs *before* the token is minted, so two
+concurrent redemptions of a single-use link race on the row and exactly one wins
+(fail-closed). On SQL Server the `UPDATE` lives in the `spConsumeMagicLinkInvite`
+stored procedure, granted to `cdp_Developer`/`cdp_Integration`, so it works when the
+MJAPI login is a member of MJ's data roles rather than `db_owner` — those roles never
+get DML on the base table (#4753). On PostgreSQL the runtime roles do hold table DML
+and there is no counterpart function, so the service runs the same guarded
+`UPDATE … RETURNING` directly. A losing/late redemption is rejected (`410 Gone`,
+`errorCode: "consumed"`). A database failure during the consume (permissions, a
+missing procedure, a lost connection) is reported as `500`, `errorCode:
+"server_error"` — never as `410 consumed`.
 
 ---
 
@@ -381,7 +388,7 @@ No new mechanism — it's reads over existing data:
 | `restrictedRoleName` | `Magic Link Baseline` | Default role when an invite omits `roleId` |
 | `inviteIssuerRoleNames` | `[]` | Roles (besides Owner) allowed to call `/create`. Empty ⇒ Owner-only |
 | `grantableRoleNames` | `[]` | Roles (besides the restricted role) an invite may grant |
-| `contextUserForProvisioning` | — | User context for provisioning writes |
+| `contextUserForProvisioning` | — | User context for provisioning writes. Matched against `User.Name` first, then `User.Email`; falls back to `userHandling.contextUserForNewUserCreation`, then the system user, then the lowest-ID active Owner (see #4209) |
 | `communicationProvider` | — | CommunicationEngine provider for invite email |
 | `fromAddress` | — | Invite email From |
 | `audience` | `mj-magic-link` | JWT audience + provider audience |

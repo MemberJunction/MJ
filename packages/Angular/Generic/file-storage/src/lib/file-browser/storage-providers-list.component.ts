@@ -1,6 +1,8 @@
-import { Component, EventEmitter, OnInit, Output, ChangeDetectorRef } from '@angular/core';
-import { FileStorageEngineBase, StorageAccountWithProvider } from '@memberjunction/core-entities';
+import { Component, EventEmitter, OnInit, Output, ChangeDetectorRef, inject } from '@angular/core';
+import { FileStorageEngineBase, StorageAccountWithProvider, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
+import { Metadata, type IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { StorageAdminTab } from '../admin/storage-admin-dialog.component';
 
 /**
  * Displays a list of organizational file storage accounts.
@@ -15,21 +17,50 @@ import { UUIDsEqual } from '@memberjunction/global';
   styleUrls: ['./storage-providers-list.component.css']
 })
 export class StorageProvidersListComponent implements OnInit {
+  private cdr = inject(ChangeDetectorRef);
+
   /**
    * Emits when an account is selected by the user, or null when no accounts are available.
    * Emits the full account-with-provider object for downstream components to use.
    */
-  @Output() accountSelected = new EventEmitter<StorageAccountWithProvider | null>();
+  @Output() AccountSelected = new EventEmitter<StorageAccountWithProvider | null>();
+
+  /**
+   * @deprecated Use {@link AccountSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (accountSelected) keeps working. Must stay AFTER AccountSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() accountSelected = this.AccountSelected;
 
   /**
    * All available storage accounts with their provider details.
    */
-  public accounts: StorageAccountWithProvider[] = [];
+  public Accounts: StorageAccountWithProvider[] = [];
+
+  /** @deprecated Use {@link Accounts}. */
+  public get accounts(): StorageAccountWithProvider[] {
+    return this.Accounts;
+  }
+  /** @deprecated Use {@link Accounts}. */
+  public set accounts(value: StorageAccountWithProvider[]) {
+    this.Accounts = value;
+  }
 
   /**
    * Currently selected account.
    */
-  public selectedAccount: StorageAccountWithProvider | null = null;
+  public SelectedAccount: StorageAccountWithProvider | null = null;
+
+  /** @deprecated Use {@link SelectedAccount}. */
+  public get selectedAccount(): StorageAccountWithProvider | null {
+    return this.SelectedAccount;
+  }
+  /** @deprecated Use {@link SelectedAccount}. */
+  public set selectedAccount(value: StorageAccountWithProvider | null) {
+    this.SelectedAccount = value;
+  }
 
   /**
    * Loading state indicator.
@@ -41,38 +72,123 @@ export class StorageProvidersListComponent implements OnInit {
    */
   public errorMessage: string | null = null;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  /**
+   * Whether current user has admin rights to configure storage accounts or providers.
+   */
+  public UserCanManage: boolean = false;
+
+  /** @deprecated Use {@link UserCanManage}. */
+  public get userCanManage(): boolean {
+    return this.UserCanManage;
+  }
+  /** @deprecated Use {@link UserCanManage}. */
+  public set userCanManage(value: boolean) {
+    this.UserCanManage = value;
+  }
+
+  /**
+   * Admin dialog state
+   */
+  public IsManageDialogOpen: boolean = false;
+
+  /** @deprecated Use {@link IsManageDialogOpen}. */
+  public get isManageDialogOpen(): boolean {
+    return this.IsManageDialogOpen;
+  }
+  /** @deprecated Use {@link IsManageDialogOpen}. */
+  public set isManageDialogOpen(value: boolean) {
+    this.IsManageDialogOpen = value;
+  }
+  public AdminDialogTab: StorageAdminTab = 'accounts';
+
+  /** @deprecated Use {@link AdminDialogTab}. */
+  public get adminDialogTab(): StorageAdminTab {
+    return this.AdminDialogTab;
+  }
+  /** @deprecated Use {@link AdminDialogTab}. */
+  public set adminDialogTab(value: StorageAdminTab) {
+    this.AdminDialogTab = value;
+  }
+  public AccountToEdit: MJFileStorageAccountEntity | null = null;
+
+  /** @deprecated Use {@link AccountToEdit}. */
+  public get accountToEdit(): MJFileStorageAccountEntity | null {
+    return this.AccountToEdit;
+  }
+  /** @deprecated Use {@link AccountToEdit}. */
+  public set accountToEdit(value: MJFileStorageAccountEntity | null) {
+    this.AccountToEdit = value;
+  }
+
+  public Provider: IMetadataProvider | null = null;
+
+  public get ProviderToUse(): IMetadataProvider {
+    return this.Provider ?? Metadata.Provider;
+  }
+
+  constructor() {}
 
   ngOnInit(): void {
+    if (!this.UserCanManage) {
+      this.checkPermissions();
+    }
     this.loadAccounts();
+  }
+
+  /**
+   * Checks if current user has create or update permissions on storage entities.
+   */
+  private checkPermissions(): void {
+    try {
+      const md = this.ProviderToUse;
+      const user = md.CurrentUser;
+      if (!user) {
+        return;
+      }
+
+      const provEntity = md.Entities.find(e => e.Name === 'MJ: File Storage Providers');
+      const acctEntity = md.Entities.find(e => e.Name === 'MJ: File Storage Accounts');
+
+      const provCanManage = provEntity ? provEntity.GetUserPermisions(user).CanCreate || provEntity.GetUserPermisions(user).CanUpdate : false;
+      const acctCanManage = acctEntity ? acctEntity.GetUserPermisions(user).CanCreate || acctEntity.GetUserPermisions(user).CanUpdate : false;
+
+      this.UserCanManage = !!(provCanManage || acctCanManage);
+    } catch {
+      this.UserCanManage = false;
+    }
   }
 
   /**
    * Loads all available file storage accounts with their provider details.
    * Uses FileStorageEngineBase for centralized, cached access.
    */
-  private async loadAccounts(): Promise<void> {
+  private async loadAccounts(forceRefresh = false): Promise<void> {
     this.isLoading = true;
     this.errorMessage = null;
 
     try {
       const engine = FileStorageEngineBase.Instance;
-      await engine.Config(false);  // Use cached data if available
+      await engine.Config(forceRefresh);
 
       // Only show accounts whose provider is active
-      this.accounts = engine.AccountsWithProviders.filter(a => a.provider.IsActive);
+      this.Accounts = engine.AccountsWithProviders.filter(a => a.provider.IsActive !== false);
 
-      console.log('[StorageAccountsList] Loaded accounts:', this.accounts.map(a => ({
+      if (this.Accounts.length === 0 && !forceRefresh) {
+        await engine.Config(true);
+        this.Accounts = engine.AccountsWithProviders.filter(a => a.provider.IsActive !== false);
+      }
+
+      console.log('[StorageAccountsList] Loaded accounts:', this.Accounts.map(a => ({
         name: a.account.Name,
         provider: a.provider.Name,
         hasCredential: !!a.account.CredentialID
       })));
 
       // Auto-select first account if available
-      if (this.accounts.length > 0) {
-        this.selectAccount(this.accounts[0]);
+      if (this.Accounts.length > 0) {
+        this.SelectAccount(this.Accounts[0]);
       } else {
-        this.accountSelected.emit(null);
+        this.AccountSelected.emit(null);
       }
 
     } catch (error) {
@@ -87,22 +203,32 @@ export class StorageProvidersListComponent implements OnInit {
   /**
    * Handles account selection by the user.
    */
+  public SelectAccount(accountWithProvider: StorageAccountWithProvider): void {
+    this.SelectedAccount = accountWithProvider;
+    this.AccountSelected.emit(accountWithProvider);
+  }
+
+  /** @deprecated Use {@link SelectAccount}. */
   public selectAccount(accountWithProvider: StorageAccountWithProvider): void {
-    this.selectedAccount = accountWithProvider;
-    this.accountSelected.emit(accountWithProvider);
+    return this.SelectAccount(accountWithProvider);
   }
 
   /**
    * Checks if an account is currently selected.
    */
+  public IsSelected(accountWithProvider: StorageAccountWithProvider): boolean {
+    return UUIDsEqual(this.SelectedAccount?.account.ID, accountWithProvider.account.ID);
+  }
+
+  /** @deprecated Use {@link IsSelected}. */
   public isSelected(accountWithProvider: StorageAccountWithProvider): boolean {
-    return UUIDsEqual(this.selectedAccount?.account.ID, accountWithProvider.account.ID);
+    return this.IsSelected(accountWithProvider);
   }
 
   /**
    * Gets the icon class for a provider based on its name.
    */
-  public getProviderIcon(providerName: string): string {
+  public GetProviderIcon(providerName: string): string {
     const name = providerName.toLowerCase();
 
     if (name.includes('aws') || name.includes('s3')) {
@@ -124,10 +250,74 @@ export class StorageProvidersListComponent implements OnInit {
     }
   }
 
+  /** @deprecated Use {@link GetProviderIcon}. */
+  public getProviderIcon(providerName: string): string {
+    return this.GetProviderIcon(providerName);
+  }
+
   /**
    * Refreshes the accounts list by forcing a reload from the database.
    */
+  public Refresh(): void {
+    void this.loadAccounts(true);
+  }
+
+  /** @deprecated Use {@link Refresh}. */
   public refresh(): void {
-    FileStorageEngineBase.Instance.Config(true).then(() => this.loadAccounts());
+    return this.Refresh();
+  }
+
+  /**
+   * Opens the storage administration dialog
+   */
+  public OpenAdminDialog(tab: StorageAdminTab = 'accounts', account?: MJFileStorageAccountEntity | null): void {
+    this.AdminDialogTab = tab;
+    this.AccountToEdit = account ?? null;
+    this.IsManageDialogOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link OpenAdminDialog}. */
+  public openAdminDialog(tab: StorageAdminTab = 'accounts', account?: MJFileStorageAccountEntity | null): void {
+    return this.OpenAdminDialog(tab, account);
+  }
+
+  /**
+   * Closes the storage administration dialog
+   */
+  public CloseAdminDialog(): void {
+    this.IsManageDialogOpen = false;
+    this.AccountToEdit = null;
+    this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link CloseAdminDialog}. */
+  public closeAdminDialog(): void {
+    return this.CloseAdminDialog();
+  }
+
+  /**
+   * Handles storage configuration changes from the admin dialog
+   */
+  public OnAdminAccountsChanged(): void {
+    this.Refresh();
+  }
+
+  /** @deprecated Use {@link OnAdminAccountsChanged}. */
+  public onAdminAccountsChanged(): void {
+    return this.OnAdminAccountsChanged();
+  }
+
+  /**
+   * Handles inline edit click on an account item
+   */
+  public OnEditAccountClick(item: StorageAccountWithProvider, event: MouseEvent): void {
+    event.stopPropagation();
+    this.OpenAdminDialog('accounts', item.account);
+  }
+
+  /** @deprecated Use {@link OnEditAccountClick}. */
+  public onEditAccountClick(item: StorageAccountWithProvider, event: MouseEvent): void {
+    return this.OnEditAccountClick(item, event);
   }
 }

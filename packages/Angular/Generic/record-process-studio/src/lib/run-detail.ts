@@ -26,7 +26,7 @@ interface RunDetailPayload {
  * Parses a Process Run Detail's `ResultPayload` and returns only the changes that were actually applied
  * (condition passed, value differed, no error). Safe on null/empty/invalid JSON — returns `[]`.
  */
-export function parseAppliedRunDetailChanges(resultPayload: string | null | undefined): RunDetailChange[] {
+export function ParseAppliedRunDetailChanges(resultPayload: string | null | undefined): RunDetailChange[] {
     if (!resultPayload) {
         return [];
     }
@@ -39,8 +39,13 @@ export function parseAppliedRunDetailChanges(resultPayload: string | null | unde
     return (payload?.Changes ?? []).filter((c) => c.Applied && c.Changed && !c.Error);
 }
 
+/** @deprecated Use {@link ParseAppliedRunDetailChanges}. */
+export function parseAppliedRunDetailChanges(resultPayload: string | null | undefined): RunDetailChange[] {
+    return ParseAppliedRunDetailChanges(resultPayload);
+}
+
 /** Renders an arbitrary value for the audit diff table. */
-export function displayRunValue(value: unknown): string {
+export function DisplayRunValue(value: unknown): string {
     if (value === null || value === undefined || value === '') {
         return '(empty)';
     }
@@ -48,4 +53,9 @@ export function displayRunValue(value: unknown): string {
         return JSON.stringify(value);
     }
     return String(value);
+}
+
+/** @deprecated Use {@link DisplayRunValue}. */
+export function displayRunValue(value: unknown): string {
+    return DisplayRunValue(value);
 }

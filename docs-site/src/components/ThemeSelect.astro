@@ -1,0 +1,49 @@
+---
+import Default from '@astrojs/starlight/components/ThemeSelect.astro';
+import Select from '@astrojs/starlight/components/Select.astro';
+
+/**
+ * Starlight ThemeSelect override that prepends a documentation-version
+ * switcher. Versioned-deploy knobs (set by .github/workflows/docs.yml):
+ *   DOCS_VERSION   this build's version id, e.g. "v6" — also the path prefix
+ *                  the site is served under (/v6).
+ *   DOCS_VERSIONS  JSON list of every deployed version: [{"id","label"}, …].
+ * Local and single-version builds set neither, so the switcher renders
+ * nothing and the component is just the stock theme select.
+ */
+const current = process.env.DOCS_VERSION ?? '';
+const versions = JSON.parse(process.env.DOCS_VERSIONS ?? '[]');
+if (current && versions.length > 0 && !versions.some((v) => v.id === current)) {
+  throw new Error(`DOCS_VERSION "${current}" is not in DOCS_VERSIONS ${process.env.DOCS_VERSIONS}`);
+}
+const show = current !== '' && versions.length > 1;
+const options = versions.map((v) => ({ label: v.label, value: v.id, selected: v.id === current }));
+---
+
+{
+  show && (
+    <mj-version-select data-current={current}>
+      <Select icon="open-book" label="Select documentation version" options={options} width="8em" />
+    </mj-version-select>
+  )
+}
+<Default><slot /></Default>
+
+<script>
+  class MJVersionSelect extends HTMLElement {
+    constructor() {
+      super();
+      this.querySelector('select')?.addEventListener('change', (e) => {
+        if (!(e.currentTarget instanceof HTMLSelectElement)) return;
+        const target = e.currentTarget.value;
+        const prefix = `/${this.dataset.current ?? ''}`;
+        const path = location.pathname;
+        // Same-path swap: /v6/guides/x/ -> /v5/guides/x/. A page missing in
+        // the target version lands on the root 404, which links both homes.
+        const rest = path.startsWith(prefix) ? path.slice(prefix.length) : '/';
+        location.assign(`/${target}${rest}${location.search}${location.hash}`);
+      });
+    }
+  }
+  customElements.define('mj-version-select', MJVersionSelect);
+</script>

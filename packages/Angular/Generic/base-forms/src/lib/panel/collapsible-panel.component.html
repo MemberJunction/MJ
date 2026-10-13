@@ -26,6 +26,30 @@
       <i [class]="Icon" class="mj-forms-panel-icon"></i>
       <h3 class="mj-forms-panel-title">
         <span [innerHTML]="DisplayName"></span>
+        <!-- Section indicators: unsaved-changes dot (same idiom as an edited field's
+             label dot) and invalid-field count (same colour as the field's red underline).
+             Derived from the projected fields — see SectionIndicators. -->
+        @if (SectionDirtyCount > 0) {
+          <span class="mj-forms-panel-dirty"
+                role="img"
+                [title]="SectionDirtyTitle"
+                [attr.aria-label]="SectionDirtyTitle"></span>
+        }
+        @if (SectionErrorCount > 0) {
+          <span class="mj-forms-panel-error-badge"
+                role="img"
+                [title]="SectionErrorTitle"
+                [attr.aria-label]="SectionErrorTitle">
+            <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>{{ SectionErrorCount }}
+          </span>
+        } @else if (SectionWarningCount > 0) {
+          <span class="mj-forms-panel-warning-badge"
+                role="img"
+                [title]="SectionWarningTitle"
+                [attr.aria-label]="SectionWarningTitle">
+            <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>{{ SectionWarningCount }}
+          </span>
+        }
         <!-- Row count badge for related entities -->
         @if (BadgeCount !== undefined) {
           <span class="mj-forms-row-count-badge" [class.mj-forms-row-count-badge--zero]="BadgeCount === 0">
@@ -57,7 +81,32 @@
     <div class="mj-forms-panel-content"
          #panelContent
          [style.height.px]="PanelContentHeight">
+      <!-- Contributions drawn inside this section: one host above the fields, one below. A
+           panel standing in for fields draws in their place; one placed in the section by its
+           key replaces nothing. -->
+      @if (HostsFieldPanels) {
+        <mj-form-field-panel-slot
+          [Entity]="FieldPanelEntity"
+          [FieldNames]="ClaimableFieldNames"
+          [SectionKey]="SectionKey"
+          Position="start"
+          [Record]="FieldPanelForm!.record"
+          [FormComponent]="FieldPanelForm!"
+          [FormContext]="FormContext">
+        </mj-form-field-panel-slot>
+      }
       <ng-content></ng-content>
+      @if (HostsFieldPanels) {
+        <mj-form-field-panel-slot
+          [Entity]="FieldPanelEntity"
+          [FieldNames]="ClaimableFieldNames"
+          [SectionKey]="SectionKey"
+          Position="end"
+          [Record]="FieldPanelForm!.record"
+          [FormComponent]="FieldPanelForm!"
+          [FormContext]="FormContext">
+        </mj-form-field-panel-slot>
+      }
     </div>
   </div>
 </div>

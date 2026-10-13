@@ -1,0 +1,81 @@
+<div class="mj-inspector mj-inspector--solo">
+    <mj-page-header-interior
+        Role="region"
+        AriaLabel="Grid width lab"
+        Title="Grid Width Lab"
+        Subtitle="Live fixture for the entity-data-grid width + column contract">
+        <div actions>
+            <button mjButton
+                    [variant]="FillWidth ? 'primary' : 'secondary'"
+                    size="sm"
+                    (click)="OnToggleFillWidth()"
+                    [attr.aria-pressed]="FillWidth"
+                    title="Append the inert trailing filler column">
+                <i class="fa-solid fa-arrows-left-right-to-line" aria-hidden="true"></i>
+                <span class="mj-action-label">FillWidth {{ FillWidth ? 'on' : 'off' }}</span>
+            </button>
+            <button mjButton
+                    [variant]="ShowHiddenColumn ? 'primary' : 'secondary'"
+                    size="sm"
+                    (click)="OnToggleHiddenColumn()"
+                    [attr.aria-pressed]="ShowHiddenColumn"
+                    title="Re-show the column declared visible:false">
+                <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                <span class="mj-action-label">{{ ShowHiddenColumn ? 'Hide' : 'Show' }} hidden column</span>
+            </button>
+            <button mjButton
+                    [variant]="FilterOn ? 'primary' : 'secondary'"
+                    size="sm"
+                    (click)="OnToggleFilter()"
+                    [attr.aria-pressed]="FilterOn"
+                    title="Re-assign Params — the churn that used to wipe declared columns">
+                <i class="fa-solid fa-filter" aria-hidden="true"></i>
+                <span class="mj-action-label">Filter {{ FilterOn ? 'on' : 'off' }}</span>
+            </button>
+        </div>
+    </mj-page-header-interior>
+
+    <div class="mj-inspector__content">
+        <!-- What the grid will SELECT. Most of this contract's failures are invisible in the
+             rendered table and only show up in the query. -->
+        <div class="gwl-fields">
+            <div class="gwl-fields__head">
+                <h4 class="gwl-fields__title">Fields sent to RunView</h4>
+                @if (HasCaseDuplicate) {
+                    <span class="gwl-flag gwl-flag--bad">
+                        <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                        Same field requested twice under different casing
+                    </span>
+                } @else {
+                    <span class="gwl-flag gwl-flag--ok">
+                        <i class="fa-solid fa-check" aria-hidden="true"></i>
+                        No case-duplicate fields
+                    </span>
+                }
+            </div>
+            @if (FieldsError) {
+                <mj-alert Variant="error" [Message]="FieldsError"></mj-alert>
+            } @else {
+                <div class="gwl-fields__list">
+                    @for (f of FieldsPreview; track f) {
+                        <code class="gwl-field">{{ f }}</code>
+                    }
+                </div>
+            }
+            <p class="gwl-note">
+                The Name column is declared as <code>name</code> while the entity spells it
+                <code>Name</code>. Both should resolve to one <code>Name</code> entry above.
+                <code>BaseTable</code> should be present whether or not its column is currently shown —
+                that is what lets it re-appear with data rather than empty cells.
+            </p>
+        </div>
+
+        <div class="gwl-grid">
+            <mj-entity-data-grid
+                [Params]="Params"
+                [Columns]="Columns"
+                [FillWidth]="FillWidth">
+            </mj-entity-data-grid>
+        </div>
+    </div>
+</div>

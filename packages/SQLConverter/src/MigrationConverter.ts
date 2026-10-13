@@ -24,8 +24,10 @@
  * the `TSQLToPGTranspiler` interface so classification stays unit-testable without
  * a Python runtime.
  */
-import { splitMigration, type MigrationSplitResult, type MigrationRegionKind } from './MigrationSplitter.js';
-import { splitByStatement, type StatementBatch, type StatementKind } from './MigrationStatementSplitter.js';
+import { SplitMigration, type MigrationSplitResult, type MigrationRegionKind } from './MigrationSplitter.js';
+import { SplitByStatement, type StatementBatch, type StatementKind } from './MigrationStatementSplitter.js';
+import { CastBooleanInsertValues, ConvertBooleanLiteralComparisons } from './rules/ExpressionHelpers.js';
+import { SeedCoreMetadataBooleanColumns } from './rules/CoreMetadataBooleanColumns.js';
 
 export type ConversionStatus =
   /** Category-B content was transpiled into `pgSQL`. */
@@ -99,19 +101,19 @@ export interface KeptTSQL {
  */
 export interface ConversionReconciliation {
   /** Content (non-noise) source statements in the whole file, GO-batch granularity. */
-  sourceStatements: number;
+  sourceStatements: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Content statements in the emitted PG body (coarse chunk count; 0 for a marker). */
-  emittedStatements: number;
+  emittedStatements: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Statements surfaced as gaps for a human: `unhandled.length + handProcedural.length`. */
-  gaps: number;
+  gaps: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The dialect's own per-call self-check reported an ACCOUNTING-LEAK (a missed drop site). */
-  accountingLeak: boolean;
+  accountingLeak: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * The classifier fed SUBSTANTIVE T-SQL to the dialect, yet the dialect emitted nothing AND
    * reported no gap — content vanished without a trace. Belt-and-suspenders beyond the dialect's
    * own EMPTY-EMISSION guard; when true the caller appends a `RECONCILIATION-EMPTY-OUTPUT` gap.
    */
-  suspiciousEmptyOutput: boolean;
+  suspiciousEmptyOutput: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface MigrationConversionResult {
@@ -138,6 +140,18 @@ export interface MigrationConversionResult {
 export interface ConvertMigrationOptions {
   /** Target schema substituted for `${flyway:defaultSchema}` in the output (default '__mj'). */
   schema?: string;
+  /**
+   * MJ core schema substituted for `${mjSchema}` in the output (default '__mj').
+   *
+   * Distinct from `schema`: an Open App migration says `${flyway:defaultSchema}` for its OWN
+   * schema and `${mjSchema}` for core, and the two differ for every app (e.g.
+   * `__mj_bizappscommon` vs `__mj`). Both must be resolved, because committed `.pg.sql` files
+   * carry literal schemas — Flyway placeholder substitution is not relied on for PostgreSQL —
+   * and because `--bake-codegen` executes the converted body against the working database as it
+   * goes, where an unresolved macro is a hard error (`relation "${mjSchema}.Entity" does not
+   * exist`) that halts the whole bake chain.
+   */
+  coreSchema?: string;
   /** Emit the standard `.pg.sql` provenance header (default true). */
   includeHeader?: boolean;
   /**
@@ -170,8 +184,8 @@ const STATEMENT_MODE_KEEP: ReadonlySet<StatementKind> = new Set<StatementKind>([
 const SNAPSHOT_CODEGEN_OBJECT = /^(?:VIEW|PROCEDURE|PROC|FUNCTION)\b/i;
 
 /** Classify a migration and return the kept T-SQL to transpile — the single classification entry point. */
-export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
-  const split = splitMigration(sql, fileName);
+export function ExtractKeptTSQL(sql: string, fileName: string): KeptTSQL {
+  const split = SplitMigration(sql, fileName);
   const droppedCodeGenLines = split.codeGenBlock ? split.codeGenBlock.split('\n').length : 0;
 
   // Baselines and old-style migrations have NO banner but DO contain generated
@@ -185,7 +199,7 @@ export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
   // hand-authored file from flipping the whole file into statement-mode, where its other
   // batches would be dropped (issue #3252 RC2 defense-in-depth). Such a file stays banner-mode,
   // where a stray hand routine is flagged needs-hand-authoring instead of silently dropped.
-  const stmts = splitByStatement(sql);
+  const stmts = SplitByStatement(sql);
   const isUnbanneredSnapshot =
     split.boundaryMethod === 'no-codegen-block' &&
     stmts.some((s) => s.kind === 'codegen-object' && SNAPSHOT_CODEGEN_OBJECT.test(s.evidence));
@@ -194,6 +208,11 @@ export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
   }
 
   return classifyBannerMode(split, droppedCodeGenLines);
+}
+
+/** @deprecated Use {@link ExtractKeptTSQL}. */
+export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
+  return ExtractKeptTSQL(sql, fileName);
 }
 
 /** Banner-split path: feature migrations with (or without) a CodeGen block. */
@@ -299,13 +318,13 @@ function classifyStatementMode(
  * kept T-SQL exists but no transpiler was provided — content is never dropped
  * because a backend was missing.
  */
-export async function convertMigration(
+export async function ConvertMigration(
   sql: string,
   fileName: string,
   options: ConvertMigrationOptions = {},
 ): Promise<MigrationConversionResult> {
-  const kept = extractKeptTSQL(sql, fileName);
-  const stmts = splitByStatement(sql);
+  const kept = ExtractKeptTSQL(sql, fileName);
+  const stmts = SplitByStatement(sql);
   const sourceStatements = stmts.filter((s) => s.kind !== 'noise').length;
 
   if (!kept.tsql.trim()) {
@@ -372,6 +391,7 @@ export async function convertMigration(
 
   const transpiled = await options.transpiler.transpile(kept.tsql);
   const schema = options.schema ?? '__mj';
+  const coreSchema = options.coreSchema ?? '__mj';
 
   const emittedStatements = transpiled.sql.filter((s) => s.trim().length > 0).length;
   const accountingLeak = transpiled.unhandled.some((u) => u.kind === 'ACCOUNTING-LEAK');
@@ -393,11 +413,51 @@ export async function convertMigration(
     notes.push('Reconciliation: kept T-SQL produced empty output with no reported gap — surfaced as a conversion gap.');
   }
 
-  const pgSQL = assemblePgSQL(kept, { ...transpiled, unhandled }, schema, options.includeHeader ?? true);
+  /**
+   * HOLLOW: every translatable statement became a gap, so the emitted body is a header and a gap
+   * banner over nothing (issue #3840).
+   *
+   * This is the third distinct way `emittedStatements === 0` arises, and the only one that was
+   * unguarded:
+   *   • nothing reported, nothing dropped → content VANISHED  (suspiciousEmptyOutput, above)
+   *   • the dialect intentionally DROPPED it → legitimately empty, must stay `converted`
+   *   • everything became a GAP           → hollow, handled here
+   *
+   * Keyed on `transpiled.unhandled`, NOT on the local `unhandled`, which the vanish guard above
+   * has already appended its synthetic RECONCILIATION-EMPTY-OUTPUT row to. Reading the local one
+   * would fold the vanish case in here and label it with a note that misdescribes it — nothing
+   * "became a gap"; the reconciliation layer manufactured one. Vanish is promoted on its own
+   * terms below, the same way the empty-marker path does it.
+   *
+   * Left as `converted`, the CLI writes it as a discoverable `.pg.sql`. That artifact is the worst
+   * shape this pipeline can produce: it satisfies filename parity, contains no T-SQL to trip a
+   * contamination scan, applies to a PostgreSQL host without error, and does nothing — so the
+   * migration is recorded as applied while the schema change never happens. Observed on
+   * bizapps-common's `Layered_Base_Views_People_Organizations`, whose whole body sat inside two
+   * `IF NOT OBJECT_ID(...)` blocks.
+   *
+   * Promoting the status routes it to `.needs-hand` exactly as the empty-marker path above already
+   * does, and for the same stated reason: never a discoverable `.pg.sql` that Skyway could apply.
+   * The transpiled artifact is still written (under the `.needs-hand` name) so the gap comments and
+   * any partial DDL survive for whoever finishes the port.
+   */
+  const fullyGapped = emittedStatements === 0 && transpiled.unhandled.length > 0;
+  if (fullyGapped) {
+    notes.push(
+      'Reconciliation: every translatable statement became a conversion gap, leaving no executable SQL — ' +
+        'written as .needs-hand rather than a .pg.sql that would apply cleanly and do nothing.',
+    );
+  }
+
+  const pgSQL = assemblePgSQL(kept, { ...transpiled, unhandled }, schema, options.includeHeader ?? true, coreSchema);
 
   return {
     fileName: kept.fileName,
-    status: kept.status,
+    // A hollow body must not masquerade as a clean conversion — see `fullyGapped` above. Vanished
+    // content is promoted for the same reason and stated separately rather than folded in, so both
+    // routes to `.needs-hand` are visible here and neither borrows the other's explanation. This
+    // matches the empty-marker path, which already promotes on `suspiciousEmptyOutput` alone.
+    status: fullyGapped || suspiciousEmptyOutput ? 'needs-hand-authoring' : kept.status,
     pgSQL,
     split: kept.split,
     droppedCodeGenLines: kept.droppedCodeGenLines,
@@ -415,12 +475,22 @@ export async function convertMigration(
   };
 }
 
+/** @deprecated Use {@link ConvertMigration}. */
+export async function convertMigration(
+  sql: string,
+  fileName: string,
+  options: ConvertMigrationOptions = {},
+): Promise<MigrationConversionResult> {
+  return ConvertMigration(sql, fileName, options);
+}
+
 /** Assemble the final `.pg.sql` text: header, gap comments, transpiled body. */
 function assemblePgSQL(
   kept: KeptTSQL,
   transpiled: MJTranspileResult,
   schema: string,
   includeHeader: boolean,
+  coreSchema: string,
 ): string {
   const parts: string[] = [];
   if (includeHeader) parts.push(pgHeader(kept.fileName));
@@ -436,11 +506,59 @@ function assemblePgSQL(
   // Committed .pg.sql files use the literal schema (Flyway placeholder substitution
   // is not relied on for PG). Replace both the macro and the dialect's internal
   // sentinel, should it ever leak.
-  return parts
+  const rendered = parts
     .join('\n\n')
-    .replaceAll('${flyway:defaultSchema}', schema)
-    .replaceAll('__mj_flyway_default_schema__', schema)
-    .concat('\n');
+    // Replacement FUNCTIONS, not strings: a string replacement expands $$, $&, $` , $' and
+    // $1-$99, so any '$' in a schema name would be executed rather than inserted (issue #3171).
+    // A schema name is unlikely to carry one, but the function form costs nothing and removes
+    // the question.
+    .replaceAll('${flyway:defaultSchema}', () => schema)
+    .replaceAll('__mj_flyway_default_schema__', () => schema)
+    // `${mjSchema}` names MJ CORE, not the app's own schema, so it resolves to a different value
+    // and was previously left in the output — surviving into the file AND into the SQL that
+    // `--bake-codegen` executes against the working database (issue #3838).
+    .replaceAll('${mjSchema}', () => coreSchema);
+
+  // Boolean coercion runs AFTER schema substitution, not before. The INSERT matcher keys on a
+  // `schema.Table` reference whose schema is word characters; until the replacements above run,
+  // the table is still `${flyway:defaultSchema}."Entity"`, which is not a word-character token, so
+  // an earlier call matches nothing and silently returns the body unchanged.
+  return castCoreMetadataBooleans(rendered).concat('\n');
+}
+
+/**
+ * Rewrite SQL Server BIT literals (`0`/`1`) to `FALSE`/`TRUE` in the entity-registration
+ * INSERTs that deliberately survive the split (see ENTITY_REGISTRATION_TABLES).
+ *
+ * Those rows are CodeGen output against `Entity`, `EntityField`, `EntityPermission` and friends
+ * — long-lived core-metadata tables that no migration re-creates, so the AST dialect never sees a
+ * CREATE TABLE for them and has no column types to infer from. It therefore transpiles a BIT
+ * literal as the integer it looks like, and PostgreSQL rejects the INSERT with
+ * `column "IncludeInAPI" is of type boolean but expression is of type integer` — a failure that
+ * appears only when the migration is APPLIED, which is why the converter's own "0 gaps" summary
+ * cannot catch it. The rule-based (legacy) path already seeds this catalog via
+ * `createConversionContext`; the split path assembles its output from the transpiler directly and
+ * so bypassed it, meaning every migration registering a NEW entity produced a file that failed on
+ * its first apply.
+ *
+ * Only exact `0`/`1` values at known-boolean ordinal positions are rewritten, so an already-TRUE
+ * literal, a NULL, a quoted string containing a comma, and any non-boolean integer column
+ * (`UserViewMaxRows`, `Sequence`) all pass through untouched — making this safe to run over the
+ * whole assembled body rather than a single statement.
+ */
+function castCoreMetadataBooleans(body: string): string {
+  const coreMetadataColumns = new Map<string, Map<string, string>>();
+  SeedCoreMetadataBooleanColumns(coreMetadataColumns);
+  // Two distinct shapes, both of which reach PostgreSQL as `boolean` vs `integer`:
+  //   INSERT … VALUES (…, 1, 0, …)        → castBooleanInsertValues  (by ordinal position)
+  //   UPDATE … SET "Col" = 1 / WHERE = 0  → convertBooleanLiteralComparisons  (by column name)
+  // The rule-based path applies both; this path applied only the first, so a CodeGen UPDATE against
+  // a core-metadata table still failed at apply time with `operator does not exist: boolean =
+  // integer` — the same class of defect as the INSERT case, at a different syntactic site.
+  return ConvertBooleanLiteralComparisons(
+    CastBooleanInsertValues(body, coreMetadataColumns),
+    coreMetadataColumns,
+  );
 }
 
 /** The standard committed-`.pg.sql` provenance header. */
@@ -548,7 +666,7 @@ function recoverEntityRegistrationInserts(codeGenBlock: string): string {
   // EntityField registrations and EntitySettings with it). CodeGen does, however,
   // prefix every emitted item with a `/* … */` provenance comment at line start —
   // segment on those so each item is classified independently of its batch-mates.
-  return splitByStatement(codeGenBlock)
+  return SplitByStatement(codeGenBlock)
     .flatMap((s) => s.sql.split(/\n(?=\s*\/\*)/))
     .filter((seg) => headRe.test(stripLeadingCommentsAndNoise(seg)) || specialDateField.test(afterLineComments(seg)))
     .map((seg) => truncateAtGeneratedObject(seg))

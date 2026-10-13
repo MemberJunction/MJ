@@ -215,10 +215,10 @@ export default class Export extends Command {
         spinner.start('Generating additional schema info for CodeGen');
         const schemaInfoGen = new AdditionalSchemaInfoGenerator();
         const schemaInfo = schemaInfoGen.generate(state, {
-          approvedOnly: flags['approved-only'],
-          confidenceThreshold: parseFloat(flags['confidence-threshold']),
-          discoveredOnly: flags['schema-info-discovered-only'],
-          confirmedOnly: flags['schema-info-confirmed-only']
+          ApprovedOnly: flags['approved-only'],
+          ConfidenceThreshold: parseFloat(flags['confidence-threshold']),
+          DiscoveredOnly: flags['schema-info-discovered-only'],
+          ConfirmedOnly: flags['schema-info-confirmed-only']
         });
 
         const schemaInfoPath = path.join(outputDir, 'additionalSchemaInfo.json');

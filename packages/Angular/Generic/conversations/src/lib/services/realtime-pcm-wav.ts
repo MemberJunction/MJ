@@ -43,7 +43,7 @@ function floatToPcm16(sample: number): number {
  * @param sampleRate Sample rate in Hz (from the capturing `AudioContext`).
  * @returns A standalone `ArrayBuffer` containing the full WAV file.
  */
-export function encodePcm16Wav(samples: Float32Array, sampleRate: number): ArrayBuffer {
+export function EncodePcm16Wav(samples: Float32Array, sampleRate: number): ArrayBuffer {
     const numChannels = 1;
     const bitsPerSample = 16;
     const bytesPerSample = bitsPerSample / 8;
@@ -77,6 +77,11 @@ export function encodePcm16Wav(samples: Float32Array, sampleRate: number): Array
     }
 
     return buffer;
+}
+
+/** @deprecated Use {@link EncodePcm16Wav}. */
+export function encodePcm16Wav(samples: Float32Array, sampleRate: number): ArrayBuffer {
+    return EncodePcm16Wav(samples, sampleRate);
 }
 
 /** Writes an ASCII string into a {@link DataView} byte-by-byte at `offset`. */
@@ -191,7 +196,7 @@ export class PeakAccumulator {
  *   not produced — a short buffer yields at most `samples.length` peaks.
  * @returns Normalized peaks; `[]` for an empty or all-silent buffer.
  */
-export function downsamplePeaks(samples: Float32Array, targetBuckets = 600): number[] {
+export function DownsamplePeaks(samples: Float32Array, targetBuckets = 600): number[] {
     const target = Math.max(1, Math.floor(targetBuckets));
     if (samples.length === 0) {
         return [];
@@ -219,4 +224,9 @@ export function downsamplePeaks(samples: Float32Array, targetBuckets = 600): num
         return [];
     }
     return peaks.map(v => v / globalMax);
+}
+
+/** @deprecated Use {@link DownsamplePeaks}. */
+export function downsamplePeaks(samples: Float32Array, targetBuckets = 600): number[] {
+    return DownsamplePeaks(samples, targetBuckets);
 }

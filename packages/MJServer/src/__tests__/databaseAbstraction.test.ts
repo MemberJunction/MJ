@@ -66,11 +66,16 @@ vi.mock('mssql', () => {
 // We must also mock the auth module and its transitive deps so that importing
 // individual source files does not trigger type-graphql or reflect-metadata.
 vi.mock('../auth/index', () => ({
-  getSigningKeys: vi.fn(),
-  getSystemUser: vi.fn(),
-  getValidationOptions: vi.fn(),
-  verifyUserRecord: vi.fn(),
-  extractUserInfoFromPayload: vi.fn(),
+  GetSigningKeys: vi.fn(),
+    get getSigningKeys() { return this.GetSigningKeys; },
+  GetSystemUser: vi.fn(),
+    get getSystemUser() { return this.GetSystemUser; },
+  GetValidationOptions: vi.fn(),
+    get getValidationOptions() { return this.GetValidationOptions; },
+  VerifyUserRecord: vi.fn(),
+    get verifyUserRecord() { return this.VerifyUserRecord; },
+  ExtractUserInfoFromPayload: vi.fn(),
+    get extractUserInfoFromPayload() { return this.ExtractUserInfoFromPayload; },
   TokenExpiredError: class TokenExpiredError extends Error {},
   AuthProviderFactory: { getInstance: vi.fn(() => ({ getByIssuer: vi.fn() })) },
   IAuthProvider: {},
@@ -82,7 +87,8 @@ vi.mock('../auth/AuthProviderFactory', () => ({
 }));
 
 vi.mock('../cache', () => ({
-  authCache: new Map(),
+  AuthCache: new Map(),
+    get authCache() { return this.AuthCache; },
 }));
 
 vi.mock('@memberjunction/core', () => ({
@@ -100,6 +106,7 @@ vi.mock('@memberjunction/core', () => ({
 // Inline the actual implementation here so the env-var-handling tests below
 // exercise the genuine behavior (they're testing this function).
 vi.mock('@memberjunction/generic-database-provider', () => ({
+  UserCache: { Instance: { Users: [], GetSystemUser: vi.fn() } },
   resolveDbPlatformFromEnv: (envVarName: string = 'DB_PLATFORM'): 'sqlserver' | 'postgresql' | undefined => {
     const raw = process.env[envVarName];
     if (raw === undefined) return undefined;
@@ -117,7 +124,6 @@ vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
   SQLServerDataProvider: vi.fn(),
   SQLServerProviderConfigData: vi.fn(),
   setupSQLServerClient: vi.fn(),
-  UserCache: { Instance: { Users: [], GetSystemUser: vi.fn() } },
 }));
 
 vi.mock('@memberjunction/api-keys', () => ({

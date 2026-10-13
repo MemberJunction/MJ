@@ -4,7 +4,7 @@
  */
 
 import { LogError, LogStatus, LogStatusEx, UserInfo } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { SchedulingEngine } from '@memberjunction/scheduling-engine';
 import { ScheduledJobsConfig } from '../config.js';
 

@@ -73,10 +73,11 @@ import {
   UserInfo
 } from '@memberjunction/core';
 import { IsUuidSQLType } from '@memberjunction/sql-dialect';
+import { ordinalCompare } from '@memberjunction/global';
 import fastGlob from 'fast-glob';
 import fs from 'fs-extra';
 import { JsonPreprocessor } from './json-preprocessor';
-import { loadEntityConfig } from '../config';
+import { LoadEntityConfig } from '../config';
 import { SyncEngine } from './sync-engine';
 
 /** Prefix used to namespace the dynamic per-entity cache properties on the engine instance. */
@@ -97,9 +98,9 @@ const LARGE_ENTITY_WARN_THRESHOLD = 100_000;
 /** Cached file contents produced by the preload scan. */
 export interface CachedFile {
   /** The on-disk JSON, exactly as parsed (preserves `@file:` / `@include` directives). */
-  rawData: unknown;
+  rawData: unknown;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The fully-resolved JSON after `@include` preprocessing. Same reference as `rawData` when the file has no `@include`s. */
-  fileData: unknown;
+  fileData: unknown;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -120,8 +121,8 @@ interface DelegatedSlot {
 
 /** One delegated entity → donor engine pairing, for logging/diagnostics. */
 export interface DelegationSummaryEntry {
-  entityName: string;
-  engineClassName: string;
+  entityName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  engineClassName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -163,22 +164,46 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
    */
   private pkIndexes: Map<string, Map<string, BaseEntity>> = new Map();
 
+  /**
+   * Per-entity lookup index keyed on lowercased composite key strings (`field=value|...`).
+   * Provides O(1) resolution for @lookup keys over preloaded entities.
+   */
+  private lookupIndexes: Map<string, Map<string, BaseEntity>> = new Map();
+
+  /** Dynamic entity cache properties populated via BaseEngine / preload */
+  [key: `cached_${string}`]: BaseEntity[] | undefined;
+
   /** Non-fatal warnings collected during preload (malformed shapes, oversized entities). Drained by the caller after `Config()`. */
   private warnings: string[] = [];
 
-  public initializeEngine(syncEngine: SyncEngine): void {
+  public InitializeEngine(syncEngine: SyncEngine): void {
     this.syncEngine = syncEngine;
   }
 
-  public setEntityDirs(dirs: string[]): void {
+  /** @deprecated Use {@link InitializeEngine}. */
+  public initializeEngine(syncEngine: SyncEngine): void {
+    return this.InitializeEngine(syncEngine);
+  }
+
+  public SetEntityDirs(dirs: string[]): void {
     this.entityDirs = dirs;
   }
 
+  /** @deprecated Use {@link SetEntityDirs}. */
+  public setEntityDirs(dirs: string[]): void {
+    return this.SetEntityDirs(dirs);
+  }
+
   /** Returns and clears the warnings collected during the last preload run. */
-  public drainWarnings(): string[] {
+  public DrainWarnings(): string[] {
     const out = this.warnings;
     this.warnings = [];
     return out;
+  }
+
+  /** @deprecated Use {@link DrainWarnings}. */
+  public drainWarnings(): string[] {
+    return this.DrainWarnings();
   }
 
   /**
@@ -186,8 +211,13 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
    * arrays for the given entity are stored. `BaseEngine.applyImmediateMutation`
    * reads/writes these slots directly, so we use a deterministic naming scheme.
    */
-  public getPropertyNameForEntity(entityName: string): string {
+  public GetPropertyNameForEntity(entityName: string): `cached_${string}` {
     return `${CACHED_ENTITY_PROP_PREFIX}${entityName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  }
+
+  /** @deprecated Use {@link GetPropertyNameForEntity}. */
+  public getPropertyNameForEntity(entityName: string): `cached_${string}` {
+    return this.GetPropertyNameForEntity(entityName);
   }
 
   /**
@@ -227,6 +257,96 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
    * subscription replaces saved instances with clones) — that drift is
    * absorbed by {@link findCachedByPrimaryKey}'s scan-and-repair fallback.
    */
+  /**
+   * Build a deterministic composite key from lookup fields for indexed O(1) lookup.
+   * Matches the normalization used in resolveLookup (trimmed, lowercased, sorted by field name).
+   */
+  public BuildLookupCompositeKey(
+    fields: Array<{ fieldName: string; fieldValue: unknown }>
+  ): string {
+    return fields
+      .map(f => ({
+        name: (f.fieldName || '').trim().toLowerCase(),
+        value: (f.fieldValue?.toString() || '').trim().toLowerCase(),
+      }))
+      .sort((a, b) => ordinalCompare(a.name, b.name))
+      .map(f => `${f.name}=${f.value}`)
+      .join('|');
+  }
+
+  /** @deprecated Use {@link BuildLookupCompositeKey}. */
+  public buildLookupCompositeKey(
+    fields: Array<{ fieldName: string; fieldValue: unknown }>
+  ): string {
+    return this.BuildLookupCompositeKey(fields);
+  }
+
+  /**
+   * Indexes a single entity instance across its single-field and multi-field combinations.
+   */
+  private indexEntityForLookup(
+    entity: BaseEntity,
+    lookupIndex: Map<string, BaseEntity>,
+    entityInfo: EntityInfo
+  ): void {
+    const fields: Array<{ name: string; value: string }> = [];
+    for (const field of entityInfo.Fields) {
+      const raw = entity.Get(field.Name);
+      if (raw !== undefined && raw !== null) {
+        fields.push({
+          name: field.Name.trim().toLowerCase(),
+          value: raw.toString().trim().toLowerCase(),
+        });
+      }
+    }
+
+    // 1. Single-field entries
+    for (const f of fields) {
+      const key = `${f.name}=${f.value}`;
+      if (!lookupIndex.has(key)) {
+        lookupIndex.set(key, entity);
+      }
+    }
+
+    // 2. Pairwise combinations (for 2-field lookups)
+    // Only index all pairs if entity has a small number of fields (<= 5).
+    // For wide tables (30-60 fields), generating all F*(F-1)/2 pairs across tens of thousands
+    // of rows causes massive memory bloat (tens of millions of strings) and OOMs Node.
+    // Real-world 2-field lookups invariably involve standard identifying keys.
+    // Any other composite lookup falls through to findCachedByLookup's on-demand repair.
+    const isSmallFieldCount = fields.length <= 5;
+    const LOOKUP_CANDIDATE_FIELDS = new Set([
+      'id', 'name', 'code', 'entityid', 'sku', 'slug', 'accountnumber',
+      'type', 'displayname', 'parentid', 'categoryid', 'companyid', 'status'
+    ]);
+
+    for (let i = 0; i < fields.length; i++) {
+      if (!isSmallFieldCount && !LOOKUP_CANDIDATE_FIELDS.has(fields[i].name)) continue;
+      for (let j = i + 1; j < fields.length; j++) {
+        if (!isSmallFieldCount && !LOOKUP_CANDIDATE_FIELDS.has(fields[j].name)) continue;
+        const pair = [fields[i], fields[j]].sort((a, b) => ordinalCompare(a.name, b.name));
+        const key = `${pair[0].name}=${pair[0].value}|${pair[1].name}=${pair[1].value}`;
+        if (!lookupIndex.has(key)) {
+          lookupIndex.set(key, entity);
+        }
+      }
+    }
+
+    // 3. Composite of ALL fields (for 3-5 field lookups)
+    if (fields.length > 2 && fields.length <= 5) {
+      const sorted = [...fields].sort((a, b) => ordinalCompare(a.name, b.name));
+      const allKey = sorted.map(f => `${f.name}=${f.value}`).join('|');
+      if (!lookupIndex.has(allKey)) {
+        lookupIndex.set(allKey, entity);
+      }
+    }
+  }
+
+  /**
+   * Build the per-entity PK → entity Map and lookup index from each populated slot
+   * (self-loaded and delegated alike). Runs once after `Config()` fills
+   * the slots.
+   */
   private buildPKIndexes(entityNames: Iterable<string>): void {
     for (const entityName of entityNames) {
       const entityInfo = this.syncEngine.getEntityInfo(entityName);
@@ -235,10 +355,13 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       if (!list) continue;
 
       const index = new Map<string, BaseEntity>();
+      const lookupIndex = new Map<string, BaseEntity>();
+
       for (const entity of list) {
         try {
-          const pkStr = this.serializePrimaryKey(entityInfo, entity.GetAll());
+          const pkStr = this.SerializePrimaryKey(entityInfo, entity.GetAll());
           index.set(pkStr, entity);
+          this.indexEntityForLookup(entity, lookupIndex, entityInfo);
         } catch {
           // Defensive: a malformed cached entity shouldn't break index
           // construction for the whole entity. The array scan fallback
@@ -246,7 +369,71 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
         }
       }
       this.pkIndexes.set(entityName, index);
+      this.lookupIndexes.set(entityName, lookupIndex);
     }
+  }
+
+  /**
+   * Rebuilds both the PK indexes and the lookup indexes for the specified entity names
+   * (or all preloaded entity names if omitted). Useful when preloaded data has been updated.
+   */
+  public RebuildIndexes(entityNames?: Iterable<string>): void {
+    this.buildPKIndexes(entityNames ?? this.preloadedEntityNames);
+  }
+
+  /** @deprecated Use {@link RebuildIndexes}. */
+  public rebuildIndexes(entityNames?: Iterable<string>): void {
+    return this.RebuildIndexes(entityNames);
+  }
+
+  /**
+   * O(1) lookup against the preload cache using field/value pairs, with an array-scan
+   * fallback so we tolerate drift or 3+ field subset lookups.
+   *
+   * Returns matching `BaseEntity`, or `null` if not found in cache.
+   */
+  public FindCachedByLookup(
+    entityName: string,
+    lookupFields: Array<{ fieldName: string; fieldValue: string }>
+  ): BaseEntity | null {
+    if (!this.IsEntityPreloaded(entityName)) return null;
+    if (lookupFields.length === 0) return null;
+
+    const entityIndex = this.lookupIndexes.get(entityName);
+    const key = this.BuildLookupCompositeKey(lookupFields);
+    const hit = entityIndex?.get(key);
+    if (hit) return hit;
+
+    // Fallback: array scan over cached entities (and repair the index)
+    const list = this.GetCachedEntities(entityName);
+    for (const cachedEntity of list) {
+      let allMatch = true;
+      for (const { fieldName, fieldValue } of lookupFields) {
+        const entityValue = cachedEntity.Get(fieldName);
+        const normalizedEntityValue = (entityValue?.toString() || '').trim().toLowerCase();
+        const normalizedLookupValue = (fieldValue?.toString() || '').trim().toLowerCase();
+        if (normalizedEntityValue !== normalizedLookupValue) {
+          allMatch = false;
+          break;
+        }
+      }
+      if (allMatch) {
+        if (entityIndex) {
+          entityIndex.set(key, cachedEntity);
+        }
+        return cachedEntity;
+      }
+    }
+
+    return null;
+  }
+
+  /** @deprecated Use {@link FindCachedByLookup}. */
+  public findCachedByLookup(
+    entityName: string,
+    lookupFields: Array<{ fieldName: string; fieldValue: string }>
+  ): BaseEntity | null {
+    return this.FindCachedByLookup(entityName, lookupFields);
   }
 
   /**
@@ -257,12 +444,12 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
    * Returns `null` when the entity isn't preloaded or the PK isn't in
    * the cache — callers fall through to a DB load.
    */
-  public findCachedByPrimaryKey(entityName: string, primaryKey: Record<string, unknown>): BaseEntity | null {
-    if (!this.isEntityPreloaded(entityName)) return null;
+  public FindCachedByPrimaryKey(entityName: string, primaryKey: Record<string, unknown>): BaseEntity | null {
+    if (!this.IsEntityPreloaded(entityName)) return null;
     const entityInfo = this.syncEngine.getEntityInfo(entityName);
     if (!entityInfo) return null;
 
-    const pkStr = this.serializePrimaryKey(entityInfo, primaryKey);
+    const pkStr = this.SerializePrimaryKey(entityInfo, primaryKey);
     const index = this.pkIndexes.get(entityName);
     const hit = index?.get(pkStr);
     if (hit) return hit;
@@ -271,10 +458,10 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     // a new entity into the array slot without updating the index.
     // Linear scan once, and if we find a match, repair the index so
     // subsequent hits stay O(1).
-    const list = this.getCachedEntities(entityName);
+    const list = this.GetCachedEntities(entityName);
     for (const entity of list) {
       try {
-        if (this.serializePrimaryKey(entityInfo, entity.GetAll()) === pkStr) {
+        if (this.SerializePrimaryKey(entityInfo, entity.GetAll()) === pkStr) {
           index?.set(pkStr, entity);
           return entity;
         }
@@ -285,12 +472,27 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     return null;
   }
 
-  public markEntityAsPreloaded(entityName: string): void {
+  /** @deprecated Use {@link FindCachedByPrimaryKey}. */
+  public findCachedByPrimaryKey(entityName: string, primaryKey: Record<string, unknown>): BaseEntity | null {
+    return this.FindCachedByPrimaryKey(entityName, primaryKey);
+  }
+
+  public MarkEntityAsPreloaded(entityName: string): void {
     this.preloadedEntityNames.add(entityName);
   }
 
-  public isEntityPreloaded(entityName: string): boolean {
+  /** @deprecated Use {@link MarkEntityAsPreloaded}. */
+  public markEntityAsPreloaded(entityName: string): void {
+    return this.MarkEntityAsPreloaded(entityName);
+  }
+
+  public IsEntityPreloaded(entityName: string): boolean {
     return this.preloadedEntityNames.has(entityName);
+  }
+
+  /** @deprecated Use {@link IsEntityPreloaded}. */
+  public isEntityPreloaded(entityName: string): boolean {
+    return this.IsEntityPreloaded(entityName);
   }
 
   /**
@@ -309,7 +511,7 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
    * Returns true when a donor was registered; the caller then skips the
    * self-load config for this entity.
    */
-  public delegateEntityIfCached(entityName: string): boolean {
+  public DelegateEntityIfCached(entityName: string): boolean {
     const matches = BaseEngineRegistry.Instance.FindCachedEntity(entityName, { unfilteredOnly: true });
     for (const match of matches) {
       if (match.engine === this) continue;
@@ -328,12 +530,22 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     return false;
   }
 
+  /** @deprecated Use {@link DelegateEntityIfCached}. */
+  public delegateEntityIfCached(entityName: string): boolean {
+    return this.DelegateEntityIfCached(entityName);
+  }
+
   /** Delegated entity → donor engine pairings from the last `Config()` run, for logging. */
-  public getDelegationSummary(): DelegationSummaryEntry[] {
+  public GetDelegationSummary(): DelegationSummaryEntry[] {
     return Array.from(this.delegatedSlots.entries()).map(([entityName, slot]) => ({
       entityName,
       engineClassName: slot.engineClassName
     }));
+  }
+
+  /** @deprecated Use {@link GetDelegationSummary}. */
+  public getDelegationSummary(): DelegationSummaryEntry[] {
+    return this.GetDelegationSummary();
   }
 
   /**
@@ -349,21 +561,51 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       if (Array.isArray(live)) return live as BaseEntity[];
       // Defensive: donor slot vanished — fall through to our own slot.
     }
-    const propName = this.getPropertyNameForEntity(entityName);
-    const list = (this as unknown as Record<string, unknown>)[propName];
-    return Array.isArray(list) ? (list as BaseEntity[]) : undefined;
+    const propName = this.GetPropertyNameForEntity(entityName);
+    const list = this[propName];
+    return Array.isArray(list) ? list : undefined;
   }
 
-  public getCachedEntities(entityName: string): BaseEntity[] {
+  public GetCachedEntities(entityName: string): BaseEntity[] {
     return this.resolveSlot(entityName) ?? [];
   }
 
-  public getCachedFile(filePath: string): CachedFile | undefined {
+  /** @deprecated Use {@link GetCachedEntities}. */
+  public getCachedEntities(entityName: string): BaseEntity[] {
+    return this.GetCachedEntities(entityName);
+  }
+
+  /**
+   * Test fixture helper to set preloaded entity array and build indexes.
+   */
+  public SetCachedEntitiesForTesting(entityName: string, entities: BaseEntity[]): void {
+    const propName = this.GetPropertyNameForEntity(entityName);
+    this[propName] = entities;
+    this.preloadedEntityNames.add(entityName);
+    this.RebuildIndexes([entityName]);
+  }
+
+  /** @deprecated Use {@link SetCachedEntitiesForTesting}. */
+  public setCachedEntitiesForTesting(entityName: string, entities: BaseEntity[]): void {
+    return this.SetCachedEntitiesForTesting(entityName, entities);
+  }
+
+  public GetCachedFile(filePath: string): CachedFile | undefined {
     return this.fileDataCache.get(filePath);
   }
 
-  public cacheFile(filePath: string, rawData: unknown, fileData: unknown): void {
+  /** @deprecated Use {@link GetCachedFile}. */
+  public getCachedFile(filePath: string): CachedFile | undefined {
+    return this.GetCachedFile(filePath);
+  }
+
+  public CacheFile(filePath: string, rawData: unknown, fileData: unknown): void {
     this.fileDataCache.set(filePath, { rawData, fileData });
+  }
+
+  /** @deprecated Use {@link CacheFile}. */
+  public cacheFile(filePath: string, rawData: unknown, fileData: unknown): void {
+    return this.CacheFile(filePath, rawData, fileData);
   }
 
   /**
@@ -371,21 +613,25 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
    * before (or after) any code path that writes back to a metadata JSON
    * file during the sync, so a subsequent reader gets fresh contents.
    */
-  public invalidateCachedFile(filePath: string): void {
+  public InvalidateCachedFile(filePath: string): void {
     this.fileDataCache.delete(filePath);
   }
 
-  public addEntityToCache(entityName: string, entity: BaseEntity): void {
+  /** @deprecated Use {@link InvalidateCachedFile}. */
+  public invalidateCachedFile(filePath: string): void {
+    return this.InvalidateCachedFile(filePath);
+  }
+
+  public AddEntityToCache(entityName: string, entity: BaseEntity): void {
     // Delegated entities write into the donor's live array: PK-dedup below
     // prevents a duplicate against rows the donor already holds, and the
     // donor's own save-event handler sees our instance by reference and
     // no-ops rather than double-inserting.
     let list = this.resolveSlot(entityName);
     if (!list) {
-      const propName = this.getPropertyNameForEntity(entityName);
-      const slot = (this as unknown as Record<string, unknown>);
-      slot[propName] = [];
-      list = slot[propName] as BaseEntity[];
+      const propName = this.GetPropertyNameForEntity(entityName);
+      this[propName] = [];
+      list = this[propName]!;
     }
     // `PrimaryKey.Equals` requires the entity to have a populated composite
     // key; if either side is missing one we fall back to reference equality
@@ -404,32 +650,44 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       list.push(entity);
     }
 
-    // Keep the PK index in sync. Skip silently when serializePrimaryKey
+    // Keep the PK and lookup indexes in sync. Skip silently when serializePrimaryKey
     // throws — typically a half-built entity with no PK populated yet.
     try {
       const entityInfo = this.syncEngine.getEntityInfo(entityName);
       if (entityInfo) {
-        const pkStr = this.serializePrimaryKey(entityInfo, entity.GetAll());
+        const pkStr = this.SerializePrimaryKey(entityInfo, entity.GetAll());
         let index = this.pkIndexes.get(entityName);
         if (!index) {
           index = new Map<string, BaseEntity>();
           this.pkIndexes.set(entityName, index);
         }
         index.set(pkStr, entity);
+
+        let lIndex = this.lookupIndexes.get(entityName);
+        if (!lIndex) {
+          lIndex = new Map<string, BaseEntity>();
+          this.lookupIndexes.set(entityName, lIndex);
+        }
+        this.indexEntityForLookup(entity, lIndex, entityInfo);
       }
     } catch { /* defensive: malformed entity */ }
   }
 
-  public removeEntityFromCache(entityName: string, primaryKey: Record<string, unknown>): void {
+  /** @deprecated Use {@link AddEntityToCache}. */
+  public addEntityToCache(entityName: string, entity: BaseEntity): void {
+    return this.AddEntityToCache(entityName, entity);
+  }
+
+  public RemoveEntityFromCache(entityName: string, primaryKey: Record<string, unknown>): void {
     // For delegated entities this splices the donor's live array; the donor's
     // delete-event handler tolerates the row already being gone.
     const list = this.resolveSlot(entityName);
     const entityInfo = this.syncEngine.getEntityInfo(entityName);
     let pkStr: string | null = null;
     if (entityInfo) {
-      pkStr = this.serializePrimaryKey(entityInfo, primaryKey);
+      pkStr = this.SerializePrimaryKey(entityInfo, primaryKey);
       if (list) {
-        const arrayIdx = list.findIndex(e => this.serializePrimaryKey(entityInfo, e.GetAll()) === pkStr);
+        const arrayIdx = list.findIndex(e => this.SerializePrimaryKey(entityInfo, e.GetAll()) === pkStr);
         if (arrayIdx >= 0) {
           list.splice(arrayIdx, 1);
         }
@@ -437,15 +695,32 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     }
     if (pkStr !== null) {
       this.pkIndexes.get(entityName)?.delete(pkStr);
+      if (entityInfo && list) {
+        const lIndex = new Map<string, BaseEntity>();
+        for (const e of list) {
+          this.indexEntityForLookup(e, lIndex, entityInfo);
+        }
+        this.lookupIndexes.set(entityName, lIndex);
+      }
     }
-    this.invalidateLookupsForEntity(entityName);
+    this.InvalidateLookupsForEntity(entityName);
   }
 
-  public getCachedLookup(key: string): string | undefined {
+  /** @deprecated Use {@link RemoveEntityFromCache}. */
+  public removeEntityFromCache(entityName: string, primaryKey: Record<string, unknown>): void {
+    return this.RemoveEntityFromCache(entityName, primaryKey);
+  }
+
+  public GetCachedLookup(key: string): string | undefined {
     return this.lookupCache.get(key);
   }
 
-  public setCachedLookup(key: string, id: string, entityName?: string): void {
+  /** @deprecated Use {@link GetCachedLookup}. */
+  public getCachedLookup(key: string): string | undefined {
+    return this.GetCachedLookup(key);
+  }
+
+  public SetCachedLookup(key: string, id: string, entityName?: string): void {
     this.lookupCache.set(key, id);
     if (entityName) {
       const normalized = entityName.toLowerCase();
@@ -458,9 +733,19 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     }
   }
 
-  public clearLookupCache(): void {
+  /** @deprecated Use {@link SetCachedLookup}. */
+  public setCachedLookup(key: string, id: string, entityName?: string): void {
+    return this.SetCachedLookup(key, id, entityName);
+  }
+
+  public ClearLookupCache(): void {
     this.lookupCache.clear();
     this.lookupKeysByEntity.clear();
+  }
+
+  /** @deprecated Use {@link ClearLookupCache}. */
+  public clearLookupCache(): void {
+    return this.ClearLookupCache();
   }
 
   /**
@@ -472,7 +757,7 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
    * `resolveLookup` integration always passes the entity name, so this
    * is only a concern for callers that bypass that path.
    */
-  public invalidateLookupsForEntity(entityName: string): void {
+  public InvalidateLookupsForEntity(entityName: string): void {
     const normalized = entityName.toLowerCase();
     const bucket = this.lookupKeysByEntity.get(normalized);
     if (!bucket) return;
@@ -482,12 +767,17 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     this.lookupKeysByEntity.delete(normalized);
   }
 
+  /** @deprecated Use {@link InvalidateLookupsForEntity}. */
+  public invalidateLookupsForEntity(entityName: string): void {
+    return this.InvalidateLookupsForEntity(entityName);
+  }
+
   /**
    * Canonical string representation of a record's primary key, used as the
    * key in entity-cache dedup/removal lookups. UUID-typed components are
    * lower-cased to bridge SQL Server (upper) vs PG (lower).
    */
-  public serializePrimaryKey(entityInfo: EntityInfo, primaryKey: Record<string, unknown>): string {
+  public SerializePrimaryKey(entityInfo: EntityInfo, primaryKey: Record<string, unknown>): string {
     const parts = entityInfo.PrimaryKeys.map((pk: EntityFieldInfo) => {
       const val = primaryKey[pk.Name];
       let valStr = val !== undefined && val !== null ? String(val) : '';
@@ -502,6 +792,11 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     return parts.join('|');
   }
 
+  /** @deprecated Use {@link SerializePrimaryKey}. */
+  public serializePrimaryKey(entityInfo: EntityInfo, primaryKey: Record<string, unknown>): string {
+    return this.SerializePrimaryKey(entityInfo, primaryKey);
+  }
+
   /**
    * Walk every entity referenced by metadata files (including nested
    * `relatedEntities`) and return the set of entity names touched by this
@@ -511,7 +806,7 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     const entitiesFound: Set<string> = new Set();
 
     for (const entityDir of this.entityDirs) {
-      const entityConfig = await loadEntityConfig(entityDir);
+      const entityConfig = await LoadEntityConfig(entityDir);
       if (!entityConfig) continue;
 
       const pattern = entityConfig.filePattern || '*.json';
@@ -544,12 +839,12 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       const entityInfo = this.syncEngine.getEntityInfo(entityName);
       if (!entityInfo) continue;
 
-      this.markEntityAsPreloaded(entityName);
-      if (this.delegateEntityIfCached(entityName)) {
+      this.MarkEntityAsPreloaded(entityName);
+      if (this.DelegateEntityIfCached(entityName)) {
         continue;
       }
       configs.push({
-        PropertyName: this.getPropertyNameForEntity(entityName),
+        PropertyName: this.GetPropertyNameForEntity(entityName),
         EntityName: entityName,
         Type: 'entity',
         ResultType: 'entity_object',
@@ -638,7 +933,7 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       const batch = files.slice(i, i + FILE_READ_CONCURRENCY);
       const parsed = await Promise.all(batch.map(filePath => this.readAndPreprocessFile(filePath)));
       for (const { filePath, rawData, fileData } of parsed) {
-        this.cacheFile(filePath, rawData, fileData);
+        this.CacheFile(filePath, rawData, fileData);
         const records = Array.isArray(fileData) ? fileData : [fileData];
         this.collectEntitiesRecursive(records as Array<Record<string, unknown>>, entityName, entitiesFound, filePath);
       }

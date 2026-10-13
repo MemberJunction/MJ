@@ -17,17 +17,19 @@
  * so both this module and the client bootstrap publish/read the same install.
  */
 import sql from 'mssql';
-import { LocalCacheManager, InMemoryLocalStorageProvider, Metadata, SetProvider } from '@memberjunction/core';
+import { LocalCacheManager, InMemoryLocalStorageProvider, Metadata, SetProvider, StartupManager } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import { LoadEnv, LoadDbConfig } from './config';
 import type { DbConfig } from './config';
 import {
-    assertOwnsProcess,
-    getActiveIntegrationBootstrap,
-    _setActiveStorage,
-    _setCurrentServerBootstrap,
+    AssertOwnsProcess,
+    GetActiveIntegrationBootstrap,
+    SetActiveStorage,
+    SetCurrentServerBootstrap,
     type IntegrationBootstrapContext,
     type BootstrapServerOptions
 } from './bootstrap-shared';
@@ -53,24 +55,6 @@ function resolveContextUser(email?: string): UserInfo {
 }
 
 /**
- * Resolve the context user on the PostgreSQL path. UserCache (mssql-only Refresh) is
- * not populated on PG, so this surfaces the missing PG-aware user bootstrap as a clear,
- * actionable error (the Phase-0 prerequisite) instead of fabricating a user.
- */
-function resolvePostgresContextUser(email?: string): UserInfo {
-    const users = UserCache.Instance.Users ?? [];
-    if (users.length === 0) {
-        throw new Error(
-            'PostgreSQL integration bootstrap: no context user is available. UserCache.Refresh is ' +
-            'mssql-only, so PG needs a PG-aware user-cache bootstrap before the integration suites can ' +
-            'run against it (tracked Phase-0 prerequisite — plan §10 Step 6). The provider was configured ' +
-            'successfully; only user resolution is blocked.'
-        );
-    }
-    return resolveContextUser(email);
-}
-
-/**
  * Own the process: install the instrumented cache as FIRST caller, then set up the
  * data provider for the configured backend (SQL Server by default, PostgreSQL when
  * DB_PLATFORM=postgresql) and resolve the context user. Idempotent within a process.
@@ -79,26 +63,40 @@ function resolvePostgresContextUser(email?: string): UserInfo {
  * The instrumented-cache-first ordering is identical on both backends — the cache
  * singleton is platform-agnostic. Only the provider setup differs, behind db.Platform.
  */
-export async function bootstrapIntegrationServer(opts: BootstrapServerOptions = {}): Promise<IntegrationBootstrapContext> {
-    const existing = getActiveIntegrationBootstrap();
+/** Process ID the integration bootstrap identifies itself with to the dynamic-package loader. */
+export const INTEGRATION_TESTS_PROCESS_ID = 'integration-tests';
+
+export async function BootstrapIntegrationServer(opts: BootstrapServerOptions = {}): Promise<IntegrationBootstrapContext> {
+    const existing = GetActiveIntegrationBootstrap();
     if (existing) {
         return existing;
     }
     LoadEnv();
     // Fail fast on mis-host BEFORE reading config — never wedge instrumentation into a live cache.
-    assertOwnsProcess();
+    AssertOwnsProcess();
     const db = await LoadDbConfig();
 
+    // Installed Open App server packages (mj.config.cjs dynamicPackages.server[]) register their
+    // entity subclasses here, AFTER the lite manifest imported above and BEFORE the provider —
+    // the same ordering MJAPI uses — so checks exercise the apps' real classes, not BaseEntity.
+    const raw = DiscoverMJConfig(undefined, { searchStrategy: 'none' }); // same cwd-only search as LoadDbConfig()
+    await LoadDynamicPackages({ processId: INTEGRATION_TESTS_PROCESS_ID, tier: 'server', config: raw.config, configFilePath: raw.configFilePath });
+
     // FIRST-CALLER cache init — MUST precede any provider setup (load-bearing on both backends).
-    const storage = new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider());
+    const storage = new InstrumentedLocalStorageProvider(opts.SharedStorage ?? new InMemoryLocalStorageProvider());
     await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: opts.VerboseCacheLogging ?? false });
-    _setActiveStorage(storage);
+    SetActiveStorage(storage);
 
     const ctx = db.Platform === 'postgresql'
         ? await setupPostgreSQLProvider(db, storage, opts)
         : await setupSqlServerProvider(db, storage, opts);
-    _setCurrentServerBootstrap(ctx);
+    SetCurrentServerBootstrap(ctx);
     return ctx;
+}
+
+/** @deprecated Use {@link BootstrapIntegrationServer}. */
+export async function bootstrapIntegrationServer(opts: BootstrapServerOptions = {}): Promise<IntegrationBootstrapContext> {
+    return BootstrapIntegrationServer(opts);
 }
 
 /** SQL Server provider setup — the locally-proven path (unchanged behavior). */
@@ -115,8 +113,12 @@ async function setupSqlServerProvider(
         options: { encrypt: false, trustServerCertificate: true }
     }).connect();
 
-    await setupSQLServerClient(new SQLServerProviderConfigData(pool, db.Schema));
-    await UserCache.Instance.Refresh(pool);
+    const config = new SQLServerProviderConfigData(pool, db.Schema);
+    if (opts.SharedStorage) {
+        config.LocalStorageProvider = storage; // shared store from the first read
+    }
+    const provider = await setupSQLServerClient(config);
+    await UserCache.Instance.Refresh(provider);
 
     const user = resolveContextUser(opts.ContextUserEmail);
     return {
@@ -131,12 +133,8 @@ async function setupSqlServerProvider(
  * dependency) is dynamically imported so it stays out of the default dependency graph
  * for SQL-Server-only consumers (CLAUDE.md rule #8 category 2; declared in optionalDependencies).
  *
- * NOTE (Phase-0 prerequisite, see plan §10 Step 6): there is no PG-aware user-cache
- * bootstrap yet — `UserCache.Refresh` is mssql-only (raw `sql.Request`), and a fresh
- * provider has no users loaded to seed a RunView-based load. This helper sets up the
- * real provider, then resolves the context user from whatever is already cached; if
- * nothing is, it throws a clear, actionable error rather than fabricating a user. The
- * PG parity CI lane is therefore non-blocking until that framework gap is closed.
+ * `UserCache.Refresh` is dialect-neutral, so the PG path warms the same cache the SQL
+ * Server path does and resolves its context user through the same helper.
  */
 async function setupPostgreSQLProvider(
     db: DbConfig, storage: InstrumentedLocalStorageProvider, opts: BootstrapServerOptions
@@ -148,10 +146,18 @@ async function setupPostgreSQLProvider(
         db.Schema,
         1 // checkRefreshIntervalSeconds > 0 → load metadata on Config
     );
+    if (opts.SharedStorage) {
+        pgConfig.LocalStorageProvider = storage; // shared store from the first read
+    }
     await provider.Config(pgConfig);
     SetProvider(provider as unknown as IMetadataProvider);
+    await UserCache.Instance.Refresh(provider);
+    // setupSQLServerClient runs the startup engines itself; the PostgreSQL provider does not, so
+    // run them here as MJAPI does. Without this, engine-backed checks ran against unloaded engines.
+    const systemUser = UserCache.Instance.GetSystemUser() ?? UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
+    await StartupManager.Instance.Startup(false, systemUser, provider as unknown as IMetadataProvider);
 
-    const user = resolvePostgresContextUser(opts.ContextUserEmail);
+    const user = resolveContextUser(opts.ContextUserEmail);
     return {
         Pool: undefined, User: user, Storage: storage, Provider: Metadata.Provider, Db: db, // global-provider-ok: this dedicated-process bootstrap just installed the one global provider (SetProvider above) — it IS the single provider for this run (D1)
         ClosePool: async () => {

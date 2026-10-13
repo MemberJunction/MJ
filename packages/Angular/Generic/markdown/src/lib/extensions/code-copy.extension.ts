@@ -88,7 +88,7 @@ const DEFAULT_OPTIONS: Required<Omit<CodeCopyOptions, 'onCopy' | 'onError'>> & P
  * @param container The DOM element containing code blocks
  * @param options Configuration options
  */
-export function addCopyButtonsToCodeBlocks(
+export function AddCopyButtonsToCodeBlocks(
   container: HTMLElement,
   options?: CodeCopyOptions
 ): void {
@@ -171,6 +171,14 @@ export function addCopyButtonsToCodeBlocks(
   });
 }
 
+/** @deprecated Use {@link AddCopyButtonsToCodeBlocks}. */
+export function addCopyButtonsToCodeBlocks(
+  container: HTMLElement,
+  options?: CodeCopyOptions
+): void {
+  return AddCopyButtonsToCodeBlocks(container, options);
+}
+
 /**
  * Extract the language class from a code element
  */
@@ -190,10 +198,18 @@ function extractLanguageFromCode(codeElement: Element): string | null {
  * Remove all copy buttons from code blocks in a container
  * Useful for cleanup when component is destroyed
  */
-export function removeCopyButtonsFromCodeBlocks(
+export function RemoveCopyButtonsFromCodeBlocks(
   container: HTMLElement,
   toolbarClass: string = 'code-toolbar'
 ): void {
   const toolbars = container.querySelectorAll(`.${toolbarClass}`);
   toolbars.forEach((toolbar) => toolbar.remove());
+}
+
+/** @deprecated Use {@link RemoveCopyButtonsFromCodeBlocks}. */
+export function removeCopyButtonsFromCodeBlocks(
+  container: HTMLElement,
+  toolbarClass: string = 'code-toolbar'
+): void {
+  return RemoveCopyButtonsFromCodeBlocks(container, toolbarClass);
 }

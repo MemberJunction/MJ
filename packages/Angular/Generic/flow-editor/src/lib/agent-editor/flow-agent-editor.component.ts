@@ -6,13 +6,38 @@ import {
 import { RunView, CompositeKey, TransactionGroupBase } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEvent, FlowConnectionReassignedEvent, FlowNodeTypeConfig } from '../interfaces/flow-types';
+import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEvent, FlowConnectionReassignedEvent, FlowNodeTypeConfig, PromptOption } from '../interfaces/flow-types';
 import { FlowEditorComponent } from '../components/flow-editor.component';
 import { AgentFlowTransformerService, AGENT_STEP_TYPE_CONFIGS } from './agent-flow-transformer.service';
 import { UUIDsEqual } from '@memberjunction/global';
+import { ReadDecisionStepKey } from './decision-step-config';
+import { CheckFlowRun, type FlowRunProblem } from './flow-run-check';
 
 /** View mode for the agent editor */
 export type AgentEditorViewMode = 'diagram' | 'list';
+
+/**
+ * Generates a unique Decision step key among existing flow steps.
+ * Starts with 'decision', then 'decision_2', 'decision_3', etc.
+ */
+export function GenerateUniqueDecisionKey(steps: MJAIAgentStepEntity[]): string {
+  const existingKeys = new Set<string>();
+  for (const s of steps) {
+    const key = s.StepType === 'Decision' ? ReadDecisionStepKey(s.Configuration)?.trim() : undefined;
+    if (key) {
+      existingKeys.add(key);
+    }
+  }
+
+  if (!existingKeys.has('decision')) {
+    return 'decision';
+  }
+  let counter = 2;
+  while (existingKeys.has(`decision_${counter}`)) {
+    counter++;
+  }
+  return `decision_${counter}`;
+}
 
 /**
  * Flow Agent Editor — wraps the generic FlowEditorComponent with
@@ -34,6 +59,29 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
   @Input() AgentID: string | null = null;
   @Input() EditMode = true;
   @Input() FullScreen = false;
+
+  /**
+   * Whether this editor shows its own Save / Edit / Cancel controls.
+   *
+   * **Off by default, and that default is the safe one.** When a host form owns the record's save —
+   * which is the normal case, since the flow is one part of an agent — a Save button here is a
+   * second save button for the same record. The user then has two, they disagree about what "saved"
+   * means, and the unsaved indicator on one says nothing about the other.
+   *
+   * A host that turns this ON is declaring that this editor owns its own persistence (the standalone
+   * or fullscreen self-contained case). A host that leaves it off MUST call
+   * {@link FlowAgentEditorComponent.QueueSaveInto} from its own save, or flow edits will have no way
+   * to reach the database at all.
+   */
+  @Input() ShowSaveControls = false;
+
+  /**
+   * The title shown in the centre of the toolbar. `null` hides it.
+   *
+   * Hidden by hosts whose own page chrome already names the record — repeating it inside the canvas
+   * is a second, smaller title competing with the real one.
+   */
+  @Input() CanvasTitle: string | null = 'Flow Configuration';
 
   // ── Outputs ─────────────────────────────────────────────────
   @Output() FlowSaved = new EventEmitter<void>();
@@ -72,8 +120,9 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
 
   // Picker data (includes icon fields for node rendering)
   protected availableActions: Array<{ ID: string; Name: string; IconClass?: string | null }> = [];
-  protected availablePrompts: Array<{ ID: string; Name: string }> = [];
+  protected availablePrompts: PromptOption[] = [];
   protected availableAgents: Array<{ ID: string; Name: string; IconClass?: string | null; LogoURL?: string | null }> = [];
+  protected decisionModelTypeID: string | null = null;
 
   // Permission state — cached once on init
   protected userCanUpdate = false;
@@ -161,7 +210,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
       },
       {
         EntityName: 'MJ: AI Agent Step Paths',
-        ExtraFilter: `OriginStepID IN (SELECT ID FROM [__mj].[AIAgentStep] WHERE AgentID='${this.AgentID}')`,
+        ExtraFilter: `OriginStepID IN (SELECT ID FROM [__mj].[vwAIAgentSteps] WHERE AgentID='${this.AgentID}')`,
         OrderBy: 'Priority DESC',
         ResultType: 'entity_object'
       }
@@ -175,7 +224,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
 
   private async loadPickerData(): Promise<void> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-    const [actionsResult, promptsResult, agentsResult] = await rv.RunViews([
+    const [actionsResult, promptsResult, agentsResult, decisionModelTypeResult] = await rv.RunViews([
       {
         EntityName: 'MJ: Actions',
         Fields: ['ID', 'Name', 'IconClass'],
@@ -185,7 +234,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
       },
       {
         EntityName: 'MJ: AI Prompts',
-        Fields: ['ID', 'Name'],
+        Fields: ['ID', 'Name', 'AIModelType', 'AIModelTypeID'],
         ExtraFilter: '',
         OrderBy: 'Name ASC',
         ResultType: 'simple'
@@ -196,6 +245,12 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
         ExtraFilter: this.AgentID ? `ID <> '${this.AgentID}'` : '',
         OrderBy: 'Name ASC',
         ResultType: 'simple'
+      },
+      {
+        EntityName: 'MJ: AI Model Types',
+        ExtraFilter: "Name='Decision'",
+        Fields: ['ID'],
+        ResultType: 'simple'
       }
     ]);
 
@@ -203,16 +258,83 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
       ? (actionsResult.Results as Array<{ ID: string; Name: string; IconClass?: string | null }>)
       : [];
     this.availablePrompts = promptsResult.Success
-      ? (promptsResult.Results as Array<{ ID: string; Name: string }>)
+      ? (promptsResult.Results as PromptOption[])
       : [];
     this.availableAgents = agentsResult.Success
       ? (agentsResult.Results as Array<{ ID: string; Name: string; IconClass?: string | null; LogoURL?: string | null }>)
       : [];
+    this.decisionModelTypeID = decisionModelTypeResult.Success && decisionModelTypeResult.Results && decisionModelTypeResult.Results.length > 0
+      ? (decisionModelTypeResult.Results[0] as { ID: string }).ID
+      : null;
   }
 
   private rebuildFlowModel(): void {
-    this.nodes = this.transformer.StepsToNodes(this.steps, this.availableActions, this.availableAgents);
-    this.connections = this.transformer.PathsToConnections(this.paths);
+    this.refreshRunCheck();
+    this.nodes = this.transformer.StepsToNodes(this.steps, this.availableActions, this.availableAgents, this.runProblems);
+    this.connections = this.transformer.PathsToConnections(this.paths, this.runProblems);
+    this.drawnPathProblems = this.pathProblemSignature();
+  }
+
+  // ── Run check ───────────────────────────────────────────────
+
+  /**
+   * Why the flow would not run as it stands — the runtime compiler's and validator's refusals, placed on
+   * the steps and paths they are about (see {@link CheckFlowRun}). Rechecked on every change and before
+   * a save. A save is not blocked by it: an unfinished flow is still worth saving, and the dispatcher
+   * refuses a flow that cannot run before any of it does.
+   */
+  public get RunProblems(): readonly FlowRunProblem[] {
+    return this.runProblems;
+  }
+
+  /** The heading of the run-check banner. */
+  public get RunProblemsTitle(): string {
+    const count = this.runProblems.length;
+    return `${count} ${count === 1 ? 'problem' : 'problems'} would stop this flow from running`;
+  }
+
+  private runProblems: FlowRunProblem[] = [];
+
+  /** The path problems the canvas last drew, so connections are rebuilt only when they change. */
+  private drawnPathProblems = '';
+
+  private refreshRunCheck(): void {
+    this.runProblems = CheckFlowRun(this.steps, this.paths);
+  }
+
+  /** Rechecks the flow and re-marks the canvas with the result. */
+  private applyRunCheck(): void {
+    this.refreshRunCheck();
+    this.markRunProblems();
+  }
+
+  /**
+   * Re-marks every node and path with the last run check. A change to one step — a renamed question, a
+   * removed option — can break a path or a fork elsewhere in the flow. Only nodes whose warning changed
+   * are pushed to the canvas, and connections are rebuilt only when a path's problems changed.
+   */
+  private markRunProblems(): void {
+    for (const node of this.nodes) {
+      const step = this.steps.find(s => UUIDsEqual(s.ID, node.ID));
+      if (!step) continue;
+      const message = this.transformer.BuildNodeWarning(step, this.runProblems) ?? undefined;
+      const status = message ? 'warning' : this.transformer.MapStepStatus(step.Status);
+      if (status === node.Status && message === node.StatusMessage) continue;
+      node.Status = status;
+      node.StatusMessage = message;
+      this.flowEditor?.UpdateNode(node.ID, { Status: status, StatusMessage: message });
+    }
+
+    const pathProblems = this.pathProblemSignature();
+    if (pathProblems !== this.drawnPathProblems) {
+      this.drawnPathProblems = pathProblems;
+      this.connections = this.transformer.PathsToConnections(this.paths, this.runProblems);
+    }
+  }
+
+  /** The path problems of the last run check, as one comparable string. */
+  private pathProblemSignature(): string {
+    return JSON.stringify(this.runProblems.filter(p => p.PathID).map(p => [p.PathID, p.Message]));
   }
 
   /**
@@ -259,47 +381,33 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
 
   // ── Save ────────────────────────────────────────────────────
 
+  /**
+   * Saves the flow on its own — creates a transaction, queues everything into it, submits.
+   *
+   * Used when this editor owns the save (the standalone / fullscreen self-contained mode). A host
+   * that owns the record's save should call {@link QueueSaveInto} instead so the flow lands in the
+   * same transaction as the rest of the record.
+   */
   async Save(): Promise<void> {
     if (this.isSaving || !this.AgentID) return;
     this.isSaving = true;
     this.cdr.detectChanges();
 
     try {
-      // Update positions from canvas to entities
-      this.syncPositionsFromCanvas();
-
-      // Bundle deletes and saves for steps + paths into one transaction so a partial save
-      // can never leave the flow in an inconsistent state.
       const p = this.ProviderToUse;
       const tg = await p.CreateTransactionGroup();
-
-      await this.queueRemovedEntitiesForDelete(tg);
-
-      for (const step of this.steps) {
-        step.TransactionGroup = tg;
-        await step.Save();
-      }
-
-      for (const path of this.paths) {
-        path.TransactionGroup = tg;
-        await path.Save();
-      }
+      await this.QueueSaveInto(tg);
 
       if (!await tg.Submit()) {
         console.error('Failed to save flow — all changes have been rolled back');
         return;
       }
 
-      this.deletedPathIDs = [];
-      this.deletedStepIDs = [];
-      this.hasUnsavedChanges = false;
-      this.lastSaved = new Date();
-
+      this.MarkSaved();
       // Exit self-contained fullscreen edit mode after successful save
       if (this.fullscreenEditMode) {
         this.fullscreenEditMode = false;
       }
-
       this.FlowSaved.emit();
     } catch (err) {
       console.error('Error saving flow:', err);
@@ -307,6 +415,51 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
       this.isSaving = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * Queues every step and path change onto a transaction the CALLER owns and will submit.
+   *
+   * Split out of {@link Save} so a host form can make the flow part of the record's own atomic save
+   * rather than a second, separate one. Two independent saves is how a record ends up looking saved
+   * while the user's step edits are gone — the form succeeds, the flow fails, and nothing says so.
+   *
+   * Deliberately does NOT submit and does NOT clear dirty state: the caller decides whether the
+   * transaction commits, and only the caller knows whether it did. Call {@link MarkSaved} after a
+   * successful submit.
+   */
+  public async QueueSaveInto(tg: TransactionGroupBase): Promise<void> {
+    // Positions live on the canvas until asked for, so pull them onto the entities first — otherwise
+    // a drag made just before saving is the one change that does not persist.
+    this.syncPositionsFromCanvas();
+    // What is saved is what the run check last judged, so the banner never describes an older flow.
+    this.applyRunCheck();
+
+    await this.queueRemovedEntitiesForDelete(tg);
+
+    for (const step of this.steps) {
+      step.TransactionGroup = tg;
+      await step.Save();
+    }
+
+    for (const path of this.paths) {
+      path.TransactionGroup = tg;
+      await path.Save();
+    }
+  }
+
+  /** Clears dirty state after the owning transaction actually committed. */
+  public MarkSaved(): void {
+    this.deletedPathIDs = [];
+    this.deletedStepIDs = [];
+    this.hasUnsavedChanges = false;
+    this.lastSaved = new Date();
+    this.cdr.detectChanges();
+  }
+
+  /** Whether the flow holds edits that have not been written yet. Read by a host that owns the save. */
+  public get HasUnsavedChanges(): boolean {
+    return this.hasUnsavedChanges;
   }
 
   private syncPositionsFromCanvas(): void {
@@ -344,15 +497,23 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
 
   // ── Flow Editor Event Handlers ──────────────────────────────
 
+  /**
+   * A new, empty step entity from the editor's provider. The one place a step is created, so a host or
+   * a spec can supply its own.
+   */
+  protected async CreateStepEntity(): Promise<MJAIAgentStepEntity> {
+    const p = this.ProviderToUse;
+    return p.GetEntityObject<MJAIAgentStepEntity>('MJ: AI Agent Steps', p.CurrentUser);
+  }
+
   protected async onNodeAdded(event: FlowNodeAddedEvent): Promise<void> {
     if (!this.AgentID) return;
 
-    const p = this.ProviderToUse;
-    const step = await p.GetEntityObject<MJAIAgentStepEntity>('MJ: AI Agent Steps', p.CurrentUser);
+    const step = await this.CreateStepEntity();
     step.NewRecord(); // This generates a UUID immediately - available before Save()
     step.AgentID = this.AgentID;
     step.Name = event.Node.Label;
-    step.StepType = event.Node.Type as 'Action' | 'Prompt' | 'Sub-Agent' | 'ForEach' | 'While';
+    step.StepType = event.Node.Type as MJAIAgentStepEntity['StepType'];
     step.Status = 'Active';
     step.StartingStep = this.steps.length === 0; // First step is starting step
     step.PositionX = Math.round(event.DropPosition.X);
@@ -361,13 +522,21 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
     step.RetryCount = 0;
     step.TimeoutSeconds = 600;
 
+    if (step.StepType === 'Decision') {
+      step.PromptID = null;
+      const key = GenerateUniqueDecisionKey(this.steps);
+      step.Configuration = JSON.stringify({ key, state: 'payload', questions: {} }, null, 2);
+    }
+
     // Add the unsaved step to the array - it already has a UUID from NewRecord()
     // This allows connections to be drawn immediately without waiting for a database save
     this.steps.push(step);
+    this.refreshRunCheck();
 
     // Build a FlowNode using the entity's pre-generated ID so Foblex can track it
-    const newNode = this.transformer.StepToNode(step, this.availableActions, this.availableAgents);
+    const newNode = this.transformer.StepToNode(step, this.availableActions, this.availableAgents, this.runProblems);
     this.nodes.push(newNode);
+    this.markRunProblems();
     this.markDirty();
 
     // Select the new node
@@ -456,6 +625,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
       this.paths = this.paths.filter(
         p => !UUIDsEqual(p.OriginStepID, node.ID) && !UUIDsEqual(p.DestinationStepID, node.ID)
       );
+      this.applyRunCheck();
       this.markDirty();
     }
   }
@@ -467,6 +637,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
         this.deletedPathIDs.push(path.ID);
       }
       this.paths = this.paths.filter(p => !UUIDsEqual(p.ID, conn.ID));
+      this.applyRunCheck();
       this.markDirty();
     }
   }
@@ -502,13 +673,14 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
   // ── Properties Panel Events ─────────────────────────────────
 
   protected onStepChanged(step: MJAIAgentStepEntity): void {
+    this.refreshRunCheck();
     // Update the corresponding flow node in-place and push to generic editor
     const node = this.nodes.find(n => UUIDsEqual(n.ID, step.ID));
     if (node) {
       const newLabel = step.Name;
       const newSubtitle = this.transformer.BuildStepSubtitle(step);
       const baseStatus = this.transformer.MapStepStatus(step.Status);
-      const warningMessage = (baseStatus !== 'disabled') ? this.transformer.BuildConfigWarningMessage(step) : null;
+      const warningMessage = this.transformer.BuildNodeWarning(step, this.runProblems);
       const newStatus = warningMessage ? 'warning' : baseStatus;
       const newIsStart = step.StartingStep === true;
 
@@ -547,6 +719,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
         Data: node.Data
       });
     }
+    this.markRunProblems();
     this.markDirty();
     this.cdr.detectChanges();
   }
@@ -638,8 +811,13 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
   }
 
   /** Whether editing is currently allowed — combines parent EditMode + fullscreen self-contained edit */
-  get isEditingActive(): boolean {
+  get IsEditingActive(): boolean {
     return this.EditMode || this.fullscreenEditMode;
+  }
+
+  /** @deprecated Use {@link IsEditingActive}. */
+  get isEditingActive(): boolean {
+    return this.IsEditingActive;
   }
 
   protected toggleFullscreenEditMode(): void {

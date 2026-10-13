@@ -20,19 +20,44 @@ export class ArtifactStateService {
   private _panelMode$ = new BehaviorSubject<'view' | 'edit'>('view');
 
   // Public observable streams
-  public readonly activeArtifactId$ = this._activeArtifactId$.asObservable();
-  public readonly activeVersionNumber$ = this._activeVersionNumber$.asObservable();
-  public readonly isPanelOpen$ = this._isPanelOpen$.asObservable();
-  public readonly panelMode$ = this._panelMode$.asObservable();
+  public readonly ActiveArtifactId$ = this._activeArtifactId$.asObservable();
+
+  /** @deprecated Use {@link ActiveArtifactId$}. */
+  public get activeArtifactId$() {
+    return this.ActiveArtifactId$;
+  }
+  public readonly ActiveVersionNumber$ = this._activeVersionNumber$.asObservable();
+
+  /** @deprecated Use {@link ActiveVersionNumber$}. */
+  public get activeVersionNumber$() {
+    return this.ActiveVersionNumber$;
+  }
+  public readonly IsPanelOpen$ = this._isPanelOpen$.asObservable();
+
+  /** @deprecated Use {@link IsPanelOpen$}. */
+  public get isPanelOpen$() {
+    return this.IsPanelOpen$;
+  }
+  public readonly PanelMode$ = this._panelMode$.asObservable();
+
+  /** @deprecated Use {@link PanelMode$}. */
+  public get panelMode$() {
+    return this.PanelMode$;
+  }
 
   // Derived observable for active artifact
-  public readonly activeArtifact$: Observable<MJArtifactEntity | null> = combineLatest([
-    this.activeArtifactId$,
+  public readonly ActiveArtifact$: Observable<MJArtifactEntity | null> = combineLatest([
+    this.ActiveArtifactId$,
     this._artifacts$
   ]).pipe(
     map(([id, artifacts]) => id ? artifacts.get(id) || null : null),
     shareReplay(1)
   );
+
+  /** @deprecated Use {@link ActiveArtifact$}. */
+  public get activeArtifact$(): Observable<MJArtifactEntity | null> {
+    return this.ActiveArtifact$;
+  }
 
   private _provider: IMetadataProvider | null = null;
 
@@ -58,8 +83,13 @@ export class ArtifactStateService {
    * @param currentUser The current user context
    * @returns True if user has read permission
    */
-  async canReadArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
+  async CanReadArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
     return this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'read', currentUser);
+  }
+
+  /** @deprecated Use {@link CanReadArtifact}. */
+  async canReadArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
+    return this.CanReadArtifact(artifactId, currentUser);
   }
 
   /**
@@ -68,8 +98,13 @@ export class ArtifactStateService {
    * @param currentUser The current user context
    * @returns True if user has edit permission
    */
-  async canEditArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
+  async CanEditArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
     return this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'edit', currentUser);
+  }
+
+  /** @deprecated Use {@link CanEditArtifact}. */
+  async canEditArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
+    return this.CanEditArtifact(artifactId, currentUser);
   }
 
   /**
@@ -78,8 +113,13 @@ export class ArtifactStateService {
    * @param currentUser The current user context
    * @returns True if user has share permission
    */
-  async canShareArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
+  async CanShareArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
     return this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'share', currentUser);
+  }
+
+  /** @deprecated Use {@link CanShareArtifact}. */
+  async canShareArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
+    return this.CanShareArtifact(artifactId, currentUser);
   }
 
   /**
@@ -87,17 +127,22 @@ export class ArtifactStateService {
    * @param id The artifact ID
    * @param versionNumber Optional specific version number
    */
-  openArtifact(id: string, versionNumber?: number): void {
+  OpenArtifact(id: string, versionNumber?: number): void {
     this._activeArtifactId$.next(id);
     this._activeVersionNumber$.next(versionNumber || null);
     this._isPanelOpen$.next(true);
+  }
+
+  /** @deprecated Use {@link OpenArtifact}. */
+  openArtifact(id: string, versionNumber?: number): void {
+    return this.OpenArtifact(id, versionNumber);
   }
 
   /**
    * Opens an artifact by version ID
    * @param versionId The artifact version ID
    */
-  async openArtifactByVersionId(versionId: string): Promise<void> {
+  async OpenArtifactByVersionId(versionId: string): Promise<void> {
     try {
       const md = this.Provider;
       const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions');
@@ -105,7 +150,7 @@ export class ArtifactStateService {
 
       if (loaded) {
         // Open the artifact with the specific version number
-        this.openArtifact(version.ArtifactID, version.VersionNumber);
+        this.OpenArtifact(version.ArtifactID, version.VersionNumber);
       } else {
         console.error('Failed to load artifact version:', versionId);
       }
@@ -114,56 +159,91 @@ export class ArtifactStateService {
     }
   }
 
+  /** @deprecated Use {@link OpenArtifactByVersionId}. */
+  async openArtifactByVersionId(versionId: string): Promise<void> {
+    return this.OpenArtifactByVersionId(versionId);
+  }
+
   /**
    * Closes the artifact panel
    */
-  closeArtifact(): void {
+  CloseArtifact(): void {
     this._activeArtifactId$.next(null);
     this._activeVersionNumber$.next(null);
     this._isPanelOpen$.next(false);
     this._panelMode$.next('view');
   }
 
+  /** @deprecated Use {@link CloseArtifact}. */
+  closeArtifact(): void {
+    return this.CloseArtifact();
+  }
+
   /**
    * Toggles the panel open/closed state
    */
-  togglePanel(): void {
+  TogglePanel(): void {
     this._isPanelOpen$.next(!this._isPanelOpen$.value);
+  }
+
+  /** @deprecated Use {@link TogglePanel}. */
+  togglePanel(): void {
+    return this.TogglePanel();
   }
 
   /**
    * Sets the panel mode
    * @param mode The mode ('view' or 'edit')
    */
-  setPanelMode(mode: 'view' | 'edit'): void {
+  SetPanelMode(mode: 'view' | 'edit'): void {
     this._panelMode$.next(mode);
+  }
+
+  /** @deprecated Use {@link SetPanelMode}. */
+  setPanelMode(mode: 'view' | 'edit'): void {
+    return this.SetPanelMode(mode);
   }
 
   /**
    * Caches an artifact in memory
    * @param artifact The artifact to cache
    */
-  cacheArtifact(artifact: MJArtifactEntity): void {
+  CacheArtifact(artifact: MJArtifactEntity): void {
     const current = this._artifacts$.value;
     current.set(artifact.ID, artifact);
     this._artifacts$.next(new Map(current));
+  }
+
+  /** @deprecated Use {@link CacheArtifact}. */
+  cacheArtifact(artifact: MJArtifactEntity): void {
+    return this.CacheArtifact(artifact);
   }
 
   /**
    * Removes an artifact from cache
    * @param id The artifact ID
    */
-  removeCachedArtifact(id: string): void {
+  RemoveCachedArtifact(id: string): void {
     const current = this._artifacts$.value;
     current.delete(id);
     this._artifacts$.next(new Map(current));
   }
 
+  /** @deprecated Use {@link RemoveCachedArtifact}. */
+  removeCachedArtifact(id: string): void {
+    return this.RemoveCachedArtifact(id);
+  }
+
   /**
    * Clears all cached artifacts
    */
-  clearCache(): void {
+  ClearCache(): void {
     this._artifacts$.next(new Map());
+  }
+
+  /** @deprecated Use {@link ClearCache}. */
+  clearCache(): void {
+    return this.ClearCache();
   }
 
   /**
@@ -172,7 +252,7 @@ export class ArtifactStateService {
    * @param currentUser The current user context
    * @returns Array of artifacts
    */
-  async loadArtifactsForConversation(conversationId: string, currentUser: UserInfo): Promise<MJArtifactEntity[]> {
+  async LoadArtifactsForConversation(conversationId: string, currentUser: UserInfo): Promise<MJArtifactEntity[]> {
     try {
       const rv = RunView.FromMetadataProvider(this.Provider);
       const result = await rv.RunView<MJArtifactEntity>(
@@ -188,7 +268,7 @@ export class ArtifactStateService {
 
       if (result.Success && result.Results) {
         // Cache all artifacts
-        result.Results.forEach(artifact => this.cacheArtifact(artifact));
+        result.Results.forEach(artifact => this.CacheArtifact(artifact));
         return result.Results;
       }
       return [];
@@ -198,13 +278,18 @@ export class ArtifactStateService {
     }
   }
 
+  /** @deprecated Use {@link LoadArtifactsForConversation}. */
+  async loadArtifactsForConversation(conversationId: string, currentUser: UserInfo): Promise<MJArtifactEntity[]> {
+    return this.LoadArtifactsForConversation(conversationId, currentUser);
+  }
+
   /**
    * Loads artifacts for a collection
    * @param collectionId The collection ID
    * @param currentUser The current user context
    * @returns Array of artifacts
    */
-  async loadArtifactsForCollection(collectionId: string, currentUser: UserInfo): Promise<MJArtifactEntity[]> {
+  async LoadArtifactsForCollection(collectionId: string, currentUser: UserInfo): Promise<MJArtifactEntity[]> {
     try {
       const rv = RunView.FromMetadataProvider(this.Provider);
       // Load artifacts through the collection join - use subquery to get artifact IDs from versions
@@ -224,7 +309,7 @@ export class ArtifactStateService {
       );
 
       if (artifactsResult.Success && artifactsResult.Results) {
-        artifactsResult.Results.forEach(artifact => this.cacheArtifact(artifact));
+        artifactsResult.Results.forEach(artifact => this.CacheArtifact(artifact));
         return artifactsResult.Results;
       }
       return [];
@@ -234,6 +319,11 @@ export class ArtifactStateService {
     }
   }
 
+  /** @deprecated Use {@link LoadArtifactsForCollection}. */
+  async loadArtifactsForCollection(collectionId: string, currentUser: UserInfo): Promise<MJArtifactEntity[]> {
+    return this.LoadArtifactsForCollection(collectionId, currentUser);
+  }
+
   /**
    * Loads artifact VERSIONS for a collection (all versions, not deduplicated by artifact ID)
    * This method returns each version as a separate item with its parent artifact metadata
@@ -241,7 +331,7 @@ export class ArtifactStateService {
    * @param currentUser The current user context
    * @returns Array of objects containing version and parent artifact info
    */
-  async loadArtifactVersionsForCollection(
+  async LoadArtifactVersionsForCollection(
     collectionId: string,
     currentUser: UserInfo,
     bypassCache: boolean = false
@@ -308,7 +398,7 @@ export class ArtifactStateService {
         if (artifactResult.Success && artifactResult.Results) {
           artifactResult.Results.forEach(a => {
             artifactMap.set(a.ID, a);
-            this.cacheArtifact(a); // Cache parent artifacts
+            this.CacheArtifact(a); // Cache parent artifacts
           });
         }
       }
@@ -326,20 +416,29 @@ export class ArtifactStateService {
     }
   }
 
+  /** @deprecated Use {@link LoadArtifactVersionsForCollection}. */
+  async loadArtifactVersionsForCollection(
+    collectionId: string,
+    currentUser: UserInfo,
+    bypassCache: boolean = false
+  ): Promise<Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }>> {
+    return this.LoadArtifactVersionsForCollection(collectionId, currentUser, bypassCache);
+  }
+
   /**
    * Loads a single artifact by ID
    * @param id The artifact ID
    * @param currentUser The current user context
    * @returns The artifact entity or null
    */
-  async loadArtifact(id: string, currentUser: UserInfo): Promise<MJArtifactEntity | null> {
+  async LoadArtifact(id: string, currentUser: UserInfo): Promise<MJArtifactEntity | null> {
     try {
       const md = this.Provider;
       const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', currentUser);
       const loaded = await artifact.Load(id);
 
       if (loaded) {
-        this.cacheArtifact(artifact);
+        this.CacheArtifact(artifact);
         return artifact;
       }
       return null;
@@ -349,13 +448,18 @@ export class ArtifactStateService {
     }
   }
 
+  /** @deprecated Use {@link LoadArtifact}. */
+  async loadArtifact(id: string, currentUser: UserInfo): Promise<MJArtifactEntity | null> {
+    return this.LoadArtifact(id, currentUser);
+  }
+
   /**
    * Creates a new artifact
    * @param data Artifact data
    * @param currentUser The current user context
    * @returns The created artifact
    */
-  async createArtifact(data: Partial<MJArtifactEntity>, currentUser: UserInfo): Promise<MJArtifactEntity> {
+  async CreateArtifact(data: Partial<MJArtifactEntity>, currentUser: UserInfo): Promise<MJArtifactEntity> {
     const md = this.Provider;
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', currentUser);
 
@@ -363,11 +467,16 @@ export class ArtifactStateService {
 
     const saved = await artifact.Save();
     if (saved) {
-      this.cacheArtifact(artifact);
+      this.CacheArtifact(artifact);
       return artifact;
     } else {
       throw new Error(artifact.LatestResult?.Message || 'Failed to create artifact');
     }
+  }
+
+  /** @deprecated Use {@link CreateArtifact}. */
+  async createArtifact(data: Partial<MJArtifactEntity>, currentUser: UserInfo): Promise<MJArtifactEntity> {
+    return this.CreateArtifact(data, currentUser);
   }
 
   /**
@@ -377,7 +486,7 @@ export class ArtifactStateService {
    * @param currentUser The current user context
    * @returns True if successful
    */
-  async updateArtifact(id: string, updates: Partial<MJArtifactEntity>, currentUser: UserInfo): Promise<boolean> {
+  async UpdateArtifact(id: string, updates: Partial<MJArtifactEntity>, currentUser: UserInfo): Promise<boolean> {
     // Check edit permission
     const canEdit = await this.artifactPermissionService.checkPermission(id, currentUser.ID, 'edit', currentUser);
     if (!canEdit) {
@@ -396,11 +505,16 @@ export class ArtifactStateService {
 
     const saved = await artifact.Save();
     if (saved) {
-      this.cacheArtifact(artifact);
+      this.CacheArtifact(artifact);
       return true;
     } else {
       throw new Error(artifact.LatestResult?.Message || 'Failed to update artifact');
     }
+  }
+
+  /** @deprecated Use {@link UpdateArtifact}. */
+  async updateArtifact(id: string, updates: Partial<MJArtifactEntity>, currentUser: UserInfo): Promise<boolean> {
+    return this.UpdateArtifact(id, updates, currentUser);
   }
 
   /**
@@ -409,7 +523,7 @@ export class ArtifactStateService {
    * @param currentUser The current user context
    * @returns True if successful
    */
-  async deleteArtifact(id: string, currentUser: UserInfo): Promise<boolean> {
+  async DeleteArtifact(id: string, currentUser: UserInfo): Promise<boolean> {
     // Check edit permission (required for deletion)
     const canEdit = await this.artifactPermissionService.checkPermission(id, currentUser.ID, 'edit', currentUser);
     if (!canEdit) {
@@ -426,14 +540,19 @@ export class ArtifactStateService {
 
     const deleted = await artifact.Delete();
     if (deleted) {
-      this.removeCachedArtifact(id);
+      this.RemoveCachedArtifact(id);
       if (this._activeArtifactId$.value === id) {
-        this.closeArtifact();
+        this.CloseArtifact();
       }
       return true;
     } else {
       throw new Error(artifact.LatestResult?.Message || 'Failed to delete artifact');
     }
+  }
+
+  /** @deprecated Use {@link DeleteArtifact}. */
+  async deleteArtifact(id: string, currentUser: UserInfo): Promise<boolean> {
+    return this.DeleteArtifact(id, currentUser);
   }
 
   /**
@@ -443,7 +562,7 @@ export class ArtifactStateService {
    * @param currentUser The current user context
    * @param versionId Optional specific version ID. If not provided, uses latest version
    */
-  async addToCollection(artifactId: string, collectionId: string, currentUser: UserInfo, versionId?: string): Promise<void> {
+  async AddToCollection(artifactId: string, collectionId: string, currentUser: UserInfo, versionId?: string): Promise<void> {
     // Check edit permission (required to modify collection membership)
     const canEdit = await this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'edit', currentUser);
     if (!canEdit) {
@@ -484,13 +603,18 @@ export class ArtifactStateService {
     }
   }
 
+  /** @deprecated Use {@link AddToCollection}. */
+  async addToCollection(artifactId: string, collectionId: string, currentUser: UserInfo, versionId?: string): Promise<void> {
+    return this.AddToCollection(artifactId, collectionId, currentUser, versionId);
+  }
+
   /**
    * Removes all versions of an artifact from a collection
    * @param artifactId The artifact ID
    * @param collectionId The collection ID
    * @param currentUser The current user context
    */
-  async removeFromCollection(artifactId: string, collectionId: string, currentUser: UserInfo): Promise<void> {
+  async RemoveFromCollection(artifactId: string, collectionId: string, currentUser: UserInfo): Promise<void> {
     // Check edit permission (required to modify collection membership)
     const canEdit = await this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'edit', currentUser);
     if (!canEdit) {
@@ -526,5 +650,10 @@ export class ArtifactStateService {
         throw new Error(errorMsg);
       }
     }
+  }
+
+  /** @deprecated Use {@link RemoveFromCollection}. */
+  async removeFromCollection(artifactId: string, collectionId: string, currentUser: UserInfo): Promise<void> {
+    return this.RemoveFromCollection(artifactId, collectionId, currentUser);
   }
 }

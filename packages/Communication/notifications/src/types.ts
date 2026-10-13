@@ -1,3 +1,5 @@
+import type { NotificationScope } from './scoped-notification-config-resolver';
+
 /**
  * Individual channel settings for notification delivery.
  * Each channel can be independently enabled or disabled.
@@ -68,6 +70,31 @@ export interface SendNotificationParams {
    * When specified, these channels are used instead of resolving from preferences.
    */
   forceDeliveryChannels?: DeliveryChannels;
+
+  /**
+   * A **ceiling** on delivery, applied last — after preferences, type defaults, and
+   * `forceDeliveryChannels`. Only an explicit `false` restricts a channel; `true` and
+   * `undefined` leave it to normal resolution.
+   *
+   * This exists for callers that carry their own per-record channel toggles — a Scheduled Job's
+   * `NotifyViaEmail`/`NotifyViaInApp`, a User Routine's equivalents — where two different people
+   * have a say: the person who configured the job chose which channels it may use, and the
+   * recipient chose which channels they want. Composing them is an intersection, and neither
+   * existing knob expresses it. `forceDeliveryChannels` would let the job override the
+   * recipient's opt-out, and omitting the toggles entirely would let a channel the job never
+   * asked for fire off a type default.
+   *
+   * Because it can only subtract, a caller cannot use this to escalate past a preference —
+   * which is the property that makes it safe to expose.
+   */
+  allowedDeliveryChannels?: Partial<DeliveryChannels>;
+
+  /**
+   * The scope the notice is sent in, for `MJ: Scoped Notification Configs`: the caller's primary record (its
+   * application, say) and named secondary dimensions such as `origin`. The engine adds the recipient and the
+   * recipient's roles as scopes itself. Omit it and only global rows apply.
+   */
+  scope?: NotificationScope;
 }
 
 /**

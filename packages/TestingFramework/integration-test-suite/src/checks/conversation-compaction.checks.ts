@@ -30,6 +30,10 @@ import {
     ConversationWindowSourceRow,
     MJConversationEntity,
     MJConversationDetailEntity,
+    MJAIAgentSessionEntity,
+    MJArtifactEntity,
+    MJArtifactVersionEntity,
+    MJConversationDetailArtifactEntity,
 } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent, ConversationToolManager, ConversationSearchHit, ConversationToolMessage, PriorTurnToolResultCache } from '@memberjunction/ai-agents';
@@ -54,7 +58,7 @@ function requireFixture(ctx: IntegrationCheckContext): ConversationCompactionFix
  */
 async function CreateConversationFixture(
     ctx: IntegrationCheckContext,
-    messages: Array<{ role: 'User' | 'AI'; text: string }>
+    messages: Array<{ role: 'User' | 'AI'; text: string; sessionId?: string }>
 ): Promise<{ Conversation: MJConversationEntity; Details: MJConversationDetailEntity[] }> {
     const fixture = requireFixture(ctx);
     const conversation = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
@@ -71,6 +75,9 @@ async function CreateConversationFixture(
         detail.Role = message.role;
         detail.Message = message.text;
         detail.HiddenToUser = false;
+        if (message.sessionId) {
+            detail.AgentSessionID = message.sessionId;   // collapses to ONE timeline card
+        }
         if (!(await detail.Save())) {
             throw new Error(`Fixture detail save failed: ${detail.LatestResult?.CompleteMessage}`);
         }
@@ -113,6 +120,88 @@ interface BaseAgentStepInternals {
     createStepEntity(p: Record<string, unknown>): Promise<MJAIAgentRunStepEntityExtended>;
     loadPriorTurnToolResultSteps(p: Record<string, unknown>): Promise<CarryForwardStepRecord[]>;
     cachePriorTurnToolResults(): void;
+}
+
+/** First existing row's ID for a reference-only lookup, or fail loudly. */
+async function RequireAnyId(ctx: IntegrationCheckContext, entityName: string): Promise<string> {
+    const result = await new RunView().RunView<{ ID: string }>({
+        EntityName: entityName, Fields: ['ID'], MaxRows: 1, ResultType: 'simple',
+    }, ctx.User);
+    Assert(result.Success && result.Results.length > 0, `an existing ${entityName} row to reference`);
+    return result.Results[0].ID;
+}
+
+/**
+ * A real (tagged) agent session, so details can carry a genuine `AgentSessionID`.
+ *
+ * The FK is enforced, so the session-expansion check cannot fake the stamp — which is the
+ * point: the behaviour under test is the engine issuing a SECOND read keyed on that column.
+ */
+async function CreateSessionFixture(ctx: IntegrationCheckContext, conversationId: string): Promise<string> {
+    const fixture = requireFixture(ctx);
+    const session = await ctx.Provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', ctx.User);
+    session.AgentID = await RequireAnyId(ctx, 'MJ: AI Agents');
+    session.UserID = ctx.User.ID;
+    session.Status = 'Closed';
+    session.ConversationID = conversationId;
+    session.LastActiveAt = new Date();
+    Assert(await session.Save(), `session fixture save: ${session.LatestResult?.CompleteMessage}`);
+    fixture.WindowRoots.push(session);   // details reference it — deleted after them
+    return session.ID;
+}
+
+/**
+ * Attaches a real artifact to a detail through all THREE tables the window rebuild walks:
+ * artifact → version → detail/version junction.
+ *
+ * `LoadDetailWindow` reconstructs the card the stored query used to hand over pre-joined, so
+ * nothing short of the real chain exercises it — this is precisely the seam unit mocks cannot
+ * reach.
+ */
+async function AttachArtifactFixture(
+    ctx: IntegrationCheckContext,
+    detailId: string,
+    direction: 'Input' | 'Output',
+    name: string
+): Promise<{ ArtifactID: string; VersionID: string }> {
+    const fixture = requireFixture(ctx);
+
+    const artifact = await ctx.Provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
+    artifact.Name = `${name} ${FIXTURE_TAG}`;
+    artifact.EnvironmentID = await RequireAnyId(ctx, 'MJ: Environments');
+    artifact.TypeID = await RequireAnyId(ctx, 'MJ: Artifact Types');
+    artifact.UserID = ctx.User.ID;
+    artifact.Visibility = 'Always';
+    Assert(await artifact.Save(), `artifact fixture save: ${artifact.LatestResult?.CompleteMessage}`);
+    fixture.WindowRoots.push(artifact);
+
+    const version = await ctx.Provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', ctx.User);
+    version.ArtifactID = artifact.ID;
+    version.VersionNumber = 1;
+    version.Name = `${name} v1`;
+    version.Content = JSON.stringify({ probe: name });
+    version.UserID = ctx.User.ID;
+    Assert(await version.Save(), `version fixture save: ${version.LatestResult?.CompleteMessage}`);
+    fixture.WindowRoots.push(version);   // LIFO teardown puts this before its artifact
+
+    const junction = await ctx.Provider.GetEntityObject<MJConversationDetailArtifactEntity>(
+        'MJ: Conversation Detail Artifacts', ctx.User
+    );
+    junction.ConversationDetailID = detailId;
+    junction.ArtifactVersionID = version.ID;
+    junction.Direction = direction;
+    Assert(await junction.Save(), `junction fixture save: ${junction.LatestResult?.CompleteMessage}`);
+    fixture.WindowJunctions.push(junction);   // references a detail — deleted before it
+
+    return { ArtifactID: artifact.ID, VersionID: version.ID };
+}
+
+/** Sequential `mN` messages, for the paging checks. */
+function PlainMessages(count: number): Array<{ role: 'User' | 'AI'; text: string }> {
+    return Array.from({ length: count }, (_, i) => ({
+        role: (i % 2 === 0 ? 'User' : 'AI') as 'User' | 'AI',
+        text: `w${i + 1}`,
+    }));
 }
 
 /** The ordered conversation-compaction bundle. Mutates the DB by design (own tagged fixtures only). */
@@ -430,6 +519,150 @@ export const ConversationCompactionChecks: NamedCheck[] = [
             AssertEqual(new Set(sequences).size, 4, `all concurrent Sequences distinct (got ${JSON.stringify(sequences)})`);
             AssertEqual(JSON.stringify(sequences), JSON.stringify([2, 3, 4, 5]), 'consecutive after the seed row — no gaps, no duplicates');
         }
+    },
+    {
+        Id: 'conversation-compaction.CC13',
+        Name: 'CC13: LoadDetailWindow — newest page, chronological, real trigger Sequence bounds',
+        Fn: async (ctx): Promise<void> => {
+            // Its own 12-row conversation: CC1's fixture is 3 rows and is mutated by CC4-CC7.
+            const entry = await CreateConversationFixture(ctx, PlainMessages(12));
+            const window = await ConversationEngine.Instance.LoadDetailWindow(
+                { ConversationID: entry.Conversation.ID, PageSize: 4, RawOverread: 4 }, ctx.User
+            );
+
+            AssertEqual(window.Details.length, 4, 'RawOverread respected against the live view');
+            // The read is Sequence DESC; the engine reverses it. Sequences come from the real
+            // trgConversationDetail_AssignSequence trigger, not from a fixture literal.
+            AssertEqual(window.Details.map(d => d.Message).join(','), 'w9,w10,w11,w12', 'newest page, chronological');
+            AssertEqual(window.OldestSequence, 9, 'OldestSequence is the page floor');
+            AssertEqual(window.NewestSequence, 12, 'NewestSequence is the conversation tail');
+            AssertEqual(window.HasMoreAbove, true, 'probe finds the eight rows below the page');
+            AssertEqual(window.Failed, false, 'a successful read is not flagged');
+        }
+    },
+    {
+        Id: 'conversation-compaction.CC14',
+        Name: 'CC14: BeforeSequence pages strictly older, and the first page reports no more above',
+        Fn: async (ctx): Promise<void> => {
+            const entry = requireFixture(ctx).Conversations[requireFixture(ctx).Conversations.length - 1];
+            const older = await ConversationEngine.Instance.LoadDetailWindow(
+                { ConversationID: entry.Conversation.ID, BeforeSequence: 9, PageSize: 4, RawOverread: 4 }, ctx.User
+            );
+            AssertEqual(older.Details.map(d => d.Message).join(','), 'w5,w6,w7,w8', 'the page below Sequence 9');
+            Assert(older.Details.every(d => d.Sequence < 9), 'strictly older than the bound — no overlap');
+            AssertEqual(older.HasMoreAbove, true, 'four rows still below');
+
+            const first = await ConversationEngine.Instance.LoadDetailWindow(
+                { ConversationID: entry.Conversation.ID, BeforeSequence: 5, PageSize: 4, RawOverread: 4 }, ctx.User
+            );
+            AssertEqual(first.Details.map(d => d.Message).join(','), 'w1,w2,w3,w4', 'the start of the conversation');
+            AssertEqual(first.HasMoreAbove, false, 'nothing below Sequence 1 — the sentinel retires');
+        }
+    },
+    {
+        Id: 'conversation-compaction.CC15',
+        Name: 'CC15: a window is never written into the engine detail cache',
+        Fn: async (ctx): Promise<void> => {
+            // The highest-consequence invariant in the windowing work, proven against a live
+            // engine rather than a mock: GetAgentContextWindow reads _detailCache as COMPLETE
+            // history, so a partial entry there starves the agent silently and with no error.
+            const entry = await CreateConversationFixture(ctx, PlainMessages(6));
+            Assert(!ConversationEngine.Instance.HasCachedDetails(entry.Conversation.ID), 'cache cold before the window read');
+
+            await ConversationEngine.Instance.LoadDetailWindow(
+                { ConversationID: entry.Conversation.ID, PageSize: 2, RawOverread: 2 }, ctx.User
+            );
+            Assert(!ConversationEngine.Instance.HasCachedDetails(entry.Conversation.ID), 'window did NOT populate _detailCache');
+
+            // And the full-history API still returns everything for the same conversation.
+            const agentWindow = await ConversationEngine.Instance.GetAgentContextWindow(entry.Conversation.ID, ctx.User);
+            AssertEqual(agentWindow.length, 6, 'agent context window still sees all six rows');
+        }
+    },
+    {
+        Id: 'conversation-compaction.CC16',
+        Name: 'CC16: session expansion completes a realtime session split by the page boundary',
+        Fn: async (ctx): Promise<void> => {
+            // Rows 5-7 share one session. A newest-4 read lands on w7 as its oldest row, which
+            // is session-stamped — the engine must issue a second, session-keyed read for w5-w6
+            // or the card renders from a partial row set AND repeats on the next older page.
+            const conversationId = (await CreateConversationFixture(ctx, [{ role: 'User', text: 'seed' }]))
+                .Conversation.ID;
+            const sessionId = await CreateSessionFixture(ctx, conversationId);
+            const fixture = requireFixture(ctx);
+            const entry = fixture.Conversations[fixture.Conversations.length - 1];
+
+            for (let i = 2; i <= 10; i++) {
+                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(
+                    'MJ: Conversation Details', ctx.User
+                );
+                detail.ConversationID = conversationId;
+                detail.Role = 'AI';
+                detail.Message = `w${i}`;
+                detail.HiddenToUser = false;
+                if (i >= 5 && i <= 7) {
+                    detail.AgentSessionID = sessionId;
+                }
+                Assert(await detail.Save(), `session-row save: ${detail.LatestResult?.CompleteMessage}`);
+                entry.Details.push(detail);
+            }
+
+            const window = await ConversationEngine.Instance.LoadDetailWindow(
+                { ConversationID: conversationId, PageSize: 4, RawOverread: 4 }, ctx.User
+            );
+
+            const stamped = window.Details.filter(d => d.AgentSessionID === sessionId).map(d => d.Message);
+            AssertEqual(stamped.join(','), 'w5,w6,w7', 'every row of the session came along');
+            // 4 requested + the 2 the expansion reached back for.
+            AssertEqual(window.Details.length, 6, 'page widened by exactly the missing session rows');
+            AssertEqual(window.OldestSequence, 5, 'OldestSequence moved to the session floor');
+        }
+    },
+    {
+        Id: 'conversation-compaction.CC17',
+        Name: 'CC17: artifact rebuild joins junction → version → artifact for the window rows',
+        Fn: async (ctx): Promise<void> => {
+            const entry = await CreateConversationFixture(ctx, [
+                { role: 'User', text: 'ask' },
+                { role: 'AI', text: 'answer with artifact' },
+            ]);
+            const target = entry.Details[1];
+            const created = await AttachArtifactFixture(ctx, target.ID, 'Output', 'Window probe artifact');
+
+            const window = await ConversationEngine.Instance.LoadDetailWindow(
+                { ConversationID: entry.Conversation.ID }, ctx.User
+            );
+
+            const artifacts = window.ArtifactsByDetailId.get(target.ID);
+            Assert(!!artifacts && artifacts.length === 1, 'one artifact reconstructed for the detail');
+            const card = artifacts![0];
+            AssertEqual(card.ArtifactID, created.ArtifactID, 'artifact id from the third table');
+            AssertEqual(card.ArtifactVersionID, created.VersionID, 'version id from the junction');
+            AssertEqual(card.VersionNumber, 1, 'version number carried through');
+            Assert((card.ArtifactName ?? '').startsWith('Window probe artifact'), 'artifact NAME resolved (third read)');
+            Assert(!!card.ArtifactType, 'artifact TYPE resolved');
+        }
+    },
+    {
+        Id: 'conversation-compaction.CC18',
+        Name: "CC18: only Direction='Output' artifacts reach the window",
+        Fn: async (ctx): Promise<void> => {
+            // Mirrors GetConversationComplete: inputs are what the user handed the agent and
+            // are not rendered as result cards. Dropping the filter would double every card on
+            // a detail that both consumed and produced an artifact.
+            const entry = await CreateConversationFixture(ctx, [{ role: 'AI', text: 'both directions' }]);
+            const target = entry.Details[0];
+            await AttachArtifactFixture(ctx, target.ID, 'Output', 'Kept output');
+            await AttachArtifactFixture(ctx, target.ID, 'Input', 'Excluded input');
+
+            const window = await ConversationEngine.Instance.LoadDetailWindow(
+                { ConversationID: entry.Conversation.ID }, ctx.User
+            );
+
+            const artifacts = window.ArtifactsByDetailId.get(target.ID) ?? [];
+            AssertEqual(artifacts.length, 1, 'the Input artifact was filtered out');
+            Assert((artifacts[0].ArtifactName ?? '').startsWith('Kept output'), 'the surviving card is the Output one');
+        }
     }
 ];
 
@@ -441,12 +674,16 @@ for (const check of ConversationCompactionChecks) {
 // INSIDE the ordered checks); Teardown deletes everything FK-ordered, best-effort per record.
 IntegrationCheckRegistry.Instance.RegisterLifecycle('conversation-compaction', {
     Setup: async ctx => {
-        ctx.CompactionFixture = { Conversations: [], AgentRuns: [], Steps: [] };
+        ctx.CompactionFixture = { Conversations: [], AgentRuns: [], Steps: [], WindowJunctions: [], WindowRoots: [] };
     },
     Teardown: async ctx => {
         const fixture = ctx.CompactionFixture;
         if (!fixture) {
             return;
+        }
+        // Junctions point AT conversation details, so they go before the details below.
+        for (const junction of fixture.WindowJunctions) {
+            try { await junction.Delete(); } catch (e) { console.error('Window junction cleanup failed:', e); }
         }
         for (const step of fixture.Steps) {
             try { await step.Delete(); } catch (e) { console.error('Step fixture cleanup failed:', e); }
@@ -454,15 +691,23 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('conversation-compaction', {
         for (const run of fixture.AgentRuns) {
             try { await run.Delete(); } catch (e) { console.error('Agent run fixture cleanup failed:', e); }
         }
+        // Details BEFORE conversations, as before — but now in a pass of their own, because
+        // WindowRoots has to run between the two: a detail references its agent session, and
+        // that session references the conversation. Deleting a conversation with the loop
+        // still holding its session would fail the FK.
         for (const entry of fixture.Conversations) {
-            try {
-                for (const detail of entry.Details) {
-                    await detail.Delete();
-                }
-                await entry.Conversation.Delete();
-            } catch (e) {
-                console.error('Conversation fixture cleanup failed:', e);
+            for (const detail of entry.Details) {
+                try { await detail.Delete(); } catch (e) { console.error('Detail fixture cleanup failed:', e); }
             }
+        }
+        // REVERSE insertion order: an artifact version was pushed after its artifact, so
+        // reversing puts the version first. Sessions land here too — after the details that
+        // pointed at them, before the conversations they point at.
+        for (const root of [...fixture.WindowRoots].reverse()) {
+            try { await root.Delete(); } catch (e) { console.error('Window root cleanup failed:', e); }
+        }
+        for (const entry of fixture.Conversations) {
+            try { await entry.Conversation.Delete(); } catch (e) { console.error('Conversation fixture cleanup failed:', e); }
         }
         ctx.CompactionFixture = undefined;
     }

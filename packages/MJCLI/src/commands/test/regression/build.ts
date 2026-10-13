@@ -2,10 +2,10 @@ import { Args, Command, Flags } from '@oclif/core';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import {
-  dockerComposeArgs,
+  DockerComposeArgs,
   GEN_FORMS_SCRIPT,
-  requireMonorepoRoot,
-  spawnInherit,
+  RequireMonorepoRoot,
+  SpawnInherit,
 } from '../../../lib/regression/docker-helpers.js';
 
 const GENERATED_FORMS_DIR = 'docker/regression/.docker-generated/MJExplorer-forms/Entities';
@@ -43,22 +43,22 @@ export default class TestRegressionBuild extends Command {
 
   async run(): Promise<void> {
     const { argv, flags } = await this.parse(TestRegressionBuild);
-    requireMonorepoRoot();
+    RequireMonorepoRoot();
 
     if (!flags['skip-gen-forms'] && !existsSync(path.resolve(GENERATED_FORMS_DIR))) {
       this.log(
         '▶ .docker-generated/ is empty — running `gen-forms` first (one-time, ~5 min)...',
       );
-      const genCode = await spawnInherit('bash', [GEN_FORMS_SCRIPT]);
+      const genCode = await SpawnInherit('bash', [GEN_FORMS_SCRIPT]);
       if (genCode !== 0) this.exit(genCode);
     }
 
     // Pass-through any positional service names so users can rebuild a
     // single image (e.g. `mj test regression build mjexplorer`).
     const services = (argv as string[]).filter(Boolean);
-    const composeArgs = dockerComposeArgs('full', ['build', ...services]);
+    const composeArgs = DockerComposeArgs('full', ['build', ...services]);
 
-    const code = await spawnInherit('docker', composeArgs);
+    const code = await SpawnInherit('docker', composeArgs);
     if (code !== 0) this.exit(code);
   }
 }

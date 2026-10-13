@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { LinkedInBaseAction } from '../linkedin-base.action';
+import { LinkedInBaseAction, LinkedInPostSummary } from '../linkedin-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialPost } from '../../../base/base-social.action';
@@ -92,17 +92,17 @@ export class LinkedInGetPersonalPostsAction extends LinkedInBaseAction {
         try {
             // LinkedIn v2 API has limited personal analytics
             // We can get basic engagement data from the share itself
-            const response = await this.axiosInstance.get(`/ugcPosts/${shareId}`);
+            const response = await this.httpClient.Get<LinkedInPostSummary>(`/ugcPosts/${shareId}`);
             
-            if (response.data) {
+            if (response.Data) {
                 // Extract available metrics from the post data
                 return {
                     totalShareStatistics: {
                         impressionCount: 0, // Not available for personal posts
                         clickCount: 0, // Not available for personal posts
                         engagement: 0, // Not available for personal posts
-                        likeCount: response.data.likesSummary?.totalLikes || 0,
-                        commentCount: response.data.commentsSummary?.totalComments || 0,
+                        likeCount: response.Data.likesSummary?.totalLikes || 0,
+                        commentCount: response.Data.commentsSummary?.totalComments || 0,
                         shareCount: 0, // Not available in this endpoint
                         uniqueImpressionsCount: 0 // Not available for personal posts
                     }

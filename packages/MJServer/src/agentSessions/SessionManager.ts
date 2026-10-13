@@ -1,4 +1,5 @@
 import { IMetadataProvider, UserInfo, LogError, RunView } from '@memberjunction/core';
+import { MJLruCache } from '@memberjunction/global';
 import {
     MJAIAgentSessionEntity,
     MJAIAgentSessionChannelEntity,
@@ -6,8 +7,9 @@ import {
 } from '@memberjunction/core-entities';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
+import type { BridgeDisconnectReason } from '@memberjunction/ai-bridge-base';
 import { GetHostInstanceID } from './HostInstance.js';
-import { writeReturningVisitorRecap } from './ReturningVisitorRecap.js';
+import { WriteReturningVisitorRecap } from './ReturningVisitorRecap.js';
 import { ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
@@ -54,6 +56,24 @@ export interface CreateSessionInput {
 export type SessionCloseReason = 'Explicit' | 'Janitor' | 'Shutdown' | 'Error';
 
 /**
+ * The {@link SessionCloseReason} for a session whose bridged agent has left (see
+ * {@link SessionManager.CloseSessionForEndedBridge}). The bridge's reason carries over where the session has the same one;
+ * `HostEnded` (everyone left the room, the call hung up) closes it as `Explicit`, people ending it, as phone calls close
+ * theirs.
+ */
+function sessionCloseReasonForBridgeEnd(reason: BridgeDisconnectReason): SessionCloseReason {
+    switch (reason) {
+        case 'Error':
+        case 'Janitor':
+        case 'Shutdown':
+            return reason;
+        case 'Explicit':
+        case 'HostEnded':
+            return 'Explicit';
+    }
+}
+
+/**
  * Thrown by {@link SessionManager.CreateSession} when the caller lacks `CanRun` on the target
  * agent. No session row is created — denial happens before any write. Distinct error type so the
  * resolver layer can map it to an authorization-shaped GraphQL error rather than a generic failure.
@@ -78,9 +98,10 @@ const HEARTBEAT_MIN_WRITE_INTERVAL_MS = 3_000;
  * `contextUser` and request-scoped `IMetadataProvider` so all entity operations run under the
  * correct identity/provider and never pin the process-global provider.
  *
- * The only in-memory state it holds is a small per-session last-heartbeat-write timestamp map used
- * purely to coalesce {@link Heartbeat} writes, plus the injected {@link RealtimeClientSessionService}
- * used by {@link finalizeObservabilityRuns}; it carries no user or provider state across calls.
+ * The only in-memory state it holds is a small per-session last-heartbeat-write timestamp cache used
+ * purely to coalesce {@link Heartbeat} writes (see {@link heartbeatLastWrite} for why it's bounded),
+ * plus the injected {@link RealtimeClientSessionService} used by {@link finalizeObservabilityRuns}; it
+ * carries no user or provider state across calls.
  *
  * Responsibilities:
  * - **Create** — authorize (`CanRun`), optionally mint a Conversation, persist an `Active` session.
@@ -94,8 +115,24 @@ const HEARTBEAT_MIN_WRITE_INTERVAL_MS = 3_000;
  * this layer, so close here only reconciles the durable record + channel rows.
  */
 export class SessionManager {
-    /** session ID (lowercased) → epoch ms of its last persisted `LastActiveAt` write. */
-    private heartbeatLastWrite = new Map<string, number>();
+    /**
+     * session ID (lowercased) → epoch ms of its last persisted `LastActiveAt` write. Written by
+     * {@link persistHeartbeat}, read by {@link heartbeatWriteDue}/{@link shouldForceWrite}, and
+     * normally deleted by {@link CloseSession}. Bounded with `MJLruCache` (rather than a plain `Map`)
+     * for the same reason as `RealtimeClientSessionService.promptRunWriteChains`: `SessionManager` is
+     * constructed fresh by every resolver that needs one (`AgentSessionResolver`,
+     * `RealtimeClientSessionResolver`, `RealtimeBridgeResolver`) plus `SessionJanitor`'s own instance,
+     * so each is itself a process-lifetime singleton with its own copy of this map. A session's
+     * heartbeats land through one resolver's instance, but the overwhelmingly common close path — a
+     * crashed tab, a dropped connection, any disconnect that never round-trips an explicit close
+     * mutation — is reconciled by `SessionJanitor`'s staleness/shutdown sweeps through ITS OWN
+     * `SessionManager`, which never touches the originating instance's map. The TTL/maxSize eviction
+     * here is what keeps that scenario bounded instead of an unbounded per-instance leak.
+     */
+    private readonly heartbeatLastWrite = new MJLruCache<string, number>({
+        maxSize: 5_000,
+        ttlMs: 4 * 60 * 60 * 1000, // 4h backstop — generous vs. the janitor's 15m staleness threshold
+    });
 
     /**
      * The {@link RealtimeClientSessionService} used to finalize a closing session's co-agent
@@ -169,7 +206,7 @@ export class SessionManager {
         if (!session) {
             return false;
         }
-        this.heartbeatLastWrite.delete(agentSessionID.toLowerCase());
+        this.heartbeatLastWrite.Delete(agentSessionID.toLowerCase());
 
         if (session.Status === 'Closed') {
             // Idempotent — already terminal. Still notify the channel-plugin host so a session
@@ -189,8 +226,70 @@ export class SessionManager {
         // Returning-visitor recap (RV2): if this session's conversation is returning-visitor-enabled,
         // summarize it into an Active memory note so the visitor's next session opens with prior context.
         // Best-effort + no-op for non-returning-visitor conversations; never blocks teardown.
-        await writeReturningVisitorRecap(session.ConversationID, session.AgentID, contextUser, provider);
+        await WriteReturningVisitorRecap(session.ConversationID, session.AgentID, contextUser, provider);
         return true;
+    }
+
+    /**
+     * Closes a session that was created for one bridged agent (a bot in a meeting room) once that agent's bridge has
+     * ended, whatever ended it: the agent was stopped, the meeting was ended, everyone left, the model session was lost.
+     * Without this the session stays `Active` until the janitor's staleness sweep closes it, 15 minutes or more later.
+     *
+     * The close is {@link CloseSession}, the one the janitor runs, with the bridge's reason: `Explicit` for a stop, an
+     * ended meeting or an emptied room (`HostEnded`), otherwise the bridge's own (`Error`, `Janitor`, `Shutdown`). A
+     * session already closed (by the janitor, or by its user) keeps its reason.
+     *
+     * Never throws: it runs as the bridge's end-of-session bookkeeping. A failure is logged and leaves the session to the
+     * janitor, as before.
+     *
+     * @param agentSessionID The session created for the bridged agent.
+     * @param reason Why the bridge ended.
+     * @param contextUser The user the session was created for.
+     * @param provider The metadata provider the session was created through.
+     * @returns `true` when the session is (or already was) closed.
+     */
+    public async CloseSessionForEndedBridge(
+        agentSessionID: string,
+        reason: BridgeDisconnectReason,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        try {
+            return await this.CloseSession(agentSessionID, contextUser, provider, sessionCloseReasonForBridgeEnd(reason));
+        } catch (e) {
+            LogError(
+                `SessionManager.CloseSessionForEndedBridge could not close agent session ${agentSessionID} after its bridge ended ` +
+                    `(${reason}); the janitor will: ${e instanceof Error ? e.message : String(e)}`,
+            );
+            return false;
+        }
+    }
+
+    /**
+     * Closes a session that was created for one agent's time in a room when that agent failed to start: its model session
+     * could not open, the bot's token could not be minted, the bridge did not start. The agent never joined, so no
+     * end-of-session hook will close the session; without this it stays `Active` until the janitor's staleness sweep.
+     *
+     * The close is {@link CloseSession} with reason `Error`. A session already closed keeps its reason.
+     *
+     * Never throws: it runs while the caller handles the failed start, whose error is the one the caller reports. A failure
+     * is logged and leaves the session to the janitor.
+     *
+     * @param agentSessionID The session created for the agent.
+     * @param contextUser The user the session was created for.
+     * @param provider The metadata provider the session was created through.
+     * @returns `true` when the session is (or already was) closed.
+     */
+    public async CloseSessionForFailedStart(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<boolean> {
+        try {
+            return await this.CloseSession(agentSessionID, contextUser, provider, 'Error');
+        } catch (e) {
+            LogError(
+                `SessionManager.CloseSessionForFailedStart could not close agent session ${agentSessionID} after its agent failed ` +
+                    `to start; the janitor will: ${e instanceof Error ? e.message : String(e)}`,
+            );
+            return false;
+        }
     }
 
     /**
@@ -517,7 +616,7 @@ export class SessionManager {
 
     /** True once the per-session coalescing window has elapsed since the last persisted write. */
     private heartbeatWriteDue(key: string): boolean {
-        const last = this.heartbeatLastWrite.get(key);
+        const last = this.heartbeatLastWrite.Get(key);
         return last == null || (Date.now() - last) >= HEARTBEAT_MIN_WRITE_INTERVAL_MS;
     }
 
@@ -527,7 +626,7 @@ export class SessionManager {
      * swallowed by coalescing.
      */
     private shouldForceWrite(key: string, _provider: IMetadataProvider): boolean {
-        return !this.heartbeatLastWrite.has(key);
+        return !this.heartbeatLastWrite.Has(key);
     }
 
     /** Loads, bumps `LastActiveAt`, reactivates `Idle → Active`, saves, and records the write time. */
@@ -546,7 +645,14 @@ export class SessionManager {
         }
         const saved = await this.saveOrLog(session, 'Heartbeat');
         if (saved) {
-            this.heartbeatLastWrite.set(agentSessionID.toLowerCase(), Date.now());
+            this.heartbeatLastWrite.Set(agentSessionID.toLowerCase(), Date.now());
+            // A live session keeps its co-agent run live too — on whichever instance gets its heartbeats —
+            // or the agent-run watchdog force-fails the run mid-call. Same elevation as the finalize path.
+            this.realtimeClientSessionService.KeepCoAgentRunAlive(
+                this.parseSessionRunConfig(session.Config_).coAgentRunID,
+                provider,
+                ResolveScopedAnonymousRunUser(contextUser),
+            );
         }
         return saved;
     }

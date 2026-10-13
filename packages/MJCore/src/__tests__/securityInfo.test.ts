@@ -485,3 +485,76 @@ describe('AuditLogTypeInfo', () => {
         expect(info.Description).toBe('Entity was read');
     });
 });
+
+// ─── `$` in substituted values (issue #3171) ───────────────────────────
+
+/**
+ * `String.prototype.replace` expands `$$`, `$&`, `` $` `` and `$'` inside a
+ * *string* replacement. Every token substitution below feeds runtime data into
+ * an RLS predicate, so a `$` in that data used to rewrite the predicate itself —
+ * the exact outcome the `'`-escaping on these lines exists to prevent.
+ */
+describe('RowLevelSecurityFilterInfo — $ in substituted values (#3171)', () => {
+    // `$` followed by an ordinary character is NOT special, which is why casual
+    // testing with a `$` value passes; the four metacharacter forms are the bug.
+    const HOSTILE = ['ac$$me', 'ac$&me', 'ac$`me', "ac$'me", 'ac$1me', 'ac$me'];
+
+    /**
+     * The contract is "substituted verbatim, *after* SQL quote-escaping" — the
+     * `'`-doubling is deliberate and must survive; only the `$` expansion is the bug.
+     */
+    const sqlEscape = (s: string) => s.replace(/'/g, "''");
+
+    describe('MarkupFilterText user tokens', () => {
+        for (const value of HOSTILE) {
+            it(`substitutes ${JSON.stringify(value)} verbatim`, () => {
+                const filter = new RowLevelSecurityFilterInfo({
+                    FilterText: "OwnerID = '{{UserID}}' AND TenantID = '{{UserName}}'"
+                });
+                const user = new UserInfo(null, { ID: 'u-123', Name: value });
+
+                expect(filter.MarkupFilterText(user)).toBe(
+                    `OwnerID = 'u-123' AND TenantID = '${sqlEscape(value)}'`
+                );
+            });
+        }
+    });
+
+    describe('MagicLinkScope tokens', () => {
+        for (const value of HOSTILE) {
+            it(`substitutes ResourceID ${JSON.stringify(value)} verbatim`, () => {
+                const filter = new RowLevelSecurityFilterInfo({
+                    FilterText: "ID = '{{ScopeResourceID}}'"
+                });
+                const user = new UserInfo(null, { ID: 'u-1' });
+                user.MagicLinkScope = { ResourceID: value, ResourceType: 'Report' };
+
+                expect(filter.MarkupFilterText(user)).toBe(`ID = '${sqlEscape(value)}'`);
+            });
+        }
+    });
+
+    describe('Acting* tokens', () => {
+        for (const value of HOSTILE) {
+            it(`substitutes ActingOrganizationID ${JSON.stringify(value)} verbatim`, () => {
+                const filter = new RowLevelSecurityFilterInfo({
+                    FilterText: "OrgID = '{{ActingOrganizationID}}'"
+                });
+                const user = new UserInfo(null, { ID: 'u-1' });
+                user.APIKeyActingContext = { ActingOrganizationID: value };
+
+                expect(filter.MarkupFilterText(user)).toBe(`OrgID = '${sqlEscape(value)}'`);
+            });
+        }
+
+        it('renders an ActingCompanyIDs list containing $ verbatim', () => {
+            const filter = new RowLevelSecurityFilterInfo({
+                FilterText: 'CompanyID IN ({{ActingCompanyIDs}})'
+            });
+            const user = new UserInfo(null, { ID: 'u-1' });
+            user.APIKeyActingContext = { ActingCompanyIDs: ['a$&b', 'c$`d'] };
+
+            expect(filter.MarkupFilterText(user)).toBe("CompanyID IN ('a$&b','c$`d')");
+        });
+    });
+});

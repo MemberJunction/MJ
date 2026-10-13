@@ -17,13 +17,16 @@
  * @author MemberJunction.com
  */
 
-import { IRealtimeSession, ChatMessage, BaseRealtimeModel, RealtimeVoiceOption, GetAIAPIKey } from '@memberjunction/ai';
+import { IRealtimeSession, ChatMessage, BaseRealtimeModel, RealtimeVoiceOption, RealtimeToolDefinition, AIAPIKeyResolver, MakeAIAPIKeyResolver } from '@memberjunction/ai';
 import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, NormalizeUUID, IndexByUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
+import type { ResolvedModelPersona } from '@memberjunction/ai-engine-base';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from '../base-agent';
-import { RealtimeClientSessionService } from './realtime-client-session-service';
+import { RealtimeClientSessionService, RealtimeHostToolsResolver } from './realtime-client-session-service';
+import { SelectRealtimeVendorForModel } from './realtime-vendor-resolution';
+import { RealtimeModelShowsAvatar } from './realtime-video-output-gate';
 
 /**
  * The context a bridge passes to {@link CreateBridgeRealtimeSession}. Structurally compatible with the
@@ -71,6 +74,40 @@ export interface BridgeRealtimeSessionContext {
     MeetingMode?: boolean;
     /** The names the agent answers to (display name + aliases) — phrasing for the meeting prompt only. */
     SelfNames?: string[];
+    /**
+     * Tools the host declares and executes itself (a phone call's `transfer_call` / `send_dtmf` / `end_call`).
+     * Added to the model's tool set; executed through the runtime's local tool handler
+     * (see `GetBridgeRealtimeRuntime`).
+     */
+    HostTools?: RealtimeToolDefinition[];
+    /**
+     * Optional callback that allows the host to resolve host tools dynamically based on
+     * the model, vendor, and driver actually resolved for the session, before session opening.
+     */
+    ResolveHostTools?: RealtimeHostToolsResolver;
+    /** Host-authored instructions appended to the system prompt (e.g. the phone-call and caller framing). */
+    HostFraming?: string;
+    /**
+     * Role-tagged transcript lines (`User: …` / `Assistant: …`) of the conversation so far, framed into the
+     * prompt as "earlier in this conversation". Set when a lost model session is re-opened mid-call so the new
+     * session remembers what was said.
+     */
+    PriorTranscript?: string;
+    /** Earlier turns to seed the model's context. Defaults to none (a fresh call has no history). */
+    ConversationMessages?: ChatMessage[];
+    /** The `MJ: Conversations` row the session writes to — stamped on the co-agent observability run. */
+    ConversationID?: string;
+    /**
+     * `'room'` when the bridge's bot can publish the agent's avatar into the room (the LiveKit coordinator asks its native
+     * module first). Flows to the session's avatar request, so the driver may render it. Absent: audio only.
+     */
+    AvatarDelivery?: 'room';
+    /**
+     * `true` when the session is a phone call (a carrier call, or a SIP call in a LiveKit room). Flows to
+     * `params.data.realtimePhoneCall`: the session then asks the driver for no avatar (the caller sees no video) and
+     * reports `phone` as its avatar status.
+     */
+    PhoneCall?: boolean;
 }
 
 /**
@@ -79,7 +116,7 @@ export interface BridgeRealtimeSessionContext {
  *
  * @param ctx The bridge session context (agent id/name + user + provider).
  * @returns The live realtime session to hand to `AIBridgeEngine.StartBridgeSession`.
- * @throws When the agent can't be resolved, has no DriverClass, the driver can't be instantiated, or no
+ * @throws When the agent can't be resolved, names a DriverClass no BaseAgent subclass is registered for, or no
  *   usable Realtime model is configured (surfaced from {@link BaseAgent.StartBridgeRealtimeSession}).
  */
 export async function CreateBridgeRealtimeSession(ctx: BridgeRealtimeSessionContext): Promise<IRealtimeSession> {
@@ -94,24 +131,68 @@ export async function CreateBridgeRealtimeSession(ctx: BridgeRealtimeSessionCont
         );
     }
 
-    // Instantiate the right BaseAgent subclass exactly as AgentRunner does (agent DriverClass, else its type's).
-    const agentType = AIEngine.Instance.AgentTypes.find((t) => UUIDsEqual(t.ID, agent.TypeID));
-    const driverClass = agent.DriverClass || agentType?.DriverClass;
-    if (!driverClass) {
-        throw new Error(`CreateBridgeRealtimeSession: agent '${agent.Name}' has no DriverClass (and its type none either).`);
-    }
-
-    const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgent>(BaseAgent, driverClass);
-    if (!instance) {
-        throw new Error(`CreateBridgeRealtimeSession: ClassFactory could not create a BaseAgent for DriverClass '${driverClass}'.`);
+    // Instantiate the agent's own BaseAgent subclass — or the plain BaseAgent when it declares none.
+    //
+    // ── WHY NOT `agentType.DriverClass` AS A FALLBACK (#4111) ──
+    //
+    // `AIAgentType.DriverClass` names a **BaseAgentType** subclass — the three shipped values are
+    // `LoopAgentType`, `FlowAgentType`, `RealtimeAgentType`. The key needed here is a **BaseAgent**
+    // one. Different ClassFactory registries, matched by exact key against the base class NAME, so
+    // the type's key resolved nothing here — ever. Dead code that looked alive.
+    //
+    // What that produced is worth stating precisely, because the wrong story invites the wrong fix:
+    // with no registration and no `@RequiresSubclass` marker, `resolveAndInstantiate` returns
+    // `new BaseClassConstructor(...)` — a plain `BaseAgent`. So every such seat silently ran the
+    // BASE implementation, dropping whatever subclass behaviour it was configured for. It did not
+    // run some other agent's class. The only signal was one `console.warn` from
+    // `reportResolutionFailure`, deduped per base+key and capped at 3 per base: effectively
+    // invisible in a busy log, which is the whole problem.
+    //
+    // A NULL key is the path that really does hand back somebody else's agent —
+    // `GetAllRegistrations` skips the key filter entirely for null, so the highest-priority
+    // registered `BaseAgent` subclass wins. That is why the else-branch below constructs
+    // `new BaseAgent()` directly instead of calling `CreateInstance(BaseAgent, null)`.
+    //
+    // Most agents declare no `DriverClass` at all and are meant to run on the base implementation
+    // (that is what makes them data rather than code), so an absent one is NOT an error — it is the
+    // common case, and the old throw was unreachable only because the wrong-registry lookup always
+    // produced a truthy key.
+    //
+    // Dropping the type fallback loses nothing: agent-type behaviour is resolved separately inside
+    // `BaseAgent` via `BaseAgentType.GetAgentTypeInstance`, so a seat on the plain `BaseAgent` still
+    // gets Loop/Realtime type semantics.
+    // Trimmed like every other externally-sourced string in this file (`RealtimeVoice`,
+    // `RealtimeModelID`, `AgentSessionID`): a whitespace-only value is a truthy key that would
+    // otherwise reach the ClassFactory and fail with a confusing quoted-blank message.
+    const driverClass = agent.DriverClass?.trim() || undefined;
+    let instance: BaseAgent | null;
+    if (driverClass) {
+        // `TryCreateInstance`, not `CreateInstance`: an unresolvable key must be an error here rather
+        // than a hollow anchor-base object that answers plausibly and wrongly.
+        const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseAgent>(BaseAgent, driverClass);
+        instance = resolution.Resolved ? resolution.Instance : null;
+        if (!instance) {
+            throw new Error(
+                `CreateBridgeRealtimeSession: no BaseAgent subclass is registered as '${driverClass}' ` +
+                    `(agent '${agent.Name}'). Refusing the base-class fallback: it would run a different ` +
+                    `agent than the one configured, in this agent's voice.`,
+            );
+        }
+    } else {
+        // `new BaseAgent()` and NOT `CreateInstance(BaseAgent, null)`: a null key makes
+        // `GetAllRegistrations` skip the key filter, so the factory would return the
+        // highest-priority registered subclass — an arbitrary agent. Direct construction is the only
+        // form that reliably yields the base implementation.
+        instance = new BaseAgent();
     }
 
     return instance.StartBridgeRealtimeSession({
         agent,
         contextUser: ctx.ContextUser,
         provider,
-        // A fresh bridge session starts with no prior turns; memory context degrades gracefully to empty.
-        conversationMessages: [] as ChatMessage[],
+        // A fresh bridge session starts with no prior turns; memory context degrades gracefully to empty. A
+        // re-opened session (model-drop recovery) is given what was said so far via PriorTranscript instead.
+        conversationMessages: ctx.ConversationMessages ?? ([] as ChatMessage[]),
         // Realtime extras ride params.data: the TARGET agent the co-agent voices via `invoke-target-agent`
         // (without it the co-agent stays idle), plus optional per-session dev overrides for the model/voice
         // so two agents in the same room can sound distinct. Omitted keys are simply absent.
@@ -141,8 +222,29 @@ function buildRealtimeData(ctx: BridgeRealtimeSessionContext): Record<string, un
     if (ctx.MeetingMode === true) {
         data.realtimeMeetingMode = true;
     }
+    if (ctx.HostTools && ctx.HostTools.length > 0) {
+        data.realtimeHostTools = ctx.HostTools;
+    }
+    if (ctx.ResolveHostTools) {
+        data.resolveHostTools = ctx.ResolveHostTools;
+    }
+    if (ctx.HostFraming && ctx.HostFraming.trim().length > 0) {
+        data.realtimeHostFraming = ctx.HostFraming.trim();
+    }
+    if (ctx.PriorTranscript && ctx.PriorTranscript.trim().length > 0) {
+        data.realtimePriorTranscript = ctx.PriorTranscript.trim();
+    }
+    if (ctx.ConversationID && ctx.ConversationID.trim().length > 0) {
+        data.conversationId = ctx.ConversationID.trim();
+    }
     if (ctx.SelfNames && ctx.SelfNames.length > 0) {
         data.realtimeSelfNames = ctx.SelfNames;
+    }
+    if (ctx.AvatarDelivery === 'room') {
+        data.realtimeAvatarDelivery = 'room';
+    }
+    if (ctx.PhoneCall === true) {
+        data.realtimePhoneCall = true;
     }
     return Object.keys(data).length > 0 ? data : undefined;
 }
@@ -171,14 +273,34 @@ export async function FinalizeBridgeCoAgentRuns(
     await new RealtimeClientSessionService().FinalizeCoAgentRunsBySession(agentSessionID, success, contextUser, provider);
 }
 
+/**
+ * A voice the dev model/voice picker offers: one per persona, or one per voice only the driver declares. Two personas can
+ * share a voice `ID` (a voice, and the same voice with a face), so {@link PersonaID} tells them apart. A persona voice also
+ * carries the avatar that comes with it and the persona's preview image; a voice only the driver declares carries none of
+ * the three.
+ */
+export interface RealtimeModelVoiceOption extends RealtimeVoiceOption {
+    /** The persona this voice belongs to (`MJ: AI Personas.ID`). Absent for a voice only the driver declares. */
+    PersonaID?: string;
+    /**
+     * The avatar that comes with this voice: the `APIName` of the persona's preset Video binding on the model's vendor,
+     * which is what `realtime.video.avatarId` takes. Absent when the persona has no such binding there, or only a custom
+     * one (custom avatars are not supported), and on a model that shows no avatar there (its Video/Output row turns
+     * video off, or its driver renders none on that vendor's endpoint).
+     */
+    AvatarID?: string;
+    /** The persona's preview image (`MJ: AI Personas.PreviewImageURL`), when it has one. */
+    PreviewImageURL?: string;
+}
+
 /** An active Realtime model paired with the voices its driver supports — for the dev model/voice picker. */
 export interface RealtimeModelVoices {
     /** The `MJ: AI Models` row id. */
     ModelID: string;
     /** The model's display name. */
     ModelName: string;
-    /** The provider-native voices the model's driver declares (empty when it declares none). */
-    Voices: RealtimeVoiceOption[];
+    /** The model's persona voices on its vendor, then the driver's other voices (empty when there are none). */
+    Voices: RealtimeModelVoiceOption[];
 }
 
 /**
@@ -186,14 +308,24 @@ export interface RealtimeModelVoices {
  * model/voice picker. Only models with an Active vendor + resolvable API key + ClassFactory driver are
  * returned (a model you can't actually run isn't worth offering). Voices come from the driver
  * ({@link BaseRealtimeModel.SupportedVoices}) — the near-term, driver-owned source of truth.
+ * A persona voice whose persona also has a preset Video binding on the same vendor names that avatar
+ * ({@link RealtimeModelVoiceOption.AvatarID}), when the model shows avatars on that vendor
+ * ({@link RealtimeModelShowsAvatar}: its Video/Output row allows video or it has none, and the driver
+ * renders avatars on its endpoint); driver voices never do. So the picker marks a voice "Comes with an
+ * avatar" only where a call can show one. A persona with a face doesn't stand in for its plain voice, so
+ * the plain voice is listed too.
  *
  * @param contextUser The user the engine config runs as (server-side).
  * @param provider The request-scoped metadata provider (multi-provider safe).
+ * @param resolveAPIKey Key-resolution seam deciding which vendors count as runnable. Defaults to the
+ *   platform lookup (`AI_VENDOR_API_KEY__<driver>`); the voice-picker query has no run context and
+ *   passes none, so today the list always reflects the platform's keys.
  * @returns Active realtime models, each with its driver's voices.
  */
 export async function GetRealtimeModelVoices(
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
+    resolveAPIKey: AIAPIKeyResolver = MakeAIAPIKeyResolver(),
 ): Promise<RealtimeModelVoices[]> {
     await AIEngine.Instance.Config(false, contextUser, provider);
     const isRealtime = (t: string | null | undefined): boolean =>
@@ -204,29 +336,77 @@ export async function GetRealtimeModelVoices(
 
     const out: RealtimeModelVoices[] = [];
     for (const model of models) {
-        const driverClass = resolveRealtimeDriverClass(model.ID);
+        const selection = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
+        const driverClass = selection?.DriverClass ?? null;
         if (!driverClass) {
             continue; // no active vendor with a resolvable key — not runnable, so omit
         }
+
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
-            BaseRealtimeModel, driverClass, GetAIAPIKey(driverClass),
+            BaseRealtimeModel, driverClass, resolveAPIKey(driverClass),
         );
-        out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: instance?.SupportedVoices ?? [] });
+
+        // 1. Consult metadata first (Personas & PersonaVendors carry curated names/descriptions, and avatars where the
+        //    model shows them on this vendor)
+        const showsAvatar = instance ? RealtimeModelShowsAvatar({ ModelID: model.ID, APIName: selection.APIName, Model: instance }, AIEngine.Instance) : false;
+        const voices = personaVoiceOptions(model.ID, selection.VendorID, showsAvatar);
+
+        // 2. Union with driver SupportedVoices: append the driver voices no persona offers plainly, unless excluded
+        appendDriverVoices(voices, instance?.SupportedVoices ?? [], model.ID, selection.VendorID);
+
+        out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: voices });
     }
     return out;
 }
 
-/** The DriverClass of the highest-priority Active vendor (with a resolvable API key) for a model, or null. */
-function resolveRealtimeDriverClass(modelID: string): string | null {
-    const vendors = AIEngine.Instance.ModelVendors
-        .filter((mv) => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
-        .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
-    for (const v of vendors) {
-        if (GetAIAPIKey(v.DriverClass!)) {
-            return v.DriverClass!;
+/**
+ * Appends the driver's voices that no persona already offers as a plain voice (without a face), skipping the ones the
+ * model explicitly excludes (`IsSupported === false`). A persona with a face doesn't stand in for its plain voice, so the
+ * voice stays pickable without the face. Driver voices have no persona: no avatar, no image.
+ */
+function appendDriverVoices(voices: RealtimeModelVoiceOption[], driverVoices: RealtimeVoiceOption[], modelID: string, vendorID: string): void {
+    const excluded = new Set(
+        AIEngine.Instance.GetModelPersonaExclusions(modelID, 'Audio', vendorID).map((name) => name.toLowerCase())
+    );
+    for (const dv of driverVoices) {
+        const id = dv.ID.toLowerCase();
+        if (!excluded.has(id) && !voices.some((v) => !v.AvatarID && v.ID.toLowerCase() === id)) {
+            voices.push({ ID: dv.ID, Name: dv.Name });
         }
     }
-    return null;
+}
+
+/**
+ * The model's persona voices on a vendor, one per persona, in persona order. On a model that shows avatars there, a
+ * persona whose preset Video binding on the same vendor the model supports carries that binding's `APIName` as its avatar
+ * (the face the session asks for when the voice is picked); a binding on any other vendor doesn't count, nor does a custom
+ * one, and with no vendor there is nothing to match. On a model that shows none, no voice comes with an avatar.
+ *
+ * @param showsAvatar Whether the model shows avatars on this vendor ({@link RealtimeModelShowsAvatar}).
+ */
+function personaVoiceOptions(modelID: string, vendorID: string, showsAvatar: boolean): RealtimeModelVoiceOption[] {
+    const faces = vendorID && showsAvatar ? AIEngine.Instance.GetModelPersonas(modelID, 'Video', vendorID).filter(isPresetFace) : [];
+    // First face per persona wins, as faces.find() would.
+    const facesByPersona = IndexByUUID(faces, (f) => f.Persona.ID);
+    return AIEngine.Instance.GetModelPersonas(modelID, 'Audio', vendorID).map((voice) => {
+        const face = facesByPersona.Get(voice.Persona.ID);
+        const image = voice.Persona.PreviewImageURL?.trim();
+        return {
+            ID: voice.PersonaVendor.APIName,
+            Name: voice.Persona.Name,
+            PersonaID: voice.Persona.ID,
+            ...(face ? { AvatarID: face.PersonaVendor.APIName.trim() } : {}),
+            ...(image ? { PreviewImageURL: image } : {}),
+        };
+    });
+}
+
+/**
+ * Whether a Video binding is a face a picked voice can bring: a preset (`Avatar.Kind` absent or `'preset'`). Custom avatars
+ * are not supported, so a session asking for one would stay audio only.
+ */
+function isPresetFace(face: ResolvedModelPersona): boolean {
+    return (face.PersonaVendor.VendorSettingsObject?.Avatar?.Kind ?? 'preset') !== 'custom';
 }
 
 /** Resolves the agent entity from the engine cache by id (preferred), then by case-insensitive name. */

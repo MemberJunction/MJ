@@ -132,41 +132,16 @@ export interface RecordSnapshot {
 // Dependency graph types
 // ---------------------------------------------------------------------------
 
-/**
- * A node in a record dependency graph.
- */
-export interface DependencyNode {
-    /** Entity name */
-    EntityName: string;
-    /** Entity metadata */
-    EntityInfo: EntityInfo;
-    /** The record's primary key */
-    RecordKey: CompositeKey;
-    /** The record's primary key as a concatenated string */
-    RecordID: string;
-    /** Current field values of the record */
-    RecordData: Record<string, unknown>;
-    /** Relationship from parent to this node (null for root) */
-    Relationship: EntityRelationshipInfo | null;
-    /** Child/dependent record nodes */
-    Children: DependencyNode[];
-    /** Depth in the graph (0 = root) */
-    Depth: number;
-}
-
-/**
- * Options for walking the dependency graph.
- */
-export interface WalkOptions {
-    /** Maximum recursion depth (default: 10) */
-    MaxDepth?: number;
-    /** Only include these entities */
-    EntityFilter?: string[];
-    /** Skip these entities */
-    ExcludeEntities?: string[];
-    /** Include soft-deleted records (default: false) */
-    IncludeDeleted?: boolean;
-}
+// NOTE: Dependency graph types have moved to @memberjunction/record-graph.
+// Re-exported here for backward compatibility.
+export type {
+    DependencyNode,
+    GraphNode,
+    WalkOptions,
+    WalkStats,
+    GraphEdge,
+    EdgeKind,
+} from '@memberjunction/record-graph';
 
 // ---------------------------------------------------------------------------
 // Diff types

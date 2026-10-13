@@ -28,6 +28,8 @@ vi.mock('@memberjunction/core', () => ({
 import { ComponentManager } from '../component-manager/component-manager';
 import { ComponentRegistry } from '../registry/component-registry';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { ComponentCompiler } from '../compiler';
+import type { RuntimeContext } from '../types';
 
 /**
  * Creates a minimal mock ComponentCompiler.
@@ -44,7 +46,7 @@ function createMockCompiler() {
       loadedLibraries: new Map(),
     })),
     setBabelInstance: vi.fn(),
-  } as any;
+  } as unknown as ComponentCompiler;
 }
 
 /**
@@ -56,7 +58,7 @@ function createMockRuntimeContext() {
     globals: {},
     libraries: {},
     getLibrary: vi.fn(),
-  } as any;
+  } as unknown as RuntimeContext;
 }
 
 /**
@@ -289,7 +291,7 @@ describe('ComponentManager', () => {
         name: 'Dashboard',
         code: 'function Dashboard() {}',
       });
-      delete (minimalSpec as any).dependencies;
+      delete minimalSpec.dependencies;
 
       const result = await manager.loadHierarchy(minimalSpec);
       expect(result.success).toBe(true);

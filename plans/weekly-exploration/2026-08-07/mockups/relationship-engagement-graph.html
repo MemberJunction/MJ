@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Constituent 360 — Relationship Graph &amp; Engagement</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-brand-primary-hover: #1e3f8c;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page);
+    color: var(--mj-text-primary);
+    line-height: 1.5;
+    display: flex;
+    min-height: 100vh;
+    font-size: 14px;
+  }
+  .sidebar {
+    width: var(--sidebar-width); min-width: var(--sidebar-width);
+    background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default);
+    display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; overflow-y: auto;
+  }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .brand i { font-size: 18px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; cursor: default; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .breadcrumb { color: var(--mj-text-muted); font-size: 13px; }
+  .breadcrumb b { color: var(--mj-text-primary); }
+  .topbar-actions { display: flex; gap: 8px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: default; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+
+  .record-header { background: var(--mj-bg-surface); padding: 20px 28px; border-bottom: 1px solid var(--mj-border-default); display: flex; gap: 20px; align-items: center; }
+  .avatar { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, var(--mj-brand-primary), #5b7fd4); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; flex-shrink: 0; }
+  .record-title h1 { font-size: 20px; font-weight: 700; }
+  .record-title .sub { color: var(--mj-text-secondary); font-size: 13px; margin-top: 3px; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+  .badge-success { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .badge-warning { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+
+  .tabs { display: flex; gap: 4px; padding: 0 28px; background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); }
+  .tab { padding: 12px 16px; font-size: 13.5px; font-weight: 600; color: var(--mj-text-muted); border-bottom: 2px solid transparent; cursor: default; }
+  .tab.active { color: var(--mj-brand-primary); border-bottom-color: var(--mj-brand-primary); }
+
+  .content { padding: 24px 28px; display: grid; grid-template-columns: 1.6fr 1fr; gap: 20px; align-items: start; }
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+  .card-header .hint { font-size: 12px; color: var(--mj-text-muted); }
+  .card-body { padding: 18px; }
+
+  /* Relationship graph */
+  .graph-toolbar { display: flex; gap: 8px; align-items: center; }
+  .chip { font-size: 11.5px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--mj-border-default); color: var(--mj-text-secondary); background: var(--mj-bg-surface-card); }
+  .graph-svg-wrap { background: var(--mj-bg-surface-sunken); border-radius: 8px; padding: 10px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; font-size: 12px; color: var(--mj-text-secondary); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+  /* Engagement widget */
+  .score-ring-wrap { display: flex; align-items: center; gap: 18px; }
+  .score-num { font-size: 34px; font-weight: 800; color: var(--mj-status-success); }
+  .score-trend { font-size: 12.5px; color: var(--mj-status-success); font-weight: 600; display: flex; align-items: center; gap: 4px; }
+  .score-trend.down { color: var(--mj-status-error); }
+  .breakdown-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--mj-border-subtle); }
+  .breakdown-row:last-child { border-bottom: none; }
+  .breakdown-label { flex: 0 0 120px; font-size: 12.5px; color: var(--mj-text-secondary); font-weight: 600; }
+  .breakdown-bar-track { flex: 1; height: 8px; background: var(--mj-bg-surface-sunken); border-radius: 999px; overflow: hidden; }
+  .breakdown-bar { height: 100%; border-radius: 999px; background: var(--mj-brand-primary); }
+  .breakdown-val { flex: 0 0 34px; text-align: right; font-size: 12px; font-weight: 700; color: var(--mj-text-primary); }
+
+  .signal-note { margin-top: 14px; padding: 10px 12px; background: var(--mj-status-info-bg); border: 1px solid color-mix(in srgb, var(--mj-status-info) 25%, transparent); border-radius: 8px; font-size: 12px; color: var(--mj-text-secondary); display: flex; gap: 8px; }
+  .signal-note i { color: var(--mj-status-info); margin-top: 1px; }
+
+  .path-finder { margin-top: 16px; padding: 14px; background: var(--mj-bg-surface-card); border-radius: 8px; border: 1px dashed var(--mj-border-default); }
+  .path-finder h3 { font-size: 12.5px; font-weight: 700; margin-bottom: 8px; display:flex; align-items:center; gap:6px; }
+  .path-result { display: flex; align-items: center; gap: 8px; font-size: 12.5px; flex-wrap: wrap; }
+  .path-node { padding: 4px 10px; border-radius: 999px; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); font-weight: 600; }
+  .path-arrow { color: var(--mj-text-muted); }
+
+  .footer-note { padding: 14px 28px 28px; color: var(--mj-text-muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-diagram-project"></i> MemberJunction</div>
+    <div class="nav-section">Explorer</div>
+    <div class="nav-item"><i class="fa-solid fa-house"></i> Home</div>
+    <div class="nav-item active"><i class="fa-solid fa-address-card"></i> Contacts</div>
+    <div class="nav-item"><i class="fa-solid fa-building"></i> Organizations</div>
+    <div class="nav-item"><i class="fa-solid fa-hand-holding-heart"></i> Gifts &amp; Dues</div>
+    <div class="nav-section">Framework · New</div>
+    <div class="nav-item"><i class="fa-solid fa-share-nodes"></i> Relationship Types</div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> Engagement Signals</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="breadcrumb">Contacts / <b>Dana Whitfield</b></div>
+      <div class="topbar-actions">
+        <div class="btn"><i class="fa-solid fa-pen"></i> Edit</div>
+        <div class="btn btn-primary"><i class="fa-solid fa-route"></i> Find a Path</div>
+      </div>
+    </div>
+
+    <div class="record-header">
+      <div class="avatar">DW</div>
+      <div class="record-title">
+        <h1>Dana Whitfield &nbsp;<span class="badge badge-success"><i class="fa-solid fa-circle-check"></i> Active Member</span></h1>
+        <div class="sub">Board Member · Northeast Chapter · Member since 2014</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab">Overview</div>
+      <div class="tab">Activity</div>
+      <div class="tab active">Relationships &amp; Engagement</div>
+      <div class="tab">Communications</div>
+      <div class="tab">Giving History</div>
+    </div>
+
+    <div class="content">
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-share-nodes"></i> Relationship Graph</h2>
+          <div class="graph-toolbar">
+            <span class="chip">2 hops</span>
+            <span class="chip"><i class="fa-solid fa-sliders"></i></span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="graph-svg-wrap">
+            <svg width="100%" height="360" viewBox="0 0 640 360">
+              <!-- edges -->
+              <line x1="320" y1="180" x2="150" y2="90" stroke="#264FAF" stroke-width="2"/>
+              <line x1="320" y1="180" x2="150" y2="270" stroke="#264FAF" stroke-width="2"/>
+              <line x1="320" y1="180" x2="480" y2="80" stroke="#16a34a" stroke-width="2"/>
+              <line x1="320" y1="180" x2="500" y2="200" stroke="#ea580c" stroke-width="2" stroke-dasharray="4 3"/>
+              <line x1="320" y1="180" x2="470" y2="300" stroke="#94a3b8" stroke-width="2"/>
+              <line x1="480" y1="80" x2="560" y2="40" stroke="#16a34a" stroke-width="1.5"/>
+              <line x1="150" y1="90" x2="60" y2="60" stroke="#264FAF" stroke-width="1.5"/>
+
+              <!-- center node: Dana -->
+              <circle cx="320" cy="180" r="28" fill="#264FAF"/>
+              <text x="320" y="184" text-anchor="middle" fill="white" font-size="11" font-weight="700" font-family="system-ui">DW</text>
+              <text x="320" y="222" text-anchor="middle" fill="#334155" font-size="11" font-weight="700" font-family="system-ui">Dana Whitfield</text>
+
+              <!-- household -->
+              <circle cx="150" cy="90" r="20" fill="#5b7fd4"/>
+              <text x="150" y="94" text-anchor="middle" fill="white" font-size="10" font-weight="700" font-family="system-ui">MW</text>
+              <text x="150" y="118" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui">Marcus Whitfield</text>
+              <text x="150" y="130" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="system-ui">Household Member</text>
+
+              <circle cx="60" cy="60" r="16" fill="#5b7fd4"/>
+              <text x="60" y="63" text-anchor="middle" fill="white" font-size="9" font-weight="700" font-family="system-ui">JW</text>
+              <text x="60" y="84" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="system-ui">Jordan W. (dependent)</text>
+
+              <!-- employer -->
+              <circle cx="150" cy="270" r="20" fill="#5b7fd4"/>
+              <text x="150" y="274" text-anchor="middle" fill="white" font-size="9" font-weight="700" font-family="system-ui">RH</text>
+              <text x="150" y="298" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui">Ridgeline Health Systems</text>
+              <text x="150" y="310" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="system-ui">Employer</text>
+
+              <!-- board seat -->
+              <circle cx="480" cy="80" r="20" fill="#16a34a"/>
+              <text x="480" y="84" text-anchor="middle" fill="white" font-size="9" font-weight="700" font-family="system-ui">GB</text>
+              <text x="480" y="108" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui">Governance Board</text>
+              <text x="480" y="120" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="system-ui">Board Seat · since 2022</text>
+
+              <circle cx="560" cy="40" r="16" fill="#16a34a"/>
+              <text x="560" y="43" text-anchor="middle" fill="white" font-size="9" font-weight="700" font-family="system-ui">RP</text>
+              <text x="595" y="43" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="system-ui">Renata P.</text>
+
+              <!-- referred -->
+              <circle cx="500" cy="200" r="20" fill="#ea580c"/>
+              <text x="500" y="204" text-anchor="middle" fill="white" font-size="9" font-weight="700" font-family="system-ui">TL</text>
+              <text x="500" y="228" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui">Theo Lin</text>
+              <text x="500" y="240" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="system-ui">Referred By (proposed)</text>
+
+              <!-- mentor -->
+              <circle cx="470" cy="300" r="20" fill="#94a3b8"/>
+              <text x="470" y="304" text-anchor="middle" fill="white" font-size="9" font-weight="700" font-family="system-ui">SK</text>
+              <text x="470" y="328" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui">Sam Kirali</text>
+              <text x="470" y="340" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="system-ui">Mentor · ended 2023</text>
+            </svg>
+          </div>
+          <div class="legend">
+            <span><i class="dot" style="background:#264FAF"></i> Household</span>
+            <span><i class="dot" style="background:#16a34a"></i> Board / Committee</span>
+            <span><i class="dot" style="background:#ea580c"></i> Referred By (AI-proposed, unconfirmed)</span>
+            <span><i class="dot" style="background:#94a3b8"></i> Ended relationship</span>
+          </div>
+
+          <div class="path-finder">
+            <h3><i class="fa-solid fa-route"></i> Path Finder — "Does anyone connect Dana to a Governance Board member?"</h3>
+            <div class="path-result">
+              <span class="path-node">Dana Whitfield</span>
+              <span class="path-arrow">— Board Seat →</span>
+              <span class="path-node">Governance Board</span>
+              <span class="path-arrow">← Board Seat —</span>
+              <span class="path-node">Renata P.</span>
+              <span class="path-arrow" style="margin-left:6px;">2-hop path found</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-gauge-high"></i> Engagement Score</h2>
+          <span class="hint">refreshed 3h ago</span>
+        </div>
+        <div class="card-body">
+          <div class="score-ring-wrap">
+            <svg width="76" height="76" viewBox="0 0 76 76">
+              <circle cx="38" cy="38" r="32" fill="none" stroke="#f0f2f5" stroke-width="8"/>
+              <circle cx="38" cy="38" r="32" fill="none" stroke="#16a34a" stroke-width="8" stroke-linecap="round"
+                stroke-dasharray="201" stroke-dashoffset="42" transform="rotate(-90 38 38)"/>
+            </svg>
+            <div>
+              <div class="score-num">79</div>
+              <div class="score-trend"><i class="fa-solid fa-arrow-trend-up"></i> +6 vs. last quarter</div>
+            </div>
+          </div>
+
+          <div style="margin-top:18px;">
+            <div class="breakdown-row">
+              <div class="breakdown-label">Participation</div>
+              <div class="breakdown-bar-track"><div class="breakdown-bar" style="width:88%; background:#16a34a;"></div></div>
+              <div class="breakdown-val">88</div>
+            </div>
+            <div class="breakdown-row">
+              <div class="breakdown-label">Giving</div>
+              <div class="breakdown-bar-track"><div class="breakdown-bar" style="width:64%; background:#264FAF;"></div></div>
+              <div class="breakdown-val">64</div>
+            </div>
+            <div class="breakdown-row">
+              <div class="breakdown-label">Communication</div>
+              <div class="breakdown-bar-track"><div class="breakdown-bar" style="width:71%; background:#0284c7;"></div></div>
+              <div class="breakdown-val">71</div>
+            </div>
+            <div class="breakdown-row">
+              <div class="breakdown-label">Governance</div>
+              <div class="breakdown-bar-track"><div class="breakdown-bar" style="width:95%; background:#ea580c;"></div></div>
+              <div class="breakdown-val">95</div>
+            </div>
+          </div>
+
+          <div class="signal-note">
+            <i class="fa-solid fa-circle-info"></i>
+            <div>Composite of 4 configurable signal definitions (event attendance, gift recency-weighted, email engagement, committee attendance). No ML training required — weights are set by staff in <b>Engagement Signals</b> admin. Feeds Predictive Studio as an optional input feature.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">Mockup — MemberJunction Weekly Exploration, 2026-08-07 · Idea 1: Relationship Graph &amp; Engagement Signal Engine · Illustrative data only.</div>
+  </div>
+</body>
+</html>

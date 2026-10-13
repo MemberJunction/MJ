@@ -11,6 +11,9 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// Hoisted so it survives the vi.resetModules() re-imports the env-var tests perform.
+const { mockLogErrorEx } = vi.hoisted(() => ({ mockLogErrorEx: vi.fn() }));
+
 vi.mock('@memberjunction/core', () => {
     class MockMetadata {
         static Provider = {};
@@ -19,6 +22,7 @@ vi.mock('@memberjunction/core', () => {
         Metadata: MockMetadata,
         LogError: vi.fn(),
         LogStatus: vi.fn(),
+        LogErrorEx: mockLogErrorEx,
     };
 });
 
@@ -85,6 +89,58 @@ describe('FullTextSearchProvider', () => {
             // topK=100: min(100, max(25, ceil(100/10)=10)) = 25.
             await provider.Search('test', 100, undefined, contextUser);
             expect(maxRowsPerEntity()).toBe(25);
+        });
+    });
+
+    /**
+     * PerEntityFetchDepth also accepts a default override from the environment at process start
+     * (MJ_SEARCH_FULLTEXT_PER_ENTITY_FETCH_DEPTH). The override is read once when the module is
+     * evaluated, so each case resets the module registry and re-imports the provider with the env
+     * var in place.
+     */
+    describe('env-var default override', () => {
+        const FETCH_KEY = 'MJ_SEARCH_FULLTEXT_PER_ENTITY_FETCH_DEPTH';
+        const originalFetch = process.env[FETCH_KEY];
+
+        beforeEach(() => {
+            mockLogErrorEx.mockClear();
+        });
+
+        afterEach(() => {
+            if (originalFetch === undefined) {
+                delete process.env[FETCH_KEY];
+            } else {
+                process.env[FETCH_KEY] = originalFetch;
+            }
+            vi.resetModules();
+        });
+
+        async function reimportProvider() {
+            vi.resetModules();
+            return (await import('../generic/FullTextSearchProvider')).FullTextSearchProvider;
+        }
+
+        it('reads PerEntityFetchDepth from MJ_SEARCH_FULLTEXT_PER_ENTITY_FETCH_DEPTH', async () => {
+            process.env[FETCH_KEY] = '30';
+            const Provider = await reimportProvider();
+            expect(Provider.PerEntityFetchDepth).toBe(30);
+            expect(mockLogErrorEx).not.toHaveBeenCalled();
+        });
+
+        it('falls back to the default for a non-numeric value and warns', async () => {
+            process.env[FETCH_KEY] = 'lots';
+            const Provider = await reimportProvider();
+            expect(Provider.PerEntityFetchDepth).toBe(15);
+            expect(mockLogErrorEx).toHaveBeenCalledWith(
+                expect.objectContaining({ severity: 'warning', message: expect.stringContaining(FETCH_KEY) })
+            );
+        });
+
+        it('falls back to the default when the var is unset — no warning', async () => {
+            delete process.env[FETCH_KEY];
+            const Provider = await reimportProvider();
+            expect(Provider.PerEntityFetchDepth).toBe(15);
+            expect(mockLogErrorEx).not.toHaveBeenCalled();
         });
     });
 });

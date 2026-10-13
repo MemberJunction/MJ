@@ -1,0 +1,31 @@
+{
+  "id": "sage-clarify-ambiguous-entity-01",
+  "agent": "Sage",
+  "tags": [
+    "clarify",
+    "over-eager-detection",
+    "coherence"
+  ],
+  "description": "'The report' is unresolvable without knowing which one. Asking is right; guessing an action is the over-eager failure a 26-action catalog invites.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Can you update the report?"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "chat",
+    "message": {
+      "matcher": "nonEmpty"
+    },
+    "forbiddenActions": [
+      "Update Record",
+      "Create Record",
+      "Modify Document Section",
+      "Create Document"
+    ]
+  }
+}

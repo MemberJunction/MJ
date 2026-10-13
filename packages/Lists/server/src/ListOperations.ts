@@ -497,16 +497,7 @@ export class ListOperations {
    * `CompositeKey.ToConcatenatedString` defaults.
    */
   private serializeRecordId(entityInfo: EntityInfo, row: Record<string, unknown>): string {
-    if (entityInfo.PrimaryKeys.length === 1) {
-      const pkName = entityInfo.PrimaryKeys[0].Name;
-      return String(row[pkName]);
-    }
-    const ck = new CompositeKey();
-    ck.KeyValuePairs = entityInfo.PrimaryKeys.map((pk) => ({
-      FieldName: pk.Name,
-      Value: row[pk.Name] as string | number | Date | null | undefined,
-    }));
-    return ck.ToConcatenatedString();
+    return CompositeKey.FromEntityRecord(entityInfo, row).ToCompactURLSegment();
   }
 
   private async buildDelta(args: {

@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { GetExamplesParams, GetNotesParams } from '../agent-context-injector';
 
 // ---- Mocks for the underlying retrieval collaborators ------------------------------------------
 // The builder is the thin orchestration wrapper; we mock the collaborators so the tests are
 // deterministic and never touch DB/network.
 
-const getNotes = vi.fn(async () => [] as unknown[]);
-const getExamples = vi.fn(async () => [] as unknown[]);
+/** The note and example fields the builder reads from what the injector returns. */
+type RetrievedRecord = { ID: string };
+
+const getNotes = vi.fn(async (_params: GetNotesParams): Promise<RetrievedRecord[]> => []);
+const getExamples = vi.fn(async (_params: GetExamplesParams): Promise<RetrievedRecord[]> => []);
 const formatNotes = vi.fn((notes: unknown[]) => (notes.length ? `NOTES(${notes.length})` : ''));
 const formatExamples = vi.fn((examples: unknown[]) => (examples.length ? `EXAMPLES(${examples.length})` : ''));
 
@@ -30,11 +34,20 @@ vi.mock('@memberjunction/ai-reranker', () => ({
 }));
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
-import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import type { MJAIAgentEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import type { UserInfo } from '@memberjunction/core';
 import type { ChatMessage } from '@memberjunction/ai';
 
 const fakeUser = { ID: 'u1' } as unknown as UserInfo;
+
+/** The rerank step fields a test tells apart. */
+type RerankStepFields = Pick<MJAIAgentRunStepEntityExtended, 'ID' | 'StepName'>;
+
+/** A rerank step, through the seam onto the full step entity. */
+function rerankStep(id: string): MJAIAgentRunStepEntityExtended {
+    const fields: RerankStepFields = { ID: id, StepName: 'Rerank Notes' };
+    return fields as MJAIAgentRunStepEntityExtended;
+}
 
 /** Build an agent stub with injection flags + strategy/limit fields the builder reads. */
 function makeAgent(overrides: Partial<MJAIAgentEntityExtended>): MJAIAgentEntityExtended {
@@ -161,7 +174,45 @@ describe('AgentMemoryContextBuilder', () => {
 
             expect(getNotes).toHaveBeenCalledTimes(1);
             const arg = getNotes.mock.calls[0][0] as { observability?: { agentRunID: string; stepNumber: number } };
-            expect(arg.observability).toEqual({ agentRunID: 'run-9', stepNumber: 3 });
+            expect(arg.observability).toMatchObject({ agentRunID: 'run-9', stepNumber: 3 });
+        });
+
+        it("hands each rerank step to the caller's OnStepCreated, and numbers the examples step after the notes step", async () => {
+            const notesStep = rerankStep('step-notes');
+            getNotes.mockImplementationOnce(async params => {
+                params.observability?.OnStepCreated?.(notesStep);
+                return [{ ID: 'n1' }];
+            });
+            const onStepCreated = vi.fn();
+
+            await new AgentMemoryContextBuilder().InjectContextMemory(
+                'hi', makeAgent({ InjectNotes: true, InjectExamples: true }), undefined, undefined, fakeUser, [],
+                undefined, undefined, undefined, undefined,
+                { agentRunID: 'run-9', stepNumber: 3, OnStepCreated: onStepCreated }
+            );
+
+            expect(onStepCreated).toHaveBeenCalledWith(notesStep);
+            expect(getNotes.mock.calls[0][0].observability).toMatchObject({ agentRunID: 'run-9', stepNumber: 3 });
+            expect(getExamples.mock.calls[0][0].observability).toMatchObject({ agentRunID: 'run-9', stepNumber: 4 });
+        });
+
+        it('numbers the examples step as the first when the notes created no step', async () => {
+            await new AgentMemoryContextBuilder().InjectContextMemory(
+                'hi', makeAgent({ InjectNotes: true, InjectExamples: true }), undefined, undefined, fakeUser, [],
+                undefined, undefined, undefined, undefined,
+                { agentRunID: 'run-9', stepNumber: 3 }
+            );
+
+            expect(getExamples.mock.calls[0][0].observability).toMatchObject({ agentRunID: 'run-9', stepNumber: 3 });
+        });
+
+        it('passes no observability to either retrieval call when the caller has none', async () => {
+            await new AgentMemoryContextBuilder().InjectContextMemory(
+                'hi', makeAgent({ InjectNotes: true, InjectExamples: true }), undefined, undefined, fakeUser, []
+            );
+
+            expect(getNotes.mock.calls[0][0].observability).toBeUndefined();
+            expect(getExamples.mock.calls[0][0].observability).toBeUndefined();
         });
 
         it('injects an examples-only system message when only InjectExamples is enabled', async () => {

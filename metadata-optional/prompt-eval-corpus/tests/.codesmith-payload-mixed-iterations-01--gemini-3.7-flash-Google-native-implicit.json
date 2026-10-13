@@ -1,0 +1,115 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "codesmith-payload-mixed-iterations-01 [gemini-3.7-flash · Google · native-implicit]",
+    "Description": "Nothing has run yet. Executing is the decision; the prompt also asks for iterations to be incremented each time code executes, which a mixed turn (action + payload write) can do at once. Either is accepted; the mixed form is what the payload arm measures.",
+    "InputDefinition": {
+      "payload": {
+        "task": "sum the values",
+        "inputData": {
+          "values": [
+            1,
+            2,
+            3
+          ]
+        },
+        "iterations": 0
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Sum the values."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "codesmith-payload-mixed-iterations-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Execute Code"
+              }
+            ],
+            "allowAdditionalActions": true,
+            "payload": {
+              "updateElements.iterations": {
+                "matcher": "typeOf",
+                "type": "number"
+              }
+            }
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Execute Code"
+              }
+            ],
+            "allowAdditionalActions": true
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Codesmith Agent",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Execute Code"
+                  }
+                ],
+                "allowAdditionalActions": true,
+                "payload": {
+                  "updateElements.iterations": {
+                    "matcher": "typeOf",
+                    "type": "number"
+                  }
+                }
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Execute Code"
+                  }
+                ],
+                "allowAdditionalActions": true
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "9E6C94A4-09ED-4FFB-AF0A-EE01520BEE02"
+  }
+}

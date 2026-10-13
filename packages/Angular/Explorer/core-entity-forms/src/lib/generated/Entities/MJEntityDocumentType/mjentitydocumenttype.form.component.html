@@ -10,16 +10,6 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Record Identifier Section -->
-    <mj-collapsible-panel
-        SectionKey="recordIdentifier"
-        SectionName="Record Identifier"
-        Icon="fa fa-key"
-        [Form]="this"
-        [FormContext]="formContext">
-
-    </mj-collapsible-panel>
-
     <!-- Document Type Information Section -->
     <mj-collapsible-panel
         SectionKey="documentTypeInformation"
@@ -92,9 +82,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Documents','TypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Documents')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Documents','TypeID')"
                 [AllowLoad]="IsSectionExpanded('mJEntityDocuments')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityDocuments', $event.totalRowCount)"
                 >

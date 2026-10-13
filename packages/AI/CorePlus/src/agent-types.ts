@@ -11,12 +11,13 @@
  */
 
 import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
-import { ChatMessage } from '@memberjunction/ai';
+import { ChatMessage, ChatToolCall } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
-import { AIAPIKey } from '@memberjunction/ai';
+import { AgentDecisionRequest, AgentDecisionResult, AgentFinishIf } from './agent-decisions';
+import { AIAPIKey, AICredentialScope } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionParam } from '@memberjunction/actions-base';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
@@ -155,6 +156,7 @@ export interface SecondaryDimension {
 // Exported directly from index.ts, not re-exported here
 import type { ForEachOperation } from './foreach-operation';
 import type { WhileOperation } from './while-operation';
+import type { TaskGraphSpec } from './task-graph/task-graph-spec';
 
 /**
  * Represents a media output that an agent has explicitly promoted to its outputs.
@@ -233,7 +235,19 @@ export interface FileOutputRef {
     fileId?: string;
     /** File size in bytes */
     sizeBytes?: number;
+    /**
+     * How the artifact MJ creates for this file is shown. `Always` (default): a normal artifact, with a
+     * card on the message and the viewer. `System Only`: the artifact, its version and its download URL
+     * exist, but the chat keeps it out of the message cards (a host opts in with `showSystemArtifacts`).
+     * An action whose file is a DOWNLOAD — an export the user asked for and will open elsewhere — says
+     * so here, instead of the host having to hide a card that opens an empty viewer.
+     * @since 6.1.0
+     */
+    visibility?: FileOutputVisibility;
 }
+
+/** The visibility an action can ask for on the artifact made from its file output. */
+export type FileOutputVisibility = 'Always' | 'System Only';
 
 /**
  * Attempts to parse an unknown value as a FileOutputRef by checking its shape.
@@ -262,12 +276,17 @@ export function ParseFileOutputRef(raw: unknown): FileOutputRef | null {
     const fileId = typeof fo['fileId'] === 'string' ? fo['fileId'] : undefined;
     if (!fileData && !fileId) return null;
 
+    const rawVisibility = fo['visibility'];
+    const visibility: FileOutputVisibility | undefined =
+        rawVisibility === 'Always' || rawVisibility === 'System Only' ? rawVisibility : undefined;
+
     return {
         fileName,
         mimeType,
         fileData,
         fileId,
-        sizeBytes: typeof fo['sizeBytes'] === 'number' ? fo['sizeBytes'] : undefined
+        sizeBytes: typeof fo['sizeBytes'] === 'number' ? fo['sizeBytes'] : undefined,
+        visibility
     };
 }
 
@@ -279,6 +298,8 @@ export type AgentAction = {
     name: string;
     /** Parameters to pass to the action */
     params: Record<string, unknown>;
+    /** The native tool call (ChatToolCall.id) this action answers — set only on native turns. */
+    toolCallId?: string;
     /** Mapping of action outputs to payload fields */
     outputMapping?: string;   
 }
@@ -343,6 +364,17 @@ export interface AgentPipelineRequest {
 }
 
 /**
+ * One image a client tool returns for the model to see. `Base64` is raw base64 without a data
+ * URL prefix.
+ */
+export interface ClientToolMediaItem {
+    MimeType: string;
+    Base64: string;
+    Width?: number;
+    Height?: number;
+}
+
+/**
  * Response from a client tool execution — returned to the server when
  * the client finishes running the tool.
  */
@@ -353,6 +385,8 @@ export interface ClientToolResponse {
     Success: boolean;
     /** The tool result (if successful) */
     Result?: unknown;
+    /** Images for the model, when the tool returns any. */
+    Media?: ClientToolMediaItem[];
     /** Error message (if failed) */
     ErrorMessage?: string;
 }
@@ -367,6 +401,8 @@ export interface ClientToolResultSummary {
     Success: boolean;
     /** Result data from the tool */
     Result?: unknown;
+    /** Images for the model, when the tool returns any. */
+    Media?: ClientToolMediaItem[];
     /** Error message if the tool failed */
     ErrorMessage?: string;
 }
@@ -406,6 +442,8 @@ export type AgentSubAgentRequest<TContext = any> = {
     message: string;
     /** Whether to terminate the parent agent after sub-agent completes */
     terminateAfter: boolean;
+    /** The native tool call (ChatToolCall.id) this dispatch answers — set only on native turns. */
+    toolCallId?: string;
     /** Optional template parameters for sub-agent invocation */
     templateParameters?: Record<string, string>;
     /**
@@ -417,6 +455,14 @@ export type AgentSubAgentRequest<TContext = any> = {
      */
     context?: TContext;
 }
+
+/**
+ * Why BaseAgent's `filterAvailableSkills` hook is being asked. `catalog` is the set the model is
+ * OFFERED (the auto-activatable skills rendered into the prompt); `auto-activation` is a
+ * model-initiated Skill step being validated or executed; `requested` is a user's explicit
+ * `/skill` request arriving through `ExecuteAgentParams.requestedSkillIDs`.
+ */
+export type SkillAvailabilityPurpose = 'catalog' | 'auto-activation' | 'requested';
 
 /**
  * A skill the agent's response requested be activated (by catalog name — the agent only
@@ -481,6 +527,56 @@ export type AgentSkillInvocationProvenance = {
 }
 
 /**
+ * How the framework should persist a step's payload as an artifact. Set by the agent — the only
+ * party that knows whether the payload is a finished deliverable, a draft awaiting feedback, or a
+ * plan proposal. When absent, `AgentRunner.ProcessAgentArtifacts` applies its legacy priority chain
+ * (run's sourceArtifactId → previous artifact on the message → new artifact), so existing agents are
+ * unaffected.
+ *
+ * Precedence: caller `createArtifacts=false` → agent `ArtifactCreationMode='Never'` → this directive
+ * → legacy chain. The two vetoes still win.
+ * @since 6.1.0
+ */
+export type ArtifactDirective = {
+    /**
+     * - 'create-new': create a new artifact (version 1) even when the run carries a sourceArtifactId.
+     * - 'version-source': add a version to `targetArtifactId`, else to the run's sourceArtifactId,
+     *   else fall back to the legacy chain.
+     * - 'suppress': create or version nothing for this step — not the payload artifact, and not the
+     *   artifacts that would wrap the step's generated files or media. (The run's media audit rows
+     *   are still written; suppression governs what the user is shown, not lineage.)
+     *
+     * An unrecognized value is treated as no directive at all — not merely as no targeting — and
+     * logged. `name` and `description` are discarded with it: a `behavior` this consumer cannot
+     * parse means the producer disagrees with it about the wire format, which is no basis for
+     * trusting the object's other fields.
+     */
+    behavior: 'create-new' | 'version-source' | 'suppress';
+    /**
+     * Artifact to version when behavior is 'version-source' and it differs from the run's sourceArtifactId.
+     *
+     * This is model output, so the framework does not take it on trust. It is honored only if it is
+     * a UUID-shaped string naming an artifact that exists AND that the run's user either owns or
+     * holds an explicit `CanEdit` grant on. Any of those failing logs and falls back to the run's
+     * `sourceArtifactId`, then to the legacy chain — a named target can never widen what the user
+     * is already allowed to write.
+     */
+    targetArtifactId?: string;
+    /**
+     * Name for an artifact this step CREATES. Applies whenever the step creates a new artifact
+     * header — 'create-new', and equally the legacy fallback when no previous artifact was found —
+     * and is ignored when an existing artifact is versioned, which keeps the name it already has.
+     *
+     * Trimmed, and clamped to the column's 255 characters rather than rejected, so an over-long
+     * model-written title costs a truncation instead of the whole artifact. When supplied, it also
+     * takes precedence over the name attribute extracted from the first version's content.
+     */
+    name?: string;
+    /** Description for an artifact this step creates. Same applicability as {@link name}. */
+    description?: string;
+};
+
+/**
  * Represents the next step determination from an agent type.
  * 
  * Agent types analyze the output of prompt execution and determine what should
@@ -511,6 +607,9 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      *   they are NOT part of the generated `MJAIAgentRun.FinalStep` union below. Use an explicit
      *   `'Skill' as typeof nextStep.step` / `'Plan' as typeof nextStep.step` assertion at
      *   assignment/switch sites, mirroring the existing 'ClientTools' pattern.
+     * - 'Decision': non-terminal in the same way. Runs {@link decisions} as `Decision` run steps with
+     *   no LLM turn, and returns a 'Retry' carrying {@link decisionResults}. A Flow agent's Decision
+     *   step emits it.
      *
      * Note: To expand a compacted message, set step to 'Retry', set messageIndex to the message to expand,
      * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
@@ -547,6 +646,21 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     subAgents?: AgentSubAgentRequest<TContext>[];
     /** Array of actions to execute when step is 'actions' */
     actions?: AgentAction[];
+    /**
+     * The model's own turn when this step was derived from native tool calls. The loop replays
+     * it into history (once per turn) before answering the calls with tool-result turns, because
+     * every provider requires the assistant's call turn to precede the results.
+     */
+    nativeTurn?: {
+        /** The model's text on the turn, if any (narration; never an envelope on this path). */
+        text: string;
+        /** Every call the model made, ids included, in order. */
+        toolCalls: ChatToolCall[];
+        /** Whether results go back as native tool-result turns — the runner's recorded decision. */
+        sendResultsNatively: boolean;
+    };
+    /** On the payload-only Retry, the call id of the `payload_change_request` being answered. */
+    payloadToolCallId?: string;
     /** Message to send to user when step is 'chat' */
     message?: string;
     /**
@@ -568,6 +682,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * @since 2.116.0
      */
     automaticCommands?: AutomaticCommand[];
+    /**
+     * Optional per-step artifact handling for `newPayload`. See {@link ArtifactDirective}.
+     * Absent ⇒ AgentRunner's legacy artifact priority chain.
+     * @since 6.1.0
+     */
+    artifactDirective?: ArtifactDirective;
     /** Index of the message to expand when step is 'expand-message' */
     messageIndex?: number;
     /** Reason for expanding the message when step is 'expand-message' */
@@ -586,6 +706,29 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * @since 2.46.0
      */
     scratchpad?: AgentScratchpad;
+    /**
+     * Decision requests from the agent's response.
+     * Processed inline (zero turn cost) alongside payload and scratchpad changes.
+     * Results are injected into the next turn's conversation.
+     *
+     * On a `'Decision'` step these are the step's own requests instead, and their results come back
+     * on {@link decisionResults} rather than into the conversation.
+     */
+    decisions?: AgentDecisionRequest[];
+    /**
+     * The decision prompt a `'Decision'` step's {@link decisions} run on, by name. Omitted means
+     * `Default Decision`.
+     */
+    decisionPromptName?: string;
+    /**
+     * The results of a `'Decision'` step's {@link decisions}, on the `'Retry'` BaseAgent returns once
+     * it has run them.
+     *
+     * These go back to the agent type, which routes on them, rather than to a model. So each Choice's
+     * and Score's answer keeps its whole distribution in `probabilities` (the shape of
+     * `TaskGraphDecisionAnswer`), which a path condition may read.
+     */
+    decisionResults?: AgentDecisionResult[];
     /**
      * Artifact tool calls from the agent's response.
      * Each entry identifies an artifact and the tool to execute against it.
@@ -642,12 +785,35 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     planDetails?: { plan: string };
     /**
+     * The emitted task graph, set whenever a Loop agent produced one — whether it was dispatched
+     * (`step === 'Tasks'`) or constant-folded into an in-run `'Sub-Agent'` call (D9).
+     *
+     * **The fold is recorded, not silent.** The `TaskGraph` run step is written for every emitted
+     * graph, so run forensics show why a graph did or did not reach the dispatcher; a user who
+     * edits a two-node graph down to one can read the durability change off the run record instead
+     * of inferring it; and Save as Workflow (D17) attaches to the recorded spec, which makes the
+     * single-node case — the shape most likely to be worth promoting — promotable like any other.
+     */
+    taskGraph?: {
+        spec: TaskGraphSpec;
+        /** True when the graph was flattened to an in-run sub-agent call rather than dispatched. */
+        folded: boolean;
+        /** Why it folded. Absent when it did not. */
+        foldReason?: string;
+    };
+    /**
      * When true, the agent should terminate after executing the current step.
      * Used by ClientTools: the main loop needs `terminate: false` so it continues
      * to dispatch the tool execution, but `executeClientToolsStep` checks this
      * to decide whether to return Success or continue to another prompt.
      */
     terminateAfterExecution?: boolean;
+    /**
+     * Conditional completion gate for Actions or Sub-Agent steps.
+     * When present, if all questions evaluate to a probability >= threshold after the step completes,
+     * the run finishes immediately with `finishIf.message` at zero extra turn cost.
+     */
+    finishIf?: AgentFinishIf;
 }
 
 /**
@@ -662,6 +828,17 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
 export type ExecuteAgentResult<P = any> = {
     /** Whether the agent execution was successful */
     success: boolean;
+    /**
+     * Transport-level failure text when {@link agentRun} is missing (lost WebSocket,
+     * fire-and-forget timeout). Prefer `agentRun.ErrorMessage` when the run exists.
+     */
+    errorMessage?: string;
+    /**
+     * True when the fire-and-forget mutation returned an ACK before the transport
+     * died (server has the run). False when the request never left the browser.
+     * Undefined when the caller does not know.
+     */
+    requestAcknowledged?: boolean;
     /** Optional payload returned by the agent */
     payload?: P;
     /**
@@ -700,6 +877,12 @@ export type ExecuteAgentResult<P = any> = {
      * @since 2.116.0
      */
     automaticCommands?: AutomaticCommand[];
+    /**
+     * Artifact handling requested by the agent's final step. See {@link ArtifactDirective}.
+     * Populated from the agent's final step.
+     * @since 6.1.0
+     */
+    artifactDirective?: ArtifactDirective;
     /**
      * Optional memory context that was injected into the agent execution.
      * Includes the notes and examples that were retrieved and used for context.
@@ -967,6 +1150,20 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     parentAgentHierarchy?: string[];
     /** Optional parent depth for sub-agent execution */
     parentDepth?: number;
+
+    /**
+     * How many task-graph continuations led to this run, persisted to
+     * `AIAgentRun.ContinuationDepth`.
+     *
+     * Set only by the continuation deliverer when a finished graph restarts its submitting agent.
+     * Any graph this run subsequently submits inherits the value, which is what allows
+     * `MAX_REINVOKE_DEPTH` to bound a graph-reinvokes-agent-emits-graph chain — before this existed
+     * the depth restarted at zero on every hop and the cap could never fire.
+     *
+     * Distinct from `parentDepth`, which measures sub-agent nesting inside a single turn. A
+     * continuation is a NEW top-level turn caused by work that already completed.
+     */
+    continuationDepth?: number;
     /**
      * Optional parent step counts from root to immediate parent agent.
      * Used to build hierarchical step display (e.g., "2.1.3" for nested agents).
@@ -975,6 +1172,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     parentStepCounts?: number[];
     /** Optional parent agent run entity for nested sub-agent execution */
     parentRun?: MJAIAgentRunEntityExtended;
+    /**
+     * The skills active in the PARENT run when this sub-agent was invoked. Skills activate on the root
+     * agent only, so a sub-agent's own activated set is always empty; this is how the root's active
+     * skills reach the actions a sub-agent runs (`Context.ActiveSkillIDs`), e.g. a retrieval sub-agent's
+     * Scoped Search binding its skill principal to the run. Set by `ExecuteSubAgent`; hosts need not.
+     */
+    parentActivatedSkillIDs?: readonly string[];
     /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
     data?: Record<string, any>;
     /**
@@ -1059,6 +1263,22 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     apiKeys?: AIAPIKey[];
     /**
+     * Which credentials the run may spend; omitted means `'Any'`. `'RuntimeOnly'` restricts the run's
+     * model calls to {@link apiKeys}: a vendor the run carries no key for is not used, rather than
+     * falling back to the platform's credentials. See `AICredentialScope` in `@memberjunction/ai`.
+     *
+     * Covered: every prompt the agent runs and the ones it starts on its own behalf (JSON repair, the
+     * result-selector judge, summarize, compaction, naming), decision calls, self-check rubrics,
+     * sub-agents, realtime sessions and actions. An action that calls a vendor directly gets the run's
+     * key through `RunActionParams.RuntimeAPIKeyResolver`; one that runs its own prompt or agent is
+     * handed only the scope, not the keys, so under `'RuntimeOnly'` it fails rather than spending the
+     * platform's.
+     *
+     * Not covered: retrieval reranking (`AIRerankerRunner`, the search rerankers) and vector
+     * embeddings outside a prompt run, which are platform infrastructure and resolve their own keys.
+     */
+    CredentialScope?: AICredentialScope;
+    /**
      * Optional ID of the last run in a run chain.
      * When provided, this links the new run to a previous run, allowing
      * agents to maintain context across multiple interactions.
@@ -1090,6 +1310,23 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     conversationId?: string;
 
     /**
+     * Optional history floor for a conversation run: the first moment of the conversation
+     * this run may read. Meaningful only with {@link conversationId}.
+     *
+     * The caller is responsible for `conversationMessages` starting there (the agent resolver
+     * loads them through `ConversationEngine.LoadWindowRowsFresh` with the same floor). The
+     * framework holds the floor everywhere else it reads the conversation on the run's behalf:
+     * - the conversation-history retrieval tools page only rows written at or after it;
+     * - the conversation's artifacts offered to the run are those of rows at or after it;
+     * - cross-turn compaction is skipped, since a summary folds in history from before it;
+     * - the previous turn's tool results are not carried forward, since they can quote history
+     *   from before it.
+     *
+     * Omitted (the default), the run reads the whole conversation, as before.
+     */
+    ConversationHistoryFrom?: Date;
+
+    /**
      * Optional flag to automatically populate the payload from the last run.
      * When true and lastRunId is provided, the framework will:
      * 1. Load the last run's FinalPayload
@@ -1115,6 +1352,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * @since 5.44.0
      */
     planMode?: boolean;
+
+    /**
+     * When this run submits a task graph, seed `$.debug` on the parent at insert.
+     * `paused: true` is start-paused — nothing is claimed until Resume/Step.
+     * Must travel with the submit; Pause-after-submit races the first dispatcher poll.
+     */
+    taskGraphDebug?: { paused?: boolean };
 
     /**
      * Skills the caller (typically an end user via a `/skill-name` mention in the composer)
@@ -1661,6 +1905,15 @@ export type AgentChatMessageMetadata = {
     isConversationSummary?: boolean;
     /** On the summary message: the boundary row's Sequence — the summary covers all rows below it */
     summaryBoundarySequence?: number;
+    /**
+     * True on the framework-authored trailing message that carries the loop agent's volatile
+     * per-iteration state (date/time, Scratchpad, Payload, and a relocated specialization) as the
+     * final message of each request. It is appended to a COPY of the history for a
+     * single request and never persisted. Provider adapters may use it to place prompt-cache
+     * breakpoints on the message BEFORE it, so the stable history caches and only this fragment
+     * is re-processed each iteration.
+     */
+    volatileState?: boolean;
 }
 
 /**

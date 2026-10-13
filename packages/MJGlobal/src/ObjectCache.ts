@@ -2,8 +2,8 @@
  * ObjectCacheEntry is used for the array within the ObjectCache class
  */
 export class ObjectCacheEntry<T = any> {
-    key: string
-    object: T
+    key: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    object: T  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     constructor (key: string, object: T) {
         this.key = key

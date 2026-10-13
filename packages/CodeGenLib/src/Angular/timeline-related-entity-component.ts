@@ -106,8 +106,9 @@ export class TimelineRelatedEntityGenerator extends RelatedEntityDisplayComponen
 
         // Get the foreign key field that links the related entity back to the parent entity
         const fk = this.GetForeignKey(input.RelationshipInfo!.RelatedEntity, input.Entity!.Name);
-        // Build the filter expression to show only records related to the current parent record
-        const filter = `'${fk.Name}=' + record.${input.Entity!.FirstPrimaryKey.Name}`;
+        // Build the filter expression to show only records related to the current parent record,
+        // binding the parent key column that the FK actually references.
+        const filter = `'${fk.Name}=' + record.${this.GetParentKeyFieldName(input.Entity!, fk)}`;
         
         // Generate the Angular template with timeline configuration
         const template = `<mj-timeline

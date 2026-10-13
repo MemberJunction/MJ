@@ -1,12 +1,13 @@
 import { Component, Input, EventEmitter, Output, ContentChildren, QueryList, ViewChild, HostListener, ElementRef, AfterContentInit, AfterContentChecked, AfterViewInit, ChangeDetectorRef } from '@angular/core';
+import { warnIfTabChromeMissing } from '@memberjunction/ng-ui-components';
 import { MJTabComponent } from '../tab/tab.component';
 import { MJTabBodyComponent } from '../tab-body/tab-body.component';
 
  
 export class TabEvent {
-  public index!: number;
-  public tab: MJTabComponent | null = null;
-  public body: MJTabBodyComponent | null = null;
+  public index!: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  public tab: MJTabComponent | null = null;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  public body: MJTabBodyComponent | null = null;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 export class TabCancelableEvent extends TabEvent {
   public cancel: boolean = false;
@@ -15,15 +16,18 @@ export class TabClosedEvent extends TabEvent {
   /**
    * This property provides the default calculation for what the new tab index will be and can be overriden by the container component to set a different value.
    */
-  public newTabIndex!: number
+  public newTabIndex!: number  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
   /**
    * Whenever the container is done processing, it MUST call this done method to signal that it is done.  
    */
-  public done!: (error?: any) => {};
+  public done!: (error?: any) => {};  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 export class TabContextMenuEvent extends TabEvent {
-  public mouseEvent!: MouseEvent;
+  public mouseEvent!: MouseEvent;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
+
+/** Source of per-instance DOM id bases — see {@link MJTabStripComponent.IdBase}. */
+let tabStripIdSeq = 0;
 
 @Component({
   standalone: false,
@@ -42,8 +46,16 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   }
 
   constructor(private cdr: ChangeDetectorRef) { }
+  /** @deprecated No longer read — the strip sizes to content and the HOST owns region sizing. Kept only so existing bindings compile; remove on the next major. */
   @Input() FillWidth: boolean = true;
+  /** @deprecated No longer read — the strip sizes to content and the HOST owns region sizing. Kept only so existing bindings compile; remove on the next major. */
   @Input() FillHeight: boolean = true;
+
+  /**
+   * Per-instance id base pairing each tab with its panel (`aria-controls` / `aria-labelledby`).
+   * Index-suffixed by the tab/body components themselves once `syncTabIndexes` has run.
+   */
+  public readonly IdBase: string = `mj-tabstrip-${++tabStripIdSeq}`;
 
   /**
    * This event is raised whenever the TabStrip component determines it would be advisable to conduct any necessary
@@ -160,13 +172,16 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   @Output() TabScrolled = new EventEmitter();
 
 
-  @ContentChildren(MJTabComponent) tabs!: QueryList<MJTabComponent>;
-  @ContentChildren(MJTabBodyComponent) tabBodies!: QueryList<MJTabBodyComponent>;
+  @ContentChildren(MJTabComponent) tabs!: QueryList<MJTabComponent>;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+  @ContentChildren(MJTabBodyComponent) tabBodies!: QueryList<MJTabBodyComponent>;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
    
 
   private _viewInitialized: boolean = false;
   ngAfterViewInit() {
     this._viewInitialized = true;
+    // Dev-mode guard: the .mj-tabs* chrome lives in a global stylesheet a standalone host must
+    // import; a missing import renders bare divs with no error. Warn instead of staying silent.
+    warnIfTabChromeMissing(this.TabInnerContainer?.nativeElement?.closest('.mj-tabs') ?? undefined);
     this.SelectedTabIndex = this.SelectedTabIndex; // force a refresh of the tab visibility
     this.syncTabIndexes();
     this.checkTabScrollButtons();
@@ -190,11 +205,30 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   }
 
   protected syncTabIndexes() {
-    if (!this._viewInitialized) return; // don't do anything until the view is initialized  
+    if (!this._viewInitialized) return; // don't do anything until the view is initialized
 
     // Automatically assign indices to tabs and tab bodies
     this.tabs.forEach((tab, index) => tab.index = index);
     this.tabBodies.forEach((body, index) => body.index = index);
+
+    // Pair each tab with its panel for assistive tech (`aria-controls` / `aria-labelledby`).
+    // Written directly to the DOM rather than template-bound, because `index` is only known HERE —
+    // after the first render — and a binding that changes mid-cycle trips NG0100 in dev mode.
+    // Idempotent, and re-run whenever the tab set changes, so ids follow reorders/removals.
+    this.tabs.forEach((tab, index) => {
+      const el: HTMLElement | null = tab.elementRef?.nativeElement?.querySelector('[role="tab"]');
+      if (el) {
+        el.id = `${this.IdBase}-tab-${index}`;
+        el.setAttribute('aria-controls', `${this.IdBase}-panel-${index}`);
+      }
+    });
+    this.tabBodies.forEach((body, index) => {
+      const el: HTMLElement | null = body.elementRef?.nativeElement?.querySelector('[role="tabpanel"]');
+      if (el) {
+        el.id = `${this.IdBase}-panel-${index}`;
+        el.setAttribute('aria-labelledby', `${this.IdBase}-tab-${index}`);
+      }
+    });
     if (this.SelectedTabIndex === null && this.tabs.length > 0) {
       this.SelectedTabIndex = 0;
     }
@@ -271,16 +305,48 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   }
 
 
-  public handleTabContextMenu($event: MouseEvent, tab: MJTabComponent) {
+  public HandleTabContextMenu($event: MouseEvent, tab: MJTabComponent) {
     this.TabContextMenu.emit({ index: tab.index, tab: tab, body: this.tabBodies.toArray()[tab.index], mouseEvent: $event });
+  }
+
+  /** @deprecated Use {@link HandleTabContextMenu}. */
+  public handleTabContextMenu($event: MouseEvent, tab: MJTabComponent) {
+    return this.HandleTabContextMenu($event, tab);
   }
 
 
   /* INTERNAL IMPLEMENTATION */
-  @ViewChild('tabInnerContainer') tabInnerContainer!: ElementRef;
+  @ViewChild('tabInnerContainer') TabInnerContainer!: ElementRef;
 
-  showLeftButton: boolean = false;
-  showRightButton: boolean = false;
+  /** @deprecated Use {@link TabInnerContainer}. */
+  get tabInnerContainer(): ElementRef {
+    return this.TabInnerContainer;
+  }
+  /** @deprecated Use {@link TabInnerContainer}. */
+  set tabInnerContainer(value: ElementRef) {
+    this.TabInnerContainer = value;
+  }
+
+  ShowLeftButton: boolean = false;
+
+  /** @deprecated Use {@link ShowLeftButton}. */
+  get showLeftButton(): boolean {
+    return this.ShowLeftButton;
+  }
+  /** @deprecated Use {@link ShowLeftButton}. */
+  set showLeftButton(value: boolean) {
+    this.ShowLeftButton = value;
+  }
+  ShowRightButton: boolean = false;
+
+  /** @deprecated Use {@link ShowRightButton}. */
+  get showRightButton(): boolean {
+    return this.ShowRightButton;
+  }
+  /** @deprecated Use {@link ShowRightButton}. */
+  set showRightButton(value: boolean) {
+    this.ShowRightButton = value;
+  }
 
   @HostListener('window:resize', ['$event'])
   onResize(event: any) {
@@ -288,39 +354,83 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   }
 
   protected checkTabScrollButtons() {
-    if (this.tabInnerContainer && this.tabInnerContainer.nativeElement && this.tabInnerContainer.nativeElement.parentElement) {
-      const container = this.tabInnerContainer.nativeElement;
-      const parent = container.parentElement;
-      const currentLeft = container.style.left ? parseInt(container.style.left) : 0;
-
-      // show the right button if the container is wider than the parent AND the left position(which is zero or negative) + the container width is greater than the parent width
-      this.showRightButton = container.clientWidth > parent.clientWidth && 
-                             currentLeft + container.clientWidth > parent.clientWidth;
-
-      // Show left button if left position is less than 0, meaning some of the left side of the container is off screen
-      this.showLeftButton = currentLeft < 0;  
+    if (this.TabInnerContainer && this.TabInnerContainer.nativeElement) {
+      // The list itself is the scroller now (`.mj-tabs__list` is `overflow-x: auto`), so overflow
+      // and position are read off its NATIVE scroll state — the old scheme of animating a `left`
+      // offset against a relatively-positioned wrapper is gone with the wrapper's CSS.
+      const container: HTMLElement = this.TabInnerContainer.nativeElement;
+      const overflow = container.scrollWidth - container.clientWidth;
+      this.ShowLeftButton = overflow > 0 && container.scrollLeft > 0;
+      this.ShowRightButton = overflow > 0 && container.scrollLeft < overflow - 1;
     }
   }
 
   protected scrollTabHeader(scrollAmount: number) {
-    const style = this.tabInnerContainer.nativeElement.style
-    if (style) {
-      const curLeft = style.left ? parseInt(style.left) : 0;     
-      style.left = (curLeft + scrollAmount) + 'px';
-      this.checkTabScrollButtons(); // can do immediately because the above is direct DOM manipulation so the effect is immediate
-      this.TabScrolled.emit();
-    }
+    // Positive amount = reveal content to the LEFT (the old `left`-offset convention, preserved so
+    // ScrollAmount and the button wiring keep their meaning); native scrollLeft counts the other way.
+    const container: HTMLElement = this.TabInnerContainer.nativeElement;
+    container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+    // Smooth scrolling settles asynchronously; re-evaluate the buttons when it has.
+    setTimeout(() => this.checkTabScrollButtons(), 300);
+    this.TabScrolled.emit();
   }
 
   /**
    * This property determines how many pixels to scroll when the scrollLeft or scrollRight methods are called.
    */
   @Input() ScrollAmount: number = 150;
-  public scrollLeft() {
+  public ScrollLeft() {
     this.scrollTabHeader(150)
   }
-  public scrollRight() {
+
+  /** @deprecated Use {@link ScrollLeft}. */
+  public scrollLeft() {
+    return this.ScrollLeft();
+  }
+  public ScrollRight() {
     this.scrollTabHeader(-150)
+  }
+
+  /** @deprecated Use {@link ScrollRight}. */
+  public scrollRight() {
+    return this.ScrollRight();
+  }
+
+  /**
+   * Keyboard navigation from the shared `mjTabList` directive (arrows / Home / End / Enter).
+   *
+   * The directive reports a POSITION among the rendered `[role="tab"]` elements, which is already
+   * this component's identity model, so the mapping is direct. Selecting also scrolls the tab into
+   * view — arrowing to a tab hidden behind the overflow edge would otherwise move focus somewhere
+   * the user cannot see.
+   */
+  public OnTabActivateRequested(request: { Index: number }): void {
+    if (request.Index >= 0 && request.Index < this.tabs.length) {
+      this.SelectedTabIndex = request.Index;
+      this.ScrollIntoView(request.Index);
+    }
+  }
+
+  /** @deprecated Use {@link OnTabActivateRequested}. */
+  public onTabActivateRequested(request: { Index: number }): void {
+    return this.OnTabActivateRequested(request);
+  }
+
+  /**
+   * Delete / Backspace on a focused tab. Routed through the SAME `CloseTab` path a click on the
+   * close button uses, so the cancelable `BeforeTabClosed` contract holds for keyboard users too.
+   * Ignored for tabs that are not closeable.
+   */
+  public OnTabCloseRequested(request: { Index: number }): void {
+    const tab = this.tabs?.toArray()[request.Index];
+    if (tab?.TabCloseable) {
+      void this.CloseTab(request.Index);
+    }
+  }
+
+  /** @deprecated Use {@link OnTabCloseRequested}. */
+  public onTabCloseRequested(request: { Index: number }): void {
+    return this.OnTabCloseRequested(request);
   }
 
 
@@ -328,34 +438,18 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
    * This method will scroll the specified tab index into view if it is not currently visible in the tab strip.
    * @param tabIndex 
    */
-  public scrollIntoView(tabIndex: number) {
-    // In this method, we need to calculate the current left position of the specified tab, 
-    // if it is not visible we need to scroll left or scroll right sufficiently in order to ensure that the tab specified is visible
-    // we do NOT change tab selection, the caller can do that separately if they want to
+  public ScrollIntoView(tabIndex: number) {
+    // We do NOT change tab selection — the caller does that separately if they want to. The list
+    // is a native horizontal scroller now, so the browser's own logic does the geometry.
     if (tabIndex >= 0 && tabIndex < this.tabs.length) {
-      const tab = this.tabs.toArray()[tabIndex];
-      if (tab) {
-        const tabElement = tab.elementRef.nativeElement;
-        if (tabElement) {
-          const tabLeft = tabElement.offsetLeft;
-          const tabRight = tabLeft + tabElement.offsetWidth;
-          const container = this.tabInnerContainer.nativeElement;
-          const containerLeft = container.offsetLeft;
-          const containerRight = containerLeft + container.offsetWidth;
-
-          if (tabLeft < containerLeft) {
-            // tab is off to the left, scroll left
-            this.scrollTabHeader(tabLeft - containerLeft);
-          }
-          else if (tabRight > containerRight) {
-            // tab is off to the right, scroll right
-            this.scrollTabHeader(tabRight - containerRight);
-          }
-          else {
-            // tab is already visible, do nothing
-          }
-        }
-      }
+      const tabElement: HTMLElement | undefined = this.tabs.toArray()[tabIndex]?.elementRef?.nativeElement;
+      tabElement?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+      setTimeout(() => this.checkTabScrollButtons(), 300);
     }
+  }
+
+  /** @deprecated Use {@link ScrollIntoView}. */
+  public scrollIntoView(tabIndex: number) {
+    return this.ScrollIntoView(tabIndex);
   }
 }

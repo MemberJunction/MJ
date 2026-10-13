@@ -1,0 +1,79 @@
+name: New package npm gate
+
+# Blocks a PR that introduces a publishable @memberjunction/* package which does not yet
+# exist on npm with a trusted-publisher (OIDC) configuration.
+#
+# WHY THIS WORKFLOW EXISTS: npm will not attach a trusted-publisher config to a package
+# that does not exist, and creating one requires an interactive 2FA challenge no CI token
+# may satisfy (bypass-2FA granular access tokens were barred from changing trusted-
+# publishing config on 2026-07-31). The setup is therefore irreducibly manual — but it
+# does not have to happen during a release. Before this gate, DEPLOYMENT.md Step 5 found
+# missing packages mid-release, putting a human 2FA prompt on the release critical path
+# and failing `publish.yml` partway through if it was skipped. This moves that discovery
+# to the PR that adds the package, where it blocks one PR instead of a release.
+#
+# This does NOT replace `validate-npm-packages.sh`, which still checks all ~300 packages
+# at publish time. This gate checks only what the PR adds, so it costs a few seconds.
+#
+# Make this a required status check in branch protection, otherwise it reports but does
+# not block.
+
+on:
+  pull_request:
+    branches: [next]
+    paths:
+      - 'packages/**/package.json'
+      - '.github/scripts/check-new-npm-packages.mjs'
+      - '.github/workflows/new-package-gate.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: new-package-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check new packages exist on npm
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      # The default PR checkout is the merge commit at depth 1, so the base commit is not
+      # present locally. Fetch just that one object rather than the full history.
+      - name: Fetch merge base
+        run: git fetch --no-tags --depth=1 origin ${{ github.event.pull_request.base.sha }}
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      # No `pnpm install`: the script uses only Node's stdlib plus git, deliberately, so
+      # this stays a seconds-long gate. Keep it that way.
+      - name: Check for new packages missing from npm
+        id: gate
+        run: |
+          set -o pipefail
+          node .github/scripts/check-new-npm-packages.mjs \
+            "${{ github.event.pull_request.base.sha }}" 2>&1 | tee /tmp/new-package-gate.log
+
+      # Surface the instructions in the PR's Checks summary so an author never has to
+      # expand a log to learn what to do.
+      - name: Publish result to job summary
+        if: always()
+        run: |
+          {
+            echo '## New package npm gate'
+            echo ''
+            echo '```'
+            cat /tmp/new-package-gate.log 2>/dev/null || echo 'The gate produced no output.'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

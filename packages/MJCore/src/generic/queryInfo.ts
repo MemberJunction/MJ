@@ -13,6 +13,7 @@ import {
     IQueryEntityInfoBase,
     IQueryPermissionInfoBase
 } from "./queryInfoInterfaces";
+import { IQueryConfiguration } from "./JSONType-interfaces/IQueryConfiguration";
 
 /**
  * Represents a SQL dialect (e.g., T-SQL, PostgreSQL) in the MemberJunction system.
@@ -216,6 +217,90 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @deprecated Use the QuerySQL child table via GetPlatformSQL() instead.
      */
     PlatformVariants: string | null = null
+
+    /**
+     * Optional JSON configuration bag defining query-level policies and semantic capabilities (shape = IQueryConfiguration).
+     * Includes Priority (1-100) for ground-truth ranking in the semantic layer, LogExecution to control query execution logging,
+     * AlternativeQuestions for multi-phrasing vector recall, UsageGuidance and WhenNotToUse bounds for AI agents, and DomainScope.
+     */
+    public Configuration: string | null = null;
+
+    private _configurationObject: IQueryConfiguration | null | undefined = undefined;
+    private _lastRawConfiguration: string | null = null;
+
+    /**
+     * Parsed configuration object for this query. Lazily parsed and cached.
+     * Returns null if Configuration is not set or contains invalid JSON.
+     */
+    get ConfigurationObject(): IQueryConfiguration | null {
+        if (this.Configuration !== this._lastRawConfiguration) {
+            this._lastRawConfiguration = this.Configuration;
+            if (this.Configuration && this.Configuration.trim().length > 0) {
+                try {
+                    this._configurationObject = JSON.parse(this.Configuration) as IQueryConfiguration;
+                } catch {
+                    this._configurationObject = null;
+                }
+            } else {
+                this._configurationObject = null;
+            }
+        }
+        return this._configurationObject ?? null;
+    }
+
+    /**
+     * Priority ranking for semantic query selection (1-100).
+     * High values (e.g. 90-100) indicate authoritative, enterprise-certified ground truth queries.
+     * Defaults to 50 if not specified in Configuration.
+     */
+    get Priority(): number {
+        return this.ConfigurationObject?.Priority ?? 50;
+    }
+
+    /**
+     * Whether executions of this query should be recorded in query execution logs.
+     * Defaults to true if not specified in Configuration.
+     */
+    get LogExecution(): boolean {
+        return this.ConfigurationObject?.LogExecution ?? true;
+    }
+
+    /**
+     * Whether this query is designated as an enterprise ground-truth / canonical query.
+     * Defaults to false if not specified in Configuration.
+     */
+    get IsCanonical(): boolean {
+        return this.ConfigurationObject?.IsCanonical ?? false;
+    }
+
+    /**
+     * Alternative questions, natural language phrasings, and query aliases for vector indexing.
+     * Returns empty array if none defined.
+     */
+    get AlternativeQuestions(): string[] {
+        return this.ConfigurationObject?.AlternativeQuestions ?? [];
+    }
+
+    /**
+     * Prescriptive guidance for AI agents on when to choose this query.
+     */
+    get UsageGuidance(): string | null {
+        return this.ConfigurationObject?.UsageGuidance ?? null;
+    }
+
+    /**
+     * Explicit negative bounding / anti-patterns for AI agents.
+     */
+    get WhenNotToUse(): string | null {
+        return this.ConfigurationObject?.WhenNotToUse ?? null;
+    }
+
+    /**
+     * Operational domains or persona scopes where this query applies.
+     */
+    get DomainScope(): string[] {
+        return this.ConfigurationObject?.DomainScope ?? [];
+    }
 
     // virtual fields - returned by the database VIEW
     /**
@@ -470,7 +555,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
     /**
      * Lazily parses and caches the PlatformVariants JSON.
      */
-    private get ParsedVariants(): PlatformVariantsJSON | null {
+    private get ParsedVariants(): PlatformVariantsJSON | null {  // case-violation-ok-legacy-back-compat: a class in the same hierarchy already declares the camelCase name — TypeScript rejects two declarations of one private property (TS2415)
         if (this._parsedVariants === undefined) {
             this._parsedVariants = ParsePlatformVariants(this.PlatformVariants);
         }

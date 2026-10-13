@@ -16,7 +16,7 @@
  * @author MemberJunction.com
  */
 
-import { BaseRealtimeChannelServer } from '@memberjunction/ai';
+import { BaseRealtimeChannelServer, CHANNEL_INBOUND_VIDEO_TRACK, RealtimeTrackDescriptor } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 
@@ -36,6 +36,13 @@ export class WhiteboardChannelServer extends BaseRealtimeChannelServer {
     /** Matches the seeded `MJ: AI Agent Channels` row's `Name`. */
     public get ChannelName(): string {
         return 'Whiteboard';
+    }
+
+    /**
+     * Sourced tracks: Whiteboard can source inbound video to the model when the model supports it.
+     */
+    public override GetSourcedTracks(): readonly RealtimeTrackDescriptor[] {
+        return [CHANNEL_INBOUND_VIDEO_TRACK];
     }
 
     /**

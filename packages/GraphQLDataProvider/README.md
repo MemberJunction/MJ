@@ -63,6 +63,32 @@ const dataProvider = new GraphQLDataProvider();
 await dataProvider.Config(config);
 ```
 
+### Connect-only boot for embeds
+
+`setupGraphQLClient` performs the full boot: it connects, downloads the entire entity metadata graph, loads the current user and starts the registered startup engines. An anonymous embed (for example a widget that only needs to run a realtime voice session) needs none of that, and the metadata download dominates the cost. For that case use `ConnectGraphQLClient`, which connects and registers the provider globally (`Metadata.Provider` is set) and stops there.
+
+```typescript
+import { ConnectGraphQLClient, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
+
+const config = new GraphQLProviderConfigData(token, 'https://api.example.com/graphql', 'wss://api.example.com/graphql', refreshToken);
+const provider = await ConnectGraphQLClient(config);
+```
+
+| | `ConnectGraphQLClient` | `setupGraphQLClient` |
+|---|---|---|
+| Client, session id, token, `ConfigData` | Yes | Yes |
+| `Metadata.Provider` set | Yes | Yes |
+| `ExecuteGQL`, subscriptions, the realtime runtime | Works | Works |
+| Entity metadata, `RunView`, `GetEntityObject`, engines, `CurrentUser` | Not available | Available |
+
+`ConnectGraphQLClient` raises no `LoggedIn` event, so nothing that waits for a login (engine pre-warming, for example) starts.
+
+Calling `ConnectGraphQLClient` on a provider that is already fully booted is a no-op that returns it; it never drops loaded metadata or recreates the client. Calling it again on a connected but unbooted provider replaces `ConfigData` and keeps the session id. If the URL, token or API keys differ from the ones the current client was built with, the client is rebuilt so requests carry the new identity; with the same credentials the existing client is reused. For routine token expiry, keep using `RefreshTokenFunction` / `OnAuthenticationError`.
+
+You can finish the boot later on the same instance by calling `setupGraphQLClient(config)`; it then performs the full metadata load, current-user fetch and startup engines. This is also how an anonymous connection becomes a signed-in one: pass the login's config, and the client is rebuilt with the new token before the metadata download. An already-open subscription socket keeps the identity it connected with until it reconnects.
+
+`setupGraphQLClient` now rejects when the boot loaded no entity metadata (before the current user is loaded or any startup engine runs), instead of resolving with an empty provider. If you only want a connection, call `ConnectGraphQLClient`.
+
 ### Working with Entities
 
 ```typescript
@@ -225,6 +251,22 @@ async function runAdhocQuery(sql: string) {
   return result;
 }
 ```
+
+### Atomicity on the client — what this provider can and cannot do
+
+`GraphQLDataProvider` reports **`SupportsEntityTransactions === false`** and does not implement
+`BeginEntityTransaction()`. There is no local transaction to open, and a server transaction cannot be
+held open across round trips. Two supported ways to get atomicity from the browser:
+
+| Need | Use |
+|---|---|
+| Several **unrelated** records in one atomic round trip | **Transaction Group** (below) — batched into a single `ExecuteTransactionGroup` mutation that runs in one server-side SQL transaction |
+| A **parent and its children** saved together | **Entity graph** — declare a `RelatedRecordCollection` on a shared client+server subclass and call `entity.Save()`. `BaseEntity` detects that this provider cannot transact and routes the whole unit of work to the server via the `MJ.SaveEntityGraph` remote operation, which rebuilds the records as their **server-side** subclasses and executes the cascade there, inside a real transaction. |
+
+Do **not** reach for a Transaction Group to save a parent and its children: saves are deferred, so
+the parent's primary key is unavailable afterwards, there is no read-your-writes, and `Save()`
+returns `true` before anything has persisted. See
+[Transactions, Batching & Entity Graphs](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md).
 
 ### Using Transaction Groups
 
@@ -639,6 +681,57 @@ console.log(prompt.PromptRole); // From AIPrompt
 For comprehensive information about IS-A relationships in MemberJunction:
 - [IS-A Relationships Architecture](../MJCore/docs/isa-relationships.md) - Server-side implementation details, entity structure, and transaction management
 
+## Realtime session client (`GraphQLRealtimeSessionClient`)
+
+Typed transport for the realtime **session** surface of MJServer: mid-session **identity verification** and the
+**session event** subscription. It is what the browser realtime runtime and the embeddable widget call; it holds no
+logic (see `guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md`). The server side is documented in
+`packages/MJServer/src/realtimeSessions/README.md`; the event types live in `@memberjunction/ai-core-plus`.
+
+```typescript
+import { GraphQLDataProvider, GraphQLRealtimeSessionClient } from '@memberjunction/graphql-dataprovider';
+
+const client = new GraphQLRealtimeSessionClient(provider as GraphQLDataProvider);
+
+// 1. Listen first, so an event fired right after the request cannot be missed.
+const sub = client.SubscribeToSessionEventsOfType(agentSessionId, 'identity.verified').subscribe((event) => {
+    show(`Verified as ${event.Payload.VerifiedEmail}`); // typed payload
+});
+
+// 2. Ask for an emailed link + code.
+const sent = await client.RequestVerification({ AgentSessionID: agentSessionId, Name: 'Pat', Email: 'pat@acme.com' });
+if (!sent.Success) show(sent.Message);            // sent.ErrorCode is e.g. 'consumer_domain' | 'rate_limited'
+
+// 3. The person types the code (or opens the link on any device).
+const done = await client.SubmitVerificationCode({ AgentSessionID: agentSessionId, Code: typed });
+
+// 4. After a reconnect, events are NOT replayed: read the durable state.
+const status = await client.GetVerificationStatus(agentSessionId);
+```
+
+| Method | GraphQL | Notes |
+|---|---|---|
+| `RequestVerification({AgentSessionID, Name, Email})` | mutation `RequestRealtimeSessionVerification` | Policy and limits are enforced server-side. |
+| `SubmitVerificationCode({AgentSessionID, Code})` | mutation `SubmitRealtimeSessionVerificationCode` | Single use; wrong codes are counted. |
+| `GetVerificationStatus(agentSessionId)` | query `RealtimeSessionVerificationStatus` | The recovery path for a missed event. |
+| `SubscribeToSessionEvents(agentSessionId)` | subscription `RealtimeSessionEvents` | Reuses `GraphQLDataProvider.Subscribe` (the same WebSocket client as the other subscriptions). |
+| `SubscribeToSessionEventsOfType(agentSessionId, type)` | same | Narrowed to one event type with a typed payload. |
+
+Contracts worth knowing:
+
+- **The three request/response methods never throw.** A transport fault comes back as `Success: false` with
+  `ErrorCode: 'transport_error'` (a client-only code). Use `IsKnownRealtimeSessionVerificationErrorCode` to narrow
+  `ErrorCode`; the server may add codes, so the field is typed `string`.
+- **The email address and the typed code are never logged.**
+- **Events are validated.** `PayloadJson` is parsed with `ParseRealtimeSessionEvent`; malformed events are dropped and
+  logged, and a type this client does not know arrives as an `UnknownRealtimeSessionEvent` (ignore it) instead of
+  breaking an older client.
+- **Authorization is the session's own principal.** A subscription for someone else's session fails as an error on the
+  observable ("Realtime session not found."); the socket and other subscriptions are unaffected.
+- **Reconnects.** When the provider recycles an expired-token socket the observable *completes*. Re-subscribe, then call
+  `GetVerificationStatus` once.
+- **Multi-provider.** Construct it with the provider you mean (in Angular, `this.ProviderToUse`), never a hidden global.
+
 ## Key Classes and Types
 
 | Class/Type | Description |
@@ -647,6 +740,7 @@ For comprehensive information about IS-A relationships in MemberJunction:
 | `GraphQLProviderConfigData` | Configuration class for setting up the GraphQL provider with authentication and connection details |
 | `GraphQLActionClient` | Client for executing actions and entity actions through GraphQL |
 | `GraphQLAIClient` | Client for AI operations including prompts, agents, and embeddings |
+| `GraphQLRealtimeSessionClient` | Typed client for realtime session identity verification and the `RealtimeSessionEvents` subscription |
 | `GraphQLSystemUserClient` | Specialized client for server-to-server communication using API keys |
 | `GraphQLTransactionGroup` | Manages complex multi-entity transactions with variable support |
 | `FieldMapper` | Handles automatic field name mapping between client and server |
@@ -746,4 +840,4 @@ For the full architecture — differential updates, Redis cross-server sync, ses
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

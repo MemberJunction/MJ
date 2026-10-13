@@ -34,7 +34,7 @@ export interface FlattenOptions {
     /** Maximum nesting depth to flatten; objects deeper than this are kept as leaf blobs. Default 4. */
     MaxDepth?: number;
     /** Invoked when a flattened key collides with an existing key (first value wins). For diagnostics. */
-    onCollision?: (key: string) => void;
+    OnCollision?: (key: string) => void;
 }
 
 const DEFAULT_SEPARATOR = '_';
@@ -52,18 +52,23 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * Returns true if `raw` contains at least one nested plain-object value — i.e. flattening would
  * change it. Cheap top-level check; lets callers skip the allocation for the flat-record common case.
  */
-export function hasNestedObject(raw: Record<string, unknown>): boolean {
+export function HasNestedObject(raw: Record<string, unknown>): boolean {
     for (const v of Object.values(raw)) {
         if (isPlainObject(v)) return true;
     }
     return false;
 }
 
+/** @deprecated Use {@link HasNestedObject}. */
+export function hasNestedObject(raw: Record<string, unknown>): boolean {
+    return HasNestedObject(raw);
+}
+
 /**
  * Flatten a record's nested plain-objects into `parent<sep>child` scalar keys. Pure; returns a new
  * object. A record with no nested objects is returned shallow-copied + unchanged in shape.
  */
-export function flattenRecord(
+export function FlattenRecord(
     raw: Record<string, unknown>,
     opts: FlattenOptions = {},
 ): Record<string, unknown> {
@@ -73,7 +78,7 @@ export function flattenRecord(
 
     const put = (key: string, value: unknown): void => {
         if (Object.prototype.hasOwnProperty.call(out, key)) {
-            opts.onCollision?.(key);
+            opts.OnCollision?.(key);
             return; // first value wins
         }
         out[key] = value;
@@ -92,4 +97,12 @@ export function flattenRecord(
 
     recurse(raw, '', 0);
     return out;
+}
+
+/** @deprecated Use {@link FlattenRecord}. */
+export function flattenRecord(
+    raw: Record<string, unknown>,
+    opts: FlattenOptions = {},
+): Record<string, unknown> {
+    return FlattenRecord(raw, opts);
 }

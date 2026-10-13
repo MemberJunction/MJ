@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { IncrementalBaker, stripVolatileHeaders, BakeApplyError } from '../IncrementalBaker.js';
+import { IncrementalBaker, StripVolatileHeaders, BakeApplyError } from '../IncrementalBaker.js';
 import type { BakerWorkingDB, CapturedEntitySQL } from '../IncrementalBaker.js';
 import type { TSQLToPGTranspiler } from '../MigrationConverter.js';
 
@@ -329,6 +329,6 @@ describe('IncrementalBaker', () => {
 describe('stripVolatileHeaders', () => {
   it('removes only the `-- Generated at:` lines, leaving SQL intact', () => {
     const input = ['-- Generated at: 2026-06-18T18:30:28.355Z', 'CREATE VIEW x AS SELECT 1;', '  -- Generated at: 2026-06-18T18:30:28.368Z'].join('\n');
-    expect(stripVolatileHeaders(input)).toBe('CREATE VIEW x AS SELECT 1;');
+    expect(StripVolatileHeaders(input)).toBe('CREATE VIEW x AS SELECT 1;');
   });
 });

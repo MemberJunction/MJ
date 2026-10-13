@@ -1,12 +1,19 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormBuilderAction, FormResponse, FormAnswer } from '../../base/base-form-builder.action';
 import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import { HttpClient, HttpError, IsHttpError } from '@memberjunction/network-utils';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
  * JotForm API response structures
  */
+/** JotForm wraps every successful payload in a `content` envelope. */
+export interface JotFormEnvelope<T> {
+    responseCode?: number;
+    message?: string;
+    content: T;
+}
+
 export interface JotFormSubmission {
     id: string;
     form_id: string;
@@ -51,44 +58,40 @@ export abstract class JotFormBaseAction extends BaseFormBuilderAction {
         return 'https://api.jotform.com';
     }
 
-    private axiosInstance: AxiosInstance | null = null;
+    private httpClientInstance: HttpClient | null = null;
     private currentAPIKey: string | null = null;
 
     /**
-     * Get axios instance with JotForm authentication
+     * Get the HTTP client configured with JotForm authentication
      */
-    protected getAxiosInstance(apiKey: string, region?: 'us' | 'eu' | 'hipaa'): AxiosInstance {
+    protected getHttpClient(apiKey: string, region?: 'us' | 'eu' | 'hipaa'): HttpClient {
         const baseURL = this.getRegionalBaseUrl(region);
 
-        if (!this.axiosInstance || this.currentAPIKey !== apiKey) {
+        if (!this.httpClientInstance || this.currentAPIKey !== apiKey) {
             this.currentAPIKey = apiKey;
-            this.axiosInstance = axios.create({
-                baseURL,
-                timeout: 60000,
-                headers: {
+            this.httpClientInstance = new HttpClient({
+                BaseURL: baseURL,
+                Timeout: 60000,
+                Headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json'
                 },
-                params: {
-                    apiKey  // JotForm uses API key in query params
-                }
-            });
-
-            this.axiosInstance.interceptors.response.use(
-                (response) => {
-                    return response;
-                },
-                async (error: AxiosError) => {
-                    if (error.response?.status === 429) {
+                OnRequest: (config) => ({
+                    // JotForm authenticates with the API key in the query string
+                    ...config,
+                    Query: { ...config.Query, apiKey }
+                }),
+                OnRetry: async (error) => {
+                    if (error.Status === 429) {
                         LogStatus('JotForm rate limit hit. Waiting 60 seconds...');
                         await this.sleep(60000);
-                        return this.axiosInstance!.request(error.config!);
+                        return true;
                     }
-                    return Promise.reject(error);
+                    return false;
                 }
-            );
+            });
         }
-        return this.axiosInstance;
+        return this.httpClientInstance;
     }
 
     /**
@@ -134,12 +137,12 @@ export abstract class JotFormBaseAction extends BaseFormBuilderAction {
                 params.orderby = options.orderby;
             }
 
-            const response = await this.getAxiosInstance(apiKey, options?.region).get(
+            const response = await this.getHttpClient(apiKey, options?.region).Get<JotFormSubmissionsResult>(
                 `/form/${formId}/submissions`,
-                { params }
+                { Query: params }
             );
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError('Failed to get JotForm submissions:', error);
             throw this.handleJotFormError(error);
@@ -210,12 +213,12 @@ export abstract class JotFormBaseAction extends BaseFormBuilderAction {
         region?: 'us' | 'eu' | 'hipaa'
     ): Promise<JotFormSubmission> {
         try {
-            const response = await this.getAxiosInstance(apiKey, region).get(
+            const response = await this.getHttpClient(apiKey, region).Get<JotFormEnvelope<JotFormSubmission>>(
                 `/submission/${submissionId}`,
-                { params: { apiKey } }
+                { Query: { apiKey } }
             );
 
-            return response.data.content;
+            return response.Data.content;
         } catch (error) {
             LogError('Failed to get single JotForm submission:', error);
             throw this.handleJotFormError(error);
@@ -231,12 +234,12 @@ export abstract class JotFormBaseAction extends BaseFormBuilderAction {
         region?: 'us' | 'eu' | 'hipaa'
     ): Promise<any> {
         try {
-            const response = await this.getAxiosInstance(apiKey, region).get(
+            const response = await this.getHttpClient(apiKey, region).Get<JotFormEnvelope<any>>(
                 `/form/${formId}`,
-                { params: { apiKey } }
+                { Query: { apiKey } }
             );
 
-            return response.data.content;
+            return response.Data.content;
         } catch (error) {
             LogError('Failed to get JotForm details:', error);
             throw this.handleJotFormError(error);
@@ -252,12 +255,12 @@ export abstract class JotFormBaseAction extends BaseFormBuilderAction {
         region?: 'us' | 'eu' | 'hipaa'
     ): Promise<any> {
         try {
-            const response = await this.getAxiosInstance(apiKey, region).get(
+            const response = await this.getHttpClient(apiKey, region).Get<JotFormEnvelope<any>>(
                 `/form/${formId}/questions`,
-                { params: { apiKey } }
+                { Query: { apiKey } }
             );
 
-            return response.data.content;
+            return response.Data.content;
         } catch (error) {
             LogError('Failed to get JotForm questions:', error);
             throw this.handleJotFormError(error);
@@ -281,13 +284,13 @@ export abstract class JotFormBaseAction extends BaseFormBuilderAction {
                 params[`submission[${fieldId}]`] = value;
             });
 
-            const response = await this.getAxiosInstance(apiKey, region).post(
+            const response = await this.getHttpClient(apiKey, region).Post<any>(
                 `/form/${formId}/submissions`,
                 null,
-                { params }
+                { Query: params }
             );
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError('Failed to create JotForm submission:', error);
             throw this.handleJotFormError(error);
@@ -336,10 +339,10 @@ export abstract class JotFormBaseAction extends BaseFormBuilderAction {
      * Handle JotForm-specific errors
      */
     protected handleJotFormError(error: any): Error {
-        if (axios.isAxiosError(error)) {
-            const axiosError = error as AxiosError;
-            const status = axiosError.response?.status;
-            const data = axiosError.response?.data as any;
+        if (IsHttpError(error)) {
+            const httpError = error as HttpError;
+            const status = httpError.Status;
+            const data = httpError.Data as any;
 
             if (status === 401) {
                 return new Error('Invalid JotForm API key. Please check your authentication.');

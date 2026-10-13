@@ -1,0 +1,72 @@
+/* Fixture chrome only. Nothing here may style a tab — the whole point of the page is that tabs get
+   their appearance from the shared global `.mj-tabs*` sheet, so a local override would hide exactly
+   the drift this page exists to expose. */
+
+.tsl-note {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--mj-text-secondary);
+}
+.tsl-note code {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--mj-bg-surface-sunken);
+}
+.tsl-note kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--mj-border-default);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--mj-bg-surface);
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.tsl-case {
+  margin-bottom: 22px;
+}
+
+.tsl-case__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.tsl-case__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.tsl-case__meta {
+  font-size: 12px;
+  color: var(--mj-text-muted);
+}
+
+/* The stage deliberately mimics a card, because that is the context the tab chrome is drawn for —
+   the bar's bottom rule and the active tab's surface only read correctly against one. */
+.tsl-case__stage {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.tsl-body {
+  padding: 14px;
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+}
+
+.tsl-state {
+  margin-left: 10px;
+  color: var(--mj-text-muted);
+}

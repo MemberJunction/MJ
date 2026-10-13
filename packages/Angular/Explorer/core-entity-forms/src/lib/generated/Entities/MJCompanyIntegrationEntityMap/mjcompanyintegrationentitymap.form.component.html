@@ -184,9 +184,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Field Maps','EntityMapID')"
-                [NewRecordValues]="NewRecordValues('MJ: Company Integration Field Maps')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integration Field Maps','EntityMapID')"
                 [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationFieldMaps')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationFieldMaps', $event.totalRowCount)"
                 >
@@ -209,9 +209,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Sync Watermarks','EntityMapID')"
-                [NewRecordValues]="NewRecordValues('MJ: Company Integration Sync Watermarks')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integration Sync Watermarks','EntityMapID')"
                 [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationSyncWatermarks')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationSyncWatermarks', $event.totalRowCount)"
                 >

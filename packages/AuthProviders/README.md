@@ -102,6 +102,75 @@ Each built-in provider is registered with the MJ class factory under a lowercase
 
 Every provider also requires the base fields: `name`, `type`, `issuer`, `audience`, `jwksUri`. See [`AuthProviderConfig`](../MJCore/src/generic/authTypes.ts) for the full shape.
 
+> The list above is **not a closed set** — it is what MJ happens to ship. `type` is resolved through
+> the class factory, so any `@RegisterClass(BaseAuthProvider, 'your-key')` subclass is instantiable
+> the same way, with no change to this package. Nothing validates `type` against an enum.
+
+## Where provider configuration comes from
+
+A provider config can reach the factory from three places. They layer rather than compete, and none
+is mandatory:
+
+| Source | Set by | Notes |
+| --- | --- | --- |
+| **Environment variables** | Each provider class's optional `ConfigFromEnvironment` static | The zero-config path. See below. |
+| **`mj.config.cjs`** | The `authProviders` array | Explicit and exact. Declaring it **replaces** the environment-derived set rather than merging. |
+| **`MJ: Authentication Providers` metadata** | Rows in the database | Enables admin-managed configuration and the multi-IdP login picker. Layered on top at startup by MJServer's `AuthProviderEngine`. |
+
+Config and environment remain the bootstrap path: you cannot configure authentication through a UI
+you must first authenticate to reach.
+
+### Environment-variable configuration (`ConfigFromEnvironment`)
+
+A provider class declares its own environment mapping by implementing the optional
+[`IEnvironmentConfigurableProvider`](src/IEnvironmentConfigurableProvider.ts) static.
+`AuthProviderFactory.DiscoverFromEnvironment()` walks the class-factory registry and collects every
+provider that finds its variables — so a third-party provider gets the same "set two variables and
+you're done" experience as a built-in, without touching MJ core.
+
+| Provider | Variables | Resulting provider name |
+| --- | --- | --- |
+| Entra ID / Azure AD | `TENANT_ID` + `WEB_CLIENT_ID` | `azure` |
+| Auth0 | `AUTH0_DOMAIN` + `AUTH0_CLIENT_ID` (optional `AUTH0_CLIENT_SECRET`) | `auth0` |
+| AWS Cognito | `COGNITO_USER_POOL_ID` + `COGNITO_CLIENT_ID` + `AWS_REGION` | `cognito` |
+| Okta | `OKTA_DOMAIN` + `OKTA_CLIENT_ID` (optional `OKTA_ISSUER`, `OKTA_AUDIENCE`) | `okta` |
+| WorkOS | `WORKOS_CLIENT_ID` (optional `WORKOS_AUDIENCE`) | `workos` |
+
+Implementing it on your own provider:
+
+```typescript
+@RegisterClass(BaseAuthProvider, 'my-idp')
+export class MyIdpProvider extends BaseAuthProvider {
+  static ConfigFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
+    // MUST return null — never a partial config — when the variables are absent, or the
+    // half-populated result fails validateConfig() and errors on every deployment that
+    // simply does not use this provider.
+    if (!env.MY_IDP_DOMAIN || !env.MY_IDP_CLIENT_ID) return null;
+    return {
+      name: 'my-idp',
+      type: 'my-idp',
+      issuer: `https://${env.MY_IDP_DOMAIN}/`,
+      audience: env.MY_IDP_CLIENT_ID,
+      jwksUri: `https://${env.MY_IDP_DOMAIN}/.well-known/jwks.json`,
+      clientId: env.MY_IDP_CLIENT_ID
+    };
+  }
+  // ...extractUserInfo, etc.
+}
+```
+
+### Metadata configuration
+
+`MJ: Authentication Providers` rows name a `DriverClass` — the same key as `@RegisterClass` — plus
+the non-secret OIDC fields, and are resolved at runtime through the class factory. Two configuration
+blobs are split by trust boundary: `AdditionalConfiguration` is server-only and never published,
+while `ClientConfiguration` is published verbatim to the unauthenticated pre-auth catalog endpoint
+that the browser reads before login. Real secrets belong behind `CredentialID`, which points at an
+encrypted `MJ: Credentials` record.
+
+MJ ships seed rows for its providers (all `Inactive`, connection fields blank) — see
+[`metadata/authentication-providers/`](../../metadata/authentication-providers/README.md).
+
 ## Configuration
 
 In an MJ server, providers are configured under `authProviders` in `mj.config.cjs`. Multiple providers can be registered concurrently — the factory dispatches incoming tokens to the right one based on the `iss` claim.
@@ -243,7 +312,7 @@ export class KeycloakProvider extends BaseAuthProvider {
 // Then in mj.config.cjs use type: 'keycloak'
 ```
 
-> **Important:** because the provider is loaded via class-factory metadata and not by direct reference, your bundler may tree-shake it out. Make sure the file containing the `@RegisterClass` decorator is imported (directly or transitively) before `AuthProviderFactory.createProvider()` runs. The built-in providers do this from [`AuthProviderFactory.ts`](src/AuthProviderFactory.ts); follow the same pattern in your own entry point or a manifest. See the class-registration manifest discussion in [packages/CodeGenLib/CLAUDE.md](../CodeGenLib/CLAUDE.md) for background.
+> **Important:** because the provider is loaded via class-factory metadata and not by direct reference, your bundler may tree-shake it out. Make sure the file containing the `@RegisterClass` decorator is imported (directly or transitively) before `AuthProviderFactory.createProvider()` runs. The built-in providers achieve this by being exported from this package's [`index.ts`](src/index.ts) — importing anything from `@memberjunction/auth-providers` loads and registers all of them. (`AuthProviderFactory.ts` used to carry a literal roster of side-effect imports for this; it was removed because it made the built-ins look like a closed set you had to append to, and `index.ts` already covered it.) For your own provider, export it from your package entry point and make sure that package is reachable from a class-registration manifest — see the discussion in [packages/CodeGenLib/CLAUDE.md](../CodeGenLib/CLAUDE.md).
 
 ## API reference
 
@@ -314,4 +383,4 @@ A `GraphQLError` with `extensions.code = 'JWT_EXPIRED'` and `extensions.expiryDa
 
 ## License
 
-ISC — part of the [MemberJunction](https://github.com/MemberJunction/MJ) monorepo.
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

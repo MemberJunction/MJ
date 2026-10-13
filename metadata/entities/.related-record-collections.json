@@ -1,0 +1,249 @@
+[
+  {
+    "_comments": [
+      "MJ: Actions — the three collections that replace MJActionEntityExtended's hand-written getters.",
+      "Those getters were memoized filters over ActionEngineBase's preloaded caches, which is exactly",
+      "Source 'cache' + Load 'lazy': fill on first read, from RAM, zero queries.",
+      "",
+      "ReadOnly is left to its default (true, because Source is cache), so the records handed out ARE",
+      "the engine's own instances — same as the getters did — and the collection itself refuses",
+      "Add/Remove/Clear, contributes nothing to a save, and never reports dirty.",
+      "",
+      "OnRemove is therefore absent: a read-only collection has no removal semantics."
+    ],
+    "fields": {
+      "Name": "MJ: Actions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Params",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "Name ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Action Params&RelatedEntityJoinField=ActionID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:58:29.966Z",
+            "checksum": "e247a48c2cda0205c803d70da558bfb2b6b32d9b8d2631d22c47c697f69e4323"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "ResultCodes",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "ResultCode ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Action Result Codes&RelatedEntityJoinField=ActionID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:58:30.041Z",
+            "checksum": "4d6151598c55d1e996bb91b86813a57b91c80e71ff864bcf06612d63bb8d78d3"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Libraries",
+              "Source": "cache",
+              "Load": "lazy"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Action Libraries&RelatedEntityJoinField=ActionID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:58:30.058Z",
+            "checksum": "8bfdba3906a2e514c65bdeb316dba3745d7223121283a3f9557ca4e80fa22f58"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Actions"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: AI Agents — three collections, one of which is self-referential and needs care.",
+      "",
+      "Prompts: AgentID is NOT NULL and ExecutionOrder is genuinely positional (which prompt runs",
+      "first), so it gets the Sequence policy. From is 0 because the column defaults to 0, not 1.",
+      "Source 'database' and ReadOnly false are the defaults, but they are stated explicitly here",
+      "because this is the ONE writable collection among the eight — leaving them implicit makes it",
+      "read as an oversight next to its cache/lazy siblings, and it is the opposite.",
+      "",
+      "Actions: a read-only lazy view over BaseAIEngine's agent-action cache — this replaced both",
+      "MJAIAgentEntityExtended's hand-written getter and BaseAIEngine's manual association loop.",
+      "Read-only refuses Add/Remove/Clear, so no OnRemove policy applies.",
+      "",
+      "SubAgents: also a read-only lazy cache view (the ParentID hierarchy, ordered by",
+      "ExecutionOrder). Read-only means nobody can detach a sub-agent through this collection —",
+      "the safe default for a self-referential hierarchy, where a careless removal policy could",
+      "destroy an entire agent together with its prompts, actions and run history. No Sequence",
+      "policy either: renumbering ExecutionOrder would rewrite the agent records themselves, so",
+      "the column is used for ordering only.",
+      "",
+      "NOTE: MJ: AI Agents has a SECOND self-relationship (DefaultCoAgentID) which is deliberately",
+      "NOT declared — hence RelatedEntityJoinField in every lookup below, which is what keeps these",
+      "two rows apart."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agents"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Actions",
+              "Source": "cache",
+              "Load": "lazy"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Actions&RelatedEntityJoinField=AgentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:58:29.985Z",
+            "checksum": "f3fc07fe5585228c6e23e6728b8891ac85b0ea17c53f8d3d7ec227691f2f1a06"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Prompts",
+              "Source": "database",
+              "ReadOnly": false,
+              "Load": "explicit",
+              "OnRemove": "delete",
+              "OrderBy": "ExecutionOrder ASC",
+              "Sequence": {
+                "Field": "ExecutionOrder",
+                "From": 0
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Prompts&RelatedEntityJoinField=AgentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T00:34:35.197Z",
+            "checksum": "893b9c9db081e3ddf06d917057171e39367d9f89100a46495275e97d47a02875"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "SubAgents",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "ExecutionOrder ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&RelatedEntityJoinField=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:58:30.021Z",
+            "checksum": "1023366396e30dbc9d611ccb7fcd4c7eac194166731afaf1c803a59efc4449f0"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agents"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: AI Prompts -> MJ: AI Prompt Models. PromptID is NOT NULL, Hard delete.",
+      "",
+      "Deliberately NO Sequence policy despite Priority being an integer: Priority is a SEMANTIC",
+      "ranking (which model to prefer), not a positional line number. Auto-renumbering it on every",
+      "save would silently rewrite a deliberate preference — a sequence policy suits line numbers,",
+      "not rankings. OrderBy alone gives the read ordering without touching the values."
+    ],
+    "fields": {
+      "Name": "MJ: AI Prompts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Models",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "Priority ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: AI Prompts&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: AI Prompt Models&RelatedEntityJoinField=PromptID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:58:30.075Z",
+            "checksum": "3d4f6ff93239cdce922c6e7394b3ef3a2306f4476fd67d94abe6ef4563fb1cc6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompts"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: API Keys -> MJ: API Key Scopes. APIKeyID is NOT NULL, Hard delete. Priority is a",
+      "ranking, so no Sequence policy (same reasoning as AI Prompt Models above).",
+      "",
+      "NO VALIDATION ROLLUP HERE — and that is deliberate. An earlier version of this comment",
+      "claimed that declaring this collection would switch on MJAPIKeyScopeEntityServer's",
+      "row-filter ValidateAsync (dead today, because DefaultSkipAsyncValidation is true) for every",
+      "scope on every API Key save. That is NOT what happens. Scopes is cache-sourced and therefore",
+      "read-only, and a read-only collection is a projection: it contributes no save work, so it",
+      "must contribute no validation either. Validating it would block the parent's save on records",
+      "the save will never write, and — worse — the FK stamping that precedes validation would",
+      "MUTATE the engine's shared cached instances, dirtying them for every holder in the process.",
+      "",
+      "If the row-filter check is wanted, it belongs on the scope's own save path, not smuggled in",
+      "through a parent's validation pass."
+    ],
+    "fields": {
+      "Name": "MJ: API Keys"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Scopes",
+              "Source": "cache",
+              "Load": "lazy",
+              "OrderBy": "Priority ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: API Keys&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: API Key Scopes&RelatedEntityJoinField=APIKeyID"
+          },
+          "sync": {
+            "lastModified": "2026-08-07T23:58:30.089Z",
+            "checksum": "35f6ec4f75651a49f88af7e358fe9c5bc6b36749dbe31eabbfc6ab0ecac751e0"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: API Keys"
+    }
+  }
+]

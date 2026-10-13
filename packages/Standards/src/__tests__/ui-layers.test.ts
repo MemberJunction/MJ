@@ -114,6 +114,35 @@ describe('UILayersCheck', () => {
         expect(result.Violations[0].Message).toContain('declares "@angular/router"');
     });
 
+    it('excuses a declaration that backs a marker-excused import', async () => {
+        // Knip's dependency-check gate requires every real import to be declared, so a
+        // marker-excused import FORCES a declaration — flagging it would deadlock the two gates.
+        writePackage('w', { mjUILayer: 'widgets', dependencies: { '@memberjunction/ng-shared': '6.0.0' } }, {
+            'a.ts': `// mj-ui-layers-allow: tracked in #3404\nimport { BaseResourceComponent } from '@memberjunction/ng-shared';`,
+        });
+        expect((await run()).Violations).toEqual([]);
+    });
+
+    it('still flags the declaration when the import has NO marker', async () => {
+        writePackage('w', { mjUILayer: 'widgets', dependencies: { '@memberjunction/ng-shared': '6.0.0' } }, {
+            'a.ts': `import { BaseResourceComponent } from '@memberjunction/ng-shared';`,
+        });
+        const result = await run();
+        // Both halves flag: the import on its line, and the declaration in the manifest.
+        expect(result.Violations.map((v) => v.Message)).toEqual(
+            expect.arrayContaining([expect.stringContaining('imports'), expect.stringContaining('declares "@memberjunction/ng-shared"')]),
+        );
+    });
+
+    it('a marker on one import does not excuse a different forbidden declaration', async () => {
+        writePackage('w', { mjUILayer: 'widgets', dependencies: { '@angular/router': '21.1.3' } }, {
+            'a.ts': `// mj-ui-layers-allow: tracked in #3404\nimport { BaseResourceComponent } from '@memberjunction/ng-shared';`,
+        });
+        const result = await run();
+        expect(result.Violations).toHaveLength(1);
+        expect(result.Violations[0].Message).toContain('declares "@angular/router"');
+    });
+
     it('flags a zero-arg RunView but NOT one given a provider', async () => {
         // Regression: an earlier pattern flagged `new RunView(provider)`, which is correct code.
         // A gate that cries wolf is a gate that gets switched off.

@@ -1,5 +1,7 @@
 # Pixel-Perfect Styling Alignment - COMPLETE ✅
 
+> **Note (September 2026):** the prototype this document compares against, `initial-prototype-now-old/slack-style-agent-chat-v22.html`, was removed from the repository in #4312. The last commit that contained it is `00c5a6f86e`; use `git show 00c5a6f86e:packages/Angular/Generic/conversations/initial-prototype-now-old/slack-style-agent-chat-v22.html` to view it.
+
 ## Executive Summary
 All styling has been systematically updated to achieve pixel-perfect alignment with the prototype (`slack-style-agent-chat-v22.html`). The production Angular components now match the prototype's professional Slack-style design.
 

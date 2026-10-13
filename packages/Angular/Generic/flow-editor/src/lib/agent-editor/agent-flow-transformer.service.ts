@@ -2,6 +2,8 @@ import { Injectable } from '@angular/core';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { FlowNode, FlowConnection, FlowConnectionStyle, FlowNodeTypeConfig, FlowNodePort } from '../interfaces/flow-types';
 import { UUIDsEqual } from '@memberjunction/global';
+import { ReadFlowDecisionStepConfiguration } from '@memberjunction/ai-core-plus';
+import { PathRunProblems, StepRunProblems, type FlowRunProblem } from './flow-run-check';
 
 /** Picker item shape for Actions with optional icon */
 export interface ActionPickerItem { ID: string; Name: string; IconClass?: string | null; }
@@ -27,6 +29,17 @@ export const AGENT_STEP_TYPE_CONFIGS: FlowNodeTypeConfig[] = [
     Label: 'Prompt',
     Icon: 'fa-comment-dots',
     Color: '#8B5CF6',
+    Category: 'Steps',
+    DefaultPorts: [
+      { ID: 'input', Direction: 'input', Side: 'top', Multiple: true },
+      { ID: 'output', Direction: 'output', Side: 'bottom', Multiple: true }
+    ]
+  },
+  {
+    Type: 'Decision',
+    Label: 'Decision',
+    Icon: 'fa-scale-balanced',
+    Color: '#0891b2',
     Category: 'Steps',
     DefaultPorts: [
       { ID: 'input', Direction: 'input', Side: 'top', Multiple: true },
@@ -68,24 +81,54 @@ export const AGENT_STEP_TYPE_CONFIGS: FlowNodeTypeConfig[] = [
   }
 ];
 
+/** "1st", "2nd", "3rd", … for the precedence note on an exclusive branch. */
+function ordinal(n: number): string {
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th'
+    : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th';
+  return `${n}${suffix}`;
+}
+
+/** How an edge reads on the canvas. */
+type PathVisual = {
+  label?: string;
+  labelIcon?: string;
+  labelIconColor?: string;
+  labelDetail?: string;
+  color: string;
+  style: FlowConnectionStyle;
+};
+
 /**
  * Transforms MJ AIAgentStep/Path entities to/from generic FlowNode/FlowConnection models.
  */
 @Injectable()
 export class AgentFlowTransformerService {
 
-  /** Convert MJ step entities to generic FlowNodes */
+  /** Convert MJ step entities to generic FlowNodes, each warning about its share of `problems` */
   StepsToNodes(
     steps: MJAIAgentStepEntity[],
     actions?: ActionPickerItem[],
-    agents?: AgentPickerItem[]
+    agents?: AgentPickerItem[],
+    problems: readonly FlowRunProblem[] = []
   ): FlowNode[] {
-    return steps.map(step => this.StepToNode(step, actions, agents));
+    return steps.map(step => this.StepToNode(step, actions, agents, problems));
   }
 
-  /** Convert MJ path entities to generic FlowConnections */
-  PathsToConnections(paths: MJAIAgentStepPathEntity[]): FlowConnection[] {
-    return paths.map(path => this.pathToConnection(path, paths));
+  /** Convert MJ path entities to generic FlowConnections, each flagging its share of `problems` */
+  PathsToConnections(paths: MJAIAgentStepPathEntity[], problems: readonly FlowRunProblem[] = []): FlowConnection[] {
+    return paths.map(path => this.pathToConnection(path, paths, problems));
+  }
+
+  /**
+   * What a step's node warns about: its own missing configuration, then each flow-check problem on the
+   * step that is not already that. A path's problem is flagged on the path instead. Nothing for a
+   * disabled step, which the author has taken out of the flow.
+   */
+  BuildNodeWarning(step: MJAIAgentStepEntity, problems: readonly FlowRunProblem[] = []): string | null {
+    if (this.MapStepStatus(step.Status) === 'disabled') return null;
+    const flow = StepRunProblems(problems, step.ID).map(p => p.Message);
+    const messages = [this.BuildConfigWarningMessage(step), ...flow].filter((m): m is string => !!m);
+    return messages.length > 0 ? messages.join('\n') : null;
   }
 
   /** Build the subtitle for a step based on its configured action/prompt/agent */
@@ -101,6 +144,14 @@ export class AgentFlowTransformerService {
         return this.buildLoopSubtitle(step, 'For Each');
       case 'While':
         return this.buildLoopSubtitle(step, 'While');
+      case 'Decision': {
+        const read = ReadFlowDecisionStepConfiguration(step.Configuration);
+        if ('Config' in read) {
+          const count = Object.keys(read.Config.questions || {}).length;
+          return `${read.Config.key} · ${count} ${count === 1 ? 'question' : 'questions'}`;
+        }
+        return 'Unconfigured';
+      }
       default:
         return step.StepType;
     }
@@ -141,6 +192,10 @@ export class AgentFlowTransformerService {
       case 'ForEach':
       case 'While':
         return this.buildLoopWarningMessage(step);
+      case 'Decision': {
+        const read = ReadFlowDecisionStepConfiguration(step.Configuration);
+        return 'Error' in read ? read.Error : null;
+      }
       default:
         return null;
     }
@@ -172,6 +227,10 @@ export class AgentFlowTransformerService {
       case 'ForEach':
       case 'While':
         return this.isLoopBodyMissingReference(step);
+      case 'Decision': {
+        const read = ReadFlowDecisionStepConfiguration(step.Configuration);
+        return 'Error' in read;
+      }
       default:
         return false;
     }
@@ -251,7 +310,8 @@ export class AgentFlowTransformerService {
   StepToNode(
     step: MJAIAgentStepEntity,
     actions?: ActionPickerItem[],
-    agents?: AgentPickerItem[]
+    agents?: AgentPickerItem[],
+    problems: readonly FlowRunProblem[] = []
   ): FlowNode {
     const stepId = step.ID;
     const ports: FlowNodePort[] = [
@@ -270,10 +330,10 @@ export class AgentFlowTransformerService {
       }
     ];
 
-    // Show warning status when the step is missing its required configuration,
-    // unless the step is explicitly disabled (respect the user's intent).
+    // Show warning status when the step is missing its required configuration or the flow check
+    // refuses something on it, unless the step is explicitly disabled (respect the user's intent).
     const baseStatus = this.MapStepStatus(step.Status);
-    const warningMessage = (baseStatus !== 'disabled') ? this.BuildConfigWarningMessage(step) : null;
+    const warningMessage = this.BuildNodeWarning(step, problems);
     const effectiveStatus = warningMessage ? 'warning' : baseStatus;
 
     // Build loop-specific data for ForEach/While nodes
@@ -310,7 +370,11 @@ export class AgentFlowTransformerService {
     };
   }
 
-  private pathToConnection(path: MJAIAgentStepPathEntity, allPaths: MJAIAgentStepPathEntity[]): FlowConnection {
+  private pathToConnection(
+    path: MJAIAgentStepPathEntity,
+    allPaths: MJAIAgentStepPathEntity[],
+    problems: readonly FlowRunProblem[] = []
+  ): FlowConnection {
     const hasCondition = path.Condition != null && path.Condition.trim().length > 0;
     const isAlwaysPath = !hasCondition;
 
@@ -325,8 +389,20 @@ export class AgentFlowTransformerService {
     // highest-priority one will execute — regardless of whether they have descriptions.
     const hasAmbiguousAlways = isAlwaysPath && unconditionalSiblings.length > 1;
 
+    // Where this path sits in its exclusive group, when it is IN one. Highest Priority wins, ties
+    // broken by path ID — and none of that precedence is visible on the canvas today, so someone
+    // debugging a fork cannot tell which branch takes it when two conditions are both true.
+    const conditionalSiblings = siblingPaths.filter(p => p.Condition && p.Condition.trim().length > 0);
+    const rank = hasCondition && conditionalSiblings.length > 1
+      ? this.rankWithinGroup(path, conditionalSiblings)
+      : null;
+
     // Build label, icon, and visual style
-    const visual = this.buildPathVisuals(path, hasCondition, isOnlyPath, hasAmbiguousAlways);
+    const pathProblems = PathRunProblems(problems, path.ID).map(p => p.Message);
+    const visual = this.withPathProblems(
+      this.buildPathVisuals(path, hasCondition, isOnlyPath, hasAmbiguousAlways, rank),
+      pathProblems
+    );
 
     return {
       ID: path.ID,
@@ -350,52 +426,126 @@ export class AgentFlowTransformerService {
     };
   }
 
+  /**
+   * What an edge says on the canvas, and what it says on inspection.
+   *
+   * **An edge label answers one question: WHEN is this path taken?** That is the condition. The
+   * `Description` is the author's rationale — genuinely useful, and inspection-time content: it is
+   * prose, it is arbitrarily long, and rendering it always turned the least important element on the
+   * canvas into the most visually dominant one, overlapping nodes and other labels.
+   *
+   * So the condition is the LABEL (truncated), the description is the DETAIL (the hover tooltip),
+   * and an unconditional edge says nothing at all — a plain line already means "then". That last
+   * rule removes most of the clutter on a real graph, because most edges are unconditional.
+   */
   private buildPathVisuals(
     path: MJAIAgentStepPathEntity,
     hasCondition: boolean,
     isOnlyPath: boolean,
-    hasAmbiguousAlways: boolean
-  ): { label?: string; labelIcon?: string; labelIconColor?: string; labelDetail?: string; color: string; style: FlowConnectionStyle } {
-    // Conditional path — amber dashed with condition text
+    hasAmbiguousAlways: boolean,
+    rank: { position: number; total: number } | null = null
+  ): PathVisual {
+    const rationale = path.Description?.trim();
+
+    // Conditional path — amber dashed, labelled with the RULE.
     if (hasCondition) {
+      const condition = path.Condition!.trim();
+      // The rank prefix is tiny and always fits, so it survives truncation — which matters, because
+      // precedence is exactly what a truncated condition would otherwise hide.
+      const prefix = rank ? `${rank.position}/${rank.total} ` : '';
+      const precedence = rank
+        ? `\n\nChecked ${ordinal(rank.position)} of ${rank.total}: highest priority wins, ties by path ID.`
+        : '';
       return {
-        label: path.Description || path.Condition!,
+        label: prefix + this.truncateLabel(condition, rank ? 28 : 32),
+        labelIcon: 'fa-code-branch',
+        labelIconColor: '#f59e0b',
+        // Full condition first — a truncated label is only safe if the whole thing is one hover
+        // away — then the rationale, then how this branch is chosen against its siblings.
+        labelDetail: (rationale ? `${condition}\n\n${rationale}` : condition) + precedence,
         color: '#f59e0b',
         style: 'dashed'
       };
     }
 
-    // Sole unconditional (only exit path) — neutral dark slate with Default indicator
-    if (isOnlyPath) {
-      return {
-        label: path.Description || 'Default',
-        labelIcon: 'fa-circle-check',
-        labelIconColor: '#16a34a',
-        color: '#64748b',
-        style: 'solid'
-      };
-    }
-
-    // Ambiguous: multiple unconditional paths from the same step
+    // Ambiguous: multiple unconditional paths from the same step. This one KEEPS its label, because
+    // it is a defect the author needs to see without hovering anything.
     if (hasAmbiguousAlways) {
       return {
-        label: path.Description || 'Default',
+        label: 'Duplicate default',
         labelIcon: 'fa-triangle-exclamation',
         labelIconColor: '#ef4444',
-        labelDetail: 'Duplicate default paths: only the highest-priority one will execute',
+        labelDetail: rationale
+          ? `Duplicate default paths: only the highest-priority one will execute.\n\n${rationale}`
+          : 'Duplicate default paths: only the highest-priority one will execute',
         color: '#ef4444',
         style: 'solid'
       };
     }
 
-    // Valid default path (unconditional among conditional siblings) — forest green with checkmark
+    // Every other unconditional path — NO LABEL. The line already means "then", and "Default" on
+    // every edge of a linear flow is a caption on each arrow of a diagram saying "arrow".
+    // The rationale stays reachable on hover.
     return {
-      label: path.Description || 'Default',
-      labelIcon: 'fa-circle-check',
-      labelIconColor: '#16a34a',
-      color: '#16a34a',
+      labelDetail: rationale || undefined,
+      color: isOnlyPath ? '#64748b' : '#16a34a',
       style: 'solid'
     };
+  }
+
+  /**
+   * An edge the flow check refuses keeps its label but turns red with a warning icon, and its detail
+   * leads with why — so a broken condition is visible on the canvas without selecting the path.
+   */
+  private withPathProblems(visual: PathVisual, problems: readonly string[]): PathVisual {
+    if (problems.length === 0) return visual;
+    const why = problems.join('\n\n');
+    return {
+      ...visual,
+      labelIcon: 'fa-triangle-exclamation',
+      labelIconColor: '#ef4444',
+      labelDetail: visual.labelDetail ? `${why}\n\n${visual.labelDetail}` : why,
+      color: '#ef4444'
+    };
+  }
+
+  /**
+   * This path's position among its conditional siblings, in the order the dispatcher checks them.
+   *
+   * Mirrors the COMPILER, which is where the order is actually decided: `buildDependencies` sorts a
+   * fan-out by `Priority` descending, then path ID ascending, and writes that ordinal into
+   * `TaskDependency.Sequence` — which is what `ResolveExclusiveGroups` then reads at runtime. A path
+   * row has no `Sequence` of its own and deliberately never has: a compiled edge gets a fresh UUID
+   * and needs a stored ordinal to stay deterministic across machines, while a design-time path still
+   * has its own stable ID to break the tie with. Ranking here by anything else would disagree with
+   * the engine precisely on ties — and `Priority` defaults to 0, so ties are the common case.
+   */
+  private rankWithinGroup(
+    path: MJAIAgentStepPathEntity,
+    siblings: MJAIAgentStepPathEntity[]
+  ): { position: number; total: number } {
+    const ordered = [...siblings].sort((a, b) =>
+      (b.Priority ?? 0) - (a.Priority ?? 0) || a.ID.localeCompare(b.ID)
+    );
+    return {
+      position: ordered.findIndex(p => UUIDsEqual(p.ID, path.ID)) + 1,
+      total: ordered.length
+    };
+  }
+
+  /**
+   * Trims a condition to what fits on an edge without covering its neighbours.
+   *
+   * Breaks on a word boundary when there is one near the limit, so the visible part stays readable
+   * rather than ending mid-identifier. The full text is always in `labelDetail`.
+   */
+  private truncateLabel(text: string, limit = 32): string {
+    const flat = text.replace(/\s+/g, ' ').trim();
+    if (flat.length <= limit) return flat;
+
+    const cut = flat.slice(0, limit);
+    const lastSpace = cut.lastIndexOf(' ');
+    return `${(lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
   }
 
   /** Populate loop-specific display data on the node's Data payload */

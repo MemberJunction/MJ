@@ -73,7 +73,7 @@ export abstract class SemanticValidator {
    * }
    * ```
    */
-  abstract validate(
+  abstract validate(  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
     context: ValidationContext,
     constraint: PropertyConstraint
   ): ConstraintViolation[];
@@ -86,8 +86,13 @@ export abstract class SemanticValidator {
    *
    * @returns Validator name
    */
-  getName(): string {
+  GetName(): string {
     return this.constructor.name;
+  }
+
+  /** @deprecated Use {@link GetName}. */
+  getName(): string {
+    return this.GetName();
   }
 
   /**
@@ -105,7 +110,7 @@ export abstract class SemanticValidator {
    * }
    * ```
    */
-  abstract getDescription(): string;
+  abstract getDescription(): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
   // ============================================================================
   // Protected Helper Methods
@@ -301,7 +306,10 @@ export abstract class SemanticValidator {
     // Replace template variables
     for (const [key, value] of Object.entries(vars)) {
       const regex = new RegExp(`\\{${key}\\}`, 'g');
-      message = message.replace(regex, String(value));
+      // Function replacement: `value` is user component data, so `$&`/`` $` ``/`$'`/`$$`
+      // in it would otherwise be expanded into the diagnostic. See issue #3171.
+      const replacement = String(value);
+      message = message.replace(regex, () => replacement);
     }
 
     return message;

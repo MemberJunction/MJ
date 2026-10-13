@@ -3,16 +3,18 @@ import { Command, Flags } from '@oclif/core';
 import { Skyway } from '@memberjunction/skyway-core';
 import type { MigrateResult, MigrationExecutionResult, ResolvedMigration, SkywayConfig } from '@memberjunction/skyway-core';
 import ora from 'ora-classic';
-import { getValidatedConfig, getSkywayConfig, type MJConfig } from '../../config';
-import { fetchMigrationSlice, resolveGitRef, type MigrationFetchResult } from '../../lib/migration-fetch';
-import { verifyDatabaseConnection } from '../../lib/db-preflight';
-import { readCurrentDbVersion } from '../../lib/db-version';
+import { GetValidatedConfig, GetSkywayConfig, type MJConfig } from '../../config';
+import { FetchMigrationSlice, ResolveGitRef, type MigrationFetchResult } from '../../lib/migration-fetch';
+import { VerifyDatabaseConnection } from '../../lib/db-preflight';
+import { ReadCurrentDbVersion } from '../../lib/db-version';
+import { executeOpenAppMetadataRefresh, isOpenAppSchema } from '@memberjunction/open-app-engine';
+import { ClearSharedCacheAfterWrite, MigrationChangedDatabase, SKIP_CACHE_CLEAR_ENV } from '../../lib/shared-cache';
 
 /** Skyway's default history table — matches `@memberjunction/skyway-core`'s config default. */
 const HISTORY_TABLE = 'flyway_schema_history';
 
 export default class Migrate extends Command {
-  static description = 'Migrate MemberJunction database to latest version';
+  static description = 'Migrate MemberJunction database to latest version. Open App migrates also run the core metadata-heal procs (same work as R__RefreshMetadata) scoped to the app schema, on SQL Server and PostgreSQL.';
 
   static examples = [
     `<%= config.bin %> <%= command.id %>
@@ -31,11 +33,14 @@ export default class Migrate extends Command {
     'check-connection': Flags.boolean({
       description: 'Verify the database connection (including TLS) and exit without migrating',
     }),
+    'skip-cache-clear': Flags.boolean({
+      description: `Do not clear the shared Redis cache (REDIS_URL) after migrating. Also: ${SKIP_CACHE_CLEAR_ENV}=1`,
+    }),
   };
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Migrate);
-    const config = getValidatedConfig();
+    const config = GetValidatedConfig();
 
     // Connection preflight: a real connect with the configured TLS/auth settings, so a
     // self-signed cert or bad credentials fails fast with an actionable hint instead of a
@@ -57,11 +62,11 @@ export default class Migrate extends Command {
 
     try {
       const sourceDir = this.resolveSourceDir(fetched, flags.dir);
-      const skywayConfig = await getSkywayConfig(config, undefined, flags.schema, sourceDir);
+      const skywayConfig = await GetSkywayConfig(config, undefined, flags.schema, sourceDir);
       this.logFetchSummary(flags.verbose, fetched);
       await this.executeMigration(config, flags, skywayConfig);
     } finally {
-      if (fetched) await fetched.cleanup();
+      if (fetched) await fetched.Cleanup();
     }
   }
 
@@ -73,9 +78,9 @@ export default class Migrate extends Command {
   private async fetchSliceForRef(config: MJConfig, ref: string, schema: string | undefined): Promise<MigrationFetchResult> {
     const currentVersion = await this.readInstalledVersion(config, schema);
     this.logInstalledVersion(currentVersion);
-    return fetchMigrationSlice({
+    return FetchMigrationSlice({
       repoUrl: config.mjRepoUrl,
-      ref: resolveGitRef(ref),
+      ref: ResolveGitRef(ref),
       dialect: config.dbPlatform,
       currentVersion,
     });
@@ -87,8 +92,8 @@ export default class Migrate extends Command {
    */
   private async readInstalledVersion(config: MJConfig, schema: string | undefined): Promise<string | null> {
     // A throwaway config just to obtain a provider — the migration location is irrelevant here.
-    const probe = await getSkywayConfig(config, undefined, schema, undefined);
-    return readCurrentDbVersion(probe.Provider, probe.Migrations.DefaultSchema, HISTORY_TABLE);
+    const probe = await GetSkywayConfig(config, undefined, schema, undefined);
+    return ReadCurrentDbVersion(probe.Provider, probe.Migrations.DefaultSchema, HISTORY_TABLE);
   }
 
   /** Surfaces the detected installed version so the user sees what's being upgraded from. */
@@ -106,7 +111,7 @@ export default class Migrate extends Command {
    * suggestion such as DB_TRUST_SERVER_CERTIFICATE for a self-signed cert) and exits.
    */
   private async preflightConnection(config: MJConfig, checkOnly: boolean): Promise<void> {
-    const result = await verifyDatabaseConnection(config);
+    const result = await VerifyDatabaseConnection(config);
     if (!result.Ok) {
       const suggestion = result.Suggestion ? `\n→ ${result.Suggestion}` : '';
       this.error(`Database connection failed: ${result.Message ?? 'unknown error'}${suggestion}`);
@@ -123,22 +128,22 @@ export default class Migrate extends Command {
    */
   private resolveSourceDir(fetched: MigrationFetchResult | null, dirFlag: string | undefined): string | undefined {
     if (!fetched) return dirFlag;
-    if (!dirFlag) return fetched.dir;
+    if (!dirFlag) return fetched.Dir;
     const subPath = dirFlag.replace(/^filesystem:/, '').replace(/^\.\//, '');
-    return path.join(fetched.dir, subPath);
+    return path.join(fetched.Dir, subPath);
   }
 
   private logFetchSummary(verbose: boolean, fetched: MigrationFetchResult | null): void {
     if (!verbose || !fetched) return;
     this.log(
-      fetched.usedFallback
+      fetched.UsedFallback
         ? 'Fetched full migration history (partial clone unavailable)'
-        : `Fetched ${fetched.selected.length} migration file(s) for the target slice`,
+        : `Fetched ${fetched.Selected.length} migration file(s) for the target slice`,
     );
   }
 
   /** Runs Skyway against the prepared config and reports the outcome. */
-  private async executeMigration(config: MJConfig, flags: { verbose: boolean; tag?: string }, skywayConfig: SkywayConfig): Promise<void> {
+  private async executeMigration(config: MJConfig, flags: { verbose: boolean; tag?: string; 'skip-cache-clear'?: boolean }, skywayConfig: SkywayConfig): Promise<void> {
     const targetSchema = skywayConfig.Migrations.DefaultSchema;
     const skyway = new Skyway(skywayConfig);
 
@@ -183,6 +188,11 @@ export default class Migrate extends Command {
       const message = err instanceof Error ? err.message : String(err);
       this.logToStderr(`\nMigration error: ${message}\n`);
       this.printCallbackErrors(failedMigrations, lastMigrationStarted, errorLog);
+      // A throw used to end the run with the fleet still holding pre-migration rows. Whatever had
+      // already been applied was committed, so the cache is stale whether or not the run finished.
+      await this.clearSharedCache(flags['skip-cache-clear'], MigrationChangedDatabase({
+        Threw: true, Succeeded: false, MigrationsApplied: 0, StartedApplying: lastMigrationStarted !== undefined,
+      }));
       this.error('Migrations failed');
     } finally {
       await skyway.Close();
@@ -199,9 +209,24 @@ export default class Migrate extends Command {
           this.log(`\t${detail.Migration.Version ?? '(R)'} ${detail.Migration.Description} — ${detail.ExecutionTimeMS}ms`);
         }
       }
+      await this.refreshMetadataAfterOpenAppMigrate(config, targetSchema, flags.verbose);
+      // Only when the database actually changed: a run that found nothing pending used to make the
+      // whole fleet drop its cache and reload every engine for no reason.
+      await this.clearSharedCache(flags['skip-cache-clear'], MigrationChangedDatabase({
+        Threw: false, Succeeded: true, MigrationsApplied: result.MigrationsApplied, StartedApplying: lastMigrationStarted !== undefined,
+      }));
     } else {
       spinner.fail();
       this.logToStderr(`\nMigration failed: ${result.ErrorMessage ?? 'unknown error'}\n`);
+
+      // Clear for the whole failure branch, not only when the detail list happens to name a
+      // succeeded migration. `Details` can be empty precisely because the run died before
+      // assembling it, and a migration that began and failed can still have committed statements —
+      // DDL is not transactional across batches on SQL Server.
+      await this.clearSharedCache(flags['skip-cache-clear'], MigrationChangedDatabase({
+        Threw: false, Succeeded: false, MigrationsApplied: result.MigrationsApplied,
+        StartedApplying: lastMigrationStarted !== undefined,
+      }));
 
       if (result.Details.length > 0) {
         // We have per-migration details — show them
@@ -231,6 +256,63 @@ export default class Migrate extends Command {
       }
 
       this.error('Migrations failed');
+    }
+  }
+
+  /**
+   * Running servers never hear about a schema or data change made here, and a server-side cache
+   * hit is never re-validated, so without this they keep serving pre-migration rows (#4083).
+   * No-op without REDIS_URL. A failed clear is reported, not fatal: the migration succeeded.
+   *
+   * @param wroteSomething - False when the run changed nothing (no migrations applied), in which
+   *   case no server can be holding stale rows and the fleet is left alone.
+   */
+  private async clearSharedCache(skip: boolean | undefined, wroteSomething: boolean): Promise<void> {
+    if (!wroteSomething) {
+      return;
+    }
+    const report = await ClearSharedCacheAfterWrite('mj migrate', skip);
+    if (!report) return;
+    if (report.Ok) this.log(report.Message);
+    else this.warn(report.Message);
+  }
+
+  /**
+   * Core `mj migrate` ends with Flyway running `R__RefreshMetadata` against `__mj`.
+   * An Open App migrate is a different history, so that repeatable never runs.
+   * After a successful Open App migrate, run the same heal (SQL Server: all seven
+   * R__ members with dependency-ordered view refresh; PostgreSQL: field-heal
+   * functions — no view recompile). `mj app install` uses the same helper via
+   * RunAppMigrations.
+   */
+  private async refreshMetadataAfterOpenAppMigrate(config: MJConfig, targetSchema: string, verbose: boolean): Promise<void> {
+    const coreSchema = config.coreSchema ?? '__mj';
+    if (!isOpenAppSchema(targetSchema, coreSchema)) {
+      return;
+    }
+
+    const spinner = ora(`Refreshing metadata for ${targetSchema}...`);
+    spinner.start();
+    try {
+      await executeOpenAppMetadataRefresh({
+        platform: config.dbPlatform === 'postgresql' ? 'postgresql' : 'sqlserver',
+        coreSchema,
+        appSchema: targetSchema,
+        database: {
+          Host: config.dbHost,
+          Port: config.dbPort,
+          Database: config.dbDatabase,
+          User: config.codeGenLogin,
+          Password: config.codeGenPassword,
+          Encrypt: config.dbEncrypt,
+          TrustServerCertificate: config.dbTrustServerCertificate,
+        },
+      });
+      spinner.succeed(`Metadata refreshed for ${targetSchema}`);
+    } catch (err: unknown) {
+      spinner.fail();
+      const message = err instanceof Error ? err.message : String(err);
+      this.error(`Open App metadata refresh failed for ${targetSchema}: ${message}`);
     }
   }
 

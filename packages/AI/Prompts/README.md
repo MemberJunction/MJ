@@ -110,6 +110,8 @@ Execution order:
 3. Child results replace placeholders in parent template
 4. Final composed prompt executes as a single LLM call
 
+**Rendering children without executing.** `AIPromptRunner.RenderChildPromptTemplates(childPrompts, params)` renders the child templates and returns `{ renderedTemplates }` keyed by each child's `parentPlaceholder`, with no model call. A caller that needs the rendered text before execution — the loop agent uses it to relocate a volatile specialization into its trailing runtime-state message — passes the map back as `AIPromptParams.PreRenderedChildTemplates`, and `ExecutePrompt` embeds those strings instead of rendering the children a second time. Rendering is deterministic for the same inputs, so both paths produce the same text.
+
 ### Model Selection Strategies
 
 Three strategies for selecting which AI model executes a prompt:
@@ -196,9 +198,58 @@ Hierarchical credential resolution for API keys:
 5. `AIPromptParams.apiKeys[]` (legacy runtime keys)
 6. `AI_VENDOR_API_KEY__<DRIVER>` environment variables (legacy)
 
+**Credential scope.** `AIPromptParams.CredentialScope` (`'Any' | 'RuntimeOnly'`, default `'Any'`)
+decides which of these tiers a run may use. Under `'RuntimeOnly'` only 1 and 5 count — the caller's
+own `credentialId` and `apiKeys`. Credential bindings, the vendor default and environment keys are
+skipped, a candidate the run has no key for is unavailable, so failover stays on the caller's
+vendors, and a run the keys do not cover fails with *"… The credential scope is RuntimeOnly …"*
+instead of running on the platform's account. Prompts the runner starts on a caller's behalf (JSON
+repair, the result-selector judge, decisions' chat prompts) run under the caller's scope.
+
 ### Failover
 
 When a model fails due to rate limiting, authentication errors, or other transient issues, the runner can automatically retry with alternate models from the selection candidates.
+
+### Media Runners
+
+Non-chat models run through runners built on the same `BaseModelRunner`, so they get the same model selection, credential resolution, failover and `MJ: AI Prompt Runs` row as a chat prompt. Each requires one model type, and uses a default carrier prompt, found by name, unless the caller passes a `PromptID`. A `ModelID` pins the model, and failover then stays within its vendors. The run row never holds media bytes.
+
+| Runner | Model type | Method | Default prompt | Usage recorded |
+|---|---|---|---|---|
+| `AIImageGenerationRunner` | `Image Generator` | `RunImageGeneration`, `RunImageEdit` | `Default Image Generation` | the driver's, else images returned (`Images`) |
+| `AITextToSpeechRunner` | `TTS` | `RunTextToSpeech` | `Default Text To Speech` | the driver's, else characters sent (`Characters`) |
+| `AISpeechToTextRunner` | `Speech to Text` | `RunSpeechToText` | `Default Speech To Text` | the driver's: audio seconds (`Seconds`) when reported, otherwise nothing |
+| `AIVideoRunner` | `Video` | `RunAvatarVideo` | `Default Video Generation` | the driver's: video seconds (`Seconds`) when reported, otherwise nothing |
+
+The text-to-speech, speech-to-text and video runners share their lifecycle through `BaseMediaRunner`. It follows the carrier prompt's `FailoverStrategy`, narrowing `SameModelDifferentVendor` to the selected model's vendors.
+
+Whether a failed call fails over is `ErrorAnalyzer`'s decision, as it is for chat prompts. The shipped audio and video drivers report it on `SpeechResult.errorInfo` / `VideoResult.errorInfo`, from the error their SDK threw, so it keeps the HTTP status:
+
+- a rate limit, an outage, a server error or a timeout fails over;
+- a request the vendor rejected as invalid (a 400 or 422, such as an unknown voice or an unsupported audio format) does not, since every other candidate would reject it too;
+- a 400 whose message reads as vendor-specific validation (`required`, `must be`, …) fails over to another vendor, as it does for chat;
+- a 401 stops failover, as it does for chat.
+
+A driver that reports only `errorMessage` is classified from the message, which recognizes rate limits, outages and a few malformed requests; any other message reads as `Unknown`, which fails over. A driver should set `errorInfo` with `ErrorAnalyzer.AnalyzeError(error)` on the error it caught.
+
+`TimeoutMS` and `CancellationToken` bound each driver call as `timeoutMS` and `cancellationToken` bound a chat call. A call that exceeds `TimeoutMS` fails with an `AIPromptTimeoutError` and fails over. A cancelled call ends at once, never fails over, and its run row is recorded as `Cancelled`. The media drivers take no abort signal, so in both cases the request already sent is abandoned rather than torn down.
+
+Video generation is asynchronous at the provider, and the primitive offers no status call, so `AIVideoRunner` does not wait for a render. A successful run means the provider accepted the request; the row records the video ID (for HeyGen, the render job's ID) and records the video's length only if a driver reports it.
+
+Usage is recorded with `BaseModelRunner.ApplyUsageToRunRecord`, which writes non-token quantities as `InputUnitsUsed` / `OutputUnitsUsed` with the `MJ: AI Usage Types` row that names their measure. The runners never set a cost. The row's save prices it from the model's cost rows, and declines when no price unit type claims the measure, as none yet does for `Characters`.
+
+```typescript
+import { AITextToSpeechRunner } from '@memberjunction/ai-prompts';
+
+const result = await new AITextToSpeechRunner().RunTextToSpeech({
+  text: 'Your report is ready.',
+  voice: 'alloy',
+  ContextUser: contextUser,
+});
+if (result.Success) {
+  const audio = result.SpeechResult?.data; // the run row describes the audio but never stores it
+}
+```
 
 ## Usage
 

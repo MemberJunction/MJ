@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T090 - Send Message And User Bubble Render",
+    "Description": "Exercises the full message-send round-trip (message-input onTextSubmitted -> conversation create -> message-list render + in-progress AI time-pill) — the primary write path of the chat feature.",
+    "InputDefinition": "{\n  \"goal\": \"Open the application switcher, choose 'Chat', wait for the workspace, and start a new conversation. Type a short message such as 'Hello, what can you help me with?' into the composer at the bottom and press Enter (or click the send button). Confirm the message is accepted: your typed text appears as a user message bubble in the conversation thread, and the app shows it is working on a response (a processing/typing indicator, a spinning status on the message, or an AI response beginning to appear). Seeing your message posted and the app begin processing is success — you do NOT need to wait for the full agent answer. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"The typed message posts and appears as a user message bubble in the thread\",\n    \"After sending, a processing/typing/working indicator or an AI response starting to render is visible\",\n    \"The composer clears or is disabled while processing (message was consumed, not left in the input)\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,chat",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "D6987F75-C212-452D-8705-EAD07DBBE88B"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.732Z",
+    "checksum": "3954686998e09ee470ac8b81cf39065b8f4aba871c9a54b4d4de51ee95997ab9"
+  }
+}

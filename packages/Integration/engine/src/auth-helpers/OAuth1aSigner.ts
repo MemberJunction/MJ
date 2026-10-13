@@ -52,13 +52,18 @@ export interface OAuth1aSignRequest {
  * RFC 3986 percent-encoding (stricter than `encodeURIComponent`, which leaves
  * `! ' ( ) *` unescaped). OAuth 1.0a requires these to be escaped too.
  */
-export function percentEncodeRFC3986(value: string): string {
+export function PercentEncodeRFC3986(value: string): string {
     return encodeURIComponent(value)
         .replace(/!/g, '%21')
         .replace(/'/g, '%27')
         .replace(/\(/g, '%28')
         .replace(/\)/g, '%29')
         .replace(/\*/g, '%2A');
+}
+
+/** @deprecated Use {@link PercentEncodeRFC3986}. */
+export function percentEncodeRFC3986(value: string): string {
+    return PercentEncodeRFC3986(value);
 }
 
 /**
@@ -98,11 +103,11 @@ export class OAuth1aSigner {
         const allParams: Record<string, string> = { ...oauthParams, ...queryParams };
         const normalizedParams = Object.keys(allParams)
             .sort()
-            .map(k => `${percentEncodeRFC3986(k)}=${percentEncodeRFC3986(allParams[k])}`)
+            .map(k => `${PercentEncodeRFC3986(k)}=${PercentEncodeRFC3986(allParams[k])}`)
             .join('&');
 
-        const baseString = `${method}&${percentEncodeRFC3986(baseUrl)}&${percentEncodeRFC3986(normalizedParams)}`;
-        const signingKey = `${percentEncodeRFC3986(req.ConsumerSecret)}&${percentEncodeRFC3986(req.TokenSecret)}`;
+        const baseString = `${method}&${PercentEncodeRFC3986(baseUrl)}&${PercentEncodeRFC3986(normalizedParams)}`;
+        const signingKey = `${PercentEncodeRFC3986(req.ConsumerSecret)}&${PercentEncodeRFC3986(req.TokenSecret)}`;
         const algo = sigMethod === 'HMAC-SHA1' ? 'sha1' : 'sha256';
         const signature = createHmac(algo, signingKey).update(baseString).digest('base64');
 
@@ -111,10 +116,10 @@ export class OAuth1aSigner {
         const headerParams: Record<string, string> = { ...oauthParams, oauth_signature: signature };
         const paramList = Object.keys(headerParams)
             .sort()
-            .map(k => `${percentEncodeRFC3986(k)}="${percentEncodeRFC3986(headerParams[k])}"`)
+            .map(k => `${PercentEncodeRFC3986(k)}="${PercentEncodeRFC3986(headerParams[k])}"`)
             .join(', ');
 
-        const realmPrefix = req.Realm ? `realm="${percentEncodeRFC3986(req.Realm)}", ` : '';
+        const realmPrefix = req.Realm ? `realm="${PercentEncodeRFC3986(req.Realm)}", ` : '';
         return `OAuth ${realmPrefix}${paramList}`;
     }
 

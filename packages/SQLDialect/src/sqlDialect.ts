@@ -155,6 +155,22 @@ export interface SQLParserDialect {
     /** Default ORDER BY expression for paging when no ORDER BY exists.
      *  SQL Server: '(SELECT NULL)', PostgreSQL: '1' */
     DefaultPagingOrderBy: string;
+    /** Whether `E'…'` string literals, in which a backslash escapes the next character, exist.
+     *  PostgreSQL: true, SQL Server: false */
+    SupportsEscapeStringLiterals: boolean;
+    /** Whether dollar-quoted string literals (`$$…$$`, `$tag$…$tag$`) exist.
+     *  PostgreSQL: true, SQL Server: false */
+    SupportsDollarQuotedStrings: boolean;
+    /** The keyword that opens a statement's trailing query-hint clause, such as `OPTION (…)`;
+     *  `null` when the platform has none. SQL Server: 'OPTION', PostgreSQL: null */
+    QueryHintKeyword: string | null;
+    /**
+     * Functions SQL a caller supplied (ad-hoc SQL, `TestQuerySQL`, query specs) may not call,
+     * lower case; a trailing `*` matches every name with that prefix. They run SQL passed as a
+     * string, read files or other databases, or act on the server, so neither the check of which
+     * tables the SQL reads nor a read-only transaction stops them.
+     */
+    CallerSQLForbiddenFunctions: readonly string[];
 }
 
 /**
@@ -221,6 +237,28 @@ export abstract class SQLDialect implements SQLParserDialect {
         return `'${value.replace(/'/g, "''")}'`;
     }
 
+    /**
+     * The prefix a string literal holding `text` needs so the database keeps every character, or
+     * `''` when a plain literal does. SQL Server: `N` when the text has characters outside ASCII,
+     * which a plain literal would lose to the database code page. PostgreSQL: always `''`.
+     */
+    abstract StringLiteralPrefix(text: string): string;
+
+    /**
+     * Escapes the characters a `LIKE` pattern treats specially, so `text` matches literally with
+     * the platform's default escape rules (no `ESCAPE` clause). Quotes are not escaped here; the
+     * caller still doubles them for the string literal.
+     * SQL Server: `[`, `%` and `_` become `[[]`, `[%]` and `[_]`. PostgreSQL: `\`, `%` and `_`
+     * are escaped with a backslash.
+     */
+    abstract EscapeLikePattern(text: string): string;
+
+    /**
+     * The value to bind for a boolean query parameter. SQL Server: `1` / `0` (BIT),
+     * PostgreSQL: `true` / `false`.
+     */
+    abstract BooleanParameterValue(value: boolean): boolean | number;
+
     // ─── Pagination ──────────────────────────────────────────────────
 
     /**
@@ -257,6 +295,19 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: GETUTCDATE(), PostgreSQL: NOW() AT TIME ZONE 'UTC'
      */
     abstract CurrentTimestampUTC(): string;
+
+    /**
+     * Wraps a single DML statement so the number of rows it affected comes back as a one-row,
+     * one-column result set — the portable way to read an affected-row count without relying on a
+     * driver-specific `rowsAffected` field.
+     *
+     * SQL Server appends `SELECT @@ROWCOUNT`. PostgreSQL has no `@@ROWCOUNT` at all, so it wraps
+     * the statement in a data-modifying CTE and counts the `RETURNING` rows.
+     *
+     * `dmlStatement` must be exactly one INSERT/UPDATE/DELETE and carry no trailing semicolon:
+     * the PostgreSQL form is a CTE, which cannot wrap a statement batch.
+     */
+    abstract AffectedRowCountSQL(dmlStatement: string, alias: string): string;
 
     /**
      * Wraps an expression in the dialect's lowercase function — used for
@@ -584,6 +635,33 @@ export abstract class SQLDialect implements SQLParserDialect {
      */
     abstract get DefaultPagingOrderBy(): string;
 
+    /**
+     * The ORDER BY expression for paging a set operation (`UNION` / `INTERSECT` / `EXCEPT`) or a
+     * `SELECT DISTINCT` that has no ORDER BY of its own, on a platform that only accepts select-list
+     * items there. `null` when {@link DefaultPagingOrderBy} is accepted for those shapes too.
+     * SQL Server: '1' (the first column), PostgreSQL: null
+     */
+    abstract get SelectListPagingOrderBy(): string | null;
+
+    /**
+     * Whether skipping rows for a page needs an ORDER BY (`OFFSET … FETCH` does on SQL Server).
+     * When true, a page taken from a derived table is ordered by {@link DefaultPagingOrderBy}.
+     * SQL Server: true, PostgreSQL: false
+     */
+    abstract get PagingRequiresOrderBy(): boolean;
+
+    /** {@inheritDoc SQLParserDialect.SupportsEscapeStringLiterals} */
+    abstract get SupportsEscapeStringLiterals(): boolean;
+
+    /** {@inheritDoc SQLParserDialect.SupportsDollarQuotedStrings} */
+    abstract get SupportsDollarQuotedStrings(): boolean;
+
+    /** {@inheritDoc SQLParserDialect.QueryHintKeyword} */
+    abstract get QueryHintKeyword(): string | null;
+
+    /** {@inheritDoc SQLParserDialect.CallerSQLForbiddenFunctions} */
+    abstract get CallerSQLForbiddenFunctions(): readonly string[];
+
     // ─── Data Types ──────────────────────────────────────────────────
 
     /**
@@ -904,4 +982,25 @@ export abstract class SQLDialect implements SQLParserDialect {
      * PostgreSQL: CASE WHEN condition THEN trueVal ELSE falseVal END
      */
     abstract IIF(condition: string, trueVal: string, falseVal: string): string;
+
+    // ─── Nested transactions (savepoints) ────────────────────────────
+
+    /**
+     * SQL that marks a nested transaction savepoint. SQL Server:
+     * `SAVE TRANSACTION name`. PostgreSQL: `SAVEPOINT name`.
+     */
+    abstract CreateSavepointSQL(name: string): string;
+
+    /**
+     * SQL that discards a savepoint after a nested commit, or `null` when the
+     * platform has no release (SQL Server savepoints live until the outer TX
+     * ends). PostgreSQL: `RELEASE SAVEPOINT name`.
+     */
+    abstract ReleaseSavepointSQL(name: string): string | null;
+
+    /**
+     * SQL that undoes work after a savepoint. SQL Server:
+     * `ROLLBACK TRANSACTION name`. PostgreSQL: `ROLLBACK TO SAVEPOINT name`.
+     */
+    abstract RollbackToSavepointSQL(name: string): string;
 }

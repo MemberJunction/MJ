@@ -4,6 +4,8 @@
  * trivially unit-testable with plain `Map` fixtures.
  */
 
+import { ordinalCompare } from '@memberjunction/global';
+
 /**
  * Finds the true cyclical groups within a dependency graph by computing the strongly
  * connected components (Tarjan's algorithm) and returning only those with more than one
@@ -21,8 +23,8 @@
 export function FindTrueCycles(dependencyMap: Map<string, Set<string>>): string[][] {
    return computeStronglyConnectedComponents(dependencyMap)
       .filter(component => component.length > 1)
-      .map(component => [...component].sort((a, b) => a.localeCompare(b)))
-      .sort((a, b) => a[0].localeCompare(b[0]));
+      .map(component => [...component].sort((a, b) => ordinalCompare(a, b)))
+      .sort((a, b) => ordinalCompare(a[0], b[0]));
 }
 
 /**

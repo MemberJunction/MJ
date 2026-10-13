@@ -76,8 +76,8 @@ describe('WorkspaceInitializerService.classifyError', () => {
     const { MJAuthBase } = await import('@memberjunction/ng-auth-services');
     const { StartupValidationService } = await import('@memberjunction/ng-explorer-core');
     service = new mod.WorkspaceInitializerService(
-      {} as never,
-      {} as never,
+      new MJAuthBase() as never,
+      new StartupValidationService() as never,
       {} as never
     );
   });
@@ -93,11 +93,18 @@ describe('WorkspaceInitializerService.classifyError', () => {
     expect(result.shouldRetry).toBe(false);
   });
 
-  it('should classify ResourceTypes error as no_roles', () => {
-    const err = new Error("Cannot read properties of undefined (reading 'ResourceTypes')");
+  it('should classify a failed boot caused by the MJ: User Roles permission as no_roles (#4887)', () => {
+    // SetupGraphQLClient rejects with the metadata download's failure appended to its own message.
+    const err = new Error(
+      'SetupGraphQLClient: no entity metadata was loaded from http://localhost:4000/ — the metadata download failed or returned nothing: ' +
+      'User a@b.com does not have read permissions on MJ: User Roles'
+    );
     const result = service.classifyError(err);
     expect(result.type).toBe('no_roles');
+    expect(result.shouldRetry).toBe(false);
   });
+
+  // An empty-graph boot now rejects in SetupGraphQLClient carrying the real cause, which the "MJ: User Roles" case above covers.
 
   it('should classify access denied error', () => {
     const err = new Error("You don't have access to this application");

@@ -168,6 +168,11 @@ function createMockBookkeepingEntity(overrides: Record<string, unknown> = {}) {
 
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
+    // Durable runs (PR 1): every sync claims/heartbeats/fences its run row through the
+    // provider, so the mock provider must answer those statements.
+    const { createOwnershipProviderSurface } = await vi.importActual<
+        typeof import('./helpers/ownershipProviderSurface.js')
+    >('./helpers/ownershipProviderSurface.js');
 
     // Entity-info the engine reads via EntityByName. Includes Fields + PrimaryKeys so
     // the real PK-extraction / content-hash-introspection paths don't throw. Defined
@@ -193,7 +198,7 @@ vi.mock('@memberjunction/core', async () => {
             Entities: typeof CONTACTS_ENTITY_INFO[];
             EntityByName: (name: string) => typeof CONTACTS_ENTITY_INFO | undefined;
             GetEntityObject: (...args: unknown[]) => Promise<unknown>;
-        };
+        } & ReturnType<typeof createOwnershipProviderSurface>;
         get Entities() { return [CONTACTS_ENTITY_INFO]; }
         EntityByName(name: string) {
             return name === 'Contacts' ? CONTACTS_ENTITY_INFO : undefined;
@@ -203,6 +208,7 @@ vi.mock('@memberjunction/core', async () => {
         }
     }
     MockMetadata.Provider = {
+        ...createOwnershipProviderSurface(),
         BeginTransaction: vi.fn().mockResolvedValue(undefined),
         CommitTransaction: vi.fn().mockResolvedValue(undefined),
         RollbackTransaction: vi.fn().mockResolvedValue(undefined),
@@ -623,11 +629,13 @@ describe('IntegrationEngine — RecordMap on UPDATE (1:1, no drift)', () => {
         }
     });
 
-    it('re-updating the same external record reuses the existing map row (idempotent upsert, still 1:1)', async () => {
+    it('re-updating the same external record leaves the unchanged map row alone (no-op skip, still 1:1)', async () => {
         // The SAME external record is updated across TWO separate sync runs. The FIRST run's
-        // UpdateRecord creates the map row; the SECOND run's UpdateRecord must LOOK IT UP via
-        // SaveRecordMap's upsert-by-identity and REUSE it (Load, not NewRecord) — so the map
-        // never duplicates and stays strictly 1:1. (Two separate runs, not two batches in one
+        // UpdateRecord creates the map row; the SECOND run's UpdateRecord looks it up via
+        // SaveRecordMap's upsert-by-identity, finds it already pointing at the same MJ record,
+        // and SKIPS the write entirely — the map stays strictly 1:1 with no duplicate AND no
+        // pointless re-save of an unchanged row (the batched writer has always skipped this
+        // case; the per-record path now agrees). (Two separate runs, not two batches in one
         // run, because the engine's duplicate-batch guard halts a run that re-fetches the same
         // ExternalID set twice — which is irrelevant to the record-map dedupe under test.)
         const run1Records: ExternalRecord[] = [{
@@ -739,12 +747,10 @@ describe('IntegrationEngine — RecordMap on UPDATE (1:1, no drift)', () => {
             expect(r2.Success).toBe(true);
             expect(r2.RecordsUpdated).toBe(1);
 
-            // Each run's UpdateRecord saved the map → two Save() calls total.
-            expect(savedRecordMapRows.length).toBe(2);
-            // Run 1's Save created the row; Run 2's Save reused it (isNew=false) — proving
-            // the upsert-by-identity dedupe, so the map stays strictly 1:1.
+            // Run 1's UpdateRecord saved the map; run 2 found the row already pointing at the
+            // same MJ record and skipped the save — ONE Save() total, not one per run.
+            expect(savedRecordMapRows.length).toBe(1);
             expect(savedRecordMapRows[0].isNew).toBe(true);
-            expect(savedRecordMapRows[1].isNew).toBe(false);
 
             // Still exactly one logical (CI, Entity, ExternalID) tuple — no drift.
             const tuples = new Set(
@@ -755,6 +761,102 @@ describe('IntegrationEngine — RecordMap on UPDATE (1:1, no drift)', () => {
                 expect(r.ExternalSystemRecordID).toBe('ext-1');
                 expect(r.EntityRecordID).toBe('mj-contact-1');
             }
+        } finally {
+            ConnectorFactory.Resolve = resolveOrig;
+        }
+    });
+
+    it('REWRITES a map row that points at a different MJ record — the skip is a no-op skip, not a no-write rule', async () => {
+        // The existing map row claims ext-1 belongs to a DIFFERENT MJ record (a stale mapping —
+        // e.g. the destination row was merged/recreated). The no-op skip must NOT swallow this:
+        // the row differs, so SaveRecordMap loads and rewrites it to the current PK.
+        const records: ExternalRecord[] = [{
+            ExternalID: 'ext-1',
+            ObjectType: 'Contact',
+            Fields: { Name: 'Existing Contact', Email: 'v3@test.com' },
+            IsDeleted: false,
+        }];
+        const connector = {
+            TestConnection: vi.fn(),
+            DiscoverObjects: vi.fn(),
+            DiscoverFields: vi.fn(),
+            FetchChanges: vi.fn().mockImplementation(async () =>
+                ({ Records: records, HasMore: false, NewWatermarkValue: 'wm-1' })),
+            GetDefaultFieldMappings: vi.fn().mockReturnValue([]),
+            RateLimitPolicy: null,
+            ExtractRetryAfterMs: () => undefined,
+            PostProcessRecord: (r: ExternalRecord) => r,
+            StableOrderingKey: () => null,
+        } as unknown as BaseIntegrationConnector;
+
+        const companyIntegration = createMockCompanyIntegration();
+        const integration = {
+            ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+            Name: 'TestIntegration',
+            ClassName: 'TestConnector',
+        } as unknown as MJIntegrationEntity;
+
+        mockRunViewsFn.mockResolvedValue([
+            { Success: true, Results: [companyIntegration] },
+            {
+                Success: true,
+                Results: [{
+                    Get: vi.fn((f: string) => f === 'ID' ? 'em-1' : null),
+                    ID: 'em-1',
+                    CompanyIntegrationID: 'ci-1',
+                    EntityID: 'entity-1',
+                    ConflictResolution: 'SourceWins',
+                    DeleteBehavior: 'SoftDelete',
+                    Entity: 'Contacts',
+                    ExternalObjectName: 'contacts',
+                    SyncEnabled: true,
+                    Status: 'Active',
+                } as unknown as ICompanyIntegrationEntityMap],
+            },
+            { Success: true, Results: [integration] },
+            { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
+        ]);
+
+        mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+            const entityName = params['EntityName'] as string;
+            if (entityName === 'MJ: Company Integration Field Maps') {
+                return {
+                    Success: true,
+                    Results: [{
+                        SourceFieldName: 'Name',
+                        DestinationFieldName: 'Name',
+                        TransformPipeline: null,
+                        IsKeyField: true,
+                        Status: 'Active',
+                        Priority: 0,
+                    } as unknown as ICompanyIntegrationFieldMap],
+                };
+            }
+            if (entityName === 'Contacts') {
+                return { Success: true, Results: [{ ID: 'mj-contact-1' }] };
+            }
+            if (entityName === 'MJ: Company Integration Record Maps') {
+                // STALE: the row exists but maps ext-1 to a different MJ record.
+                return { Success: true, Results: [{ ID: 'existing-map-1', ExternalSystemRecordID: 'ext-1', EntityRecordID: 'mj-contact-OLD' }] };
+            }
+            return { Success: true, Results: [] };
+        });
+
+        const { ConnectorFactory } = await import('../ConnectorFactory.js');
+        const resolveOrig = ConnectorFactory.Resolve;
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+
+        try {
+            const result = await orchestrator.RunSync('ci-1', contextUser);
+            expect(result.Success).toBe(true);
+            expect(result.RecordsUpdated).toBe(1);
+
+            // The differing row WAS rewritten — loaded (isNew=false) and re-pointed at the
+            // current PK. This is the case the no-op skip must never absorb.
+            expect(savedRecordMapRows.length).toBe(1);
+            expect(savedRecordMapRows[0].isNew).toBe(false);
+            expect(savedRecordMapRows[0].EntityRecordID).toBe('mj-contact-1');
         } finally {
             ConnectorFactory.Resolve = resolveOrig;
         }

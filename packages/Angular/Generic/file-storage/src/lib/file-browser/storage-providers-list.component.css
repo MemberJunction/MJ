@@ -27,6 +27,80 @@
   letter-spacing: 0.5px;
 }
 
+.admin-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-action-btn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm, 6px);
+  background-color: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  font-size: 11px;
+}
+
+.admin-action-btn:hover {
+  background-color: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+}
+
+.provider-edit-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--mj-radius-sm, 4px);
+  background-color: transparent;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  font-size: 11px;
+  opacity: 0;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.provider-item:hover .provider-edit-btn {
+  opacity: 1;
+}
+
+.provider-edit-btn:hover {
+  background-color: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+
+.mj-empty-action-btn {
+  margin-top: 12px;
+  padding: 6px 12px;
+  border-radius: var(--mj-radius-sm, 6px);
+  border: 1px solid transparent;
+  background-color: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #ffffff);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.12s;
+}
+
+.mj-empty-action-btn:hover {
+  background-color: var(--mj-brand-primary-hover);
+}
+
 .add-provider-btn {
   width: 28px;
   height: 28px;

@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import InstallClaude, { mapFlagsToInstallOptions } from '../../commands/install/claude.js';
+import InstallClaude, { MapFlagsToInstallOptions } from '../../commands/install/claude.js';
 import UpdateClaude from '../../commands/update/claude.js';
 
 // ---------------------------------------------------------------------------
@@ -94,7 +94,7 @@ describe('update:claude command class', () => {
 
 describe('mapFlagsToInstallOptions', () => {
     it('maps every flag to its installPack option name', () => {
-        const opts = mapFlagsToInstallOptions({
+        const opts = MapFlagsToInstallOptions({
             dir: '/some/dir',
             major: '5',
             ref: 'v5.33.0',
@@ -119,19 +119,19 @@ describe('mapFlagsToInstallOptions', () => {
     });
 
     it('defaults TargetDir to "." when dir is empty/undefined', () => {
-        expect(mapFlagsToInstallOptions({}).TargetDir).toBe('.');
-        expect(mapFlagsToInstallOptions({ dir: '' }).TargetDir).toBe('.');
+        expect(MapFlagsToInstallOptions({}).TargetDir).toBe('.');
+        expect(MapFlagsToInstallOptions({ dir: '' }).TargetDir).toBe('.');
     });
 
     it('leaves optional string fields undefined when absent', () => {
-        const opts = mapFlagsToInstallOptions({});
+        const opts = MapFlagsToInstallOptions({});
         expect(opts.Major).toBeUndefined();
         expect(opts.Ref).toBeUndefined();
         expect(opts.FromPath).toBeUndefined();
     });
 
     it('booleans default to undefined / false, not true', () => {
-        const opts = mapFlagsToInstallOptions({});
+        const opts = MapFlagsToInstallOptions({});
         expect(opts.Offline).toBe(false);
         expect(opts.DryRun).toBe(false);
         expect(opts.Force).toBe(false);
@@ -139,7 +139,7 @@ describe('mapFlagsToInstallOptions', () => {
 
     it('passes OnProgress through when provided', () => {
         const cb = vi.fn();
-        const opts = mapFlagsToInstallOptions({}, cb);
+        const opts = MapFlagsToInstallOptions({}, cb);
         expect(opts.OnProgress).toBe(cb);
     });
 });
@@ -425,7 +425,7 @@ describe('install:claude via spawned bin/run.js — --json purity', () => {
         expect(res.stdout).not.toContain('MemberJunction'); // figlet banner on wide terminals
     }, TEST_TIMEOUT_MS);
 
-    it('pretty mode (no --json) DOES include the banner — regression-safe', () => {
+    it('pretty mode over a pipe drops the banner but keeps the human report', () => {
         if (!existsSync(BIN)) return;
         const res = spawnSync(
             process.execPath,
@@ -435,10 +435,17 @@ describe('install:claude via spawned bin/run.js — --json purity', () => {
         // Surface a real hang distinctly from an assertion failure.
         expect(res.error, `CLI subprocess errored/timed out: ${res.error?.message}`).toBeUndefined();
         expect(res.status).toBe(0);
-        // One of the two banner forms must be present
-        const hasBanner =
-            res.stdout.includes('~ M e m b e r J u n c t i o n ~') ||
-            res.stdout.includes('MemberJunction');
-        expect(hasBanner).toBe(true);
+
+        // spawnSync pipes stdout, so there is no TTY. Under the agent-first contract a
+        // pipe is itself the request for clean output: chrome is suppressed with no flag
+        // required, exactly as `--json` would. (The banner-on-a-terminal path is covered
+        // in prerun-banner.test.ts, which can stub isTTY without needing a pty here.)
+        expect(res.stdout).not.toContain('~ M e m b e r J u n c t i o n ~');
+        expect(res.stdout).not.toContain('MemberJunction');
+
+        // What must NOT change: pretty mode is still the human report, not JSON. Dropping
+        // the banner is a chrome change; it must not silently turn this into --json.
+        expect(res.stdout).toContain('Claude Code pack');
+        expect(() => JSON.parse(res.stdout)).toThrow();
     }, TEST_TIMEOUT_MS);
 });

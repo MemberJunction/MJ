@@ -395,43 +395,68 @@ export class APIUsagePanelComponent extends BaseAngularComponent implements OnIn
     /**
      * Change time range and reload
      */
-    public async setTimeRange(range: 'day' | 'week' | 'month' | 'all'): Promise<void> {
+    public async SetTimeRange(range: 'day' | 'week' | 'month' | 'all'): Promise<void> {
         this.TimeRange = range;
         await this.loadData();
+    }
+
+    /** @deprecated Use {@link SetTimeRange}. */
+    public async setTimeRange(range: 'day' | 'week' | 'month' | 'all'): Promise<void> {
+      return this.SetTimeRange(range);
     }
 
     /**
      * Get bar height percentage for chart
      */
-    public getBarHeight(value: number): number {
+    public GetBarHeight(value: number): number {
         if (this.MaxRequests === 0) return 0;
         return Math.max(2, (value / this.MaxRequests) * 100);
+    }
+
+    /** @deprecated Use {@link GetBarHeight}. */
+    public getBarHeight(value: number): number {
+      return this.GetBarHeight(value);
     }
 
     /**
      * Get error bar height for chart
      */
-    public getErrorBarHeight(bucket: TimeBucket): number {
+    public GetErrorBarHeight(bucket: TimeBucket): number {
         if (bucket.requests === 0) return 0;
         return (bucket.errors / bucket.requests) * 100;
+    }
+
+    /** @deprecated Use {@link GetErrorBarHeight}. */
+    public getErrorBarHeight(bucket: TimeBucket): number {
+      return this.GetErrorBarHeight(bucket);
     }
 
     /**
      * Drill down into endpoint
      */
-    public drillDownEndpoint(endpoint: EndpointStats): void {
+    public DrillDownEndpoint(endpoint: EndpointStats): void {
         this.LogsFilter = { endpoint: endpoint.endpoint };
         this.loadFilteredLogs();
         this.ShowLogsPanel = true;
     }
 
+    /** @deprecated Use {@link DrillDownEndpoint}. */
+    public drillDownEndpoint(endpoint: EndpointStats): void {
+      return this.DrillDownEndpoint(endpoint);
+    }
+
     /**
      * Drill down into key
      */
-    public drillDownKey(key: KeyStats): void {
+    public DrillDownKey(key: KeyStats): void {
         this.LogsFilter = { keyId: key.keyId };
         this.loadFilteredLogs();
         this.ShowLogsPanel = true;
+    }
+
+    /** @deprecated Use {@link DrillDownKey}. */
+    public drillDownKey(key: KeyStats): void {
+      return this.DrillDownKey(key);
     }
 
     /**
@@ -470,15 +495,20 @@ export class APIUsagePanelComponent extends BaseAngularComponent implements OnIn
     /**
      * Close logs panel
      */
-    public closeLogsPanel(): void {
+    public CloseLogsPanel(): void {
         this.ShowLogsPanel = false;
         this.LogsFilter = {};
+    }
+
+    /** @deprecated Use {@link CloseLogsPanel}. */
+    public closeLogsPanel(): void {
+      return this.CloseLogsPanel();
     }
 
     /**
      * Get status class for HTTP status code
      */
-    public getStatusClass(statusCode: number): string {
+    public GetStatusClass(statusCode: number): string {
         if (statusCode >= 200 && statusCode < 300) return 'status-success';
         if (statusCode >= 300 && statusCode < 400) return 'status-info';
         if (statusCode >= 400 && statusCode < 500) return 'status-warning';
@@ -486,16 +516,26 @@ export class APIUsagePanelComponent extends BaseAngularComponent implements OnIn
         return '';
     }
 
+    /** @deprecated Use {@link GetStatusClass}. */
+    public getStatusClass(statusCode: number): string {
+      return this.GetStatusClass(statusCode);
+    }
+
     /**
      * Get method badge class
      */
-    public getMethodClass(method: string): string {
+    public GetMethodClass(method: string): string {
         const m = method.toUpperCase();
         if (m === 'GET') return 'method-get';
         if (m === 'POST') return 'method-post';
         if (m === 'PUT' || m === 'PATCH') return 'method-put';
         if (m === 'DELETE') return 'method-delete';
         return 'method-other';
+    }
+
+    /** @deprecated Use {@link GetMethodClass}. */
+    public getMethodClass(method: string): string {
+      return this.GetMethodClass(method);
     }
 
     /**
@@ -519,9 +559,14 @@ export class APIUsagePanelComponent extends BaseAngularComponent implements OnIn
     /**
      * Format number with K/M suffix
      */
-    public formatNumber(num: number): string {
+    public FormatNumber(num: number): string {
         if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
         if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
         return num.toString();
+    }
+
+    /** @deprecated Use {@link FormatNumber}. */
+    public formatNumber(num: number): string {
+      return this.FormatNumber(num);
     }
 }

@@ -1,4 +1,4 @@
-import { BaseEntity, DatabaseProviderBase, EntityInfo, EntitySaveOptions, LogError, LogStatus, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
+import { BaseEntity, DatabaseProviderBase, EntityInfo, EntitySaveOptions, IEntityDataProvider, LogError, LogStatus, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
 import { MJApplicationEntity, MJUserApplicationEntity } from "@memberjunction/core-entities";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 
@@ -12,11 +12,11 @@ import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
  */
 @RegisterClass(BaseEntity, 'MJ: Applications')
 export class MJApplicationEntityServer extends MJApplicationEntity {
-    constructor(Entity: EntityInfo) {
-        super(Entity);
+    constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
+        super(Entity, Provider);
 
         // Verify this is running server-side only
-        const md = new Metadata(); // global-provider-ok: constructor runs before entity provider is wired
+        const md = new Metadata(); // global-provider-ok: constructor-time provider-type check
         if (md.ProviderType !== 'Database')
             throw new Error('This class is only supported for server-side/database providers. Remove this package from your application.');
     }

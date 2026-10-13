@@ -197,6 +197,53 @@ describe('AssemblyAIRealtime session-object construction', () => {
         expect(session['unrelated']).toBeUndefined();
     });
 
+    it('accepts the neutral `firstMessage` key for the opening utterance (issue #3557)', () => {
+        // `firstMessage` is the driver-family-neutral name a persona authors without knowing which
+        // vendor will run; this driver's wire slot happens to be called `greeting`.
+        const session = AssemblyAIRealtime.BuildSessionObject(
+            makeParams({ Config: { firstMessage: 'Hi — thanks for making the time.' } })
+        );
+        expect(session['greeting']).toBe('Hi — thanks for making the time.');
+    });
+
+    it('prefers `firstMessage` over the legacy `greeting` key when a bag carries both', () => {
+        const session = AssemblyAIRealtime.BuildSessionObject(
+            makeParams({ Config: { firstMessage: 'Neutral.', greeting: 'Legacy.' } })
+        );
+        expect(session['greeting']).toBe('Neutral.');
+    });
+
+    it.each([
+        ['a blank string', '   '],
+        ['an empty string', ''],
+        ['a non-string', 42],
+        ['null', null],
+    ])('omits the greeting entirely when the first message is %s', (_label, firstMessage) => {
+        // same trim-and-drop-blank rule the ElevenLabs driver applies, so one authored value means
+        // the same thing whichever vendor ends up running
+        const session = AssemblyAIRealtime.BuildSessionObject(makeParams({ Config: { firstMessage } }));
+
+        expect(session['greeting']).toBeUndefined();
+    });
+
+    it('does NOT let a blank `firstMessage` suppress a valid legacy `greeting`', () => {
+        // blank means "no opening utterance authored", not "an empty one" — so it must not win the
+        // key over a legacy value that actually carries something
+        const session = AssemblyAIRealtime.BuildSessionObject(
+            makeParams({ Config: { firstMessage: '   ', greeting: 'Legacy.' } })
+        );
+
+        expect(session['greeting']).toBe('Legacy.');
+    });
+
+    it('trims a padded first message', () => {
+        const session = AssemblyAIRealtime.BuildSessionObject(
+            makeParams({ Config: { firstMessage: '  Hello there.  ' } })
+        );
+
+        expect(session['greeting']).toBe('Hello there.');
+    });
+
     it('fingerprints tool sets order-insensitively', () => {
         const toolB: RealtimeToolDefinition = { Name: 'b_tool', Description: 'b', ParametersSchema: {} };
         expect(AssemblyAIRealtime.ToolSetFingerprint([WEATHER_TOOL, toolB])).toBe(
@@ -398,11 +445,33 @@ describe('AssemblyAIRealtime server-bridged session (StartSession)', () => {
 
         it('streams client audio as base64 input.audio frames', () => {
             const bytes = new Uint8Array([9, 8, 7]);
-            session.SendInput(bytes.buffer);
+            session.SendInput({ Data: bytes.buffer, Kind: 'audio' });
             expect(driver.Socket.SentFrames().at(-1)).toEqual({
                 type: 'input.audio',
                 audio: Buffer.from(bytes).toString('base64'),
             });
+        });
+
+        it('drops a video frame instead of sending it as audio, reports it once, and still sends audio (#5091)', () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const framesBefore = driver.Socket.Sent.length;
+                const jpeg = new Uint8Array([0xff, 0xd8, 0xff]);
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+
+                expect(driver.Socket.Sent.length).toBe(framesBefore);
+                const drops = warn.mock.calls.filter((call) => String(call[0]).startsWith('[AssemblyAIRealtime] Dropped video input of type image/jpeg'));
+                expect(drops).toHaveLength(1);
+
+                const audio = new Uint8Array([9, 8, 7]);
+                session.SendInput({ Data: audio.buffer, Kind: 'audio' });
+                expect(driver.Socket.SentFrames().slice(framesBefore)).toEqual([
+                    { type: 'input.audio', audio: Buffer.from(audio).toString('base64') },
+                ]);
+            } finally {
+                warn.mockRestore();
+            }
         });
 
         it('completes the tool round-trip: tool.call → tool.result with the JSON-string result', async () => {
@@ -614,6 +683,6 @@ describe('AssemblyAIRealtime token mint (production seam)', () => {
 describe('AssemblyAIRealtimeSession guard rails', () => {
     it('throws on sends when no socket was ever attached', () => {
         const session = new AssemblyAIRealtimeSession({ system_prompt: 'p' });
-        expect(() => session.SendInput(new Uint8Array([1]).buffer)).toThrow('not open');
+        expect(() => session.SendInput({ Data: new Uint8Array([1]).buffer, Kind: 'audio' })).toThrow('not open');
     });
 });

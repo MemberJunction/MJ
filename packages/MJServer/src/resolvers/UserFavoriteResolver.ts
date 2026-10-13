@@ -14,7 +14,7 @@ import {
   Query,
   Resolver,
 } from '@memberjunction/server';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 import { MJUserFavorite_, MJUserFavoriteResolverBase } from '../generated/generated.js';
 import { GetReadOnlyProvider } from '../util.js';

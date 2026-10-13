@@ -1,0 +1,82 @@
+.mj-form-chrome-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mj-form-chrome-knobs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 16px;
+}
+
+.mj-form-chrome-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
+  font-weight: var(--mj-font-semibold);
+}
+
+.mj-form-chrome-summary {
+  display: flex;
+  gap: 8px;
+}
+
+.mj-form-chrome-pill {
+  padding: 2px 10px;
+  border-radius: var(--mj-radius-full);
+  font-size: var(--mj-text-xs);
+  background: color-mix(in srgb, var(--mj-status-success) 14%, var(--mj-bg-surface));
+  color: var(--mj-status-success-text);
+}
+
+.mj-form-chrome-pill.is-detail {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+}
+
+.mj-form-chrome-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--mj-text-sm);
+}
+
+.mj-form-chrome-table th,
+.mj-form-chrome-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.mj-form-chrome-table th {
+  color: var(--mj-text-muted);
+  font-weight: var(--mj-font-semibold);
+  font-size: var(--mj-text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.mj-form-chrome-table tr.is-detail td {
+  color: var(--mj-text-secondary);
+}
+
+.mj-form-chrome-role {
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-status-success-text);
+}
+
+.mj-form-chrome-role.is-detail {
+  color: var(--mj-text-muted);
+}
+
+.mj-form-chrome-reason {
+  color: var(--mj-text-muted);
+  font-family: var(--mj-font-mono, monospace);
+  font-size: var(--mj-text-xs);
+}
+
+.mj-form-chrome-score {
+  font-variant-numeric: tabular-nums;
+}

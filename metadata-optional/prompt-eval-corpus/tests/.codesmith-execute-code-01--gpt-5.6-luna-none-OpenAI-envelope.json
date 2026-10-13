@@ -1,0 +1,99 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "codesmith-execute-code-01 [gpt-5.6-luna@none · OpenAI · envelope]",
+    "Description": "A calculation the agent must do by writing code, not by inference. One action, one required param.",
+    "InputDefinition": {
+      "payload": {
+        "task": "Compute the mean and median of the provided values",
+        "inputData": {
+          "values": [
+            4,
+            8,
+            15,
+            16,
+            23,
+            42
+          ]
+        }
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Compute the mean and median of input.values."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "codesmith-execute-code-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Execute Code",
+            "params": {
+              "code": {
+                "matcher": "nonEmpty"
+              },
+              "language": {
+                "matcher": "oneOf",
+                "values": [
+                  "javascript"
+                ],
+                "optional": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Codesmith Agent",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Execute Code",
+                "params": {
+                  "code": {
+                    "matcher": "nonEmpty"
+                  },
+                  "language": {
+                    "matcher": "oneOf",
+                    "values": [
+                      "javascript"
+                    ],
+                    "optional": true
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "6ADF7A97-D5CD-4FD4-A8D6-CDFEDBD7CE00"
+  }
+}

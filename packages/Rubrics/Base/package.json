@@ -1,0 +1,42 @@
+{
+  "name": "@memberjunction/rubrics-base",
+  "type": "module",
+  "version": "6.2.0-edge.3",
+  "description": "UI-safe rubric scoring and version classification. Pure functions: no database and no Angular.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "MemberJunction",
+    "rubrics"
+  ],
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@memberjunction/core": "6.2.0-edge.3",
+    "@memberjunction/global": "6.2.0-edge.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "tsc-alias": "^1.8.16",
+    "vitest": "^4.0.18"
+  }
+}

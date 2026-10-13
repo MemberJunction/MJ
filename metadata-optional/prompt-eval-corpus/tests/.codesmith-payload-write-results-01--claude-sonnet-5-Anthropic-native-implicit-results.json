@@ -1,0 +1,90 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "codesmith-payload-write-results-01 [claude-sonnet-5 · Anthropic · native-implicit-results]",
+    "Description": "The agent's own payload contract names code/results/iterations. This is the envelope-side regression watch: payload writes must survive native mode unchanged. This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+    "InputDefinition": {
+      "payload": {
+        "task": "count by category",
+        "inputData": {
+          "rows": [
+            {
+              "c": "a"
+            },
+            {
+              "c": "b"
+            },
+            {
+              "c": "a"
+            }
+          ]
+        },
+        "iterations": 1
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Count the rows by category."
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Execute Code succeeded. output = { a: 2, b: 1 }"
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "codesmith-payload-write-results-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "taskComplete"
+          },
+          {
+            "kind": "payloadChange"
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Codesmith Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "taskComplete"
+              },
+              {
+                "kind": "payloadChange"
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "32602DDF-2D68-437A-A02E-6839332F683A"
+  }
+}

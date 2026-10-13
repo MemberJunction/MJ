@@ -11,7 +11,8 @@ import {
     XAI_PCM_SAMPLE_RATE,
 } from '../drivers/xaiRealtimeClient';
 import { IOpenAIProtocolClientSocket, OpenAIProtocolServerEvent } from '../generic/openAIProtocolClient';
-import { collect, FakeMediaStream, FakeTrack } from './helpers/realtime-fakes';
+import { collect, FakeMediaStream, FakeMicCapture, FakeTrack } from './helpers/realtime-fakes';
+import { DescribePcmMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
 
@@ -65,6 +66,12 @@ class FakePlayback implements IRealtimePcmPlayback {
     public Closed = false;
     /** Controllable stand-in for "playhead is ahead of the context clock". */
     public IsPlaying = false;
+    /** Stand-in for the Web Audio output stream the real playback exposes (issue #5153). */
+    public OutputStream: MediaStream | null = null;
+
+    public GetOutputStream(): MediaStream | null {
+        return this.OutputStream;
+    }
 
     public Enqueue(pcm16: ArrayBuffer): void {
         this.Enqueued.push(pcm16);
@@ -77,14 +84,6 @@ class FakePlayback implements IRealtimePcmPlayback {
     public Close(): void {
         this.Closed = true;
         this.IsPlaying = false;
-    }
-}
-
-/** Fake mic capture handle. */
-class FakeMicCapture implements IPcmMicCapture {
-    public Stopped = false;
-    public Stop(): void {
-        this.Stopped = true;
     }
 }
 
@@ -207,6 +206,14 @@ describe('xAIRealtimeClient', () => {
             await connect(client);
             client.OnPcmChunk?.('UENNMTY=');
             expect(client.Fake.SentFrames().at(-1)).toEqual({ type: 'input_audio_buffer.append', audio: 'UENNMTY=' });
+        });
+
+        it('should keep the client-side requestedTracks hint out of session.update', async () => {
+            await connect(client, { type: 'realtime', instructions: 'be the session voice', requestedTracks: [{ Direction: 'Inbound', Modality: 'Video' }] });
+            expect(client.Fake.SentFrames()[0]).toEqual({
+                type: 'session.update',
+                session: { type: 'realtime', instructions: 'be the session voice' },
+            });
         });
 
         it('should NOT send a session.update when the session config is empty', async () => {
@@ -352,6 +359,52 @@ describe('xAIRealtimeClient', () => {
             client.Emit({ type: 'response.created' });
             client.Emit({ type: 'response.done', response: { usage: { input_tokens: 30, output_tokens: 12 } } });
             expect(usage).toEqual([{ InputTokens: 30, OutputTokens: 12, Raw: { input_tokens: 30, output_tokens: 12 } }]);
+        });
+
+        /**
+         * REGRESSION — xAI does NOT use the nested slot.
+         *
+         * The frame below is copied from a live capture off `wss://api.x.ai/v1/realtime`
+         * (grok-voice-think-fast-2.0): usage sits at the TOP LEVEL, and `response.usage` is present
+         * but EMPTY. The test above passes against a hand-written OpenAI-shaped frame, which is
+         * exactly why this went unnoticed — real Grok sessions recorded NULL tokens on AIPromptRun
+         * because `{}` is truthy, so the old `if (!usage) return` guard never fired and the emitted
+         * delta was `{undefined, undefined}` → clamped to 0 → dropped by the host.
+         */
+        it('should read usage from the TOP-LEVEL key when response.usage is an empty object (real xAI shape)', () => {
+            const { usage } = collectUsage(client);
+            client.Emit({ type: 'response.created' });
+            client.Emit({
+                type: 'response.done',
+                response: { id: 'resp_1', status: 'completed', usage: {} },
+                usage: {
+                    input_tokens: 6,
+                    input_token_details: { text_tokens: 6, audio_tokens: 0, grok_tokens: 0 },
+                    output_tokens: 87,
+                    output_token_details: { text_tokens: 7, audio_tokens: 80, grok_tokens: 0 },
+                    total_tokens: 93,
+                    output_audio_seconds: 1.5895,
+                    billable_audio_seconds: 1,
+                },
+            } as unknown as Parameters<typeof client.Emit>[0]);
+
+            expect(usage).toHaveLength(1);
+            expect(usage[0].InputTokens).toBe(6);
+            expect(usage[0].OutputTokens).toBe(87);
+            // The per-modality detail must survive on Raw — audio vs text bill at very different rates.
+            expect(usage[0].Raw).toMatchObject({
+                output_token_details: { text_tokens: 7, audio_tokens: 80 },
+                billable_audio_seconds: 1,
+            });
+        });
+
+        it('should emit NOTHING when neither slot carries token counts', () => {
+            const { usage } = collectUsage(client);
+            client.Emit({ type: 'response.created' });
+            // Both empty — a cancelled/failed turn. Previously emitted a bogus all-undefined delta.
+            client.Emit({ type: 'response.done', response: { usage: {} } } as unknown as Parameters<typeof client.Emit>[0]);
+            client.Emit({ type: 'response.done' });
+            expect(usage).toEqual([]);
         });
     });
 
@@ -557,9 +610,13 @@ describe('xAIRealtimeClient', () => {
         it('should send the instructions and tag the resulting turn as narration, then reset to normal', () => {
             const { transcripts } = collect(client);
             client.RequestSpokenUpdate('Say one short first-person sentence.');
+            // The session prompt rides AHEAD of the direction: `response.instructions` is a full
+            // override of the session prompt, so sending the direction alone would leave the model
+            // with no identity for exactly this one turn (#4591). `makeConfig` mints the session
+            // with `instructions: 'be the session voice'`.
             expect(client.Fake.SentFrames().at(-1)).toEqual({
                 type: 'response.create',
-                response: { instructions: 'Say one short first-person sentence.' },
+                response: { instructions: 'be the session voice\n\nSay one short first-person sentence.' },
             });
             expect(client.IsBusy).toBe(true);
 
@@ -664,6 +721,22 @@ describe('xAIRealtimeClient', () => {
             expect(track.enabled).toBe(false);
             client.SetMuted(false);
             expect(track.enabled).toBe(true);
+        });
+
+        it('should publish the playback output stream on Connect and clear it on Disconnect (#5153)', async () => {
+            const agentStream = new FakeMediaStream([]);
+            client.Playback.OutputStream = agentStream;
+            const delivered: (MediaStream | null)[] = [];
+            client.OnRemoteMediaStream((s) => delivered.push(s));
+
+            await connect(client);
+
+            expect(client.GetRemoteMediaStream()).toBe(agentStream);
+            expect(delivered).toEqual([agentStream]);
+
+            await client.Disconnect();
+
+            expect(client.GetRemoteMediaStream()).toBeNull();
         });
 
         it('should tear everything down and emit closed on Disconnect', async () => {
@@ -952,3 +1025,12 @@ describe('QA re-audit fixes (S1/S3)', () => {
         expect(newSocket.SentFrames().some((f) => f.type === 'conversation.item.create')).toBe(true);
     });
 });
+
+DescribePcmMicrophoneReplacement(
+    async () => {
+        const client = new TestxAIClient();
+        const track = await connect(client);
+        return { Client: client, Track: track, Capture: client.Capture };
+    },
+    () => new TestxAIClient()
+);

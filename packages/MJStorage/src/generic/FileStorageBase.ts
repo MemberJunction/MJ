@@ -1,4 +1,5 @@
 import { Readable } from 'stream';
+import { RequiresSubclass } from '@memberjunction/global';
 
 /**
  * Represents the payload returned by the CreatePreAuthUploadUrl method.
@@ -11,6 +12,8 @@ import { Readable } from 'stream';
 export type CreatePreAuthUploadUrlPayload = {
   UploadUrl: string;
   ProviderKey?: string | undefined;
+  HttpMethod?: 'PUT' | 'POST' | undefined;
+  HttpHeaders?: Record<string, string> | undefined;
 };
 
 /**
@@ -398,7 +401,17 @@ export interface StorageProviderConfig {
  * - Methods return Promises to support asynchronous operations across various providers
  * - When a storage provider doesn't support a particular operation, implementations should throw UnsupportedOperationError
  * - Each instance operates on behalf of a specific FileStorageAccount (identified by accountId)
+ *
+ * ## Why this base is `@RequiresSubclass()`
+ * Every operation that matters here (`GetObject`, `PutObject`, `ListObjects`, ...) is `abstract`,
+ * and TypeScript's `abstract` is ERASED at runtime — `new FileStorageBase()` succeeds in plain JS
+ * and yields an object whose methods are all `undefined`. Without this marker, a `ServerDriverKey`
+ * that resolves to nothing made `ClassFactory.CreateInstance` hand back exactly that hollow object,
+ * and the misconfiguration surfaced minutes later, in a different subsystem, as
+ * `driver.GetObject is not a function`. The marker turns an unresolved driver key into an
+ * immediate, named failure at the point of resolution.
  */
+@RequiresSubclass()
 export abstract class FileStorageBase {
   /**
    * The name of this storage provider, used in error messages and logging.
@@ -442,6 +455,21 @@ export abstract class FileStorageBase {
    */
   protected throwUnsupportedOperationError(methodName: string): never {
     throw new UnsupportedOperationError(methodName, this.providerName);
+  }
+
+  /**
+   * Releases any resources (keep-alive sockets, connection pools, credential timers) held by
+   * this driver's underlying SDK client. Called by {@link FileStorageEngine} before a cached
+   * driver instance is dropped or replaced (e.g. `RefreshDriverCache()`, or the on-demand
+   * `GetDriver()` fallback overwriting a stale entry) so the old client doesn't keep its socket
+   * pool alive after nothing can reach it.
+   *
+   * Default is a no-op: most storage SDKs used here (Azure, Box, Dropbox, Google) don't expose
+   * an explicit client-teardown API, so there is nothing safe to call. Drivers whose SDK client
+   * *does* expose one (see {@link AWSFileStorage.Dispose}) should override this.
+   */
+  public Dispose(): void {
+    // no-op by default; see class doc comment
   }
 
   /**
@@ -736,6 +764,28 @@ export abstract class FileStorageBase {
   }
 
   /**
+   * Returns true if the storage provider driver supports generating pre-authenticated direct upload URLs.
+   *
+   * When true, callers can invoke {@link CreatePreAuthUploadUrl} to get a direct cloud storage
+   * upload URL and send raw binary data directly to the storage service without routing through
+   * intermediate servers.
+   *
+   * @returns true if the driver supports pre-authenticated uploads; false otherwise.
+   */
+  public get SupportsPreAuthUpload(): boolean {
+    return false;
+  }
+
+  /**
+   * Returns true if the storage provider driver supports generating pre-authenticated direct download URLs.
+   *
+   * @returns true if the driver supports pre-authenticated downloads; false otherwise.
+   */
+  public get SupportsPreAuthDownload(): boolean {
+    return false;
+  }
+
+  /**
    * Streams an object's content (optionally a byte range) without buffering the whole
    * object in memory.
    *
@@ -959,7 +1009,7 @@ export abstract class FileStorageBase {
    *                 - Provide for multi-tenant (overrides with database credentials)
    * @returns A Promise that resolves when initialization is complete
    */
-  public async initialize(config?: StorageProviderConfig): Promise<void> {
+  public async initialize(config?: StorageProviderConfig): Promise<void> {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
     // Extract and store account information from the config if provided
     if (config) {
       this._accountId = config.accountId;

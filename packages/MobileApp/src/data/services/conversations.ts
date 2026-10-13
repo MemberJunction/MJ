@@ -7,6 +7,13 @@
  */
 
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import {
+    CollectRealtimeSessionIDs,
+    MapRealtimeSessionMeta,
+    REALTIME_SESSION_META_FIELDS,
+    type RealtimeSessionMetaRow,
+    type RealtimeSessionTimelineMeta,
+} from '@memberjunction/conversations-runtime';
 import type {
     MJConversationEntity,
     MJConversationDetailEntity,
@@ -23,19 +30,19 @@ const ENTITY_CONVERSATION_ARTIFACT = 'MJ: Conversation Artifacts';
  * aggregated client-side from `MJ: Conversation Details` rows.
  */
 export type ConversationListItem = {
-    entity: MJConversationEntity;
+    entity: MJConversationEntity;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Latest message body (or null if no messages yet). */
-    latestSnippet: string | null;
+    LatestSnippet: string | null;
     /** Latest message timestamp (Date) or fall back to UpdatedAt. */
-    latestAt: Date;
+    LatestAt: Date;
     /** Whether the latest agent task is still running. */
-    live: boolean;
+    live: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Distinct agent IDs that have participated. Empty if unknown. */
-    agentIds: string[];
+    AgentIds: string[];
     /** Distinct agent display names (parallel to agentIds when known). */
-    agentNames: string[];
+    AgentNames: string[];
     /** Total message count in the conversation. */
-    messageCount: number;
+    messageCount: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
@@ -50,7 +57,7 @@ export type ConversationListItem = {
  * detail rows across all of them (covers ~2 messages per conversation on
  * average for the list view).
  */
-export async function loadConversations(contextUser?: UserInfo): Promise<ConversationListItem[]> {
+export async function LoadConversations(contextUser?: UserInfo): Promise<ConversationListItem[]> {
     const rv = new RunView();
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
@@ -137,11 +144,11 @@ export async function loadConversations(contextUser?: UserInfo): Promise<Convers
         const updatedAt = (conv as unknown as { __mj_UpdatedAt?: Date }).__mj_UpdatedAt;
         return {
             entity: conv,
-            latestSnippet: latest?.Message ?? null,
-            latestAt: latest ? new Date(latest.__mj_CreatedAt) : (updatedAt ? new Date(updatedAt) : new Date()),
+            LatestSnippet: latest?.Message ?? null,
+            LatestAt: latest ? new Date(latest.__mj_CreatedAt) : (updatedAt ? new Date(updatedAt) : new Date()),
             live: details.some((d) => d.Status === 'In-Progress'),
-            agentIds,
-            agentNames,
+            AgentIds: agentIds,
+            AgentNames: agentNames,
             messageCount: details.length,
         } satisfies ConversationListItem;
     });
@@ -149,16 +156,22 @@ export async function loadConversations(contextUser?: UserInfo): Promise<Convers
 
 /** A single `MJ: Conversation Details` row paired with its resolved agent name (for AI rows). */
 export type ConversationMessage = {
-    detail: MJConversationDetailEntity;
+    detail: MJConversationDetailEntity;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Resolved agent name if Role==='AI', else null. */
-    agentName: string | null;
+    agentName: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 /** A fully-loaded conversation: the `MJ: Conversations` entity, its ordered messages, and its artifacts. */
 export type ConversationDetailLoad = {
-    conversation: MJConversationEntity;
-    messages: ConversationMessage[];
-    artifacts: MJConversationArtifactEntity[];
+    Conversation: MJConversationEntity;
+    Messages: ConversationMessage[];
+    Artifacts: MJConversationArtifactEntity[];
+    /**
+     * Realtime-session rows for any voice sessions this conversation contains, keyed by
+     * normalized id. Empty when there were none — or when the lookup failed, which is deliberate:
+     * a session card degrades to its generic label rather than the thread failing to load.
+     */
+    SessionMeta: Map<string, RealtimeSessionTimelineMeta>;
 };
 
 /**
@@ -174,7 +187,7 @@ export type ConversationDetailLoad = {
  * @returns A {@link ConversationDetailLoad}, or `null` if the conversation can't be loaded.
  * @throws If the conversation-details view fails.
  */
-export async function loadConversation(
+export async function LoadConversation(
     conversationId: string,
     contextUser?: UserInfo,
 ): Promise<ConversationDetailLoad | null> {
@@ -233,5 +246,49 @@ export async function loadConversation(
         ? ((artifactsResult.Results as MJConversationArtifactEntity[]) ?? [])
         : [];
 
-    return { conversation, messages, artifacts };
+    const sessionMeta = await LoadRealtimeSessionMeta(details, currentUser);
+
+    return { Conversation: conversation, Messages: messages, Artifacts: artifacts, SessionMeta: sessionMeta };
+}
+
+/**
+ * Reads the `MJ: AI Agent Sessions` rows behind whatever voice sessions the loaded details
+ * reference, so each collapsed session card can show the agent name and a status chip.
+ *
+ * Costs nothing for a conversation with no voice in it — no stamped rows means no query at all.
+ *
+ * Tolerant on purpose: a failure logs and returns an empty map, leaving the cards on their generic
+ * label. The chip is enrichment; losing it must never cost the user the thread.
+ *
+ * @param details The conversation's loaded detail rows.
+ * @param contextUser The acting user (server-side scoping).
+ */
+async function LoadRealtimeSessionMeta(
+    details: MJConversationDetailEntity[],
+    contextUser?: UserInfo,
+): Promise<Map<string, RealtimeSessionTimelineMeta>> {
+    // Both the id collection and the row mapping come from the runtime, so this keys its map
+    // exactly as the web does — the ids differ in case between SQL Server and PostgreSQL, and a
+    // second implementation of that rule is how one surface silently stops finding its own rows.
+    const sessionIds = CollectRealtimeSessionIDs(details);
+    if (sessionIds.length === 0) {
+        return new Map();
+    }
+    try {
+        const idList = sessionIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
+        const rv = new RunView();
+        const result = await rv.RunView<RealtimeSessionMetaRow>(
+            {
+                EntityName: 'MJ: AI Agent Sessions',
+                ExtraFilter: `ID IN (${idList})`,
+                Fields: [...REALTIME_SESSION_META_FIELDS],
+                ResultType: 'simple',
+            },
+            contextUser,
+        );
+        return result.Success ? MapRealtimeSessionMeta(result.Results) : new Map();
+    } catch (error) {
+        console.warn('Realtime session meta lookup failed — session cards render without status chips:', error);
+        return new Map();
+    }
 }

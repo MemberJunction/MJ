@@ -42,6 +42,26 @@ SQLDialect (abstract base)
 | `QuoteIdentifier(name)` | Wraps a single identifier | `[name]` | `"name"` |
 | `QuoteSchema(schema, object)` | Schema-qualified reference | `[schema].[object]` | `schema."object"` |
 
+#### PostgreSQL auto-quoting (whole-statement)
+
+The two methods above quote one identifier you have already identified. `postgresqlAutoQuote.ts`
+solves the harder problem: taking arbitrary SQL and deciding which of its bare words are
+identifiers that must be quoted to survive PostgreSQL's lowercase folding.
+
+| Export | Description |
+|---|---|
+| `AutoQuotePostgreSQLIdentifiers(sql)` | Tokenizes a statement and quotes the words that are identifiers. Skips string literals, dollar-quoted bodies and comments. Idempotent. |
+| `PostgreSQLQuotingKeywords` | Keywords recognized **case-sensitively, ALL-CAPS only**. A word here is safe even when it is also an MJ column name — only the ALL-CAPS spelling is exempted, so the mixed-case column form still quotes. |
+| `PostgreSQLStructuralKeywords` | A small tier matched case-INsensitively, so stored `UserView.OrderBy` / `ExtraFilter` fragments written in Title Case keep working. Guarded by a test that fails if a real column ever collides. |
+
+The ALL-CAPS rule is the load-bearing part: the set of SQL keywords and the set of MJ column names
+intersect (`Name`, `Text`, `Length`, `Values`, `Rank`, …), so a case-insensitive denylist emits
+those columns bare and PostgreSQL then rejects them. `TEXT` is the type; `Text` is the column.
+
+This is **not** the only quoter — `PostgreSQLDataProvider` has a metadata-driven one that knows an
+entity's field list and is used where that context exists. See the module docblock; they are not
+duplicates.
+
 ### Pagination
 
 | Method | Description | SQL Server | PostgreSQL |
@@ -346,9 +366,25 @@ export class MySQLDialect extends SQLDialect {
         return { prefix: '', suffix };
     }
     BooleanLiteral(value: boolean): string { return value ? '1' : '0'; }
+
+    // Query rendering: the pipeline reads these instead of checking the platform name
+    get SelectListPagingOrderBy(): string | null { return null; }
+    get PagingRequiresOrderBy(): boolean { return false; }
+    get SupportsEscapeStringLiterals(): boolean { return false; }
+    get SupportsDollarQuotedStrings(): boolean { return false; }
+    get QueryHintKeyword(): string | null { return null; }
+    get CallerSQLForbiddenFunctions(): readonly string[] { return ['load_file']; }
+    StringLiteralPrefix(_text: string): string { return ''; }
+    EscapeLikePattern(text: string): string {
+        return text.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    }
+    BooleanParameterValue(value: boolean): boolean | number { return value ? 1 : 0; }
     // ... implement all remaining abstract methods (~25+)
 }
 ```
+
+The query rendering members decide how row caps, paging, composed queries and the RunQuery
+template filters behave on the platform; see [Query rendering members](#query-rendering-members).
 
 3. **Update the `DatabasePlatform` type** in `sqlDialect.ts` to include the new platform key.
 
@@ -392,6 +428,32 @@ export { MySQLDialect } from './mysqlDialect.js';
 | **Comments/descriptions** | `sp_addextendedproperty` | `COMMENT ON ...` |
 | **Grants** | `GRANT ... ON [s].[o] TO [r]` | `GRANT ... ON s."o" TO "r"` |
 
+## Query rendering members
+
+The RunQuery rendering pipeline (SQLParser's lexer and paging-shape analysis, the paging and
+composition engines in `@memberjunction/generic-database-provider`, the template filters in
+`@memberjunction/core` and the parameter processor) reads these members rather than the platform
+name, so a new dialect gets correct rendering by declaring them:
+
+| Member | SQL Server | PostgreSQL | Used for |
+|---|---|---|---|
+| `LimitClause(limit, offset?)` | `TOP n` / `OFFSET … FETCH` | `LIMIT … OFFSET` | Row caps and pages |
+| `DefaultPagingOrderBy` | `(SELECT NULL)` | `1` | Paging a query with no ORDER BY |
+| `SelectListPagingOrderBy` | `1` | `null` | Paging a set operation or `SELECT DISTINCT` with no ORDER BY |
+| `PagingRequiresOrderBy` | `true` | `false` | Whether a page from a derived table needs an ORDER BY |
+| `AllowsOrderByInCTE` | `false` | `true` | Stripping a composed dependency's ORDER BY |
+| `RecursiveCTESyntax()` | `WITH` | `WITH RECURSIVE` | Composing into a recursive WITH clause |
+| `QueryHintKeyword` | `OPTION` | `null` | Keeping a trailing hint clause last; lifting a dependency's hints |
+| `CallerSQLForbiddenFunctions` | `openrowset`, `openquery`, … | `query_to_xml*`, `ts_stat`, `pg_read_file`, `dblink*`, … | Refusing calls in caller-supplied SQL that read what a check of its tables cannot see |
+| `SupportsEscapeStringLiterals` | `false` | `true` | Lexing `E'…'` strings |
+| `SupportsDollarQuotedStrings` | `false` | `true` | Lexing `$$…$$` strings |
+| `QuoteIdentifier(name)` | `[name]` | `"name"` | Lexing quoted identifiers; `sqlIdentifier` |
+| `StringLiteralPrefix(text)` | `N` for non-ASCII | none | `sqlString`, `sqlIn`, LIKE filters |
+| `EscapeLikePattern(text)` | `[%]`, `[_]`, `[[]` | `\%`, `\_`, `\\` | LIKE filters |
+| `BooleanLiteral(value)` | `1` / `0` | `true` / `false` | `sqlBoolean` |
+| `BooleanParameterValue(value)` | `1` / `0` | `true` / `false` | Binding a boolean query parameter |
+| `ParserDialect` | `TransactSQL` | `PostgresQL` | node-sql-parser grammar, where the AST is used |
+
 ## Installation
 
 ```bash
@@ -402,4 +464,4 @@ Or, in a MemberJunction workspace, add the dependency to your package's `package
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

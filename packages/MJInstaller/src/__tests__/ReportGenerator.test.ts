@@ -319,6 +319,48 @@ describe('ReportGenerator', () => {
       expect(envSnap!.Content).not.toContain('secret123');
     });
 
+    it('should redact any variable matching KEY, TOKEN, SECRET, or PASSWORD patterns and token shapes', async () => {
+      mockFileExists.mockImplementation(async (filePath: string) => {
+        return filePath.endsWith('.env') && !filePath.includes('MJAPI');
+      });
+      mockReadText.mockResolvedValue(
+        'CUSTOM_SERVICE_TOKEN=xyz987token\n' +
+        'OPENAI_API_KEY=sk-proj-1234567890abcdef1234567890\n' +
+        'APP_CREDENTIAL_DATA=sensitive_cred\n' +
+        'GITHUB_AUTH_TOKEN=ghp_1234567890abcdefghijklmnopqrstuvwxyz\n' +
+        'SAFE_SETTING=hello_world'
+      );
+
+      const snapshots = await generator.SnapshotConfigFiles('/fake/dir');
+      const envSnap = snapshots.find((s) => s.RelativePath === '.env');
+      expect(envSnap).toBeDefined();
+      expect(envSnap!.Content).toContain('CUSTOM_SERVICE_TOKEN=[REDACTED]');
+      expect(envSnap!.Content).toContain('OPENAI_API_KEY=[REDACTED]');
+      expect(envSnap!.Content).toContain('APP_CREDENTIAL_DATA=[REDACTED]');
+      expect(envSnap!.Content).toContain('GITHUB_AUTH_TOKEN=[REDACTED]');
+      expect(envSnap!.Content).toContain('SAFE_SETTING=hello_world');
+      expect(envSnap!.Content).not.toContain('xyz987token');
+      expect(envSnap!.Content).not.toContain('sk-proj-');
+      expect(envSnap!.Content).not.toContain('ghp_');
+    });
+
+    it('should sanitize token shapes in service logs', () => {
+      const result = generator.Render({
+        ServiceLogs: [
+          {
+            Service: 'MJAPI',
+            Started: true,
+            Output: ['Connected with Authorization: Bearer secret-token-value-here', 'API key sk-1234567890abcdef1234567890 loaded'],
+            DurationMs: 1000,
+          },
+        ],
+      });
+      expect(result).not.toContain('secret-token-value-here');
+      expect(result).not.toContain('sk-1234567890abcdef1234567890');
+      expect(result).toContain('Bearer [REDACTED_TOKEN]');
+      expect(result).toContain('[REDACTED_API_KEY]');
+    });
+
     it('should sanitize TypeScript environment files', async () => {
       mockFileExists.mockImplementation(async (filePath: string) => {
         return filePath.includes('environment.ts') && !filePath.includes('development');
@@ -359,5 +401,30 @@ describe('ReportGenerator', () => {
       expect(nodeMods?.Exists).toBe(true);
       expect(lockFile?.Exists).toBe(false);
     });
+  });
+});
+
+describe('package-manager reporting', () => {
+  const generator = new ReportGenerator();
+
+  it('lists both lockfiles in the key-files check', async () => {
+    const checks = await generator.CheckKeyFiles('/test/install');
+    const paths = checks.map((c) => c.Path);
+    expect(paths).toContain('pnpm-lock.yaml');
+    expect(paths).toContain('package-lock.json');
+  });
+
+  it('renders a package-manager row in the environment table when present', () => {
+    const result = generator.Render({
+      Environment: {
+        OS: 'darwin 25 (arm64)',
+        NodeVersion: 'v24.0.0',
+        NpmVersion: '11.7.0',
+        Architecture: 'arm64',
+        PackageManager: 'pnpm',
+        PackageManagerVersion: '10.33.0',
+      },
+    });
+    expect(result).toContain('| Package manager | pnpm 10.33.0 |');
   });
 });

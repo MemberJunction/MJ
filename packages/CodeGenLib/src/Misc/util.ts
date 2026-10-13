@@ -1,22 +1,33 @@
 import { logError } from "./status_logging";
+import { ordinalCompare } from "@memberjunction/global";
 import fs, { unlinkSync } from "fs";
 import fsExtra from 'fs-extra';
 import { globSync } from 'glob';
 import path from 'path';
 
-export function makeDirs(dirPaths: string[]) {
+export function MakeDirs(dirPaths: string[]) {
     for (let i = 0; i < dirPaths.length; i++) {
-        makeDir(dirPaths[i]);
+        MakeDir(dirPaths[i]);
     }
 }
 
-export function makeDir(dirPath: string): void {
+/** @deprecated Use {@link MakeDirs}. */
+export function makeDirs(dirPaths: string[]) {
+  return MakeDirs(dirPaths);
+}
+
+export function MakeDir(dirPath: string): void {
     if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
     }
 }
 
-export function copyDir(sourceDir: string, destDir: string) {
+/** @deprecated Use {@link MakeDir}. */
+export function makeDir(dirPath: string): void {
+  return MakeDir(dirPath);
+}
+
+export function CopyDir(sourceDir: string, destDir: string) {
     // To copy a folder or file, select overwrite accordingly
     try {
       fsExtra.copySync(sourceDir, destDir, { overwrite: true })
@@ -26,7 +37,12 @@ export function copyDir(sourceDir: string, destDir: string) {
 
 }
 
-export async function attemptDeleteFile(filePath: string, maxRetries: number, repeatDelay: number): Promise<void> {
+/** @deprecated Use {@link CopyDir}. */
+export function copyDir(sourceDir: string, destDir: string) {
+  return CopyDir(sourceDir, destDir);
+}
+
+export async function AttemptDeleteFile(filePath: string, maxRetries: number, repeatDelay: number): Promise<void> {
     for (let i = 0; i < maxRetries; i++) {
       try {
         unlinkSync(filePath);
@@ -48,7 +64,12 @@ export async function attemptDeleteFile(filePath: string, maxRetries: number, re
     }
   }
 
-export function combineFiles(directory: string, combinedFileName: string, pattern: string, overwriteExistingFile: boolean): void {
+/** @deprecated Use {@link AttemptDeleteFile}. */
+export async function attemptDeleteFile(filePath: string, maxRetries: number, repeatDelay: number): Promise<void> {
+  return AttemptDeleteFile(filePath, maxRetries, repeatDelay);
+}
+
+export function CombineFiles(directory: string, combinedFileName: string, pattern: string, overwriteExistingFile: boolean): void {
     const combinedFilePath = path.join(directory, combinedFileName);
 
     // Check if the combined file exists and if overwriteExistingFile is false, skip the process
@@ -69,7 +90,7 @@ export function combineFiles(directory: string, combinedFileName: string, patter
         } else if (!isAPermissions && isBPermissions) {
             return -1;
         } else {
-            return a.localeCompare(b);
+            return ordinalCompare(a, b);
         }
     });
 
@@ -83,15 +104,25 @@ export function combineFiles(directory: string, combinedFileName: string, patter
     fs.writeFileSync(combinedFilePath, combinedContent);
 }
 
+/** @deprecated Use {@link CombineFiles}. */
+export function combineFiles(directory: string, combinedFileName: string, pattern: string, overwriteExistingFile: boolean): void {
+  return CombineFiles(directory, combinedFileName, pattern, overwriteExistingFile);
+}
+
 
 /**
  * Logs the provided params to the console if the shouldLog parameter is true
  * @param shouldLog 
  */
-export function logIf(shouldLog: boolean, ...args: any[]) {
+export function LogIf(shouldLog: boolean, ...args: any[]) {
     if (shouldLog) {
         console.log(...args);
     }
+}
+
+/** @deprecated Use {@link LogIf}. */
+export function logIf(shouldLog: boolean, ...args: any[]) {
+  return LogIf(shouldLog, ...args);
 }
 
 /**
@@ -116,7 +147,7 @@ export function logIf(shouldLog: boolean, ...args: any[]) {
  * @param items - Array of items that have Sequence and optional name properties
  * @returns A new sorted array
  */
-export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_CreatedAt?: Date; Value?: string; Name?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
+export function SortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_CreatedAt?: Date; Value?: string; Name?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
     return [...items].sort((a, b) => {
         // Primary sort by Sequence
         if (a.Sequence !== b.Sequence) {
@@ -126,29 +157,34 @@ export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_Cr
         // Alphabetical tiebreakers — try type-appropriate name fields in order
         // Value (EntityFieldValueInfo)
         if (a.Value != null && b.Value != null) {
-            const cmp = a.Value.localeCompare(b.Value);
+            const cmp = ordinalCompare(a.Value, b.Value);
             if (cmp !== 0) return cmp;
         } else if (a.Value != null && b.Value == null) return -1;
         else if (a.Value == null && b.Value != null) return 1;
 
         // Name (EntityFieldInfo)
         if (a.Name != null && b.Name != null) {
-            const cmp = a.Name.localeCompare(b.Name);
+            const cmp = ordinalCompare(a.Name, b.Name);
             if (cmp !== 0) return cmp;
         }
 
         // RelatedEntityJoinField (EntityRelationshipInfo)
         if (a.RelatedEntityJoinField != null && b.RelatedEntityJoinField != null) {
-            const cmp = a.RelatedEntityJoinField.localeCompare(b.RelatedEntityJoinField);
+            const cmp = ordinalCompare(a.RelatedEntityJoinField, b.RelatedEntityJoinField);
             if (cmp !== 0) return cmp;
         }
 
         // Last resort: sort by ID for absolute determinism
         if (a.ID != null && b.ID != null) {
-            return a.ID.localeCompare(b.ID);
+            return ordinalCompare(a.ID, b.ID);
         }
         return 0;
     });
+}
+
+/** @deprecated Use {@link SortBySequenceAndCreatedAt}. */
+export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_CreatedAt?: Date; Value?: string; Name?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
+  return SortBySequenceAndCreatedAt(items);
 }
 
 /**
@@ -161,7 +197,7 @@ export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_Cr
  * a separate bug), so the alphabetical tiebreakers are doing the real work of stabilizing
  * the order across environments.
  */
-export function sortRelatedEntities<T extends { Sequence: number; __mj_CreatedAt?: Date; RelatedEntity?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
+export function SortRelatedEntities<T extends { Sequence: number; __mj_CreatedAt?: Date; RelatedEntity?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
     return [...items].sort((a, b) => {
         // Primary sort by Sequence
         if (a.Sequence !== b.Sequence) {
@@ -170,20 +206,92 @@ export function sortRelatedEntities<T extends { Sequence: number; __mj_CreatedAt
 
         // Tiebreaker: RelatedEntity name (the display name of the related entity)
         if (a.RelatedEntity != null && b.RelatedEntity != null) {
-            const cmp = a.RelatedEntity.localeCompare(b.RelatedEntity);
+            const cmp = ordinalCompare(a.RelatedEntity, b.RelatedEntity);
             if (cmp !== 0) return cmp;
         }
 
         // Tiebreaker: RelatedEntityJoinField (FK column name)
         if (a.RelatedEntityJoinField != null && b.RelatedEntityJoinField != null) {
-            const cmp = a.RelatedEntityJoinField.localeCompare(b.RelatedEntityJoinField);
+            const cmp = ordinalCompare(a.RelatedEntityJoinField, b.RelatedEntityJoinField);
             if (cmp !== 0) return cmp;
         }
 
         // Last resort: ID
         if (a.ID != null && b.ID != null) {
-            return a.ID.localeCompare(b.ID);
+            return ordinalCompare(a.ID, b.ID);
         }
         return 0;
     });
+}
+
+/** @deprecated Use {@link SortRelatedEntities}. */
+export function sortRelatedEntities<T extends { Sequence: number; __mj_CreatedAt?: Date; RelatedEntity?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
+  return SortRelatedEntities(items);
+}
+
+/**
+ * Serializes a value to JSON with recursively sorted object keys, ensuring deterministic
+ * string representations across runs regardless of property insertion order.
+ *
+ * @param value - Value to serialize
+ * @param space - Optional indentation (e.g. 2 for pretty-printed JSON)
+ */
+export function CanonicalJSONStringify(value: unknown, space?: number | string): string {
+    return JSON.stringify(sortKeysRecursively(value), null, space);
+}
+
+/** @deprecated Use {@link CanonicalJSONStringify}. */
+export function canonicalJSONStringify(value: unknown, space?: number | string): string {
+  return CanonicalJSONStringify(value, space);
+}
+
+function sortKeysRecursively(value: unknown): unknown {
+    if (value === null || typeof value !== 'object') {
+        return value;
+    }
+    if (Array.isArray(value)) {
+        return value.map(sortKeysRecursively);
+    }
+    const obj = value as Record<string, unknown>;
+    const sortedKeys = Object.keys(obj).sort(ordinalCompare);
+    const result: Record<string, unknown> = {};
+    for (const key of sortedKeys) {
+        result[key] = sortKeysRecursively(obj[key]);
+    }
+    return result;
+}
+
+/**
+ * Deep structural equality comparison for JSON-serializable objects and primitives.
+ */
+export function DeepEqualJSON(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (a == null || b == null) return false;
+    if (typeof a !== typeof b) return false;
+    if (typeof a !== 'object') return false;
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+
+    if (Array.isArray(a) && Array.isArray(b)) {
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if (!DeepEqualJSON(a[i], b[i])) return false;
+        }
+        return true;
+    }
+
+    const objA = a as Record<string, unknown>;
+    const objB = b as Record<string, unknown>;
+    const keysA = Object.keys(objA);
+    const keysB = Object.keys(objB);
+    if (keysA.length !== keysB.length) return false;
+    for (const key of keysA) {
+        if (!Object.prototype.hasOwnProperty.call(objB, key)) return false;
+        if (!DeepEqualJSON(objA[key], objB[key])) return false;
+    }
+    return true;
+}
+
+/** @deprecated Use {@link DeepEqualJSON}. */
+export function deepEqualJSON(a: unknown, b: unknown): boolean {
+  return DeepEqualJSON(a, b);
 }

@@ -11,11 +11,13 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
 // --- Mock the client-direct service so CloseSession's run finalization is observable (no DB),
 //     plus the channel-plugin host so the start/close lifecycle notifications are observable. ---
 const finalizeCoAgentRunMock = vi.fn(async () => undefined);
+const keepCoAgentRunAliveMock = vi.fn();
 const hostSessionStartedMock = vi.fn(async () => undefined);
 const hostSessionClosedMock = vi.fn(async () => undefined);
 vi.mock('@memberjunction/ai-agents', () => ({
     RealtimeClientSessionService: class {
         FinalizeCoAgentRun = finalizeCoAgentRunMock;
+        KeepCoAgentRunAlive = keepCoAgentRunAliveMock;
     },
     RealtimeChannelServerHost: {
         get Instance() {
@@ -43,7 +45,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 // --- Partial mock: control ONLY UserCache.GetSystemUser (the scoped-anonymous elevation seam,
 //     issue #3371); everything else in the data provider stays real ---
 const getSystemUserMock = vi.fn<[], UserInfo | undefined>();
-vi.mock('@memberjunction/sqlserver-dataprovider', async (importOriginal) => {
+vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
     return {
         ...actual,
@@ -425,6 +427,79 @@ describe('SessionManager.CloseSession', () => {
     });
 });
 
+describe('SessionManager.CloseSessionForEndedBridge (a bridged agent left its room)', () => {
+    it.each([
+        ['Explicit', 'Explicit'],
+        ['HostEnded', 'Explicit'],
+        ['Error', 'Error'],
+        ['Janitor', 'Janitor'],
+        ['Shutdown', 'Shutdown'],
+    ] as const)('closes the session when its bridge ended with %s, stamping %s', async (bridgeReason, sessionReason) => {
+        const session = makeSessionEntity({ ID: 'session-bridged', Status: 'Active' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        const ok = await mgr.CloseSessionForEndedBridge('session-bridged', bridgeReason, makeUser(), provider);
+
+        expect(ok).toBe(true);
+        expect(session.Status).toBe('Closed');
+        expect(session.ClosedAt).toBeInstanceOf(Date);
+        expect(session.CloseReason).toBe(sessionReason);
+        // The same close the janitor runs: the channel plugins hear about it too.
+        expect(hostSessionClosedMock).toHaveBeenCalledWith('session-bridged', sessionReason);
+    });
+
+    it('keeps the reason of a session something else closed first (the janitor, the user)', async () => {
+        const session = makeSessionEntity({ ID: 'session-bridged', Status: 'Closed', CloseReason: 'Janitor' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        const ok = await mgr.CloseSessionForEndedBridge('session-bridged', 'Explicit', makeUser(), provider);
+
+        expect(ok).toBe(true);
+        expect(session.CloseReason).toBe('Janitor');
+        expect(session.Save).not.toHaveBeenCalled();
+    });
+
+    it('never throws: a close that fails is reported as not closed, leaving the session to the janitor', async () => {
+        const provider = {
+            GetEntityObject: vi.fn(async () => {
+                throw new Error('database unreachable');
+            }),
+        } as unknown as IMetadataProvider;
+        const mgr = new SessionManager();
+
+        await expect(mgr.CloseSessionForEndedBridge('session-bridged', 'Explicit', makeUser(), provider)).resolves.toBe(false);
+    });
+});
+
+describe('SessionManager.CloseSessionForFailedStart (an agent that never joined its room)', () => {
+    it('closes the session as Error, through the close the janitor runs', async () => {
+        const session = makeSessionEntity({ ID: 'session-unstarted', Status: 'Active' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        const ok = await mgr.CloseSessionForFailedStart('session-unstarted', makeUser(), provider);
+
+        expect(ok).toBe(true);
+        expect(session.Status).toBe('Closed');
+        expect(session.ClosedAt).toBeInstanceOf(Date);
+        expect(session.CloseReason).toBe('Error');
+        expect(hostSessionClosedMock).toHaveBeenCalledWith('session-unstarted', 'Error');
+    });
+
+    it('never throws: a close that fails is reported as not closed, leaving the session to the janitor', async () => {
+        const provider = {
+            GetEntityObject: vi.fn(async () => {
+                throw new Error('database unreachable');
+            }),
+        } as unknown as IMetadataProvider;
+        const mgr = new SessionManager();
+
+        await expect(mgr.CloseSessionForFailedStart('session-unstarted', makeUser(), provider)).resolves.toBe(false);
+    });
+});
+
 describe('SessionManager.Heartbeat', () => {
     it('coalesces writes within the min interval (one write, not two)', async () => {
         const session = makeSessionEntity({ ID: 'session-1', Status: 'Active' });
@@ -458,6 +533,90 @@ describe('SessionManager.Heartbeat', () => {
         const ok = await mgr.Heartbeat('session-1', makeUser(), provider);
         expect(ok).toBe(false);
         expect(session.Save).not.toHaveBeenCalled();
+    });
+});
+
+describe('SessionManager.Heartbeat — the session\'s co-agent run stays alive', () => {
+    beforeEach(() => {
+        keepCoAgentRunAliveMock.mockClear();
+    });
+
+    it('keeps the co-agent run alive for the run watchdog on each persisted heartbeat', async () => {
+        const session = makeSessionEntity({ ID: 'session-1', Status: 'Active', Config_: JSON.stringify({ coAgentRunID: 'co-run-1', promptRunID: 'pr-1' }) });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        await mgr.Heartbeat('session-1', makeUser(), provider);
+        await mgr.Heartbeat('session-1', makeUser(), provider); // coalesced: no write, no re-registration
+
+        expect(keepCoAgentRunAliveMock).toHaveBeenCalledOnce();
+        expect(keepCoAgentRunAliveMock.mock.calls[0][0]).toBe('co-run-1');
+        expect(keepCoAgentRunAliveMock.mock.calls[0][1]).toBe(provider);
+    });
+
+    it('does nothing for a closed session, and passes no run for a session without one', async () => {
+        const closed = makeSessionEntity({ ID: 'session-closed', Status: 'Closed', Config_: JSON.stringify({ coAgentRunID: 'co-run-1' }) });
+        await new SessionManager().Heartbeat('session-closed', makeUser(), makeProvider(() => closed).provider);
+        expect(keepCoAgentRunAliveMock).not.toHaveBeenCalled();
+
+        const workspace = makeSessionEntity({ ID: 'session-2', Status: 'Active', Config_: null });
+        await new SessionManager().Heartbeat('session-2', makeUser(), makeProvider(() => workspace).provider);
+        expect(keepCoAgentRunAliveMock.mock.calls[0][0]).toBeUndefined();
+    });
+});
+
+describe('SessionManager.Heartbeat — bounded heartbeatLastWrite (Round 11 memory-leak fix)', () => {
+    // Regression coverage: heartbeatLastWrite used to be a plain, unbounded `Map`. SessionManager
+    // is constructed fresh by every resolver that needs one (AgentSessionResolver,
+    // RealtimeClientSessionResolver, RealtimeBridgeResolver) plus SessionJanitor's own instance, so
+    // each is itself a process-lifetime singleton with its own copy of the map. A session's
+    // heartbeats land through one resolver's instance, but the overwhelmingly common close path —
+    // a crashed tab, a dropped connection, anything that never round-trips an explicit close
+    // mutation — is reconciled by SessionJanitor's sweeps through ITS OWN SessionManager, which
+    // never touches the originating instance's map, so the entry was never deleted. The fix bounds
+    // the map with MJLruCache(maxSize 5_000, ttlMs 4h) so that scenario is capped instead of
+    // growing forever.
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('forces a fresh write once the 4h TTL elapses, even though CloseSession never ran on this instance', async () => {
+        const session = makeSessionEntity({ ID: 'session-ttl', Status: 'Active' });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+        const user = makeUser();
+
+        const first = await mgr.Heartbeat('session-ttl', user, provider);
+        expect(first).toBe(true);
+        expect(session.Save).toHaveBeenCalledTimes(1);
+
+        // Still within the coalescing window — no second write.
+        const second = await mgr.Heartbeat('session-ttl', user, provider);
+        expect(second).toBe(true);
+        expect(session.Save).toHaveBeenCalledTimes(1);
+
+        // Advance past the cache's 4h TTL backstop (well beyond the 3s coalescing window too).
+        vi.advanceTimersByTime(4 * 60 * 60 * 1000 + 1);
+
+        const third = await mgr.Heartbeat('session-ttl', user, provider);
+        expect(third).toBe(true);
+        // The TTL-expired entry forces a write again, exactly as a never-before-seen session would —
+        // proving the cache entry does not live forever when nothing on this instance ever calls
+        // CloseSession for it.
+        expect(session.Save).toHaveBeenCalledTimes(2);
+    });
+
+    it('is backed by a bounded MJLruCache, not a plain unbounded Map (structural regression guard)', () => {
+        const mgr = new SessionManager();
+        const internal = (mgr as unknown as { heartbeatLastWrite: { MaxSize: number; Size: number } })
+            .heartbeatLastWrite;
+        expect(internal.MaxSize).toBe(5_000);
+        expect(internal.Size).toBe(0);
     });
 });
 

@@ -2,7 +2,7 @@ import { LogError, LogStatus, SetProvider, StartupManager, StartupOptions } from
 import { SQLServerDataProvider } from "./SQLServerDataProvider";
 import { SQLServerProviderConfigData } from "./types";
 import sql from 'mssql';
-import { UserCache } from "./UserCache";
+import { UserCache } from "@memberjunction/generic-database-provider";
 
 
 /**
@@ -14,7 +14,7 @@ import { UserCache } from "./UserCache";
  *   should resolve the mode via ResolveStartupMode() so the MJ_STARTUP_MODE/config precedence
  *   chain behaves identically everywhere.
  */
-export async function setupSQLServerClient(config: SQLServerProviderConfigData, startupOptions?: StartupOptions): Promise<SQLServerDataProvider> {
+export async function SetupSQLServerClient(config: SQLServerProviderConfigData, startupOptions?: StartupOptions): Promise<SQLServerDataProvider> {
     try {
         // Set the provider for all entities to be SQL Server in this project, can use a different provider in other situations....
         const pool: sql.ConnectionPool = config.ConnectionPool;
@@ -27,7 +27,7 @@ export async function setupSQLServerClient(config: SQLServerProviderConfigData, 
 
             // now setup the user cache
             // CheckRefreshIntervalSeconds is in SECONDS; UserCache.Refresh expects MILLISECONDS -> convert.
-            await UserCache.Instance.Refresh(pool, config.CheckRefreshIntervalSeconds * 1000);
+            await UserCache.Instance.Refresh(provider, config.CheckRefreshIntervalSeconds * 1000);
 
             if (config.CheckRefreshIntervalSeconds && config.CheckRefreshIntervalSeconds > 0) {
                 // Start a timer to check for refreshes
@@ -52,7 +52,7 @@ export async function setupSQLServerClient(config: SQLServerProviderConfigData, 
             LogStatus("Connection pool is not connected, we're going to wait for it...")
             await pool.connect();
             if (pool.connected)
-                return setupSQLServerClient(config, startupOptions) // one time recursive call since we're now connected
+                return SetupSQLServerClient(config, startupOptions) // one time recursive call since we're now connected
             else
                 throw new Error("Failed to connect to database"); // don't do recursive call here as it would go on forever
         }
@@ -63,4 +63,9 @@ export async function setupSQLServerClient(config: SQLServerProviderConfigData, 
         LogError(`Error in setupSQLServerClient: ${errorMessage}\n${errorStack}`);
         throw e; // Re-throw so caller knows about the failure
     }
+}
+
+/** @deprecated Use {@link SetupSQLServerClient}. */
+export async function setupSQLServerClient(config: SQLServerProviderConfigData, startupOptions?: StartupOptions): Promise<SQLServerDataProvider> {
+    return SetupSQLServerClient(config, startupOptions);
 }

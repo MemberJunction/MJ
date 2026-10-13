@@ -85,6 +85,28 @@ function fieldCodeNameForKey(codeNames: Set<string>, key: string): boolean {
     return key.endsWith('_') && codeNames.has(key.slice(0, -1));
 }
 
+/**
+ * The generated entity-subclass source: the per-schema files when CodeGen split them, the
+ * single `entity_subclasses.ts` otherwise.
+ *
+ * With `fileEmit.perSchema` on, `entity_subclasses.ts` is a barrel re-exporting one file per
+ * schema and carries no registrations of its own. Reading whichever shape is on disk — rather
+ * than parsing the barrel — keeps this check correct with that flag set either way.
+ */
+function readGeneratedEntitySource(generatedDir: string): string {
+    const entry = fs.readFileSync(path.join(generatedDir, 'entity_subclasses.ts'), 'utf8');
+    // Decide on the entry file's CONTENT, not on whether `entities/` exists. Turning `perSchema`
+    // off rewrites the entry file but leaves the old per-schema directory behind, so keying off
+    // the directory would count a stale roster and pass while the real artifact had drifted.
+    if (!entry.includes("export * from './entities/")) {
+        return entry;
+    }
+    const splitDir = path.join(generatedDir, 'entities');
+    const files = fs.existsSync(splitDir) ? fs.readdirSync(splitDir).filter((f) => f.endsWith('.ts')).sort() : [];
+    Assert(files.length > 0, 'entity_subclasses.ts re-exports entities/ but no generated files are there — the emit is incomplete');
+    return files.map((f) => fs.readFileSync(path.join(splitDir, f), 'utf8')).join('\n');
+}
+
 /** Walk up from cwd looking for the MJ repo root (identified by the generated core-entities file). */
 function findRepoRoot(): string | undefined {
     const marker = path.join('packages', 'MJCoreEntities', 'src', 'generated', 'entity_subclasses.ts');
@@ -284,10 +306,11 @@ export const CodegenDeterminismChecks: NamedCheck[] = [
             // Registration-count parity: the checked-in generated file must register exactly one
             // BaseEntity subclass per live core entity — fewer means CodeGen is behind the DB,
             // more means the DB lost entities the artifacts still carry.
-            const registrations = entitySource.match(/@RegisterClass\(BaseEntity, '/g) ?? [];
+            const rosterSource = readGeneratedEntitySource(generatedDir);
+            const registrations = rosterSource.match(/@RegisterClass\(BaseEntity, '/g) ?? [];
             const entities = coreEntities(ctx);
             AssertEqual(registrations.length, entities.length,
-                `entity_subclasses.ts registers ${registrations.length} entities but live metadata has ${entities.length} core entities — generated file and DB are out of step`);
+                `the generated entity subclasses register ${registrations.length} entities but live metadata has ${entities.length} core entities — generated files and DB are out of step`);
 
             const remoteOpsPath = path.join(generatedDir, 'remote_operations.ts');
             const remoteOps = fs.readFileSync(remoteOpsPath, 'utf8');

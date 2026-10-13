@@ -2,6 +2,15 @@ import ora, { type Ora } from 'ora-classic';
 import chalk from 'chalk';
 import type { IMJCLIRuntimeHost, LogLevel, MJCLIResult, OutputFormat, PluginUsage } from './types';
 import { SerializeResult } from './serialize';
+import { ShouldSuppressChrome } from './output-format';
+
+/** Construction-time state for {@link MJCLIRuntimeHost}. Injectable so tests need no real TTY. */
+export interface RuntimeHostOptions {
+  /** Whether this run may prompt — from `ResolveInteractivity`. Defaults to false (agent-first). */
+  interactive?: boolean;
+  /** Defaults to `process.stdout.isTTY`. */
+  stdoutIsTTY?: boolean;
+}
 
 /**
  * Default implementation of {@link IMJCLIRuntimeHost}.
@@ -17,11 +26,17 @@ import { SerializeResult } from './serialize';
  *   pipeable (plan D4: `mj sync push --format=json | jq .errors`).
  * - **MD mode**: the result is emitted as a fenced ```json block on stdout
  *   (forward-looking slot for AI chat UIs, plan D10).
+ *
+ * Chrome (spinners, color) additionally requires a real TTY, not just text mode:
+ * `--format=text > log.txt` should not write spinner escape codes into the file.
  */
 export class MJCLIRuntimeHost implements IMJCLIRuntimeHost {
   public readonly Format: OutputFormat;
   public readonly Verbose: boolean;
+  public readonly Interactive: boolean;
   private readonly noBanner: boolean;
+  /** Whether stdout is a real terminal — gates spinners, color, and pretty-printing. */
+  private readonly stdoutIsTTY: boolean;
 
   /** Process-start, used for the "· N total" running clock in text mode. */
   private readonly startTime = Date.now();
@@ -31,17 +46,27 @@ export class MJCLIRuntimeHost implements IMJCLIRuntimeHost {
   private stepStart = 0;
   private ticker: NodeJS.Timeout | null = null;
 
-  constructor(format: OutputFormat = 'text', verbose = false, noBanner = false) {
+  constructor(format: OutputFormat = 'text', verbose = false, noBanner = false, options: RuntimeHostOptions = {}) {
     this.Format = format;
     this.Verbose = verbose;
+    this.Interactive = options.interactive ?? false;
+    this.stdoutIsTTY = options.stdoutIsTTY ?? process.stdout.isTTY === true;
     // `--no-banner` is handled globally by the CLI prerun hook (it strips the flag
     // from argv so not-yet-migrated commands don't fail oclif's strict parser) and
     // signalled here via env, so honor either source.
     this.noBanner = noBanner || process.env.MJ_CLI_NO_BANNER === '1';
   }
 
-  /** Spinners/colors are only appropriate in text mode on a real TTY. */
+  /**
+   * Spinners/colors are only appropriate in text mode on a real TTY. A piped text
+   * run still logs — it just logs plain lines instead of animating.
+   */
   private get textMode(): boolean {
+    return this.Format === 'text' && !ShouldSuppressChrome(this.Format, this.stdoutIsTTY);
+  }
+
+  /** Text mode regardless of whether stdout is a terminal — gates plain-line logging. */
+  private get plainTextMode(): boolean {
     return this.Format === 'text';
   }
 
@@ -114,6 +139,8 @@ export class MJCLIRuntimeHost implements IMJCLIRuntimeHost {
       }
     } else if (this.Format === 'json') {
       this.emitStderrEvent({ event: 'step-done', label, detail });
+    } else if (this.plainTextMode) {
+      process.stdout.write(`${detail ? `${label} ${detail}` : label}\n`);
     }
   }
 
@@ -128,6 +155,8 @@ export class MJCLIRuntimeHost implements IMJCLIRuntimeHost {
       }
     } else if (this.Format === 'json') {
       this.emitStderrEvent({ event: 'step-failed', label, detail });
+    } else if (this.plainTextMode) {
+      process.stderr.write(`${detail ? `${label} ${detail}` : label}\n`);
     }
   }
 
@@ -138,6 +167,10 @@ export class MJCLIRuntimeHost implements IMJCLIRuntimeHost {
       const painted = level === 'error' ? chalk.red(message) : level === 'warn' ? chalk.yellow(message) : message;
       // eslint-disable-next-line no-console
       (level === 'error' ? console.error : console.log)(painted);
+    } else if (this.plainTextMode) {
+      // Text mode, piped: still the caller's primary output, so keep it on stdout —
+      // just uncolored, since escape codes in a redirected file help nobody.
+      (level === 'error' ? process.stderr : process.stdout).write(message + '\n');
     } else {
       // Keep stdout clean for the JSON/MD result — all human logging → stderr.
       process.stderr.write(message + '\n');
@@ -151,7 +184,7 @@ export class MJCLIRuntimeHost implements IMJCLIRuntimeHost {
 
     if (this.Format === 'json') {
       this.emitStderrEvent({ event: 'start', command: usage.command, runtime: usage.runtime });
-    } else if (this.textMode) {
+    } else if (this.plainTextMode) {
       const r = usage.runtime;
       const secs = r.typicalSeconds ? `~${r.typicalSeconds}s` : r.class;
       const note = r.note ? ` — ${r.note}` : '';
@@ -164,7 +197,8 @@ export class MJCLIRuntimeHost implements IMJCLIRuntimeHost {
     if (this.spinner?.isSpinning) this.spinner.stop();
 
     if (this.Format === 'json' || this.Format === 'md') {
-      process.stdout.write(SerializeResult(result, this.Format) + '\n');
+      // Pretty only when a human is watching; a pipe gets one compact line.
+      process.stdout.write(SerializeResult(result, this.Format, { pretty: this.stdoutIsTTY }) + '\n');
     }
     // Text mode: the plugin is responsible for its own rich human output (via
     // Log/StartStep/SucceedStep). Emit deliberately prints nothing extra so we

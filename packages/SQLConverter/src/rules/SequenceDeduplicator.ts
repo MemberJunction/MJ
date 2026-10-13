@@ -53,15 +53,15 @@ export interface DeduplicationResult {
 }
 
 export interface SequenceEntry {
-  entityId: string;
-  sequence: number;
-  file: string;
+  entityId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  sequence: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  file: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Line number of the sequence value in the file */
-  line: number;
+  line: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Character offset of the sequence value within the line */
-  offset: number;
+  offset: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Length of the sequence string (e.g., "100048" = 6 chars) */
-  length: number;
+  length: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -72,7 +72,7 @@ export interface SequenceEntry {
  * @param migrationsDir - Directory containing .pg.sql files (e.g., migrations-pg/v5)
  * @param dryRun - If true, detect collisions but don't modify files
  */
-export function deduplicateEntityFieldSequences(
+export function DeduplicateEntityFieldSequences(
   migrationsDir: string,
   dryRun: boolean = false
 ): DeduplicationResult {
@@ -178,6 +178,14 @@ export function deduplicateEntityFieldSequences(
     fixes,
     collisions,
   };
+}
+
+/** @deprecated Use {@link DeduplicateEntityFieldSequences}. */
+export function deduplicateEntityFieldSequences(
+  migrationsDir: string,
+  dryRun: boolean = false
+): DeduplicationResult {
+  return DeduplicateEntityFieldSequences(migrationsDir, dryRun);
 }
 
 /**

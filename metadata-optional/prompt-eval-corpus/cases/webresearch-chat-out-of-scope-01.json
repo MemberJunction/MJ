@@ -1,0 +1,32 @@
+{
+  "id": "webresearch-chat-out-of-scope-01",
+  "agent": "Web Research Agent",
+  "tags": [
+    "clarify",
+    "coherence"
+  ],
+  "description": "A database question aimed at a web-research specialist. Saying so beats attempting it with the wrong tools.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Query our internal database for last month's revenue."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "chat",
+        "message": {
+          "matcher": "nonEmpty"
+        }
+      },
+      {
+        "kind": "taskComplete"
+      }
+    ]
+  }
+}

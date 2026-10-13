@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Hoisted mocks — referenced in vi.mock factories (which are hoisted above imports)
 // ============================================================================
 
-const { mockEngineInstance, mockAxiosGet } = vi.hoisted(() => ({
+const { mockEngineInstance, mockHttpGet } = vi.hoisted(() => ({
     mockEngineInstance: {
         getChecksumFromText: vi.fn().mockImplementation((text: string) => {
             // Deterministic fake hash: length-prefixed first 16 chars. The real
@@ -18,7 +18,7 @@ const { mockEngineInstance, mockAxiosGet } = vi.hoisted(() => ({
         getContentSourceParams: vi.fn().mockResolvedValue(new Map()),
         ExtractTextAndProcessWithLLM: vi.fn().mockResolvedValue(undefined),
     },
-    mockAxiosGet: vi.fn(),
+    mockHttpGet: vi.fn(),
 }));
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -63,8 +63,9 @@ vi.mock('../Core', () => ({
     AutotagProgressCallback: undefined,
 }));
 
-vi.mock('axios', () => ({
-    default: { get: mockAxiosGet, head: vi.fn() },
+vi.mock('@memberjunction/network-utils', () => ({
+    HttpGet: mockHttpGet,
+    HttpHead: vi.fn(),
 }));
 
 import { AutotagWebsite } from '../Websites/generic/AutotagWebsite';
@@ -425,10 +426,10 @@ describe('AutotagWebsite', () => {
                 'https://ex.com/C': '<a href="https://ex.com/C1">c1</a>',
                 'https://ex.com/B1': '', 'https://ex.com/B2': '', 'https://ex.com/C1': '',
             };
-            mockAxiosGet.mockImplementation((url: string) => {
+            mockHttpGet.mockImplementation((url: string) => {
                 const html = pages[url];
                 if (html == null) return Promise.reject(new Error(`unmocked URL ${url}`));
-                return Promise.resolve({ data: `<body>${html}</body>` });
+                return Promise.resolve({ Data: `<body>${html}</body>` });
             });
 
             const yielded: string[] = [];
@@ -461,10 +462,10 @@ describe('AutotagWebsite', () => {
                 'https://ex.com/C': '<a href="https://ex.com/A">a</a><a href="https://ex.com/D">d</a>',
                 'https://ex.com/D': '',
             };
-            mockAxiosGet.mockImplementation((url: string) => {
+            mockHttpGet.mockImplementation((url: string) => {
                 const html = pages[url];
                 if (html == null) return Promise.reject(new Error(`unmocked URL ${url}`));
-                return Promise.resolve({ data: `<body>${html}</body>` });
+                return Promise.resolve({ Data: `<body>${html}</body>` });
             });
 
             const yielded: string[] = [];
@@ -486,8 +487,8 @@ describe('AutotagWebsite', () => {
                 // B has more links but at depth 0 we don't visit B.
                 'https://ex.com/B': '<a href="https://ex.com/SHOULD_NOT_APPEAR">x</a>',
             };
-            mockAxiosGet.mockImplementation((url: string) =>
-                Promise.resolve({ data: `<body>${pages[url] ?? ''}</body>` })
+            mockHttpGet.mockImplementation((url: string) =>
+                Promise.resolve({ Data: `<body>${pages[url] ?? ''}</body>` })
             );
 
             const yielded: string[] = [];
@@ -504,12 +505,12 @@ describe('AutotagWebsite', () => {
 
     describe('fetchAndExtract', () => {
         it('fetches the URL exactly once and returns extracted text + checksum', async () => {
-            mockAxiosGet.mockResolvedValueOnce({ data: '<body><p>Hello world</p></body>' });
+            mockHttpGet.mockResolvedValueOnce({ Data: '<body><p>Hello world</p></body>' });
 
             const result = await subject.fetchAndExtract('https://example.com/page');
 
-            expect(mockAxiosGet).toHaveBeenCalledTimes(1);
-            expect(mockAxiosGet).toHaveBeenCalledWith('https://example.com/page');
+            expect(mockHttpGet).toHaveBeenCalledTimes(1);
+            expect(mockHttpGet).toHaveBeenCalledWith('https://example.com/page', { ResponseType: 'text' });
             expect(result.text).toContain('Hello world');
             // Checksum should come from the engine helper that hashes EXTRACTED text,
             // NOT the raw HTML. This is the critical Commit 2 invariant.
@@ -524,20 +525,20 @@ describe('AutotagWebsite', () => {
             const htmlA = '<body><!-- build:abc123 --><p>Same content</p></body>';
             const htmlB = '<body><!-- build:def456 --><p>Same content</p></body>';
 
-            mockAxiosGet.mockResolvedValueOnce({ data: htmlA });
+            mockHttpGet.mockResolvedValueOnce({ Data: htmlA });
             const a = await subject.fetchAndExtract('https://example.com/page');
 
-            mockAxiosGet.mockResolvedValueOnce({ data: htmlB });
+            mockHttpGet.mockResolvedValueOnce({ Data: htmlB });
             const b = await subject.fetchAndExtract('https://example.com/page');
 
             expect(a.checksum).toBe(b.checksum);
         });
 
         it('returns different checksums when the extracted text actually differs', async () => {
-            mockAxiosGet.mockResolvedValueOnce({ data: '<body><p>Version one</p></body>' });
+            mockHttpGet.mockResolvedValueOnce({ Data: '<body><p>Version one</p></body>' });
             const a = await subject.fetchAndExtract('https://example.com/page');
 
-            mockAxiosGet.mockResolvedValueOnce({ data: '<body><p>Version two</p></body>' });
+            mockHttpGet.mockResolvedValueOnce({ Data: '<body><p>Version two</p></body>' });
             const b = await subject.fetchAndExtract('https://example.com/page');
 
             expect(a.checksum).not.toBe(b.checksum);

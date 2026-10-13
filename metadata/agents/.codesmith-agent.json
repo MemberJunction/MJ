@@ -50,6 +50,28 @@
             "checksum": "728665075513a2b2b42c677ccfc9512cd6af3dd5a4b4818ef19b620a19bdd98f"
           }
         }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Generated code",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Codesmith Agent"
+            }
+          },
+          "primaryKey": {
+            "ID": "14F1D3E2-D06B-4726-86E2-3B732B50D623"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:55.259Z",
+            "checksum": "13f093632684fc8a86700e6755b210571aea3dafdf9979c09b7a4a5f39b6a406"
+          }
+        }
       ]
     },
     "primaryKey": {

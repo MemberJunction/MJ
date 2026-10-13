@@ -1,5 +1,6 @@
 {
     "name": "fixture-not-built-pkg",
+    "license": "BUSL-1.1",
     "private": true,
     "type": "module",
     "main": "built/index.js"

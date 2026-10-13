@@ -1,23 +1,27 @@
 # Installation in Minutes
 
-MemberJunction is an open-source platform designed to help organizations efficiently manage data, build applications, and leverage AI for better insights. This guide walks you through the complete setup process using the automated installer, which handles downloading, configuring, building, and validating your MemberJunction installation.
+MemberJunction is a platform designed to help organizations efficiently manage data, build applications, and leverage AI for better insights. This guide walks you through the complete setup process using the automated installer, which handles downloading, configuring, building, and validating your MemberJunction installation.
 
 ## Prerequisites
 
 Before running the installer, make sure you have the following ready:
 
-1. **SQL Server** — SQL Server 2022 or above. Can be a local SQL Server instance (including Docker) or Azure SQL. You do **not** need to create a database ahead of time — the installer generates a setup script that handles that.
-   > **Note:** If using a local SQL Server with a self-signed certificate (common with Docker or default installations), the installer will ask if you want to trust the server certificate. Azure SQL handles encryption automatically, so this step is not needed for Azure SQL.
+1. **A supported database** — Choose one:
+   - **SQL Server** — SQL Server 2022 or above. Can be a local SQL Server instance (including Docker) or Azure SQL. You do **not** need to create a database ahead of time — the installer creates it, along with the SQL logins MemberJunction uses, when you give it an administrator login such as `sa`.
+     > **Note:** If using a local SQL Server with a self-signed certificate (common with Docker or default installations), the installer will ask if you want to trust the server certificate. Azure SQL handles encryption automatically, so this step is not needed for Azure SQL.
+   - **PostgreSQL** — a local PostgreSQL instance (including Docker) or a managed PostgreSQL service. The installer has been verified against PostgreSQL 16. You do **not** need to create a database ahead of time — the installer creates it, along with the PostgreSQL roles MemberJunction uses, when you give it a superuser login such as `postgres`. For non-interactive installs, set `MJ_INSTALL_DB_PLATFORM=postgresql`.
 
 2. **Node.js 22 or above** (Node.js 24 recommended) — Install from [nodejs.org](https://nodejs.org). Verify with:
    ```
    node --version
    ```
 
-3. **npm** — Comes with Node.js. Verify with:
+3. **pnpm 10 or above** — The installer's default package manager (matching the era-6 platform manifest). Enable it with corepack (ships with Node.js) and verify:
    ```
-   npm --version
+   corepack enable pnpm
+   pnpm --version
    ```
+   To install with npm instead, set `"PackageManager": "npm"` in your install config (or `MJ_INSTALL_PACKAGE_MANAGER=npm`). There is no silent fallback — if the configured package manager is missing, preflight fails with instructions.
 
 4. **At least 2 GB of free disk space** — The installer checks this automatically.
 
@@ -52,9 +56,9 @@ The installer runs through 9 phases automatically. Here's what happens at each s
 1. **Preflight** — Checks your environment (Node.js version, disk space, port availability, SQL Server connectivity)
 2. **Scaffold** — Lets you choose a MemberJunction release version, then downloads and extracts the release package from GitHub
 3. **Configure** — Prompts you for database credentials, ports, and authentication settings, then generates configuration files (`.env`, `mj.config.cjs`, and Explorer environment files)
-4. **Database** — Generates SQL setup scripts for creating your database, logins, users, and permissions. **You must run these scripts manually** (see [Running the Database Scripts](#running-the-database-scripts) below)
+4. **Database** — Creates your database, logins, users, and permissions if they don't exist yet (see [Setting Up the Database](#3-setting-up-the-database) below)
 5. **Platform Compatibility** — Patches npm scripts for your operating system (e.g., adds `cross-env` on Windows)
-6. **Dependencies** — Runs `npm install` and `npm run build` to install and compile all packages
+6. **Dependencies** — Runs the configured package manager's `install` and `run build` (pnpm by default) to install and compile all packages
 7. **Migrate** — Runs database migrations to create the `__mj` schema with all MemberJunction tables, views, stored procedures, and seed data
 8. **CodeGen** — Generates TypeScript entity classes, SQL stored procedures, Angular forms, and class registration manifests for your specific database
 9. **Smoke Test** — Starts MJAPI and MJExplorer to verify they launch correctly, then shuts them down
@@ -65,38 +69,45 @@ During the configure step, the installer will ask for:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Database hostname | `localhost` | Your SQL Server address |
-| Database port | `1433` | SQL Server TCP port |
-| Database name | `MemberJunction` | Target database name |
-| Trust self-signed certificate | No | Set to Yes for local SQL Server instances |
-| CodeGen login | `MJ_CodeGen` | A privileged SQL login for schema management |
-| CodeGen password | *(none)* | Password for the CodeGen login |
-| API login | `MJ_Connect` | A SQL login for application data access |
-| API password | *(none)* | Password for the API login |
-| GraphQL API port | `4000` | Port for the MJAPI server |
-| Explorer UI port | `4201` | Port for the MJExplorer dev server |
-| Authentication provider | None | Choose Microsoft Entra (MSAL), Auth0, or skip for now |
+| **Database platform** | SQL Server | Choose SQL Server or PostgreSQL |
+| **Database hostname** | `localhost` | Your database server address |
+| **Database port** | `1433` (SQL Server) or `5432` (PostgreSQL) | Database TCP port (auto-set based on platform) |
+| **Database name** | `MemberJunction` | Target database name |
+| **Trust self-signed certificate** | No | Set to Yes for local SQL Server instances (SQL Server only) |
+| **CodeGen login** | `MJ_CodeGen` | A privileged role/login for schema management |
+| **CodeGen password** | *(none)* | Password for the CodeGen role/login |
+| **API login** | `MJ_Connect` | A role/login for application data access |
+| **API password** | *(none)* | Password for the API role/login |
+| **GraphQL API port** | `4000` | Port for the MJAPI server |
+| **Explorer UI port** | `4201` | Port for the MJExplorer dev server |
+| **Authentication provider** | None | Choose Microsoft Entra (MSAL), Auth0, or skip for now |
 
 If you choose an authentication provider, you'll also be prompted for the provider-specific settings (Client ID, Tenant ID, etc.).
 
 > **Note on Authentication:** If you skip authentication setup, MJAPI will start but MJExplorer will not be fully functional until you configure an auth provider. The installer will warn you about this. See [Configuring Authentication](#configuring-authentication) below.
 
-### 3. Run the Database Scripts
+### 3. Setting Up the Database
 
-After the configure step completes, the installer generates two SQL scripts in your working directory:
+The installer first signs in as the CodeGen and API logins/roles you chose. If both work, the database is already set up and it moves on.
 
-- **`mj-db-setup.sql`** — Creates the database (if it doesn't exist), the `__mj` schema, SQL Server logins, database users, and assigns permissions
-- **`mj-db-validate.sql`** — Verifies that the setup was applied correctly
+If they don't, it asks how to set the database up:
 
-**You need to run these scripts manually** using SQL Server Management Studio (SSMS), Azure Data Studio, or any SQL client:
+- **Set it up now (recommended)** — Enter an administrator login (for SQL Server, try `sa`; for PostgreSQL, try `postgres`). The installer creates the database, the `__mj` schema, both logins/roles, and their permissions, then signs in as both to confirm it worked. The administrator login is used for this one step only and is never written to `.env`, the install state, or the diagnostic report.
+- **I'll run it myself** — The installer waits while you run `mj-db-setup.sql` from your working directory in SQL Server Management Studio (SSMS), Azure Data Studio (for SQL Server or PostgreSQL), psql (for PostgreSQL), or any database client, connected as an administrator. It checks both logins again when you continue.
 
-1. Connect to your SQL Server as an administrator (e.g., `sa` or a login with `sysadmin` role)
-2. Open and execute `mj-db-setup.sql`
-3. Optionally, run `mj-db-validate.sql` to confirm everything was created correctly
+Either way, two scripts are saved in your working directory so you can see exactly what runs:
 
-> **Why manual?** Creating server-level logins requires elevated SQL Server permissions (`sysadmin` or `securityadmin`) that the installer shouldn't hold. Running the script manually lets you review and approve the changes.
+- **`mj-db-setup.sql`** — Creates the database (if it doesn't exist), the `__mj` schema, the logins/roles, and permissions. It is safe to run more than once on the platform it targets.
+- **`mj-db-validate.sql`** — Verifies that the setup was applied correctly.
 
-Once the scripts are complete, the installer will continue with the remaining phases (dependencies, migrations, codegen, and smoke test).
+> **SQL Server Notes:**
+> - Azure SQL Database does not support `USE` statements. Create the database and logins with the Azure portal or your usual tooling, then run the installer; it will find them already set up.
+>
+> **PostgreSQL Notes:**
+> - `mj-db-setup.sql` is a `psql` script (it uses `\connect` and `\gexec`); run it with `psql -h <host> -p <port> -U postgres -d postgres -f mj-db-setup.sql`. The installer itself sends the same statements one at a time through the driver.
+> - The CodeGen and API logins are PostgreSQL login roles with no special attributes (no `CREATEDB`, `CREATEROLE`, or superuser). The CodeGen role owns the `__mj` schema and may create schemas in the database; the API role can read and write the tables, use the sequences, and execute the routines the CodeGen role creates.
+> - The administrator also creates the `pgcrypto` and `uuid-ossp` extensions and the `cdp_BI`, `cdp_CodeGen`, `cdp_Developer`, `cdp_Integration`, and `cdp_UI` group roles that MemberJunction's migrations grant permissions to.
+> - `.env` gets `DB_PLATFORM='postgresql'` and the same `DB_*` / `CODEGEN_DB_*` keys as SQL Server, so `mj migrate` and CodeGen use the CodeGen login and MJAPI uses the API login.
 
 ### 4. Verify Your Installation
 
@@ -201,7 +212,7 @@ For automated or repeat installations, you can skip all prompts:
 mj install --yes
 ```
 
-This auto-selects the latest stable release and uses default values for all settings. You can combine it with a config file to provide your specific values:
+This auto-selects the latest stable release and uses default values for all settings. Nothing is asked, so if the database isn't set up yet, provide an administrator login (`MJ_INSTALL_DB_ADMIN_USER` / `MJ_INSTALL_DB_ADMIN_PASSWORD`, or `DatabaseAdminUser` / `DatabaseAdminPassword` in the config file) and the installer sets it up; without one it stops with instructions. You can combine `--yes` with a config file to provide your specific values:
 
 ```
 mj install --yes --config ./install.config.json
@@ -223,6 +234,7 @@ Create an `install.config.json` to save your settings for reuse:
   "APIPassword": "YourStrongPassword2!",
   "APIPort": 4000,
   "ExplorerPort": 4201,
+  "PackageManager": "pnpm",
   "AuthProvider": "entra",
   "AuthProviderValues": {
     "TenantID": "your-tenant-id",
@@ -237,6 +249,7 @@ You can also provide configuration via environment variables (useful for CI/CD):
 
 | Variable | Maps To |
 |----------|---------|
+| `MJ_INSTALL_DB_PLATFORM` | `sqlserver` (default) or `postgresql` |
 | `MJ_INSTALL_DB_HOST` | Database hostname |
 | `MJ_INSTALL_DB_PORT` | Database port |
 | `MJ_INSTALL_DB_NAME` | Database name |
@@ -245,9 +258,12 @@ You can also provide configuration via environment variables (useful for CI/CD):
 | `MJ_INSTALL_CODEGEN_PASSWORD` | CodeGen password |
 | `MJ_INSTALL_API_USER` | API SQL login |
 | `MJ_INSTALL_API_PASSWORD` | API password |
+| `MJ_INSTALL_DB_ADMIN_USER` | Administrator login used once to create the database and logins (SQL Server: e.g. `sa`; PostgreSQL: a superuser such as `postgres`; never saved) |
+| `MJ_INSTALL_DB_ADMIN_PASSWORD` | Password for that administrator login (never saved) |
 | `MJ_INSTALL_API_PORT` | GraphQL API port |
 | `MJ_INSTALL_EXPLORER_PORT` | Explorer UI port |
 | `MJ_INSTALL_AUTH_PROVIDER` | Auth provider (`entra`, `auth0`, `none`) |
+| `MJ_INSTALL_PACKAGE_MANAGER` | Package manager (`pnpm` default, `npm`) |
 | `MJ_INSTALL_ENTRA_TENANT_ID` | Entra Tenant ID |
 | `MJ_INSTALL_ENTRA_CLIENT_ID` | Entra Client ID |
 | `MJ_INSTALL_AUTH0_DOMAIN` | Auth0 Domain |
@@ -381,7 +397,11 @@ This usually means the MSAL token cache in your browser has expired. Open your b
 
 ### npm install fails with ERESOLVE errors
 
-The installer automatically retries with `--legacy-peer-deps`. If it still fails, check that you're using Node.js 22 or above (24 recommended).
+Applies only when `PackageManager` is set to `npm`: the installer automatically retries with `--legacy-peer-deps`. If it still fails, check that you're using Node.js 22 or above (24 recommended). pnpm (the default) reports peer conflicts as warnings and needs no retry.
+
+### Preflight fails with "pnpm not found on PATH"
+
+The installer defaults to pnpm. Enable it with `corepack enable pnpm` (corepack ships with Node.js) or install it from [pnpm.io](https://pnpm.io/installation) — or set `"PackageManager": "npm"` in your install config to use npm instead.
 
 ### Build fails for generated packages
 

@@ -1,9 +1,9 @@
 import { RegisterClass } from '@memberjunction/global';
-import { FacebookBaseAction, FacebookInsight } from '../facebook-base.action';
+import { FacebookBaseAction, FacebookInsight, FacebookPagedResponse } from '../facebook-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { SocialMediaErrorCode } from '../../../base/base-social.action';
 import { LogStatus, LogError } from '@memberjunction/core';
-import axios from 'axios';
+import { HttpGet } from '@memberjunction/network-utils';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
@@ -138,10 +138,10 @@ export class FacebookGetPageInsightsAction extends FacebookBaseAction {
             }
 
             // Get page insights
-            const insightsResponse = await axios.get(
+            const insightsResponse = await HttpGet<FacebookPagedResponse<FacebookInsight>>(
                 `${this.apiBaseUrl}/${pageId}/insights`,
                 {
-                    params: {
+                    Query: {
                         access_token: pageToken,
                         metric: metrics.join(','),
                         period: period,
@@ -150,20 +150,20 @@ export class FacebookGetPageInsightsAction extends FacebookBaseAction {
                 }
             );
 
-            const insights: FacebookInsight[] = insightsResponse.data.data || [];
+            const insights: FacebookInsight[] = insightsResponse.Data.data || [];
 
             // Get page info for context
-            const pageInfoResponse = await axios.get(
+            const pageInfoResponse = await HttpGet(
                 `${this.apiBaseUrl}/${pageId}`,
                 {
-                    params: {
+                    Query: {
                         access_token: pageToken,
                         fields: 'id,name,category,fan_count,followers_count,about,cover,picture'
                     }
                 }
             );
 
-            const pageInfo = pageInfoResponse.data;
+            const pageInfo = pageInfoResponse.Data;
 
             // Process insights into categories
             const processedInsights = this.categorizeInsights(insights);
@@ -395,10 +395,10 @@ export class FacebookGetPageInsightsAction extends FacebookBaseAction {
             const previousStart = new Date(startDate.getTime() - duration);
             const previousEnd = new Date(startDate.getTime());
 
-            const response = await axios.get(
+            const response = await HttpGet<FacebookPagedResponse<FacebookInsight>>(
                 `${this.apiBaseUrl}/${pageId}/insights`,
                 {
-                    params: {
+                    Query: {
                         access_token: pageToken,
                         metric: metrics.join(','),
                         period: period,
@@ -408,7 +408,7 @@ export class FacebookGetPageInsightsAction extends FacebookBaseAction {
                 }
             );
 
-            const previousInsights = response.data.data || [];
+            const previousInsights = response.Data.data || [];
             const processedPrevious = this.categorizeInsights(previousInsights);
 
             return {

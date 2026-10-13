@@ -35,7 +35,7 @@ import type { ComputerUseResult } from '@memberjunction/computer-use';
 
 import { MJComputerUseEngine } from '../engine/MJComputerUseEngine.js';
 import { MJRunComputerUseParams, PromptEntityRef } from '../types/mj-params.js';
-import { parseJudgeFrequency } from '../utils/judge-frequency-parser.js';
+import { ParseJudgeFrequency } from '../utils/judge-frequency-parser.js';
 
 @RegisterClass(BaseAction, 'Computer Use')
 export class ComputerUseAction extends BaseAction {
@@ -94,7 +94,7 @@ export class ComputerUseAction extends BaseAction {
         // Judge frequency (format: "EveryStep", "EveryNSteps:5", "OnStagnation:3")
         const judgeFreqStr = this.getStringParam(params, 'JudgeFrequency');
         if (judgeFreqStr) {
-            runParams.JudgeFrequency = parseJudgeFrequency(judgeFreqStr);
+            runParams.JudgeFrequency = ParseJudgeFrequency(judgeFreqStr);
         }
 
         // MJ-specific

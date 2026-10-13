@@ -58,9 +58,32 @@ export class WatermarkService {
     ): Promise<void> {
         const existing = await this.Load(entityMapID, contextUser, direction);
         if (existing) {
-            await this.UpdateExistingWatermark(existing, newValue);
+            await this.updateExistingWatermark(existing, newValue);
         } else {
-            await this.CreateNewWatermark(entityMapID, newValue, contextUser, direction);
+            await this.createNewWatermark(entityMapID, newValue, contextUser, direction);
+        }
+    }
+
+    /**
+     * Puts the watermark VALUE back to a prior state — the undo for a mid-run durability floor
+     * (IntegrationEngine §8a) after a page-skip gap makes that floor unsafe. Accepts null because
+     * the prior state may be "no watermark yet" (first run / the row was created BY the floor);
+     * a null value re-triggers a full window fetch on the next run, which is exactly the hold
+     * semantics the gap requires. A missing row means no floor was ever written — nothing to do.
+     */
+    public async RestoreValue(
+        entityMapID: string,
+        value: string | null,
+        contextUser: UserInfo,
+        direction: 'Pull' | 'Push' = 'Pull'
+    ): Promise<void> {
+        const existing = await this.Load(entityMapID, contextUser, direction);
+        if (!existing) return;
+        existing.WatermarkValue = value;
+        existing.LastSyncAt = new Date();
+        const saved = await existing.Save();
+        if (!saved) {
+            throw new Error(`Failed to restore watermark for EntityMapID=${entityMapID}`);
         }
     }
 
@@ -204,12 +227,20 @@ export class WatermarkService {
 
     /**
      * Updates an existing watermark record with a new value and timestamp.
+     *
+     * The type is restored, not just the value. This row is shared with the keyset resume position
+     * ({@link SaveKeysetPosition}), which flips it to `WatermarkType='Cursor'` mid-run. Creating a
+     * watermark stamps `'Timestamp'` but updating one used to leave the type alone, so a map that
+     * saved a cursor mid-run and then completed cleanly ended up holding a TIMESTAMP value typed as
+     * a CURSOR — and {@link Load}'s consumers read the type to decide what the value means, feeding
+     * it back to the connector as a seek key on the next run.
      */
-    private async UpdateExistingWatermark(
+    private async updateExistingWatermark(
         watermark: ICompanyIntegrationSyncWatermark,
         newValue: string
     ): Promise<void> {
         watermark.WatermarkValue = newValue;
+        watermark.WatermarkType = 'Timestamp';
         watermark.LastSyncAt = new Date();
         const saved = await watermark.Save();
         if (!saved) {
@@ -221,7 +252,7 @@ export class WatermarkService {
      * Creates a new watermark record for the given entity map (Timestamp type — the default for
      * incremental connectors).
      */
-    private async CreateNewWatermark(
+    private async createNewWatermark(
         entityMapID: string,
         newValue: string,
         contextUser: UserInfo,

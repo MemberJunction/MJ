@@ -25,32 +25,167 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
   @Output() Close = new EventEmitter<ArtifactSelectionResult | undefined>();
 
   // Data
-  artifacts: MJArtifactEntity[] = [];
-  artifactVersions: MJArtifactVersionEntity[] = [];
+  Artifacts: MJArtifactEntity[] = [];
+
+  /** @deprecated Use {@link Artifacts}. */
+  get artifacts(): MJArtifactEntity[] {
+    return this.Artifacts;
+  }
+  /** @deprecated Use {@link Artifacts}. */
+  set artifacts(value: MJArtifactEntity[]) {
+    this.Artifacts = value;
+  }
+  ArtifactVersions: MJArtifactVersionEntity[] = [];
+
+  /** @deprecated Use {@link ArtifactVersions}. */
+  get artifactVersions(): MJArtifactVersionEntity[] {
+    return this.ArtifactVersions;
+  }
+  /** @deprecated Use {@link ArtifactVersions}. */
+  set artifactVersions(value: MJArtifactVersionEntity[]) {
+    this.ArtifactVersions = value;
+  }
 
   // Paging State
-  currentPage = 0;
+  CurrentPage = 0;
+
+  /** @deprecated Use {@link CurrentPage}. */
+  get currentPage() {
+    return this.CurrentPage;
+  }
+  /** @deprecated Use {@link CurrentPage}. */
+  set currentPage(value) {
+    this.CurrentPage = value;
+  }
   pageSize = 25;
-  totalArtifacts = 0;
-  hasMorePages = false;
+  TotalArtifacts = 0;
+
+  /** @deprecated Use {@link TotalArtifacts}. */
+  get totalArtifacts() {
+    return this.TotalArtifacts;
+  }
+  /** @deprecated Use {@link TotalArtifacts}. */
+  set totalArtifacts(value) {
+    this.TotalArtifacts = value;
+  }
+  HasMorePages = false;
+
+  /** @deprecated Use {@link HasMorePages}. */
+  get hasMorePages() {
+    return this.HasMorePages;
+  }
+  /** @deprecated Use {@link HasMorePages}. */
+  set hasMorePages(value) {
+    this.HasMorePages = value;
+  }
 
   // UI State
   isLoading = true;
-  searchTerm = '';
-  userEmail = '';
-  selectedArtifactType = '';
-  showNewArtifactForm = false;
-  isFilterPanelCollapsed = false;
+  SearchTerm = '';
+
+  /** @deprecated Use {@link SearchTerm}. */
+  get searchTerm() {
+    return this.SearchTerm;
+  }
+  /** @deprecated Use {@link SearchTerm}. */
+  set searchTerm(value) {
+    this.SearchTerm = value;
+  }
+  UserEmail = '';
+
+  /** @deprecated Use {@link UserEmail}. */
+  get userEmail() {
+    return this.UserEmail;
+  }
+  /** @deprecated Use {@link UserEmail}. */
+  set userEmail(value) {
+    this.UserEmail = value;
+  }
+  SelectedArtifactType = '';
+
+  /** @deprecated Use {@link SelectedArtifactType}. */
+  get selectedArtifactType() {
+    return this.SelectedArtifactType;
+  }
+  /** @deprecated Use {@link SelectedArtifactType}. */
+  set selectedArtifactType(value) {
+    this.SelectedArtifactType = value;
+  }
+  ShowNewArtifactForm = false;
+
+  /** @deprecated Use {@link ShowNewArtifactForm}. */
+  get showNewArtifactForm() {
+    return this.ShowNewArtifactForm;
+  }
+  /** @deprecated Use {@link ShowNewArtifactForm}. */
+  set showNewArtifactForm(value) {
+    this.ShowNewArtifactForm = value;
+  }
+  IsFilterPanelCollapsed = false;
+
+  /** @deprecated Use {@link IsFilterPanelCollapsed}. */
+  get isFilterPanelCollapsed() {
+    return this.IsFilterPanelCollapsed;
+  }
+  /** @deprecated Use {@link IsFilterPanelCollapsed}. */
+  set isFilterPanelCollapsed(value) {
+    this.IsFilterPanelCollapsed = value;
+  }
 
 
   // Selection State
-  selectedArtifact: MJArtifactEntity | null = null;
-  selectedVersion: MJArtifactVersionEntity | null = null;
-  versionAction: 'new' | 'update' = 'new';
+  SelectedArtifact: MJArtifactEntity | null = null;
+
+  /** @deprecated Use {@link SelectedArtifact}. */
+  get selectedArtifact(): MJArtifactEntity | null {
+    return this.SelectedArtifact;
+  }
+  /** @deprecated Use {@link SelectedArtifact}. */
+  set selectedArtifact(value: MJArtifactEntity | null) {
+    this.SelectedArtifact = value;
+  }
+  SelectedVersion: MJArtifactVersionEntity | null = null;
+
+  /** @deprecated Use {@link SelectedVersion}. */
+  get selectedVersion(): MJArtifactVersionEntity | null {
+    return this.SelectedVersion;
+  }
+  /** @deprecated Use {@link SelectedVersion}. */
+  set selectedVersion(value: MJArtifactVersionEntity | null) {
+    this.SelectedVersion = value;
+  }
+  VersionAction: 'new' | 'update' = 'new';
+
+  /** @deprecated Use {@link VersionAction}. */
+  get versionAction(): 'new' | 'update' {
+    return this.VersionAction;
+  }
+  /** @deprecated Use {@link VersionAction}. */
+  set versionAction(value: 'new' | 'update') {
+    this.VersionAction = value;
+  }
   
   // New Artifact Form
-  newArtifactName = '';
-  newArtifactDescription = '';
+  NewArtifactName = '';
+
+  /** @deprecated Use {@link NewArtifactName}. */
+  get newArtifactName() {
+    return this.NewArtifactName;
+  }
+  /** @deprecated Use {@link NewArtifactName}. */
+  set newArtifactName(value) {
+    this.NewArtifactName = value;
+  }
+  NewArtifactDescription = '';
+
+  /** @deprecated Use {@link NewArtifactDescription}. */
+  get newArtifactDescription() {
+    return this.NewArtifactDescription;
+  }
+  /** @deprecated Use {@link NewArtifactDescription}. */
+  set newArtifactDescription(value) {
+    this.NewArtifactDescription = value;
+  }
   
   private get metadata() { return this.ProviderToUse; }
   private currentUser: UserInfo | null = null;
@@ -68,10 +203,10 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
       distinctUntilChanged(),
       takeUntil(this.destroy$)
     ).subscribe(() => {
-      this.filterArtifacts();
+      this.FilterArtifacts();
     });
     
-    await this.filterArtifacts();
+    await this.FilterArtifacts();
   }
 
   ngOnDestroy() {
@@ -79,14 +214,14 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
     this.destroy$.complete();
   }
 
-  async loadArtifacts() {
+  async LoadArtifacts() {
     this.isLoading = true;
     this.cdr.detectChanges();
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Calculate StartRow for server-side paging
-      const startRow = this.currentPage * this.pageSize;
+      const startRow = this.CurrentPage * this.pageSize;
 
       // Load artifacts with paging
       const result = await rv.RunView<MJArtifactEntity>({
@@ -99,12 +234,12 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
       });
 
       if (result.Success && result.Results) {
-        this.artifacts = result.Results;
+        this.Artifacts = result.Results;
 
         // Calculate total pages using TotalRowCount from server
-        this.totalArtifacts = result.TotalRowCount || 0;
-        const totalPages = Math.ceil(this.totalArtifacts / this.pageSize);
-        this.hasMorePages = this.currentPage < totalPages - 1;
+        this.TotalArtifacts = result.TotalRowCount || 0;
+        const totalPages = Math.ceil(this.TotalArtifacts / this.pageSize);
+        this.HasMorePages = this.CurrentPage < totalPages - 1;
       }
     } catch (error) {
       console.error('Error loading artifacts:', error);
@@ -114,56 +249,76 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
     }
   }
 
+  /** @deprecated Use {@link LoadArtifacts}. */
+  async loadArtifacts() {
+    return this.LoadArtifacts();
+  }
+
   private _artifactFilter: string | undefined= undefined;
-  public async filterArtifacts() {
+  public async FilterArtifacts() {
     // Reset to first page when filters change
-    this.currentPage = 0;
+    this.CurrentPage = 0;
     
     const filters: string[] = [];
     
     // Filter by search term
-    if (this.searchTerm?.trim()) {
-      const term = this.searchTerm.toLowerCase();
+    if (this.SearchTerm?.trim()) {
+      const term = this.SearchTerm.toLowerCase();
       filters.push(`(Name LIKE '%${term}%' OR Description LIKE '%${term}%')`);
     }
     
     // Filter by artifact type
-    if (this.selectedArtifactType) {
-      filters.push(`ArtifactTypeID IN (SELECT ID FROM __mj.vwArtifactTypes WHERE Name = '${this.selectedArtifactType}')`);
+    if (this.SelectedArtifactType) {
+      filters.push(`ArtifactTypeID IN (SELECT ID FROM __mj.vwArtifactTypes WHERE Name = '${this.SelectedArtifactType}')`);
     }
     
     // Filter by user email if provided
-    if (this.userEmail?.trim()) {
+    if (this.UserEmail?.trim()) {
       const md = this.ProviderToUse;
       const schemaName = md.EntityByName("MJ: Users")?.SchemaName || "__mj";
-      const userFilter = `UserID IN (SELECT ID FROM ${schemaName}.vwUsers WHERE Email LIKE '%${this.userEmail.trim()}%')`;
+      const userFilter = `UserID IN (SELECT ID FROM ${schemaName}.vwUsers WHERE Email LIKE '%${this.UserEmail.trim()}%')`;
       filters.push(userFilter);
     }
     
     // Combine all filters
     this._artifactFilter = filters.length > 0 ? filters.join(' AND ') : undefined;
 
-    await this.loadArtifacts();
+    await this.LoadArtifacts();
   }
 
+  /** @deprecated Use {@link FilterArtifacts}. */
+  public async filterArtifacts() {
+    return this.FilterArtifacts();
+  }
+
+  SelectCreateNew() {
+    this.ShowNewArtifactForm = true;
+    this.SelectedArtifact = null;
+    this.SelectedVersion = null;
+  }
+
+  /** @deprecated Use {@link SelectCreateNew}. */
   selectCreateNew() {
-    this.showNewArtifactForm = true;
-    this.selectedArtifact = null;
-    this.selectedVersion = null;
+    return this.SelectCreateNew();
   }
 
-  async selectArtifact(artifact: MJArtifactEntity) {
-    this.selectedArtifact = artifact;
-    this.showNewArtifactForm = false;
-    this.versionAction = 'new';
-    this.selectedVersion = null;
+  async SelectArtifact(artifact: MJArtifactEntity) {
+    this.SelectedArtifact = artifact;
+    this.ShowNewArtifactForm = false;
+    this.VersionAction = 'new';
+    this.SelectedVersion = null;
     this.cdr.detectChanges();
 
     // Load versions for this artifact
-    await this.loadVersions(artifact.ID);
+    await this.LoadVersions(artifact.ID);
   }
 
-  async loadVersions(artifactId: string) {
+  /** @deprecated Use {@link SelectArtifact}. */
+  async selectArtifact(artifact: MJArtifactEntity) {
+    return this.SelectArtifact(artifact);
+  }
+
+  async LoadVersions(artifactId: string) {
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactVersionEntity>({
@@ -174,96 +329,161 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
       });
 
       if (result.Success && result.Results) {
-        this.artifactVersions = result.Results;
+        this.ArtifactVersions = result.Results;
       }
     } catch (error) {
       console.error('Error loading versions:', error);
-      this.artifactVersions = [];
+      this.ArtifactVersions = [];
     } finally {
       this.cdr.detectChanges();
     }
   }
 
+  /** @deprecated Use {@link LoadVersions}. */
+  async loadVersions(artifactId: string) {
+    return this.LoadVersions(artifactId);
+  }
+
+  GetNextVersionNumber(): number {
+    if (this.ArtifactVersions.length === 0) return 1;
+    return Math.max(...this.ArtifactVersions.map(v => v.VersionNumber)) + 1;
+  }
+
+  /** @deprecated Use {@link GetNextVersionNumber}. */
   getNextVersionNumber(): number {
-    if (this.artifactVersions.length === 0) return 1;
-    return Math.max(...this.artifactVersions.map(v => v.VersionNumber)) + 1;
+    return this.GetNextVersionNumber();
   }
 
   // Paging methods
+  async NextPage() {
+    if (this.HasMorePages) {
+      this.CurrentPage++;
+      await this.LoadArtifacts();
+    }
+  }
+
+  /** @deprecated Use {@link NextPage}. */
   async nextPage() {
-    if (this.hasMorePages) {
-      this.currentPage++;
-      await this.loadArtifacts();
+    return this.NextPage();
+  }
+
+  async PreviousPage() {
+    if (this.CurrentPage > 0) {
+      this.CurrentPage--;
+      await this.LoadArtifacts();
     }
   }
 
+  /** @deprecated Use {@link PreviousPage}. */
   async previousPage() {
-    if (this.currentPage > 0) {
-      this.currentPage--;
-      await this.loadArtifacts();
-    }
+    return this.PreviousPage();
   }
 
+  CanGoNext(): boolean {
+    return this.HasMorePages;
+  }
+
+  /** @deprecated Use {@link CanGoNext}. */
   canGoNext(): boolean {
-    return this.hasMorePages;
+    return this.CanGoNext();
   }
 
+  CanGoPrevious(): boolean {
+    return this.CurrentPage > 0;
+  }
+
+  /** @deprecated Use {@link CanGoPrevious}. */
   canGoPrevious(): boolean {
-    return this.currentPage > 0;
+    return this.CanGoPrevious();
   }
 
+  GetTotalPages(): number {
+    return Math.ceil(this.TotalArtifacts / this.pageSize);
+  }
+
+  /** @deprecated Use {@link GetTotalPages}. */
   getTotalPages(): number {
-    return Math.ceil(this.totalArtifacts / this.pageSize);
+    return this.GetTotalPages();
   }
 
+  ToggleFilterPanel() {
+    this.IsFilterPanelCollapsed = !this.IsFilterPanelCollapsed;
+  }
+
+  /** @deprecated Use {@link ToggleFilterPanel}. */
   toggleFilterPanel() {
-    this.isFilterPanelCollapsed = !this.isFilterPanelCollapsed;
+    return this.ToggleFilterPanel();
   }
 
+  OnSearchInput() {
+    this.searchSubject.next(this.SearchTerm);
+  }
+
+  /** @deprecated Use {@link OnSearchInput}. */
   onSearchInput() {
-    this.searchSubject.next(this.searchTerm);
+    return this.OnSearchInput();
   }
 
-  onArtifactTypeChange() {
+  OnArtifactTypeChange() {
     // Clear selected artifact when type changes
-    this.selectedArtifact = null;
-    this.selectedVersion = null;
-    this.artifactVersions = [];
-    this.filterArtifacts();
+    this.SelectedArtifact = null;
+    this.SelectedVersion = null;
+    this.ArtifactVersions = [];
+    this.FilterArtifacts();
   }
 
-  getActiveFilterCount(): number {
+  /** @deprecated Use {@link OnArtifactTypeChange}. */
+  onArtifactTypeChange() {
+    return this.OnArtifactTypeChange();
+  }
+
+  GetActiveFilterCount(): number {
     let count = 0;
-    if (this.searchTerm?.trim()) count++;
-    if (this.selectedArtifactType) count++;
-    if (this.userEmail?.trim()) count++;
+    if (this.SearchTerm?.trim()) count++;
+    if (this.SelectedArtifactType) count++;
+    if (this.UserEmail?.trim()) count++;
     return count;
   }
 
-  canSave(): boolean {
-    if (this.showNewArtifactForm) {
-      return this.newArtifactName.trim().length > 0;
+  /** @deprecated Use {@link GetActiveFilterCount}. */
+  getActiveFilterCount(): number {
+    return this.GetActiveFilterCount();
+  }
+
+  CanSave(): boolean {
+    if (this.ShowNewArtifactForm) {
+      return this.NewArtifactName.trim().length > 0;
     }
     
-    if (!this.selectedArtifact) return false;
+    if (!this.SelectedArtifact) return false;
     
-    if (this.versionAction === 'update') {
-      return this.selectedVersion !== null;
+    if (this.VersionAction === 'update') {
+      return this.SelectedVersion !== null;
     }
     
     return true;
   }
 
-  getSaveButtonText(): string {
-    if (this.showNewArtifactForm) {
+  /** @deprecated Use {@link CanSave}. */
+  canSave(): boolean {
+    return this.CanSave();
+  }
+
+  GetSaveButtonText(): string {
+    if (this.ShowNewArtifactForm) {
       return 'Create & Save';
     }
 
-    if (this.versionAction === 'update' && this.selectedVersion) {
-      return `Update Version ${this.selectedVersion.VersionNumber}`;
+    if (this.VersionAction === 'update' && this.SelectedVersion) {
+      return `Update Version ${this.SelectedVersion.VersionNumber}`;
     }
 
-    return `Save as Version ${this.getNextVersionNumber()}`;
+    return `Save as Version ${this.GetNextVersionNumber()}`;
+  }
+
+  /** @deprecated Use {@link GetSaveButtonText}. */
+  getSaveButtonText(): string {
+    return this.GetSaveButtonText();
   }
 
   cancel() {
@@ -271,10 +491,10 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
   }
 
   async save() {
-    if (!this.canSave()) return;
+    if (!this.CanSave()) return;
     
     // Handle new artifact creation
-    if (this.showNewArtifactForm) {
+    if (this.ShowNewArtifactForm) {
       const newArtifact = await this.createNewArtifact();
       if (newArtifact) {
         const result: ArtifactSelectionResult = {
@@ -287,16 +507,16 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
     }
     
     // Handle existing artifact selection
-    if (this.selectedArtifact) {
+    if (this.SelectedArtifact) {
       const result: ArtifactSelectionResult = {
-        artifact: this.selectedArtifact,
-        action: this.versionAction === 'update' ? 'update-version' : 'new-version',
-        versionToUpdate: this.versionAction === 'update' ? this.selectedVersion! : undefined
+        artifact: this.SelectedArtifact,
+        action: this.VersionAction === 'update' ? 'update-version' : 'new-version',
+        versionToUpdate: this.VersionAction === 'update' ? this.SelectedVersion! : undefined
       };
       
       // If updating, show confirmation
-      if (this.versionAction === 'update') {
-        const confirmed = await this.confirmService.Confirm({ title: 'Overwrite version', message: `Overwrite version ${this.selectedVersion!.VersionNumber}?`, detail: 'This action cannot be undone.' });
+      if (this.VersionAction === 'update') {
+        const confirmed = await this.confirmService.Confirm({ title: 'Overwrite version', message: `Overwrite version ${this.SelectedVersion!.VersionNumber}?`, detail: 'This action cannot be undone.' });
         if (!confirmed) return;
       }
 
@@ -307,8 +527,8 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
   private async createNewArtifact(): Promise<MJArtifactEntity | null> {
     try {
       const artifact = await this.metadata.GetEntityObject<MJArtifactEntity>('MJ: Artifacts');
-      artifact.Name = this.newArtifactName;
-      artifact.Description = this.newArtifactDescription || null;
+      artifact.Name = this.NewArtifactName;
+      artifact.Description = this.NewArtifactDescription || null;
 
       // Get Component artifact type
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -359,11 +579,11 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
 
   /** Case-insensitive UUID check whether an artifact is the currently selected artifact. */
   IsArtifactSelected(artifact: MJArtifactEntity): boolean {
-    return UUIDsEqual(this.selectedArtifact?.ID, artifact.ID);
+    return UUIDsEqual(this.SelectedArtifact?.ID, artifact.ID);
   }
 
   /** Case-insensitive UUID check whether a version is the currently selected version. */
   IsVersionSelected(version: MJArtifactVersionEntity): boolean {
-    return UUIDsEqual(this.selectedVersion?.ID, version.ID);
+    return UUIDsEqual(this.SelectedVersion?.ID, version.ID);
   }
 }

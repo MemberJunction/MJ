@@ -76,6 +76,7 @@ const { mockClassFactory } = vi.hoisted(() => ({
     mockClassFactory: {
         CreateInstance: vi.fn(),
         GetAllRegistrations: vi.fn().mockReturnValue([]),
+        GetRegistration: vi.fn().mockReturnValue(null),
     },
 }));
 vi.mock('@memberjunction/global', async (importOriginal) => ({
@@ -208,7 +209,7 @@ vi.mock('@memberjunction/actions-base', () => {
 // ============================================================================
 // Now import the modules under test
 // ============================================================================
-import { ActionEngineServer } from '../generic/ActionEngine';
+import { ACTION_PREVENTED_BY_FILTER_MESSAGE, ActionEngineServer } from '../generic/ActionEngine';
 import { BaseAction } from '../generic/BaseAction';
 import { Metadata, LogError, LogErrorEx } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
@@ -323,6 +324,55 @@ describe('ActionEngineServer', () => {
             expect(internalSpy).toHaveBeenCalledWith(params, '[]');
             expect(result.Success).toBe(true);
         });
+
+        it('must NOT run the action when filters refuse', async () => {
+            // The regression this exists for: the refusal branch built a result, logged it, and then
+            // fell through to execute the action anyway. Every filter recorded that it had prevented
+            // something while preventing nothing — and the log row made the mechanism look like it
+            // worked, which is exactly why it survived. Asserting on the returned message alone would
+            // NOT have caught it; the assertion that matters is that execution never happened.
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(false as never);
+            const internalSpy = vi.spyOn(engine as never, 'InternalRunAction' as never);
+            const timeoutSpy = vi.spyOn(engine as never, 'RunActionWithTimeout' as never);
+
+            const params = {
+                Action: { ID: 'action-1', Name: 'Test Action', DriverClass: 'TestDriver' },
+                ContextUser: { ID: 'user-1', Name: 'Test' },
+                Filters: [{ ID: 'f1' }],
+                Params: [],
+                SkipActionLog: true,
+            };
+
+            const result = await engine.RunAction(params as unknown as Record<string, Function>);
+
+            expect(internalSpy).not.toHaveBeenCalled();
+            expect(timeoutSpy).not.toHaveBeenCalled();
+            // Prevented is a SUCCESS: a filter saying "not this time" is the mechanism working, not
+            // an error, and callers must not treat it as a failure to retry.
+            expect(result.Success).toBe(true);
+            expect(result.Message).toBe(ACTION_PREVENTED_BY_FILTER_MESSAGE);
+        });
+
+        it('runs a deferral in place of the action, but only after filters pass', async () => {
+            // Durable dispatch hangs on this seam. If a deferral could run before the gates, a scoped
+            // or filtered durable binding would fire on every record and every save.
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(false as never);
+            const defer = vi.fn().mockResolvedValue({ Success: true, ResultCode: 'SUBMITTED', Message: 'submitted' });
+
+            const params = {
+                Action: { ID: 'action-1', Name: 'Test Action', DriverClass: 'TestDriver' },
+                ContextUser: { ID: 'user-1', Name: 'Test' },
+                Filters: [{ ID: 'f1' }],
+                Params: [],
+                SkipActionLog: true,
+                DeferExecution: defer,
+            };
+
+            await engine.RunAction(params as unknown as Record<string, Function>);
+            expect(defer).not.toHaveBeenCalled();
+        });
     });
 
     describe('ValidateInputs', () => {
@@ -374,9 +424,81 @@ describe('ActionEngineServer', () => {
     });
 
     describe('RunSingleFilter', () => {
-        it('should return true (stub implementation)', async () => {
-            const result = await (engine as unknown as Record<string, Function>)['RunSingleFilter']({} as never, {} as unknown as Record<string, Function>);
-            expect(result).toBe(true);
+        // Minimal filter-row shape the engine reads: ID, Code, __mj_UpdatedAt.
+        const makeFilter = (code: string, id = 'filter-1') => ({
+            ID: id,
+            Code: code,
+            __mj_UpdatedAt: new Date('2026-01-01T00:00:00Z'),
+        });
+        const runFilter = (filter: Record<string, unknown>, params: Record<string, unknown> = {}) =>
+            (engine as unknown as Record<string, Function>)['RunSingleFilter'](params, filter);
+
+        it('should allow the action when filter code returns true', async () => {
+            await expect(runFilter(makeFilter('return true;'))).resolves.toBe(true);
+        });
+
+        it('should prevent the action when filter code returns false', async () => {
+            await expect(runFilter(makeFilter('return false;'))).resolves.toBe(false);
+        });
+
+        it('should read the verdict from ActionFilterContext.result when code does not return', async () => {
+            await expect(runFilter(makeFilter('ActionFilterContext.result = true;'))).resolves.toBe(true);
+        });
+
+        it('should expose params and filter on the execution context', async () => {
+            const params = { Action: { Name: 'Test Action' } };
+            const code = 'return ActionFilterContext.params.Action.Name === "Test Action" && ActionFilterContext.filter.ID === "filter-1";';
+            await expect(runFilter(makeFilter(code), params)).resolves.toBe(true);
+        });
+
+        it('should support async filter code', async () => {
+            await expect(runFilter(makeFilter('return await Promise.resolve(true);'))).resolves.toBe(true);
+        });
+
+        it('should fail closed and log when filter code throws', async () => {
+            await expect(runFilter(makeFilter('throw new Error("boom");'))).resolves.toBe(false);
+            expect(LogErrorEx).toHaveBeenCalled();
+        });
+
+        it('should fail closed and log on a non-boolean verdict', async () => {
+            await expect(runFilter(makeFilter('return "yes";'))).resolves.toBe(false);
+            expect(LogError).toHaveBeenCalled();
+        });
+
+        it('should fail closed and log when Code is empty and no subclass is registered', async () => {
+            await expect(runFilter(makeFilter('   '))).resolves.toBe(false);
+            expect(LogError).toHaveBeenCalled();
+        });
+
+        it('should recompile when the filter row version changes', async () => {
+            const first = makeFilter('return true;', 'filter-2');
+            await expect(runFilter(first)).resolves.toBe(true);
+            const edited = { ...first, Code: 'return false;', __mj_UpdatedAt: new Date('2026-02-01T00:00:00Z') };
+            await expect(runFilter(edited)).resolves.toBe(false);
+        });
+
+        it('should serve the cached compilation for an unchanged row version', async () => {
+            const filter = makeFilter('return true;', 'filter-3');
+            await expect(runFilter(filter)).resolves.toBe(true);
+            // Same ID + same __mj_UpdatedAt → the cached compilation runs even though Code text changed.
+            const sameVersion = { ...filter, Code: 'return false;' };
+            await expect(runFilter(sameVersion)).resolves.toBe(true);
+        });
+
+        it('should let a registered BaseActionFilter subclass win over inline Code', async () => {
+            const subclassRun = vi.fn().mockResolvedValue(false);
+            mockClassFactory.GetAllRegistrations.mockReturnValueOnce([{ SubClass: class {} }]);
+            mockClassFactory.CreateInstance.mockReturnValueOnce({ Run: subclassRun });
+
+            await expect(runFilter(makeFilter('return true;', 'filter-4'))).resolves.toBe(false);
+            expect(subclassRun).toHaveBeenCalled();
+        });
+
+        it('should coerce a non-boolean subclass verdict to false', async () => {
+            mockClassFactory.GetAllRegistrations.mockReturnValueOnce([{ SubClass: class {} }]);
+            mockClassFactory.CreateInstance.mockReturnValueOnce({ Run: vi.fn().mockResolvedValue('truthy') });
+
+            await expect(runFilter(makeFilter('return true;', 'filter-5'))).resolves.toBe(false);
         });
     });
 
@@ -384,7 +506,7 @@ describe('ActionEngineServer', () => {
         it('should map Scalar ValueType to default value directly', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Scalar', DefaultValue: 'hello', Type: 'Input' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'Scalar', DefaultValue: 'hello', Type: 'Input' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -394,7 +516,7 @@ describe('ActionEngineServer', () => {
         it('should parse JSON for Simple Object ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: '{"key":"val"}', Type: 'Input' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: '{"key":"val"}', Type: 'Input' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -404,7 +526,7 @@ describe('ActionEngineServer', () => {
         it('should use raw string for Simple Object when JSON parse fails', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: 'not-json', Type: 'Input' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: 'not-json', Type: 'Input' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -414,7 +536,7 @@ describe('ActionEngineServer', () => {
         it('should pass through BaseEntity Sub-Class ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'BaseEntity Sub-Class', DefaultValue: 'entity-ref', Type: 'Input' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'BaseEntity Sub-Class', DefaultValue: 'entity-ref', Type: 'Input' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -424,7 +546,7 @@ describe('ActionEngineServer', () => {
         it('should pass through Other ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Other', DefaultValue: 'other-val', Type: 'Both' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'Other', DefaultValue: 'other-val', Type: 'Both' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -434,7 +556,7 @@ describe('ActionEngineServer', () => {
         it('should log error and use default for unknown ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'UnknownType', DefaultValue: 'fallback', Type: 'Output' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'UnknownType', DefaultValue: 'fallback', Type: 'Output' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -445,10 +567,10 @@ describe('ActionEngineServer', () => {
         it('should handle multiple params', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [
+                Params: { Items: [
                     { Name: 'p1', ValueType: 'Scalar', DefaultValue: 'a', Type: 'Input' },
                     { Name: 'p2', ValueType: 'Scalar', DefaultValue: 'b', Type: 'Output' },
-                ],
+                ] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -458,7 +580,7 @@ describe('ActionEngineServer', () => {
         });
 
         it('should handle empty params array', () => {
-            const action = { Name: 'TestAction', Params: [] };
+            const action = { Name: 'TestAction', Params: { Items: [] } };
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
             expect(result).toEqual([]);
         });
@@ -472,7 +594,7 @@ describe('ActionEngineServer', () => {
             // Set up the engine's ActionResultCodes
             // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
             // ActionEngineServer proxies — seed it there, not on the server instance.
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] =[
                 { ActionID: 'action-1', ResultCode: 'SUCCESS' },
             ];
 
@@ -551,7 +673,7 @@ describe('ActionEngineServer', () => {
 
             // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
             // ActionEngineServer proxies — seed it there, not on the server instance.
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[];
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] =[];
 
             const params = {
                 Action: { ID: 'action-1', Name: 'FallbackName', DriverClass: '' },
@@ -574,7 +696,7 @@ describe('ActionEngineServer', () => {
 
             // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
             // ActionEngineServer proxies — seed it there, not on the server instance.
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] =[
                 { ActionID: 'action-1', ResultCode: '  SUCCESS  ' },
             ];
 
@@ -596,7 +718,7 @@ describe('ActionEngineServer', () => {
             mockClassFactory.CreateInstance.mockReturnValue(testAction);
             // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
             // ActionEngineServer proxies — seed it there, not on the server instance.
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[];
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] =[];
 
             const startSpy = vi.spyOn(engine as never, 'StartActionLog' as never).mockResolvedValue({
                 Save: vi.fn().mockResolvedValue(true),
@@ -837,6 +959,150 @@ describe('ActionEngineServer', () => {
         it('should return an instance from static getter', () => {
             const instance = ActionEngineServer.Instance;
             expect(instance).toBeDefined();
+        });
+    });
+
+    // ========================================================================
+    // Actions that authorize their own caller
+    // ========================================================================
+    describe('ActionAuthorizesCaller', () => {
+        class SelfAuthorizingAction extends BaseAction {
+            public static readonly AuthorizesCaller = true;
+            protected async InternalRunAction(): Promise<{ Success: boolean; ResultCode: string }> {
+                return { Success: true, ResultCode: 'SUCCESS' };
+            }
+        }
+
+        const action = (fields: { Name: string; DriverClass?: string | null; Type?: string }) =>
+            ({ ID: 'action-1', DriverClass: null, Type: 'Custom', ...fields }) as unknown as Parameters<ActionEngineServer['ActionAuthorizesCaller']>[0];
+
+        it('is true when the class that runs the action declares AuthorizesCaller', () => {
+            mockClassFactory.GetRegistration.mockReturnValue({ SubClass: SelfAuthorizingAction });
+
+            expect(engine.ActionAuthorizesCaller(action({ Name: 'Create Entity' }))).toBe(true);
+        });
+
+        it('is false for an action class that does not declare it', () => {
+            mockClassFactory.GetRegistration.mockReturnValue({ SubClass: TestAction });
+
+            expect(engine.ActionAuthorizesCaller(action({ Name: 'Calculate Expression' }))).toBe(false);
+        });
+
+        it('is false when no class is registered for the action', () => {
+            mockClassFactory.GetRegistration.mockReturnValue(null);
+
+            expect(engine.ActionAuthorizesCaller(action({ Name: 'Unregistered' }))).toBe(false);
+        });
+
+        it('is false for a Runtime action, which has no class', () => {
+            mockClassFactory.GetRegistration.mockReturnValue({ SubClass: SelfAuthorizingAction });
+
+            expect(engine.ActionAuthorizesCaller(action({ Name: 'Create Entity', Type: 'Runtime' }))).toBe(false);
+        });
+
+        it('looks the class up by DriverClass, falling back to the action name, as RunAction does', () => {
+            mockClassFactory.GetRegistration.mockReturnValue(null);
+
+            engine.ActionAuthorizesCaller(action({ Name: 'Calculate Expression', DriverClass: '__CalculateExpression' }));
+            engine.ActionAuthorizesCaller(action({ Name: 'Create Entity' }));
+
+            expect(mockClassFactory.GetRegistration).toHaveBeenNthCalledWith(1, BaseAction, '__CalculateExpression');
+            expect(mockClassFactory.GetRegistration).toHaveBeenNthCalledWith(2, BaseAction, 'Create Entity');
+        });
+
+        it('is false for an override of a marked action that does not declare the marker itself', () => {
+            class UnmarkedOverride extends SelfAuthorizingAction {}
+            mockClassFactory.GetRegistration.mockReturnValue({ SubClass: UnmarkedOverride });
+
+            expect(engine.ActionAuthorizesCaller(action({ Name: 'Create Entity' }))).toBe(false);
+        });
+
+        it('is true for an override that declares the marker itself', () => {
+            class MarkedOverride extends SelfAuthorizingAction {
+                public static readonly AuthorizesCaller = true;
+            }
+            mockClassFactory.GetRegistration.mockReturnValue({ SubClass: MarkedOverride });
+
+            expect(engine.ActionAuthorizesCaller(action({ Name: 'Create Entity' }))).toBe(true);
+        });
+
+        it('is not switched on for unmarked actions when BaseAction.AuthorizesCaller is changed at run time', () => {
+            mockClassFactory.GetRegistration.mockReturnValue({ SubClass: TestAction });
+            Reflect.set(BaseAction, 'AuthorizesCaller', true);
+            try {
+                expect(engine.ActionAuthorizesCaller(action({ Name: 'Calculate Expression' }))).toBe(false);
+            } finally {
+                Reflect.set(BaseAction, 'AuthorizesCaller', false);
+            }
+        });
+
+        it('is true for a marked class built on another loaded copy of BaseAction', () => {
+            // ClassFactory matches base classes by name, so it also returns classes that extend a second copy of this package
+            class SecondCopyBaseAction {}
+            class SecondCopyMarkedAction extends SecondCopyBaseAction {
+                public static readonly AuthorizesCaller = true;
+            }
+            mockClassFactory.GetRegistration.mockReturnValue({ SubClass: SecondCopyMarkedAction });
+
+            expect(engine.ActionAuthorizesCaller(action({ Name: 'Create Entity' }))).toBe(true);
+        });
+    });
+
+    // ========================================================================
+    // The host's checks for SQL a caller wrote
+    // ========================================================================
+    describe('AdhocSQLAuthorizer', () => {
+        const authorizer = { Authorize: vi.fn().mockReturnValue(null), ClampTimeoutSeconds: vi.fn().mockReturnValue(30) };
+
+        it('is null until the host registers one', () => {
+            expect(engine.AdhocSQLAuthorizer).toBeNull();
+        });
+
+        it('returns the authorizer the host registered', () => {
+            engine.SetAdhocSQLAuthorizer(authorizer);
+
+            expect(engine.AdhocSQLAuthorizer).toBe(authorizer);
+        });
+
+        it('keeps the first authorizer: a second registration throws and changes nothing', () => {
+            const replacement = { Authorize: vi.fn().mockReturnValue(null), ClampTimeoutSeconds: vi.fn().mockReturnValue(600) };
+            engine.SetAdhocSQLAuthorizer(authorizer);
+
+            expect(() => engine.SetAdhocSQLAuthorizer(replacement)).toThrow(/already registered/i);
+            expect(engine.AdhocSQLAuthorizer).toBe(authorizer);
+        });
+    });
+
+    // ========================================================================
+    // The host's read-only provider, for actions that run caller-supplied SQL
+    // ========================================================================
+    describe('GetReadOnlyProvider', () => {
+        const readOnlyProvider = { RunQuery: vi.fn(), RunQueries: vi.fn(), RunQueriesWithCacheCheck: vi.fn(), Config: vi.fn() };
+
+        it('resolves null until the host registers a factory', async () => {
+            expect(await engine.GetReadOnlyProvider()).toBeNull();
+        });
+
+        it('opens a provider through the registered factory on every call', async () => {
+            const factory = vi.fn().mockResolvedValue(readOnlyProvider);
+            engine.SetReadOnlyProviderFactory(factory);
+
+            expect(await engine.GetReadOnlyProvider()).toBe(readOnlyProvider);
+            expect(await engine.GetReadOnlyProvider()).toBe(readOnlyProvider);
+            expect(factory).toHaveBeenCalledTimes(2);
+        });
+
+        it('resolves null when the host has no read-only login', async () => {
+            engine.SetReadOnlyProviderFactory(vi.fn().mockResolvedValue(null));
+
+            expect(await engine.GetReadOnlyProvider()).toBeNull();
+        });
+
+        it('keeps the first factory: a second registration throws and changes nothing', async () => {
+            engine.SetReadOnlyProviderFactory(vi.fn().mockResolvedValue(readOnlyProvider));
+
+            expect(() => engine.SetReadOnlyProviderFactory(vi.fn().mockResolvedValue(null))).toThrow(/already registered/i);
+            expect(await engine.GetReadOnlyProvider()).toBe(readOnlyProvider);
         });
     });
 

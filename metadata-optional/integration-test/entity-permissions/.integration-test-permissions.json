@@ -13,7 +13,7 @@
       "ID": "A6FE647E-AA4A-48C0-B670-B04B0F292872"
     },
     "sync": {
-      "lastModified": "2026-07-02T19:44:54.185Z",
+      "lastModified": "2026-08-08T01:12:45.606Z",
       "checksum": "6a4bfc0cb919471e8b086febe10016d5a18dd8046de6b1905abe8c3e82625d59"
     }
   },
@@ -30,8 +30,25 @@
       "ID": "CE887138-637B-44A9-B1B7-90381E4F3788"
     },
     "sync": {
-      "lastModified": "2026-07-21T18:39:42.682Z",
+      "lastModified": "2026-08-08T01:12:45.590Z",
       "checksum": "c476c8f7b3f72bbf5c1cbbfc23c40894a466e088681250868620380e19284037"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Users",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: RLS Scoped Reader",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "44B1DCF4-A5BC-4978-8357-4F25575FF422"
+    },
+    "sync": {
+      "lastModified": "2026-09-09T03:44:03.130Z",
+      "checksum": "d78eed4d95b6346ba00eb39be6bf54349208d152da048e5ab387bdb37846c259"
     }
   }
 ]

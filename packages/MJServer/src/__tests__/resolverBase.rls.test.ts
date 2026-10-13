@@ -16,6 +16,9 @@ const { mockUserCacheUsers } = vi.hoisted(() => ({
 // Stub external deps before imports
 vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
     SQLServerDataProvider: class {},
+}));
+
+vi.mock('@memberjunction/generic-database-provider', () => ({
     UserCache: {
         get Users() { return mockUserCacheUsers; },
     },
@@ -136,7 +139,11 @@ function makeEntity(name: string, opts: {
     return {
         Name: name,
         UserExemptFromRowLevelSecurity: () => opts.exempt,
+        // ResolverBase now delegates to GetEffectiveRowFilterWhereClause (role RLS
+        // + API-key row filters); the deprecated role-only method is kept in the
+        // mock shape for completeness but is no longer what the resolver calls.
         GetUserRowLevelSecurityWhereClause: () => opts.exempt ? '' : opts.rlsClause,
+        GetEffectiveRowFilterWhereClause: () => opts.exempt ? '' : opts.rlsClause,
     } as unknown as EntityInfo;
 }
 

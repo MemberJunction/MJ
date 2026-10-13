@@ -2,11 +2,106 @@ import type { Type } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
-import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '../channels/base-realtime-channel-client';
+import { REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
+import { ChannelInboundVideoBridge, IChannelFrameProvider, type MediaPlacement } from '@memberjunction/ai-realtime-client';
+import { BaseRealtimeChannelClient, BuildToolBackedVerbs, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import {
-  ApplyWhiteboardAgentTool, RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS,
+  ApplyWhiteboardAgentTool, BuildWhiteboardExportSvg, RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS,
   WHITEBOARD_TOOL_PREFIX, WhiteboardState, WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent
 } from '@memberjunction/ng-whiteboard';
+
+/**
+ * Whether a whiteboard tool result reports success.
+ *
+ * `ApplyWhiteboardAgentTool` returns a JSON `WhiteboardToolResult` string — `{ success: true, … }`
+ * or `{ success: false, error }` — for every tool and every failure path. Anything that does not
+ * parse as an object with `success === true` is treated as NOT a successful mutation, which is the
+ * safe direction: the cost of missing a confirmation frame is one stale picture until the next
+ * change, while the cost of a false one is telling the model an edit landed when it did not.
+ */
+function toolSucceeded(result: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(result);
+    return parsed !== null && typeof parsed === 'object' && (parsed as { success?: unknown }).success === true;
+  } catch {
+    // A non-JSON result cannot be confirmed as a mutation — the host returned something this
+    // channel does not understand, so it does not get a "your change is on screen" note.
+    return false;
+  }
+}
+
+/**
+ * Asynchronously rasterizes an SVG string to a JPEG base64 string (without the `data:image/jpeg;base64,` prefix)
+ * using an offscreen canvas. Returns null in non-DOM environments or when rendering fails.
+ */
+export async function RasterizeSvgToJpegBase64(svg: string, width = 1280, height = 720): Promise<string | null> {
+  if (typeof document === 'undefined' || typeof Image === 'undefined') {
+    return null;
+  }
+  return new Promise<string | null>((resolve) => {
+    let url: string | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      if (timer != null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (url) {
+        URL.revokeObjectURL(url);
+        url = null;
+      }
+    };
+
+    try {
+      const img = new Image();
+      const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      url = URL.createObjectURL(svgBlob);
+
+      // Capped wait: resolve null and revoke URL if the Image never fires onload or onerror (item 61)
+      timer = setTimeout(() => {
+        console.error('[RealtimeWhiteboardChannel] SVG rasterization timed out after 5000ms');
+        cleanup();
+        resolve(null);
+      }, 5000);
+
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            cleanup();
+            resolve(null);
+            return;
+          }
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          cleanup();
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const comma = dataUrl.indexOf(',');
+          resolve(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
+        } catch (err) {
+          console.error('[RealtimeWhiteboardChannel] Failed to rasterize SVG canvas to JPEG:', err);
+          cleanup();
+          resolve(null);
+        }
+      };
+      img.onerror = (err) => {
+        console.error('[RealtimeWhiteboardChannel] Failed to load SVG image for rasterization:', err);
+        cleanup();
+        resolve(null);
+      };
+      img.src = url;
+    } catch (err) {
+      console.error('[RealtimeWhiteboardChannel] Failed to initialize SVG rasterization:', err);
+      cleanup();
+      resolve(null);
+    }
+  });
+}
 
 /**
  * Per-widget throttle window for AMBIENT interaction context notes: at most one note per
@@ -37,14 +132,14 @@ interface InteractionThrottleEntry {
  *    ({@link WHITEBOARD_TOOL_DEFINITIONS}); {@link ApplyAgentTool} prefers the BOUND host
  *    component (board mutation + violet pop-in / toast / presence-cursor garnish) and
  *    falls back to the pure {@link ApplyWhiteboardAgentTool} engine call when no surface
- *    is bound (e.g. the surface panel is collapsed) — the channel keeps working, just
+ *    is bound (e.g. the board has not been shown yet) — the channel keeps working, just
  *    without the garnish.
  *  - **Perception**: {@link BindSurface} subscribes the host's coalesced (750 ms)
  *    `SceneDelta` stream and pipes each delta into the live model's context as a
  *    `[whiteboard]` background note; the agent-undo toast click flows the same way.
- *  - **Surface**: {@link RealtimeWhiteboardHostComponent}, created dynamically by the
- *    overlay's channel tab; the host's Focus toggle rides `Context.SetFocusMode` so the
- *    shell can collapse/restore the main call column.
+ *  - **Surface**: {@link RealtimeWhiteboardHostComponent}, created on the overlay's stage; the
+ *    host's "Move to stage" button rides `Context.SetFocusMode`, and the board hears where the
+ *    overlay placed it ({@link OnSurfacePlacementChange}) so the button offers the way back.
  *  - **State of record**: every board mutation (user edits AND agent tool calls) requests
  *    a save of {@link WhiteboardState.ToJSON} under channel name `'Whiteboard'` — the
  *    host debounces and flushes at teardown.
@@ -56,7 +151,7 @@ interface InteractionThrottleEntry {
  * incompatible payloads are tolerated — the board simply starts fresh.
  */
 @RegisterClass(BaseRealtimeChannelClient, 'RealtimeWhiteboardChannel')
-export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<RealtimeWhiteboardHostComponent> {
+export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<RealtimeWhiteboardHostComponent> implements IChannelFrameProvider {
   /** The board's state of record — created fresh with the plugin (one per session). */
   public readonly State = new WhiteboardState();
 
@@ -68,10 +163,44 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   private stateChangedSub: Subscription | null = null;
   /** Per-widget ambient-interaction note throttles (ItemID → window state). */
   private interactionThrottles = new Map<string, InteractionThrottleEntry>();
-
   public get ChannelName(): string {
     return 'Whiteboard';
   }
+
+  /**
+   * Produces the latest visual scene as a base64-encoded frame for the video bridge.
+   * Renders the whiteboard SVG into an offscreen canvas and returns base64 JPEG.
+   */
+  public async GetLatestFrame(): Promise<string | null> {
+    if (!this.State) {
+      return null;
+    }
+    try {
+      const svg = BuildWhiteboardExportSvg(this.State);
+      return await RasterizeSvgToJpegBase64(svg);
+    } catch (err) {
+      console.error('[RealtimeWhiteboardChannel] Failed to export whiteboard frame:', err);
+      return null;
+    }
+  }
+
+  /**
+   * The shared frame bridge, which now lives on the base channel (`VisualVideoBridge`). This accessor
+   * keeps the board's long-standing `videoBridge` handle — tests and tooling reach the bridge by that
+   * name — pointing at the one the pump actually writes to.
+   */
+  private get videoBridge(): ChannelInboundVideoBridge | null {
+    return this.VisualVideoBridge;
+  }
+  private set videoBridge(bridge: ChannelInboundVideoBridge | null) {
+    this.VisualVideoBridge = bridge;
+  }
+
+  // The change-driven frame pump (leading edge, trailing settle, dedupe, negotiated cadence, one
+  // confirmation frame after an agent edit) used to live here. It is now the base channel's
+  // `EnableVisualPerception` pump, enabled from OnInitialize — this channel only says WHEN its picture
+  // changed. The behavior is unchanged, including (deliberately) the shared bridge's fixed-rate poller:
+  // see `StartBridgePoller` in OnInitialize.
 
   public get ToolNamePrefix(): string {
     return WHITEBOARD_TOOL_PREFIX;
@@ -83,6 +212,11 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
 
   public get TabIcon(): string {
     return 'fa-solid fa-chalkboard';
+  }
+
+  /** The board can be shared on its own: the call's Share menu offers it under "This panel" while it is on screen. */
+  public override get SurfaceShareable(): boolean {
+    return true;
   }
 
   public GetToolDefinitions(): RealtimeToolDefinition[] {
@@ -109,10 +243,61 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     };
   }
 
-  /** Persist the board (host-debounced) on EVERY board mutation — user edits AND agent tools. */
+  /**
+   * The board's self-description: what it holds, every `Whiteboard_*` tool as a verb (so a tool a
+   * subclass adds shows up here too), and that the model can SEE it (frames), not just read its state.
+   */
+  public override GetDescriptor(): RealtimeChannelDescriptor {
+    return {
+      Key: this.ChannelName,
+      Version: REALTIME_CHANNEL_CONTRACT_VERSION,
+      DisplayName: this.TabTitle,
+      OwningPackage: '@memberjunction/ng-conversations',
+      Instructions:
+        'A shared canvas you and the user can both draw, write and annotate on live. Whatever you add ' +
+        'appears instantly, and you perceive what the user adds. Use it to sketch, diagram and explain ' +
+        'visually; do not narrate minor edits.',
+      Nouns: [
+        {
+          Name: 'pages',
+          Description: 'The board\'s pages, in order; each holds the items (notes, shapes, connectors, text, widgets) drawn on it.',
+          Schema: { type: 'array', items: { type: 'object' } }
+        }
+      ],
+      Verbs: BuildToolBackedVerbs(this.GetToolDefinitions(), this.ToolNamePrefix),
+      Events: [
+        { Name: 'state_changed', Description: 'The board changed (by you or the user).' },
+        { Name: 'frame_pushed', Description: 'A picture of the board was sent to you.' }
+      ],
+      DisplayPolicy: 'open-on-start',
+      DefaultAvailability: 'all-sessions',
+      MaxExposure: 'pixels'
+    };
+  }
+
+  /**
+   * Persist the board (host-debounced) on EVERY board mutation — user edits AND agent tools — and drive
+   * the visual pump. The board feeds the model its own perception (coalesced scene deltas from the
+   * bound surface), so state changes are recorded for events and frame tagging only (`Perceive: false`):
+   * the structured note would duplicate the deltas.
+   */
   protected override OnInitialize(): void {
-    this.stateChangedSub = this.State.Changed$.subscribe(() => {
+    this.stateChangedSub?.unsubscribe();
+    this.EnableVisualPerception(this, {
+      ConfirmationNote:
+        '[whiteboard] visual confirmation of your action (background — do NOT narrate or announce your own change; continue naturally)',
+      // Preserves what the board always did: it started the bridge's fixed-rate poller despite being
+      // designed heartbeat-free. Flagged for the reviewer; remove to make the board purely change-driven.
+      StartBridgePoller: true
+    });
+    this.stateChangedSub = this.State.Changed$.subscribe((change) => {
       this.Context?.RequestSave(this.State.ToJSON());
+      this.RecordChange({ Author: change.Author, Perceive: false });
+      // Only user edits (and scene replacements like undo) drive the settle-debounce pipeline.
+      // Agent edits are confirmed with a single frame in ApplyAgentTool.
+      if (change.Author === 'user' || change.Op === 'replace') {
+        void this.NotifyVisualChange();
+      }
     });
   }
 
@@ -122,6 +307,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
    * outputs are subscribed back into the host context — the overlay never sees any of it.
    */
   public BindSurface(instance: RealtimeWhiteboardHostComponent): void {
+    this.EnsureVideoBridge();
     this.releaseSurface();
     this.host = instance;
     instance.State = this.State;
@@ -247,13 +433,25 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   /**
    * Executes one `Whiteboard_*` tool call LOCALLY. Prefers the live bound host (board
    * mutation + UI garnish); falls back to the pure engine function when no surface is
-   * bound so the channel keeps working with the pane collapsed.
+   * bound so the channel keeps working before the board is first shown.
    */
   public ApplyAgentTool(toolName: string, argsJson: string): string {
+    let result: string;
     if (this.host) {
-      return this.host.ApplyAgentTool(toolName, argsJson);
+      result = this.host.ApplyAgentTool(toolName, argsJson);
+    } else {
+      result = ApplyWhiteboardAgentTool(this.State, toolName, argsJson);
     }
-    return ApplyWhiteboardAgentTool(this.State, toolName, argsJson);
+    // A SUCCESSFUL agent tool triggers exactly ONE immediate visual confirmation frame and a note
+    // telling the model not to narrate its own change. A FAILED one must trigger neither: every
+    // failure path returns `{ success: false, error }` (bad JSON args, unknown tool, per-tool
+    // validation), and confirming it would tell the model its edit landed AND instruct it to stay
+    // quiet about it — so the failure would vanish from the user's view while the model carried on.
+    // It would also push a frame identical to the last one, since a failed tool changes nothing.
+    if (toolSucceeded(result)) {
+      void this.ConfirmVisualChange();
+    }
+    return result;
   }
 
   /** The board's serialized state of record (persisted under {@link ChannelName}). */
@@ -271,6 +469,11 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     return this.State.LoadFromJSON(stateJson);
   }
 
+  /** Keeps the board's "Move to stage" / "Back to tab" button true to where the host placed it. */
+  public override OnSurfacePlacementChange(placement: MediaPlacement): void {
+    this.host?.SetOnStage(placement === 'stage');
+  }
+
   /**
    * Exit focus mode THROUGH the bound host (its own Focus button state stays in sync; it
    * re-emits `FocusModeChange(false)` → `Context.SetFocusMode(false)`). When no surface is
@@ -285,7 +488,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   public override Dispose(): void {
     this.stateChangedSub?.unsubscribe();
     this.stateChangedSub = null;
-    super.Dispose(); // releases the surface binding + context
+    super.Dispose(); // releases the surface binding, the visual pump + bridge, and the context
   }
 
   /** Unsubscribes surface outputs, cancels pending ambient notes and drops the host reference. */
@@ -307,4 +510,9 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
  */
 export function LoadRealtimeWhiteboardChannel(): void {
   // intentional no-op — the import side effect performs the registration
+}
+
+/** @deprecated Use {@link RasterizeSvgToJpegBase64}. */
+export async function rasterizeSvgToJpegBase64(svg: string, width = 1280, height = 720): Promise<string | null> {
+  return RasterizeSvgToJpegBase64(svg, width, height);
 }

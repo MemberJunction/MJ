@@ -52,6 +52,8 @@ export * from './lib/whiteboard-srcdoc.pipe';
 
 // Right-click context-menu model (pure — decides WHAT is offered, not how it renders).
 export * from './lib/whiteboard-context-menu';
+// The host-controllable tool roster (pure): one predicate for toolbar, key map and context menu.
+export * from './lib/whiteboard-tool-roster';
 
 // Components (all standalone).
 export * from './lib/whiteboard-board.component';

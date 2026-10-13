@@ -103,4 +103,4 @@ cd packages/Angular/Explorer/explorer-app && npm run build
 
 ## License
 
-MIT
+Business Source License 1.1 — see [LICENSE](../../../../LICENSE) for details.

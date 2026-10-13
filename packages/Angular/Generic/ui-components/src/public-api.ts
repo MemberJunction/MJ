@@ -1,6 +1,8 @@
 // @memberjunction/ng-ui-components
 // Reusable standalone Angular UI components for MemberJunction
 
+export * from './lib/a11y/named-control.base';
+export * from './lib/a11y/unnamed-control-guard';
 export * from './lib/button/button.directive';
 export * from './lib/clickable/clickable.directive';
 export * from './lib/dialog/dialog.component';
@@ -20,20 +22,32 @@ export * from './lib/window/window.component';
 export * from './lib/slide-panel/slide-panel.component';
 export * from './lib/bottom-sheet/bottom-sheet.component';
 export * from './lib/combobox/combobox.component';
+export * from './lib/icon-picker/icon-picker.component';
+export * from './lib/icon-picker/font-awesome-icons';
+export * from './lib/icon-picker/icon-catalogue.service';
 export * from './lib/page-header/page-header.component';
 export * from './lib/page-layout/page-layout.component';
 export * from './lib/page-body/page-body.component';
 export * from './lib/stat-badge/stat-badge.component';
 export * from './lib/refresh-button/refresh-button.component';
 export * from './lib/filter-popover/filter-popover.component';
+export * from './lib/menu/menu.component';
 export * from './lib/page-search/page-search.component';
 export * from './lib/filter-chip/filter-chip.component';
 export * from './lib/filter-field/filter-field.component';
 export * from './lib/filter-panel/filter-panel.component';
 export * from './lib/tab-nav/tab-nav.component';
+export * from './lib/tabs/tab-list.directive';
+export * from './lib/tabs/tab-chrome-guard';
+export * from './lib/workspace-tabs/workspace-tabs.types';
+export * from './lib/workspace-tabs/workspace-tab-store';
+export * from './lib/workspace-tabs/workspace-tab-strip.component';
+export * from './lib/workspace-tabs/workspace-card.component';
+export * from './lib/workspace-tabs/workspace-tip.directive';
 export * from './lib/view-toggle/view-toggle.component';
 export * from './lib/left-nav/left-nav.component';
 export * from './lib/left-nav/left-nav-content.component';
 export * from './lib/page-header-interior/page-header-interior.component';
 export * from './lib/page-body-interior/page-body-interior.component';
 export * from './lib/empty-state/empty-state.component';
+export * from './lib/card-grid/card-grid.component';

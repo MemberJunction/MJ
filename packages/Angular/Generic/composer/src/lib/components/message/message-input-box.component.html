@@ -1,61 +1,76 @@
-<div class="message-input-box-container" (click)="onContainerClick($event)">
+<div class="message-input-box-container" (click)="OnContainerClick($event)">
   <div class="input-wrapper">
     <mj-mention-editor
       #mentionEditor
-      [placeholder]="placeholder"
-      [disabled]="disabled"
-      [currentUser]="currentUser"
-      [enableMentions]="enableMentions"
+      [placeholder]="Placeholder"
+      [disabled]="Disabled"
+      [currentUser]="CurrentUser"
+      [enableMentions]="EnableMentions"
       [TriggerProviders]="TriggerProviders"
       [ExcludedTriggerKeys]="ExcludedTriggerKeys"
       [Provider]="Provider"
-      [enableAttachments]="enableAttachments"
-      [maxAttachments]="maxAttachments"
-      [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
-      [acceptedFileTypes]="acceptedFileTypes"
-      [(ngModel)]="value"
-      (valueChange)="onValueChange($event)"
-      (enterPressed)="onEnterPressed($event)"
-      (mentionSelected)="onMentionSelected($event)"
-      (attachmentsChanged)="onAttachmentsChanged($event)"
-      (attachmentError)="onAttachmentError($event)"
-      (attachmentClicked)="onAttachmentClicked($event)"
-      (editorBlurred)="blurred.emit()">
+      [enableAttachments]="EnableAttachments"
+      [maxAttachments]="MaxAttachments"
+      [maxAttachmentSizeBytes]="MaxAttachmentSizeBytes"
+      [acceptedFileTypes]="AcceptedFileTypes"
+      [(ngModel)]="Value"
+      (valueChange)="OnValueChange($event)"
+      (enterPressed)="OnEnterPressed($event)"
+      (mentionSelected)="OnMentionSelected($event)"
+      (attachmentsChanged)="OnAttachmentsChanged($event)"
+      (attachmentError)="OnAttachmentError($event)"
+      (attachmentClicked)="OnAttachmentClicked($event)"
+      (editorBlurred)="Blurred.emit()">
     </mj-mention-editor>
 
     <!-- Attach + voice + plan-mode buttons - Positioned over editor -->
-    @if (enableAttachments || enableRealtime || enablePlanMode) {
+    @if (EnableAttachments || EnableRealtime || EnablePlanMode || EnableSkills) {
       <div class="attach-buttons">
-        @if (enablePlanMode) {
+        @if (EnableSkills) {
+        <button
+          class="attach-button-icon skills-button-icon"
+          [class.skills-button-icon--active]="SkillsActive"
+          [disabled]="Disabled"
+          [attr.aria-expanded]="SkillsActive"
+          aria-haspopup="true"
+          (mousedown)="$event.preventDefault(); $event.stopPropagation()"
+          (click)="OnSkillsClick($event); $event.stopPropagation()"
+          title="Skills, or type / in the message box"
+          aria-label="Show skills"
+          >
+          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+        </button>
+        }
+        @if (EnablePlanMode) {
         <button
           class="attach-button-icon plan-mode-button-icon"
-          [class.plan-mode-button-icon--active]="planModeActive"
-          [disabled]="disabled"
-          [attr.aria-pressed]="planModeActive"
-          (click)="planModeToggle.emit(); $event.stopPropagation()"
-          [title]="planModeActive ? 'Plan Mode ON — the agent presents a plan for your approval before it acts' : 'Plan Mode: have the agent present a plan for your approval before it acts'"
+          [class.plan-mode-button-icon--active]="PlanModeActive"
+          [disabled]="Disabled"
+          [attr.aria-pressed]="PlanModeActive"
+          (click)="PlanModeToggle.emit(); $event.stopPropagation()"
+          [title]="PlanModeActive ? 'Plan Mode ON — the agent presents a plan for your approval before it acts' : 'Plan Mode: have the agent present a plan for your approval before it acts'"
           aria-label="Toggle Plan Mode"
           >
           <i class="fa-solid fa-route" aria-hidden="true"></i>
         </button>
         }
-        @if (enableAttachments) {
+        @if (EnableAttachments) {
         <button
           class="attach-button-icon"
-          [disabled]="disabled"
-          (click)="openFilePicker(); $event.stopPropagation()"
+          [disabled]="Disabled"
+          (click)="OpenFilePicker(); $event.stopPropagation()"
           title="Attach file"
           >
           <i class="fa-solid fa-paperclip"></i>
         </button>
         }
-        @if (enableRealtime) {
+        @if (EnableRealtime) {
         <button
           class="attach-button-icon voice-button-icon"
-          [class.voice-button-icon--active]="voiceActive"
-          [disabled]="!canStartRealtime"
-          (click)="onRealtimeClick(); $event.stopPropagation()"
-          [title]="voiceActive ? 'Voice call active' : 'Start a voice call'"
+          [class.voice-button-icon--active]="VoiceActive"
+          [disabled]="!CanStartRealtime"
+          (click)="OnRealtimeClick(); $event.stopPropagation()"
+          [title]="VoiceActive ? 'Voice call active' : 'Start a voice call'"
           aria-label="Start a voice call"
           >
           <i class="fa-solid fa-phone" aria-hidden="true"></i>
@@ -64,8 +79,8 @@
              click away while the plain phone click keeps its instant-start behavior. -->
         <button
           class="attach-button-icon voice-options-button-icon"
-          [disabled]="!canStartRealtime"
-          (click)="onRealtimeOptionsClick(); $event.stopPropagation()"
+          [disabled]="!CanStartRealtime"
+          (click)="OnRealtimeOptionsClick(); $event.stopPropagation()"
           title="Voice call options (choose agent and voice model)"
           aria-label="Voice call options"
           >
@@ -78,8 +93,8 @@
     <!-- Send Button (Icon Only) - Positioned over editor -->
     <button
       class="send-button-icon"
-      [disabled]="!canSend"
-      (click)="onSendClick()"
+      [disabled]="!CanSend"
+      (click)="OnSendClick()"
       title="Send message (Enter)"
       >
       <i class="fa-solid fa-paper-plane"></i>

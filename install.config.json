@@ -1,4 +1,5 @@
 {
+    "PackageManager": "pnpm",
     "dbUrl": "",
     "dbInstance": "",
     "dbTrustServerCertificate": "Y",

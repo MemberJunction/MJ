@@ -27,7 +27,6 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 // Actions Components
 import { ActionsOverviewComponent } from './Actions/components/actions-overview.component';
 import { ActionExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
-import { ScheduledActionsComponent } from './Actions/components/scheduled-actions.component';
 import { CodeManagementComponent } from './Actions/components/code-management.component';
 import { EntityIntegrationComponent } from './Actions/components/entity-integration.component';
 import { SecurityPermissionsComponent } from './Actions/components/security-permissions.component';
@@ -53,7 +52,6 @@ import {
   declarations: [
     ActionsOverviewComponent,
     ActionExecutionMonitoringComponent,
-    ScheduledActionsComponent,
     CodeManagementComponent,
     EntityIntegrationComponent,
     SecurityPermissionsComponent,
@@ -96,7 +94,6 @@ import {
   exports: [
     ActionsOverviewComponent,
     ActionExecutionMonitoringComponent,
-    ScheduledActionsComponent,
     CodeManagementComponent,
     EntityIntegrationComponent,
     SecurityPermissionsComponent,

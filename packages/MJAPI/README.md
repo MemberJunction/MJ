@@ -184,4 +184,4 @@ The Docker image includes Node.js 20, Flyway for migrations, SQL Server tools, a
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

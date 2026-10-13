@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
+    MediaModality,
     Modality,
     type AuthToken,
     type CreateAuthTokenParameters,
@@ -10,7 +11,9 @@ import {
     type Content,
 } from '@google/genai';
 import type {
+    ClientRealtimeSessionConfig,
     IRealtimeSession,
+    JSONValue,
     RealtimeSessionParams,
     RealtimeTranscript,
     RealtimeToolCall,
@@ -18,6 +21,8 @@ import type {
 } from '@memberjunction/ai';
 
 import { GeminiRealtime, type GeminiLiveSession, type GeminiConnectArgs } from '../geminiRealtime';
+import { ResolveGeminiLiveProfile } from '../geminiLiveProfiles';
+import { ConfirmGeminiSetup } from './live-session-test-helpers';
 
 /* ------------------------------------------------------------------ */
 /*  Fake in-memory Gemini Live session                                */
@@ -30,6 +35,8 @@ class FakeLiveSession implements GeminiLiveSession {
     public RealtimeInputs: Array<{ audio?: GeminiBlob; media?: GeminiBlob; text?: string; activityStart?: unknown; activityEnd?: unknown }> = [];
     public ClientContents: Array<{ turns?: Content[]; turnComplete?: boolean }> = [];
     public ToolResponses: Array<{ functionResponses: FunctionResponse[] | FunctionResponse }> = [];
+    /** Every send, in the order Google receives them. */
+    public Wire: Array<{ Method: 'sendRealtimeInput' | 'sendClientContent' | 'sendToolResponse'; Params: unknown }> = [];
     public Closed = false;
 
     /** The driver-supplied callback that translates inbound server messages. */
@@ -37,12 +44,15 @@ class FakeLiveSession implements GeminiLiveSession {
 
     public sendRealtimeInput(params: { audio?: GeminiBlob; media?: GeminiBlob; text?: string; activityStart?: unknown; activityEnd?: unknown }): void {
         this.RealtimeInputs.push(params);
+        this.Wire.push({ Method: 'sendRealtimeInput', Params: params });
     }
     public sendClientContent(params: { turns?: Content[]; turnComplete?: boolean }): void {
         this.ClientContents.push(params);
+        this.Wire.push({ Method: 'sendClientContent', Params: params });
     }
     public sendToolResponse(params: { functionResponses: FunctionResponse[] | FunctionResponse }): void {
         this.ToolResponses.push(params);
+        this.Wire.push({ Method: 'sendToolResponse', Params: params });
     }
     public close(): void {
         this.Closed = true;
@@ -60,6 +70,7 @@ class TestGeminiRealtime extends GeminiRealtime {
     protected override async connectLiveSession(args: GeminiConnectArgs): Promise<GeminiLiveSession> {
         this.LastConnectArgs = args;
         this.Fake.Emit = args.OnMessage;
+        ConfirmGeminiSetup(args);
         return this.Fake;
     }
 }
@@ -159,6 +170,38 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         expect(sc.config.tools).toBeDefined();
     });
 
+    it('carries sliding-window context compression in SessionConfig but does not lock it into the token', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams());
+
+        const sc = cfg.SessionConfig as { config: LiveConnectConfig };
+        expect(sc.config.contextWindowCompression).toEqual({ slidingWindow: {} });
+        // Mask safety for this key is unverified, and a rejected mask fails every client-direct
+        // session, so it must stay out of the token constraints.
+        const locked = driver.MintParams!.config!.liveConnectConstraints!.config as LiveConnectConfig;
+        expect(locked.contextWindowCompression).toBeUndefined();
+    });
+
+    it('requests session resumption and locks it into the token, as in Google\'s ephemeral-token example', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams());
+
+        const sc = cfg.SessionConfig as { config: LiveConnectConfig };
+        expect(sc.config.sessionResumption).toEqual({});
+        const locked = driver.MintParams!.config!.liveConnectConstraints!.config as LiveConnectConfig;
+        expect(locked.sessionResumption).toEqual({});
+    });
+
+    it('leaves session resumption out of both the config and the token for a zero-data-retention session', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams({ ZeroDataRetention: true }));
+
+        const sc = cfg.SessionConfig as { config: LiveConnectConfig };
+        expect(sc.config.sessionResumption).toBeUndefined();
+        const locked = driver.MintParams!.config!.liveConnectConstraints!.config as LiveConnectConfig;
+        expect(locked.sessionResumption).toBeUndefined();
+    });
+
     it('throws when the mint returns no token name', async () => {
         class NoNameMint extends GeminiRealtime {
             protected override async mintAuthToken(): Promise<AuthToken> {
@@ -216,6 +259,60 @@ describe('GeminiRealtime', () => {
             expect(config.responseModalities).toEqual([Modality.AUDIO]);
         });
 
+        it('enables sliding-window context compression by default, so a session with video is not cut off at 2 minutes', async () => {
+            await driver.StartSession(makeParams());
+            expect(driver.LastConnectArgs!.Config.contextWindowCompression).toEqual({ slidingWindow: {} });
+        });
+
+        it('requests session resumption by default, so a session can outlive one ~10-minute connection', async () => {
+            await driver.StartSession(makeParams());
+            expect(driver.LastConnectArgs!.Config.sessionResumption).toEqual({});
+        });
+
+        it('leaves session resumption off a zero-data-retention session', async () => {
+            await driver.StartSession(makeParams({ ZeroDataRetention: true }));
+            expect(driver.LastConnectArgs!.Config.sessionResumption).toBeUndefined();
+        });
+
+        it('drops a config-bag sessionResumption on a zero-data-retention session and says why', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            try {
+                await driver.StartSession(makeParams({ ZeroDataRetention: true, Config: { sessionResumption: { transparent: true } } }));
+                expect(driver.LastConnectArgs!.Config.sessionResumption).toBeUndefined();
+                expect(warn).toHaveBeenCalledWith(expect.stringContaining('zero data retention'));
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
+        it('gives each session its own compression object', async () => {
+            await driver.StartSession(makeParams());
+            const first = driver.LastConnectArgs!.Config.contextWindowCompression;
+            await driver.StartSession(makeParams());
+            expect(driver.LastConnectArgs!.Config.contextWindowCompression).not.toBe(first);
+        });
+
+        it('lets a config-bag contextWindowCompression object win over the default', async () => {
+            const custom = { triggerTokens: '64000', slidingWindow: { targetTokens: '32000' } };
+            await driver.StartSession(makeParams({ Config: { contextWindowCompression: custom } }));
+            expect(driver.LastConnectArgs!.Config.contextWindowCompression).toEqual(custom);
+        });
+
+        it.each([
+            ['a string', 'on', 'string'],
+            ['an array', [], 'array'],
+            ['null', null, 'null'],
+        ])('replaces a config-bag contextWindowCompression that is %s with the default and reports it', async (_label, value, got) => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            try {
+                await driver.StartSession(makeParams({ Config: { contextWindowCompression: value } }));
+                expect(driver.LastConnectArgs!.Config.contextWindowCompression).toEqual({ slidingWindow: {} });
+                expect(warn).toHaveBeenCalledWith(expect.stringContaining(`\`contextWindowCompression\` because it is not an object (got ${got})`));
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
         it('seeds InitialContext as a non-complete client-content turn', async () => {
             await driver.StartSession(makeParams({ InitialContext: 'Prior conversation summary.' }));
             expect(driver.Fake.ClientContents).toHaveLength(1);
@@ -239,10 +336,24 @@ describe('GeminiRealtime', () => {
             expect(config.realtimeInputConfig?.automaticActivityDetection?.disabled).toBe(true);
         });
 
-        it('1:1 call: no realtimeInputConfig when disableAutoResponse is absent (model auto-responds)', async () => {
+        /**
+         * Rewritten with the C4 turn-coverage work. This previously asserted that
+         * `realtimeInputConfig` was ABSENT, using the whole object's absence as a proxy for "automatic
+         * activity detection is not disabled, so the model auto-responds".
+         *
+         * That proxy no longer holds: MJ now always STATES turn coverage, so the object is always
+         * present. The requirement is unchanged, so the assertion now tests it directly — which is the
+         * better test either way, because it names the thing it cares about instead of an incidental
+         * shape that happened to correlate with it.
+         */
+        it('1:1 call: automatic activity detection is NOT disabled when disableAutoResponse is absent (model auto-responds)', async () => {
             await driver.StartSession(makeParams());
-            const config = driver.LastConnectArgs!.Config as { realtimeInputConfig?: unknown };
-            expect(config.realtimeInputConfig).toBeUndefined();
+            const config = driver.LastConnectArgs!.Config as {
+                realtimeInputConfig?: { automaticActivityDetection?: { disabled?: boolean }; turnCoverage?: string };
+            };
+            expect(config.realtimeInputConfig?.automaticActivityDetection).toBeUndefined();
+            // Coverage is stated on every session — that is the C4 guarantee, not a side effect.
+            expect(config.realtimeInputConfig?.turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
         });
 
         it('capability: reports it CANNOT reconfigure turn mode mid-session (activity detection fixed at connect)', async () => {
@@ -261,8 +372,8 @@ describe('GeminiRealtime', () => {
 
         it('opens an activity window lazily before the first audio, then commits the turn on RequestSpokenUpdate', async () => {
             const session = await driver.StartSession(makeParams({ Config: { disableAutoResponse: true } }));
-            session.SendInput(new Uint8Array([1, 2, 3]).buffer);
-            session.SendInput(new Uint8Array([4, 5, 6]).buffer);
+            session.SendInput({ Data: new Uint8Array([1, 2, 3]).buffer, Kind: 'audio' });
+            session.SendInput({ Data: new Uint8Array([4, 5, 6]).buffer, Kind: 'audio' });
 
             const inputs = driver.Fake.RealtimeInputs;
             // First send is the activityStart (opens the window), then the two audio chunks (no second start).
@@ -276,13 +387,13 @@ describe('GeminiRealtime', () => {
             expect(driver.Fake.RealtimeInputs.some((i) => i.activityEnd)).toBe(true);
 
             // Next audio re-opens a fresh window.
-            session.SendInput(new Uint8Array([7]).buffer);
+            session.SendInput({ Data: new Uint8Array([7]).buffer, Kind: 'audio' });
             expect(driver.Fake.RealtimeInputs.filter((i) => i.activityStart).length).toBe(2);
         });
 
         it('1:1 call: streams audio with no activity markers and RequestSpokenUpdate sends a text nudge', async () => {
             const session = await driver.StartSession(makeParams());
-            session.SendInput(new Uint8Array([1]).buffer);
+            session.SendInput({ Data: new Uint8Array([1]).buffer, Kind: 'audio' });
             session.RequestSpokenUpdate?.('go');
             const inputs = driver.Fake.RealtimeInputs;
             expect(inputs.some((i) => i.activityStart || i.activityEnd)).toBe(false);
@@ -333,6 +444,39 @@ describe('GeminiRealtime', () => {
             expect(transcripts).toEqual([{ Role: 'assistant', Text: 'It is sunny.', IsFinal: true }]);
         });
 
+        it('extracts thought parts as narration transcripts without emitting audio output', () => {
+            const transcripts: RealtimeTranscript[] = [];
+            const outputs: ArrayBuffer[] = [];
+            session.OnTranscript((t) => transcripts.push(t));
+            session.OnOutput((chunk) => outputs.push(chunk));
+
+            // Emit a thought part and an audio part
+            driver.Fake.Emit({
+                serverContent: {
+                    modelTurn: {
+                        role: 'model',
+                        parts: [
+                            { text: 'Let me think about this step by step.', thought: true },
+                            { inlineData: { data: Buffer.from('spoken audio').toString('base64'), mimeType: 'audio/pcm;rate=24000' } },
+                        ],
+                    },
+                },
+            } as LiveServerMessage);
+
+            expect(transcripts).toEqual([
+                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: false, Kind: 'narration', IsThought: true },
+            ]);
+            expect(outputs).toHaveLength(1);
+
+            // Complete turn finalizes the narration transcript
+            driver.Fake.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+
+            expect(transcripts).toEqual([
+                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: false, Kind: 'narration', IsThought: true },
+                { Role: 'assistant', Text: 'Let me think about this step by step.', IsFinal: true, Kind: 'narration', IsThought: true },
+            ]);
+        });
+
         it('translates toolCall.functionCalls to RealtimeToolCalls with JSON-string args', () => {
             const calls: RealtimeToolCall[] = [];
             session.OnToolCall((c) => calls.push(c));
@@ -352,6 +496,93 @@ describe('GeminiRealtime', () => {
             driver.Fake.Emit({ usageMetadata: { promptTokenCount: 120, responseTokenCount: 45 } } as LiveServerMessage);
 
             expect(usages).toEqual([{ InputTokens: 120, OutputTokens: 45 }]);
+        });
+
+        it('reports the response split by modality as OutputTokenDetails, beside the prompt split', () => {
+            const usages: RealtimeUsage[] = [];
+            session.OnUsage((u) => usages.push(u));
+
+            driver.Fake.Emit({
+                usageMetadata: {
+                    promptTokenCount: 120,
+                    responseTokenCount: 45,
+                    promptTokensDetails: [
+                        { modality: MediaModality.AUDIO, tokenCount: 100 },
+                        { modality: MediaModality.TEXT, tokenCount: 20 },
+                    ],
+                    responseTokensDetails: [
+                        { modality: MediaModality.AUDIO, tokenCount: 40 },
+                        { modality: MediaModality.TEXT, tokenCount: 5 },
+                    ],
+                },
+            } as LiveServerMessage);
+
+            expect(usages).toEqual([{
+                InputTokens: 120,
+                OutputTokens: 45,
+                InputTokenDetails: { AudioTokens: 100, TextTokens: 20 },
+                OutputTokenDetails: { AudioTokens: 40, TextTokens: 5 },
+            }]);
+        });
+
+        it('sums a modality reported twice, and leaves OutputTokenDetails out when the response has no split', () => {
+            const usages: RealtimeUsage[] = [];
+            session.OnUsage((u) => usages.push(u));
+
+            driver.Fake.Emit({
+                usageMetadata: {
+                    responseTokenCount: 33,
+                    responseTokensDetails: [
+                        { modality: MediaModality.AUDIO, tokenCount: 10 },
+                        { modality: MediaModality.AUDIO, tokenCount: 20 },
+                        { modality: MediaModality.IMAGE, tokenCount: 3 },
+                    ],
+                },
+            } as LiveServerMessage);
+            driver.Fake.Emit({ usageMetadata: { promptTokenCount: 7, responseTokenCount: 2 } } as LiveServerMessage);
+
+            expect(usages).toEqual([
+                { InputTokens: 0, OutputTokens: 33, OutputTokenDetails: { AudioTokens: 30, ImageTokens: 3 } },
+                { InputTokens: 7, OutputTokens: 2 },
+            ]);
+        });
+
+        it("reports VIDEO tokens as VideoTokens in both directions (a generated avatar's are the response's)", () => {
+            const usages: RealtimeUsage[] = [];
+            session.OnUsage((u) => usages.push(u));
+
+            driver.Fake.Emit({
+                usageMetadata: {
+                    promptTokenCount: 300,
+                    responseTokenCount: 6292,
+                    promptTokensDetails: [{ modality: MediaModality.VIDEO, tokenCount: 300 }],
+                    responseTokensDetails: [
+                        { modality: MediaModality.AUDIO, tokenCount: 100 },
+                        { modality: MediaModality.VIDEO, tokenCount: 6192 },
+                    ],
+                },
+            } as LiveServerMessage);
+
+            expect(usages).toEqual([{
+                InputTokens: 300,
+                OutputTokens: 6292,
+                InputTokenDetails: { VideoTokens: 300 },
+                OutputTokenDetails: { AudioTokens: 100, VideoTokens: 6192 },
+            }]);
+        });
+
+        it('keeps no block for a report whose counts are all in modalities it does not map', () => {
+            const usages: RealtimeUsage[] = [];
+            session.OnUsage((u) => usages.push(u));
+
+            driver.Fake.Emit({
+                usageMetadata: {
+                    promptTokenCount: 9,
+                    promptTokensDetails: [{ modality: MediaModality.DOCUMENT, tokenCount: 9 }],
+                },
+            } as LiveServerMessage);
+
+            expect(usages).toEqual([{ InputTokens: 9, OutputTokens: 0 }]);
         });
 
         it('fires OnInterruption when serverContent.interrupted is true', () => {
@@ -386,7 +617,7 @@ describe('GeminiRealtime', () => {
 
         it('SendInput streams audio as a base64 PCM blob', () => {
             const bytes = new Uint8Array([9, 8, 7]);
-            session.SendInput(bytes.buffer);
+            session.SendInput({ Data: bytes.buffer, Kind: 'audio' });
 
             expect(driver.Fake.RealtimeInputs).toHaveLength(1);
             const sent = driver.Fake.RealtimeInputs[0].audio!;
@@ -557,7 +788,86 @@ describe('GeminiRealtime', () => {
 
         it('throws if SendInput is used after Close', async () => {
             await session.Close();
-            expect(() => session.SendInput(new Uint8Array([1]).buffer)).toThrow(/not open/);
+            expect(() => session.SendInput({ Data: new Uint8Array([1]).buffer, Kind: 'audio' })).toThrow(/not open/);
+        });
+    });
+
+    /**
+     * A context note is client content with `turnComplete: false`, which tells Gemini more input is coming: Gemini then
+     * holds all generation, the continuation after a tool result included, until a `turnComplete: true` closes the turn.
+     */
+    describe('a client turn a context note left open, after a tool result', () => {
+        const NOTE = '[delegated agent] gathering the order history';
+        const noteSent = { Method: 'sendClientContent', Params: { turns: [{ role: 'user', parts: [{ text: NOTE }] }], turnComplete: false } };
+        const turnClosed = { Method: 'sendClientContent', Params: { turnComplete: true } };
+        const resultSent = (id: string) => ({ Method: 'sendToolResponse', Params: { functionResponses: [{ id, name: 'invoke_agent', response: { done: true } }] } });
+        const DONE = JSON.stringify({ done: true });
+
+        let session: IRealtimeSession;
+
+        /** Starts a session on `model`; returns where its sends start on the wire. */
+        async function start(model: string): Promise<number> {
+            session = await driver.StartSession(makeParams({ Model: model }));
+            return driver.Fake.Wire.length;
+        }
+
+        /** The model calls a tool for each id: a delegation each. */
+        function toolCalls(...ids: string[]): void {
+            driver.Fake.Emit({ toolCall: { functionCalls: ids.map((id) => ({ id, name: 'invoke_agent', args: {} })) } } as LiveServerMessage);
+        }
+
+        it('closes it right after the tool result, so the model speaks the result: the note, the result, then turnComplete', async () => {
+            const from = await start('gemini-3.8-live');
+            toolCalls('call-1');
+            session.SendContextNote?.(NOTE);
+            await session.SendToolResult('call-1', DONE);
+            expect(driver.Fake.Wire.slice(from)).toEqual([noteSent, resultSent('call-1'), turnClosed]);
+        });
+
+        it('adds no close when no note left the turn open', async () => {
+            const from = await start('gemini-3.8-live');
+            toolCalls('call-1');
+            await session.SendToolResult('call-1', DONE);
+            expect(driver.Fake.Wire.slice(from)).toEqual([resultSent('call-1')]);
+        });
+
+        it("adds no close once the model's turnComplete took the note in", async () => {
+            const from = await start('gemini-3.8-live');
+            session.SendContextNote?.(NOTE);
+            driver.Fake.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+            toolCalls('call-1');
+            await session.SendToolResult('call-1', DONE);
+            expect(driver.Fake.Wire.slice(from)).toEqual([noteSent, resultSent('call-1')]);
+        });
+
+        it('closes it once: a second result adds no second close', async () => {
+            const from = await start('gemini-3.8-live');
+            toolCalls('call-1', 'call-2');
+            session.SendContextNote?.(NOTE);
+            await session.SendToolResult('call-1', DONE);
+            await session.SendToolResult('call-2', DONE);
+            expect(driver.Fake.Wire.slice(from)).toEqual([noteSent, resultSent('call-1'), turnClosed, resultSent('call-2')]);
+        });
+
+        it("adds no close while the model is speaking, which the close would cut off: that turn's turnComplete takes the note in", async () => {
+            const from = await start('gemini-3.8-live');
+            toolCalls('call-1');
+            session.SendContextNote?.(NOTE);
+            const speech = Buffer.from(new Uint8Array([1])).toString('base64');
+            driver.Fake.Emit({
+                serverContent: { modelTurn: { role: 'model', parts: [{ inlineData: { data: speech, mimeType: 'audio/pcm;rate=24000' } }] } },
+            } as LiveServerMessage);
+            await session.SendToolResult('call-1', DONE);
+            driver.Fake.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+            expect(driver.Fake.Wire.slice(from)).toEqual([noteSent, resultSent('call-1')]);
+        });
+
+        it('adds no close on a model whose tools never block (Extended Thinking): it may still be reasoning, and the close would cut it off', async () => {
+            const from = await start('gemini-3.8-live-extended-thinking');
+            toolCalls('call-1');
+            session.SendContextNote?.(NOTE);
+            await session.SendToolResult('call-1', DONE);
+            expect(driver.Fake.Wire.slice(from)).toEqual([noteSent, resultSent('call-1')]);
         });
     });
 });
@@ -577,15 +887,35 @@ describe('C6: cross-provider config-bag safety (shared-key scrubbing)', () => {
                     endpoint: 'ws://x/v1/realtime',
                     sampleRate: 24000,
                     proxyBaseUrl: 'https://p',
+                    brokerBaseUrl: 'https://b',
                     temperature: 0.4, // legit Gemini key — must survive
                 },
             }));
             const cfg = driver.LastConnectArgs?.Config as Record<string, unknown>;
-            for (const key of ['effortLevel', 'reasoningEffort', 'parallelToolCalls', 'mcpTools', 'inputTranscriptionModel', 'endpoint', 'sampleRate', 'proxyBaseUrl']) {
+            for (const key of ['effortLevel', 'reasoningEffort', 'parallelToolCalls', 'mcpTools', 'inputTranscriptionModel', 'endpoint', 'sampleRate', 'proxyBaseUrl', 'brokerBaseUrl']) {
                 expect(cfg[key], `key ${key} must be scrubbed`).toBeUndefined();
             }
             expect(cfg.temperature).toBe(0.4);
             expect(warn).toHaveBeenCalledWith(expect.stringContaining('Scrubbed non-Gemini config key'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    /**
+     * `firstMessage` (issue #3557) is a neutral persona slot with no Gemini equivalent, filed onto
+     * this driver like any other. The SDK's config converter is a path allowlist, so an unscrubbed
+     * key would be dropped silently before the wire rather than erroring — harmless here, but the
+     * same invisible class as #3721, and it is only harmless by luck of this SDK's behaviour.
+     */
+    it('scrubs the neutral firstMessage key, which Gemini has no equivalent for', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            await driver.StartSession(makeParams({ Config: { firstMessage: 'Good morning.', temperature: 0.4 } }));
+            const cfg = driver.LastConnectArgs?.Config as Record<string, unknown>;
+            expect(cfg.firstMessage).toBeUndefined();
+            expect(cfg.temperature).toBe(0.4);
         } finally {
             warn.mockRestore();
         }
@@ -600,5 +930,1026 @@ describe('C6: cross-provider config-bag safety (shared-key scrubbing)', () => {
         } finally {
             warn.mockRestore();
         }
+    });
+
+    /*
+     * Issue #5334. The driver applies `turnDetection`, `reasoning`, `effortLevel` and `reasoningEffort` itself, reading
+     * them from the original bag after the merge, so the scrub line must not call them non-Gemini. Gemini 3.8 Live's
+     * catalog rows set `turnDetection.Coverage`, which put the key in that line on every such session.
+     */
+    const scrubLines = (warnings: string[]): string[] => warnings.filter((line) => line.includes('Scrubbed non-Gemini config key'));
+    const turnCoverageOf = (config: Record<string, unknown>): unknown => (config['realtimeInputConfig'] as Record<string, unknown> | undefined)?.['turnCoverage'];
+    const thinkingConfigOf = (config: Record<string, unknown>): Record<string, unknown> | undefined => config['thinkingConfig'] as Record<string, unknown> | undefined;
+
+    it('a session that sets turn coverage logs no scrub line and still sends that coverage, bridged and minted', async () => {
+        const params = makeParams({ Model: 'gemini-3.8-live', Config: { turnDetection: { Coverage: 'audioActivityAndAllVideo' } } });
+        const bridged = await startWithWarnings(new TestGeminiRealtime('k'), params);
+        const minted = await mintWithWarnings(new ClientDirectTestable('k'), params);
+        for (const [path, run] of [['bridged', bridged], ['minted', minted]] as const) {
+            expect(scrubLines(run.warnings), path).toEqual([]);
+            expect(turnCoverageOf(run.config), path).toBe('TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO');
+            // Still kept out of the config itself: the driver reads the key from the bag, it is not a Live field.
+            expect(run.config['turnDetection'], path).toBeUndefined();
+        }
+    });
+
+    it("Extended Thinking's catalog bag logs no scrub line, and its reasoning and coverage are applied", async () => {
+        // What the catalog projects for the model's Google row: Tooling, Reasoning and TurnDetection.
+        const { config, warnings } = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({
+            Model: 'gemini-3.8-live-extended-thinking',
+            Config: {
+                tooling: { SupportsBlockingExecution: false, SupportsScheduling: false },
+                reasoning: { IncludeThoughtSummaries: true, Level: 'high' },
+                turnDetection: { Coverage: 'audioActivityAndAllVideo' },
+            },
+        }));
+        expect(scrubLines(warnings)).toEqual([]);
+        expect(thinkingConfigOf(config)).toEqual({ thinkingLevel: 'HIGH', includeThoughts: true });
+        expect(turnCoverageOf(config)).toBe('TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO');
+        expect(config['reasoning']).toBeUndefined();
+    });
+
+    it('a named effort in effortLevel or reasoningEffort logs no scrub line and sets the thinking level', async () => {
+        const viaEffortLevel = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({ Model: 'gemini-3.8-live-extended-thinking', Config: { effortLevel: 'low' } }));
+        const viaReasoningEffort = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({ Model: 'gemini-3.8-live-extended-thinking', Config: { reasoningEffort: 'high' } }));
+        expect(scrubLines([...viaEffortLevel.warnings, ...viaReasoningEffort.warnings])).toEqual([]);
+        expect(thinkingConfigOf(viaEffortLevel.config)?.['thinkingLevel']).toBe('LOW');
+        expect(thinkingConfigOf(viaReasoningEffort.config)?.['thinkingLevel']).toBe('HIGH');
+    });
+
+    it('a key Gemini Live does not apply still gets the scrub line, which names only the keys it does not apply', async () => {
+        const { config, warnings } = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({
+            Model: 'gemini-3.8-live-extended-thinking',
+            Config: {
+                turnDetection: { Coverage: 'audioActivityAndAllVideo' },
+                reasoning: { Level: 'low' },
+                parallelToolCalls: true,
+                mcpTools: [{ type: 'mcp', server_label: 'kb' }],
+            },
+        }));
+        expect(scrubLines(warnings)).toEqual([
+            '[GeminiRealtime] Scrubbed non-Gemini config key(s) from the session bag: parallelToolCalls, mcpTools — other realtime drivers use these; Gemini Live does not apply them.',
+        ]);
+        expect(config['parallelToolCalls']).toBeUndefined();
+        expect(config['mcpTools']).toBeUndefined();
+        expect(turnCoverageOf(config)).toBe('TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO');
+        expect(thinkingConfigOf(config)?.['thinkingLevel']).toBe('LOW');
+    });
+
+    it('a value of a type the driver cannot read is named on its own line, not as a non-Gemini key', async () => {
+        // A number is a valid MJ effort level (1-100) that the OpenAI drivers map; Gemini Live reads only a named effort.
+        const { config, warnings } = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({
+            Model: 'gemini-3.8-live-extended-thinking',
+            Config: { effortLevel: 85, turnDetection: 'semanticVad' },
+        }));
+        expect(scrubLines(warnings)).toEqual([]);
+        expect(warnings.filter((line) => line.includes('Ignored the session config bag'))).toEqual([
+            '[GeminiRealtime] Ignored the session config bag\'s `effortLevel` because it is not a named effort such as "medium" (got number).',
+            '[GeminiRealtime] Ignored the session config bag\'s `turnDetection` because it is not an object (got string).',
+        ]);
+        expect(config['effortLevel']).toBeUndefined();
+        expect(config['turnDetection']).toBeUndefined();
+        // Neither applies, so the model's defaults stand.
+        expect(thinkingConfigOf(config)?.['thinkingLevel']).toBe('MEDIUM');
+        expect(turnCoverageOf(config)).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+    });
+
+    it('reads null as unset: no line for a key the driver applies, and its default stands', async () => {
+        // A config layer clears an inherited value with null (DeepMergeConfigs lets null replace).
+        const { config, warnings } = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({
+            Model: 'gemini-3.8-live-extended-thinking',
+            Config: { turnDetection: null, reasoning: null, effortLevel: null, reasoningEffort: null },
+        }));
+        expect(scrubLines(warnings)).toEqual([]);
+        expect(warnings.filter((line) => line.includes('Ignored the session config bag'))).toEqual([]);
+        expect(thinkingConfigOf(config)?.['thinkingLevel']).toBe('MEDIUM');
+        expect(turnCoverageOf(config)).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+    });
+});
+
+describe('C7: agnostic voice → Gemini speechConfig (issue #3721)', () => {
+    it('maps the driver-neutral voice key to speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName (never raw)', async () => {
+        const driver = new TestGeminiRealtime('k');
+        await driver.StartSession(makeParams({ Config: { voice: 'Kore' } }));
+        const config = driver.LastConnectArgs!.Config as LiveConnectConfig & Record<string, unknown>;
+        expect(config.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName).toBe('Kore');
+        // The neutral key must be CONSUMED, not spread raw: LiveConnectConfig has no `voice`
+        // property, and the SDK's allowlist config converter drops unknown keys silently — which
+        // is exactly how an authored voice went missing before this mapping existed.
+        expect(config.voice).toBeUndefined();
+    });
+
+    it('omits speechConfig ENTIRELY when no voice is authored', async () => {
+        const driver = new TestGeminiRealtime('k');
+        await driver.StartSession(makeParams({ Config: { temperature: 0.2 } }));
+        // Pins the `if (speech.SpeechConfig)` guard in BuildConnectConfig and keeps the connect config
+        // clean — writing `speechConfig: undefined` instead would fail this.
+        //
+        // It is NOT protecting against a token 400: an undefined value cannot reach the field mask
+        // either way, because `BuildConstraintConfig` copies under `if (config.speechConfig)` and the
+        // SDK converter guards with `fromSpeechConfig != null` before forwarding. Absence is asserted
+        // because it is the honest contract, not because undefined is dangerous.
+        expect('speechConfig' in driver.LastConnectArgs!.Config).toBe(false);
+    });
+
+    it('a raw speechConfig that already names a voice WINS over the neutral key — and says so', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            await driver.StartSession(makeParams({
+                Config: {
+                    voice: 'Kore',
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } },
+                },
+            }));
+            const config = driver.LastConnectArgs!.Config;
+            expect(config.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName).toBe('Puck');
+            // The more specific vendor-native value wins, but the discarded voice is NOT silent —
+            // a silently-dropped voice is the whole bug class this maps around.
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('Kore'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('merges at the LEAF: a raw speechConfig that sets only languageCode still receives the authored voice', async () => {
+        const driver = new TestGeminiRealtime('k');
+        await driver.StartSession(makeParams({
+            Config: { voice: 'Kore', speechConfig: { languageCode: 'en-US' } },
+        }));
+        const speechConfig = driver.LastConnectArgs!.Config.speechConfig;
+        // Neither half may be lost. Block-level winner-takes-all would drop the voice here — the
+        // same silent drop as #3721, just narrower.
+        expect(speechConfig?.languageCode).toBe('en-US');
+        expect(speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName).toBe('Kore');
+    });
+
+    it('never injects a voiceConfig alongside multiSpeakerVoiceConfig (mutually exclusive) or a replicated voice', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            // multiSpeakerVoiceConfig is mutually exclusive with voiceConfig, so a prebuilt voice is
+            // not fabricated alongside it. (The SDK also rejects the key outright on Live — asserted
+            // separately; that throw does not depend on this branch.)
+            const multi = new TestGeminiRealtime('k');
+            await multi.StartSession(makeParams({
+                Config: { voice: 'Kore', speechConfig: { multiSpeakerVoiceConfig: { speakerVoiceConfigs: [] } } },
+            }));
+            expect(multi.LastConnectArgs!.Config.speechConfig?.voiceConfig).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('Kore'));
+
+            // A replicated (cloned) voice is a voice decision too, so it stands.
+            warn.mockClear();
+            const replicated = new TestGeminiRealtime('k');
+            await replicated.StartSession(makeParams({
+                Config: { voice: 'Kore', speechConfig: { voiceConfig: { replicatedVoiceConfig: { voiceSample: {} } } } },
+            }));
+            const voiceConfig = replicated.LastConnectArgs!.Config.speechConfig?.voiceConfig;
+            expect(voiceConfig?.replicatedVoiceConfig).toBeDefined();
+            expect(voiceConfig?.prebuiltVoiceConfig).toBeUndefined();
+            // Asserted on CONTENT, not call count: an exact count breaks whenever an unrelated
+            // warning is added, which says nothing about whether the discard was reported.
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('Kore'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('treats a blank voice as absent rather than sending an empty voiceName — and SAYS so', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            await driver.StartSession(makeParams({ Config: { voice: '   ' } }));
+            expect('speechConfig' in driver.LastConnectArgs!.Config).toBe(false);
+            expect((driver.LastConnectArgs!.Config as Record<string, unknown>).voice).toBeUndefined();
+            // Blank is the likeliest of the three malformed cases in practice — a cleared-but-not-
+            // removed metadata field — so it must not be the one case that vanishes silently.
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('voice'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('reports a NON-STRING voice as malformed — not as a foreign provider key — and never sends it raw', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            await driver.StartSession(makeParams({ Config: { voice: 42 } }));
+            expect((driver.LastConnectArgs!.Config as Record<string, unknown>).voice).toBeUndefined();
+            expect('speechConfig' in driver.LastConnectArgs!.Config).toBe(false);
+            // `voice` IS a Gemini-meaningful key, so the scrub message ("other realtime drivers use
+            // these; Gemini Live does not apply them") would be a lie about a plain config typo.
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('not a string'));
+            expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('Scrubbed non-Gemini config key'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('client-direct: the voice is token-LOCKED and carried to the browser (both halves, one mapping)', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { voice: 'Kore' } }));
+
+        // speechConfig is a generation-level field, so it IS mask-safe — the mint locks it under
+        // lockAdditionalFields: [], making the server's voice authoritative even if a client tampers.
+        const locked = driver.MintParams!.config!.liveConnectConstraints!.config as LiveConnectConfig;
+        expect(locked.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName).toBe('Kore');
+
+        // ...and the browser applies the server-built config verbatim, so this one mapping serves the
+        // client-direct topology too — no second translation site.
+        const sc = cfg.SessionConfig as { config: LiveConnectConfig & Record<string, unknown> };
+        expect(sc.config.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName).toBe('Kore');
+        expect(sc.config.voice).toBeUndefined();
+    });
+
+    it('consumes voice AND disableAutoResponse together — the only two keys sharing that mechanism', async () => {
+        const driver = new TestGeminiRealtime('k');
+        await driver.StartSession(makeParams({ Config: { voice: 'Kore', disableAutoResponse: true } }));
+        const config = driver.LastConnectArgs!.Config as LiveConnectConfig & Record<string, unknown>;
+        // Both translated, neither forwarded raw. Each is covered alone elsewhere; this pins the pair,
+        // since both are consumed pre-merge and a future reorder could break one without the other.
+        expect(config.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName).toBe('Kore');
+        expect(config.realtimeInputConfig?.automaticActivityDetection?.disabled).toBe(true);
+        expect(config.voice).toBeUndefined();
+        expect(config.disableAutoResponse).toBeUndefined();
+    });
+
+    it('warns that multiSpeakerVoiceConfig is unsupported on Live at all, not merely bypassed here', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            // The SDK's tLiveSpeechConfig throws on this key UNCONDITIONALLY for live sessions, on
+            // both topologies (connect, and the token mint via liveConnectConstraintsToMldev). So
+            // forwarding it silently hands the caller a guaranteed-dead session with no hint why.
+            await driver.StartSession(makeParams({
+                Config: { speechConfig: { multiSpeakerVoiceConfig: { speakerVoiceConfigs: [] } } },
+            }));
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('multiSpeakerVoiceConfig'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('ignores a non-OBJECT speechConfig instead of spreading it into garbage', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            // `speechConfig` arrives from an open JSON bag through an `as Partial<LiveConnectConfig>`
+            // cast, so its declared type is unenforced — the same cast that hid #3721. Spreading a
+            // string yields {0:'K',1:'o',…} and puts that on the wire.
+            await driver.StartSession(makeParams({ Config: { voice: 'Kore', speechConfig: 'Puck' } }));
+            const speechConfig = driver.LastConnectArgs!.Config.speechConfig as Record<string, unknown>;
+            expect(speechConfig['0']).toBeUndefined();
+            expect(speechConfig.voiceConfig).toEqual({ prebuiltVoiceConfig: { voiceName: 'Kore' } });
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('speechConfig'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Per-model Live legality (plan §6 tasks C1-C4)                     */
+/*                                                                    */
+/*  Every rule here fails at SESSION MINT when broken — upstream of   */
+/*  all UI code — so each is pinned per model rather than trusted.     */
+/* ------------------------------------------------------------------ */
+describe('per-model Live legality', () => {
+    const connectConfig = (d: TestGeminiRealtime) => (d.LastConnectArgs?.Config ?? {}) as Record<string, unknown>;
+    const realtimeInput = (d: TestGeminiRealtime) =>
+        (connectConfig(d).realtimeInputConfig ?? {}) as Record<string, unknown>;
+    const thinkingOf = (d: TestGeminiRealtime) => connectConfig(d).thinkingConfig as Record<string, unknown> | undefined;
+
+    let warn: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+        warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    });
+
+    describe('C1 — affective dialogue is removed from the 3.8 API', () => {
+        it('drops enableAffectiveDialog for gemini-3.8-live, with a warning', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.8-live', Config: { enableAffectiveDialog: true } }));
+            expect(connectConfig(d).enableAffectiveDialog).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('enableAffectiveDialog'));
+        });
+
+        it('keeps it for the 3.1 preview, where it is still valid', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.1-flash-live-preview', Config: { enableAffectiveDialog: true } })
+            );
+            expect(connectConfig(d).enableAffectiveDialog).toBe(true);
+        });
+    });
+
+    describe('C2 — proactive audio is permanently on for 3.8', () => {
+        it('drops proactivity.proactiveAudio:false rather than sending an error', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.8-live', Config: { proactivity: { proactiveAudio: false } } })
+            );
+            expect(connectConfig(d).proactivity).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('proactiveAudio'));
+        });
+
+        it('leaves proactiveAudio:true alone — only the illegal value is removed', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.8-live', Config: { proactivity: { proactiveAudio: true } } })
+            );
+            expect(connectConfig(d).proactivity).toEqual({ proactiveAudio: true });
+        });
+    });
+
+    describe('full-duplex capability — what a room\'s floor gate keys on', () => {
+        it('reports the 3.8 models as full-duplex (proactive audio is permanently on)', async () => {
+            const session = await new TestGeminiRealtime('k').StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+            expect(session.Capabilities?.FullDuplex).toBe(true);
+        });
+
+        it('reports the 3.1 preview as turn-based', async () => {
+            const session = await new TestGeminiRealtime('k').StartSession(makeParams({ Model: 'gemini-3.1-flash-live-preview' }));
+            expect(session.Capabilities?.FullDuplex).toBe(false);
+        });
+
+        it('reports a 3.8 session in MEETING mode as turn-based: its activity detection is off, so the bridge drives turns', async () => {
+            const session = await new TestGeminiRealtime('k').StartSession(
+                makeParams({ Model: 'gemini-3.8-live', Config: { disableAutoResponse: true } })
+            );
+            expect(session.Capabilities?.FullDuplex).toBe(false);
+        });
+    });
+
+    describe('C3 — thinking level per model', () => {
+        it('omits thinkingConfig ENTIRELY for gemini-3.8-live, as its model page instructs', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.8-live', Config: { reasoning: { Remote: { Effort: 'high' } } } })
+            );
+            expect(thinkingOf(d)).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('does not accept'));
+        });
+
+        it('sends low/medium/high for Extended Thinking', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Config: { reasoning: { Remote: { Effort: 'medium' } } },
+                })
+            );
+            expect(thinkingOf(d)?.thinkingLevel).toBe('MEDIUM');
+        });
+
+        it('refuses minimal on Extended Thinking without killing the session, falling back to default medium', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Config: { reasoning: { Remote: { Effort: 'minimal' } } },
+                })
+            );
+            expect(thinkingOf(d)?.thinkingLevel).toBe('MEDIUM');
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('accepts only'));
+        });
+
+        it('accepts minimal on the 3.1 preview, which allows it', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.1-flash-live-preview',
+                    Config: { reasoning: { Remote: { Effort: 'minimal' } } },
+                })
+            );
+            expect(thinkingOf(d)?.thinkingLevel).toBe('MINIMAL');
+        });
+
+        it('honours the flat legacy effortLevel bag key so existing configs keep working', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({ Model: 'gemini-3.8-live-extended-thinking', Config: { reasoningEffort: 'low' } })
+            );
+            expect(thinkingOf(d)?.thinkingLevel).toBe('LOW');
+        });
+
+        it('sets includeThoughts only when asked, and only where supported', async () => {
+            const d1 = new TestGeminiRealtime('k');
+            await d1.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Config: { reasoning: { IncludeThoughtSummaries: true } },
+                })
+            );
+            expect(thinkingOf(d1)?.includeThoughts).toBe(true);
+
+            const d2 = new TestGeminiRealtime('k');
+            await d2.StartSession(
+                makeParams({ Model: 'gemini-3.8-live', Config: { reasoning: { IncludeThoughtSummaries: true } } })
+            );
+            expect(thinkingOf(d2)).toBeUndefined();
+        });
+
+        it('defaults to medium thinkingLevel on Extended Thinking when none specified', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.8-live-extended-thinking' }));
+            expect(thinkingOf(d)?.thinkingLevel).toBe('MEDIUM');
+        });
+    });
+
+    describe('C4 — turn coverage is stated, never inherited', () => {
+        it('defaults to audio-only, so billed video frames are never inherited', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+            expect(realtimeInput(d).turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+        });
+
+        it('includes all video only when the catalog explicitly asks', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live',
+                    Config: { turnDetection: { Coverage: 'audioActivityAndAllVideo' } },
+                })
+            );
+            expect(realtimeInput(d).turnCoverage).toBe('TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO');
+        });
+
+        it('states coverage even on the legacy model, so behaviour never depends on a provider default', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.1-flash-live-preview' }));
+            expect(realtimeInput(d).turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+        });
+
+        it('preserves an existing automaticActivityDetection alongside coverage', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.8-live', Config: { disableAutoResponse: true } }));
+            const ri = realtimeInput(d);
+            expect(ri.turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+            expect((ri.automaticActivityDetection as Record<string, unknown>)?.disabled).toBe(true);
+        });
+    });
+
+    describe('C5 — refuse BLOCKING locally for Extended Thinking', () => {
+        const testTools = [
+            {
+                Name: 'search_docs',
+                Description: 'Search documentation',
+                ParametersSchema: { type: 'object', properties: { query: { type: 'string' } } },
+            },
+        ];
+
+        it('defaults tool declarations to behavior: NON_BLOCKING', () => {
+            const decls = GeminiRealtime.MapToolsToFunctionDeclarations(testTools);
+            expect(decls).toHaveLength(1);
+            expect(decls[0].behavior).toBe('NON_BLOCKING');
+        });
+
+        it('permits BLOCKING on gemini-3.8-live where blocking is supported', () => {
+            const decls = GeminiRealtime.MapToolsToFunctionDeclarations(testTools, 'gemini-3.8-live', 'BLOCKING');
+            expect(decls).toHaveLength(1);
+            expect(decls[0].behavior).toBe('BLOCKING');
+        });
+
+        it('permits BLOCKING on legacy 3.1 preview where blocking is supported', () => {
+            const decls = GeminiRealtime.MapToolsToFunctionDeclarations(
+                testTools,
+                'gemini-3.1-flash-live-preview',
+                'BLOCKING'
+            );
+            expect(decls).toHaveLength(1);
+            expect(decls[0].behavior).toBe('BLOCKING');
+        });
+
+        it('forces NON_BLOCKING and warns when BLOCKING is requested on gemini-3.8-live-extended-thinking', () => {
+            const decls = GeminiRealtime.MapToolsToFunctionDeclarations(
+                testTools,
+                'gemini-3.8-live-extended-thinking',
+                'BLOCKING'
+            );
+            expect(decls).toHaveLength(1);
+            expect(decls[0].behavior).toBe('NON_BLOCKING');
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('blocking tool execution is not supported'));
+        });
+
+        it('refuses BLOCKING in StartSession for Extended Thinking when passed via Config bag', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Tools: testTools,
+                    Config: { tooling: { Behavior: 'BLOCKING' } },
+                })
+            );
+            const tools =
+                (connectConfig(d).tools as Array<{
+                    functionDeclarations?: Array<{ name: string; behavior?: string }>;
+                }>) ?? [];
+            expect(tools[0].functionDeclarations![0].behavior).toBe('NON_BLOCKING');
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('blocking tool execution is not supported'));
+        });
+
+        it('cleanses any BLOCKING functionDeclaration in applyModelLegality for Extended Thinking', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live-extended-thinking',
+                    Config: {
+                        tools: [
+                            {
+                                functionDeclarations: [{ name: 'injected_tool', behavior: 'BLOCKING' }],
+                            },
+                        ],
+                    },
+                })
+            );
+            const tools =
+                (connectConfig(d).tools as Array<{
+                    functionDeclarations?: Array<{ name: string; behavior?: string }>;
+                }>) ?? [];
+            expect(tools[0].functionDeclarations![0].behavior).toBe('NON_BLOCKING');
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('blocking tool execution is not supported'));
+        });
+    });
+
+    describe('Phase D — D6 function scheduling gating and SessionConfig profile fields', () => {
+        it('stamps idleSignal, supportsScheduling, supportsBlocking in SessionConfig for Extended Thinking', async () => {
+            const driver = new ClientDirectTestable('k');
+            const cfg = await driver.CreateClientSession(makeParams({ Model: 'gemini-3.8-live-extended-thinking' }));
+            const sc = cfg.SessionConfig as Record<string, unknown>;
+            expect(sc['idleSignal']).toBe('interactionStatus');
+            expect(sc['supportsScheduling']).toBe(false);
+            expect(sc['supportsBlocking']).toBe(false);
+        });
+
+        it('stamps idleSignal, supportsScheduling, supportsBlocking in SessionConfig for plain 3.8 Live', async () => {
+            const driver = new ClientDirectTestable('k');
+            const cfg = await driver.CreateClientSession(makeParams({ Model: 'gemini-3.8-live' }));
+            const sc = cfg.SessionConfig as Record<string, unknown>;
+            expect(sc['idleSignal']).toBe('turnComplete');
+            expect(sc['supportsScheduling']).toBe(true);
+            expect(sc['supportsBlocking']).toBe(true);
+        });
+
+        it('mints the inbound video stream count: one for the 3.8 video models, zero for a model without video', async () => {
+            const driver = new ClientDirectTestable('k');
+            for (const [model, expected] of [
+                ['gemini-3.8-live', 1],
+                ['gemini-3.8-live-extended-thinking', 1],
+                ['gemini-3.1-flash-live-preview', 0],
+                ['some-unknown-live-model', 0],
+            ] as const) {
+                const cfg = await driver.CreateClientSession(makeParams({ Model: model }));
+                const sc = cfg.SessionConfig as Record<string, unknown>;
+                expect(sc['maxInboundVideoStreams'], model).toBe(expected);
+            }
+        });
+
+        it('reports MaxInboundVideoStreams in the session capabilities, consistent with the inbound video track', async () => {
+            const d = new TestGeminiRealtime('k');
+            const video = await d.StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+            expect(video.Capabilities?.MaxInboundVideoStreams).toBe(1);
+            expect(video.Capabilities?.SupportedInboundTracks?.some((t) => t.Modality === 'video')).toBe(true);
+            const audioOnly = await new TestGeminiRealtime('k').StartSession(makeParams({ Model: 'gemini-3.1-flash-live-preview' }));
+            expect(audioOnly.Capabilities?.MaxInboundVideoStreams).toBe(0);
+        });
+
+        it("declares the inbound video track's rate from the model's profile, not a literal", async () => {
+            const profile = ResolveGeminiLiveProfile('gemini-3.8-live');
+            const declared = profile.MaxInboundVideoRate;
+            profile.MaxInboundVideoRate = 2;
+            try {
+                const session = await new TestGeminiRealtime('k').StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+                const track = session.Capabilities?.SupportedInboundTracks?.find((t) => t.Modality === 'video');
+                expect(track?.Rate).toBe(2);
+            } finally {
+                profile.MaxInboundVideoRate = declared;
+            }
+        });
+
+        it('attaches scheduling on SendToolResult when model supports scheduling (gemini-3.8-live)', async () => {
+            const d = new TestGeminiRealtime('k');
+            const session = await d.StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+            // Simulate incoming tool call to cache the name
+            d.Fake.Emit({
+                toolCall: { functionCalls: [{ id: 'call-1', name: 'lookup', args: {} }] },
+            } as LiveServerMessage);
+
+            await session.SendToolResult('call-1', JSON.stringify({ result: 'data', scheduling: 'WHEN_IDLE' }));
+            expect(d.Fake.ToolResponses).toHaveLength(1);
+            const resp = d.Fake.ToolResponses[0].functionResponses;
+            const item = Array.isArray(resp) ? resp[0] : resp;
+            expect(item.scheduling).toBe('WHEN_IDLE');
+        });
+
+        it('drops scheduling with a warning when model does NOT support scheduling (Extended Thinking)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const d = new TestGeminiRealtime('k');
+                const session = await d.StartSession(makeParams({ Model: 'gemini-3.8-live-extended-thinking' }));
+                d.Fake.Emit({
+                    toolCall: { functionCalls: [{ id: 'call-1', name: 'lookup', args: {} }] },
+                } as LiveServerMessage);
+
+                await session.SendToolResult('call-1', JSON.stringify({ result: 'data', scheduling: 'SILENT' }));
+                expect(d.Fake.ToolResponses).toHaveLength(1);
+                const resp = d.Fake.ToolResponses[0].functionResponses;
+                const item = Array.isArray(resp) ? resp[0] : resp;
+                expect(item.scheduling).toBeUndefined();
+                expect(warn).toHaveBeenCalledWith(expect.stringContaining('scheduling is only supported on gemini-3.8-live'));
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
+        it('supports __mj_scheduling, accepts INTERRUPTED, and strips scheduling keys from payload', async () => {
+            const d = new TestGeminiRealtime('k');
+            const session = await d.StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+            d.Fake.Emit({
+                toolCall: { functionCalls: [{ id: 'call-2', name: 'lookup', args: {} }] },
+            } as LiveServerMessage);
+
+            await session.SendToolResult('call-2', JSON.stringify({ result: 'ok', __mj_scheduling: 'INTERRUPTED' }));
+            expect(d.Fake.ToolResponses).toHaveLength(1);
+            const resp = d.Fake.ToolResponses[0].functionResponses;
+            const item = Array.isArray(resp) ? resp[0] : resp;
+            expect(item.scheduling).toBe('INTERRUPT');
+            const payload = item.response as Record<string, unknown>;
+            expect(payload['result']).toBe('ok');
+            expect(payload['__mj_scheduling']).toBeUndefined();
+            expect(payload['scheduling']).toBeUndefined();
+        });
+
+        it('warns on unrecognized scheduling value', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const parsed: Record<string, unknown> = { key: 'val', scheduling: 'INVALID_SCHED' };
+                const res = GeminiRealtime.ExtractAndResolveScheduling(parsed, true, 'testTool');
+                expect(res).toBeUndefined();
+                expect(parsed['key']).toBe('val');
+                expect(parsed['scheduling']).toBeUndefined();
+                expect(warn).toHaveBeenCalledWith(expect.stringContaining('Unrecognized function scheduling value "INVALID_SCHED"'));
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
+        it('states behavior on bag tools without behavior (C5a) and warns on unrecognized behavior (C5b)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const d = new TestGeminiRealtime('k');
+                await d.StartSession(
+                    makeParams({
+                        Model: 'gemini-3.8-live',
+                        Config: {
+                            tools: [
+                                {
+                                    functionDeclarations: [
+                                        { name: 'bare_tool' },
+                                        { name: 'typo_tool', behavior: 'BLOKING' as Behavior },
+                                    ],
+                                },
+                            ],
+                        },
+                    })
+                );
+                const tools = (connectConfig(d).tools as Array<{
+                    functionDeclarations?: Array<{ name: string; behavior?: string }>;
+                }>) ?? [];
+                const decls = tools[0].functionDeclarations!;
+                expect(decls[0].name).toBe('bare_tool');
+                expect(decls[0].behavior).toBe('NON_BLOCKING');
+                expect(decls[1].name).toBe('typo_tool');
+                expect(decls[1].behavior).toBe('NON_BLOCKING');
+                expect(warn).toHaveBeenCalledWith(expect.stringContaining('Unrecognized behavior value "BLOKING"'));
+            } finally {
+                warn.mockRestore();
+            }
+        });
+
+        it('scrubs tooling, toolBehavior, and functionCallingBehavior from vendor config bag (C5c)', async () => {
+            const d = new TestGeminiRealtime('k');
+            await d.StartSession(
+                makeParams({
+                    Model: 'gemini-3.8-live',
+                    Config: {
+                        tooling: { Behavior: 'NON_BLOCKING' },
+                        toolBehavior: 'BLOCKING',
+                        functionCallingBehavior: 'BLOCKING',
+                    },
+                })
+            );
+            const cfg = connectConfig(d) as Record<string, unknown>;
+            expect(cfg['tooling']).toBeUndefined();
+            expect(cfg['toolBehavior']).toBeUndefined();
+            expect(cfg['functionCallingBehavior']).toBeUndefined();
+        });
+    });
+
+    it('an unknown Live model still mints a working session rather than failing', async () => {
+        const d = new TestGeminiRealtime('k');
+        await d.StartSession(makeParams({ Model: 'gemini-9.9-live-future' }));
+        expect(realtimeInput(d).turnCoverage).toBe('TURN_INCLUDES_ONLY_ACTIVITY');
+        expect(thinkingOf(d)).toBeUndefined();
+    });
+});
+
+/** The base driver as if it served Gemini Enterprise, for the avatar rule (the real Enterprise driver arrives later). */
+class EnterpriseClientDirect extends ClientDirectTestable {
+    protected override get Endpoint(): 'enterprise' {
+        return 'enterprise';
+    }
+}
+
+/** A bridged (server-side) session driver on Gemini Enterprise. */
+class EnterpriseBridged extends TestGeminiRealtime {
+    protected override get Endpoint(): 'enterprise' {
+        return 'enterprise';
+    }
+}
+
+const BEN: RealtimeSessionParams['Avatar'] = { AvatarID: 'Ben', PersonaName: 'Ben', Source: 'persona' };
+
+/** The connect config a client-direct mint carried, and the warnings it logged. */
+async function mintWithWarnings(
+    driver: ClientDirectTestable,
+    params: RealtimeSessionParams,
+): Promise<{ sc: Record<string, unknown>; config: Record<string, unknown>; warnings: string[]; minted: ClientRealtimeSessionConfig }> {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+        const cfg = await driver.CreateClientSession(params);
+        const sc = cfg.SessionConfig as Record<string, unknown>;
+        return { sc, config: sc['config'] as Record<string, unknown>, warnings: warn.mock.calls.map((c) => String(c[0])), minted: cfg };
+    } finally {
+        warn.mockRestore();
+    }
+}
+
+/** The connect config a bridged (server-side) session opened with, and the warnings it logged. */
+async function startWithWarnings(driver: TestGeminiRealtime, params: RealtimeSessionParams): Promise<{ config: Record<string, unknown>; warnings: string[] }> {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+        await driver.StartSession(params);
+        return { config: (driver.LastConnectArgs?.Config ?? {}) as Record<string, unknown>, warnings: warn.mock.calls.map((c) => String(c[0])) };
+    } finally {
+        warn.mockRestore();
+    }
+}
+
+describe('C4 on each endpoint: a session sends only a turn coverage its endpoint accepts', () => {
+    const ALL_VIDEO = 'TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO';
+    const ONLY_ACTIVITY = 'TURN_INCLUDES_ONLY_ACTIVITY';
+    const ENTERPRISE_LINE =
+        '[GeminiRealtime] Turn coverage "audioActivityAndAllVideo" is not one Gemini Enterprise accepts for gemini-3.8-live ' +
+        '(it accepts audioActivityOnly); sent "audioActivityOnly" (TURN_INCLUDES_ONLY_ACTIVITY) instead.';
+
+    /** Session params whose catalog coverage (the bag's `turnDetection.Coverage`) is `coverage`. */
+    const asks = (coverage: string, extra: Record<string, JSONValue> = {}): RealtimeSessionParams =>
+        makeParams({ Model: 'gemini-3.8-live', Config: { turnDetection: { Coverage: coverage }, ...extra } });
+    const coverageOf = (config: Record<string, unknown>): unknown => (config['realtimeInputConfig'] as Record<string, unknown> | undefined)?.['turnCoverage'];
+    const coverageLines = (warnings: string[]): string[] => warnings.filter((line) => line.includes('Turn coverage'));
+
+    it('a bridged Gemini Enterprise session that asks for all video sends only activity, and one line names both', async () => {
+        const { config, warnings } = await startWithWarnings(new EnterpriseBridged('k'), asks('audioActivityAndAllVideo'));
+        expect(coverageOf(config)).toBe(ONLY_ACTIVITY);
+        expect(coverageLines(warnings)).toEqual([ENTERPRISE_LINE]);
+    });
+
+    it('a Gemini Enterprise mint does the same', async () => {
+        const { config, warnings } = await mintWithWarnings(new EnterpriseClientDirect('k'), asks('audioActivityAndAllVideo'));
+        expect(coverageOf(config)).toBe(ONLY_ACTIVITY);
+        expect(coverageLines(warnings)).toEqual([ENTERPRISE_LINE]);
+    });
+
+    it('never puts TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO in a Gemini Enterprise config, however it is asked for', async () => {
+        const requests: Array<[string, RealtimeSessionParams]> = [
+            ['the catalog coverage, padded', asks(' audioActivityAndAllVideo ')],
+            ['a raw realtimeInputConfig in the bag', makeParams({ Model: 'gemini-3.8-live', Config: { realtimeInputConfig: { turnCoverage: ALL_VIDEO } } })],
+            ['both, in a meeting', asks('audioActivityAndAllVideo', { realtimeInputConfig: { turnCoverage: ALL_VIDEO }, disableAutoResponse: true })],
+            ['Extended Thinking', { ...asks('audioActivityAndAllVideo'), Model: 'gemini-3.8-live-extended-thinking' }],
+            ['an unknown model', { ...asks('audioActivityAndAllVideo'), Model: 'gemini-9.9-live-future' }],
+            ['an avatar published into a room', { ...asks('audioActivityAndAllVideo'), Avatar: { AvatarID: 'Ben', PersonaName: 'Ben', Delivery: 'room' } }],
+        ];
+        for (const [label, params] of requests) {
+            const bridged = await startWithWarnings(new EnterpriseBridged('k'), params);
+            const minted = await mintWithWarnings(new EnterpriseClientDirect('k'), params);
+            for (const [path, config] of [['bridged', bridged.config], ['minted', minted.config]] as const) {
+                expect(coverageOf(config), `${label}, ${path}`).toBe(ONLY_ACTIVITY);
+                expect(JSON.stringify(config), `${label}, ${path}`).not.toContain(ALL_VIDEO);
+            }
+        }
+    });
+
+    it('the Developer API still sends TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO when the catalog asks, bridged and minted, with no line', async () => {
+        const bridged = await startWithWarnings(new TestGeminiRealtime('k'), asks('audioActivityAndAllVideo'));
+        const minted = await mintWithWarnings(new ClientDirectTestable('k'), asks('audioActivityAndAllVideo'));
+        expect(coverageOf(bridged.config)).toBe(ALL_VIDEO);
+        expect(coverageOf(minted.config)).toBe(ALL_VIDEO);
+        expect(coverageLines([...bridged.warnings, ...minted.warnings])).toEqual([]);
+    });
+
+    it('logs nothing on either endpoint when the session asks for nothing or for audioActivityOnly', async () => {
+        for (const driver of [new TestGeminiRealtime('k'), new EnterpriseBridged('k')]) {
+            for (const params of [makeParams({ Model: 'gemini-3.8-live' }), asks('audioActivityOnly')]) {
+                const { config, warnings } = await startWithWarnings(driver, params);
+                expect(coverageOf(config)).toBe(ONLY_ACTIVITY);
+                expect(coverageLines(warnings)).toEqual([]);
+            }
+        }
+    });
+
+    it('sends only activity for a value that is not a coverage, on the Developer API too, and names it', async () => {
+        const { config, warnings } = await startWithWarnings(new TestGeminiRealtime('k'), asks('allInput'));
+        expect(coverageOf(config)).toBe(ONLY_ACTIVITY);
+        expect(coverageLines(warnings)).toEqual([
+            '[GeminiRealtime] Turn coverage "allInput" is not one the Gemini Developer API accepts for gemini-3.8-live ' +
+                '(it accepts audioActivityOnly, audioActivityAndAllVideo); sent "audioActivityOnly" (TURN_INCLUDES_ONLY_ACTIVITY) instead.',
+        ]);
+    });
+
+    it('quotes the configured value as JSON, so a quote or a line break in it cannot split the log line', async () => {
+        const { warnings } = await startWithWarnings(new EnterpriseBridged('k'), asks('all"video\nnext'));
+        const [line] = coverageLines(warnings);
+        expect(line).toContain('Turn coverage "all\\"video\\nnext" is not one Gemini Enterprise accepts');
+        expect(line).not.toContain('\n');
+    });
+});
+
+describe('live avatars: the driver asks for one only where the endpoint renders it', () => {
+    it('stays audio-only on the Developer API, logging why, with no avatar block in the mint', async () => {
+        const { sc, config, warnings } = await mintWithWarnings(new ClientDirectTestable('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+        expect(config['responseModalities']).toEqual(['AUDIO']);
+        expect(config['avatarConfig']).toBeUndefined();
+        expect(sc['avatar']).toBeUndefined();
+        expect(warnings.filter((w) => w.includes('Reason: endpoint'))).toHaveLength(1);
+        expect(warnings.find((w) => w.includes('Reason: endpoint'))).toContain('Avatar "Ben" (persona Ben) not used: gemini-3.8-live on the Gemini Developer API renders no avatar');
+    });
+
+    it('names Gemini Enterprise in that line for a model that renders no avatar there', async () => {
+        const { warnings } = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live-extended-thinking', Avatar: BEN }));
+        expect(warnings.find((w) => w.includes('Reason: endpoint'))).toContain('not used: gemini-3.8-live-extended-thinking on Gemini Enterprise renders no avatar');
+    });
+
+    it('asks for video and the avatar at 2 Mbps on Enterprise 3.8 Live, and mints the avatar block', async () => {
+        const { sc, config, warnings } = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+        expect(config['responseModalities']).toEqual(['VIDEO']);
+        expect(config['avatarConfig']).toEqual({ avatarName: 'Ben', videoBitrateBps: 2_000_000 });
+        expect(sc['avatar']).toEqual({ output: true, encoding: 'video/mp4; codecs="avc1.42c01f, mp4a.40.2"', audioMuxed: true });
+        expect(warnings.filter((w) => w.includes('Avatar "Ben"'))).toEqual([]);
+    });
+
+    it('asks for the bitrate MJ_GEMINI_AVATAR_VIDEO_BITRATE_BPS names, leaves the field out for 0, and uses 2 Mbps for a bad value', async () => {
+        const key = 'MJ_GEMINI_AVATAR_VIDEO_BITRATE_BPS';
+        const saved = process.env[key];
+        const avatarFor = async (value: string): Promise<unknown> => {
+            process.env[key] = value;
+            return (await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }))).config['avatarConfig'];
+        };
+        try {
+            expect(await avatarFor('750000')).toEqual({ avatarName: 'Ben', videoBitrateBps: 750_000 });
+            expect(await avatarFor('0')).toEqual({ avatarName: 'Ben' });
+            expect(await avatarFor('two million')).toEqual({ avatarName: 'Ben', videoBitrateBps: 2_000_000 });
+        } finally {
+            if (saved === undefined) delete process.env[key];
+            else process.env[key] = saved;
+        }
+    });
+
+    it('never puts the avatar into the token lock', async () => {
+        const driver = new EnterpriseClientDirect('k');
+        await mintWithWarnings(driver, makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+        const constraints = driver.MintParams?.config?.liveConnectConstraints?.config as Record<string, unknown> | undefined;
+        expect(constraints?.['avatarConfig']).toBeUndefined();
+    });
+
+    it('stays audio-only for a custom avatar, an empty avatar id, or a model without avatars, with the reason', async () => {
+        const custom = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: { AvatarID: 'Mine', Kind: 'custom' } }));
+        expect(custom.config['avatarConfig']).toBeUndefined();
+        expect(custom.warnings.some((w) => w.includes('Reason: custom-disabled'))).toBe(true);
+
+        const blank = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: { AvatarID: '  ' } }));
+        expect(blank.config['responseModalities']).toEqual(['AUDIO']);
+        expect(blank.warnings.some((w) => w.includes('Reason: unknown-avatar'))).toBe(true);
+
+        const et = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live-extended-thinking', Avatar: BEN }));
+        expect(et.config['avatarConfig']).toBeUndefined();
+        expect(et.sc['avatar']).toBeUndefined();
+        expect(et.warnings.some((w) => w.includes('Reason: endpoint'))).toBe(true);
+    });
+
+    it('a server-side (bridged) session never asks for video, even on Enterprise', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const d = new EnterpriseBridged('k');
+            await d.StartSession(makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+            const config = d.LastConnectArgs!.Config as Record<string, unknown>;
+            expect(config['responseModalities']).toEqual(['AUDIO']);
+            expect(config['avatarConfig']).toBeUndefined();
+            expect(warn.mock.calls.map((c) => String(c[0])).filter((w) => w.includes('Reason: bridged'))).toHaveLength(1);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('removes video output and an avatarConfig that arrive through the config bag', async () => {
+        const { config, warnings } = await mintWithWarnings(
+            new EnterpriseClientDirect('k'),
+            makeParams({ Model: 'gemini-3.8-live', Config: { responseModalities: ['VIDEO'], avatarConfig: { avatarName: 'Ben' } } }),
+        );
+        expect(config['responseModalities']).toEqual(['AUDIO']);
+        expect(config['avatarConfig']).toBeUndefined();
+        expect(warnings.some((w) => w.includes('Dropped `avatarConfig`'))).toBe(true);
+        expect(warnings.some((w) => w.includes('Dropped the VIDEO response modality'))).toBe(true);
+    });
+
+    it('changes nothing for a session without an avatar request', async () => {
+        const { sc, config, warnings } = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live' }));
+        expect(config['responseModalities']).toEqual(['AUDIO']);
+        expect(sc['avatar']).toBeUndefined();
+        expect(warnings.filter((w) => /avatar|VIDEO/i.test(w))).toEqual([]);
+    });
+});
+
+/** Exposes the protected pact builder on the Enterprise endpoint, as a relay-backed driver uses it. */
+class PactProbe extends EnterpriseClientDirect {
+    public Pact(model: string, config: LiveConnectConfig, browserConfig?: LiveConnectConfig): Record<string, unknown> {
+        return this.SessionPactFor(model, config, browserConfig) as Record<string, unknown>;
+    }
+    public Config(params: RealtimeSessionParams): LiveConnectConfig {
+        return this.BuildConnectConfig(params);
+    }
+}
+
+describe('SessionPactFor: the pact a client-direct mint returns', () => {
+    it('is what CreateClientSession mints: the full config by default, with the model facts', async () => {
+        const driver = new PactProbe('k');
+        const params = makeParams({ Model: 'gemini-3.8-live', Avatar: BEN });
+        const minted = (await driver.CreateClientSession(params)).SessionConfig;
+        expect(driver.Pact('gemini-3.8-live', driver.Config(params))).toEqual(minted);
+    });
+
+    it("carries a smaller browser config when given one; the avatar block and the model facts still follow the session's config", () => {
+        const driver = new PactProbe('k');
+        const config = driver.Config(makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+        const pact = driver.Pact('gemini-3.8-live', config, { responseModalities: config.responseModalities });
+        expect(pact['config']).toEqual({ responseModalities: ['VIDEO'] });
+        expect(pact['avatar']).toEqual({ output: true, encoding: 'video/mp4; codecs="avc1.42c01f, mp4a.40.2"', audioMuxed: true });
+        expect(pact).toMatchObject({ model: 'gemini-3.8-live', idleSignal: 'turnComplete', supportsInboundVideo: true });
+        expect(JSON.stringify(pact)).not.toContain('You are a helpful voice assistant.');
+    });
+
+    it('is plain JSON that shares nothing with the config', () => {
+        const driver = new PactProbe('k');
+        const config = driver.Config(makeParams({ Model: 'gemini-3.8-live' }));
+        const pact = driver.Pact('gemini-3.8-live', config);
+        (pact['config'] as Record<string, unknown>)['responseModalities'] = ['TEXT'];
+        expect(config.responseModalities).toEqual(['AUDIO']);
+    });
+});
+
+describe("live avatars: the mint says whether the avatar shows, and why not", () => {
+    it('on the Developer API: asked for, not granted, the endpoint renders none', async () => {
+        const { minted } = await mintWithWarnings(new ClientDirectTestable('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+        expect(minted.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+    });
+
+    it('on Enterprise 3.8 Live: granted', async () => {
+        const { minted } = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+        expect(minted.AvatarStatus).toEqual({ Requested: true, Granted: true });
+    });
+
+    it('a custom avatar, an empty id and a model without avatars each carry their reason', async () => {
+        const custom = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: { AvatarID: 'Mine', Kind: 'custom' } }));
+        expect(custom.minted.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'custom-disabled' });
+        const blank = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: { AvatarID: '  ' } }));
+        expect(blank.minted.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'unknown-avatar' });
+        const et = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live-extended-thinking', Avatar: BEN }));
+        expect(et.minted.AvatarStatus).toEqual({ Requested: true, Granted: false, Reason: 'endpoint' });
+    });
+
+    it('says nothing when the session asked for no avatar, even when the config bag asks for video', async () => {
+        const plain = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live' }));
+        expect('AvatarStatus' in plain.minted).toBe(false);
+        const bag = await mintWithWarnings(
+            new EnterpriseClientDirect('k'),
+            makeParams({ Model: 'gemini-3.8-live', Config: { responseModalities: ['VIDEO'], avatarConfig: { avatarName: 'Ben' } } }),
+        );
+        expect('AvatarStatus' in bag.minted).toBe(false);
+    });
+
+    it('keeps the status out of the driver pact', async () => {
+        const { sc, config } = await mintWithWarnings(new EnterpriseClientDirect('k'), makeParams({ Model: 'gemini-3.8-live', Avatar: BEN }));
+        for (const key of ['AvatarStatus', 'avatarStatus', 'Requested', 'Granted', 'Reason']) {
+            expect(sc[key], key).toBeUndefined();
+            expect(config[key], key).toBeUndefined();
+        }
+    });
+
+    it('renders avatars only for 3.8 Live on Enterprise', () => {
+        const enterprise = new EnterpriseClientDirect('k');
+        const developer = new ClientDirectTestable('k');
+        expect(enterprise.SupportsAvatarOutput('gemini-3.8-live')).toBe(true);
+        expect(enterprise.SupportsAvatarOutput('gemini-3.8-live-extended-thinking')).toBe(false);
+        expect(enterprise.SupportsAvatarOutput('gemini-3.1-flash-live-preview')).toBe(false);
+        expect(developer.SupportsAvatarOutput('gemini-3.8-live')).toBe(false);
+        expect(developer.SupportsAvatarOutput('gemini-3.1-flash-live-preview')).toBe(false);
     });
 });

@@ -18,9 +18,9 @@ import type * as http from 'http';
 import { RunView, type UserInfo } from '@memberjunction/core';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import type { MCPSessionContext, AuthMode, AuthResult } from './types.js';
-import { getAuthMode, isOAuthEnabled } from './OAuthConfig.js';
-import { validateBearerToken, resolveOAuthUser } from './TokenValidator.js';
-import { send401Response, send403Response, send503Response } from './WWWAuthenticate.js';
+import { GetAuthMode, IsOAuthEnabled } from './OAuthConfig.js';
+import { ValidateBearerToken, ResolveOAuthUser } from './TokenValidator.js';
+import { Send401Response, Send403Response, Send503Response } from './WWWAuthenticate.js';
 
 /**
  * Credential extraction result from HTTP request.
@@ -39,7 +39,7 @@ interface ExtractedCredentials {
  */
 export interface AuthGateConfig {
   /** Function to validate API keys (provided by Server.ts) */
-  validateApiKey: (
+  validateApiKey: (  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
     apiKey: string,
     request: Request | http.IncomingMessage
   ) => Promise<{
@@ -50,7 +50,7 @@ export interface AuthGateConfig {
     error?: string;
   }>;
   /** Function to get system user for 'none' mode */
-  getSystemUser: () => UserInfo | undefined;
+  getSystemUser: () => UserInfo | undefined;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -65,7 +65,7 @@ export interface AuthGateConfig {
  * @param request - The incoming HTTP request
  * @returns Extracted credentials
  */
-export function extractCredentials(request: Request | http.IncomingMessage): ExtractedCredentials {
+export function ExtractCredentials(request: Request | http.IncomingMessage): ExtractedCredentials {
   const result: ExtractedCredentials = {};
 
   // Check dedicated API key headers
@@ -117,6 +117,11 @@ export function extractCredentials(request: Request | http.IncomingMessage): Ext
   return result;
 }
 
+/** @deprecated Use {@link ExtractCredentials}. */
+export function extractCredentials(request: Request | http.IncomingMessage): ExtractedCredentials {
+  return ExtractCredentials(request);
+}
+
 /**
  * Authenticates a request using the configured auth mode.
  *
@@ -124,12 +129,12 @@ export function extractCredentials(request: Request | http.IncomingMessage): Ext
  * @param config - AuthGate configuration with validation functions
  * @returns Authentication result
  */
-export async function authenticateRequest(
+export async function AuthenticateRequest(
   request: Request | http.IncomingMessage,
   config: AuthGateConfig
 ): Promise<AuthResult> {
-  const mode = getAuthMode();
-  const credentials = extractCredentials(request);
+  const mode = GetAuthMode();
+  const credentials = ExtractCredentials(request);
 
   // Mode: none - skip authentication, use system user
   if (mode === 'none') {
@@ -161,6 +166,14 @@ export async function authenticateRequest(
       message: `Unknown auth mode: ${mode}`,
     },
   };
+}
+
+/** @deprecated Use {@link AuthenticateRequest}. */
+export async function authenticateRequest(
+  request: Request | http.IncomingMessage,
+  config: AuthGateConfig
+): Promise<AuthResult> {
+  return AuthenticateRequest(request, config);
 }
 
 /**
@@ -361,7 +374,7 @@ async function validateApiKeyCredentials(
  */
 async function validateOAuthCredentials(token: string): Promise<AuthResult> {
   // Validate the token - audience is derived from the auth provider
-  const validation = await validateBearerToken(token);
+  const validation = await ValidateBearerToken(token);
 
   if (!validation.valid || !validation.userInfo) {
     const errorCode = validation.error?.code || 'invalid_token';
@@ -393,7 +406,7 @@ async function validateOAuthCredentials(token: string): Promise<AuthResult> {
   }
 
   // Resolve user in MemberJunction
-  const userResult = await resolveOAuthUser(validation.userInfo);
+  const userResult = await ResolveOAuthUser(validation.userInfo);
 
   if (userResult.error) {
     const is403 = userResult.error.code === 'user_not_found' || userResult.error.code === 'user_inactive';
@@ -437,7 +450,7 @@ async function validateOAuthCredentials(token: string): Promise<AuthResult> {
  * @param result - The authentication result
  * @returns MCPSessionContext for use with MCP handlers
  */
-export function toSessionContext(result: AuthResult): MCPSessionContext {
+export function ToSessionContext(result: AuthResult): MCPSessionContext {
   if (!result.authenticated || !result.user) {
     throw new Error('Cannot create session context from unauthenticated result');
   }
@@ -464,13 +477,18 @@ export function toSessionContext(result: AuthResult): MCPSessionContext {
   };
 }
 
+/** @deprecated Use {@link ToSessionContext}. */
+export function toSessionContext(result: AuthResult): MCPSessionContext {
+  return ToSessionContext(result);
+}
+
 /**
  * Sends an appropriate error response based on the AuthResult.
  *
  * @param res - Express response object
  * @param result - The authentication result containing error details
  */
-export function sendAuthErrorResponse(res: Response, result: AuthResult): void {
+export function SendAuthErrorResponse(res: Response, result: AuthResult): void {
   if (result.authenticated) {
     throw new Error('Cannot send error response for authenticated result');
   }
@@ -478,12 +496,17 @@ export function sendAuthErrorResponse(res: Response, result: AuthResult): void {
   const error = result.error!;
 
   if (error.status === 503) {
-    send503Response(res, error.message);
+    Send503Response(res, error.message);
   } else if (error.status === 403) {
-    send403Response(res, error.message, error.message);
+    Send403Response(res, error.message, error.message);
   } else {
     // 401 Unauthorized
-    const options = isOAuthEnabled() ? {} : { resourceMetadataUrl: undefined };
-    send401Response(res, error.message, options);
+    const options = IsOAuthEnabled() ? {} : { resourceMetadataUrl: undefined };
+    Send401Response(res, error.message, options);
   }
+}
+
+/** @deprecated Use {@link SendAuthErrorResponse}. */
+export function sendAuthErrorResponse(res: Response, result: AuthResult): void {
+  return SendAuthErrorResponse(res, result);
 }

@@ -60,7 +60,7 @@ export interface InitAgentRunStepOptions {
  * @param step The new step entity to populate.
  * @param opts The started field values.
  */
-export function initAgentRunStep(step: MJAIAgentRunStepEntity, opts: InitAgentRunStepOptions): void {
+export function InitAgentRunStep(step: MJAIAgentRunStepEntity, opts: InitAgentRunStepOptions): void {
     step.AgentRunID = opts.AgentRunID;
     step.StepNumber = opts.StepNumber;
     step.StepType = opts.StepType;
@@ -81,6 +81,11 @@ export function initAgentRunStep(step: MJAIAgentRunStepEntity, opts: InitAgentRu
     if (opts.PayloadAtEnd != null) {
         step.PayloadAtEnd = opts.PayloadAtEnd;
     }
+}
+
+/** @deprecated Use {@link InitAgentRunStep}. */
+export function initAgentRunStep(step: MJAIAgentRunStepEntity, opts: InitAgentRunStepOptions): void {
+    return InitAgentRunStep(step, opts);
 }
 
 /** Inputs for {@link finalizeAgentRunStep} — the "completion" field set of an agent run step. */
@@ -110,7 +115,7 @@ export interface FinalizeAgentRunStepOptions {
  * @param step The step entity to finalize (must already have `StartedAt` set, i.e. been init'd).
  * @param opts The completion values.
  */
-export function finalizeAgentRunStep(step: MJAIAgentRunStepEntity, opts: FinalizeAgentRunStepOptions): void {
+export function FinalizeAgentRunStep(step: MJAIAgentRunStepEntity, opts: FinalizeAgentRunStepOptions): void {
     const completedAt = opts.completedAt ?? new Date();
     step.Status = opts.success ? 'Completed' : 'Failed';
     step.CompletedAt = completedAt;
@@ -129,6 +134,11 @@ export function finalizeAgentRunStep(step: MJAIAgentRunStepEntity, opts: Finaliz
             },
         });
     }
+}
+
+/** @deprecated Use {@link FinalizeAgentRunStep}. */
+export function finalizeAgentRunStep(step: MJAIAgentRunStepEntity, opts: FinalizeAgentRunStepOptions): void {
+    return FinalizeAgentRunStep(step, opts);
 }
 
 /** Diagnostics returned by {@link AgentRunStepSaveQueue.Flush}. */

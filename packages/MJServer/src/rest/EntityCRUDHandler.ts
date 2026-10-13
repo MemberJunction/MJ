@@ -11,7 +11,7 @@ export class EntityCRUDHandler {
     /**
      * Create a new entity
      */
-    static async createEntity(entityName: string, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
+    static async CreateEntity(entityName: string, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -77,11 +77,16 @@ export class EntityCRUDHandler {
             return { success: false, error: error?.message || 'Unknown error' };
         }
     }
+
+    /** @deprecated Use {@link CreateEntity}. */
+    static async createEntity(entityName: string, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
+        return this.CreateEntity(entityName, data, user);
+    }
     
     /**
      * Read an entity by ID
      */
-    static async getEntity(entityName: string, id: string | number, relatedEntities: string[] = null, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string }> {
+    static async GetEntity(entityName: string, id: string | number, relatedEntities: string[] = null, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string }> {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -116,11 +121,16 @@ export class EntityCRUDHandler {
             return { success: false, error: error?.message || 'Unknown error' };
         }
     }
+
+    /** @deprecated Use {@link GetEntity}. */
+    static async getEntity(entityName: string, id: string | number, relatedEntities: string[] = null, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string }> {
+        return this.GetEntity(entityName, id, relatedEntities, user);
+    }
     
     /**
      * Update an existing entity
      */
-    static async updateEntity(entityName: string, id: string | number, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
+    static async UpdateEntity(entityName: string, id: string | number, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -203,11 +213,16 @@ export class EntityCRUDHandler {
             return { success: false, error: error?.message || 'Unknown error' };
         }
     }
+
+    /** @deprecated Use {@link UpdateEntity}. */
+    static async updateEntity(entityName: string, id: string | number, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
+        return this.UpdateEntity(entityName, id, data, user);
+    }
     
     /**
      * Delete an entity
      */
-    static async deleteEntity(entityName: string, id: string | number, options: EntityDeleteOptions, user: UserInfo): Promise<{ success: boolean, error?: string, details?: any }> {
+    static async DeleteEntity(entityName: string, id: string | number, options: EntityDeleteOptions, user: UserInfo): Promise<{ success: boolean, error?: string, details?: any }> {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -252,28 +267,17 @@ export class EntityCRUDHandler {
             return { success: false, error: error?.message || 'Unknown error' };
         }
     }
+
+    /** @deprecated Use {@link DeleteEntity}. */
+    static async deleteEntity(entityName: string, id: string | number, options: EntityDeleteOptions, user: UserInfo): Promise<{ success: boolean, error?: string, details?: any }> {
+        return this.DeleteEntity(entityName, id, options, user);
+    }
     
     /**
-     * Helper method to create a composite key from an ID
+     * Build the record key from the `:id` path segment. A single-column key (any column name) is
+     * the bare value; a composite key is the URL-encoded `Field1|Value1||Field2|Value2` segment.
      */
     private static createCompositeKeyFromId(entity: BaseEntity, id: string | number): CompositeKey {
-        if (entity.EntityInfo.PrimaryKeys.length === 1) {
-            // Single primary key
-            const primaryKeyField = entity.EntityInfo.PrimaryKeys[0].Name;
-            const compositeKey = new CompositeKey();
-            const strId = id.toString();
-            
-            // Use key-value pairs instead of SetValue
-            compositeKey.KeyValuePairs = [
-                { FieldName: primaryKeyField, Value: strId }
-            ];
-            
-            return compositeKey;
-        } else {
-            // Composite primary key - this is a simplification
-            // In a real implementation, you would need to parse a composite ID string
-            // or accept an object with all primary key values
-            throw new Error('Composite primary keys are not supported in this simplified implementation');
-        }
+        return CompositeKey.FromURLSegment(entity.EntityInfo, id.toString());
     }
 }

@@ -29,12 +29,8 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 import { LogError, Metadata, UserInfo } from '@memberjunction/core';
-import {
-    SQLServerDataProvider,
-    SQLServerProviderConfigData,
-    UserCache,
-    setupSQLServerClient
-} from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { UUIDsEqual } from '@memberjunction/global';
 import { ActionParam } from '@memberjunction/actions-base';
 
@@ -91,7 +87,7 @@ async function connect(): Promise<{ pool: sql.ConnectionPool; provider: SQLServe
     await pool.connect();
     const config = new SQLServerProviderConfigData(pool, schema);
     const provider = await setupSQLServerClient(config);
-    await UserCache.Instance.Refresh(pool);
+    await UserCache.Instance.Refresh(provider);
 
     // Prefer an 'Owner' type user so we run with broad permissions.
     const owner =

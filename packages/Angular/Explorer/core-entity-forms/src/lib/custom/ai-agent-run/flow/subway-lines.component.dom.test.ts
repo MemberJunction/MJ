@@ -28,21 +28,21 @@ afterAll(() => {
 
 function node(over: Partial<FlowNode>): FlowNode {
   return {
-    id: 0, name: 'Node', type: 'other', status: 'Completed', model: null, realDur: 1,
-    t0: 0, t1: 1, tmid: 0.5, r0: 0, r1: 1, depth: 0, heat: 0,
-    parent: null, children: [], raw: null, iconClass: 'fa-circle', logoUrl: null, ...over,
+    Id: 0, Name: 'Node', Type: 'other', Status: 'Completed', Model: null, RealDur: 1,
+    T0: 0, T1: 1, Tmid: 0.5, R0: 0, R1: 1, Depth: 0, Heat: 0,
+    Parent: null, Children: [], Raw: null, IconClass: 'fa-circle', LogoUrl: null, ...over,
   };
 }
 
 /** root agent line with 3 leaf stations at spread-out tmids. */
 function sampleModel(): FlowModel {
-  const root = node({ id: 0, name: 'Support Agent', type: 'agent', depth: 0, tmid: 0.5 });
-  const a = node({ id: 1, name: 'Execute Agent Prompt', type: 'prompt', depth: 1, tmid: 0.1, parent: root });
-  const b = node({ id: 2, name: 'Execute Action: Search', type: 'action', depth: 1, tmid: 0.5, parent: root });
-  const c = node({ id: 3, name: 'Agent Validation', type: 'validation', depth: 1, tmid: 0.9, parent: root });
-  root.children = [a, b, c];
+  const root = node({ Id: 0, Name: 'Support Agent', Type: 'agent', Depth: 0, Tmid: 0.5 });
+  const a = node({ Id: 1, Name: 'Execute Agent Prompt', Type: 'prompt', Depth: 1, Tmid: 0.1, Parent: root });
+  const b = node({ Id: 2, Name: 'Execute Action: Search', Type: 'action', Depth: 1, Tmid: 0.5, Parent: root });
+  const c = node({ Id: 3, Name: 'Agent Validation', Type: 'validation', Depth: 1, Tmid: 0.9, Parent: root });
+  root.Children = [a, b, c];
   const nodes = [root, a, b, c];
-  return { root, nodes, leaves: [a, b, c], total: 3, maxDepth: 1, maxLeafDur: 1 };
+  return { Root: root, Nodes: nodes, Leaves: [a, b, c], Total: 3, MaxDepth: 1, MaxLeafDur: 1 };
 }
 
 const render = (model: FlowModel | null) => {

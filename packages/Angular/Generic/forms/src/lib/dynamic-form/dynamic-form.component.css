@@ -1,8 +1,11 @@
 .dynamic-form {
   margin-top: 16px;
   display: block;
+  /* Sizes to content, so a short form stays compact — but agent-authored labels are
+     often sentence-length, so give the card enough room before its contents have to wrap. */
   width: fit-content;
-  max-width: 600px;
+  min-width: 0;
+  max-width: 720px;
 }
 
 /* Simple Choice Mode */

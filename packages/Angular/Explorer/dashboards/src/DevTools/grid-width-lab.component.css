@@ -1,0 +1,89 @@
+/* Grid Width Lab — fixture chrome only; the grid itself must be left to render exactly as it would
+   on a real page, since its edge-to-edge behaviour is the thing under test. */
+
+.gwl-fields {
+  flex: none;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+}
+
+.gwl-fields__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.gwl-fields__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.gwl-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.gwl-flag--ok {
+  background: color-mix(in srgb, var(--mj-status-success) 14%, transparent);
+  color: var(--mj-status-success);
+}
+.gwl-flag--bad {
+  background: color-mix(in srgb, var(--mj-status-error) 14%, transparent);
+  color: var(--mj-status-error);
+}
+
+.gwl-fields__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gwl-field {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  font-size: 12px;
+}
+
+.gwl-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--mj-text-muted);
+}
+.gwl-note code {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+}
+
+/* The grid needs a bounded height to scroll internally, and must keep its own card edges so
+   FillWidth's "reaches the container edge" claim is actually observable. */
+.gwl-grid {
+  flex: 1;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.gwl-grid mj-entity-data-grid {
+  flex: 1;
+  min-height: 0;
+}

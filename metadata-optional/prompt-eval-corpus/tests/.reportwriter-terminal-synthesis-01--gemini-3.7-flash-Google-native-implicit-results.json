@@ -1,0 +1,212 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "reportwriter-terminal-synthesis-01 [gemini-3.7-flash · Google · native-implicit-results]",
+    "Description": "Findings are complete in the payload. The Report Writer's own prompt mandates at least one chart for any quantitative data and forbids generating SVG itself, so building visuals through its actions is as correct as completing outright (the agent's prompt is trusted). This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+    "InputDefinition": {
+      "payload": {
+        "findings": [
+          {
+            "content": "IBM reached 1000+ qubits in Q4 2024",
+            "source": {
+              "type": "web",
+              "url": "https://example.org/a"
+            }
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_001",
+            "url": "https://example.org/a"
+          }
+        ]
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Research is complete. Write the final report from the payload findings."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "reportwriter-terminal-synthesis-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "taskComplete"
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Create SVG Chart"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Create Mermaid Diagram"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Generate Image"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Create SVG Diagram"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Create SVG Network"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Create SVG Word Cloud"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Create SVG Sketch Diagram"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "payloadChange"
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Research Report Writer",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "taskComplete"
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Create SVG Chart"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Create Mermaid Diagram"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Generate Image"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Create SVG Diagram"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Create SVG Network"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Create SVG Word Cloud"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Create SVG Sketch Diagram"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "payloadChange"
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "F397A0EA-62B2-451F-A163-B2538464B255"
+  }
+}

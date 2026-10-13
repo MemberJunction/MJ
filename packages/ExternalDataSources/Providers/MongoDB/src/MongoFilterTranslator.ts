@@ -117,10 +117,15 @@ class Parser {
   }
   private isKw(v: string): boolean { const t = this.peek(); return !!t && t.kind === 'kw' && t.value === v; }
 
-  parse(): MongoFilter {
+  Parse(): MongoFilter {
     const f = this.parseOr();
     if (this.pos !== this.tokens.length) throw new Error('Unexpected trailing tokens in filter.');
     return f;
+  }
+
+  /** @deprecated Use {@link Parse}. */
+  parse(): MongoFilter {
+    return this.Parse();
   }
 
   private parseOr(): MongoFilter {

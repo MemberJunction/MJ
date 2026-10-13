@@ -48,6 +48,7 @@ import {
 import {
     BaseServerExtension,
     ServerExtensionConfig,
+    ServerExtensionPhase,
     ExtensionInitResult,
     ExtensionHealthResult
 } from '@memberjunction/server-extensions-core';
@@ -69,6 +70,11 @@ import { MessagingAdapterSettings } from '../base/types.js';
  */
 @RegisterClass(BaseServerExtension, 'TeamsMessagingExtension')
 export class TeamsMessagingExtension extends BaseServerExtension {
+    /** Teams Bot Framework webhooks arrive pre-authenticated via JWT; run in pre-auth phase. */
+    public override get DefaultPhase(): ServerExtensionPhase {
+        return 'pre-auth';
+    }
+
     /** The Teams adapter handling message processing. */
     private adapter: TeamsAdapter | null = null;
 
@@ -157,7 +163,8 @@ export class TeamsMessagingExtension extends BaseServerExtension {
             return {
                 Success: true,
                 Message: `Teams messaging extension loaded for agent ${settings.DefaultAgentName}`,
-                RegisteredRoutes: [`POST ${config.RootPath}`]
+                RegisteredRoutes: [`POST ${config.RootPath}`],
+                Service: this.adapter ?? undefined
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);

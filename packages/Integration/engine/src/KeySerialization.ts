@@ -17,7 +17,7 @@
  * - plain object / array (anything `typeof === 'object'` that is not a `Date`) → `JSON.stringify`.
  * - everything else (string / number / boolean / Date / bigint / symbol) → `String(value)`.
  */
-export function serializeKeyValue(value: unknown): string {
+export function SerializeKeyValue(value: unknown): string {
     if (value == null) {
         return '';
     }
@@ -25,4 +25,9 @@ export function serializeKeyValue(value: unknown): string {
         return JSON.stringify(value);
     }
     return String(value);
+}
+
+/** @deprecated Use {@link SerializeKeyValue}. */
+export function serializeKeyValue(value: unknown): string {
+    return SerializeKeyValue(value);
 }

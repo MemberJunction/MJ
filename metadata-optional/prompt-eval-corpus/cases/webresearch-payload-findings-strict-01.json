@@ -1,0 +1,22 @@
+{
+  "id": "webresearch-payload-findings-strict-01",
+  "agent": "Web Research Agent",
+  "tags": ["payload-change", "n2"],
+  "description": "Two summaries are in hand and the prompt's Step 4 says findings go into payloadChangeRequest.newElements.findings. Unlike webresearch-payload-write-findings-01 this case requires the write.",
+  "input": {
+    "payload": { "topic": "grid-scale battery storage 2025", "findings": [], "sources": [] },
+    "conversationMessages": [
+      { "role": "user", "content": "Research grid-scale battery storage developments in 2025." },
+      { "role": "user", "content": "[Action Result] Summarize Content succeeded. url = https://example.org/iea-2025; summary = IEA: 2025 utility-scale storage additions ~70 GW, up 40% y/y." },
+      { "role": "user", "content": "[Action Result] Summarize Content succeeded. url = https://example.org/nrel-costs; summary = NREL: LFP pack costs fell to ~$95/kWh in 2025." }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      { "kind": "payloadChange", "payload": { "newElements.findings": { "matcher": "nonEmpty" } } },
+      { "kind": "payloadChange", "payload": { "updateElements.findings": { "matcher": "nonEmpty" } } },
+      { "kind": "payloadChange", "payload": { "replaceElements.findings": { "matcher": "nonEmpty" } } }
+    ]
+  }
+}

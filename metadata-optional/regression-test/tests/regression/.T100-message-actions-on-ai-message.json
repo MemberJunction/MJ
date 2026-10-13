@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T100 - Message Actions On AI Message",
+    "Description": "Exercises MessageItemComponent footer controls (PinMessage, mj-conversation-message-rating, reaction buttons) on a rendered message — a distinct per-message interaction path from send/compose.",
+    "InputDefinition": "{\n  \"goal\": \"Open the Chat application and wait for the workspace. Select the conversation named 'Membership renewal questions' from the sidebar — it is seeded with a completed AI message for this test. If it is missing, pick any other conversation that already contains an AI reply, or as a last resort send a message and wait for one. On a completed AI message, confirm the per-message action affordances render: a pin (thumbtack) button, a thumbs up/down rating control, and reaction buttons. Click the pin button and confirm its pinned state toggles (e.g. it highlights and/or a pinned-messages chip appears in the header). Seeing the message action controls render and the pin toggle respond is success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"An existing/received AI message shows per-message controls (pin/thumbtack, thumbs rating, reactions)\",\n    \"Clicking the pin button toggles its state (highlight and/or a pinned indicator/chip in the header)\",\n    \"The controls are interactive without breaking the message thread layout\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,chat",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "0064867D-F7F2-4DCC-9460-332E96888135"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.822Z",
+    "checksum": "e217ea3d941b7c580dfdcfc6de718059629e16dc22290785283bfaf1ff596f5f"
+  }
+}

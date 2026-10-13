@@ -54,6 +54,27 @@ const entity = md.Entities.find(e => e.Name === params.EntityName);
 
 This rule applies to any code that needs to look up a single entity by name. Use `Entities` (the array) only when you genuinely need to iterate over all entities (e.g. to filter by `SchemaName`).
 
+### 🚨 Primary keys: never assume a column named `ID`
+
+An MJ entity's primary key can be **any column name(s) and type(s)** — `ID`, `individual_id`, or a composite `(OrderID, LineNo)`. Every MJ core entity happens to use `ID`, so code that hardcodes it works on the whole core product and silently breaks on customer entities mapped from external schemas: `Load()` rejects the invented field name (`Primary key ID not found in entity ...`) or a composite key is truncated to its first column. This was #4179 (search click-through) and ~60 files had the same shape. `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts` gates it.
+
+| Situation | Write | Never |
+|---|---|---|
+| Literal MJ core entity (`'MJ: AI Agents'`) | `CompositeKey.FromID(id)` | `{ FieldName: 'ID', Value: id }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)` |
+| Entity is a **variable** (`entityName`, `entityInfo`, an event's `EntityName`) | `CompositeKey.FromURLSegment(entityInfo, recordId)` — reads a bare value (mapped onto the entity's first PK) or a `F1\|v1\|\|F2\|v2` segment | `CompositeKey.FromID(recordId)` |
+| Key from a `ResultType: 'simple'` row | `CompositeKey.FromEntityRecord(entityInfo, row)` | `row.ID`, `row['ID']` |
+| Key from a `BaseEntity` | `entity.PrimaryKey` | `CompositeKey.FromID(entity.ID)` |
+| Persisting a record id as one string (RecordID columns, search results, URLs) | `key.ToCompactURLSegment()` — bare value for a single column, prefixed segment for composite | `key.Values()` (drops field names — composite keys can never be read back) |
+| Filtering a variable entity by key | `${entityInfo.FirstPrimaryKey.Name} IN (...)` for single-column; `key.ToWhereClause()` per record for composite; `Fields: entityInfo.PrimaryKeys.map(pk => pk.Name)` | `` `ID IN (...)` ``, `Fields: ['ID']` |
+
+`FirstPrimaryKey` is for the places MJ is single-column **by design** — foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, the URL shorthand — never for constructing a load key or filter for an arbitrary entity. Use the accessor, never `PrimaryKeys[0]`. The gate is strict: every `FirstPrimaryKey` carries `// first-pk-ok: <reason>` on the same line, and every `CompositeKey.FromID` either has its `'MJ: …'` core-entity literal on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` call) or carries the same annotation. Never write `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` — the fallback is the hardcoded `ID` the rule exists to remove; if the entity can be missing, fail loudly.
+
+Two persisted formats are **sanctioned** and must **not** be unified: Record Changes and Version Label Items store the always-prefixed `ToURLSegment()` form (`ID|abc`); List Details, User Record Logs and search results store the compact form. `FromURLSegment` reads both. Those five are correct as they stand — write new code to whichever matches the column you are writing.
+
+**But those are not the only formats in the estate, and this is the trap.** An audit in [#4321](https://github.com/MemberJunction/MJ/pull/4321) found **90 write sites** setting a polymorphic `EntityID`/`RecordID` column, of which **2** use the canonical prefixed encoding. The rest write a bare single value, a comma-space joined list (`CompositeKey.Values()`), a `||`-joined bare list (`RecordGeoCode`), `Field=Value AND …` (`CompositeKey.ToString()` — `DataContextItem`), or something that is not a record pointer at all (`CompanyIntegrationRunDetail` stores `EntityMap:{id}|Processed:{n}`). A single column can carry several: `ResourcePermission.ResourceRecordID` is written as `ToURLSegment()` in one place, a bare id in another, and the literal `'DataExplorer'` in a third.
+
+So **do not assume an arbitrary `*RecordID` column holds either sanctioned format** — check its actual writers before reading or comparing against it. In particular, never assume it holds "one bare key value"; that assumption is what [#4321](https://github.com/MemberJunction/MJ/pull/4321) fixes in the soft-link dependency query, and what [#4330](https://github.com/MemberJunction/MJ/issues/4330) is auditing across the `first-pk-ok` annotations. Normalising the rest is Layer 0 of the polymorphic-foreign-keys plan (#4084).
+
 ### 🚨 CRITICAL: Don't Reach for the Global `Metadata` Provider in Per-Provider Code Paths
 
 `new Metadata()` and the static `Metadata.Provider` both resolve to the **process-global default provider**. That's fine in single-provider apps, but **wrong** in any code path that may run under a non-default provider — most importantly:
@@ -190,6 +211,33 @@ const results = await rv.RunView<TemplateContentEntity>({
 const entities = results.Results; // No casting needed!
 ```
 
+### 🚨 SQL Literal Escaping in `ExtraFilter` & SQL Clauses — use `EscapeSQLString`
+
+- **NEVER hand-roll `.replace(/'/g, "''")`** when interpolating a dynamic value into SQL text, `ExtraFilter`, or a query predicate. Import `EscapeSQLString` from `@memberjunction/global` instead.
+- **Why**: ad-hoc inline escaping is error-prone, throws on `null`/`undefined`, leaves null bytes (`\0`) in place, and spawns divergent sanitizers across the codebase. `EscapeSQLString` gives you ANSI quote doubling plus null-byte stripping in one audited place.
+
+```typescript
+import { EscapeSQLString } from '@memberjunction/global';
+
+// ✅ CORRECT — centralized, safe SQL escaping
+const filter = `Email = '${EscapeSQLString(user.Email?.trim().toLowerCase())}'`;
+
+// ❌ WRONG — fragile manual regex
+const filter = `Email = '${user.Email.replace(/'/g, "''")}'`;
+```
+
+#### Three things `EscapeSQLString` does **not** do
+
+It escapes **string literals** and nothing else. Quote doubling is the wrong tool — or an insufficient one — in these three cases:
+
+| Context | Why quote doubling is not enough | Use instead |
+|---|---|---|
+| `LIKE` patterns | `%`, `_` and `[` stay live as wildcards, so a user searching for `%` still matches every row | Escape the wildcards too and pair the clause with `ESCAPE '\'`. Reference implementations: `escapeLikeValue()` in [`packages/MJCore/src/generic/runQuerySQLFilterImplementations.ts`](../../packages/MJCore/src/generic/runQuerySQLFilterImplementations.ts) (platform-aware) and `GenericDatabaseProvider.escapeLikeTerm()` |
+| Identifiers — table, column, schema names | Identifiers are quoted with brackets or double quotes, never single quotes, so escaping `'` protects nothing | `ValidateIdentifier()` from `@memberjunction/schema-engine` |
+| A value that must not be missing | `EscapeSQLString(undefined)` returns `''`, so the predicate silently degrades to `Field = ''` and matches nothing instead of failing loudly | Validate the value before building the filter — the escaper will not fail for you |
+
+This is the standard for **new and changed code**. Ad-hoc escaping still exists in packages that have not been migrated; convert those as you touch them rather than in one sweep.
+
 ### RunView Error Handling
 **Important**: RunView does NOT throw exceptions when it fails. Instead, it returns a result object with `Success` and `ErrorMessage` properties:
 
@@ -255,6 +303,102 @@ LogError(`Error: ${entity.LatestResult?.Message}`); // Incomplete info
 - **Always** use `LatestResult?.CompleteMessage` (not `.Message`) for error details — `CompleteMessage` combines all error info
 - **Never** wrap `Save()`/`Delete()` in try/catch expecting them to throw on business logic failures
 - Save/Delete CAN still throw for infrastructure errors (network, connection), but logical failures (validation, permissions, FK violations) return `false`
+
+### Saving a parent AND its children — use an entity graph, not a hand-rolled cascade
+
+**Do not hand-roll a parent/children save.** Declaring a child collection gets you atomicity,
+validation ordering, dirty tracking, orphan handling and client/server parity for free — and avoids
+the five defects every hand-rolled version in this codebase has shipped at least one of.
+
+```typescript
+// On a SHARED (client + server) entity subclass — not a server-only one
+public readonly Lines = this.DeclareRelatedRecords<OrderLineEntity>({
+    Name: 'Lines',
+    RelatedEntity: 'MJ_BizApps_Orders: Order Lines',
+    RelatedEntityJoinField: 'OrderHeaderID',
+    OrderBy: 'LineNumber ASC',
+    Load: 'explicit',                        // 'explicit' | 'immediate' | 'lazy' | 'never'
+    Source: 'database',                      // or 'cache' — read from a loaded BaseEngine
+    OnRemove: 'delete',                      // 'delete' | 'orphan' | 'refuse'
+    Sequence: { Field: 'LineNumber', From: 1 },
+});
+
+// Then, on either tier:
+await order.Save();   // header + lines, atomically
+```
+
+**The three mechanisms are not interchangeable:**
+
+| Need | Use | Never use |
+|---|---|---|
+| Parent + its children | `DeclareRelatedRecords()` + `entity.Save()` | ❌ a TransactionGroup — saves are *deferred*, so the parent's PK is unavailable, there is no read-your-writes, and `Save()` returns `true` before anything persists |
+| Several server-side writes together | `RunInEntityTransaction(this.ProviderToUse, work)` | ❌ `ProviderToUse as DatabaseProviderBase` then `BeginTransaction()` — that cast is what makes a class server-only |
+| Unrelated records in one client round trip | TransactionGroup + `Submit()` | — |
+
+Other rules that follow from this:
+
+- **`Load: 'immediate'` never fires from `LoadFromData()`.** For result sets use
+  `RunView({ ..., ResultType: 'entity_object', IncludeRelatedRecords: ['Lines'] })`, which costs `1 + K`
+  queries instead of N+1.
+- **Prefer declaring it in metadata.** Set `EntityRelationship.RelatedRecordCollection` and CodeGen
+  emits the declaration onto the *generated* class — both tiers get it, no subclass needed.
+- **`Source: 'cache'` gives zero-query related records** for entities a `BaseEngine` already caches
+  (action params, prompt models, API key scopes). It resolves generically through
+  `BaseEngineRegistry`, falls back to a database load on a miss, and defaults `ReadOnly: true` —
+  because you are then holding *the engine's own instances*, as a live view. Declare
+  `ReadOnly: false` to get copies you can safely modify. `Load: 'lazy'` requires both, and **throws**
+  on a cache miss rather than returning an empty array.
+- **`await entity.LoadRelatedRecords()`** populates everything: cache-backed for free,
+  database-backed batched into one `RunViews`.
+- **The collection is iterable** — `for (const l of order.Lines)`, `[...order.Lines]`,
+  `order.Lines.length` all work. Use `.Items` for `map`/`filter`/`find`; it is `readonly` on
+  purpose, so mutate through `Add`/`Create`/`Remove` and never by pushing at an array.
+- **Declare collections on a shared subclass**, with server-only behaviour in a class that extends
+  it. `ClassFactory` priority auto-increments by load order, so the server subclass wins server-side
+  with no configuration — and the browser still sees the collection.
+- **`BeginISATransaction()`, `ProviderTransaction` and `PropagateTransactionToParents()` were removed in 6.2.** Use `BeginEntityTransaction()` / `RunInEntityTransaction()`.
+- **`DeclareRelatedRecordsDynamic(options)` is for generic engines only.** It is the public form of
+  the protected `DeclareRelatedRecords`: it registers a collection on *one instance* at runtime, for a
+  relationship the class declares no collection for (Record Cloning's materializer, `mj sync push`).
+  It throws on a duplicate name. In entity code, declare the collection statically or in metadata.
+
+Read [`guides/TRANSACTIONS_AND_BATCHING_GUIDE.md`](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md)
+before writing anything that saves more than one record together, and
+[`packages/MJCore/docs/related-record-collections.md`](../../packages/MJCore/docs/related-record-collections.md)
+for the full model with flow diagrams.
+
+### 🚨 NEVER WRITE DIRECT SQL DML AGAINST AN ENTITY — unless it opts in
+
+**Do not write `INSERT`, `UPDATE`, or `DELETE` against an entity's base table.** All mutations go through `BaseEntity.Save()` / `.Delete()`, because that is the only path where the platform's guarantees actually run:
+
+| Guarantee | What skipping it looks like |
+|---|---|
+| Record Changes (`TrackRecordChanges`) | An audit trail that **looks** complete but silently isn't |
+| Cache invalidation (`TrustServerCacheCompletely`) | The server RunView cache serves stale rows **indefinitely** |
+| Entity Actions | Create/update/delete hooks never fire |
+| Validation | Field rules and `BaseEntity` subclass overrides never run |
+| Soft delete (`DeleteType='Soft'`) | The row is **destroyed** instead of having `DeletedAt` set |
+
+None of these fail loudly. That's the point — raw DML produces a database that looks fine and is quietly wrong.
+
+**The opt-in.** Three flags on `Entity` declare, per verb, that direct SQL is sanctioned:
+
+```typescript
+const entity = new Metadata().EntityByName('Some Entity');
+if (!entity?.AllowDirectSQLUpdate) {
+    // Not sanctioned — go through BaseEntity.Save()
+}
+```
+
+- `AllowDirectSQLInsert` — bulk loads, ETL/integration sync, rows created as a side effect of a proc
+- `AllowDirectSQLUpdate` — bulk backfills, maintenance routines
+- `AllowDirectSQLDelete` — purge/retention, integration reconciliation
+
+All default to `false`. **They declare; they do not enforce** — nothing stops you executing SQL, so a `false` is a statement that the platform does not expect raw DML here, not a barrier that will catch you.
+
+Setting any of them requires `TrackRecordChanges = 0` **and** `TrustServerCacheCompletely = 0` (a database CHECK enforces it), since direct DML writes no audit row and fires no invalidation event. `AllowDirectSQLDelete` additionally requires `DeleteType = 'Hard'`.
+
+**If you need a bulk operation**, reach for the substrate before reaching for SQL — see [Record Set Processing & Record Processes Guide](../../guides/RECORD_SET_PROCESSING_GUIDE.md), which gives you batching, resume, rate limiting and audit without leaving the `BaseEntity` path.
 
 ### Key Benefits of This Pattern
 - **Type Safety**: Generic method provides full TypeScript typing
@@ -380,7 +524,7 @@ while (true) {
     if (result.Results.length < 500) break;
 
     const last = result.Results[result.Results.length - 1];
-    lastSeenKey = CompositeKey.FromID(last.ID);
+    lastSeenKey = last.PrimaryKey;   // an entity_object row carries its own key — never assume the column is named ID
 }
 ```
 
@@ -446,6 +590,7 @@ const result = await rv.RunView<{ID: string; Name: string; Status: string}>({
 - **`entity_object`**: Creates full BaseEntity subclass instances with getters/setters, validation, dirty tracking
 - **`simple`**: Returns plain JavaScript objects with just the data - much faster for read-only operations
 - **`Fields` parameter**: Reduces data transfer by excluding large columns (JSON blobs, text fields)
+- **Binary fields** (`varbinary`/`bytea`, base64 strings above the DB) are omitted from `RunView` unless `IncludeBinaryFields: true` or one is named in `Fields`; `Load()` always includes them. See [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md).
 
 #### Anti-Patterns
 ```typescript
@@ -612,6 +757,33 @@ If you're tempted to use `localStorage` because "it's just a little thing" — t
 - This feature tracks all changes to entity records unless explicitly disabled
 - No need to implement custom versioning - it's handled automatically by the framework
 - Access historical versions through the Record Changes entities
+
+### Record Changes written by a clone
+
+A row saved by the record-cloning engine gets a Record Change with `Source = 'Clone'` and a
+`ChangeContext` JSON column shaped like `IRecordChangeContext`
+(`metadata/entities/JSONType-interfaces/IRecordChangeContext.ts`):
+`{ Version: 1, Kind: 'Clone', Clone: { CloneLogID, SourceEntityName, SourceRecordID, RootEntityName, RootSourceRecordID, RootTargetRecordID, Depth, Route, FieldChangeSummary, Reason? } }`.
+Read it through the typed `ChangeContextObject` accessor on `MJRecordChangeEntity`.
+
+- **Only the server sets it, through the engine.** `CloneExecutor` calls `BaseEntity.SetCloneContext()`
+  on each row it stages, and the database provider writes `Source`/`ChangeContext` from it. The
+  context stays on the instance until `ClearCloneContext()`.
+- **GraphQL clients cannot supply it.** `GraphQLDataProvider` never sends a clone context (a wire
+  test guards this) and the resolver accepts only `RestoreContext___`. A client-supplied clone
+  context would forge lineage.
+- A save can't be both: with a restore context also set, the provider throws ("an operation cannot be both a restore and a clone"). `SetCloneContext()` does not clear a pending restore context, so clear one before setting the other.
+
+### Annotating a Record Change — `Comments` only
+
+Record Changes are immutable except for `Comments`. `MJRecordChangeEntityServer`
+(`packages/MJCoreEntitiesServer/src/custom/MJRecordChangeEntityServer.server.ts`) refuses an update
+unless **all** of these hold:
+
+1. `Comments` is the only dirty field.
+2. The user holds `Record Changes: Annotate` (directly or through an ancestor authorization).
+3. The user has ordinary Update permission on `MJ: Record Changes` and its Update API is enabled.
+   The authorization narrows who may annotate; it does not replace the role permission.
 
 ## Related guides
 

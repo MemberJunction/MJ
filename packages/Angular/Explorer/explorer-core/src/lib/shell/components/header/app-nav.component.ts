@@ -7,8 +7,8 @@ import { Subject, takeUntil } from 'rxjs';
  * Event emitted when a nav item is clicked
  */
 export interface NavItemClickEvent {
-  item: NavItem;
-  shiftKey: boolean;
+  item: NavItem;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  shiftKey: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -80,8 +80,26 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('moreBtn') private moreBtnRef?: ElementRef<HTMLElement>;
   @ViewChild('trailingSlot') private trailingSlotRef?: ElementRef<HTMLElement>;
 
-  @Output() navItemClick = new EventEmitter<NavItemClickEvent>();
-  @Output() navItemDismiss = new EventEmitter<NavItem>();
+  @Output() NavItemClick = new EventEmitter<NavItemClickEvent>();
+
+  /**
+   * @deprecated Use {@link NavItemClick}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (navItemClick) keeps working. Must stay AFTER NavItemClick: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() navItemClick = this.NavItemClick;
+  @Output() NavItemDismiss = new EventEmitter<NavItem>();
+
+  /**
+   * @deprecated Use {@link NavItemDismiss}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (navItemDismiss) keeps working. Must stay AFTER NavItemDismiss: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() navItemDismiss = this.NavItemDismiss;
 
   /**
    * Disable the priority+ overflow behavior. Used by the mobile drawer instance,
@@ -364,7 +382,7 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /** True when any overflowed item is the active one (More button shows active tint) */
   get OverflowHasActive(): boolean {
-    return this.OverflowItems.some(item => this.isActive(item));
+    return this.OverflowItems.some(item => this.IsActive(item));
   }
 
   /** Open/close the More dropdown, anchoring it under the More button and clamping it inside the host */
@@ -444,8 +462,13 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Check if a nav item is dynamic (generated from recent orphan resources)
    */
-  isDynamic(item: NavItem): boolean {
+  IsDynamic(item: NavItem): boolean {
     return (item as DynamicNavItem).isDynamic === true;
+  }
+
+  /** @deprecated Use {@link IsDynamic}. */
+  isDynamic(item: NavItem): boolean {
+    return this.IsDynamic(item);
   }
 
   /**
@@ -485,34 +508,54 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Get cached navigation items (no computation in getter)
    */
-  get navItems(): NavItem[] {
+  get NavItems(): NavItem[] {
     return this._cachedNavItems;
+  }
+
+  /** @deprecated Use {@link NavItems}. */
+  get navItems(): NavItem[] {
+    return this.NavItems;
   }
 
   /**
    * Check if nav item is active (uses cached state from Map)
    */
-  isActive(item: NavItem): boolean {
+  IsActive(item: NavItem): boolean {
     const key = this.getItemKey(item);
     return this.activeStateMap.get(key) || false;
+  }
+
+  /** @deprecated Use {@link IsActive}. */
+  isActive(item: NavItem): boolean {
+    return this.IsActive(item);
   }
 
   /**
    * Track function for @for to optimize rendering
    */
-  trackByNavItem(_index: number, item: NavItem): string {
+  TrackByNavItem(_index: number, item: NavItem): string {
     return this.getItemKey(item);
+  }
+
+  /** @deprecated Use {@link TrackByNavItem}. */
+  trackByNavItem(_index: number, item: NavItem): string {
+    return this.TrackByNavItem(_index, item);
   }
 
   /**
    * Handle nav item click
    */
-  onNavClick(item: NavItem, event?: MouseEvent): void {
+  OnNavClick(item: NavItem, event?: MouseEvent): void {
     this.MoreOpen = false;
-    this.navItemClick.emit({
+    this.NavItemClick.emit({
       item,
       shiftKey: event?.shiftKey || false
     });
+  }
+
+  /** @deprecated Use {@link OnNavClick}. */
+  onNavClick(item: NavItem, event?: MouseEvent): void {
+    return this.OnNavClick(item, event);
   }
 
   /**
@@ -520,7 +563,7 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
    * Removes from the app's recent stack and refreshes nav items immediately.
    * Stops propagation so the nav click handler doesn't fire.
    */
-  onDismiss(item: NavItem, event: MouseEvent): void {
+  OnDismiss(item: NavItem, event: MouseEvent): void {
     event.stopPropagation();
 
     // Remove from the app's recent stack directly so we can refresh immediately
@@ -534,7 +577,12 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     }
 
-    this.navItemDismiss.emit(item);
+    this.NavItemDismiss.emit(item);
+  }
+
+  /** @deprecated Use {@link OnDismiss}. */
+  onDismiss(item: NavItem, event: MouseEvent): void {
+    return this.OnDismiss(item, event);
   }
 
 }

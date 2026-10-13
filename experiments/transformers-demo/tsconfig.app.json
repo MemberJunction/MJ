@@ -4,7 +4,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "./out-tsc/app",
-    "types": ["@webgpu/types"]
+    "types": ["@webgpu/types", "dom-chromium-ai"]
   },
   "files": [
     "src/main.ts"

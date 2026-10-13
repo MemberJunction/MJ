@@ -46,13 +46,58 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
     // State
     // ========================================
 
-    public entityFilter: DataExplorerFilter | null = null;
-    public contextName: string | null = null;
-    public contextIcon: string | null = null;
-    /** Initial query params from the URL, forwarded to the dashboard */
-    public initialQueryParams: Record<string, string> = {};
+    public EntityFilter: DataExplorerFilter | null = null;
 
-    @ViewChild(DataExplorerDashboardComponent) dataExplorer!: DataExplorerDashboardComponent;
+    /** @deprecated Use {@link EntityFilter}. */
+    public get entityFilter(): DataExplorerFilter | null {
+      return this.EntityFilter;
+    }
+    /** @deprecated Use {@link EntityFilter}. */
+    public set entityFilter(value: DataExplorerFilter | null) {
+      this.EntityFilter = value;
+    }
+    public ContextName: string | null = null;
+
+    /** @deprecated Use {@link ContextName}. */
+    public get contextName(): string | null {
+      return this.ContextName;
+    }
+    /** @deprecated Use {@link ContextName}. */
+    public set contextName(value: string | null) {
+      this.ContextName = value;
+    }
+    public ContextIcon: string | null = null;
+
+    /** @deprecated Use {@link ContextIcon}. */
+    public get contextIcon(): string | null {
+      return this.ContextIcon;
+    }
+    /** @deprecated Use {@link ContextIcon}. */
+    public set contextIcon(value: string | null) {
+      this.ContextIcon = value;
+    }
+    /** Initial query params from the URL, forwarded to the dashboard */
+    public InitialQueryParams: Record<string, string> = {};
+
+    /** @deprecated Use {@link InitialQueryParams}. */
+    public get initialQueryParams(): Record<string, string> {
+      return this.InitialQueryParams;
+    }
+    /** @deprecated Use {@link InitialQueryParams}. */
+    public set initialQueryParams(value: Record<string, string>) {
+      this.InitialQueryParams = value;
+    }
+
+    @ViewChild(DataExplorerDashboardComponent) DataExplorer!: DataExplorerDashboardComponent;
+
+    /** @deprecated Use {@link DataExplorer}. */
+    get dataExplorer(): DataExplorerDashboardComponent {
+      return this.DataExplorer;
+    }
+    /** @deprecated Use {@link DataExplorer}. */
+    set dataExplorer(value: DataExplorerDashboardComponent) {
+      this.DataExplorer = value;
+    }
 
     private readonly _destroy$ = new Subject<void>();
     private _dataLoaded = false;
@@ -102,8 +147,8 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
      * needs them for deep linking (entity, viewId, filter, view mode, map mode).
      */
     protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
-        if (this.dataExplorer) {
-            this.dataExplorer.HandleQueryParamsChanged(params, source);
+        if (this.DataExplorer) {
+            this.DataExplorer.HandleQueryParamsChanged(params, source);
         }
     }
 
@@ -139,9 +184,9 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
         const config = data.Configuration || {};
 
         // Extract configuration options
-        this.entityFilter = config['entityFilter'] as DataExplorerFilter || null;
-        this.contextName = config['appName'] as string || null;
-        this.contextIcon = config['appIcon'] as string || null;
+        this.EntityFilter = config['entityFilter'] as DataExplorerFilter || null;
+        this.ContextName = config['appName'] as string || null;
+        this.ContextIcon = config['appIcon'] as string || null;
 
         // Build initial query params: start with workspace-saved params, then let
         // browser URL params override. The URL is the source of truth for user intent —
@@ -153,14 +198,14 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
         browserParams.forEach((value, key) => {
             merged[key] = value;
         });
-        this.initialQueryParams = merged;
+        this.InitialQueryParams = merged;
 
         this.cdr.detectChanges();
 
         // Setup LoadCompleteEvent after view initializes
         setTimeout(() => {
-            if (this.dataExplorer) {
-                this.dataExplorer.LoadCompleteEvent = () => {
+            if (this.DataExplorer) {
+                this.DataExplorer.LoadCompleteEvent = () => {
                     this.NotifyLoadComplete();
                 };
 
@@ -169,8 +214,8 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
                     dashboard: null as unknown as MJDashboardEntity,
                     userState: {}
                 };
-                this.dataExplorer.Config = dashboardConfig;
-                this.dataExplorer.Refresh();
+                this.DataExplorer.Config = dashboardConfig;
+                this.DataExplorer.Refresh();
 
                 // RACE GUARD: BaseDashboard.ngOnInit() calls NotifyLoadComplete() almost immediately
                 // (after the no-op loadData), firing the inner dashboard's LoadCompleteEvent. But this
@@ -179,7 +224,7 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
                 // and the completion signal is lost. The shell then waits forever ("Gathering your
                 // tools…" hangs) — reproduced on direct-URL refresh. If the dashboard already completed,
                 // forward completion to the shell now.
-                if (this.dataExplorer.LoadComplete) {
+                if (this.DataExplorer.LoadComplete) {
                     this.NotifyLoadComplete();
                 }
             } else {
@@ -192,13 +237,23 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
     // Event Handlers
     // ========================================
 
-    public onOpenEntityRecord(event: { EntityName: string; RecordPKey: CompositeKey }): void {
+    public OnOpenEntityRecord(event: { EntityName: string; RecordPKey: CompositeKey }): void {
         if (event && event.EntityName && event.RecordPKey) {
             this.navigationService.OpenEntityRecord(event.EntityName, event.RecordPKey);
         }
     }
 
-    public onDisplayNameChanged(name: string): void {
+    /** @deprecated Use {@link OnOpenEntityRecord}. */
+    public onOpenEntityRecord(event: { EntityName: string; RecordPKey: CompositeKey }): void {
+      return this.OnOpenEntityRecord(event);
+    }
+
+    public OnDisplayNameChanged(name: string): void {
         this.NotifyDisplayNameChanged(name);
+    }
+
+    /** @deprecated Use {@link OnDisplayNameChanged}. */
+    public onDisplayNameChanged(name: string): void {
+      return this.OnDisplayNameChanged(name);
     }
 }

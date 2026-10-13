@@ -1,10 +1,11 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
 import {
-  convertIdentifiers, removeNPrefix, removeCollate, convertCastTypes,
-  quotePascalCaseIdentifiers, convertCommonFunctions, convertStringConcat,
-  convertCharIndex, convertStuff, convertConvertFunction, convertIIF, convertTopToLimit,
-  transformCodeOnly, castBooleanInsertValues, convertJsonFunctions,
-  convertBooleanLiteralComparisons,
+  ConvertIdentifiers, RemoveNPrefix, RemoveCollate, ConvertCastTypes,
+  QuotePascalCaseIdentifiers, ConvertCommonFunctions, ConvertStringConcat,
+  ConvertCharIndex, ConvertStuff, ConvertConvertFunction, ConvertIIF, ConvertTopToLimit,
+  TransformCodeOnly, CastBooleanInsertValues, ConvertJsonFunctions,
+  ConvertBooleanLiteralComparisons,
+  EscapeRegExp,
 } from './ExpressionHelpers.js';
 
 /** Strip trailing comments (both line -- and block /* *‌/) from a SQL string.
@@ -50,27 +51,33 @@ export class InsertRule implements IConversionRule {
   BypassJustification = 'INSERT INTO with N\'string\' literals, GETUTCDATE() defaults, IDENTITY_INSERT, [bracket] identifiers, and SQL Server BIT (0/1) for BOOLEAN columns. The rule strips N prefixes, converts date functions, and quotes identifiers — work sqlglot does partially but with quirks for MJ\'s CodeGen-emitted INSERTs.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
-    let result = convertIdentifiers(sql);
-    result = removeNPrefix(result);
-    result = removeCollate(result);
+    let result = ConvertIdentifiers(sql);
+    result = RemoveNPrefix(result);
+    result = RemoveCollate(result);
     // Function conversions BEFORE quoting (prevents "LEN", "SUBSTRING" etc. from being quoted)
-    result = convertCommonFunctions(result);
-    result = convertStringConcat(result, context.TableColumns);
-    result = convertCharIndex(result);
-    result = convertStuff(result);
-    result = convertConvertFunction(result);
-    result = convertIIF(result);
+    result = ConvertCommonFunctions(result);
+    result = ConvertStringConcat(result, context.TableColumns);
+    result = ConvertCharIndex(result);
+    result = ConvertStuff(result);
+    result = ConvertConvertFunction(result);
+    result = ConvertIIF(result);
     // Convert SS JSON functions (JSON_VALUE / ISJSON) BEFORE PascalCase quoting,
     // so the function names aren't quoted as identifiers.
-    result = convertJsonFunctions(result);
-    result = convertCastTypes(result);
+    result = ConvertJsonFunctions(result);
+    result = ConvertCastTypes(result);
     // Convert SELECT TOP N subqueries to SELECT ... LIMIT N
-    result = convertTopToLimit(result);
+    result = ConvertTopToLimit(result);
     // Quote bare schema.Name references (e.g. __mj.vwFoo → __mj."vwFoo")
     const schema = context.Schema;
     if (schema) {
-      const bareSchemaRef = new RegExp(`\\b${schema}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
-      result = result.replace(bareSchemaRef, `${schema}."$1"`);
+      // Both sides treat `schema` as DATA. Escaped on the search side so a `$`
+      // in it cannot act as an end-anchor (which would make the pattern match
+      // nothing), and carried through a replacement function on the other so a
+      // `$` cannot be expanded. The capture group stays intentional, passed as a
+      // named callback parameter instead of `$1`. The sibling ViewRule was
+      // converted by the #3171 sweep; this twin was missed. See issue #3171.
+      const bareSchemaRef = new RegExp(`\\b${EscapeRegExp(schema)}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
+      result = result.replace(bareSchemaRef, (_match, table: string) => `${schema}."${table}"`);
     }
     // Quote column names in INSERT INTO table (col1, col2, ...) — these are always column
     // names even if they collide with SQL keywords (e.g. Language, Condition, Action)
@@ -79,18 +86,18 @@ export class InsertRule implements IConversionRule {
     // with underscores so quotePascalCaseIdentifiers (which requires [A-Z] start) misses them.
     // Uses transformCodeOnly to skip string literals — otherwise values like '__mj_CreatedAt'
     // inside INSERT VALUES would get incorrectly quoted to '"__mj_CreatedAt"'.
-    result = transformCodeOnly(result, (code) =>
+    result = TransformCodeOnly(result, (code) =>
       code.replace(/(?<!")\b(__mj_[A-Za-z]\w*)\b(?!")/g, '"$1"')
     );
     // Quote bare PascalCase identifiers (column names in INSERT/UPDATE/DELETE)
-    result = quotePascalCaseIdentifiers(result);
+    result = QuotePascalCaseIdentifiers(result);
     // Cast SS BIT literals (0/1) → PG boolean (FALSE/TRUE) at boolean-column
     // positions in INSERT VALUES. PG rejects integer literals for boolean columns.
-    result = castBooleanInsertValues(result, context.TableColumns);
+    result = CastBooleanInsertValues(result, context.TableColumns);
     // Convert `"BoolCol" = 0/1` comparisons/assignments (UPDATE SET, WHERE) to
     // FALSE/TRUE. INSERT VALUES is positional (handled above); this covers the
     // `"col" = N` form that appears in UPDATE/DELETE statements.
-    result = convertBooleanLiteralComparisons(result, context.TableColumns);
+    result = ConvertBooleanLiteralComparisons(result, context.TableColumns);
     // Convert T-SQL UPDATE alias FROM pattern to PG syntax
     result = this.convertUpdateFromAlias(result);
     // Ensure semicolon after the actual SQL statement (not after trailing comments).

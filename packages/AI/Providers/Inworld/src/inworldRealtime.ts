@@ -23,6 +23,8 @@
 
 import {
     BaseRealtimeModel,
+    REALTIME_SHARED_CONFIG_KEYS,
+    RealtimeDroppedInputReporter,
     type IRealtimeSession,
     type RealtimeSessionParams,
     type RealtimeToolDefinition,
@@ -32,6 +34,7 @@ import {
     type RealtimeSessionError,
     type JSONObject,
     type JSONValue,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -340,6 +343,9 @@ export class InworldRealtimeSession implements IRealtimeSession {
      */
     private currentToolsFingerprint: string;
 
+    /** Reports the frames {@link SendInput} drops, once per kind and type. */
+    private readonly droppedInput = new RealtimeDroppedInputReporter('InworldRealtime', 'this session sends audio only');
+
     /**
      * @param params The session parameters (model, system prompt, tools, initial context, config bag).
      */
@@ -385,9 +391,18 @@ export class InworldRealtimeSession implements IRealtimeSession {
 
     // ── IRealtimeSession outbound ──
 
-    /** @inheritdoc — streams one client media frame as a base64 input audio-append frame. */
-    public SendInput(chunk: ArrayBuffer): void {
-        this.sendFrame(this.buildAudioAppendFrame(chunk));
+    /**
+     * @inheritdoc
+     *
+     * Streams one audio frame as a base64 input audio-append frame. The session sends audio only, so a frame of another
+     * kind (a camera or screen frame) is dropped, never sent as audio, and reported once per kind and type.
+     */
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind !== 'audio') {
+            this.droppedInput.Report(frame);
+            return;
+        }
+        this.sendFrame(this.buildAudioAppendFrame(frame.Data));
     }
 
     /**
@@ -763,13 +778,24 @@ export class InworldRealtimeSession implements IRealtimeSession {
      * double-write. Lets a per-conversation config replace a whole block (e.g. a fully-specified
      * `audio` object) while shorthands stay convenient.
      *
+     * ALSO skips {@link REALTIME_SHARED_CONFIG_KEYS} — the MJ-side vocabulary shared across the
+     * driver family, which that registry's contract requires non-OpenAI-protocol drivers to scrub
+     * rather than forward. Those keys are never Inworld wire fields, and because a co-agent config
+     * is authored WITHOUT knowing which vendor will run, any of them can arrive here: an agnostic
+     * `firstMessage` (issue #3557) is filed onto whichever driver resolves, consumed or not. This
+     * loop is the forwarding path, so it is where the scrub belongs.
+     *
+     * Deliberately narrow: only the shared vocabulary is dropped. Passing an Inworld-native field
+     * the driver has no shorthand for is the whole point of this channel and still works.
+     *
      * @param session The session object being built (mutated in place).
      * @param config The caller's config bag.
      */
     private applyRawConfigOverrides(session: JSONObject, config: JSONObject): void {
         const consumedShorthands = new Set(['voice', 'stt', 'language', 'eagerness']);
+        const sharedMJKeys = new Set(REALTIME_SHARED_CONFIG_KEYS);
         for (const [key, value] of Object.entries(config)) {
-            if (consumedShorthands.has(key)) {
+            if (consumedShorthands.has(key) || sharedMJKeys.has(key)) {
                 continue;
             }
             session[key] = value;
@@ -910,8 +936,14 @@ export class InworldRealtimeSession implements IRealtimeSession {
 
     // ── Shared helpers ──
 
-    /** Resolves the underlying LLM id Inworld brokers (param model, falling back to the default). */
+    /** Resolves the underlying LLM id Inworld brokers (Reasoning.Remote.Ref, param model, falling back to default). */
     private resolveModelId(): string {
+        const reasoning = (this.params.Config as Record<string, unknown> | undefined)?.Reasoning as
+            | { Remote?: { Ref?: string } }
+            | undefined;
+        if (reasoning?.Remote?.Ref && reasoning.Remote.Ref.length > 0) {
+            return reasoning.Remote.Ref;
+        }
         return this.params.Model && this.params.Model.length > 0 ? this.params.Model : INWORLD_DEFAULT_MODEL_ID;
     }
 

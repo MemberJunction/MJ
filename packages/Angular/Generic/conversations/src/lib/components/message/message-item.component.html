@@ -51,9 +51,17 @@
           [class.in-progress]="isInProgressAIMessage"
           [class.active]="!isInProgressAIMessage && isAgentRunActive"
           [class.complete]="!isInProgressAIMessage && !isAgentRunActive && messageStatus === 'Complete'"
-          [class.failed]="messageStatus === 'Error'">
-          <i class="fas fa-clock"></i>
+          [class.failed]="messageStatus === 'Error'"
+          [class.checking]="LivenessState === 'checking'"
+          [class.stalled]="LivenessState === 'stalled'"
+          [title]="LivenessState === 'stalled' ? 'No progress reported for several minutes' : (LivenessState === 'checking' ? 'No recent progress — re-checking' : '')">
+          <i class="fas" [ngClass]="LivenessState === 'live' ? 'fa-clock' : 'fa-exclamation-triangle'"></i>
           {{ timePillText }}
+          @if (LivenessState === 'checking') {
+            <span class="liveness-label">checking…</span>
+          } @else if (LivenessState === 'stalled') {
+            <span class="liveness-label">no response</span>
+          }
         </span>
       }
 
@@ -150,8 +158,19 @@
           </div>
         }
 
+        <!-- One per attached artifact whose rows are still loading. Rendered AFTER the loaded
+             cards, so an artifact arriving appends rather than reordering what is already on
+             screen. Carries the same system-artifact de-emphasis as the card it becomes. -->
+        @for (pending of pendingArtifactPlaceholders; track pending.artifactId) {
+          <div class="artifact-wrapper" [class.system-artifact]="pending.visibility === 'System Only'">
+            <div class="artifact-pending">
+              <mj-loading [text]="pendingLabel(pending)" size="small"></mj-loading>
+            </div>
+          </div>
+        }
+
         <!-- Agent Response Form (shown only for last message by owner) -->
-        @if (isLastMessageInConversation && isConversationOwner && responseForm) {
+        @if (!ReadOnly && isLastMessageInConversation && isConversationOwner && responseForm) {
           <mj-dynamic-form
             [FormDefinition]="responseForm"
             [Disabled]="isProcessing"
@@ -160,7 +179,7 @@
         }
 
         <!-- Actionable Commands (shown only for last message by owner) -->
-        @if (isLastMessageInConversation && isConversationOwner && actionableCommands.length > 0) {
+        @if (!ReadOnly && isLastMessageInConversation && isConversationOwner && actionableCommands.length > 0) {
           <mj-actionable-commands
             [commands]="actionableCommands"
             [disabled]="isProcessing"
@@ -214,7 +233,7 @@
                 [currentUser]="currentUser"
                 [ratingEntityName]="message.EntityInfo.Name || 'MJ: Conversation Details'"
                 [ratingsData]="ratings"
-                [canEdit]="isConversationOwner">
+                [canEdit]="isConversationOwner && !ReadOnly">
               </mj-conversation-message-rating>
             }
             @if (allowPinning) {
@@ -317,7 +336,7 @@
                       [conversationDetailId]="message.ID"
                       [currentUser]="currentUser"
                       [ratingsData]="ratings"
-                      [canEdit]="isConversationOwner">
+                      [canEdit]="isConversationOwner && !ReadOnly">
                     </mj-conversation-message-rating>
                   }
                   @if (allowPinning) {

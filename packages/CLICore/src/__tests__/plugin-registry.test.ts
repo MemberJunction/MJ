@@ -89,6 +89,56 @@ describe('CLIPluginRegistry usage composition', () => {
   });
 });
 
+describe('CLIPluginRegistry.RegisterUsage (non-plugin commands)', () => {
+  const standalone: PluginUsage = {
+    domain: 'fixture-domain',
+    command: 'fixture-domain:thing',
+    summary: 'A command that is a plain oclif Command, not a plugin.',
+    runtime: { class: 'fast', typicalSeconds: 1 },
+  };
+
+  it('surfaces a directly-registered command in both usage tiers', () => {
+    CLIPluginRegistry.RegisterUsage(standalone);
+
+    expect(CLIPluginRegistry.GetAllUsage().map((u) => u.command)).toContain('fixture-domain:thing');
+    const detail = CLIPluginRegistry.BuildDomainDetail('fixture-domain');
+    expect(detail.commands).toHaveLength(1);
+    expect(detail.commands[0].summary).toBe(standalone.summary);
+    const mapped = CLIPluginRegistry.BuildDomainMap().domains.find((d) => d.domain === 'fixture-domain');
+    expect(mapped?.runtime).toBe('fast');
+  });
+
+  it('is idempotent — registering the same command twice keeps one entry', () => {
+    CLIPluginRegistry.RegisterUsage(standalone);
+    CLIPluginRegistry.RegisterUsage({ ...standalone, summary: 'a later, ignored declaration' });
+    const detail = CLIPluginRegistry.BuildDomainDetail('fixture-domain');
+    expect(detail.commands).toHaveLength(1);
+    expect(detail.commands[0].summary).toBe(standalone.summary);
+  });
+
+  it('never shadows a plugin that owns the same command key', () => {
+    // FakePushPlugin (above) already owns 'sync:push' through the ClassFactory.
+    CLIPluginRegistry.RegisterUsage({
+      domain: 'sync',
+      command: 'sync:push',
+      summary: 'standalone declaration that must not win',
+      runtime: { class: 'fast' },
+    });
+    const detail = CLIPluginRegistry.BuildDomainDetail('sync');
+    const push = detail.commands.find((c) => c.command === 'sync:push');
+    expect(push?.summary).toBe('Push local metadata files to the database.');
+  });
+
+  it('rejects a declaration missing its domain or command', () => {
+    expect(() => CLIPluginRegistry.RegisterUsage({ domain: '', command: 'x', summary: 's', runtime: { class: 'fast' } })).toThrow(
+      /domain and command/
+    );
+    expect(() => CLIPluginRegistry.RegisterUsage({ domain: 'd', command: '', summary: 's', runtime: { class: 'fast' } })).toThrow(
+      /domain and command/
+    );
+  });
+});
+
 describe('CLIPluginRegistry.LoadPluginsFromConfig', () => {
   it('reports loaded and failed specifiers (no silent swallow)', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'mjcli-load-'));

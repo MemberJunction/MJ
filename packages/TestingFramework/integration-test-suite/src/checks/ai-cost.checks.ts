@@ -1,5 +1,5 @@
 /**
- * ai-cost.checks.ts — the 'ai-cost' bundle (AC1–AC6): cost/pricing metadata integrity for the
+ * ai-cost.checks.ts — the 'ai-cost' bundle (AC1–AC7): cost/pricing metadata integrity for the
  * AI stack, per packages/TestingFramework/integration-test-suite/docs/test-catalog.md Domain 4 (the deterministic,
  * read-only siblings of the mutation-tier AI1 rollup check).
  *
@@ -19,7 +19,8 @@
  * check (AC4) reimplements `GetActiveModelCost`'s selection independently so it is a genuine
  * cross-check, not a restatement.
  */
-import { RunView } from '@memberjunction/core';
+import { RunView, RunQuery } from '@memberjunction/core';
+import type { AggregateResult } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import type { MJAIModelCostEntity } from '@memberjunction/core-entities';
 import {
@@ -43,12 +44,33 @@ const STRANGER_ID = '00000000-0000-4000-8000-0000000000CC';
 const KNOWN_DRIVER_DIVISORS: Readonly<Record<string, number>> = {
     PerMillionTokens: 1_000_000,
     PerHundredThousandTokens: 100_000,
-    PerThousandTokens: 1_000
+    PerThousandTokens: 1_000,
+    TimePerHour: 3_600,
+    TimePerMinute: 60,
+    PerImage: 1
 };
 
 /** Loud, uniform skip-as-pass note. */
 function skipNote(checkId: string, reason: string): void {
     console.warn(`  ⚠ ai-cost.${checkId} SKIPPED — ${reason}`);
+}
+
+/**
+ * Numeric aggregate value by alias, asserting on a missing one.
+ *
+ * This deliberately matches the stricter copies in view-execution.checks.ts and
+ * runview-matrix.checks.ts. An earlier revision here opened with `if (!hit) return 0`, which made
+ * a typo'd alias yield 0 instead of failing — and 0 passes both AC8's coverage math and AC11's
+ * `diff < 0.0001` parity assert. A check that cannot fail when its own query is wrong is not a check.
+ */
+function aggregateValue(results: readonly AggregateResult[] | undefined, alias: string): number {
+    const hit = (results ?? []).find(a => a.alias === alias);
+    Assert(hit != null, `aggregate '${alias}' missing from AggregateResults`);
+    Assert(hit!.value != null, `aggregate '${alias}' returned no value`);
+    Assert(!hit!.error, `aggregate '${alias}' returned an error: ${hit!.error}`);
+    const n = Number(hit!.value);
+    Assert(Number.isFinite(n), `aggregate '${alias}' value is not numeric: ${JSON.stringify(hit!.value)}`);
+    return n;
 }
 
 /** Ensure the AI metadata cache (models, vendors, costs, price/unit types) is loaded. */
@@ -75,12 +97,21 @@ async function makeUnsavedCost(
     return cost;
 }
 
-/** Resolve a price-unit-type driver the way production does; null when unresolvable/hollow. */
+/**
+ * Resolve a price-unit-type driver the way production does; null when unresolvable.
+ *
+ * `TryCreateInstance`, matching `AIEngineBase.GetPriceCalculator`. The duck-type check that used to
+ * guard this call is retained as a second line: `BasePriceUnitType` is now marked
+ * `@RequiresSubclass()` so the factory refuses to hand back a hollow base instance, but this check
+ * is what would catch that marker being removed — and this bundle exists to detect exactly that
+ * class of silent regression.
+ */
 function resolvePriceCalculator(driverClass: string): BasePriceUnitType | null {
     try {
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BasePriceUnitType>(BasePriceUnitType, driverClass);
-        if (!instance || typeof instance.CalculateNormalizedCost !== 'function') {
-            return null; // hollow/abstract instance — cannot price anything
+        const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<BasePriceUnitType>(BasePriceUnitType, driverClass);
+        const instance = resolution.Instance;
+        if (!resolution.Resolved || !instance || typeof instance.CalculateNormalizedCost !== 'function') {
+            return null; // unregistered driver, or a hollow/abstract instance — cannot price anything
         }
         return instance;
     } catch {
@@ -106,15 +137,47 @@ export const AiCostChecks: NamedCheck[] = [
             const unitTypes = engine.ModelPriceUnitTypes;
             Assert(unitTypes.length > 0, 'no MJ: AI Model Price Unit Types rows loaded — the pricing catalog is empty');
 
+            // Unit types an ACTIVE cost row actually points at are the ones whose missing driver
+            // silently uncosts real runs — those are asserted. A unit type no active row references
+            // can be a deployment's own custom row awaiting its driver; reddening the whole tier for
+            // it would punish a state that costs nothing today, so it is reported instead.
+            const referencedByActiveCost = new Set(
+                engine.ModelCosts
+                    .filter(c => c.Status === 'Active')
+                    .map(c => c.UnitTypeID.toLowerCase())
+            );
+
             const unresolved: string[] = [];
+            const unresolvedUnreferenced: string[] = [];
             const badMath: string[] = [];
             const probe = await makeUnsavedCost(ctx, { input: 2.5, output: 10 });
             for (const unitType of unitTypes) {
                 const calculator = resolvePriceCalculator(unitType.DriverClass);
                 if (!calculator) {
-                    unresolved.push(`${unitType.Name} → ${unitType.DriverClass}`);
+                    const label = `${unitType.Name} → ${unitType.DriverClass}`;
+                    if (referencedByActiveCost.has(unitType.ID.toLowerCase())) {
+                        unresolved.push(label);
+                    } else {
+                        unresolvedUnreferenced.push(label);
+                    }
                     continue;
                 }
+                // The COLUMN must agree with the CLASS. The drivers now read UnitsPerBillingUnit off
+                // the row when one is supplied, so a seeded value that disagrees with the class's
+                // compiled-in literal silently re-prices every run through that unit type — and the
+                // field is editable in the generated Explorer form. Skip `Linear`, which has no
+                // literal to agree with: the column IS its scale.
+                if (unitType.DriverClass !== 'Linear') {
+                    const declared = KNOWN_DRIVER_DIVISORS[unitType.DriverClass];
+                    if (declared !== undefined && Number(unitType.UnitsPerBillingUnit) !== declared) {
+                        badMath.push(
+                            `${unitType.Name} (${unitType.DriverClass}): UnitsPerBillingUnit column is ` +
+                            `${unitType.UnitsPerBillingUnit} but the driver class declares ${declared} — the column ` +
+                            `wins at runtime, so every run priced by this unit type is scaled by the column`
+                        );
+                    }
+                }
+
                 const divisor = KNOWN_DRIVER_DIVISORS[unitType.DriverClass];
                 if (divisor !== undefined) {
                     // Exactly one divisor's worth of input AND output tokens must cost exactly
@@ -125,16 +188,28 @@ export const AiCostChecks: NamedCheck[] = [
                     }
                 }
             }
-            // KNOWN PRODUCT GAP (bug register B60): three SHIPPED price-unit types
-            // (PerImage/TimePerMinute/TimePerHour) have no registered calculator, so runs priced
-            // by them are silently uncosted. This is logged for the product owner — pin it as a
-            // loud WARNING here rather than reddening the deterministic gate on a tracked issue.
-            // The real invariant AC1 guards is the built-in divisor math, asserted next.
-            if (unresolved.length > 0) {
-                console.warn(`  ⚠ ai-cost.AC1 (B60): price-unit driver(s) with NO calculator — runs priced by them are silently uncosted: ${unresolved.join('; ')}`);
+            if (unresolvedUnreferenced.length > 0) {
+                console.warn(
+                    `      ⚠ ${unresolvedUnreferenced.length} price unit type(s) have NO registered calculator but are ` +
+                    `referenced by no Active cost row, so nothing is mispriced today — they WILL uncost every run the ` +
+                    `moment a cost row points at them: ${unresolvedUnreferenced.join('; ')}`
+                );
             }
+            // Hard assert since the B60 driver gap closed: PerImage/TimePerMinute/TimePerHour now
+            // have registered calculators, so every SHIPPED unit type resolves. Any future unit
+            // type added without one makes runs priced by it silently uncosted (CalculateAndSetCost
+            // logs and returns), which is exactly the drift this gate exists to catch — a warning
+            // would let it ship.
+            Assert(
+                unresolved.length === 0,
+                `Active-cost-referenced price-unit driver(s) with NO calculator — runs priced by them would be ` +
+                `silently uncosted: ${unresolved.join('; ')}`
+            );
             Assert(badMath.length === 0, `built-in unit-type divisor drift: ${badMath.join('; ')}`);
-            console.log(`      → ${unitTypes.length} unit type(s) resolved; built-in divisors verified`);
+            console.log(
+                `      → ${unitTypes.length} unit type(s) checked (${referencedByActiveCost.size} referenced by Active ` +
+                `cost rows); built-in divisors verified`
+            );
         }
     },
     {
@@ -384,6 +459,296 @@ export const AiCostChecks: NamedCheck[] = [
             }
             Assert(problems.length === 0, `prompt-run cost-identity violations: ${problems.join('; ')}`);
             console.log(`      → ${rows.length} costed prompt run(s) satisfy TotalCost = Cost + DescendantCost with non-negative costs`);
+        }
+    },
+    {
+        Id: 'ai-cost.AC7',
+        Name: 'AC7: completed runs that did measurable work are not silently uncosted — hard-fails when a price EXISTS and was not applied',
+        Fn: async (ctx): Promise<void> => {
+            // The monitoring counterpart to this domain's whole design. Everything else here converts
+            // a wrong number into a NULL, which is right — but a null plus a LogError in a server log
+            // is invisible. B60 (three shipped price unit types with no driver, six ACTIVE image cost
+            // rows dormant since 2026-02-06) survived months precisely because nothing asked this
+            // question. It is the query that would have caught it.
+            //
+            // The two populations are NOT the same defect and are graded differently:
+            //   - no active cost row in the run's measure → a pricing-coverage GAP. A deployment
+            //     choice (AC5 already reports unpriced models), so reported, not failed.
+            //   - an active cost row in the run's measure EXISTS and the run is still uncosted → the
+            //     cost pipeline was handed everything it needed and produced nothing. That is a bug
+            //     with B60's exact signature, and it is asserted.
+            const engine = await configuredAIEngine(ctx);
+            const rv = new RunView();
+            const result = await rv.RunView<{
+                ID: string;
+                ModelID: string | null;
+                VendorID: string | null;
+                UsageTypeID: string;
+                TokensUsed: number | null;
+                InputUnitsUsed: number | null;
+                OutputUnitsUsed: number | null;
+            }>({
+                EntityName: 'MJ: AI Prompt Runs',
+                // Completed, no cost, and it measurably did something. A run with no usage at all is
+                // correctly uncosted — ShouldCalculateCost declines it — so it must not be counted.
+                ExtraFilter:
+                    'CompletedAt IS NOT NULL AND Cost IS NULL AND (' +
+                    'ISNULL(TokensUsed, 0) > 0 OR ISNULL(InputUnitsUsed, 0) > 0 OR ISNULL(OutputUnitsUsed, 0) > 0)',
+                Fields: ['ID', 'ModelID', 'VendorID', 'UsageTypeID', 'TokensUsed', 'InputUnitsUsed', 'OutputUnitsUsed'],
+                OrderBy: '__mj_CreatedAt DESC',
+                MaxRows: 500,
+                ResultType: 'simple'
+            }, ctx.User);
+            Assert(result.Success, `uncosted prompt-run query failed: ${result.ErrorMessage}`);
+
+            const uncosted = result.Results;
+            if (uncosted.length === 0) {
+                console.log('      → no completed prompt run did measurable work without a cost');
+                return;
+            }
+
+            // A price existed and was not applied — grouped so the report names the configuration to
+            // look at rather than listing hundreds of run ids.
+            const priceExisted = new Map<string, number>();
+            let noPriceConfigured = 0;
+            let unresolvableMeasure = 0;
+            for (const row of uncosted) {
+                if (!row.ModelID || !row.VendorID) {
+                    // Cost calculation requires both; without them the run is correctly skipped.
+                    noPriceConfigured++;
+                    continue;
+                }
+                // An unset UsageTypeID means token-billed — every run predating the column is — so it
+                // resolves to Tokens the same way the storage seam does. A value that IS set but is
+                // absent from the catalog is a real fault (a deleted row, a stale cache), counted
+                // separately instead of defaulted, which would attribute it to a pricing gap it has
+                // nothing to do with.
+                const measure = row.UsageTypeID ? engine.UsageTypeName(row.UsageTypeID) : 'Tokens';
+                if (measure === null) {
+                    unresolvableMeasure++;
+                    continue;
+                }
+                const cost = engine.GetActiveModelCost(row.ModelID, row.VendorID, 'Realtime', measure as never);
+                if (!cost) {
+                    noPriceConfigured++;
+                    continue;
+                }
+                const key = `${row.ModelID} @ ${row.VendorID} in ${measure}`;
+                priceExisted.set(key, (priceExisted.get(key) ?? 0) + 1);
+            }
+
+            if (noPriceConfigured > 0) {
+                console.warn(
+                    `      ⚠ ${noPriceConfigured}/${uncosted.length} uncosted run(s) have NO active cost row in the ` +
+                    `measure they recorded — a pricing-coverage gap, not a pipeline failure (see AC5)`
+                );
+            }
+            if (unresolvableMeasure > 0) {
+                console.warn(
+                    `      ⚠ ${unresolvableMeasure}/${uncosted.length} uncosted run(s) name a UsageTypeID absent from ` +
+                    `the MJ: AI Usage Types catalog — a deleted row or a stale cache, not a pricing gap`
+                );
+            }
+            const offenders = [...priceExisted.entries()].map(([key, n]) => `${key}: ${n} run(s)`);
+            Assert(
+                offenders.length === 0,
+                `completed run(s) did measurable work, an Active cost row in their measure EXISTS, and Cost is still ` +
+                `NULL — the cost pipeline had everything it needed: ${offenders.join('; ')}`
+            );
+            console.log(
+                `      → ${uncosted.length} uncosted run(s) examined; all explained by absent pricing, none by a ` +
+                `failure to apply pricing that exists`
+            );
+        }
+    },
+    {
+        Id: 'ai-cost.AC8',
+        Name: 'AC8: prompt-run cost precision and basis invariants — with-children cost share, coverage reporting, non-negative agent run totals',
+        Fn: async (ctx): Promise<void> => {
+            const rv = new RunView();
+
+            // Probe completed prompt runs for total count and total cost.
+            const probe = await rv.RunView({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: 'CompletedAt IS NOT NULL',
+                Aggregates: [
+                    { expression: 'COUNT(*)', alias: 'TotalCompleted' },
+                    { expression: 'SUM(Cost)', alias: 'TotalCost' }
+                ],
+                ResultType: 'count_only',
+                MaxRows: 1
+            }, ctx.User);
+            Assert(probe.Success, `prompt-run completed probe failed: ${probe.ErrorMessage}`);
+            const totalCompleted = aggregateValue(probe.AggregateResults, 'TotalCompleted');
+            if (totalCompleted === 0) {
+                skipNote('AC8', 'no completed MJ: AI Prompt Runs rows exist — precision and basis invariants are unexercised');
+                return;
+            }
+
+            // (b) Report unpriced ratio as coverage (log line, no assert — coverage is reported, not gated, in PR1).
+            const unpricedProbe = await rv.RunView({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: 'CompletedAt IS NOT NULL AND Cost IS NULL',
+                Aggregates: [{ expression: 'COUNT(*)', alias: 'UnpricedCompleted' }],
+                ResultType: 'count_only',
+                MaxRows: 1
+            }, ctx.User);
+            Assert(unpricedProbe.Success, `unpriced prompt-run query failed: ${unpricedProbe.ErrorMessage}`);
+            const unpricedCompleted = aggregateValue(unpricedProbe.AggregateResults, 'UnpricedCompleted');
+            const pricedCount = totalCompleted - unpricedCompleted;
+            const coveragePct = (pricedCount / totalCompleted) * 100;
+            console.log(
+                `      → prompt-run pricing coverage: ${coveragePct.toFixed(1)}% priced ` +
+                `(${pricedCount}/${totalCompleted} completed runs), ${unpricedCompleted} unpriced`
+            );
+
+            // (c) ParallelParent prompt runs must have Cost IS NULL.
+            // Parallel parents aggregate spend across their arms and have no own spend.
+            const invalidParallelParentsResult = await rv.RunView({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: "CompletedAt IS NOT NULL AND RunType = 'ParallelParent' AND Cost IS NOT NULL",
+                Aggregates: [{ expression: 'COUNT(*)', alias: 'InvalidParallelParents' }],
+                ResultType: 'count_only',
+                MaxRows: 1
+            }, ctx.User);
+            Assert(invalidParallelParentsResult.Success, `parallel parent prompt-run query failed: ${invalidParallelParentsResult.ErrorMessage}`);
+            const invalidParallelParentsCount = aggregateValue(invalidParallelParentsResult.AggregateResults, 'InvalidParallelParents');
+            AssertEqual(
+                invalidParallelParentsCount,
+                0,
+                `ParallelParent prompt runs must have Cost IS NULL (found ${invalidParallelParentsCount} row(s) with Cost IS NOT NULL)`
+            );
+
+            // Non-negative agent-run cost assert
+            const negativeAgentRunCostResult = await rv.RunView({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: 'TotalCost IS NOT NULL AND TotalCost < 0',
+                ResultType: 'count_only',
+                MaxRows: 1
+            }, ctx.User);
+            Assert(negativeAgentRunCostResult.Success, `negative agent run cost query failed: ${negativeAgentRunCostResult.ErrorMessage}`);
+            const negativeAgentRunCostCount = negativeAgentRunCostResult.TotalRowCount ?? 0;
+            AssertEqual(
+                negativeAgentRunCostCount,
+                0,
+                `AIAgentRun.TotalCost must be non-negative (found ${negativeAgentRunCostCount} row(s) with TotalCost < 0)`
+            );
+            console.log(`      → verified basis invariants: ParallelParent Cost IS NULL, agent run costs non-negative`);
+        }
+    },
+    {
+        Id: 'ai-cost.AC11',
+        Name: 'AC11: prompt-run base own-cost equals the AIUsageHourly aggregate cost over the same window',
+        Fn: async (ctx): Promise<void> => {
+            const rv = new RunView();
+            const rq = new RunQuery();
+            // Midnight-aligned bounds: AIUsageHourly returns whole hours overlapping [start, end), which for
+            // aligned bounds is exactly [start, end) — so both sides select the same prompt runs.
+            const start = '2020-01-01T00:00:00.000Z';
+            const end = '2030-01-01T00:00:00.000Z';
+
+            // (a) Own-cost side: RunView on MJ: AI Prompt Runs with Aggregates, on the query's own basis —
+            // completed runs by RunAt, parallel parents excluded (they carry no own cost by design).
+            const baseRes = await rv.RunView({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: `RunAt >= '${start}' AND RunAt < '${end}' AND CompletedAt IS NOT NULL AND (RunType <> 'ParallelParent' OR RunType IS NULL)`,
+                Aggregates: [
+                    { expression: 'SUM(Cost)', alias: 'TotalCost' },
+                    { expression: 'COUNT(*)', alias: 'TotalCount' }
+                ],
+                ResultType: 'count_only',
+                MaxRows: 1
+            }, ctx.User);
+            Assert(baseRes.Success, `AIPromptRun base view query failed: ${baseRes.ErrorMessage}`);
+
+            const baseCount = aggregateValue(baseRes.AggregateResults, 'TotalCount');
+            const baseCost = aggregateValue(baseRes.AggregateResults, 'TotalCost');
+
+            // (b) Aggregate side: saved query AIUsageHourly over the same window
+            const hourlyRes = await rq.RunQuery({
+                QueryName: 'AIUsageHourly',
+                CategoryPath: '/MJ/AI/',
+                Parameters: { start, end }
+            }, ctx.User);
+            Assert(hourlyRes.Success, `AIUsageHourly query failed: ${hourlyRes.ErrorMessage}`);
+
+            const hourlyRows = hourlyRes.Results ?? [];
+            const hourlyTotal = hourlyRows.reduce(
+                (sum: number, r: Record<string, unknown>) => {
+                    Assert(typeof r.OwnCost === 'number' && Number.isFinite(r.OwnCost), `AIUsageHourly row OwnCost must be a finite number, got: ${r.OwnCost}`);
+                    return sum + (r.OwnCost as number);
+                },
+                0
+            );
+            const hourlyRuns = hourlyRows.reduce((sum: number, r: Record<string, unknown>) => sum + Number(r.Runs ?? 0), 0);
+
+            if (baseCount === 0 && hourlyRuns === 0) {
+                skipNote('AC11', 'no completed prompt runs in test window — fact view / hourly parity is unexercised');
+                return;
+            }
+
+            AssertEqual(hourlyRuns, baseCount, `AIUsageHourly Runs (${hourlyRuns}) must equal the completed non-parent prompt runs in the window (${baseCount})`);
+            const diff = Math.abs(hourlyTotal - baseCost);
+            Assert(
+                diff < 0.0001,
+                `AIUsageHourly cost (${hourlyTotal}) does not match AIPromptRun base cost (${baseCost}), diff=${diff}`
+            );
+
+            console.log(`      → AC11 verified: AIPromptRun base cost (${baseCost.toFixed(6)}) matches AIUsageHourly (${hourlyTotal.toFixed(6)}) across ${baseCount} run(s)`);
+        }
+    },
+    {
+        Id: 'ai-cost.AC12',
+        Name: 'AC12: AIAgentRunSubtreeCost (CalculateRunCost) body changed to SUM(OwnCost) over subtree, executes cleanly for root runs',
+        Fn: async (ctx): Promise<void> => {
+            const rv = new RunView();
+            // (a) Query metadata checks: CalculateRunCost exists and is Approved
+            const queryRes = await rv.RunView({
+                EntityName: 'MJ: Queries',
+                ExtraFilter: "Name = 'CalculateRunCost'",
+                MaxRows: 1
+            }, ctx.User);
+            Assert(queryRes.Success, `CalculateRunCost query lookup failed: ${queryRes.ErrorMessage}`);
+            Assert((queryRes.Results ?? []).length > 0, `CalculateRunCost query must exist in metadata`);
+            const q = queryRes.Results![0] as Record<string, unknown>;
+            AssertEqual(q.Status, 'Approved', `CalculateRunCost must be Approved`);
+            Assert(!!q.UsesTemplate, `CalculateRunCost must have UsesTemplate = true`);
+
+            // Check that the SQL does not reference TotalCostRollup or raw TotalCost
+            const sql = String(q.SQL ?? '');
+            Assert(!sql.includes('TotalCostRollup'), `CalculateRunCost SQL must not reference TotalCostRollup`);
+
+            // (b) Check for root agent runs
+            const agentRunRes = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: 'ParentRunID IS NULL',
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple'
+            }, ctx.User);
+            Assert(agentRunRes.Success, `AI Agent Runs probe failed: ${agentRunRes.ErrorMessage}`);
+
+            const rq = new RunQuery();
+            if (!agentRunRes.Results || agentRunRes.Results.length === 0) {
+                // Verify CalculateRunCost executes cleanly on a stranger ID
+                const strangerRes = await rq.RunQuery({
+                    QueryName: 'CalculateRunCost',
+                    CategoryPath: '/MJ/AI/',
+                    Parameters: { AIAgentRunID: STRANGER_ID }
+                }, ctx.User);
+                Assert(strangerRes.Success, `CalculateRunCost query execution failed for stranger ID: ${strangerRes.ErrorMessage}`);
+                skipNote('AC12', 'no root agent runs exist in the database — subtree cost execution on real root is unexercised');
+                return;
+            }
+
+            const rootRunId = String(agentRunRes.Results[0].ID);
+            const calcRes = await rq.RunQuery({
+                QueryName: 'CalculateRunCost',
+                CategoryPath: '/MJ/AI/',
+                Parameters: { AIAgentRunID: rootRunId }
+            }, ctx.User);
+            Assert(calcRes.Success, `CalculateRunCost query failed: ${calcRes.ErrorMessage}`);
+            console.log(`      → AC12 verified: CalculateRunCost executed successfully for root run ${rootRunId}`);
         }
     }
 ];

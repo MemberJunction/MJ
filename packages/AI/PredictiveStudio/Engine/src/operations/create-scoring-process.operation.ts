@@ -24,7 +24,7 @@ import {
   type PredictiveStudioCreateScoringProcessInput,
   type PredictiveStudioCreateScoringProcessOutput,
 } from '@memberjunction/core-entities';
-import { createScoringProcess } from '../scoring/scoring-process';
+import { CreateScoringProcess } from '../scoring/scoring-process';
 
 /**
  * Server implementation of `PredictiveStudio.CreateScoringProcess`. Extends the
@@ -47,7 +47,7 @@ export class PredictiveStudioCreateScoringProcessServerOperation extends Predict
       throw new Error('targetEntityName is required');
     }
 
-    const result = await createScoringProcess({
+    const result = await CreateScoringProcess({
       modelId: input.modelId,
       targetEntityName: input.targetEntityName,
       scope: input.scope,

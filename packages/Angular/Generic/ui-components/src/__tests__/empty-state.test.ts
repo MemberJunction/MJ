@@ -48,11 +48,19 @@ describe('MJEmptyStateComponent', () => {
     it('should not set compact/large classes for the default size', () => {
       expect(cmp.IsCompact).toBe(false);
       expect(cmp.IsLarge).toBe(false);
+      expect(cmp.IsInline).toBe(false);
+    });
+    it('should set IsInline only when Size is "inline"', () => {
+      cmp.Size = 'inline';
+      expect(cmp.IsInline).toBe(true);
+      expect(cmp.IsCompact).toBe(false);
+      expect(cmp.IsLarge).toBe(false);
     });
     it('should set IsCompact only when Size is "compact"', () => {
       cmp.Size = 'compact';
       expect(cmp.IsCompact).toBe(true);
       expect(cmp.IsLarge).toBe(false);
+      expect(cmp.IsInline).toBe(false);
     });
     it('should set IsLarge only when Size is "large"', () => {
       cmp.Size = 'large';

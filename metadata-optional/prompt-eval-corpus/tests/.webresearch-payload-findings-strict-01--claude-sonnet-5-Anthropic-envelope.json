@@ -1,0 +1,116 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "webresearch-payload-findings-strict-01 [claude-sonnet-5 · Anthropic · envelope]",
+    "Description": "Two summaries are in hand and the prompt's Step 4 says findings go into payloadChangeRequest.newElements.findings. Unlike webresearch-payload-write-findings-01 this case requires the write.",
+    "InputDefinition": {
+      "payload": {
+        "topic": "grid-scale battery storage 2025",
+        "findings": [],
+        "sources": []
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Research grid-scale battery storage developments in 2025."
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Summarize Content succeeded. url = https://example.org/iea-2025; summary = IEA: 2025 utility-scale storage additions ~70 GW, up 40% y/y."
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Summarize Content succeeded. url = https://example.org/nrel-costs; summary = NREL: LFP pack costs fell to ~$95/kWh in 2025."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "webresearch-payload-findings-strict-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "payloadChange",
+            "payload": {
+              "newElements.findings": {
+                "matcher": "nonEmpty"
+              }
+            }
+          },
+          {
+            "kind": "payloadChange",
+            "payload": {
+              "updateElements.findings": {
+                "matcher": "nonEmpty"
+              }
+            }
+          },
+          {
+            "kind": "payloadChange",
+            "payload": {
+              "replaceElements.findings": {
+                "matcher": "nonEmpty"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Web Research Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "payloadChange",
+                "payload": {
+                  "newElements.findings": {
+                    "matcher": "nonEmpty"
+                  }
+                }
+              },
+              {
+                "kind": "payloadChange",
+                "payload": {
+                  "updateElements.findings": {
+                    "matcher": "nonEmpty"
+                  }
+                }
+              },
+              {
+                "kind": "payloadChange",
+                "payload": {
+                  "replaceElements.findings": {
+                    "matcher": "nonEmpty"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "F42656AE-075A-4757-AD08-5A7710095A78"
+  }
+}

@@ -10,7 +10,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseServerMiddleware } from './BaseServerMiddleware.js';
 import { configInfo } from '../config.js';
-import { createTenantMiddleware, createTenantPreRunViewHook, createTenantPreSaveHook } from '../multiTenancy/index.js';
+import { CreateTenantMiddleware, CreateTenantPreRunViewHook, CreateTenantPreSaveHook } from '../multiTenancy/index.js';
 import type { RequestHandler } from 'express';
 import type { RunViewParams, UserInfo, BaseEntity } from '@memberjunction/core';
 
@@ -26,14 +26,14 @@ export class MJTenantFilterMiddleware extends BaseServerMiddleware {
     }
 
     GetPostAuthMiddleware(): RequestHandler[] {
-        return [createTenantMiddleware(configInfo.multiTenancy!)];
+        return [CreateTenantMiddleware(configInfo.multiTenancy!)];
     }
 
     PreRunView(params: RunViewParams, contextUser: UserInfo | undefined): RunViewParams | Promise<RunViewParams> {
-        return createTenantPreRunViewHook(configInfo.multiTenancy!)(params, contextUser);
+        return CreateTenantPreRunViewHook(configInfo.multiTenancy!)(params, contextUser);
     }
 
     PreSave(entity: BaseEntity, contextUser: UserInfo | undefined): boolean | string | Promise<boolean | string> {
-        return createTenantPreSaveHook(configInfo.multiTenancy!)(entity, contextUser);
+        return CreateTenantPreSaveHook(configInfo.multiTenancy!)(entity, contextUser);
     }
 }

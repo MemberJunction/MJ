@@ -52,4 +52,4 @@ python3 scripts/compare.py ./output/run-1/state.json
 ```
 
 ## License
-MIT License — same as MemberJunction
+Business Source License 1.1 — see [LICENSE](../../../../LICENSE) for details.

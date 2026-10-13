@@ -35,7 +35,7 @@ vi.mock('@memberjunction/core', async () => {
         }
     }
     return {
-        PermissionProviderBase: buildPermissionProviderBase(MockRunView as any),
+        PermissionProviderBase: buildPermissionProviderBase(MockRunView),
         LogError: vi.fn(),
         LogStatus: vi.fn(),
         UserInfo: class {},

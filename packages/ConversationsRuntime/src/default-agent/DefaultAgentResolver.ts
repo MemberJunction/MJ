@@ -90,7 +90,7 @@ export class DefaultAgentResolver {
      * });
      * ```
      */
-    public async resolve(options: DefaultAgentResolveOptions = {}): Promise<MJAIAgentEntityExtended> {
+    public async Resolve(options: DefaultAgentResolveOptions = {}): Promise<MJAIAgentEntityExtended> {
         const { explicitAgentId, applicationId, contextUser, provider } = options;
 
         // Lazy-config the engines we depend on. Both `Config(false, ...)` calls are
@@ -151,6 +151,11 @@ export class DefaultAgentResolver {
                 `(5) code-const fallback agent name = "${DefaultAgentResolver.FALLBACK_AGENT_NAME}". ` +
                 `Configure Application.AgentSettings, the Application Setting, or seed the fallback agent.`
         );
+    }
+
+    /** @deprecated Use {@link Resolve}. */
+    public async resolve(options: DefaultAgentResolveOptions = {}): Promise<MJAIAgentEntityExtended> {
+        return this.Resolve(options);
     }
 
     /**

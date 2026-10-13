@@ -1,43 +1,53 @@
-<div class="session-card" role="group" [attr.aria-label]="Title" (click)="Open($event)">
-  <div class="session-card__icon" aria-hidden="true">
-    <i class="fa-solid fa-tower-broadcast"></i>
+<!--
+  One realtime (voice) session, collapsed to a single row of the conversation. It is laid out like a
+  chat message: the call icon in the avatar column, a header line, then a bubble. That keeps the
+  thread's margins and rhythm instead of stretching edge to edge across it.
+-->
+<div class="call" role="group" [attr.aria-label]="AccessibleSummary"
+     [class.call--live]="IsLiveChip" [class.call--error]="IsErrorChip">
+  <div class="call__icon" aria-hidden="true">
+    <i class="fa-solid" [class.fa-phone]="!IsErrorChip" [class.fa-phone-slash]="IsErrorChip"></i>
   </div>
 
-  <div class="session-card__body">
-    <div class="session-card__head">
-      <span class="session-card__title">{{ Title }}</span>
-      @if (StatusChip) {
-        <span class="session-card__chip"
-              [class.session-card__chip--error]="IsErrorChip"
-              [class.session-card__chip--live]="IsLiveChip">{{ StatusChip }}</span>
+  <div class="call__content">
+    <div class="call__header">
+      <span class="call__title">{{ Title }}</span>
+      @if (StartedAt) {
+        <span class="call__time">{{ StartedAt | date: 'short' }}</span>
       }
     </div>
 
-    <div class="session-card__meta">
-      @if (Group.StartedAt) {
-        <span class="session-card__range">
-          {{ Group.StartedAt | date:'MMM d, h:mm a' }}
-          @if (Group.EndedAt && Group.EndedAt !== Group.StartedAt) {
-            <i class="fa-solid fa-arrow-right-long session-card__range-arrow" aria-hidden="true"></i>
-            {{ Group.EndedAt | date:(SameDayRange ? 'h:mm a' : 'MMM d, h:mm a') }}
+    <!-- The bubble opens the review on click as a convenience for the mouse; the button below is
+         the keyboard and screen-reader path, so the bubble is deliberately not a second control. -->
+    <div class="call__bubble" (click)="Open($event)">
+      @if (Group.LastTurnPreview) {
+        <p class="call__quote">
+          <span class="call__speaker">{{ SpeakerLabel }}</span>
+          <span class="call__quote-text">{{ Group.LastTurnPreview }}</span>
+        </p>
+      }
+
+      <div class="call__footer">
+        <div class="call__facts">
+          @if (StatusChip) {
+            <span class="call__status" [attr.data-tone]="StatusTone">
+              <span class="call__status-dot" aria-hidden="true"></span>{{ StatusChip }}
+            </span>
           }
-        </span>
-        <span class="session-card__dot" aria-hidden="true">·</span>
-      }
-      <span class="session-card__turns">{{ Group.TurnCount }} {{ Group.TurnCount === 1 ? 'turn' : 'turns' }}</span>
-    </div>
+          @if (DurationLabel) {
+            <span class="call__fact call__duration">
+              <i class="fa-regular fa-clock" aria-hidden="true"></i>{{ DurationLabel }}
+            </span>
+          }
+          <span class="call__fact call__count">
+            <i class="fa-regular fa-comment" aria-hidden="true"></i>{{ MessageCountLabel }}
+          </span>
+        </div>
 
-    @if (Group.LastTurnPreview) {
-      <div class="session-card__preview">
-        <span class="session-card__preview-role">{{ Group.LastTurnRole === 'User' ? UserName : 'Agent' }}:</span>
-        {{ Group.LastTurnPreview }}
+        <button type="button" mjButton variant="secondary" size="sm" class="call__open" (click)="Open($event)">
+          {{ ActionLabel }}
+        </button>
       </div>
-    }
+    </div>
   </div>
-
-  <button type="button" class="session-card__open" (click)="Open($event)"
-          title="Open this realtime session in review mode">
-    <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
-    <span>Open</span>
-  </button>
 </div>

@@ -53,6 +53,7 @@ function makeContext(overrides?: Partial<SmokeTestContext>): SmokeTestContext {
   return {
     Dir: '/test/install',
     Config: sampleConfig(),
+    PackageManager: 'npm',
     Emitter: emitter,
     ...overrides,
   };
@@ -582,5 +583,108 @@ describe('SmokeTestPhase', () => {
       expect(apiWarn).toBeDefined();
       expect((apiWarn as { Message: string }).Message).toContain('No output captured');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Package-manager awareness
+// ---------------------------------------------------------------------------
+
+describe('SmokeTestPhase package-manager awareness', () => {
+  let phase: SmokeTestPhase;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    for (const mock of [mockFs, mockRunner]) {
+      for (const fn of Object.values(mock)) {
+        if (typeof fn === 'function' && 'mockReset' in fn) {
+          (fn as ReturnType<typeof vi.fn>).mockReset();
+        }
+      }
+    }
+    mockFetch.mockReset();
+    phase = new SmokeTestPhase();
+    mockFs.DirectoryExists.mockResolvedValue(true);
+    mockFs.FileExists.mockResolvedValue(false);
+    mockFs.ReadText.mockResolvedValue('');
+    mockRunWithStdout(
+      ['Starting server...', '🚀 Server ready at http://localhost:4000/'],
+      ['Compiling...', 'Application bundle generation complete.']
+    );
+    mockRunner.killByPort.mockReturnValue(undefined);
+    mockFetch.mockResolvedValue({ ok: true, status: 200 });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('starts services through pnpm by default', async () => {
+    const ctx = makeContext({ PackageManager: 'pnpm' });
+    const runPromise = phase.Run(ctx);
+    await flushAll();
+    await runPromise;
+
+    const startCalls = mockRunner.Run.mock.calls.filter(
+      (c) => (c[1] as string[]).includes('start:api') || (c[1] as string[]).includes('start:explorer')
+    );
+    expect(startCalls.length).toBe(2);
+    for (const call of startCalls) {
+      expect(call[0]).toBe('pnpm');
+      expect((call[1] as string[])[0]).toBe('run');
+    }
+  });
+
+  it('starts services through npm when overridden', async () => {
+    const ctx = makeContext({ PackageManager: 'npm' });
+    const runPromise = phase.Run(ctx);
+    await flushAll();
+    await runPromise;
+
+    const startCall = mockRunner.Run.mock.calls.find((c) => (c[1] as string[]).includes('start:api'));
+    expect(startCall).toBeDefined();
+    expect(startCall![0]).toBe('npm');
+  });
+
+  it('passes preCheck via packages/GeneratedEntities when the root node_modules symlink is absent (pnpm layout)', async () => {
+    // pnpm does not link workspace members into the root node_modules unless
+    // the root manifest depends on them — only the package directory exists.
+    mockFs.DirectoryExists.mockImplementation(async (p: string) =>
+      p.includes('packages') && p.includes('GeneratedEntities')
+    );
+
+    const ctx = makeContext({ PackageManager: 'pnpm' });
+    const runPromise = phase.Run(ctx);
+    await flushAll();
+
+    await expect(runPromise).resolves.toBeDefined();
+  });
+
+  it("recognizes the current MJAPI startup summary ('🚀 Ready  <url>')", async () => {
+    mockRunWithStdout(
+      ['Bootstrapping...', '🚀 Ready  http://localhost:4000/'],
+      ['Application bundle generation complete.']
+    );
+
+    const ctx = makeContext({ PackageManager: 'pnpm' });
+    const runPromise = phase.Run(ctx);
+    await flushAll();
+    const result = await runPromise;
+
+    expect(result.ApiRunning).toBe(true);
+  });
+
+  it("recognizes the summary-block ready line ('   Ready     <url>')", async () => {
+    mockRunWithStdout(
+      ['🚀 MemberJunction Server  ·  v6.1.0', '   Ready     http://localhost:4000/'],
+      ['Application bundle generation complete.']
+    );
+
+    const ctx = makeContext({ PackageManager: 'pnpm' });
+    const runPromise = phase.Run(ctx);
+    await flushAll();
+    const result = await runPromise;
+
+    expect(result.ApiRunning).toBe(true);
   });
 });

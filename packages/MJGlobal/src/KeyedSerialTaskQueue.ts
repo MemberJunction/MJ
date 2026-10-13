@@ -55,7 +55,7 @@ export class KeyedSerialTaskQueue {
      *   cross-instance ordering constraints like self-referencing foreign keys (e.g. a child step's
      *   INSERT must land after its parent step's INSERT).
      */
-    public enqueue<T>(key: object, task: () => Promise<T>, opts?: { label?: string; isOk?: (v: T) => boolean; after?: object }): Promise<T | undefined> {
+    public Enqueue<T>(key: object, task: () => Promise<T>, opts?: { label?: string; isOk?: (v: T) => boolean; after?: object }): Promise<T | undefined> {
         const prior = this.tails.get(key) ?? Promise.resolve();
         const dependency = opts?.after ? (this.tails.get(opts.after) ?? Promise.resolve()) : Promise.resolve();
 
@@ -87,15 +87,25 @@ export class KeyedSerialTaskQueue {
         return settled.then((o) => (o.ok ? o.value : undefined));
     }
 
+    /** @deprecated Use {@link Enqueue}. */
+    public enqueue<T>(key: object, task: () => Promise<T>, opts?: { label?: string; isOk?: (v: T) => boolean; after?: object }): Promise<T | undefined> {
+        return this.Enqueue(key, task, opts);
+    }
+
     /**
      * Awaits the currently in-flight tasks, then reports and resets the failure tally accumulated since
      * the last flush. Tasks enqueued after this call begins are not awaited here.
      */
-    public async flush(): Promise<SerialTaskFlushResult> {
+    public async Flush(): Promise<SerialTaskFlushResult> {
         await Promise.all([...this.inFlight]);
         const result: SerialTaskFlushResult = { failures: this.failures, rejections: this.rejections };
         this.failures = 0;
         this.rejections = 0;
         return result;
+    }
+
+    /** @deprecated Use {@link Flush}. */
+    public async flush(): Promise<SerialTaskFlushResult> {
+        return this.Flush();
     }
 }

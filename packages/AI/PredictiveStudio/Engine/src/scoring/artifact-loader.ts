@@ -20,7 +20,7 @@ import { readFile } from 'node:fs/promises';
 
 import { LogError, type UserInfo } from '@memberjunction/core';
 
-import { resolveLocalArtifactBaseDir, localArtifactPath } from '../training/artifact-store';
+import { ResolveLocalArtifactBaseDir, LocalArtifactPath } from '../training/artifact-store';
 import type { IArtifactLoader } from './types';
 
 /**
@@ -48,8 +48,13 @@ export class InMemoryArtifactLoader implements IArtifactLoader {
   }
 
   /** Register artifact bytes under a file id (test setup convenience). */
-  public set(fileId: string, bytes: Uint8Array): void {
+  public Set(fileId: string, bytes: Uint8Array): void {
     this.store.set(fileId, bytes);
+  }
+
+  /** @deprecated Use {@link Set}. */
+  public set(fileId: string, bytes: Uint8Array): void {
+    return this.Set(fileId, bytes);
   }
 
   /** @inheritdoc */
@@ -78,13 +83,13 @@ export class LocalArtifactLoader implements IArtifactLoader {
    * @param baseDir optional base-directory override (defaults to
    *   {@link resolveLocalArtifactBaseDir}); must match the store's base dir
    */
-  constructor(baseDir: string = resolveLocalArtifactBaseDir()) {
+  constructor(baseDir: string = ResolveLocalArtifactBaseDir()) {
     this.baseDir = baseDir;
   }
 
   /** @inheritdoc */
   public async load(fileId: string, _contextUser?: UserInfo): Promise<Uint8Array | null> {
-    const absolutePath = localArtifactPath(this.baseDir, fileId);
+    const absolutePath = LocalArtifactPath(this.baseDir, fileId);
     try {
       const buffer = await readFile(absolutePath);
       return new Uint8Array(buffer);

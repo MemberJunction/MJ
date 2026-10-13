@@ -1,0 +1,262 @@
+.mj-agent-inv {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+}
+
+/* ── Summary banner ─────────────────────────────────────────────────────── */
+
+.mj-agent-inv__summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--mj-border-default);
+  border-left: 4px solid var(--mj-border-strong);
+  border-radius: 8px;
+  background: var(--mj-bg-surface-sunken);
+}
+
+/* An automated agent is the finding, not the default — the accent says "look at this". */
+.mj-agent-inv__summary--automated {
+  border-left-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+}
+
+.mj-agent-inv__summary-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 50%;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  font-size: 15px;
+}
+
+.mj-agent-inv__summary--automated .mj-agent-inv__summary-icon {
+  color: var(--mj-brand-primary);
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+}
+
+.mj-agent-inv__summary-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mj-agent-inv__summary-line {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.mj-agent-inv__summary-hint {
+  font-size: 12px;
+  color: var(--mj-text-muted);
+}
+
+/* ── Groups ─────────────────────────────────────────────────────────────── */
+
+.mj-agent-inv__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mj-agent-inv__group {
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  background: var(--mj-bg-surface-card);
+  overflow: hidden;
+}
+
+.mj-agent-inv__group-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-sunken);
+}
+
+.mj-agent-inv__group-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+  color: var(--mj-brand-primary);
+  font-size: 13px;
+}
+
+.mj-agent-inv__group-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mj-agent-inv__group-title h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.mj-agent-inv__group-title p {
+  margin: 1px 0 0;
+  font-size: 12px;
+  color: var(--mj-text-muted);
+}
+
+.mj-agent-inv__group-count {
+  flex: 0 0 auto;
+  padding: 2px 9px;
+  border-radius: 10px;
+  background: var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.mj-agent-inv__group-count--live {
+  background: color-mix(in srgb, var(--mj-status-success) 16%, transparent);
+  color: var(--mj-status-success);
+}
+
+/* ── Rows ───────────────────────────────────────────────────────────────── */
+
+.mj-agent-inv__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mj-agent-inv__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px 0 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--mj-border-default) 60%, transparent);
+}
+
+.mj-agent-inv__row:last-child {
+  border-bottom: none;
+}
+
+/* Not merely dimmed — a pathway that cannot fire should read as inert at a glance. */
+.mj-agent-inv__row--muted .mj-agent-inv__row-title,
+.mj-agent-inv__row--muted .mj-agent-inv__row-trigger {
+  color: var(--mj-text-disabled);
+}
+
+.mj-agent-inv__row-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 11px 14px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.mj-agent-inv__row-main--static {
+  cursor: default;
+}
+
+button.mj-agent-inv__row-main:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 7%, transparent);
+}
+
+button.mj-agent-inv__row-main:focus-visible {
+  outline: 2px solid var(--mj-brand-primary);
+  outline-offset: -2px;
+}
+
+.mj-agent-inv__row-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.mj-agent-inv__row-trigger {
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+}
+
+.mj-agent-inv__row-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  white-space: nowrap;
+}
+
+.mj-agent-inv__row-next,
+.mj-agent-inv__row-last {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mj-agent-inv__state {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.mj-agent-inv__state--live {
+  background: color-mix(in srgb, var(--mj-status-success) 16%, transparent);
+  color: var(--mj-status-success);
+}
+
+.mj-agent-inv__state--paused {
+  background: color-mix(in srgb, var(--mj-status-warning) 18%, transparent);
+  color: var(--mj-status-warning);
+}
+
+/* ── Narrow layouts ─────────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .mj-agent-inv__row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+    padding-bottom: 10px;
+  }
+
+  .mj-agent-inv__row-meta {
+    padding: 0 14px;
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  .mj-agent-inv__summary {
+    flex-wrap: wrap;
+  }
+}

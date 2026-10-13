@@ -150,7 +150,7 @@ export class APIKeyCreateDialogComponent extends BaseAngularComponent implements
     /**
      * Handle expiration preset selection
      */
-    public onPresetSelect(preset: { label: string; days: number }): void {
+    public OnPresetSelect(preset: { label: string; days: number }): void {
         this.SelectedPreset = preset;
         this.NeverExpires = false;
 
@@ -163,52 +163,82 @@ export class APIKeyCreateDialogComponent extends BaseAngularComponent implements
         }
     }
 
+    /** @deprecated Use {@link OnPresetSelect}. */
+    public onPresetSelect(preset: { label: string; days: number }): void {
+      return this.OnPresetSelect(preset);
+    }
+
     /**
      * Handle never expires toggle
      */
-    public onNeverExpiresChange(): void {
+    public OnNeverExpiresChange(): void {
         if (this.NeverExpires) {
             this.ExpiresAt = null;
             this.SelectedPreset = null;
         }
     }
 
+    /** @deprecated Use {@link OnNeverExpiresChange}. */
+    public onNeverExpiresChange(): void {
+      return this.OnNeverExpiresChange();
+    }
+
     /**
      * Toggle category expansion
      */
-    public toggleCategory(category: ScopeCategory): void {
+    public ToggleCategory(category: ScopeCategory): void {
         category.expanded = !category.expanded;
+    }
+
+    /** @deprecated Use {@link ToggleCategory}. */
+    public toggleCategory(category: ScopeCategory): void {
+      return this.ToggleCategory(category);
     }
 
     /**
      * Toggle all scopes in a category
      */
-    public toggleCategoryAll(category: ScopeCategory): void {
+    public ToggleCategoryAll(category: ScopeCategory): void {
         category.allSelected = !category.allSelected;
         for (const item of category.scopes) {
             item.selected = category.allSelected;
         }
     }
 
+    /** @deprecated Use {@link ToggleCategoryAll}. */
+    public toggleCategoryAll(category: ScopeCategory): void {
+      return this.ToggleCategoryAll(category);
+    }
+
     /**
      * Update category allSelected state
      */
-    public updateCategoryState(category: ScopeCategory): void {
+    public UpdateCategoryState(category: ScopeCategory): void {
         category.allSelected = category.scopes.every(s => s.selected);
+    }
+
+    /** @deprecated Use {@link UpdateCategoryState}. */
+    public updateCategoryState(category: ScopeCategory): void {
+      return this.UpdateCategoryState(category);
     }
 
     /**
      * Get selected scope count
      */
-    public getSelectedScopeCount(): number {
+    public GetSelectedScopeCount(): number {
         return this.ScopeCategories.reduce((sum, cat) =>
             sum + cat.scopes.filter(s => s.selected).length, 0);
+    }
+
+    /** @deprecated Use {@link GetSelectedScopeCount}. */
+    public getSelectedScopeCount(): number {
+      return this.GetSelectedScopeCount();
     }
 
     /**
      * Proceed to scopes step
      */
-    public goToScopes(): void {
+    public GoToScopes(): void {
         if (!this.Label.trim()) {
             this.Error = 'Please enter a label for the API key';
             return;
@@ -217,17 +247,27 @@ export class APIKeyCreateDialogComponent extends BaseAngularComponent implements
         this.Step = 'scopes';
     }
 
+    /** @deprecated Use {@link GoToScopes}. */
+    public goToScopes(): void {
+      return this.GoToScopes();
+    }
+
     /**
      * Go back to configure step
      */
-    public goBack(): void {
+    public GoBack(): void {
         this.Step = 'configure';
+    }
+
+    /** @deprecated Use {@link GoBack}. */
+    public goBack(): void {
+      return this.GoBack();
     }
 
     /**
      * Create the API key using server-side cryptographic hashing
      */
-    public async createKey(): Promise<void> {
+    public async CreateKey(): Promise<void> {
         this.IsCreating = true;
         this.Error = '';
 
@@ -269,10 +309,15 @@ export class APIKeyCreateDialogComponent extends BaseAngularComponent implements
         }
     }
 
+    /** @deprecated Use {@link CreateKey}. */
+    public async createKey(): Promise<void> {
+      return this.CreateKey();
+    }
+
     /**
      * Copy the API key to clipboard
      */
-    public async copyKey(): Promise<void> {
+    public async CopyKey(): Promise<void> {
         try {
             await navigator.clipboard.writeText(this.RawApiKey);
             this.KeyCopied = true;
@@ -280,6 +325,11 @@ export class APIKeyCreateDialogComponent extends BaseAngularComponent implements
         } catch (error) {
             console.error('Failed to copy key:', error);
         }
+    }
+
+    /** @deprecated Use {@link CopyKey}. */
+    public async copyKey(): Promise<void> {
+      return this.CopyKey();
     }
 
     /**
@@ -319,9 +369,14 @@ export class APIKeyCreateDialogComponent extends BaseAngularComponent implements
     /**
      * Get minimum date for expiration (tomorrow)
      */
-    public getMinDate(): Date {
+    public GetMinDate(): Date {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         return tomorrow;
+    }
+
+    /** @deprecated Use {@link GetMinDate}. */
+    public getMinDate(): Date {
+      return this.GetMinDate();
     }
 }

@@ -1,5 +1,7 @@
 # CodeGen Large-Schema & Operational Resilience Plan
 
+> **Implemented (schema-scale emit):** per-schema TypeScript/GraphQL emit, write-if-changed, dirty-schema regen, `'schema.table'` exclude strings, schema-parallel file gen, incremental `tsc` on core-entities + server, hydrate-by-schema helpers, and `schemaOutput` routing. Guide: [`guides/CODEGEN_LARGE_SCHEMA_GUIDE.md`](../guides/CODEGEN_LARGE_SCHEMA_GUIDE.md). Test bed: [`Demos/BigSchemaDemo`](../Demos/BigSchemaDemo/README.md). The workstreams below remain the operational backlog (skip-entity heuristics, SQL parallelism, CLI status, resume).
+
 **Status:** Re-scoped 2026-06-29 against current source. Original draft 2026-05-11 (NSTA/Aptify onboarding); first code-verification pass 2026-05-12.
 **Author:** Captured 2026-05-11; re-scope by Pranav Rao.
 **Trigger case:** Onboarding the Aptify product database for [National Science Teachers Association (NSTA)] — 2,116 `dbo` tables, ~390 GB, several tables in the 20–50M row range, heavy customer customization on top of the core Aptify product.

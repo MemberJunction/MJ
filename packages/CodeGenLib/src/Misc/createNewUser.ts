@@ -1,7 +1,7 @@
 import { ApplicationInfo, DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
 import { configInfo, NewUserSetup } from "../Config/config";
 import { MJUserEntity, MJUserRoleEntity, MJUserApplicationEntity, MJUserApplicationEntityEntity, MJApplicationEntityEntityType } from "@memberjunction/core-entities";
-import { UserCache } from "@memberjunction/sqlserver-dataprovider";
+import { UserCache } from "@memberjunction/generic-database-provider";
 import { logError, logStatus } from "./status_logging";
 import { RegisterClass } from "@memberjunction/global";
 import { GetDialect } from "@memberjunction/sql-dialect";
@@ -10,7 +10,7 @@ import { GetDialect } from "@memberjunction/sql-dialect";
  * Base class for creating a new user in the system, you can sub-class this class to create your own user creation logic
  */
 export class CreateNewUserBase {
-    public async createNewUser(newUserSetup: NewUserSetup): Promise<{Success: boolean, Message: string, Severity: 'warning' | 'error' | undefined}> {
+    public async CreateNewUser(newUserSetup: NewUserSetup): Promise<{Success: boolean, Message: string, Severity: 'warning' | 'error' | undefined}> {
         try {   
             const matches: UserInfo = UserCache.Users.find(u => u?.Type?.trim().toLowerCase() ==='owner')!;
             const currentUser = matches ? matches : UserCache.Users[0]; // if we don't find an Owner, use the first user in the cache
@@ -174,5 +174,10 @@ export class CreateNewUserBase {
                 Severity: 'error'
             }
         }
+    }
+
+    /** @deprecated Use {@link CreateNewUser}. */
+    public async createNewUser(newUserSetup: NewUserSetup): Promise<{Success: boolean, Message: string, Severity: 'warning' | 'error' | undefined}> {
+        return this.CreateNewUser(newUserSetup);
     }
 }

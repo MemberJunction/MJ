@@ -25,6 +25,10 @@ import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
  *          store and flips those rows to 'Deleted'. Independent of Vectorize, so a purge-only run
  *          (Autotag=0, Vectorize=0, Purge=1 — e.g. scheduled cleanup) is valid. Bounded by MaxItems.
  *
+ * All flag params accept 1/true as well as the string forms "1"/"true"/"yes" — the generic
+ * RunAction GraphQL mutation delivers every param value as a string, so strict numeric checks
+ * would silently skip phases for GQL callers (see flagIsSet).
+ *
  * Uses plugin architecture: iterates all ContentSourceType records and resolves
  * providers dynamically via ClassFactory using the DriverClass field.
  */
@@ -38,6 +42,23 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
      * Override per-invocation with the 'MaxItems' action param.
      */
     private static readonly DEFAULT_MAX_ITEMS = 1000;
+
+    /**
+     * True when a flag param is set: accepts boolean true, numeric 1, and the string forms
+     * '1'/'true'/'yes' (case-insensitive). String forms matter because the generic RunAction
+     * GraphQL mutation types every param value as a string, so a caller passing Value: "1"
+     * previously failed the strict `=== 1` checks and the phase was silently skipped.
+     */
+    private static flagIsSet(value: unknown): boolean {
+        if (value === true || value === 1) {
+            return true;
+        }
+        if (typeof value === 'string') {
+            const v = value.trim().toLowerCase();
+            return v === '1' || v === 'true' || v === 'yes';
+        }
+        return false;
+    }
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const autotagParam: ActionParam | undefined = params.Params.find(p => p.Name === 'Autotag');
@@ -61,17 +82,17 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
 
         // Optional: force reprocessing of existing content items (skip checksum comparison)
         const forceReprocessParam = params.Params.find(p => p.Name === 'ForceReprocess');
-        const forceReprocess = forceReprocessParam?.Value === 1 || forceReprocessParam?.Value === true;
+        const forceReprocess = AutotagAndVectorizeContentAction.flagIsSet(forceReprocessParam?.Value);
 
         // Optional: purge soft-deleted chunks after vectorization (default off). Independent of
         // Vectorize so a purge-only invocation is valid.
         const purgeParam = params.Params.find(p => p.Name === 'Purge');
-        const purge = purgeParam?.Value === 1 || purgeParam?.Value === true;
+        const purge = AutotagAndVectorizeContentAction.flagIsSet(purgeParam?.Value);
 
         // Optional: (re)embed persisted ContentItemChunk rows still awaiting embedding (default off).
         // Independent of the other phases — used for migration backfill and error recovery.
         const embedPendingChunksParam = params.Params.find(p => p.Name === 'EmbedPendingChunks');
-        const embedPendingChunks = embedPendingChunksParam?.Value === 1 || embedPendingChunksParam?.Value === true;
+        const embedPendingChunks = AutotagAndVectorizeContentAction.flagIsSet(embedPendingChunksParam?.Value);
 
         // Optional: ContentProcessRunID to link detail records for per-source tracking
         const processRunParam = params.Params.find(p => p.Name === 'ContentProcessRunID');
@@ -89,7 +110,9 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             // Initialize the autotagging engine (loads cached metadata)
             await AutotagBaseEngine.Instance.Config(false, params.ContextUser);
 
-            LogStatus(`[AutotagAction] Autotag=${autotagParam.Value}, Vectorize=${vectorizeParam.Value}`);
+            const autotag = AutotagAndVectorizeContentAction.flagIsSet(autotagParam.Value);
+            const vectorize = AutotagAndVectorizeContentAction.flagIsSet(vectorizeParam.Value);
+            LogStatus(`[AutotagAction] Autotag=${autotag}, Vectorize=${vectorize}, EmbedPendingChunks=${embedPendingChunks}, Purge=${purge}`);
 
             // When the resolver is managing the ContentProcessRun, suppress the
             // legacy saveProcessRun() in the engine to avoid phantom run records.
@@ -98,7 +121,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             // Phase 1: Run autotag providers to create/update ContentItems in the DB.
             // Providers use checksum comparison to skip unchanged items.
             let hasNewItems = false;
-            if (autotagParam.Value === 1) {
+            if (autotag) {
                 // Initialize the taxonomy bridge BEFORE providers run so ALL providers
                 // (RSS, Entity, Website, CloudStorage) get tag taxonomy bridging
                 LogStatus(`[AutotagAction] Initializing taxonomy bridge...`);
@@ -111,7 +134,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
                 if (forceReprocess) {
                     LogStatus(`[AutotagAction] Force reprocess enabled — skipping checksum comparison`);
                 }
-                hasNewItems = await this.RunAutotagProviders(params, onProgress, contentSourceIDs, forceReprocess);
+                hasNewItems = await this.runAutotagProviders(params, onProgress, contentSourceIDs, forceReprocess);
                 LogStatus(`[AutotagAction] Phase 1 complete — providers finished (hasNewItems=${hasNewItems})`);
 
                 // Clean up the bridge
@@ -125,13 +148,13 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             // everything. Entity vector sync only runs when forceReprocess is set, since entity
             // records don't change during tagging — their vectors were already synced when first
             // ingested via the Vectors dashboard.
-            if (vectorizeParam.Value === 1) {
+            if (vectorize) {
                 const tasks: Promise<void>[] = [];
 
-                tasks.push(this.RunDirectVectorization(params, contentProcessRunID, contentSourceIDs, forceReprocess, maxItems));
+                tasks.push(this.runDirectVectorization(params, contentProcessRunID, contentSourceIDs, forceReprocess, maxItems));
 
                 if (forceReprocess) {
-                    tasks.push(this.SyncEntitySourceVectors(params, contentSourceIDs));
+                    tasks.push(this.syncEntitySourceVectors(params, contentSourceIDs));
                 }
 
                 LogStatus(`[AutotagAction] Phase 2: Running ${tasks.length} vectorization task(s)...`);
@@ -143,7 +166,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             // chunk rows created without them (migration) and to retry chunks whose embed failed
             // (recovery). Bounded by MaxItems so a large backlog drains over several runs.
             if (embedPendingChunks) {
-                await this.RunEmbedPendingChunks(params, maxItems);
+                await this.runEmbedPendingChunks(params, maxItems);
             }
 
             // Phase 4: Purge soft-deleted chunks. Runs whenever Purge=1, independent of the other
@@ -151,7 +174,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             // DeleteStatus='Pending'); this removes their vectors from the 3rd-party store and flips
             // the rows to 'Deleted'. Bounded by MaxItems so a large backlog drains over several runs.
             if (purge) {
-                await this.RunPurgeDeletedChunks(params, maxItems);
+                await this.runPurgeDeletedChunks(params, maxItems);
             }
             LogStatus(`[AutotagAction] All tasks completed`);
 
@@ -173,7 +196,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
      *
      * @returns true if any content items were processed (new, modified, or retried)
      */
-    private async RunAutotagProviders(
+    private async runAutotagProviders(
         params: RunActionParams,
         onProgress?: AutotagProgressCallback,
         contentSourceIDs?: string[],
@@ -239,7 +262,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
      * @param params - action run params with ContextUser
      * @param contentProcessRunID - optional parent run ID for detail tracking
      */
-    private async RunDirectVectorization(
+    private async runDirectVectorization(
         params: RunActionParams,
         contentProcessRunID?: string,
         contentSourceIDs?: string[],
@@ -326,7 +349,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
      * drains over several runs. Best-effort — a failure is logged but does not fail the action, since
      * unembedded chunks stay 'Pending' and are retried on the next run.
      */
-    private async RunEmbedPendingChunks(params: RunActionParams, maxItems: number): Promise<void> {
+    private async runEmbedPendingChunks(params: RunActionParams, maxItems: number): Promise<void> {
         try {
             LogStatus(`[AutotagAction] Phase 3: Embedding pending chunks (max ${maxItems})...`);
             const stats = await AutotagBaseEngine.Instance.EmbedPendingChunks(params.ContextUser, { maxItems });
@@ -342,7 +365,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
      * several runs. Best-effort — a purge failure is logged but does not fail the action, since the
      * chunks stay 'Pending' and are retried on the next run.
      */
-    private async RunPurgeDeletedChunks(params: RunActionParams, maxItems: number): Promise<void> {
+    private async runPurgeDeletedChunks(params: RunActionParams, maxItems: number): Promise<void> {
         try {
             LogStatus(`[AutotagAction] Phase 3: Purging soft-deleted chunks (max ${maxItems})...`);
             const stats = await AutotagBaseEngine.Instance.PurgeDeletedChunks(params.ContextUser, { maxItems });
@@ -557,7 +580,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
      * If the entity doc has already been synced and nothing changed, this is a no-op.
      * If records were modified by tagging, the vectors get updated.
      */
-    private async SyncEntitySourceVectors(
+    private async syncEntitySourceVectors(
         params: RunActionParams,
         contentSourceIDs?: string[]
     ): Promise<void> {
@@ -582,7 +605,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
 
             if (entitySources.length === 0) return;
 
-            const syncer = new EntityVectorSyncer();
+            const syncer = new EntityVectorSyncer(params.Provider);
             await syncer.Config(false, params.ContextUser);
 
             for (const source of entitySources) {

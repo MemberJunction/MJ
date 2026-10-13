@@ -22,7 +22,7 @@ const SQLSERVER_PROC_PATTERNS = [
  * Classify a SQL batch into a statement type.
  * Tests patterns in priority order matching the Python classify_batch() logic.
  */
-export function classifyBatch(batch: string): StatementType {
+export function ClassifyBatch(batch: string): StatementType {
   const rawUpper = batch.trimStart().toUpperCase();
   // Strip leading comments to detect the real SQL keyword
   const upper = stripLeadingComments(batch).trimStart().toUpperCase() || rawUpper;
@@ -39,7 +39,7 @@ export function classifyBatch(batch: string): StatementType {
       return 'SKIP_SESSION';
     }
     // Re-classify the remainder (which no longer starts with a session setting)
-    return classifyBatch(remainder);
+    return ClassifyBatch(remainder);
   }
 
   // Error handling to skip
@@ -67,6 +67,12 @@ export function classifyBatch(batch: string): StatementType {
 
   // IF EXISTS (without NOT) — SQL Server pre-flight checks (drop extended property, etc.)
   if (/^IF\s+EXISTS\s*\(/i.test(upper) && !/^IF\s+NOT\s/i.test(upper)) {
+    // ...except a guarded constraint drop, which has a direct PG equivalent
+    // (DROP CONSTRAINT IF EXISTS). Skipping it loses the DROP, and the paired
+    // ADD CONSTRAINT later in the same migration then fails with "already exists".
+    if (/\bDROP\s+CONSTRAINT\b/i.test(upper)) {
+      return 'CONDITIONAL_DDL';
+    }
     return 'SKIP_SQLSERVER';
   }
 
@@ -251,6 +257,11 @@ export function classifyBatch(batch: string): StatementType {
   }
 
   return 'UNKNOWN';
+}
+
+/** @deprecated Use {@link ClassifyBatch}. */
+export function classifyBatch(batch: string): StatementType {
+  return ClassifyBatch(batch);
 }
 
 /** Classify a CREATE PROCEDURE batch — may be skipped if it uses SQL Server system features */

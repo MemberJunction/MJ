@@ -141,11 +141,16 @@ export class LiveKitParticipantsPanelComponent {
   @Output() public Close = new EventEmitter<void>();
 
   /** Computes a participant's initials for the roster avatar. */
-  public initials(p: LiveKitParticipantView): string {
+  public Initials(p: LiveKitParticipantView): string {
     const parts = (p.DisplayName ?? '').trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) {
       return '?';
     }
     return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+  }
+
+  /** @deprecated Use {@link Initials}. */
+  public initials(p: LiveKitParticipantView): string {
+    return this.Initials(p);
   }
 }

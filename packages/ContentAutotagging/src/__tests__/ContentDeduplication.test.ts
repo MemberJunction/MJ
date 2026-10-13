@@ -110,7 +110,7 @@ vi.mock('@memberjunction/tag-engine-base', () => ({
 vi.mock('pdf-parse', () => ({ default: vi.fn() }));
 vi.mock('officeparser', () => ({ default: { parseOffice: vi.fn() } }));
 vi.mock('date-fns-tz', () => ({ toZonedTime: vi.fn() }));
-vi.mock('axios', () => ({ default: { get: vi.fn() } }));
+vi.mock('@memberjunction/network-utils', () => ({ HttpGet: vi.fn(), HttpHead: vi.fn() }));
 vi.mock('cheerio', () => ({ load: vi.fn() }));
 
 import { AutotagBaseEngine } from '../Engine/generic/AutotagBaseEngine';

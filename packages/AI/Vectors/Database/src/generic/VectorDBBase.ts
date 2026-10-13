@@ -222,6 +222,28 @@ export abstract class VectorDBBase {
     }
 
     /**
+     * Declare which source-record field paths this provider's config references.
+     *
+     * Pipelines call this before building records so they can resolve the declared paths and
+     * hand {@link BuildProviderDirectives} a source record that contains them. A path is either
+     * a plain field name on the source record (`'OrganizationID'`) or a single-hop dotted path
+     * through a foreign key (`'ContentSourceID.OrganizationID'`) — dotted paths are resolved by
+     * the calling pipeline against related records and the resolved value is injected into the
+     * source record **under the full path key**, so a provider reads it with a plain
+     * `sourceRecord[path]` lookup either way.
+     *
+     * The default implementation declares nothing — providers whose directives only use fields
+     * already present on the source record need not override this.
+     *
+     * @param _providerConfig - The parsed `VectorIndex.ProviderConfig` JSON blob.
+     * @returns Field paths the pipeline should resolve onto the source record before
+     *          calling {@link BuildProviderDirectives}. Empty when none are needed.
+     */
+    public GetSourceRecordFieldPaths(_providerConfig: Record<string, unknown>): string[] {
+        return [];
+    }
+
+    /**
      * Build per-record routing and operational directives for this provider.
      *
      * Called by the generic sync pipeline once per source database row, before the
@@ -236,10 +258,16 @@ export abstract class VectorDBBase {
      * and returns `{ namespace: '<orgId>' }` so `CreateRecords` can route each vector
      * to the correct Pinecone namespace without embedding org data in the stored metadata.
      *
+     * A provider MAY throw from this method to **reject the record** — e.g. when its config
+     * makes a routing value mandatory (a tenant-isolation field) and the source record cannot
+     * supply it. Pipelines treat a throw as a per-record failure: that record is failed/skipped
+     * and the rest of the batch proceeds. Providers that never reject simply don't throw.
+     *
      * The default implementation returns an empty object — providers that do not need
      * per-record routing need not override this method.
      *
-     * @param _sourceRecord - The raw database row being vectorized.
+     * @param _sourceRecord - The raw database row being vectorized, enriched with any paths
+     *                        declared by {@link GetSourceRecordFieldPaths}.
      * @param _providerConfig - The parsed `VectorIndex.ProviderConfig` JSON blob.
      * @returns An opaque key/value map consumed by this provider's `CreateRecord(s)`.
      */

@@ -123,7 +123,12 @@ export interface TelemetryRunViewParams {
 export interface TelemetryRunViewsBatchParams {
     /** Number of views in the batch */
     BatchSize: number;
-    /** Entity names being queried in the batch */
+    /**
+     * Entity names being queried in the batch, one entry per view. A view identified only by
+     * `ViewEntity` (no EntityName/ViewName/ViewID) is recorded as `''` rather than dropped, so
+     * this array stays index-parallel to {@link Filters}/{@link OrderBys}/{@link StartRows}/
+     * {@link AfterKeys}. The fingerprint skips falsy entries; display sites should too.
+     */
     Entities: string[];
     /**
      * Per-view SQL WHERE clause filters, parallel to {@link Entities} (one entry per view,
@@ -138,6 +143,21 @@ export interface TelemetryRunViewsBatchParams {
      * same order). See {@link Filters} for why per-view detail is needed at batch granularity.
      */
     OrderBys?: (string | undefined)[];
+    /**
+     * Per-view offset-pagination cursors (`StartRow`), parallel to {@link Entities} (one entry
+     * per view, same order). Required for the same reason the single-RunView fingerprint carries
+     * `StartRow`: consecutive pages of a sweep differ ONLY in the cursor, so omitting it collapses
+     * every page onto one fingerprint and the Duplicate analyzer fires from page 2 onward.
+     * This matters for size-1 batches too — a server-side `RunView` with `BypassCache` or `AfterKey`
+     * is routed through `RunViews([params])` (see ProviderBase.RunView), and on the client EVERY
+     * RunView takes that route.
+     */
+    StartRows?: (number | undefined)[];
+    /**
+     * Per-view keyset-pagination cursors (serialized `AfterKey`), parallel to {@link Entities}
+     * (one entry per view, same order). See {@link StartRows}.
+     */
+    AfterKeys?: (string | undefined)[];
     /** Internal marker for engine-initiated calls */
     _fromEngine?: boolean;
     /** When true, every view in the batch opted out of optimization/redundancy analyzers. */
@@ -349,6 +369,11 @@ export interface TelemetrySettings {
     autoTrim: {
         enabled: boolean;
         maxEvents?: number;
+        /**
+         * Cap on retained analyzer insights. Like `maxEvents`, but for the derived collection:
+         * one insight is appended per emitted warning and they were never released.
+         */
+        maxInsights?: number;
         maxAgeMs?: number;
     };
     /** Duplicate detection settings */
@@ -463,11 +488,11 @@ export interface TelemetryAnalyzerContext {
  */
 export interface TelemetryAnalyzer {
     /** Unique name for this analyzer */
-    name: string;
+    name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Category for grouping warnings in UI */
-    category: string;
+    category: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Analyze an event and optionally return an insight */
-    analyze(event: TelemetryEvent, context: TelemetryAnalyzerContext): TelemetryInsight | null;
+    analyze(event: TelemetryEvent, context: TelemetryAnalyzerContext): TelemetryInsight | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 // ============================================================================
@@ -477,79 +502,119 @@ export interface TelemetryAnalyzer {
 /**
  * Type guard to check if params represent a batch RunViews operation
  */
-export function isBatchRunViewParams(params: TelemetryParamsUnion): params is TelemetryRunViewsBatchParams {
+export function IsBatchRunViewParams(params: TelemetryParamsUnion): params is TelemetryRunViewsBatchParams {
     return typeof params === 'object' &&
            params !== null &&
            'Entities' in params &&
            Array.isArray((params as TelemetryRunViewsBatchParams).Entities);
 }
 
+/** @deprecated Use {@link IsBatchRunViewParams}. */
+export function isBatchRunViewParams(params: TelemetryParamsUnion): params is TelemetryRunViewsBatchParams {
+    return IsBatchRunViewParams(params);
+}
+
 /**
  * Type guard to check if params represent a single RunView operation
  */
-export function isSingleRunViewParams(params: TelemetryParamsUnion): params is TelemetryRunViewParams {
+export function IsSingleRunViewParams(params: TelemetryParamsUnion): params is TelemetryRunViewParams {
     return typeof params === 'object' &&
            params !== null &&
-           !isBatchRunViewParams(params) &&
+           !IsBatchRunViewParams(params) &&
            ('EntityName' in params || 'ViewID' in params || 'ViewName' in params);
+}
+
+/** @deprecated Use {@link IsSingleRunViewParams}. */
+export function isSingleRunViewParams(params: TelemetryParamsUnion): params is TelemetryRunViewParams {
+    return IsSingleRunViewParams(params);
 }
 
 /**
  * Type guard to check if params represent a single RunQuery operation
  */
-export function isSingleRunQueryParams(params: TelemetryParamsUnion): params is TelemetryRunQueryParams {
+export function IsSingleRunQueryParams(params: TelemetryParamsUnion): params is TelemetryRunQueryParams {
     return typeof params === 'object' &&
            params !== null &&
-           !isBatchRunQueryParams(params) &&
+           !IsBatchRunQueryParams(params) &&
            ('QueryID' in params || 'QueryName' in params);
+}
+
+/** @deprecated Use {@link IsSingleRunQueryParams}. */
+export function isSingleRunQueryParams(params: TelemetryParamsUnion): params is TelemetryRunQueryParams {
+    return IsSingleRunQueryParams(params);
 }
 
 /**
  * Type guard to check if params represent a batch RunQueries operation
  */
-export function isBatchRunQueryParams(params: TelemetryParamsUnion): params is TelemetryRunQueriesBatchParams {
+export function IsBatchRunQueryParams(params: TelemetryParamsUnion): params is TelemetryRunQueriesBatchParams {
     return typeof params === 'object' &&
            params !== null &&
            'Queries' in params &&
            Array.isArray((params as TelemetryRunQueriesBatchParams).Queries);
 }
 
+/** @deprecated Use {@link IsBatchRunQueryParams}. */
+export function isBatchRunQueryParams(params: TelemetryParamsUnion): params is TelemetryRunQueriesBatchParams {
+    return IsBatchRunQueryParams(params);
+}
+
 /**
  * Type guard to check if params represent an Engine operation
  */
-export function isEngineParams(params: TelemetryParamsUnion): params is TelemetryEngineParams {
+export function IsEngineParams(params: TelemetryParamsUnion): params is TelemetryEngineParams {
     return typeof params === 'object' &&
            params !== null &&
            'engineClass' in params &&
            'operation' in params;
 }
 
+/** @deprecated Use {@link IsEngineParams}. */
+export function isEngineParams(params: TelemetryParamsUnion): params is TelemetryEngineParams {
+    return IsEngineParams(params);
+}
+
 /**
  * Type guard to check if params represent an AI operation
  */
-export function isAIParams(params: TelemetryParamsUnion): params is TelemetryAIParams {
+export function IsAIParams(params: TelemetryParamsUnion): params is TelemetryAIParams {
     return typeof params === 'object' &&
            params !== null &&
            ('modelID' in params || 'modelName' in params || 'promptID' in params);
 }
 
+/** @deprecated Use {@link IsAIParams}. */
+export function isAIParams(params: TelemetryParamsUnion): params is TelemetryAIParams {
+    return IsAIParams(params);
+}
+
 /**
  * Type guard to check if params represent a Cache operation
  */
-export function isCacheParams(params: TelemetryParamsUnion): params is TelemetryCacheParams {
+export function IsCacheParams(params: TelemetryParamsUnion): params is TelemetryCacheParams {
     return typeof params === 'object' &&
            params !== null &&
            'cacheType' in params &&
            'operation' in params;
 }
 
+/** @deprecated Use {@link IsCacheParams}. */
+export function isCacheParams(params: TelemetryParamsUnion): params is TelemetryCacheParams {
+    return IsCacheParams(params);
+}
+
 /**
  * Type guard to check if params represent a Network operation
  */
-export function isNetworkParams(params: TelemetryParamsUnion): params is TelemetryNetworkParams {
+export function IsNetworkParams(params: TelemetryParamsUnion): params is TelemetryNetworkParams {
     return typeof params === 'object' &&
            params !== null &&
            ('method' in params || 'url' in params || 'statusCode' in params);
+}
+
+/** @deprecated Use {@link IsNetworkParams}. */
+export function isNetworkParams(params: TelemetryParamsUnion): params is TelemetryNetworkParams {
+    return IsNetworkParams(params);
 }
 
 // ============================================================================
@@ -576,7 +641,7 @@ class EngineOverlapAnalyzer implements TelemetryAnalyzer {
         if (params._fromEngine) return null;
 
         // Only check single RunView operations, not batches
-        if (!isSingleRunViewParams(params)) return null;
+        if (!IsSingleRunViewParams(params)) return null;
 
         const entityName = params.EntityName;
         if (!entityName) return null;
@@ -614,7 +679,7 @@ class SameEntityMultipleCallsAnalyzer implements TelemetryAnalyzer {
         if (event.category !== 'RunView') return null;
 
         const params = event.params as TelemetryRunViewParams | TelemetryRunViewsBatchParams;
-        if (!isSingleRunViewParams(params)) return null;
+        if (!IsSingleRunViewParams(params)) return null;
 
         const entityName = params.EntityName;
         if (!entityName) return null;
@@ -623,7 +688,7 @@ class SameEntityMultipleCallsAnalyzer implements TelemetryAnalyzer {
         const entityEvents = context.recentEvents.filter(e => {
             if (e.category !== 'RunView') return false;
             const p = e.params as TelemetryRunViewParams | TelemetryRunViewsBatchParams;
-            return isSingleRunViewParams(p) && p.EntityName === entityName;
+            return IsSingleRunViewParams(p) && p.EntityName === entityName;
         });
 
         // Get unique fingerprints (different filter/orderBy combinations)
@@ -680,7 +745,7 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
         if (event.category !== 'RunView') return null;
 
         // Guard 1: an already-batched RunViews call is not a candidate to be batched.
-        if (!isSingleRunViewParams(event.params)) return null;
+        if (!IsSingleRunViewParams(event.params)) return null;
 
         // Guard 2 (best-effort): when this event carries a stack trace, attribute it to a caller and
         // require neighbors to match. Absent stack traces (standard level), callSite is null and the
@@ -693,7 +758,7 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
             if (e.id === event.id) return false;
             if (!e.endTime) return false;
             // Guard 1 (neighbors): only single RunViews can be merged into a batch.
-            if (!isSingleRunViewParams(e.params)) return false;
+            if (!IsSingleRunViewParams(e.params)) return false;
             // Guard 2 (neighbors): when both sides have call sites, they must match.
             if (callSite && e.stackTrace && this.callSiteOf(e.stackTrace) !== callSite) return false;
             // Previous event ended shortly before this one started.
@@ -705,7 +770,7 @@ class ParallelizationOpportunityAnalyzer implements TelemetryAnalyzer {
             const allEvents = [...recentSequential, event];
             const entities = allEvents.map(e => {
                 const p = e.params as TelemetryRunViewParams | TelemetryRunViewsBatchParams;
-                return isSingleRunViewParams(p) ? p.EntityName : 'batch';
+                return IsSingleRunViewParams(p) ? p.EntityName : 'batch';
             });
 
             return {
@@ -746,10 +811,10 @@ class DuplicateRunViewAnalyzer implements TelemetryAnalyzer {
             const params = event.params as TelemetryRunViewParams | TelemetryRunViewsBatchParams;
 
             // Handle both single RunView (EntityName) and batch RunViews (Entities array)
-            const entityName = isSingleRunViewParams(params)
+            const entityName = IsSingleRunViewParams(params)
                 ? params.EntityName || 'Unknown'
-                : isBatchRunViewParams(params)
-                    ? params.Entities.join(', ')
+                : IsBatchRunViewParams(params)
+                    ? params.Entities.filter(Boolean).join(', ')
                     : 'Unknown';
 
             return {
@@ -787,6 +852,7 @@ const DEFAULT_SETTINGS: TelemetrySettings = {
     autoTrim: {
         enabled: true,
         maxEvents: 10000,
+        maxInsights: 1000,
         maxAgeMs: 30 * 60 * 1000  // 30 minutes
     },
     duplicateDetection: {
@@ -798,6 +864,13 @@ const DEFAULT_SETTINGS: TelemetrySettings = {
         dedupeWindowMs: 30000  // 30 seconds
     }
 };
+
+/**
+ * How often the O(n) map sweeps in `trimIfNeeded` are allowed to run. `trimIfNeeded` is called on
+ * every recorded event; walking `_patterns` and `_insightDedupeWindow` that often would make
+ * telemetry cost scale with its own history.
+ */
+const DEEP_TRIM_INTERVAL_MS = 60000;
 
 // ============================================================================
 // TELEMETRY MANAGER
@@ -822,6 +895,13 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
     private _analyzers: TelemetryAnalyzer[] = [];
     private _insights: TelemetryInsight[] = [];
     private _insightDedupeWindow: Map<string, number> = new Map();
+
+    /**
+     * When the two map sweeps in {@link trimIfNeeded} last ran. They are O(n) over their maps,
+     * while `trimIfNeeded` itself runs on every recorded event, so they are throttled rather than
+     * paid per event.
+     */
+    private _lastDeepTrimAt = 0;
 
     /**
      * Returns the singleton instance of TelemetryManager
@@ -1370,7 +1450,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         const level = this.GetLevelForCategory(event.category);
         if (this.GetLevelValue(level) < TelemetryLevelValue['verbose']) return;
         const p = event.params as { EntityName?: string; Entities?: string[]; ExemptReason?: string };
-        const target = p.EntityName ?? (Array.isArray(p.Entities) ? p.Entities.join(', ') : event.operation);
+        const target = p.EntityName ?? (Array.isArray(p.Entities) ? p.Entities.filter(Boolean).join(', ') : event.operation);
         const reason = p.ExemptReason ? ` — ${p.ExemptReason}` : '';
         // eslint-disable-next-line no-console
         console.log(`💡 [Telemetry] Analysis exempt for ${event.category} "${target}"${reason}`);
@@ -1578,11 +1658,17 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
      * Generate fingerprint for RunView operations
      */
     private generateRunViewFingerprint(params: TelemetryRunViewParams | TelemetryRunViewsBatchParams): Record<string, unknown> {
-        if (isBatchRunViewParams(params)) {
-            // Batch operation - fingerprint from per-view (entity, filter, orderBy) tuples.
+        if (IsBatchRunViewParams(params)) {
+            // Batch operation - fingerprint from per-view (entity, filter, orderBy, cursor) tuples.
             // Including the per-view filter/orderBy (when recorded) means two batches over the
             // SAME entity set but DIFFERENT filters get DISTINCT fingerprints — previously they
             // collided on entity-set alone and were falsely flagged as duplicate RunViews.
+            // The pagination cursors (StartRow / AfterKey) are in the tuple for the same reason
+            // the single-view branch carries them: a paginated sweep issues page after page over
+            // one entity+filter+orderBy, and without the cursor every page collapses onto one
+            // fingerprint and trips the Duplicate analyzer from page 2 onward. That path is hit
+            // even by size-1 batches, because ProviderBase.RunView routes BypassCache / AfterKey
+            // reads (server) and ALL reads (client) through RunViews([params]).
             // Tuples are sorted so batch ordering doesn't affect the fingerprint (parity with
             // the prior entity-only behavior, which sorted the entity list).
             const viewTuples = params.Entities
@@ -1593,7 +1679,13 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
                     }
                     const filter = params.Filters?.[index]?.toLowerCase().trim() ?? '';
                     const orderBy = params.OrderBys?.[index]?.toLowerCase().trim() ?? '';
-                    return `${e}\x1f${filter}\x1f${orderBy}`;
+                    // StartRow 0 and "no StartRow" are the same query, so both normalize to ''.
+                    // Otherwise an explicit 0 wouldn't match an omitted cursor and a genuinely
+                    // duplicated first-page read would go undetected.
+                    const rawStartRow = params.StartRows?.[index];
+                    const startRow = rawStartRow ? String(rawStartRow) : '';
+                    const afterKey = params.AfterKeys?.[index]?.trim() ?? '';
+                    return `${e}\x1f${filter}\x1f${orderBy}\x1f${startRow}\x1f${afterKey}`;
                 })
                 .filter((t): t is string => Boolean(t))
                 .sort();
@@ -1610,13 +1702,16 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
             // Single operation. Pagination cursors (StartRow / AfterKey) are part of the key so that
             // consecutive pages of a sweep over the same entity+filter+orderBy are DISTINCT
             // fingerprints — otherwise page 2 collides with page 1 and trips the Duplicate analyzer.
+            // StartRow 0 and "no StartRow" are the same query (same rule as the batch branch above):
+            // both normalize to undefined so JSON.stringify drops the key for both and a genuinely
+            // duplicated first-page read is still detected.
             return {
                 entity: params.EntityName?.toLowerCase().trim(),
                 filter: params.ExtraFilter?.toLowerCase().trim(),
                 orderBy: params.OrderBy?.toLowerCase().trim(),
                 resultType: params.ResultType,
-                startRow: params.StartRow,
-                afterKey: params.AfterKey
+                startRow: params.StartRow || undefined,
+                afterKey: params.AfterKey?.trim() || undefined
             };
         }
     }
@@ -1625,7 +1720,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
      * Generate fingerprint for RunQuery operations
      */
     private generateRunQueryFingerprint(params: TelemetryRunQueryParams | TelemetryRunQueriesBatchParams): Record<string, unknown> {
-        if (isBatchRunQueryParams(params)) {
+        if (IsBatchRunQueryParams(params)) {
             // Batch operation - create fingerprint from sorted query list
             const sortedQueries = [...params.Queries]
                 .map(q => q?.toLowerCase().trim())
@@ -1783,6 +1878,38 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         // Trim by count
         if (maxEvents && this._events.length > maxEvents) {
             this._events = this._events.slice(-maxEvents);
+        }
+
+        // Three collections derived from `_events` need bounding on the same schedule: `_insights`
+        // gains an entry per emitted warning, `_patterns` one per distinct fingerprint — and every
+        // new filter combination is a distinct fingerprint — and `_insightDedupeWindow` one per
+        // dedupe key. Unbounded, they retain for the life of the process.
+        const maxInsights = this._settings.autoTrim.maxInsights ?? 1000;
+        if (maxInsights && this._insights.length > maxInsights) {
+            this._insights = this._insights.slice(-maxInsights);
+        }
+
+        // The sweeps below walk whole maps, so they are throttled rather than run per event. Both
+        // collections are bounded by time rather than count: an entry that stops recurring should age
+        // out, while one that keeps recurring is live data a count cap would evict for nothing.
+        if (now - this._lastDeepTrimAt > DEEP_TRIM_INTERVAL_MS) {
+            this._lastDeepTrimAt = now;
+            if (maxAgeMs) {
+                for (const [fingerprint, pattern] of this._patterns) {
+                    if (now - pattern.lastSeen > maxAgeMs) {
+                        this._patterns.delete(fingerprint);
+                    }
+                }
+            }
+            // Dedupe keys are stamped with wall-clock time (see the dedupe check), not the
+            // performance clock `now` reads, so they must age against the same clock.
+            const dedupeWindowMs = this._settings.analyzers?.dedupeWindowMs ?? 30000;
+            const wallNow = Date.now();
+            for (const [key, seenAt] of this._insightDedupeWindow) {
+                if (wallNow - seenAt > dedupeWindowMs) {
+                    this._insightDedupeWindow.delete(key);
+                }
+            }
         }
     }
 

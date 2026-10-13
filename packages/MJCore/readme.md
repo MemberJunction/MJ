@@ -130,7 +130,14 @@ flowchart LR
 | `securityInfo.ts` | Security classes: `UserInfo`, `RoleInfo`, `AuthorizationInfo`, `AuditLogTypeInfo` |
 | `interfaces.ts` | Core interfaces: `IMetadataProvider`, `IEntityDataProvider`, `IRunViewProvider`, etc. |
 | `compositeKey.ts` | `CompositeKey` and `KeyValuePair` for multi-field primary key support |
-| `transactionGroup.ts` | `TransactionGroupBase` for atomic multi-entity operations |
+| `transactionGroup.ts` | `TransactionGroupBase` — an *arbitrary batch* facility for shipping unrelated records in one atomic round trip (saves are deferred; not for parent/children) |
+| `entityTransactionScope.ts` | `EntityTransactionScope` + `RunInEntityTransaction()` — the one provider-arbitrated transaction primitive, shared by IS-A, composites and application cascades |
+| `entityCompanion.ts` | `EntityCompanion` — named, serialisable state attached to a record (the "bag") |
+| `relatedRecordCollection.ts` | `RelatedRecordCollection<T>` — the typed parent/children companion |
+| `embeddedRecord.ts` | `EmbeddedRecord<T>` — owner-held 1:1 peer (`Deal.OrderID` → Order), inverted save order |
+| `relatedRecordBatchLoader.ts` | One batched child query per collection across a whole result set (`RunView.IncludeRelatedRecords`) |
+| `entitySavePlan.ts` | `EntitySavePlan` + executor — the ordered unit of work a composite save produces |
+| `saveEntityGraphOperation.ts` | `MJ.SaveEntityGraph` — routes a whole composite save to the server from a client provider |
 | `baseEngine.ts` | `BaseEngine` abstract singleton for building services with auto-loaded data |
 | `runQuery.ts` | `RunQuery` class for secure parameterized query execution |
 | `runReport.ts` | `RunReport` class for report generation |
@@ -353,6 +360,24 @@ const data = { ...entity };
 const data = { ...entity.GetAll(), customField: 'value' };
 ```
 
+#### Recursive Foreign Keys & Hierarchy Traversal
+
+When an entity has a single-column primary key and a self-referencing foreign key configured as a hierarchy (`EntityField.Configuration` setting `{ "Hierarchy": { "IsHierarchy": true } }`), CodeGen automatically adds strongly-typed hierarchy traversal helper methods to the generated subclass in `@memberjunction/core-entities`:
+
+```typescript
+// Fetch all descendants in the subtree with an optional maxDepth limit
+const descendants = await category.GetDescendants();     // all descendants
+const directAndGrand = await category.GetDescendants(2); // max 2 levels down
+
+// Fetch all ancestors from root down to this record's parent
+const ancestors = await category.GetAncestors();
+
+// Fetch direct child records
+const children = await category.GetChildren();
+```
+
+All three methods execute a single optimized `RunView` query using the view's computed `Root<Field>`, `<Field>Depth`, `<Field>Path`, and `<Field>IsLeaf` columns. See the [Recursive Foreign Keys & Hierarchy Traversal Guide](../../guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md).
+
 #### State Tracking and Events
 
 BaseEntity provides comprehensive state tracking and lifecycle events.
@@ -444,6 +469,8 @@ if (!result.Success) {
 }
 ```
 
+A binary field (`varbinary` / `binary` / `image`, PostgreSQL `bytea`) holds a base64 string; `Validate()` rejects a value that is not canonical base64, and one whose decoded length exceeds a fixed-length column. See the [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md).
+
 #### IS-A (Table-Per-Type) entities
 
 An entity may inherit from another — `Webinar` IS-A `Meeting` IS-A `Product` — with one primary key
@@ -466,6 +493,25 @@ rejected, which fails the whole save.
 
 See [docs/isa-relationships.md](docs/isa-relationships.md) for the full model — discovery, disjoint
 vs overlapping subtypes, delete orchestration, and CodeGen integration.
+
+### JSONType Fields: Live Typed Objects (`JSONFieldBinding`)
+
+A field with `EntityField.JSONType` gets a generated typed `<Field>Object` accessor that delegates to
+two protected `BaseEntity` helpers, `GetJSONFieldObject<T>(field)` / `SetJSONFieldObject<T>(field, value)`,
+backed by `JSONFieldBinding` (`src/generic/jsonFieldBinding.ts`). The accessor is a **live view** of the
+raw text: an in-place edit at any depth (`rec.ConfigObject.Items.push(x)`, `rec.ConfigObject.A.B = 1`,
+`delete rec.ConfigObject.K`) updates the raw field through `Set()`, so the record is dirty and `Save()`
+persists it. Only plain objects and arrays are wrapped, a write that changes nothing does not dirty the
+record, and when the raw text is replaced by another route (`Load`, `LoadFromData`, `Set`, `Revert`,
+`NewRecord`) the next read re-parses and earlier references are detached (writes through them throw).
+`FlushJSONFieldObjects()` runs before `Validate()` and at the start of `Save()` so edits made through the
+caller's own un-proxied reference after assignment are still captured.
+
+`structuredClone`, `postMessage` and IndexedDB reject a live value; use the typed
+`ToPlainJSON<T>(value)` export to obtain a plain deep copy. Generated `Validate()` overrides for opted-in
+types call the protected `ValidateJSONField(field, schema, rules, severity, result)`, which runs only when the
+field is dirty or the record is new and reports errors with path sources such as `Config.Items[2].EndHour`.
+See the [JSONType Guide](../../guides/JSONTYPE_GUIDE.md).
 
 ### CompositeKey
 
@@ -558,6 +604,50 @@ if (typedResult.Success) {
     console.log(`Found ${users.length} users`);
 }
 ```
+
+#### `ResultType`: what `'simple'` rows contain, and what `T` does not check
+
+`ResultType` defaults to `'simple'`. Simple rows are plain objects, but their VALUES are
+normalized to the shapes the generated entity types declare — identically on every tier. A `Date`
+column holds a real `Date` and a numeric column holds a `number`, whether the call ran server-side
+against the database or in a browser over GraphQL, and whether it was a fresh query or a cache
+hit. (`NULL` stays `NULL`, unparseable values are left as-is rather than becoming `Invalid Date`,
+and integer strings beyond `Number.MAX_SAFE_INTEGER` stay strings to preserve BIGINT precision.)
+
+| | `'simple'` (default) | `'entity_object'` |
+|---|---|---|
+| What you get | plain objects, values normalized to the entity's field types | `BaseEntity`-derived instances |
+| A `DATETIME` column | a real `Date`, on every tier | a real `Date` (`BaseEntity` converts on `Get`/`Set`) |
+| Entity methods / validation | no | yes |
+| Save / delete the row | no | yes |
+| `IncludeRelatedRecords` | not available | yes |
+| `Fields` narrowing | yes — use it | ignored (entities need all fields) |
+| Cost | one plain object per row | field hydration per row |
+
+`RunView<T>` takes a **caller-supplied** `T` the compiler does not verify against `ResultType`,
+so know what a plain row can and cannot honor when you pass a generated entity type:
+
+```typescript
+// Date and numeric fields are truthful on simple rows:
+const rows = await rv.RunView<UserEntity>({ EntityName: 'Users', ResultType: 'simple' });
+rows.Results[0].CreatedAt.getFullYear();   // works — a real Date on every tier
+
+// But a plain row is still not an entity:
+rows.Results[0].Save();                    // compiles, crashes — no entity methods
+// ...and a closed-union column (e.g. Status) holds whatever string the database held.
+
+// When you need entity behavior, ask for entities:
+const users = await rv.RunView<UserEntity>({ EntityName: 'Users', ResultType: 'entity_object' });
+```
+
+Two caveats: with `Fields` narrowing, non-selected properties simply don't exist on the rows,
+whatever `T` claims; and a call passing only `ViewID`/`ViewName` (no `EntityName`, no loaded
+`ViewEntity`) skips normalization — pass `EntityName` alongside the view identifier to get
+normalized rows.
+
+**Rule of thumb: want entity behavior — methods, validation, save, related records — ask for
+entity objects.** Choose `'simple'` for cheap read-only rows; its dates and numbers are already
+the types your entity declares.
 
 #### Batch Multiple Views
 
@@ -678,6 +768,8 @@ const countResult = await rv.RunView({
 });
 ```
 
+**Binary fields are omitted by default.** A `RunView` without `Fields` leaves out `varbinary` / `bytea` columns (the key is absent from the row). Pass `IncludeBinaryFields: true`, or name a binary field in `Fields`, to get them as base64 strings. `entity.Load()` always includes them, and saving a record loaded without them is safe — an unloaded field is never written. See the [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md).
+
 #### RunViewParams Reference
 
 | Parameter | Type | Description |
@@ -688,7 +780,8 @@ const countResult = await rv.RunView({
 | `EntityName` | `string` | Entity name for dynamic views |
 | `ExtraFilter` | `string` | Additional SQL WHERE clause |
 | `OrderBy` | `string` | SQL ORDER BY clause |
-| `Fields` | `string[]` | Field names to return (simple mode only) |
+| `Fields` | `string[]` | Field names to return (simple mode only). Naming a binary field sets `IncludeBinaryFields`. |
+| `IncludeBinaryFields` | `boolean` | Return binary (`varbinary` / `bytea`) fields as base64 strings; omitted by default. Part of the cache fingerprint. |
 | `UserSearchString` | `string` | User search term |
 | `MaxRows` | `number` | Maximum rows to return |
 | `StartRow` | `number` | Row offset (OFFSET-based pagination). Use for UI grids. For deep iteration over large tables, prefer `AfterKey`. |
@@ -795,6 +888,127 @@ const results = await txGroup.Submit();
 ```
 
 Each `TransactionResult` in the returned array contains a `Success` flag. If any operation fails, all are rolled back.
+
+> **A TransactionGroup is an *arbitrary batch* facility, not a composite-save engine.** Under a
+> transaction group `Save()` **defers**: the provider only registers an instruction, so the entity
+> returns `true` before anything persists, the primary key is unavailable afterwards, there is no
+> read-your-writes, and ordering is array position with a flat `Define`/`Use` variable namespace.
+> To save a parent *and its children*, use an **entity graph** (below), not a transaction group.
+> Full comparison: [Transactions, Batching & Entity Graphs](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md).
+
+---
+
+### Entity Companions & Composite Graph Saves
+
+A **companion** is named, serialisable state attached to a record that is not one of its fields —
+most commonly a collection of child records. Companions load, validate, serialise and persist with
+their parent, on **both tiers**, from one call: `entity.Save()`.
+
+Declare a child collection on a **shared (client + server)** entity subclass:
+
+```typescript
+@RegisterClass(BaseEntity, 'MJ_BizApps_Orders: Orders')
+export class OrderEntity extends mjBizAppsOrdersOrderEntity {
+    public readonly Lines = this.DeclareRelatedRecords<OrderLineEntity>({
+        Name: 'Lines',
+        RelatedEntity: 'MJ_BizApps_Orders: Order Lines',
+        RelatedEntityJoinField: 'OrderHeaderID',
+        OrderBy: 'LineNumber ASC',
+        Load: 'explicit',                        // 'explicit' | 'immediate' | 'lazy' | 'never'
+        OnRemove: 'delete',                      // 'delete' | 'orphan' | 'refuse'
+        Sequence: { Field: 'LineNumber', From: 1 },
+    });
+
+    public override Validate(): ValidationResult {
+        const result = super.Validate();         // fans out to every companion
+        assertHasLines(this.Lines.Items, result);// sees the WHOLE graph, before any write
+        return result;
+    }
+}
+```
+
+```typescript
+const order = await md.GetEntityObject<OrderEntity>('MJ_BizApps_Orders: Orders');
+order.NewRecord();
+(await order.Lines.Create()).Quantity = 2;
+(await order.Lines.Create()).Quantity = 5;
+await order.Save();      // header + both lines, atomically
+```
+
+**How it executes.** `Save()` builds an `EntitySavePlan`. A single-node plan takes the ordinary
+save path unchanged. A multi-node plan runs:
+
+| Provider | Behaviour |
+|---|---|
+| `SupportsEntityTransactions === true` (server) | Executes locally inside one transaction scope |
+| `false` (browser) | Serialises the graph and routes the whole unit of work to the server via the `MJ.SaveEntityGraph` remote operation, which rebuilds the records as their **server-side** subclasses and runs the same local executor there |
+
+There is exactly one cascade implementation; the remote path relocates it rather than
+reimplementing it.
+
+**Platform guarantees are preserved.** Every node is persisted via that record's own `Save()` /
+`Delete()` — never direct SQL — so Record Changes, entity actions, validation, subclass overrides,
+`PreSave` hooks, `save_started` / `save` / `delete` events and cache invalidation all fire per node.
+The root additionally raises `graph_save_started` and `graph_save` so a UI can refresh once per unit
+of work.
+
+**Loading.** `Load: 'immediate'` is honoured by `Load()` and **never** by `LoadFromData()` — that method
+is the per-row materialisation path for `RunView(ResultType:'entity_object')`, so loading children
+there degrades a view into N+1 queries. For result sets, ask for children explicitly and get one
+batched query per collection:
+
+```typescript
+const result = await rv.RunView<OrderEntity>({
+    EntityName: 'MJ_BizApps_Orders: Orders',
+    ResultType: 'entity_object',
+    IncludeRelatedRecords: ['Lines'],   // 1 query for ALL orders' lines, not one per order
+});
+```
+
+#### Declaring one without writing code
+
+Set `EntityRelationship.RelatedRecordCollection` (a JSONType blob) and CodeGen emits the declaration
+onto the **generated** entity class, so both tiers get it and no subclass is needed. `RelatedEntity`
+and `RelatedEntityJoinField` stay as columns on that same row rather than being repeated in the JSON
+— one source of truth each.
+
+#### Reading from an engine cache instead of the database
+
+```typescript
+{ Name: 'Params', Source: 'cache', Load: 'lazy' }   // ReadOnly defaults to true here
+```
+
+`Source: 'cache'` finds whichever loaded `BaseEngine` already holds the entity — generically, via
+`BaseEngineRegistry` — and filters it by the join field. **Zero queries**, and it falls back to a
+database load on a miss. Read-only (the default for `cache`) hands out the engine's own instances as
+a *live view*; writable copies them so the cache is never mutated in place.
+
+`Load: 'lazy'` fills on first read of `Items`, reproducing a hand-written memoised getter — and
+**throws** rather than returning an empty array when no engine caches the entity, because a lazy
+declaration asserts that one does.
+
+```typescript
+await action.LoadRelatedRecords();   // cache-backed free, database-backed batched into ONE RunViews
+```
+
+```typescript
+for (const line of order.Lines) { … }   // the collection is ITERABLE
+const all = [...order.Lines];            // spread and destructuring work
+order.Lines.length                       // and length
+order.Lines.Items.map(l => l.Total)      // Items for map/filter/find — it is readonly, so nothing
+                                         // can push around the removal tracking and sequencing
+```
+
+**Key APIs:** `BaseEntity.DeclareRelatedRecords()`, `LoadRelatedRecords()`, `RegisterCompanion()`,
+`GetCompanion()`, `Companions`, `SerializeCompanions()`, `DeserializeCompanions()`;
+`RelatedRecordCollection<T>` (iterable; `Items`, `Removed`, `Count`/`length`, `Add`, `Create`,
+`Remove`, `Clear`, `Load`, `Dirty`, `Source`, `IsReadOnly`, `LoadMode`, `RemovalMode`); `EntityCompanion` (subclass for a new *kind* of companion);
+`EntitySavePlan`.
+
+**Full guide — with flow diagrams for the local save and the network round trip:**
+[Related-Record Collections](./docs/related-record-collections.md). For when to use this versus a
+provider transaction versus a TransactionGroup, see
+[Transactions, Batching & Entity Graphs](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md).
 
 ---
 
@@ -906,6 +1120,7 @@ Key features:
 - Automatic refresh when entities are saved or deleted (debounced)
 - Local caching support via `CacheLocal` and `CacheLocalTTL` options
 - Supports both entity and dataset loading
+- `IncludeBinaryFields: true | 'DatabaseProviderOnly'` on a config loads binary fields (the second form only in server processes, where e.g. persisted embedding columns are needed)
 
 #### Permission-Constrained Loading
 
@@ -1185,8 +1400,30 @@ abstract class DatabaseProviderBase extends ProviderBase {
     abstract BeginTransaction(): Promise<void>;
     abstract CommitTransaction(): Promise<void>;
     abstract RollbackTransaction(): Promise<void>;
+
+    // The unified, provider-arbitrated transaction primitive (6.2+). Starts a transaction or joins
+    // one already in flight. Used by IS-A chains, composite graph saves, and application cascades
+    // alike — so none of them has to know about the others.
+    get SupportsEntityTransactions(): boolean;                    // true here, false on ProviderBase
+    BeginEntityTransaction(): Promise<EntityTransactionScope>;
 }
 ```
+
+**Prefer `BeginEntityTransaction()` / `RunInEntityTransaction()` over calling `BeginTransaction()`
+directly.** The scope is settle-once and composes with any transaction already open:
+
+```typescript
+import { RunInEntityTransaction } from '@memberjunction/core';
+
+await RunInEntityTransaction(this.ProviderToUse, async () => {
+    await header.Save();
+    for (const line of lines) { line.HeaderID = header.ID; await line.Save(); }
+});
+```
+
+See [Transactions, Batching & Entity Graphs](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md) for
+the difference between provider transactions, Transaction Groups, and entity graphs — and for why
+the `BeginISATransaction` trio was retired in 6.2.
 
 ---
 
@@ -1322,7 +1559,8 @@ export class MyEntityServer extends MyEntity {
             {
                 fieldName: 'Description',
                 vectorFieldName: 'DescriptionVector',
-                modelFieldName: 'DescriptionVectorModelID'
+                modelFieldName: 'DescriptionVectorModelID',
+                binaryVectorFieldName: 'DescriptionVectorBinary'   // optional
             }
         ]);
         return await super.Save();
@@ -1339,6 +1577,7 @@ Features:
 - **Dirty Detection** -- Only generates embeddings when source text changes
 - **Null Handling** -- Clears vector fields when source text is empty
 - **Parallel Processing** -- Multiple embeddings generated concurrently
+- **Binary Companion** -- The optional `binaryVectorFieldName` (`binaryVectorField` on `GenerateEmbedding`/`GenerateEmbeddings`) stores the same vector as base64 float32 bytes alongside the JSON field, set and cleared together. Readers decode it with `ReadStoredVector` from `@memberjunction/ai-vectors-memory`; see the [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md)
 
 ---
 
@@ -1598,7 +1837,7 @@ This library is written in TypeScript and provides full type definitions. All ge
 
 ## License
 
-ISC License - see LICENSE file for details.
+Business Source License 1.1 - see LICENSE file for details.
 
 ## Remote Operations (the 4th Data Primitive)
 
@@ -1662,6 +1901,14 @@ flowchart LR
 | `AllowCreateAPI` | Configurable | Always `false` |
 | `AllowUpdateAPI` | Configurable | Always `false` |
 | Stored procedures | Generated | None |
+
+> **Not the same thing as a custom base view.** A virtual entity has *no base table* and is read-only.
+> If you have a real table and only want to add computed columns to what its view exposes, you want a
+> **layered base view** instead — `GeneratedBaseViewName` keeps CodeGen generating an inner view while
+> your application owns and wraps `BaseView`, and the entity stays fully writable because
+> `spCreate`/`spUpdate`/`spDelete` still target `BaseView`. See
+> [Base Views: Generated, Custom, or Layered](../CodeGenLib/README.md#base-views-generated-custom-or-layered).
+> Layering is skipped entirely for virtual entities, which have no table to generate from.
 
 ### Read-Only Enforcement
 
@@ -1891,6 +2138,7 @@ For detailed guides on specific topics, see the [docs/](./docs/) folder:
 
 - [Virtual Entities](./docs/virtual-entities.md) — Config-driven creation, LLM decoration, read-only enforcement
 - [IS-A Relationships](./docs/isa-relationships.md) — Type inheritance, save/delete orchestration, provider integration
+- [Related-Record Collections](./docs/related-record-collections.md) — Parent + its FK rows as one unit: metadata declaration, the local save flow and the one-call network round trip (both diagrammed), cache-backed sources, load modes, sequencing and the cycle guard
 - [Organic Keys](./docs/organic-keys.md) — Cross-system matching by shared business data (email, phone, domain), CodeGen integration, transitive views
 - [RunQuery Pagination](./docs/runquery-pagination.md) — Parameterized queries with pagination support
 - [Full-Text Search](./docs/FULL_TEXT_SEARCH_GUIDE.md) — Database-native FTS via `Metadata.FullTextSearch()`, SQL Server FREETEXT / PostgreSQL tsvector, provider architecture, Knowledge Hub integration

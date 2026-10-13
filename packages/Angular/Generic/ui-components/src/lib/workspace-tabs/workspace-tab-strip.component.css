@@ -1,0 +1,34 @@
+/* Only what is LOCAL to this strip. The tab chrome — bar, tabs, active accent, label ellipsis,
+   dirty dot, close button, pinned new-tab control — lives in the global `.mj-tabs*` stylesheet
+   (ui-components `lib/tabs/tabs.scss`) so this strip and `mj-tabstrip` cannot drift apart.
+   Anything added here is, by definition, a claim that this strip should look DIFFERENT. */
+
+:host {
+  display: block;
+}
+
+/* ─── Drag-reorder (CDK) ──────────────────────────────────────────────────────
+   Specific to this strip: `mj-tabstrip` has no reorder capability, so these affordances would be
+   dead weight in the shared sheet. Default arrow cursor over tabs — not a grab hand — matching
+   browser tab convention. */
+.mj-tabs__tab.cdk-drag {
+  cursor: default;
+}
+
+/* The floating clone while dragging — still reads as a tab, plus a lift shadow. Neutral rgba so it
+   reads as a shadow in both themes; a token-tinted shadow glows in dark. */
+.cdk-drag-preview.mj-tabs__tab {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+  border-radius: 8px 8px 0 0;
+}
+
+/* The gap the tab leaves behind — a faded outline, not a solid block. */
+.mj-tabs__tab.cdk-drag-placeholder {
+  opacity: 0.35;
+}
+
+/* Smooth settle on drop, and neighbours sliding aside during a drag. */
+.cdk-drag-animating,
+.mj-tabs__list.cdk-drop-list-dragging .mj-tabs__tab:not(.cdk-drag-placeholder) {
+  transition: transform 180ms cubic-bezier(0, 0, 0.2, 1);
+}

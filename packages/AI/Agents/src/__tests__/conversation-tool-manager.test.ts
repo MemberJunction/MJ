@@ -254,4 +254,77 @@ describe('ConversationToolManager', () => {
         }
         expect(docs).toContain('Max 8 tool calls per response');
     });
+
+    describe('history floor (ExecuteAgentParams.ConversationHistoryFrom)', () => {
+        const FLOOR = new Date('2026-09-01T12:00:00.000Z');
+        const before = new Date('2026-09-01T11:59:59.999Z');
+        const after = new Date('2026-09-01T12:00:00.000Z');
+
+        function dated(sequence: number, message: string, createdAt: Date | null): Record<string, unknown> {
+            return { ...detail(sequence, sequence % 2 ? 'User' : 'AI', message), __mj_CreatedAt: createdAt };
+        }
+
+        beforeEach(() => {
+            mockCache.Details = [
+                dated(1, 'secret budget before the floor', before),
+                dated(2, 'budget reply before the floor', before),
+                dated(3, 'budget question at the floor', after),
+                dated(4, 'budget answer after the floor', new Date('2026-09-02T00:00:00.000Z')),
+                dated(5, 'budget row with no timestamp', null),
+            ] as never;
+            manager = new ConversationToolManager();
+            manager.Initialize('conv-1', user, FLOOR);
+        });
+
+        it('pages no row written before the floor, by sequence', async () => {
+            const hidden = await manager.ExecuteSingleToolCall({ tool: 'getMessageBySequence', input: { sequence: 1 } });
+            expect(hidden.result.success).toBe(false);
+            expect(hidden.result.errorMessage).toContain('valid range: 3..4');
+
+            const visible = await manager.ExecuteSingleToolCall({ tool: 'getMessageBySequence', input: { sequence: 3 } });
+            expect(visible.result.success).toBe(true);
+        });
+
+        it('returns only rows at or after the floor from a range or a search', async () => {
+            const range = await manager.ExecuteSingleToolCall({ tool: 'getMessagesByRange', input: { startSequence: 1, endSequence: 5 } });
+            expect((range.result.data as { messages: Array<{ sequence: number }> }).messages.map(m => m.sequence)).toEqual([3, 4]);
+
+            const search = await manager.ExecuteSingleToolCall({ tool: 'searchConversation', input: { query: 'budget' } });
+            const hits = (search.result.data as { hits: Array<{ sequence: number }> }).hits;
+            expect(hits.map(h => h.sequence)).toEqual([3, 4]);
+        });
+
+        it('treats a row with no timestamp as before the floor', async () => {
+            const r = await manager.ExecuteSingleToolCall({ tool: 'getMessageBySequence', input: { sequence: 5 } });
+            expect(r.result.success).toBe(false);
+        });
+
+        it('summarizes only rows at or after the floor', async () => {
+            const runSummaryPrompt = vi.fn().mockResolvedValue({ text: 'ok' });
+            manager.SetSummaryHost({ RunSummaryPrompt: runSummaryPrompt });
+            await manager.ExecuteSingleToolCall({ tool: 'summarizeRange', input: { startSequence: 1, endSequence: 5, lens: 'budget' } });
+            const rangeText = JSON.stringify(runSummaryPrompt.mock.calls[0]);
+            expect(rangeText).toContain('[seq 3]');
+            expect(rangeText).not.toContain('[seq 1]');
+            expect(rangeText).not.toContain('secret budget before the floor');
+        });
+
+        it('tells the model its reads start at a set point', () => {
+            expect(manager.GetToolDocumentation()).toContain('only from a set point onward');
+        });
+
+        it('reads the whole conversation again once re-armed without a floor', async () => {
+            manager.Initialize('conv-1', user);
+            const r = await manager.ExecuteSingleToolCall({ tool: 'getMessageBySequence', input: { sequence: 1 } });
+            expect(r.result.success).toBe(true);
+            expect(manager.GetToolDocumentation()).not.toContain('only from a set point onward');
+        });
+
+        it('Clear() drops the floor', async () => {
+            manager.Clear();
+            manager.Initialize('conv-1', user);
+            const r = await manager.ExecuteSingleToolCall({ tool: 'getMessageBySequence', input: { sequence: 2 } });
+            expect(r.result.success).toBe(true);
+        });
+    });
 });

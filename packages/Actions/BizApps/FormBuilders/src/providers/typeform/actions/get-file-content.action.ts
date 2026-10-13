@@ -3,7 +3,7 @@ import { TypeformBaseAction } from '../typeform-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { LogError, LogStatus } from '@memberjunction/core';
-import axios, { AxiosResponse } from 'axios';
+import { HttpGet, HttpResponse, IsHttpError } from '@memberjunction/network-utils';
 import { FileContentProcessor } from '../../../shared/file-content-processor';
 
 /**
@@ -90,32 +90,32 @@ export class GetTypeformFileContentAction extends TypeformBaseAction {
             LogStatus(`Downloading file from Typeform: ${fileUrl}`);
 
             // Download file content with authentication
-            const response: AxiosResponse<ArrayBuffer> = await axios.get(fileUrl, {
-                headers: {
+            const response: HttpResponse<ArrayBuffer> = await HttpGet(fileUrl, {
+                Headers: {
                     'Authorization': `Bearer ${apiToken}`,
                     'Accept': this.getAcceptHeader(format)
                 },
-                responseType: 'arraybuffer',
-                timeout: 30000 // 30 second timeout for file downloads
+                ResponseType: 'arraybuffer',
+                Timeout: 30000 // 30 second timeout for file downloads
             });
 
             // Extract file metadata from response headers
-            const contentType = response.headers['content-type'] || 'application/octet-stream';
-            const contentLength = response.headers['content-length'] || response.data.byteLength;
-            const filename = FileContentProcessor.extractFilename(fileUrl, response.headers['content-disposition']);
+            const contentType = response.Headers['content-type'] || 'application/octet-stream';
+            const contentLength = response.Headers['content-length'] || response.Data.byteLength;
+            const filename = FileContentProcessor.extractFilename(fileUrl, response.Headers['content-disposition']);
 
             // Process file content using the helper
             const processResult = await FileContentProcessor.processContent(
-                Buffer.from(response.data),
+                Buffer.from(response.Data),
                 contentType,
                 {
-                    format: format as any,
-                    includeWarnings: true,
-                    maxFileSize: 50 * 1024 * 1024 // 50MB limit
+                    Format: format as any,
+                    IncludeWarnings: true,
+                    MaxFileSize: 50 * 1024 * 1024 // 50MB limit
                 }
             );
 
-            if (!processResult.success) {
+            if (!processResult.Success) {
                 return {
                     Success: false,
                     ResultCode: 'PROCESSING_ERROR',
@@ -127,17 +127,17 @@ export class GetTypeformFileContentAction extends TypeformBaseAction {
                 {
                     Name: 'Content',
                     Type: 'Output',
-                    Value: processResult.content
+                    Value: processResult.Content
                 },
                 {
                     Name: 'ContentType',
                     Type: 'Output',
-                    Value: processResult.contentType
+                    Value: processResult.ContentType
                 },
                 {
                     Name: 'ContentFormat',
                     Type: 'Output',
-                    Value: processResult.format
+                    Value: processResult.Format
                 },
                 {
                     Name: 'Size',
@@ -152,16 +152,16 @@ export class GetTypeformFileContentAction extends TypeformBaseAction {
                 {
                     Name: 'ExtractionMethod',
                     Type: 'Output',
-                    Value: processResult.extractionMethod
+                    Value: processResult.ExtractionMethod
                 }
             ];
 
             // Add warning if present
-            if (processResult.warning) {
+            if (processResult.Warning) {
                 outputParams.push({
                     Name: 'Warning',
                     Type: 'Output',
-                    Value: processResult.warning
+                    Value: processResult.Warning
                 });
             }
 
@@ -185,9 +185,9 @@ export class GetTypeformFileContentAction extends TypeformBaseAction {
             LogError('Failed to download Typeform file:', error);
             
             // Handle specific error cases
-            if (axios.isAxiosError(error)) {
-                const axiosError = error as any;
-                const status = axiosError.response?.status;
+            if (IsHttpError(error)) {
+                const httpError = error as any;
+                const status = httpError.Status;
                 
                 if (status === 401) {
                     return {

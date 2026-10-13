@@ -190,7 +190,7 @@ export class DBAutoDocAPI {
    * }
    * ```
    */
-  public async analyze(
+  public async Analyze(
     config: DBAutoDocAPIConfig & { onProgress?: ProgressCallback }
   ): Promise<AnalysisExecutionResult> {
     try {
@@ -248,6 +248,13 @@ export class DBAutoDocAPI {
     }
   }
 
+  /** @deprecated Use {@link Analyze}. */
+  public async analyze(
+    config: DBAutoDocAPIConfig & { onProgress?: ProgressCallback }
+  ): Promise<AnalysisExecutionResult> {
+    return this.Analyze(config);
+  }
+
   /**
    * Resume analysis from a checkpoint
    *
@@ -267,7 +274,7 @@ export class DBAutoDocAPI {
    * });
    * ```
    */
-  public async resume(
+  public async Resume(
     stateFile: string,
     config?: DBAutoDocAPIConfig & { onProgress?: ProgressCallback }
   ): Promise<AnalysisExecutionResult> {
@@ -358,6 +365,14 @@ export class DBAutoDocAPI {
     }
   }
 
+  /** @deprecated Use {@link Resume}. */
+  public async resume(
+    stateFile: string,
+    config?: DBAutoDocAPIConfig & { onProgress?: ProgressCallback }
+  ): Promise<AnalysisExecutionResult> {
+    return this.Resume(stateFile, config);
+  }
+
   /**
    * Export analysis results as SQL and/or Markdown
    *
@@ -383,7 +398,7 @@ export class DBAutoDocAPI {
    * }
    * ```
    */
-  public async export(
+  public async Export(
     stateFile: string,
     options?: {
       /** Generate SQL extended properties script (default: true) */
@@ -456,6 +471,29 @@ export class DBAutoDocAPI {
     }
   }
 
+  /** @deprecated Use {@link Export}. */
+  public async export(
+    stateFile: string,
+    options?: {
+      /** Generate SQL extended properties script (default: true) */
+      sql?: boolean;
+
+      /** Generate Markdown documentation (default: true) */
+      markdown?: boolean;
+
+      /** Output directory for generated files (default: same as state file directory) */
+      outputDir?: string;
+
+      /** Only include approved items (default: false) */
+      approvedOnly?: boolean;
+
+      /** Minimum confidence threshold for inclusion (0-1, default: 0) */
+      confidenceThreshold?: number;
+    }
+  ): Promise<ExportResult> {
+    return this.Export(stateFile, options);
+  }
+
   /**
    * Get analysis status and metrics
    *
@@ -477,7 +515,7 @@ export class DBAutoDocAPI {
    * }
    * ```
    */
-  public async getStatus(stateFile: string): Promise<AnalysisStatus> {
+  public async GetStatus(stateFile: string): Promise<AnalysisStatus> {
     try {
       const stateManager = new StateManager(stateFile);
       const state = await stateManager.load();
@@ -500,6 +538,11 @@ export class DBAutoDocAPI {
     } catch (error) {
       return { exists: false };
     }
+  }
+
+  /** @deprecated Use {@link GetStatus}. */
+  public async getStatus(stateFile: string): Promise<AnalysisStatus> {
+    return this.GetStatus(stateFile);
   }
 
   /**

@@ -42,11 +42,30 @@ export interface NavigationOptions {
    * Initial values to populate when creating a new record.
    * Should be a plain object with field names as keys.
    */
-  newRecordValues?: Record<string, unknown>;
+  newRecordValues?: Record<string, unknown> | string;
 
   /**
    * URL query parameters to set on the tab after navigation.
    * Use null values to remove a query param.
    */
   queryParams?: Record<string, string | null>;
+}
+
+/**
+ * Options for NavigationService.OpenDashboard
+ */
+export interface DashboardNavigationOptions extends NavigationOptions {
+  /**
+   * The application the dashboard's tab belongs to. When omitted, or when that application is not
+   * loaded, the tab belongs to the default application (the Home app when it exists).
+   */
+  applicationId?: string;
+
+  /**
+   * Open the dashboard in edit mode, if the user can edit it. The open takes the usual tab path: a
+   * tab already open for the dashboard in that application is focused and enters edit mode, and
+   * otherwise the dashboard starts in edit mode in the tab it opens in (the replaced preview tab,
+   * or a separate tab for a Shift-click).
+   */
+  openInEditMode?: boolean;
 }

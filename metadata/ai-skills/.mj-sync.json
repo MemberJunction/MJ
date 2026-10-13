@@ -1,8 +1,7 @@
 {
   "entity": "MJ: AI Skills",
   "filePattern": "**/.*.json",
-  "defaults": {
-  },
+  "defaults": {},
   "pull": {
     "createNewFileIfNotFound": true,
     "newFileName": ".ai-skills.json",
@@ -30,6 +29,10 @@
       },
       "MJ: AI Skill Sub Agents": {
         "entity": "MJ: AI Skill Sub Agents",
+        "foreignKey": "SkillID"
+      },
+      "MJ: AI Skill Search Scopes": {
+        "entity": "MJ: AI Skill Search Scopes",
         "foreignKey": "SkillID"
       }
     }

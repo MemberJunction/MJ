@@ -106,12 +106,12 @@ export interface SqlLoggingOptions {
  */
 export interface SqlLoggingSession {
   /** Unique session ID */
-  readonly id: string;
+  readonly id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * File path where SQL is being logged. When {@link SqlLoggingOptions.maxFileSize} splitting
    * triggers, this is the FIRST part (`*.part001.sql`); use {@link filePaths} to get every part.
    */
-  readonly filePath: string;
+  readonly filePath: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Every file path produced by this session, in order. When size-based splitting did not
    * trigger this is a single-element array (`[filePath]`); when the session rotated across
@@ -120,11 +120,11 @@ export interface SqlLoggingSession {
    */
   readonly filePaths: string[];
   /** Session start time */
-  readonly startTime: Date;
+  readonly startTime: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Number of statements logged so far */
-  readonly statementCount: number;
+  readonly statementCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Configuration options for this session */
-  readonly options: SqlLoggingOptions;
+  readonly options: SqlLoggingOptions;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Dispose method to stop logging and clean up resources */
   dispose(): Promise<void>;
 }

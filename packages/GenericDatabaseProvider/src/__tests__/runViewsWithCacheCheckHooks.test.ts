@@ -9,7 +9,7 @@ vi.mock('@memberjunction/encryption', () => ({
     EncryptionEngine: { Instance: { Config: async () => {}, EncryptValue: async (v: unknown) => v, DecryptValue: async (v: unknown) => v } },
 }));
 
-import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
 import {
     RegisterDataHook,
     ClearAllDataHooks,
@@ -29,7 +29,7 @@ import type { SaveSQLResult, DeleteSQLResult } from '../GenericDatabaseProvider'
  * middleware uses) before any execution leg, matching the standard
  * PreRunView/PreRunViews pipeline.
  */
-class HookCaptureProvider extends GenericDatabaseProvider {
+class HookCaptureProvider extends GenericDatabaseProviderTestBase {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
 

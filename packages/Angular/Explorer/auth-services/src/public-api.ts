@@ -14,6 +14,11 @@ export * from './lib/auth-types';
 export * from './lib/IAuthProvider';
 export * from './lib/AngularAuthProviderFactory';
 
+// Metadata-driven provider catalog (pre-auth) + the reusable multi-IdP login picker
+export * from './lib/auth-provider-catalog';
+export * from './lib/catalog-environment';
+export * from './lib/login-picker.component';
+
 // Provider implementations
 export * from './lib/providers/mjexplorer-msal-provider.service';
 export * from './lib/providers/mjexplorer-auth0-provider.service';

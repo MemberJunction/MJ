@@ -4,10 +4,10 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { DashboardEngine } from '../../engines/dashboards';
 import { MJDashboardPermissionEntity } from '../../generated/entity_subclasses';
 import {
-    assertCallerMayCreateShare,
-    buildActionsSummary,
-    checkShareManagePermission,
-    dispatchShareNotificationAfterSave,
+    AssertCallerMayCreateShare,
+    BuildActionsSummary,
+    CheckShareManagePermission,
+    DispatchShareNotificationAfterSave,
 } from './BaseShareEntityExtended';
 
 /**
@@ -29,7 +29,7 @@ export class MJDashboardPermissionEntityExtended extends MJDashboardPermissionEn
     override CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
         if (type === EntityPermissionType.Update || type === EntityPermissionType.Delete) {
             const user = this.ActiveUser;
-            if (user && checkShareManagePermission(user, this.SharedByUserID, (userId) => this.isDashboardOwner(userId))) {
+            if (user && CheckShareManagePermission(user, this.SharedByUserID, (userId) => this.isDashboardOwner(userId))) {
                 return true;
             }
         }
@@ -38,7 +38,7 @@ export class MJDashboardPermissionEntityExtended extends MJDashboardPermissionEn
 
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const isNewShare = !this.IsSaved;
-        const allowed = await assertCallerMayCreateShare(
+        const allowed = await AssertCallerMayCreateShare(
             this,
             isNewShare,
             () => this.callerMayShareDashboard(),
@@ -48,7 +48,7 @@ export class MJDashboardPermissionEntityExtended extends MJDashboardPermissionEn
 
         const saved = await super.Save(options);
         if (saved) {
-            await dispatchShareNotificationAfterSave(this, isNewShare, this.SharedByUserID, (provider, grantorId) => ({
+            await DispatchShareNotificationAfterSave(this, isNewShare, this.SharedByUserID, (provider, grantorId) => ({
                 Provider: provider,
                 ContextUser: this.ContextCurrentUser,
                 GrantorUserID: grantorId,
@@ -88,7 +88,7 @@ export class MJDashboardPermissionEntityExtended extends MJDashboardPermissionEn
     }
 
     private actionsSummary(): string {
-        return buildActionsSummary({
+        return BuildActionsSummary({
             view: this.CanRead,
             edit: this.CanEdit,
             delete: this.CanDelete,

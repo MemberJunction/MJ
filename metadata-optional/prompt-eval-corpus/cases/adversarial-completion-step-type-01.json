@@ -1,0 +1,46 @@
+{
+  "id": "adversarial-completion-step-type-01",
+  "agent": "Database Research Agent",
+  "tags": [
+    "adversarial-exemplar",
+    "terminal-synthesis",
+    "prompt-fragility",
+    "implicit-payload-first"
+  ],
+  "description": "Detects the bogus-terminal-step defect: a shipped exemplar paired taskComplete with nextStep {type: 'Success'}, which the validator rejects before the completion is ever honored. response-well-formed now fails any undispatchable step type. This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+  "input": {
+    "payload": {
+      "queries": [
+        {
+          "sql": "SELECT 1",
+          "rows": [
+            {
+              "n": 1
+            }
+          ]
+        }
+      ]
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Confirm the database is reachable."
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Run Ad-hoc Query succeeded. 1 row returned."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "taskComplete"
+      },
+      {
+        "kind": "payloadChange"
+      }
+    ]
+  }
+}

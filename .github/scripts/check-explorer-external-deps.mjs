@@ -284,6 +284,28 @@ function parseArgs(argv) {
     return args;
 }
 
+/**
+ * Declarations in the app manifest that are themselves non-concrete (`latest`, `*`, or anything
+ * `parseRange` cannot pin). These can never be caught by the incompatible check: `parseRange`
+ * classifies them `any`, and `rangesIntersect` returns true unconditionally for `any` — so once
+ * such a range lands in the manifest it intersects every owner forever and `--write` never
+ * repairs it. That one-way ratchet is how `latest` specifiers for CodeMirror/Lezer persisted in
+ * MJExplorer's manifest for months. Surfaced separately, and gated.
+ */
+export function findNonConcreteDeclarations(appManifest, required) {
+    const declared = appManifest.dependencies ?? {};
+    const found = [];
+    for (const dep of [...required.keys()].sort()) {
+        const raw = declared[dep];
+        if (typeof raw !== 'string') continue;
+        const kind = parseRange(raw).kind;
+        if (kind === 'any' || kind === 'unknown') {
+            found.push({ dep, declaredRange: raw });
+        }
+    }
+    return found;
+}
+
 /** Non-gating diagnostics: owner range conflicts, latest-only pins, unparseable ranges. */
 function printRangeWarnings(required) {
     for (const dep of [...required.keys()].sort()) {
@@ -317,13 +339,34 @@ function printList(required, optionalOnly) {
 /** Add missing declarations (and repair zero-intersection ones) in the app package.json. */
 function writeDeclarations(appPkgPath, appManifest, required, missing, incompatible) {
     const deps = { ...(appManifest.dependencies ?? {}) };
+    // Never WRITE a non-concrete range. When every owner says `latest`, pickRange has nothing
+    // better to offer — but persisting it into the app manifest makes the build non-reproducible
+    // AND creates a declaration this script can never repair (see findNonConcreteDeclarations).
+    // Skipping leaves the dependency `missing`, which fails the gate loudly and points at the
+    // owners, where the fix actually belongs.
+    const skipped = [];
+    const resolve = (dep) => {
+        const { range, latestOnly } = pickRange(required.get(dep));
+        if (latestOnly) {
+            skipped.push({ dep, range });
+            return null;
+        }
+        return range;
+    };
     for (const dep of missing) {
-        deps[dep] = pickRange(required.get(dep)).range;
+        const range = resolve(dep);
+        if (range === null) continue;
+        deps[dep] = range;
         console.log(`  + ${dep}@${deps[dep]}`);
     }
     for (const { dep, declaredRange } of incompatible) {
-        deps[dep] = pickRange(required.get(dep)).range;
+        const range = resolve(dep);
+        if (range === null) continue;
+        deps[dep] = range;
         console.log(`  ~ ${dep}: ${declaredRange} -> ${deps[dep]}`);
+    }
+    for (const { dep, range } of skipped) {
+        console.log(`  ! ${dep}: refusing to write non-concrete '${range}' — pin it on the owner package(s) instead`);
     }
     appManifest.dependencies = Object.fromEntries(Object.entries(deps).sort(([a], [b]) => a.localeCompare(b)));
     writeFileSync(appPkgPath, JSON.stringify(appManifest, null, 2) + '\n', 'utf8');
@@ -359,22 +402,33 @@ function main() {
     }
     printRangeWarnings(required);
     const { missing, incompatible } = evaluateDeclarations(appManifest, required);
+    const nonConcrete = findNonConcreteDeclarations(appManifest, required);
     if (mode === 'write') {
         if (missing.length === 0 && incompatible.length === 0) {
             console.log('explorer-deps: nothing to write — declarations already in sync');
-            return;
+        } else {
+            writeDeclarations(appPkgPath, appManifest, required, missing, incompatible);
+            console.log(`explorer-deps: wrote declaration(s) to ${appPkgPath}`);
         }
-        writeDeclarations(appPkgPath, appManifest, required, missing, incompatible);
-        console.log(`explorer-deps: wrote ${missing.length + incompatible.length} declaration(s) to ${appPkgPath}`);
+        // --write cannot fix these: the fix belongs on the owner package, not here.
+        for (const { dep, declaredRange } of nonConcrete) {
+            console.log(`  ! ${dep}: declared '${declaredRange}' is non-concrete — pin it on the owner package(s)`);
+        }
         return;
     }
-    if (missing.length > 0 || incompatible.length > 0) {
-        console.error(`\nexplorer-deps: FAIL — ${appManifest.name} does not declare its externalized closure`);
+    if (missing.length > 0 || incompatible.length > 0 || nonConcrete.length > 0) {
+        console.error(`\nexplorer-deps: FAIL — ${appManifest.name}'s externalized closure is incomplete or not reproducibly pinned`);
         for (const dep of missing) {
             console.error(`  ✖ missing: ${dep} (owners: ${[...new Set(required.get(dep).map((e) => e.owner))].sort().join(', ')})`);
         }
         for (const { dep, declaredRange } of incompatible) {
             console.error(`  ✖ incompatible: ${dep}@${declaredRange} intersects no owner range`);
+        }
+        for (const { dep, declaredRange } of nonConcrete) {
+            console.error(
+                `  ✖ non-concrete: ${dep}@${declaredRange} — resolves differently on every install, ` +
+                    `so the build is not reproducible. Pin a concrete range on the owner package(s), then re-run --write.`
+            );
         }
         console.error('\n(regenerate with: node .github/scripts/check-explorer-external-deps.mjs --write)');
         process.exit(1);

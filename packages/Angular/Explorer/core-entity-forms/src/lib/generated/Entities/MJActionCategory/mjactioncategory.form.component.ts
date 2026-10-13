@@ -18,6 +18,7 @@ export class MJActionCategoryFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'categoryDetails', sectionName: 'Category Details', isExpanded: true },
             { sectionKey: 'hierarchyInformation', sectionName: 'Hierarchy Information', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJActionCategories', sectionName: 'Action Categories', isExpanded: false },
             { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false },

@@ -4,9 +4,9 @@ import '@angular/compiler';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EventEmitter } from '@angular/core';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient, RealtimeChannelContext } from '@memberjunction/realtime-runtime';
 import {
-  RealtimeWhiteboardChannel, WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS
+  RealtimeWhiteboardChannel, WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS, rasterizeSvgToJpegBase64
 } from '../lib/components/realtime/whiteboard/whiteboard-channel';
 import {
   RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_PREFIX,
@@ -42,6 +42,10 @@ class FakeWhiteboardHost {
   public ToggleFocus(): void {
     this.FocusMode = !this.FocusMode;
     this.FocusModeChange.emit(this.FocusMode);
+  }
+
+  public SetOnStage(onStage: boolean): void {
+    this.FocusMode = onStage;
   }
 }
 
@@ -96,6 +100,8 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     expect(channel.TabIcon).toBe('fa-solid fa-chalkboard');
     expect(channel.GetToolDefinitions()).toBe(WHITEBOARD_TOOL_DEFINITIONS);
     expect(channel.GetSurfaceComponent()).toBe(RealtimeWhiteboardHostComponent);
+    // The board is the call's first panel the user can share on its own ("This panel").
+    expect(channel.SurfaceShareable).toBe(true);
   });
 
   it('supplies first-run onboarding details (heading, description, tips, icon)', () => {
@@ -310,6 +316,20 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     expect(log.Focus).toEqual([true, false]);
   });
 
+  it("keeps the board's button true to where the host placed it, without asking to move", () => {
+    const fake = new FakeWhiteboardHost();
+    channel.BindSurface(asHost(fake));
+    channel.OnSurfacePlacementChange('stage');
+    expect(fake.FocusMode).toBe(true);
+    channel.OnSurfacePlacementChange('hidden');
+    expect(fake.FocusMode).toBe(false);
+    expect(log.Focus).toEqual([]);
+  });
+
+  it('ignores a placement with no board bound', () => {
+    expect(() => channel.OnSurfacePlacementChange('stage')).not.toThrow();
+  });
+
   it('Dispose releases the surface, the state subscription and the context', () => {
     const fake = new FakeWhiteboardHost();
     channel.BindSurface(asHost(fake));
@@ -325,4 +345,282 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'still works' }));
     expect(spy).not.toHaveBeenCalled();
   });
+
+  it('rasterizeSvgToJpegBase64 returns null in non-DOM environment', async () => {
+    const result = await rasterizeSvgToJpegBase64('<svg></svg>');
+    expect(result).toBeNull();
+  });
+
+  it('rasterizeSvgToJpegBase64 rasterizes SVG when DOM Image and canvas are available', async () => {
+    class FakeImage {
+      public onload: (() => void) | null = null;
+      public onerror: (() => void) | null = null;
+      private _src = '';
+      public get src(): string {
+        return this._src;
+      }
+      public set src(val: string) {
+        this._src = val;
+        setTimeout(() => this.onload?.(), 0);
+      }
+    }
+
+    const fakeCanvas = {
+      width: 0,
+      height: 0,
+      getContext: (_type: string) => ({
+        fillStyle: '',
+        fillRect: () => undefined,
+        drawImage: () => undefined,
+      }),
+      toDataURL: (_type: string, _quality: number) => 'data:image/jpeg;base64,mockedJpegBase64',
+    };
+
+    vi.stubGlobal('Image', FakeImage);
+    vi.stubGlobal('Blob', class FakeBlob {
+      constructor(public parts: string[], public opts: { type: string }) {}
+    });
+    vi.stubGlobal('URL', {
+      createObjectURL: () => 'blob:mock',
+      revokeObjectURL: () => undefined,
+    });
+    vi.stubGlobal('document', {
+      createElement: (tag: string) => (tag === 'canvas' ? fakeCanvas : {}),
+    });
+
+    try {
+      const result = await rasterizeSvgToJpegBase64('<svg><rect width="100" height="100"/></svg>');
+      expect(result).toBe('mockedJpegBase64');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('GetLatestFrame returns null in non-DOM environment or rasterized frame when available', async () => {
+    channel.State.AddItem({ Kind: 'text', X: 10, Y: 10, Text: 'hello board' }, 'user');
+    const frame = await channel.GetLatestFrame();
+    expect(frame).toBeNull(); // non-DOM in node test
+  });
+
+  it('paces frame pushes via videoBridge to at most 1 fps and throttles rapid mutations', async () => {
+    const pushedFrames: string[] = [];
+    const mockBridge = {
+      PushFrame: (frame: string) => {
+        pushedFrames.push(frame);
+        return true;
+      }
+    };
+    const c = channel as unknown as { videoBridge: typeof mockBridge };
+    c.videoBridge = mockBridge;
+
+    vi.spyOn(channel, 'GetLatestFrame').mockResolvedValue('frame-base64');
+
+    const contextWithClient: RealtimeChannelContext = {
+      ...makeContext(log),
+      Client: {
+        IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+      } as unknown as RealtimeChannelContext['Client'],
+    };
+    channel.Initialize(contextWithClient);
+    c.videoBridge = mockBridge;
+
+    // Mutate state - triggers user mutation push
+    channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'first' }, 'user');
+    await vi.waitFor(() => expect(pushedFrames).toHaveLength(1));
+    expect(pushedFrames[0]).toBe('frame-base64');
+
+    // Rapid second mutation within 1000ms window - should be paced/throttled
+    channel.State.AddItem({ Kind: 'text', X: 10, Y: 10, Text: 'second' }, 'user');
+    expect(pushedFrames).toHaveLength(1);
+  });
+
+  it('delivers a trailing-edge settled frame after rapid mutations when content changed', async () => {
+    vi.useFakeTimers();
+    try {
+      const pushedFrames: string[] = [];
+      const mockBridge = {
+        PushFrame: (frame: string) => {
+          pushedFrames.push(frame);
+          return true;
+        }
+      };
+      const c = channel as unknown as { videoBridge: typeof mockBridge };
+      c.videoBridge = mockBridge;
+
+      let currentFrame = 'frame-initial';
+      vi.spyOn(channel, 'GetLatestFrame').mockImplementation(async () => currentFrame);
+
+      const contextWithClient: RealtimeChannelContext = {
+        ...makeContext(log),
+        Client: {
+          IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+        } as unknown as RealtimeChannelContext['Client'],
+      };
+      channel.Initialize(contextWithClient);
+      c.videoBridge = mockBridge;
+
+      // First mutation: leading-edge push
+      channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'one' }, 'user');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(pushedFrames).toEqual(['frame-initial']);
+
+      // Rapid intermediate mutation + final change within the 1000ms window
+      currentFrame = 'frame-settled';
+      channel.State.AddItem({ Kind: 'text', X: 10, Y: 10, Text: 'two' }, 'user');
+      await vi.advanceTimersByTimeAsync(100);
+      expect(pushedFrames).toHaveLength(1); // throttled
+
+      // Advance through cooldown window: trailing-edge settle fires
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(pushedFrames).toEqual(['frame-initial', 'frame-settled']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('deduplicates identical frames during trailing-edge settle', async () => {
+    vi.useFakeTimers();
+    try {
+      const pushedFrames: string[] = [];
+      const mockBridge = {
+        PushFrame: (frame: string) => {
+          pushedFrames.push(frame);
+          return true;
+        }
+      };
+      const c = channel as unknown as { videoBridge: typeof mockBridge };
+      c.videoBridge = mockBridge;
+
+      vi.spyOn(channel, 'GetLatestFrame').mockResolvedValue('static-frame');
+
+      const contextWithClient: RealtimeChannelContext = {
+        ...makeContext(log),
+        Client: {
+          IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+        } as unknown as RealtimeChannelContext['Client'],
+      };
+      channel.Initialize(contextWithClient);
+      c.videoBridge = mockBridge;
+
+      channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'one' }, 'user');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(pushedFrames).toHaveLength(1);
+
+      channel.State.AddItem({ Kind: 'text', X: 10, Y: 10, Text: 'two' }, 'user');
+      await vi.advanceTimersByTimeAsync(1100);
+      // Resting frame is identical to first frame -> deduplicated, no second push
+      expect(pushedFrames).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('tags frames with the change id of the state they describe, and emits typed state events (the lifted pump)', async () => {
+    const mockBridge = { PushFrame: () => true };
+    const c = channel as unknown as { videoBridge: typeof mockBridge };
+    vi.spyOn(channel, 'GetLatestFrame').mockResolvedValue('tagged-frame');
+    channel.Initialize({
+      ...makeContext(log),
+      Client: {
+        IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+      } as unknown as RealtimeChannelContext['Client'],
+    });
+    c.videoBridge = mockBridge;
+    const events: Array<{ Name: string; ChangeId?: number; Payload: Record<string, unknown> }> = [];
+    channel.Events$.subscribe((e) => events.push(e));
+
+    channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'hello' }, 'user');
+    await vi.waitFor(() => expect(events.some((e) => e.Name === 'frame_pushed')).toBe(true));
+
+    const change = events.find((e) => e.Name === 'state_changed');
+    const frame = events.find((e) => e.Name === 'frame_pushed');
+    expect(change?.Payload).toEqual({ author: 'user' });
+    expect(frame?.ChangeId).toBe(change?.ChangeId); // the pixels and the state event describe the same moment
+    expect(frame?.Payload).toMatchObject({ reason: 'change' });
+  });
+
+  it('does not add a structured perception note: the board already feeds the model its own scene deltas', async () => {
+    vi.useFakeTimers();
+    try {
+      channel.Initialize(makeContext(log));
+      channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'hello' }, 'user');
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(log.Notes.some((n) => n.startsWith('[channel:Whiteboard'))).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ApplyAgentTool pushes exactly ONE confirmation frame with no-repetition etiquette note', async () => {
+    const pushedFrames: string[] = [];
+    const mockBridge = {
+      PushFrame: (frame: string) => {
+        pushedFrames.push(frame);
+        return true;
+      }
+    };
+    const c = channel as unknown as { videoBridge: typeof mockBridge };
+    c.videoBridge = mockBridge;
+
+    vi.spyOn(channel, 'GetLatestFrame').mockResolvedValue('agent-confirmed-frame');
+
+    const contextWithClient: RealtimeChannelContext = {
+      ...makeContext(log),
+      Client: {
+        IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+      } as unknown as RealtimeChannelContext['Client'],
+    };
+    channel.Initialize(contextWithClient);
+    c.videoBridge = mockBridge;
+
+    channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'agent note' }));
+
+    await vi.waitFor(() => expect(pushedFrames).toEqual(['agent-confirmed-frame']));
+    expect(log.Notes).toContainEqual(expect.stringContaining('[whiteboard] visual confirmation of your action'));
+    expect(log.Notes).toContainEqual(expect.stringContaining('do NOT narrate or announce your own change'));
+  });
+
+  /**
+   * A FAILED tool must confirm nothing. Confirming one would assert to the model that its edit
+   * landed AND tell it not to narrate the change — so the failure would disappear from the user's
+   * view while the model carried on. It would also push a frame identical to the last one, since a
+   * failed tool mutates nothing.
+   */
+  it.each([
+    ['unknown tool', 'Whiteboard_NoSuchTool', JSON.stringify({ text: 'x' })],
+    ['invalid JSON arguments', 'Whiteboard_AddNote', '{not json'],
+    ['non-object arguments', 'Whiteboard_AddNote', JSON.stringify(['not', 'an', 'object'])],
+  ])('ApplyAgentTool pushes NO confirmation frame and NO note when the tool fails (%s)', async (_label, toolName, argsJson) => {
+    const pushedFrames: string[] = [];
+    const mockBridge = {
+      PushFrame: (frame: string) => {
+        pushedFrames.push(frame);
+        return true;
+      }
+    };
+    const c = channel as unknown as { videoBridge: typeof mockBridge };
+
+    vi.spyOn(channel, 'GetLatestFrame').mockResolvedValue('should-never-be-pushed');
+
+    const contextWithClient: RealtimeChannelContext = {
+      ...makeContext(log),
+      Client: {
+        IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+      } as unknown as RealtimeChannelContext['Client'],
+    };
+    channel.Initialize(contextWithClient);
+    c.videoBridge = mockBridge;
+
+    const resultJson = channel.ApplyAgentTool(toolName, argsJson);
+
+    // The tool itself reported failure...
+    expect(JSON.parse(resultJson).success).toBe(false);
+
+    // ...so nothing was confirmed. Settle any microtasks the success path would have queued.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(pushedFrames).toEqual([]);
+    expect(log.Notes.filter((n) => n.includes('visual confirmation of your action'))).toEqual([]);
+  });
 });
+

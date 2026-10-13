@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -29,7 +29,7 @@ export class PropertyNameConsistencyRule extends BaseLintRule {
     const propertyAccesses = new Map<string, Set<string>>(); // variable -> accessed properties
 
     // Track data transformations (especially in map functions)
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
         // Look for array.map transformations
         if (t.isMemberExpression(path.node.callee) && t.isIdentifier(path.node.callee.property) && path.node.callee.property.name === 'map') {

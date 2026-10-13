@@ -70,7 +70,7 @@ describe('ZhipuLLM', () => {
   describe('Integration Tests', () => {
     const hasApiKey = !!process.env.AI_VENDOR_API_KEY__ZhipuLLM;
 
-    (hasApiKey ? it : it.skip)('should make successful chat completion with GLM 5', async () => {
+    it.skipIf(!hasApiKey)('should make successful chat completion with GLM 5', async () => {
       const params: ChatParams = {
         model: 'glm-5',
         messages: [
@@ -89,7 +89,7 @@ describe('ZhipuLLM', () => {
       expect(result.data.usage.completionTokens).toBeGreaterThan(0);
     }, 30000); // 30 second timeout for API call
 
-    (hasApiKey ? it : it.skip)('should handle JSON response format', async () => {
+    it.skipIf(!hasApiKey)('should handle JSON response format', async () => {
       const params: ChatParams = {
         model: 'glm-5',
         messages: [
@@ -111,7 +111,7 @@ describe('ZhipuLLM', () => {
       expect(parsed).toHaveProperty('status');
     }, 30000);
 
-    (hasApiKey ? it : it.skip)('should make successful chat completion with GLM 4.7', async () => {
+    it.skipIf(!hasApiKey)('should make successful chat completion with GLM 4.7', async () => {
       const params: ChatParams = {
         model: 'glm-4-plus',
         messages: [
@@ -126,7 +126,7 @@ describe('ZhipuLLM', () => {
       expect(result.data.choices[0].message.content).toBeTruthy();
     }, 30000);
 
-    (hasApiKey ? it : it.skip)('should support streaming response', async () => {
+    it.skipIf(!hasApiKey)('should support streaming response', async () => {
       const params: ChatParams = {
         model: 'glm-5',
         messages: [

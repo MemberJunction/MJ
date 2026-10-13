@@ -44,6 +44,24 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         // Load the agent entity
         const agent = await this.loadAgent(config.AgentID, context.ContextUser);
 
+        // A workflow SUBMITS and detaches — it returns a handle as soon as its steps are scheduled,
+        // not a result. A scheduled job that ran one would record success the moment the graph was
+        // written, before any of the work happened: the job history would show a clean run every
+        // time regardless of whether the workflow later succeeded, failed or stalled. That is worse
+        // than not running it, because it looks like it worked.
+        //
+        // Refused here rather than at submission because this is where the caller's expectation
+        // lives: the job expects a completed unit of work, and nothing downstream of this point can
+        // supply one until an await path exists.
+        if ((agent.Type ?? '').trim().toLowerCase() === 'flow') {
+            const message =
+                `'${agent.Name}' is a workflow and cannot be run on a schedule yet. A workflow returns ` +
+                `as soon as its steps are scheduled, so this job would report success before any of the ` +
+                `work had happened. Schedule the steps individually, or start the workflow by hand.`;
+            this.log(message);
+            return { Success: false, ErrorMessage: message, Details: { AgentID: config.AgentID } };
+        }
+
         // Verbose-only: the engine's always-on "▶️ Starting / ✅ Completed" pair already frames this
         // run. This per-agent detail is redundant noise on routine (often no-op) scheduled runs.
         this.log(`Executing agent: ${agent.Name}`, true);

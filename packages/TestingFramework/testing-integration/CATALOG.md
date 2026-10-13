@@ -18,13 +18,16 @@ Use `bootstrapIntegrationServer` (in-process) **only** where there's no client s
 
 ## Tiers (`src/tiers.ts`)
 
-| Tier | Gate | Runs in CI gate? |
+| Tier | Gate | Runs in CI? |
 |---|---|---|
-| `deterministic` | none | ✅ blocking (per-PR) |
-| `mutation` | `RUN_MUTATION_TESTS=1` | ⛔ (target: gated CI lane) |
-| `live-model` | `RUN_AGENT_TESTS=1` | ⛔ (real LLM cost) |
+| `deterministic` | none | ✅ blocking (per-PR, with MJAPI booted so client-transport members execute) |
+| `mutation` | `RUN_MUTATION_TESTS=1` (default OFF) | ✅ nightly lane (integration.yml `schedule: 0 6 * * *` sets the gate) |
+| `live-model` | `RUN_AGENT_TESTS` — **default ON** since 2026-07-20 (opt out with `RUN_AGENT_TESTS=0`; see `src/tiers.ts`) | ✅ weekly lane (Sunday, gated on the `INTEGRATION_LIVE_MODEL_KEYS` secret) |
 
-> ⚠️ The driver has **no `Skipped` status** yet — gated/degraded checks currently report as `Passed` (false green). Adding a real `Skipped` state is the #1 harness fix (plan Track A / A1).
+> ✅ The driver now has a real **`Skipped`** status (Track A / A1, landed 2026-08): a gated tier, an
+> unreachable MJAPI, or a mutation/live-gated check reports `Skipped` — surfaced in the suite
+> summary as `X passed / Y failed / Z skipped` — and can never masquerade as executed coverage.
+> Suite pass/fail is decided by hard failures only; skips are visible but non-failing.
 
 ## Current bundles (registered in `IntegrationCheckRegistry`)
 
@@ -66,14 +69,27 @@ Bundles live in [`integration-test-suite/src/checks/`](../integration-test-suite
 | ai-permissions | 6 | det | **client** |
 | ai-embeddings | 5 | det | **client** |
 | agent-loop-standin | 6 | det | server |
+| agent-decisions-switch | 9 | det | server |
+| binary-fields | 6 | det (+mut) | **client** |
+| cloudflare-clef | 6 | det | server |
+| systemone-kev | 10 | det | server |
+| perplexity-decider | 5 | det | server |
 | transaction-groups | 5 | det | **client** |
 | class-resolution | 5 | det | server |
 | metadata-sync | 9 | det | server |
 | codegen-determinism | 6 | det | **client** |
 | realtime-deterministic | 9 | det | server |
 | search | 7 | det | **client** |
+| storage | 6 | det | server |
+| queue | 7 | det | server |
+| auth-validation | 7 | det | server |
 
-**~365 checks / 52 registered bundles today** (IT01–IT52): 48 land in the **deterministic** suite, 4 (IT16–IT19) are **live-model**. The 2026-07 expansion added 22 bundles (IT31–IT52, ~143 checks) + EW9 to entity-writes. The older bundles are `bootstrapIntegrationServer` (in-process) — migrating them to client transport where a client path exists is tracked in the plan (Workstream M); the 2026-07 bundles are client-first where a client surface exists.
+**882 checks / 109 registered bundles today** (IT01–IT110, with IT107 unassigned; the table above lists the majors — run `mj test list` or read `integration-test-suite/src/checks/` for the full set): 93 members land in the **deterministic** suite, 16 in **live-model**. The 2026-07 expansion added the IT31–IT52 client-first bundles; IT64 onward followed, through the Clef, Kev and Perplexity Decider decision-model bundles at IT108–IT110. The bundle count is pinned by `check-registry.test.ts` — treat that as the source of truth over any hand-count here. The older bundles are `bootstrapIntegrationServer` (in-process) — migrating them to client transport where a client path exists is tracked in the plan (Workstream M); the 2026-07 bundles are client-first where a client surface exists.
+
+> **Suite ordering invariant**: ALL server-transport members are sequenced before ALL
+> client-transport members (deterministic suite: servers 1–49, clients 50–74). The first client
+> bundle rebinds the process-global provider to GraphQL (issue #3251), so a server member
+> sequenced after any client member hard-errors. Keep the invariant when joining new members.
 
 ## Expansion roadmap (the growth target)
 

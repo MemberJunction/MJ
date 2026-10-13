@@ -1,7 +1,8 @@
-import { BaseEntitySaveQueue, LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
-import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionCategoryEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
-import { BaseSingleton, MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { BaseEntitySaveQueue, LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider, DatabaseProviderBase } from "@memberjunction/core";
+import { MJActionEntity, MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionCategoryEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
+import { BaseSingleton, MJGlobal, MJLruCache, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
+import { BaseActionFilter } from "./BaseActionFilter";
 import {
     ActionEngineBase,
     MJActionEntityExtended,
@@ -11,7 +12,10 @@ import {
     RunActionParams,
     RuntimeActionConfigurationSchema,
     RuntimeActionBridgeBuilder,
-    RedactParamsToJSON
+    RedactParamsToJSON,
+    EntityChangeContext,
+    DidFieldChange,
+    DidFieldChangeToValue
 } from "@memberjunction/actions-base";
 import { RuntimeActionExecutor } from "@memberjunction/action-runtime";
 import type { BridgeHandlerMap } from "@memberjunction/code-execution";
@@ -19,7 +23,95 @@ import type { BridgeHandlerMap } from "@memberjunction/code-execution";
  
 
 /**
- * Base class for executing actions. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the 
+ * The `Message` on a run that a filter prevented.
+ *
+ * Exported because it is the only thing distinguishing a prevented run from an executed one in
+ * `ActionExecutionLog` — both write a row, deliberately, so an operator can see that a filter
+ * refused rather than wondering why nothing happened.
+ */
+export const ACTION_PREVENTED_BY_FILTER_MESSAGE =
+   'Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.';
+
+/**
+ * Execution context handed to an Action Filter's `Code` when the engine evaluates it inline
+ * (i.e. when no {@link BaseActionFilter} subclass is registered for the filter). The code runs
+ * with this object bound as `ActionFilterContext` and signals its verdict either by returning
+ * a boolean or by assigning `ActionFilterContext.result`.
+ */
+export interface ActionFilterContext {
+   /** The full parameters of the action run being gated, including Action, Params, and ContextUser. */
+   params: RunActionParams;
+   /** The filter row being evaluated. */
+   filter: MJActionFilterEntity;
+   /** Alternative verdict channel: filter code may assign true (allow) / false (prevent) here instead of returning. */
+   result: boolean | null;
+
+   /**
+    * What changed about the record, when the run came from an entity lifecycle event.
+    *
+    * `undefined` for a run with no save behind it — a direct invocation, a View/List fan-out, an
+    * agent calling the action. Filter code must therefore treat absence as "I cannot tell", which
+    * the helpers below already do by returning false.
+    */
+   change?: EntityChangeContext;
+
+   /** Field values as they were before the change. Empty object when there is no change context. */
+   OldValues: Readonly<Record<string, unknown>>;
+   /** Field values as they are now. Empty object when there is no change context. */
+   NewValues: Readonly<Record<string, unknown>>;
+
+   /**
+    * `true` when the named field's value actually differs across this save.
+    *
+    * Bound to the run's change context so filter code reads as the question it is asking:
+    * `return ActionFilterContext.DidFieldChange('Status')`. False on a create — a field that was
+    * never anything else did not *change* to what it is.
+    */
+   DidFieldChange(fieldName: string): boolean;
+
+   /**
+    * `true` when the named field changed AND its new value equals `value`.
+    *
+    * The transition predicate — "when Status becomes Approved" — as opposed to the state predicate
+    * "when Status is Approved", which fires on every subsequent save too. Comparison is loose across
+    * the string boundary metadata forces, so `'1'`, `1` and `true` compare equal.
+    */
+   DidFieldChangeToValue(fieldName: string, value: unknown): boolean;
+}
+
+/**
+ * Opens a provider on the host's read-only database login. Resolves null when the host has no
+ * read-only login configured.
+ */
+export type ReadOnlyProviderFactory = () => Promise<DatabaseProviderBase | null>;
+
+/**
+ * The host's checks for SQL a caller wrote, so that an action which runs such SQL applies the same
+ * rules as the host's own ad-hoc SQL API. MJServer registers one at startup.
+ */
+export interface AdhocSQLAuthorizer {
+   /**
+    * Why `contextUser` may not run `sql` on `provider`, or null when they may. The host checks the
+    * SQL as it will run: one read statement, and every table it reads an entity view the user may
+    * read in full.
+    */
+   Authorize(sql: string, provider: DatabaseProviderBase, contextUser: UserInfo): string | null;
+
+   /** The timeout, in seconds, to run with when the caller asks for `requestedSeconds`. */
+   ClampTimeoutSeconds(requestedSeconds: number | undefined): number;
+}
+
+/**
+ * True when `actionClass` declares `AuthorizesCaller = true` as its own static field. A subclass does
+ * not inherit the marker from its parent. The field is read by name, so a class built on another
+ * loaded copy of {@link BaseAction} qualifies too.
+ */
+function declaresAuthorizesCaller(actionClass: unknown): boolean {
+   return typeof actionClass === 'function' && Object.getOwnPropertyDescriptor(actionClass, 'AuthorizesCaller')?.value === true;
+}
+
+/**
+ * Base class for executing actions. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the
  * @RegisterClass decorator from the @memberjunction/global package to register your sub-class with the ClassFactory. This will cause your sub-class to be used instead of this base class when the Metadata object insantiates the ActionEngine.
  */
 export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
@@ -39,7 +131,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * one cache, loaded once, shared by every consumer (and reused by AIEngine.RefreshActions via the
     * BaseEngineRegistry).
     */
-   private get Base(): ActionEngineBase {
+   private get base(): ActionEngineBase {
       return ActionEngineBase.Instance;
    }
 
@@ -58,31 +150,93 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       if (contextUser) {
          this._contextUser = contextUser;
       }
-      await this.Base.Config(forceRefresh, contextUser, provider);
+      await this.base.Config(forceRefresh, contextUser, provider);
    }
 
    /** True once the underlying ActionEngineBase cache has loaded. */
-   public get Loaded(): boolean { return this.Base.Loaded; }
+   public get Loaded(): boolean { return this.base.Loaded; }
 
-   public get ContextUser(): UserInfo { return (this._contextUser ?? this.Base.ContextUser) as UserInfo; }
+   public get ContextUser(): UserInfo { return (this._contextUser ?? this.base.ContextUser) as UserInfo; }
    public set ContextUser(value: UserInfo) { this._contextUser = value; }
 
+   // No initializer, so running the constructor again on the live singleton keeps the registration.
+   private _readOnlyProviderFactory?: ReadOnlyProviderFactory;
+
+   /**
+    * Registers how the host opens a provider on its read-only database login. MJServer registers one
+    * at startup. A second registration through this setter throws; code running inside the server
+    * process can still replace it.
+    * @throws Error when a factory is already registered
+    */
+   public SetReadOnlyProviderFactory(factory: ReadOnlyProviderFactory): void {
+      if (this._readOnlyProviderFactory) {
+         throw new Error('A read-only provider factory is already registered with the action engine; a second registration is not allowed.');
+      }
+      this._readOnlyProviderFactory = factory;
+   }
+
+   /**
+    * A provider on the host's read-only database login, for actions that run caller-supplied SQL.
+    * Such actions run only here and never fall back to the read-write provider, so they refuse when
+    * this resolves null: no factory registered, or no read-only login configured.
+    */
+   public async GetReadOnlyProvider(): Promise<DatabaseProviderBase | null> {
+      return this._readOnlyProviderFactory ? await this._readOnlyProviderFactory() : null;
+   }
+
+   // No initializer, so running the constructor again on the live singleton keeps the registration.
+   private _adhocSQLAuthorizer?: AdhocSQLAuthorizer;
+
+   /**
+    * Registers the host's checks for SQL a caller wrote. MJServer registers one at startup. A second
+    * registration through this setter throws; code running inside the server process can still
+    * replace it.
+    * @throws Error when an authorizer is already registered
+    */
+   public SetAdhocSQLAuthorizer(authorizer: AdhocSQLAuthorizer): void {
+      if (this._adhocSQLAuthorizer) {
+         throw new Error('An ad-hoc SQL authorizer is already registered with the action engine; a second registration is not allowed.');
+      }
+      this._adhocSQLAuthorizer = authorizer;
+   }
+
+   /**
+    * The host's checks for SQL a caller wrote. Actions that run such SQL refuse when this is null.
+    */
+   public get AdhocSQLAuthorizer(): AdhocSQLAuthorizer | null {
+      return this._adhocSQLAuthorizer ?? null;
+   }
+
+   /**
+    * True when the class that runs `action` declares {@link BaseAction.AuthorizesCaller} itself. The
+    * class is resolved the way {@link RunClassBasedAction} resolves it. A subclass that overrides a
+    * marked action does not inherit the marker. A Runtime action, or one with no registered class,
+    * does not authorize its caller.
+    */
+   public ActionAuthorizesCaller(action: MJActionEntity): boolean {
+      if (action.Type === 'Runtime') {
+         return false;
+      }
+      const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, action.DriverClass || action.Name);
+      return declaresAuthorizesCaller(registration?.SubClass);
+   }
+
    // ── Proxied cached collections (single source of truth: ActionEngineBase.Instance) ──
-   public get Actions(): MJActionEntityExtended[] { return this.Base.Actions; }
-   public get ActionCategories(): MJActionCategoryEntity[] { return this.Base.ActionCategories; }
-   public get ActionParams(): MJActionParamEntity[] { return this.Base.ActionParams; }
-   public get ActionFilters(): MJActionFilterEntity[] { return this.Base.ActionFilters; }
-   public get ActionResultCodes(): MJActionResultCodeEntity[] { return this.Base.ActionResultCodes; }
-   public get ActionLibraries(): MJActionLibraryEntity[] { return this.Base.ActionLibraries; }
-   public get CoreActions(): MJActionEntityExtended[] { return this.Base.CoreActions; }
-   public get NonCoreActions(): MJActionEntityExtended[] { return this.Base.NonCoreActions; }
-   public get CoreActionsRootCategoryID(): string { return this.Base.CoreActionsRootCategoryID; }
+   public get Actions(): MJActionEntityExtended[] { return this.base.Actions; }
+   public get ActionCategories(): MJActionCategoryEntity[] { return this.base.ActionCategories; }
+   public get ActionParams(): MJActionParamEntity[] { return this.base.ActionParams; }
+   public get ActionFilters(): MJActionFilterEntity[] { return this.base.ActionFilters; }
+   public get ActionResultCodes(): MJActionResultCodeEntity[] { return this.base.ActionResultCodes; }
+   public get ActionLibraries(): MJActionLibraryEntity[] { return this.base.ActionLibraries; }
+   public get CoreActions(): MJActionEntityExtended[] { return this.base.CoreActions; }
+   public get NonCoreActions(): MJActionEntityExtended[] { return this.base.NonCoreActions; }
+   public get CoreActionsRootCategoryID(): string { return this.base.CoreActionsRootCategoryID; }
 
    // ── Proxied lookups ──
-   public IsChildCategoryOf(categoryId: string, parentCategoryId: string): boolean { return this.Base.IsChildCategoryOf(categoryId, parentCategoryId); }
-   public IsCoreAction(action: MJActionEntityExtended): boolean { return this.Base.IsCoreAction(action); }
-   public IsCoreActionCategory(categoryId: string): boolean { return this.Base.IsCoreActionCategory(categoryId); }
-   public GetActionByName(actionName: string): MJActionEntityExtended | undefined { return this.Base.GetActionByName(actionName); }
+   public IsChildCategoryOf(categoryId: string, parentCategoryId: string): boolean { return this.base.IsChildCategoryOf(categoryId, parentCategoryId); }
+   public IsCoreAction(action: MJActionEntityExtended): boolean { return this.base.IsCoreAction(action); }
+   public IsCoreActionCategory(categoryId: string): boolean { return this.base.IsCoreActionCategory(categoryId); }
+   public GetActionByName(actionName: string): MJActionEntityExtended | undefined { return this.base.GetActionByName(actionName); }
 
    /**
     * Fire-and-forget queue for action-execution-log writes. Action-execution logging is observability —
@@ -136,7 +290,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          // filters indicated we should NOT run this action
          const result: ActionResult = {
             Success: true,
-            Message: "Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.",
+            Message: ACTION_PREVENTED_BY_FILTER_MESSAGE,
             LogEntry: null, // initially null
             Params: params.Params,
             RunParams: params
@@ -145,6 +299,13 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          if(this.ShouldLogOutcome(params, result)){
             result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
          }
+
+         // RETURNING here is the entire point of a filter. Without it this block logged a refusal
+         // and then fell through to run the action anyway — so every filter recorded that it had
+         // prevented something while preventing nothing. The refusal row made it look like the
+         // mechanism worked, which is why it survived: the observable said "prevented" and the side
+         // effect happened regardless.
+         return result;
       }
 
       return await this.RunActionWithTimeout(params, inputSnapshot);
@@ -243,7 +404,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    
 
    protected GetActionParamsForAction(action: MJActionEntityExtended): ActionParam[] {
-      const params: ActionParam[] = action.Params.map((param: MJActionParamEntity) => {
+      const params: ActionParam[] = action.Params.Items.map((param: MJActionParamEntity) => {
          let value: any = null;
          switch (param.ValueType) {
             case 'Scalar':
@@ -301,13 +462,81 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    }
 
    /**
-    * This method runs a single filter. Subclasses can override this method to provide custom filter logic.
-    * 
-    * @param filter 
+    * Bounded cache of compiled filter functions. Keyed by filter ID + row version so an edited
+    * filter's Code is recompiled on next use instead of serving the stale compilation.
+    */
+   private _filterCache = new MJLruCache<string, (context: ActionFilterContext) => Promise<unknown>>({ maxSize: 1000 });
+
+   /**
+    * Runs a single Action Filter and returns whether the action should proceed.
+    *
+    * Resolution order:
+    * 1. A {@link BaseActionFilter} subclass registered with the ClassFactory under the filter's ID
+    *    (the CodeGen / custom-subclass pattern documented on BaseActionFilter) wins when present.
+    * 2. Otherwise the filter's `Code` column — JavaScript that evaluates to true (allow) or
+    *    false (prevent), per the column contract — is compiled once per filter row version and
+    *    executed with an {@link ActionFilterContext} argument. The code may `return` its verdict
+    *    or assign `ActionFilterContext.result`.
+    *
+    * Failure semantics are FAIL-CLOSED: a filter that throws, yields a non-boolean, or has no
+    * evaluable logic prevents the action and logs the reason. A broken gate must not silently
+    * allow execution — silently allowing everything is precisely the pre-fix bug this replaces.
+    *
+    * Subclasses can still override this method entirely to provide custom filter logic.
     */
    protected async RunSingleFilter(params: RunActionParams, filter: MJActionFilterEntity): Promise<boolean> {
-      return true;
-      // temp stub above, replace with code that will run the filter      
+      try {
+         const registered = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseActionFilter, filter.ID);
+         if (registered && registered.length > 0) {
+            const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseActionFilter>(BaseActionFilter, filter.ID);
+            if (instance) {
+               return await instance.Run(params, filter) === true;
+            }
+         }
+
+         const code = filter.Code?.trim();
+         if (!code) {
+            LogError(`Action Filter ${filter.ID} has no Code and no registered BaseActionFilter subclass — failing closed, action prevented.`);
+            return false;
+         }
+
+         const cacheKey = `${filter.ID}:${filter.__mj_UpdatedAt instanceof Date ? filter.__mj_UpdatedAt.getTime() : ''}`;
+         let filterFunction = this._filterCache.Get(cacheKey);
+         if (!filterFunction) {
+            filterFunction = new Function('ActionFilterContext', `
+               return (async () => {
+                  ${code}
+               })();
+            `) as (context: ActionFilterContext) => Promise<unknown>;
+            this._filterCache.Set(cacheKey, filterFunction);
+         }
+
+         const change = params.EntityChange;
+         const context: ActionFilterContext = {
+            params,
+            filter,
+            result: null,
+            change,
+            OldValues: change?.OldValues ?? {},
+            NewValues: change?.NewValues ?? {},
+            DidFieldChange: (fieldName) => DidFieldChange(change, fieldName),
+            DidFieldChangeToValue: (fieldName, value) => DidFieldChangeToValue(change, fieldName, value),
+         };
+         const returned = await filterFunction(context);
+         const verdict = returned ?? context.result;
+         if (typeof verdict !== 'boolean') {
+            LogError(`Action Filter ${filter.ID} evaluated to a non-boolean verdict (${String(verdict)}) — failing closed, action prevented.`);
+            return false;
+         }
+         return verdict;
+      }
+      catch (e) {
+         LogErrorEx({
+            message: `Action Filter ${filter.ID} threw during evaluation — failing closed, action prevented.`,
+            error: e instanceof Error ? e : new Error(String(e))
+         });
+         return false;
+      }
    }
 
    protected async InternalRunAction(params: RunActionParams, inputSnapshot?: string): Promise<ActionResult> {
@@ -323,10 +552,17 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          // Branch by Action.Type. Runtime actions go through the sandboxed
          // RuntimeActionExecutor; Custom / Generated (and legacy rows where
          // Type may be null) flow through the existing ClassFactory path.
-         const simpleResult: ActionResultSimple =
+         // A deferral takes the place of execution, never of the gates above it — validation and
+         // filters have already run by the time control reaches here. A deferral that returns null
+         // declined, so the action runs normally.
+         const deferred: ActionResultSimple | null = params.DeferExecution
+            ? await params.DeferExecution(params)
+            : null;
+         const simpleResult: ActionResultSimple = deferred ?? (
             params.Action.Type === 'Runtime'
                ? await this.RunRuntimeAction(params)
-               : await this.RunClassBasedAction(params);
+               : await this.RunClassBasedAction(params)
+         );
 
          const resultCodeEntity: MJActionResultCodeEntity | undefined = this.ActionResultCodes.find(r => UUIDsEqual(r.ActionID, params.Action.ID) &&
                                                                r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());
@@ -563,6 +799,12 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       // merged set to ResultParams instead. `inputSnapshot` is supplied by RunAction; the fallback
       // covers callers that reach StartActionLog directly.
       logEntity.Params = inputSnapshot ?? this.SnapshotInputParams(params);
+      // Stamped at write time, from the action's own policy, so the row is self-describing. Reading
+      // Action.RetentionPeriod at purge time instead would make an edit to that column retroactive:
+      // tightening retention would delete history that was written under the old policy, which is
+      // not what someone changing a going-forward setting is asking for. NULL stays NULL — a purge
+      // must never invent a lifetime nobody configured.
+      logEntity.RetentionPeriod = params.Action.RetentionPeriod;
 
       this.StampProvenance(logEntity, params);
 

@@ -40,14 +40,24 @@ export class UserInfo {
 }
 
 // Mock RunView results storage - tests can configure this
-let mockRunViewResults: Map<string, { Success: boolean; Results: unknown[]; ErrorMessage?: string }> = new Map();
+let MockRunViewResults: Map<string, { Success: boolean; Results: unknown[]; ErrorMessage?: string }> = new Map();
 
-export function setMockRunViewResult(entityName: string, result: { Success: boolean; Results: unknown[]; ErrorMessage?: string }) {
-    mockRunViewResults.set(entityName, result);
+export function SetMockRunViewResult(entityName: string, result: { Success: boolean; Results: unknown[]; ErrorMessage?: string }) {
+    MockRunViewResults.set(entityName, result);
 }
 
+/** @deprecated Use {@link SetMockRunViewResult}. */
+export function setMockRunViewResult(entityName: string, result: { Success: boolean; Results: unknown[]; ErrorMessage?: string }) {
+    return SetMockRunViewResult(entityName, result);
+}
+
+export function ClearMockRunViewResults() {
+    MockRunViewResults.clear();
+}
+
+/** @deprecated Use {@link ClearMockRunViewResults}. */
 export function clearMockRunViewResults() {
-    mockRunViewResults.clear();
+    return ClearMockRunViewResults();
 }
 
 export class RunView {
@@ -58,7 +68,7 @@ export class RunView {
         ResultType?: string;
         Fields?: string[];
     }, _contextUser?: UserInfo): Promise<{ Success: boolean; Results: T[]; ErrorMessage?: string }> {
-        const result = mockRunViewResults.get(params.EntityName);
+        const result = MockRunViewResults.get(params.EntityName);
         if (result) {
             return result as { Success: boolean; Results: T[]; ErrorMessage?: string };
         }
@@ -73,26 +83,109 @@ export class RunView {
         ResultType?: string;
     }>, _contextUser?: UserInfo): Promise<Array<{ Success: boolean; Results: unknown[] }>> {
         return params.map(p => {
-            const result = mockRunViewResults.get(p.EntityName);
+            const result = MockRunViewResults.get(p.EntityName);
             return result || { Success: true, Results: [] };
         });
     }
 }
 
 // Mock entity storage - tests can configure created entities
-let mockEntities: Map<string, unknown> = new Map();
+let MockEntities: Map<string, unknown> = new Map();
 
-export function setMockEntity(entityName: string, entity: unknown) {
-    mockEntities.set(entityName, entity);
+export function SetMockEntity(entityName: string, entity: unknown) {
+    MockEntities.set(entityName, entity);
 }
 
+/** @deprecated Use {@link SetMockEntity}. */
+export function setMockEntity(entityName: string, entity: unknown) {
+    return SetMockEntity(entityName, entity);
+}
+
+export function ClearMockEntities() {
+    MockEntities.clear();
+}
+
+/** @deprecated Use {@link ClearMockEntities}. */
 export function clearMockEntities() {
-    mockEntities.clear();
+    return ClearMockEntities();
+}
+
+// ---- Row-filter support: acting context, bindings, entity metadata, RLS filters ----
+
+export interface APIKeyActingContext {
+    ActingOrganizationID?: string;
+    ActingPersonID?: string;
+    ActingScopeID?: string;
+    ActingCompanyIDs?: string[];
+}
+
+export interface APIKeyRowFilterBinding {
+    EntityID: string;
+    PermissionType: 'Read' | 'Create' | 'Update' | 'Delete';
+    FilterID: string;
+}
+
+export class RowLevelSecurityFilterInfo {
+    ID: string;
+    Name: string;
+    FilterText: string;
+
+    constructor(data: { ID: string; Name?: string; FilterText?: string }) {
+        this.ID = data.ID;
+        this.Name = data.Name ?? 'Mock Filter';
+        this.FilterText = data.FilterText ?? '';
+    }
+}
+
+/** Minimal EntityInfo stand-in for EntityByName resolution in tests. */
+export class EntityInfo {
+    ID: string;
+    Name: string;
+
+    constructor(data: { ID: string; Name: string }) {
+        this.ID = data.ID;
+        this.Name = data.Name;
+    }
+}
+
+let mockMetadataEntities: EntityInfo[] = [];
+let mockRLSFilters: RowLevelSecurityFilterInfo[] = [];
+
+export function SetMockMetadataEntities(entities: EntityInfo[]): void {
+    mockMetadataEntities = entities;
+}
+
+/** @deprecated Use {@link SetMockMetadataEntities}. */
+export function setMockMetadataEntities(entities: EntityInfo[]): void {
+    return SetMockMetadataEntities(entities);
+}
+
+export function SetMockRowLevelSecurityFilters(filters: RowLevelSecurityFilterInfo[]): void {
+    mockRLSFilters = filters;
+}
+
+/** @deprecated Use {@link SetMockRowLevelSecurityFilters}. */
+export function setMockRowLevelSecurityFilters(filters: RowLevelSecurityFilterInfo[]): void {
+    return SetMockRowLevelSecurityFilters(filters);
+}
+
+export function ClearMockMetadataState(): void {
+    mockMetadataEntities = [];
+    mockRLSFilters = [];
+}
+
+/** @deprecated Use {@link ClearMockMetadataState}. */
+export function clearMockMetadataState(): void {
+    return ClearMockMetadataState();
+}
+
+export function LogError(..._args: unknown[]): void {
+    // no-op in tests
 }
 
 export class Metadata {
     async GetEntityObject<T>(entityName: string, _contextUser?: UserInfo): Promise<T> {
-        const entity = mockEntities.get(entityName);
+        const entity = MockEntities.get(entityName);
         if (entity) {
             return entity as T;
         }
@@ -108,7 +201,26 @@ export class Metadata {
             set(key: string, value: unknown) { mockData[key] = value; }
         } as unknown as T;
     }
+
+    EntityByName(name: string): EntityInfo | undefined {
+        const needle = name?.trim().toLowerCase();
+        return mockMetadataEntities.find(e => e.Name.trim().toLowerCase() === needle);
+    }
+
+    static get Provider(): { RowLevelSecurityFilters: RowLevelSecurityFilterInfo[]; EntityByName(name: string): EntityInfo | undefined } {
+        return {
+            RowLevelSecurityFilters: mockRLSFilters,
+            EntityByName: (name: string) => new Metadata().EntityByName(name) // global-provider-ok: this IS the mock provider — a self-contained test double with no real multi-provider concern
+        };
+    }
 }
 
 // Re-export for convenience
-export { mockRunViewResults, mockEntities };
+export {
+    MockRunViewResults,
+    MockEntities,
+    /** @deprecated Use {@link MockRunViewResults} instead. */
+    MockRunViewResults as mockRunViewResults,
+    /** @deprecated Use {@link MockEntities} instead. */
+    MockEntities as mockEntities,
+};

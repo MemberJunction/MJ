@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "Name": "Task Assignment",
+    "Description": "Sent when a human task inside a workflow becomes ready for the assigned person to act on — i.e. every prerequisite has completed and the graph is now waiting on them. Delivered by the durable task-graph dispatcher. Distinct from agent-completion notifications: this one is a request for action, and the workflow does not progress until it is answered.",
+    "DefaultInApp": true,
+    "DefaultEmail": false,
+    "DefaultSMS": false,
+    "AllowUserPreference": true,
+    "Icon": "fa-user-check",
+    "Color": "#7B1FA2",
+    "AutoExpireDays": 30,
+    "Priority": 40
+  },
+  "primaryKey": {
+    "ID": "027B362D-5D3E-46AC-9BB8-5F7B3903417D"
+  },
+  "sync": {
+    "lastModified": "2026-08-07T23:58:27.764Z",
+    "checksum": "16752d80d33d3c70c7b96416e4380307a1b2dad3588771739ea6698af6433b35"
+  }
+}

@@ -28,7 +28,7 @@ import path from 'node:path';
 import { readdir, readFile, mkdir, writeFile, copyFile, stat } from 'node:fs/promises';
 import { minimatch } from 'minimatch';
 import AdmZip from 'adm-zip';
-import { transformServerTsconfig, transformAngularTsconfig, stripTscAliasFromPackageJson, removePortFlagsFromPackageJson } from './transforms.js';
+import { TransformServerTsconfig, TransformAngularTsconfig, StripTscAliasFromPackageJson, RemovePortFlagsFromPackageJson } from './transforms.js';
 
 /**
  * A single entry to materialize in the distribution, relative to the distribution root.
@@ -93,6 +93,7 @@ const COMMON_IGNORE: readonly string[] = [
   '.angular/**',
   'internal_only/**',
   'package-lock.json',
+  'pnpm-lock.yaml',
   '.env',
   'mj.config.js',
   '*.output.txt',
@@ -146,6 +147,7 @@ const ROOT_FILES: readonly RootFile[] = [
   { SourceRel: 'distribution.turbo.json', DestRel: 'turbo.json' },
   { SourceRel: 'distribution.config.cjs', DestRel: 'mj.config.cjs' },
   { SourceRel: 'distribution.README.md', DestRel: 'README.md' },
+  { SourceRel: 'LICENSE', DestRel: 'LICENSE' },
   { SourceRel: 'install.config.json', DestRel: 'install.config.json' },
   { SourceRel: 'packages/Update_MemberJunction_Packages_To_Latest.ps1', DestRel: 'Update_MemberJunction_Packages_To_Latest.ps1' },
 ];
@@ -180,7 +182,7 @@ function migrationDirsFor(platform?: DbPlatform): string[] {
  *   A sparse fetch tolerates a path that doesn't exist at the ref, so the older-tag
  *   case (no pack present) is fine either way.
  */
-export function distributionSourcePaths(
+export function DistributionSourcePaths(
   includeMigrations = false,
   migrationPlatform?: DbPlatform,
   includeClaudePack = true,
@@ -193,6 +195,15 @@ export function distributionSourcePaths(
     dirs.push(CLAUDE_PACK_DIST_ROOT);
   }
   return [...dirs, SERVER_BASE_TSCONFIG, ANGULAR_BASE_TSCONFIG, ...ROOT_FILES.map((file) => file.SourceRel)];
+}
+
+/** @deprecated Use {@link DistributionSourcePaths}. */
+export function distributionSourcePaths(
+  includeMigrations = false,
+  migrationPlatform?: DbPlatform,
+  includeClaudePack = true,
+): string[] {
+  return DistributionSourcePaths(includeMigrations, migrationPlatform, includeClaudePack);
 }
 
 /**
@@ -361,8 +372,8 @@ export class DistributionAssembler {
     const tsconfig = await readFile(path.join(absSource, 'tsconfig.json'), 'utf-8');
     const pkg = await readFile(path.join(absSource, 'package.json'), 'utf-8');
     return [
-      { Dest: this.joinPosix(destRel, 'tsconfig.json'), Kind: 'content', Text: transformServerTsconfig(tsconfig, base) },
-      { Dest: this.joinPosix(destRel, 'package.json'), Kind: 'content', Text: stripTscAliasFromPackageJson(pkg) },
+      { Dest: this.joinPosix(destRel, 'tsconfig.json'), Kind: 'content', Text: TransformServerTsconfig(tsconfig, base) },
+      { Dest: this.joinPosix(destRel, 'package.json'), Kind: 'content', Text: StripTscAliasFromPackageJson(pkg) },
     ];
   }
 
@@ -372,8 +383,8 @@ export class DistributionAssembler {
     const tsconfig = await readFile(path.join(absSource, 'tsconfig.json'), 'utf-8');
     const pkg = await readFile(path.join(absSource, 'package.json'), 'utf-8');
     return [
-      { Dest: this.joinPosix(destRel, 'tsconfig.json'), Kind: 'content', Text: transformAngularTsconfig(tsconfig, base) },
-      { Dest: this.joinPosix(destRel, 'package.json'), Kind: 'content', Text: removePortFlagsFromPackageJson(pkg) },
+      { Dest: this.joinPosix(destRel, 'tsconfig.json'), Kind: 'content', Text: TransformAngularTsconfig(tsconfig, base) },
+      { Dest: this.joinPosix(destRel, 'package.json'), Kind: 'content', Text: RemovePortFlagsFromPackageJson(pkg) },
     ];
   }
 

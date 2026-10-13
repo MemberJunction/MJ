@@ -15,7 +15,7 @@
  * `BakerWorkingDB`, so SQLConverter stays free of a `@memberjunction/codegen-lib`
  * dependency — mirroring how `convertMigration` takes an injected transpiler.
  */
-import { convertMigration } from './MigrationConverter.js';
+import { ConvertMigration } from './MigrationConverter.js';
 import type { TSQLToPGTranspiler, ConversionStatus, UnhandledStatement } from './MigrationConverter.js';
 
 /**
@@ -28,8 +28,8 @@ import type { TSQLToPGTranspiler, ConversionStatus, UnhandledStatement } from '.
  */
 export class BakeApplyError extends Error {
   constructor(
-    public readonly fileName: string,
-    public readonly transpiledBody: string,
+    public readonly fileName: string,  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    public readonly transpiledBody: string,  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     message: string,
   ) {
     super(message);
@@ -74,6 +74,15 @@ export interface IncrementalBakerOptions {
   db: BakerWorkingDB;
   /** Target schema for the baked output and `search_path`. Defaults to `__mj`. */
   schema?: string;
+  /**
+   * MJ core schema substituted for `${mjSchema}`. Defaults to `__mj`.
+   *
+   * Separate from `schema`, which is the APP's schema: an Open App migration references core as
+   * `${mjSchema}` and itself as `${flyway:defaultSchema}`, and for every app those differ. The
+   * baked body is EXECUTED against the working database, so an unresolved macro is not cosmetic —
+   * it fails the apply and halts the bake chain (issue #3838).
+   */
+  coreSchema?: string;
 }
 
 export interface BakedMigrationResult {
@@ -99,6 +108,8 @@ export interface BakedMigrationResult {
 }
 
 const DEFAULT_SCHEMA = '__mj';
+/** MJ core's schema — the value `${mjSchema}` resolves to unless the caller overrides it. */
+const DEFAULT_CORE_SCHEMA = '__mj';
 const CODEGEN_SECTION_HEADER = '-- ===================== CodeGen (native PG, baked) =====================';
 
 /** A baseline migration (`B<timestamp>__…`) — a full from-scratch schema snapshot. Mirrors the
@@ -109,9 +120,11 @@ function isBaselineFile(fileName: string): boolean {
 
 export class IncrementalBaker {
   private readonly schema: string;
+  private readonly coreSchema: string;
 
   constructor(private readonly opts: IncrementalBakerOptions) {
     this.schema = opts.schema ?? DEFAULT_SCHEMA;
+    this.coreSchema = opts.coreSchema ?? DEFAULT_CORE_SCHEMA;
   }
 
   /**
@@ -139,10 +152,11 @@ export class IncrementalBaker {
    * gaps (`needs-hand-authoring`); they aren't referenced by base views/sprocs, so the capture is
    * complete regardless and the caller authors them into the final `.pg.sql`.
    */
-  async bakeMigration(ssSql: string, fileName: string, committedPgSql?: string): Promise<BakedMigrationResult> {
-    const conv = await convertMigration(ssSql, fileName, {
+  async BakeMigration(ssSql: string, fileName: string, committedPgSql?: string): Promise<BakedMigrationResult> {
+    const conv = await ConvertMigration(ssSql, fileName, {
       transpiler: this.opts.transpiler,
       schema: this.schema,
+      coreSchema: this.coreSchema,
       includeHeader: false,
     });
     const handBody = conv.pgSQL.trim();
@@ -199,6 +213,11 @@ export class IncrementalBaker {
     });
   }
 
+  /** @deprecated Use {@link BakeMigration}. */
+  async bakeMigration(ssSql: string, fileName: string, committedPgSql?: string): Promise<BakedMigrationResult> {
+    return this.BakeMigration(ssSql, fileName, committedPgSql);
+  }
+
   /**
    * Run one bake path's working-DB apply/capture; on ANY failure, rethrow it as a BakeApplyError
    * carrying `preservedBody` so the CLI can still write the transpiled artifact to `.needs-hand`
@@ -223,7 +242,7 @@ export class IncrementalBaker {
     const captured: string[] = [];
     for (const entity of entities) {
       const result = await this.opts.db.captureEntity(entity);
-      captured.push(stripVolatileHeaders(result.sql).trim());
+      captured.push(StripVolatileHeaders(result.sql).trim());
     }
     return captured;
   }
@@ -238,9 +257,13 @@ export class IncrementalBaker {
       parts.push(CODEGEN_SECTION_HEADER);
       parts.push(captured.join('\n\n'));
     }
-    // Belt-and-suspenders: convertMigration already substitutes the schema; native capture
+    // Belt-and-suspenders: convertMigration already substitutes both schemas; native capture
     // emits literal `__mj`. Replace any stray macro so the baked file is fully literal.
-    return parts.join('\n\n').replaceAll('${flyway:defaultSchema}', this.schema) + '\n';
+    return parts
+      .join('\n\n')
+      // Replacement functions, not strings — see MigrationConverter.assemblePgSQL (issue #3171).
+      .replaceAll('${flyway:defaultSchema}', () => this.schema)
+      .replaceAll('${mjSchema}', () => this.coreSchema) + '\n';
   }
 
   private bakedHeader(fileName: string): string {
@@ -271,9 +294,14 @@ export class IncrementalBaker {
  * baked-mode flag in `PostgreSQLCodeGenProvider.generateSQLFileHeader` (§6.4); doing it here
  * keeps the change contained to the converter and is provider-agnostic.
  */
-export function stripVolatileHeaders(sql: string): string {
+export function StripVolatileHeaders(sql: string): string {
   return sql
     .split('\n')
     .filter((line) => !/^\s*--\s*Generated at:/i.test(line))
     .join('\n');
+}
+
+/** @deprecated Use {@link StripVolatileHeaders}. */
+export function stripVolatileHeaders(sql: string): string {
+  return StripVolatileHeaders(sql);
 }

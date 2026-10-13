@@ -14,9 +14,11 @@
  * @module @memberjunction/standards
  */
 
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { CheckContext, CheckResult, StandardCheck, Violation } from '../types.js';
+import { HasMarkerNear } from '../lib/markers.js';
+import { FindPackageDirs, FindSourceFiles } from '../lib/walk.js';
 
 /** The layers a package can declare. */
 export type UILayer = 'runtime' | 'widgets' | 'surface' | 'shell';
@@ -73,8 +75,7 @@ const FORBIDDEN_PATTERNS: Record<UILayer, Array<[RegExp, string, string]>> = {
     widgets: [
         [/\bnew\s+RunViews?\s*\(\s*\)/, 'new RunView()', 'binds the global provider — use RunView.FromMetadataProvider(this.ProviderToUse)'],
         [/\bnew\s+RunQuery\s*\(\s*\)/, 'new RunQuery()', 'binds the global provider — use this.RunQueryToUse'],
-        [/\bnew\s+RunReport\s*\(\s*\)/, 'new RunReport()', 'binds the global provider — use this.RunReportToUse'],
-        [/\bnew\s+Metadata\s*\(\s*\)/, 'new Metadata()', 'binds the global provider — use this.ProviderToUse'], // global-provider-ok: detection-pattern literal, not a call site
+        [/\bnew\s+Metadata\s*\(\s*\)/, 'new Metadata()', 'binds the global provider — use this.ProviderToUse'], // global-provider-ok: this is the pattern TABLE (a documentation string), not a call site
     ],
     surface: [],
     shell: [],
@@ -171,55 +172,17 @@ export function ParseImports(source: string): ImportRecord[] {
  * would let a marker drift away from the thing it excuses.
  */
 export function IsAllowed(lines: string[], lineNumber: number): boolean {
-    const own = lines[lineNumber - 1] ?? '';
-    const above = lineNumber >= 2 ? (lines[lineNumber - 2] ?? '') : '';
-    return own.includes(ALLOW_MARKER) || above.includes(ALLOW_MARKER);
+    return HasMarkerNear(lines, lineNumber, ALLOW_MARKER);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Filesystem walk
 // ─────────────────────────────────────────────────────────────────────────────
 
-function findPackageDirs(root: string): string[] {
-    const found: string[] = [];
-    const walk = (dir: string): void => {
-        let entries;
-        try {
-            entries = readdirSync(dir, { withFileTypes: true });
-        } catch {
-            return;
-        }
-        if (entries.some((e) => e.isFile() && e.name === 'package.json')) found.push(dir);
-        for (const entry of entries) {
-            if (!entry.isDirectory() || SKIP_DIRS.has(entry.name)) continue;
-            walk(join(dir, entry.name));
-        }
-    };
-    walk(root);
-    return found;
-}
+const findPackageDirs = (root: string): string[] => FindPackageDirs(root, { SkipDirs: SKIP_DIRS });
 
-function findSourceFiles(packageDir: string): string[] {
-    const found: string[] = [];
-    const walk = (dir: string): void => {
-        let entries;
-        try {
-            entries = readdirSync(dir, { withFileTypes: true });
-        } catch {
-            return;
-        }
-        for (const entry of entries) {
-            const full = join(dir, entry.name);
-            if (entry.isDirectory()) {
-                if (!SKIP_DIRS.has(entry.name)) walk(full);
-            } else if (SOURCE_EXTENSIONS.some((ext) => entry.name.endsWith(ext))) {
-                found.push(full);
-            }
-        }
-    };
-    walk(packageDir);
-    return found;
-}
+const findSourceFiles = (packageDir: string): string[] =>
+    FindSourceFiles(packageDir, { SkipDirs: SKIP_DIRS, Extensions: SOURCE_EXTENSIONS });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The check
@@ -232,18 +195,11 @@ function checkPackage(packageDir: string, layer: UILayer, repoRoot: string, pack
         violations.push({ File: relative(repoRoot, file), Line: line, Message: message, Package: packageName });
     };
 
-    const manifestPath = join(packageDir, 'package.json');
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
-        dependencies?: Record<string, string>;
-        peerDependencies?: Record<string, string>;
-    };
-    const declared = { ...(manifest.dependencies ?? {}), ...(manifest.peerDependencies ?? {}) };
-    for (const dep of Object.keys(declared)) {
-        for (const pattern of FORBIDDEN_DEPS[layer]) {
-            if (pattern.test(dep)) add(manifestPath, 0, `declares "${dep}" — a "${layer}" package must not depend on it`);
-        }
-    }
-
+    // Sources first: the manifest half needs to know which forbidden imports carry a reviewed
+    // exception, because the dependency-check gate (Knip) requires every real import to be
+    // declared — an excused import therefore FORCES a declaration, and flagging that declaration
+    // would put the two gates in deadlock.
+    const excusedSpecifiers = new Set<string>();
     for (const file of findSourceFiles(packageDir)) {
         const raw = readFileSync(file, 'utf8');
         const source = StripComments(raw);
@@ -252,7 +208,10 @@ function checkPackage(packageDir: string, layer: UILayer, repoRoot: string, pack
         const codeLines = source.split('\n');
 
         for (const { Specifier, Names, Line } of ParseImports(source)) {
-            if (IsAllowed(lines, Line)) continue;
+            if (IsAllowed(lines, Line)) {
+                if (FORBIDDEN_MODULES[layer].some(([pattern]) => pattern.test(Specifier))) excusedSpecifiers.add(Specifier);
+                continue;
+            }
             for (const [pattern, reason] of FORBIDDEN_MODULES[layer]) {
                 if (pattern.test(Specifier)) add(file, Line, `imports "${Specifier}" — ${reason}`);
             }
@@ -265,6 +224,22 @@ function checkPackage(packageDir: string, layer: UILayer, repoRoot: string, pack
             codeLines.forEach((text, index) => {
                 if (pattern.test(text) && !IsAllowed(lines, index + 1)) add(file, index + 1, `uses ${label} — ${reason}`);
             });
+        }
+    }
+
+    const manifestPath = join(packageDir, 'package.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+        dependencies?: Record<string, string>;
+        peerDependencies?: Record<string, string>;
+    };
+    const declared = { ...(manifest.dependencies ?? {}), ...(manifest.peerDependencies ?? {}) };
+    for (const dep of Object.keys(declared)) {
+        for (const pattern of FORBIDDEN_DEPS[layer]) {
+            if (!pattern.test(dep)) continue;
+            // A declaration backing a marker-excused import inherits the exception; an unexcused
+            // import of the same module still flags on its own line, so nothing slips through.
+            const backsExcusedImport = [...excusedSpecifiers].some((s) => s === dep || s.startsWith(`${dep}/`));
+            if (!backsExcusedImport) add(manifestPath, 0, `declares "${dep}" — a "${layer}" package must not depend on it`);
         }
     }
 

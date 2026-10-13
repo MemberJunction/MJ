@@ -6,9 +6,9 @@
  * @module @memberjunction/ai-agents
  */
 import { PipeValue, PipelineOperator } from './pipeline.types';
-import { getValue, getValues } from './path';
-import { parsePredicate, evaluatePredicate } from './predicate';
-import { valueToText } from './coerce';
+import { GetValue, GetValues } from './path';
+import { ParsePredicate, EvaluatePredicate } from './predicate';
+import { ValueToText } from './coerce';
 
 // ─── helpers ───
 
@@ -87,7 +87,7 @@ function compareValues(a: PipeValue | undefined, b: PipeValue | undefined): numb
 }
 
 function toLines(input: PipeValue): string[] {
-    return valueToText(input).split('\n');
+    return ValueToText(input).split('\n');
 }
 
 type AggOp = 'sum' | 'avg' | 'min' | 'max';
@@ -109,8 +109,8 @@ const Where: PipelineOperator = {
     argsHint: 'predicate string (==, !=, <, >, <=, >=, contains, startsWith, endsWith, matches, in; and/or/not)',
     apply(input, args) {
         const arr = requireArray(input, 'where');
-        const ast = parsePredicate(asString(args, 'where'));
-        return arr.filter((el) => evaluatePredicate(ast, el));
+        const ast = ParsePredicate(asString(args, 'where'));
+        return arr.filter((el) => EvaluatePredicate(ast, el));
     },
 };
 
@@ -122,10 +122,10 @@ const Select: PipelineOperator = {
         const fields = (Array.isArray(args) ? args : [args]).map((f) => asString(f, 'select'));
         const project = (el: PipeValue): PipeValue => {
             if (fields.length === 1) {
-                return getValue(el, fields[0]) ?? null;
+                return GetValue(el, fields[0]) ?? null;
             }
             return fields.reduce<{ [k: string]: PipeValue }>((o, f) => {
-                o[lastSegment(f)] = getValue(el, f) ?? null;
+                o[lastSegment(f)] = GetValue(el, f) ?? null;
                 return o;
             }, {});
         };
@@ -136,7 +136,7 @@ const Select: PipelineOperator = {
         // fields exist on the outer object, is the classic "forgot to extract the collection"
         // mistake — fail loudly with the extraction hint instead of silently returning null (which
         // would only surface as a confusing error one stage later).
-        const allMissing = fields.every((f) => getValue(input, f) === undefined);
+        const allMissing = fields.every((f) => GetValue(input, f) === undefined);
         if (allMissing && input !== null && typeof input === 'object' && Object.values(input).some(Array.isArray)) {
             throw new Error(`"select" found none of [${fields.join(', ')}] on this value.${nonArrayHint(input)}`);
         }
@@ -155,7 +155,7 @@ const Sort: PipelineOperator = {
             for (const key of keys) {
                 const desc = key.startsWith('-');
                 const path = desc ? key.slice(1) : key;
-                const c = compareValues(getValue(a, path), getValue(b, path));
+                const c = compareValues(GetValue(a, path), GetValue(b, path));
                 if (c !== 0) {
                     return desc ? -c : c;
                 }
@@ -208,7 +208,7 @@ const Distinct: PipelineOperator = {
         const field = typeof args === 'string' && args.trim() !== '' ? args : null;
         const seen = new Set<string>();
         const keyOf = (el: PipeValue): string =>
-            field ? valueToText(getValue(el, field) ?? null) : valueToText(el);
+            field ? ValueToText(GetValue(el, field) ?? null) : ValueToText(el);
         return arr.filter((el) => {
             const k = keyOf(el);
             if (seen.has(k)) return false;
@@ -257,9 +257,9 @@ const GroupBy: PipelineOperator = {
         for (const el of arr) {
             const key: { [k: string]: PipeValue } = {};
             for (const f of byFields) {
-                key[lastSegment(f)] = getValue(el, f) ?? null;
+                key[lastSegment(f)] = GetValue(el, f) ?? null;
             }
-            const mapKey = valueToText(byFields.map((f) => getValue(el, f) ?? null));
+            const mapKey = ValueToText(byFields.map((f) => GetValue(el, f) ?? null));
             const existing = groups.get(mapKey);
             if (existing) {
                 existing.rows.push(el);
@@ -271,7 +271,7 @@ const GroupBy: PipelineOperator = {
         return [...groups.values()].map(({ key, rows }) => {
             const out: { [k: string]: PipeValue } = { ...key, count: rows.length };
             for (const { op, field } of aggSpecs) {
-                const nums = rows.map((r) => Number(getValue(r, field))).filter((n) => Number.isFinite(n));
+                const nums = rows.map((r) => Number(GetValue(r, field))).filter((n) => Number.isFinite(n));
                 out[`${op}_${lastSegment(field)}`] = applyAggregate(op, nums);
             }
             return out;
@@ -284,7 +284,7 @@ const JsonPath: PipelineOperator = {
     description: 'Extract value(s) at a JSONPath (member/index/[*]/.. ). One match → the value; many → an array.',
     argsHint: 'a JSONPath string, e.g. "$.Results[*].Status"',
     apply(input, args) {
-        const matches = getValues(input, asString(args, 'jsonpath'));
+        const matches = GetValues(input, asString(args, 'jsonpath'));
         if (matches.length === 0) return null;
         return matches.length === 1 ? matches[0] : matches;
     },
@@ -318,7 +318,7 @@ const Grep: PipelineOperator = {
         }
         const keep = (line: string): boolean => regex.test(line) !== invert;
         if (Array.isArray(input)) {
-            return input.filter((el) => keep(valueToText(el)));
+            return input.filter((el) => keep(ValueToText(el)));
         }
         return toLines(input).filter(keep).join('\n');
     },

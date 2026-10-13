@@ -2538,3 +2538,26 @@
     font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
+
+.panel-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--mj-space-2);
+  margin-bottom: var(--mj-space-4);
+}
+
+.panel-title-row .panel-title {
+  margin-bottom: 0;
+}
+
+.panel-title-actions {
+  display: flex;
+  gap: var(--mj-space-2);
+}
+
+.panel-error {
+  margin: var(--mj-space-2) 0 0;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-status-error);
+}

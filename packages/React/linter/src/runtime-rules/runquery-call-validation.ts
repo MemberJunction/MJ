@@ -1,10 +1,10 @@
-import { traverse, NodePath, isNullOrUndefined, isStringLike, isNumberLike, isObjectLike } from '../lint-utils';
+import { Traverse, NodePath, IsNullOrUndefined, IsStringLike, IsNumberLike, IsObjectLike } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec, ComponentQueryDataRequirement, ComponentQueryParameterValue } from '@memberjunction/interactive-component-types';
-import { mapSQLTypeToJSType, TypeContext } from '../type-context';
+import { MapSQLTypeToJSType, TypeContext } from '../type-context';
 
 /**
  * Rule: runquery-call-validation
@@ -113,7 +113,7 @@ function collectUseStateInits(
 ): Map<string, { category: string; description: string }> {
   const stateInits = new Map<string, { category: string; description: string }>();
 
-  traverse(ast, {
+  Traverse(ast, {
     VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
       if (!t.isArrayPattern(path.node.id)) return;
       const init = path.node.init;
@@ -195,7 +195,7 @@ function validateRunQueryPropertyType(
   violations: Violation[],
 ): void {
   if (propName === 'QueryID' || propName === 'QueryName' || propName === 'CategoryID' || propName === 'CategoryPath') {
-    if (!isStringLike(value)) {
+    if (!IsStringLike(value)) {
       const exampleMap: Record<string, string> = {
         QueryID: `"550e8400-e29b-41d4-a716-446655440000"`,
         QueryName: `"Sales by Region"`,
@@ -213,7 +213,7 @@ function validateRunQueryPropertyType(
       });
     }
   } else if (propName === 'Parameters') {
-    if (!isObjectLike(value)) {
+    if (!IsObjectLike(value)) {
       violations.push({
         rule: RULE_NAME,
         severity: 'critical',
@@ -225,7 +225,7 @@ function validateRunQueryPropertyType(
       });
     }
   } else if (propName === 'MaxRows' || propName === 'StartRow') {
-    if (!isNumberLike(value)) {
+    if (!IsNumberLike(value)) {
       violations.push({
         rule: RULE_NAME,
         severity: 'critical',
@@ -578,7 +578,7 @@ function validateParameterValueTypes(
     const extParam = param as { name: string; type?: string };
     if (extParam.type) {
       paramTypes.set(param.name.toLowerCase(), {
-        type: mapSQLTypeToJSType(extParam.type),
+        type: MapSQLTypeToJSType(extParam.type),
         sqlType: extParam.type,
       });
     }
@@ -775,7 +775,7 @@ export class RunQueryCallValidationRule extends BaseLintRule {
     // Pre-collect useState initializers for type checking
     const stateInits = collectUseStateInits(ast);
 
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
         if (!isRunQueryCallee(path.node.callee)) return;
 

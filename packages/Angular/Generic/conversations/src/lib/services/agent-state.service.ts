@@ -31,7 +31,12 @@ export class AgentStateService implements OnDestroy {
   private readonly minimumPollCycles = 3;
 
   // Public observable streams
-  public readonly activeAgents$ = this._activeAgents$.asObservable();
+  public readonly ActiveAgents$ = this._activeAgents$.asObservable();
+
+  /** @deprecated Use {@link ActiveAgents$}. */
+  public get activeAgents$() {
+    return this.ActiveAgents$;
+  }
 
   private _provider: IMetadataProvider | null = null;
 
@@ -49,7 +54,7 @@ export class AgentStateService implements OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.stopPolling();
+    this.StopPolling();
   }
 
   /**
@@ -57,9 +62,9 @@ export class AgentStateService implements OnDestroy {
    * @param currentUser The current user context
    * @param conversationId Optional conversation ID to filter by
    */
-  startPolling(currentUser: UserInfo, conversationId?: string): void {
+  StartPolling(currentUser: UserInfo, conversationId?: string): void {
     this.currentUser = currentUser;
-    this.stopPolling();
+    this.StopPolling();
     this.pollCycleCount = 0;
 
     // Initial load
@@ -71,44 +76,69 @@ export class AgentStateService implements OnDestroy {
       .subscribe();
   }
 
+  /** @deprecated Use {@link StartPolling}. */
+  startPolling(currentUser: UserInfo, conversationId?: string): void {
+    return this.StartPolling(currentUser, conversationId);
+  }
+
   /**
    * Stops polling for active agents
    */
-  stopPolling(): void {
+  StopPolling(): void {
     if (this.pollSubscription) {
       this.pollSubscription.unsubscribe();
       this.pollSubscription = undefined;
     }
   }
 
+  /** @deprecated Use {@link StopPolling}. */
+  stopPolling(): void {
+    return this.StopPolling();
+  }
+
   /**
    * Gets active agents as an observable
    * @param conversationId Optional conversation ID to filter by
    */
-  getActiveAgents(conversationId?: string): Observable<AgentWithStatus[]> {
+  GetActiveAgents(conversationId?: string): Observable<AgentWithStatus[]> {
     if (conversationId) {
-      return this.activeAgents$.pipe(
+      return this.ActiveAgents$.pipe(
         map(agents => agents.filter(a => UUIDsEqual(a.run.ConversationID, conversationId))),
         shareReplay(1)
       );
     }
-    return this.activeAgents$;
+    return this.ActiveAgents$;
+  }
+
+  /** @deprecated Use {@link GetActiveAgents}. */
+  getActiveAgents(conversationId?: string): Observable<AgentWithStatus[]> {
+    return this.GetActiveAgents(conversationId);
   }
 
   /**
    * Gets a specific agent by ID
    * @param agentRunId The agent run ID
    */
-  getAgent(agentRunId: string): AgentWithStatus | undefined {
+  GetAgent(agentRunId: string): AgentWithStatus | undefined {
     return this._activeAgents$.value.find(a => UUIDsEqual(a.run.ID, agentRunId));
+  }
+
+  /** @deprecated Use {@link GetAgent}. */
+  getAgent(agentRunId: string): AgentWithStatus | undefined {
+    return this.GetAgent(agentRunId);
   }
 
   /**
    * Manually refreshes active agents
    * @param conversationId Optional conversation ID to filter by
    */
-  async refresh(conversationId?: string): Promise<void> {
+  async Refresh(conversationId?: string): Promise<void> {
     await this.loadActiveAgents(conversationId);
+  }
+
+  /** @deprecated Use {@link Refresh}. */
+  async refresh(conversationId?: string): Promise<void> {
+    return this.Refresh(conversationId);
   }
 
   /**
@@ -155,7 +185,7 @@ export class AgentStateService implements OnDestroy {
         // before the server has created the agent run record.
         if (runs.length === 0 && this.pollSubscription && this.pollCycleCount >= this.minimumPollCycles) {
           LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService - No active agents after ${this.pollCycleCount} cycles, stopping polling`, verboseOnly: true});
-          this.stopPolling();
+          this.StopPolling();
         }
       }
     } catch (error) {
@@ -241,13 +271,13 @@ export class AgentStateService implements OnDestroy {
    * Cancels an agent run
    * @param agentRunId The agent run ID to cancel
    */
-  async cancelAgent(agentRunId: string): Promise<boolean> {
+  async CancelAgent(agentRunId: string): Promise<boolean> {
     if (!this.currentUser) {
       return false;
     }
 
     try {
-      const agent = this.getAgent(agentRunId);
+      const agent = this.GetAgent(agentRunId);
       if (!agent) {
         return false;
       }
@@ -257,7 +287,7 @@ export class AgentStateService implements OnDestroy {
 
       if (saved) {
         // Refresh the active agents list
-        await this.refresh();
+        await this.Refresh();
         return true;
       }
     } catch (error) {
@@ -267,16 +297,26 @@ export class AgentStateService implements OnDestroy {
     return false;
   }
 
+  /** @deprecated Use {@link CancelAgent}. */
+  async cancelAgent(agentRunId: string): Promise<boolean> {
+    return this.CancelAgent(agentRunId);
+  }
+
   /**
    * Updates the poll interval
    * @param milliseconds The new poll interval in milliseconds
    */
-  setPollInterval(milliseconds: number): void {
+  SetPollInterval(milliseconds: number): void {
     this.pollInterval = milliseconds;
 
     // Restart polling if currently active
     if (this.pollSubscription && this.currentUser) {
-      this.startPolling(this.currentUser);
+      this.StartPolling(this.currentUser);
     }
+  }
+
+  /** @deprecated Use {@link SetPollInterval}. */
+  setPollInterval(milliseconds: number): void {
+    return this.SetPollInterval(milliseconds);
   }
 }

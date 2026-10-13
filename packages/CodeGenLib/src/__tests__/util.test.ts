@@ -39,7 +39,7 @@ vi.mock('../Misc/status_logging', () => ({
     logStatus: vi.fn()
 }));
 
-import { makeDir, makeDirs, logIf, sortBySequenceAndCreatedAt, sortRelatedEntities } from '../Misc/util';
+import { MakeDir, MakeDirs, LogIf, SortBySequenceAndCreatedAt, SortRelatedEntities } from '../Misc/util';
 
 describe('makeDir', () => {
     beforeEach(() => {
@@ -48,19 +48,19 @@ describe('makeDir', () => {
 
     it('should create directory if it does not exist', () => {
         (fs.existsSync as ReturnType<typeof vi.fn>).mockReturnValue(false);
-        makeDir('/tmp/test-dir');
+        MakeDir('/tmp/test-dir');
         expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/test-dir', { recursive: true });
     });
 
     it('should not create directory if it already exists', () => {
         (fs.existsSync as ReturnType<typeof vi.fn>).mockReturnValue(true);
-        makeDir('/tmp/existing-dir');
+        MakeDir('/tmp/existing-dir');
         expect(fs.mkdirSync).not.toHaveBeenCalled();
     });
 
     it('should use recursive option', () => {
         (fs.existsSync as ReturnType<typeof vi.fn>).mockReturnValue(false);
-        makeDir('/tmp/deep/nested/dir');
+        MakeDir('/tmp/deep/nested/dir');
         expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/deep/nested/dir', { recursive: true });
     });
 });
@@ -72,12 +72,12 @@ describe('makeDirs', () => {
 
     it('should create all specified directories', () => {
         (fs.existsSync as ReturnType<typeof vi.fn>).mockReturnValue(false);
-        makeDirs(['/tmp/dir1', '/tmp/dir2', '/tmp/dir3']);
+        MakeDirs(['/tmp/dir1', '/tmp/dir2', '/tmp/dir3']);
         expect(fs.mkdirSync).toHaveBeenCalledTimes(3);
     });
 
     it('should handle empty array', () => {
-        makeDirs([]);
+        MakeDirs([]);
         expect(fs.mkdirSync).not.toHaveBeenCalled();
     });
 
@@ -85,7 +85,7 @@ describe('makeDirs', () => {
         (fs.existsSync as ReturnType<typeof vi.fn>)
             .mockReturnValueOnce(true)
             .mockReturnValueOnce(false);
-        makeDirs(['/tmp/exists', '/tmp/new']);
+        MakeDirs(['/tmp/exists', '/tmp/new']);
         expect(fs.mkdirSync).toHaveBeenCalledTimes(1);
     });
 });
@@ -102,22 +102,22 @@ describe('logIf', () => {
     });
 
     it('should log when shouldLog is true', () => {
-        logIf(true, 'test message');
+        LogIf(true, 'test message');
         expect(consoleSpy).toHaveBeenCalledWith('test message');
     });
 
     it('should not log when shouldLog is false', () => {
-        logIf(false, 'hidden message');
+        LogIf(false, 'hidden message');
         expect(consoleSpy).not.toHaveBeenCalled();
     });
 
     it('should pass multiple arguments to console.log', () => {
-        logIf(true, 'msg', 123, { key: 'value' });
+        LogIf(true, 'msg', 123, { key: 'value' });
         expect(consoleSpy).toHaveBeenCalledWith('msg', 123, { key: 'value' });
     });
 
     it('should handle empty call with true', () => {
-        logIf(true);
+        LogIf(true);
         expect(consoleSpy).toHaveBeenCalled();
     });
 });
@@ -129,7 +129,7 @@ describe('sortBySequenceAndCreatedAt', () => {
             { Sequence: 1, Name: 'A' },
             { Sequence: 2, Name: 'B' }
         ];
-        const result = sortBySequenceAndCreatedAt(items);
+        const result = SortBySequenceAndCreatedAt(items);
         expect(result[0].Name).toBe('A');
         expect(result[1].Name).toBe('B');
         expect(result[2].Name).toBe('C');
@@ -143,7 +143,7 @@ describe('sortBySequenceAndCreatedAt', () => {
             { Sequence: 1, Name: 'B', __mj_CreatedAt: new Date('2025-01-01') }, // earlier date but later name
             { Sequence: 1, Name: 'A', __mj_CreatedAt: new Date('2025-02-01') }  // later date but earlier name
         ];
-        const result = sortBySequenceAndCreatedAt(items);
+        const result = SortBySequenceAndCreatedAt(items);
         expect(result[0].Name).toBe('A'); // alphabetical wins; date is irrelevant
         expect(result[1].Name).toBe('B');
     });
@@ -154,18 +154,18 @@ describe('sortBySequenceAndCreatedAt', () => {
             { Sequence: 1, Name: 'A' }
         ];
         const original = [...items];
-        sortBySequenceAndCreatedAt(items);
+        SortBySequenceAndCreatedAt(items);
         expect(items[0]).toEqual(original[0]);
     });
 
     it('should handle empty array', () => {
-        const result = sortBySequenceAndCreatedAt([]);
+        const result = SortBySequenceAndCreatedAt([]);
         expect(result).toEqual([]);
     });
 
     it('should handle single element', () => {
         const items = [{ Sequence: 1, Name: 'A' }];
-        const result = sortBySequenceAndCreatedAt(items);
+        const result = SortBySequenceAndCreatedAt(items);
         expect(result).toHaveLength(1);
         expect(result[0].Name).toBe('A');
     });
@@ -178,7 +178,7 @@ describe('sortBySequenceAndCreatedAt', () => {
             { Sequence: 1, Name: 'NoDate' },
             { Sequence: 1, Name: 'HasDate', __mj_CreatedAt: new Date('2025-01-01') }
         ];
-        const result = sortBySequenceAndCreatedAt(items);
+        const result = SortBySequenceAndCreatedAt(items);
         expect(result[0].Name).toBe('HasDate'); // alphabetical: HasDate < NoDate
         expect(result[1].Name).toBe('NoDate');
     });
@@ -188,7 +188,7 @@ describe('sortBySequenceAndCreatedAt', () => {
             { Sequence: 1, Name: 'Zebra' },
             { Sequence: 1, Name: 'Alpha' }
         ];
-        const result = sortBySequenceAndCreatedAt(items);
+        const result = SortBySequenceAndCreatedAt(items);
         expect(result[0].Name).toBe('Alpha');
         expect(result[1].Name).toBe('Zebra');
     });
@@ -201,7 +201,7 @@ describe('sortBySequenceAndCreatedAt', () => {
             { Sequence: 1, Name: 'B', __mj_CreatedAt: new Date('2025-01-01') }, // earlier date
             { Sequence: 2, Name: 'D' }
         ];
-        const result = sortBySequenceAndCreatedAt(items);
+        const result = SortBySequenceAndCreatedAt(items);
         // Within Seq 1, alphabetical (date ignored): A before B
         expect(result[0].Name).toBe('A');
         expect(result[1].Name).toBe('B');
@@ -215,7 +215,7 @@ describe('sortBySequenceAndCreatedAt', () => {
             { Sequence: 0, RelatedEntityJoinField: 'LastRunID', __mj_CreatedAt: new Date('2025-01-01') },
             { Sequence: 0, RelatedEntityJoinField: 'ParentRunID', __mj_CreatedAt: new Date('2025-01-01') }
         ];
-        const result = sortBySequenceAndCreatedAt(items);
+        const result = SortBySequenceAndCreatedAt(items);
         expect(result[0].RelatedEntityJoinField).toBe('LastRunID');
         expect(result[1].RelatedEntityJoinField).toBe('ParentRunID');
     });
@@ -225,7 +225,7 @@ describe('sortBySequenceAndCreatedAt', () => {
             { Sequence: 0, ID: 'BBB-222' },
             { Sequence: 0, ID: 'AAA-111' }
         ];
-        const result = sortBySequenceAndCreatedAt(items);
+        const result = SortBySequenceAndCreatedAt(items);
         expect(result[0].ID).toBe('AAA-111');
         expect(result[1].ID).toBe('BBB-222');
     });
@@ -236,7 +236,7 @@ describe('sortBySequenceAndCreatedAt', () => {
             { Sequence: -1, Name: 'Negative' },
             { Sequence: 1, Name: 'Positive' }
         ];
-        const result = sortBySequenceAndCreatedAt(items);
+        const result = SortBySequenceAndCreatedAt(items);
         expect(result[0].Name).toBe('Negative');
         expect(result[1].Name).toBe('Zero');
         expect(result[2].Name).toBe('Positive');
@@ -249,7 +249,7 @@ describe('sortRelatedEntities', () => {
             { Sequence: 2, RelatedEntity: 'B', RelatedEntityJoinField: 'BID' },
             { Sequence: 1, RelatedEntity: 'A', RelatedEntityJoinField: 'AID' }
         ];
-        const result = sortRelatedEntities(items);
+        const result = SortRelatedEntities(items);
         expect(result[0].RelatedEntity).toBe('A');
         expect(result[1].RelatedEntity).toBe('B');
     });
@@ -263,7 +263,7 @@ describe('sortRelatedEntities', () => {
             { Sequence: 1, RelatedEntity: 'B', RelatedEntityJoinField: 'BID', __mj_CreatedAt: new Date('2026-03-23') }, // earlier date
             { Sequence: 1, RelatedEntity: 'A', RelatedEntityJoinField: 'AID', __mj_CreatedAt: new Date('2026-03-24') }  // later date
         ];
-        const result = sortRelatedEntities(items);
+        const result = SortRelatedEntities(items);
         expect(result[0].RelatedEntity).toBe('A'); // alphabetical wins
         expect(result[1].RelatedEntity).toBe('B');
     });
@@ -286,8 +286,8 @@ describe('sortRelatedEntities', () => {
             { Sequence: 1, RelatedEntity: 'External Indexes', RelatedEntityJoinField: 'SearchScopeID', ID: 'id-ext', __mj_CreatedAt: sameMillisecond },
             { Sequence: 1, RelatedEntity: 'Permissions', RelatedEntityJoinField: 'SearchScopeID', ID: 'id-prm', __mj_CreatedAt: sameMillisecond }
         ];
-        const devSorted = sortRelatedEntities(devEnvironment).map(r => r.ID);
-        const cleanSorted = sortRelatedEntities(cleanInstallEnvironment).map(r => r.ID);
+        const devSorted = SortRelatedEntities(devEnvironment).map(r => r.ID);
+        const cleanSorted = SortRelatedEntities(cleanInstallEnvironment).map(r => r.ID);
         expect(cleanSorted).toEqual(devSorted);
         // And the result is alphabetical by RelatedEntity name
         expect(devSorted).toEqual(['id-ent', 'id-ext', 'id-prm', 'id-tst']);
@@ -299,7 +299,7 @@ describe('sortRelatedEntities', () => {
             { Sequence: 1, RelatedEntity: 'Entity Organic Key Related Entities', RelatedEntityJoinField: 'RelatedEntityID', __mj_CreatedAt: sameDate },
             { Sequence: 1, RelatedEntity: 'Entity Organic Keys', RelatedEntityJoinField: 'EntityID', __mj_CreatedAt: sameDate }
         ];
-        const result = sortRelatedEntities(items);
+        const result = SortRelatedEntities(items);
         expect(result[0].RelatedEntity).toBe('Entity Organic Key Related Entities');
         expect(result[1].RelatedEntity).toBe('Entity Organic Keys');
     });
@@ -310,7 +310,7 @@ describe('sortRelatedEntities', () => {
             { Sequence: 1, RelatedEntity: 'Same Entity', RelatedEntityJoinField: 'ParentRunID', __mj_CreatedAt: sameDate },
             { Sequence: 1, RelatedEntity: 'Same Entity', RelatedEntityJoinField: 'LastRunID', __mj_CreatedAt: sameDate }
         ];
-        const result = sortRelatedEntities(items);
+        const result = SortRelatedEntities(items);
         expect(result[0].RelatedEntityJoinField).toBe('LastRunID');
         expect(result[1].RelatedEntityJoinField).toBe('ParentRunID');
     });
@@ -321,7 +321,7 @@ describe('sortRelatedEntities', () => {
             { Sequence: 1, RelatedEntity: 'Same', RelatedEntityJoinField: 'SameField', ID: 'ZZZ', __mj_CreatedAt: sameDate },
             { Sequence: 1, RelatedEntity: 'Same', RelatedEntityJoinField: 'SameField', ID: 'AAA', __mj_CreatedAt: sameDate }
         ];
-        const result = sortRelatedEntities(items);
+        const result = SortRelatedEntities(items);
         expect(result[0].ID).toBe('AAA');
         expect(result[1].ID).toBe('ZZZ');
     });
@@ -332,12 +332,12 @@ describe('sortRelatedEntities', () => {
             { Sequence: 1, RelatedEntity: 'A', RelatedEntityJoinField: 'AID' }
         ];
         const original = [...items];
-        sortRelatedEntities(items);
+        SortRelatedEntities(items);
         expect(items[0]).toEqual(original[0]);
     });
 
     it('should handle empty array', () => {
-        const result = sortRelatedEntities([]);
+        const result = SortRelatedEntities([]);
         expect(result).toEqual([]);
     });
 });

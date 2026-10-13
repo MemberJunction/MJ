@@ -1,11 +1,12 @@
-import { encodePcm16Wav, PeakAccumulator } from './realtime-pcm-wav';
+import { EncodePcm16Wav, PeakAccumulator } from './realtime-pcm-wav';
 
 /**
  * Browser-side audio recorder for a CLIENT-DIRECT realtime voice session.
  *
- * Mixes the user's microphone stream with the agent's remote-audio stream (when the driver
- * exposes one — `OpenAIRealtimeClient.GetRemoteMediaStream()`) into a single mono **WAV** (16-bit
- * PCM) blob via the Web Audio API. Rather than a `MediaRecorder` (which only emits webm/opus —
+ * Mixes the user's microphone stream with the agent's remote-audio stream (every driver exposes
+ * one via `GetRemoteMediaStream()`: WebRTC drivers publish their remote track, PCM drivers —
+ * Gemini, ElevenLabs, AssemblyAI, xAI, HuggingFace — publish their playout engine's output) into a
+ * single mono **WAV** (16-bit PCM) blob via the Web Audio API. Rather than a `MediaRecorder` (which only emits webm/opus —
  * header-less, no duration/cues, so HTTP-range seeking is unreliable), the mix is routed into an
  * {@link AudioWorkletNode} (preferred) or a {@link ScriptProcessorNode} (fallback) that captures
  * Float32 PCM frames. PCM is accumulated in memory and encoded as a seekable RIFF/WAVE file at
@@ -17,7 +18,10 @@ import { encodePcm16Wav, PeakAccumulator } from './realtime-pcm-wav';
  * - No `AudioContext` (server-side render / unsupported env) → the recorder disables itself
  *   ({@link IsRecording} stays `false`, {@link Stop} resolves `null`); the voice call proceeds.
  * - No `AudioWorkletNode` AND no `ScriptProcessorNode` → disables itself rather than throwing.
- * - No remote stream (non-WebRTC drivers, or the track hasn't landed yet) → records mic only.
+ * - No remote stream yet (e.g. the WebRTC track hasn't landed) → records mic only until it does.
+ * - A remote stream that can't be connected (e.g. a browser that rejects cross-sample-rate
+ *   `createMediaStreamSource` — the PCM playout context runs at 24 kHz, this one at the device
+ *   rate) → warns and records mic only; the mic recording is never lost to the agent stream.
  * - Any construction/start error is logged and disables the recorder rather than throwing into
  *   the session-start path.
  *
@@ -27,13 +31,13 @@ import { encodePcm16Wav, PeakAccumulator } from './realtime-pcm-wav';
  */
 export class RealtimeAudioRecorder {
     /** The container/codec we now produce — a seekable mono 16-bit PCM WAV. */
-    private static readonly WavMimeType = 'audio/wav';
+    private static readonly wavMimeType = 'audio/wav';
     /** Target waveform-peak resolution (buckets) across the whole recording. */
-    private static readonly PeakBuckets = 600;
+    private static readonly peakBuckets = 600;
     /** PCM frame size for the ScriptProcessor fallback (worklet uses its native 128-frame quantum). */
-    private static readonly ScriptProcessorBufferSize = 4096;
+    private static readonly scriptProcessorBufferSize = 4096;
     /** Inline AudioWorklet processor: forwards each 128-frame mono input block to the main thread. */
-    private static readonly WorkletProcessorSource = `
+    private static readonly workletProcessorSource = `
         class MJPcmCaptureProcessor extends AudioWorkletProcessor {
             process(inputs) {
                 const input = inputs[0];
@@ -56,7 +60,7 @@ export class RealtimeAudioRecorder {
     /** Total captured sample count across {@link pcmFrames} (kept in step to avoid re-summing). */
     private totalSamples = 0;
     /** Streaming waveform-peak accumulator — bounded regardless of recording length. */
-    private peaks = new PeakAccumulator(RealtimeAudioRecorder.PeakBuckets);
+    private peaks = new PeakAccumulator(RealtimeAudioRecorder.peakBuckets);
     /** Final normalized peaks, snapshotted at {@link Stop} so {@link GetPeaks} survives cleanup. */
     private finalPeaks: number[] = [];
     private recording = false;
@@ -65,6 +69,10 @@ export class RealtimeAudioRecorder {
     private remoteAttached = false;
     /** A remote stream handed to AttachRemoteStream before the audio graph was ready; wired at setup. */
     private pendingRemoteStream: MediaStream | null = null;
+    /** The microphone to record: the latest stream given to Start or ReplaceMicrophone. Setup connects it. */
+    private micStream: MediaStream | null = null;
+    /** The source node reading the microphone, swapped by ReplaceMicrophone. */
+    private micSource: MediaStreamAudioSourceNode | null = null;
 
     /** Sample index up to which crash-recovery shards have already been emitted (the segment cursor). */
     private flushedSampleCount = 0;
@@ -74,6 +82,13 @@ export class RealtimeAudioRecorder {
 
     /** Sample rate of the capturing {@link AudioContext}; 0 before {@link Start}. Needed to wrap shards. */
     private sampleRate = 0;
+
+    /**
+     * Bumped by {@link cleanup}. The async setup snapshots it and, after each await, gives up if it moved:
+     * a {@link Stop} that lands mid-setup can only release what setup has already published, so setup
+     * must release the rest itself rather than build a live graph on a stopped recorder.
+     */
+    private setupGeneration = 0;
 
     /** True while a recorder is actively capturing. */
     public get IsRecording(): boolean {
@@ -91,7 +106,7 @@ export class RealtimeAudioRecorder {
      * crash-recovery shards are all 16-bit PCM WAV.
      */
     public get MimeType(): string {
-        return this.recording ? RealtimeAudioRecorder.WavMimeType : '';
+        return this.recording ? RealtimeAudioRecorder.wavMimeType : '';
     }
 
     /**
@@ -125,6 +140,7 @@ export class RealtimeAudioRecorder {
         this.startedAtMs = Date.now();
         this.finalPeaks = [];
         this.recording = true;
+        this.micStream = micStream;
         // Fire-and-forget the async setup (it must `await audioContext.resume()` + worklet load); any
         // failure disables the recorder rather than throwing into the session-start path.
         void this.startMixedRecording(micStream, remoteStream).catch((error) => {
@@ -144,11 +160,28 @@ export class RealtimeAudioRecorder {
             return;
         }
         if (this.audioContext && this.captureNode()) {
-            this.connectStream(this.audioContext, stream);
-            this.remoteAttached = true;
+            this.remoteAttached = this.connectRemoteStream(this.audioContext, stream);
         } else {
             // Audio-graph setup still in flight (awaiting resume / worklet load) — connect at setup.
             this.pendingRemoteStream = stream;
+        }
+    }
+
+    /**
+     * Records the microphone stream's current track from now on: call it after the track changes (a
+     * device switch). A source node reads the track it was created with, so the recording would otherwise
+     * carry silence from the old device. Safe before the audio graph is ready (setup connects the latest
+     * stream, and Start replaces it); a stream without an audio track keeps the current one.
+     */
+    public ReplaceMicrophone(micStream: MediaStream): void {
+        this.micStream = micStream;
+        if (!this.audioContext || !this.captureNode()) {
+            return;
+        }
+        const replacement = this.connectStream(this.audioContext, micStream);
+        if (replacement) {
+            this.micSource?.disconnect();
+            this.micSource = replacement;
         }
     }
 
@@ -211,12 +244,18 @@ export class RealtimeAudioRecorder {
 
     /** Wires up the Web Audio mix graph + PCM capture node (worklet preferred) and starts capture. */
     private async startMixedRecording(micStream: MediaStream, remoteStream: MediaStream | null): Promise<void> {
+        const generation = this.setupGeneration;
         const audioContext = new AudioContext();
         // CRITICAL: browsers create an AudioContext in the `suspended` state under the autoplay policy.
         // Without resuming it, the mix graph never processes audio and we capture only silence. Starting
         // a voice call is a user gesture, so resume() succeeds here.
         if (audioContext.state === 'suspended') {
             await audioContext.resume();
+        }
+        if (generation !== this.setupGeneration) {
+            // Stopped while resuming: the context was never published, so cleanup() could not close it.
+            void audioContext.close().catch(() => { /* already closed */ });
+            return;
         }
         const destination = audioContext.createMediaStreamDestination();
         // Publish the context + sample rate BEFORE wiring the remote so a concurrent AttachRemoteStream()
@@ -228,15 +267,34 @@ export class RealtimeAudioRecorder {
         // Build the PCM capture node: AudioWorklet preferred, ScriptProcessor fallback. Either way the
         // node both pulls audio from the mix AND drives the destination so the graph keeps processing.
         await this.createCaptureNode(audioContext, destination);
+        if (generation !== this.setupGeneration) {
+            return; // Stopped while the capture node loaded: cleanup() already closed the published context.
+        }
 
-        this.connectStream(audioContext, micStream);
+        // The microphone may have been replaced while the graph was being built.
+        this.micSource = this.connectStream(audioContext, this.micStream ?? micStream);
         // Connect the agent's stream if it was passed now, or if AttachRemoteStream() stashed one while
         // we were setting up. Either way, capture the agent voice — not just the mic.
         const remote = remoteStream ?? this.pendingRemoteStream;
         this.pendingRemoteStream = null;
         if (remote && remote.getAudioTracks().length > 0) {
-            this.connectStream(audioContext, remote);
-            this.remoteAttached = true;
+            this.remoteAttached = this.connectRemoteStream(audioContext, remote);
+        }
+    }
+
+    /**
+     * Connects the agent stream, degrading to mic-only on failure. Unlike the mic (whose failure
+     * rightly disables the recorder), the agent stream is best-effort: a browser may reject it
+     * (cross-sample-rate `NotSupportedError`) and that must not discard the user's recording.
+     * Returns whether it was connected, so the caller only marks it attached on success.
+     */
+    private connectRemoteStream(audioContext: AudioContext, stream: MediaStream): boolean {
+        try {
+            this.connectStream(audioContext, stream);
+            return true;
+        } catch (error) {
+            console.warn('[RealtimeAudioRecorder] Could not mix the agent stream into the recording — continuing mic-only:', error);
+            return false;
         }
     }
 
@@ -260,7 +318,7 @@ export class RealtimeAudioRecorder {
         }
         try {
             const moduleUrl = URL.createObjectURL(
-                new Blob([RealtimeAudioRecorder.WorkletProcessorSource], { type: 'application/javascript' }),
+                new Blob([RealtimeAudioRecorder.workletProcessorSource], { type: 'application/javascript' }),
             );
             try {
                 await audioContext.audioWorklet.addModule(moduleUrl);
@@ -283,7 +341,7 @@ export class RealtimeAudioRecorder {
         if (typeof audioContext.createScriptProcessor !== 'function') {
             throw new Error('Neither AudioWorklet nor ScriptProcessor is supported');
         }
-        const node = audioContext.createScriptProcessor(RealtimeAudioRecorder.ScriptProcessorBufferSize, 1, 1);
+        const node = audioContext.createScriptProcessor(RealtimeAudioRecorder.scriptProcessorBufferSize, 1, 1);
         node.onaudioprocess = (event: AudioProcessingEvent) => {
             // Copy out of the reused input buffer before retaining.
             this.captureFrame(event.inputBuffer.getChannelData(0).slice(0));
@@ -310,14 +368,15 @@ export class RealtimeAudioRecorder {
         this.peaks.Push(copy);
     }
 
-    /** Routes one stream's audio tracks into the capture node (no-op when track-less / no node). */
-    private connectStream(audioContext: AudioContext, stream: MediaStream): void {
+    /** Routes one stream's audio tracks into the capture node; returns the source, or null when track-less / no node. */
+    private connectStream(audioContext: AudioContext, stream: MediaStream): MediaStreamAudioSourceNode | null {
         const node = this.captureNode();
         if (!node || stream.getAudioTracks().length === 0) {
-            return;
+            return null;
         }
         const source = audioContext.createMediaStreamSource(stream);
         source.connect(node);
+        return source;
     }
 
     /** Concatenates a half-open sample range [from, to) across the captured frames into one Float32Array. */
@@ -367,20 +426,23 @@ export class RealtimeAudioRecorder {
             return null;
         }
         const all = this.collectSamples(0, this.totalSamples);
-        const wav = encodePcm16Wav(all, this.sampleRate);
-        return new Blob([wav], { type: RealtimeAudioRecorder.WavMimeType });
+        const wav = EncodePcm16Wav(all, this.sampleRate);
+        return new Blob([wav], { type: RealtimeAudioRecorder.wavMimeType });
     }
 
     /** Releases the audio graph + capture node and resets state. Idempotent. */
     private cleanup(): void {
+        this.setupGeneration++;
         this.recording = false;
         this.pcmFrames = [];
         this.totalSamples = 0;
         this.flushedSampleCount = 0;
         this.sampleRate = 0;
-        this.peaks = new PeakAccumulator(RealtimeAudioRecorder.PeakBuckets);
+        this.peaks = new PeakAccumulator(RealtimeAudioRecorder.peakBuckets);
         this.remoteAttached = false;
         this.pendingRemoteStream = null;
+        this.micStream = null;
+        this.micSource = null;
         if (this.workletNode) {
             this.workletNode.port.onmessage = null;
             try { this.workletNode.disconnect(); } catch { /* already disconnected */ }

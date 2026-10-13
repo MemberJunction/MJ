@@ -9,9 +9,9 @@ import type { AddToolFn, MCPSessionContext } from '../Server.js';
 import {
     AgentManagementToolsOptions,
     DEFAULT_BUILDER_AGENTS,
-    matchesNamePattern,
-    validateCreateSpec,
-    validateUpdateSpec
+    MatchesNamePattern,
+    ValidateCreateSpec,
+    ValidateUpdateSpec
 } from './agentManagementHelpers.js';
 
 /**
@@ -38,7 +38,7 @@ import {
  *        builder-agent tools are identical to config-driven agent tools)
  * @param options - Optional configuration from mcpServerSettings.agentManagementTools
  */
-export async function loadAgentManagementTools(
+export async function LoadAgentManagementTools(
     addTool: AddToolFn,
     systemUser: UserInfo,
     sessionContext: MCPSessionContext,
@@ -60,6 +60,17 @@ export async function loadAgentManagementTools(
     registerBuilderAgentTools(options?.builderAgents ?? [...DEFAULT_BUILDER_AGENTS], registerAgentExecuteTool);
 }
 
+/** @deprecated Use {@link LoadAgentManagementTools}. */
+export async function loadAgentManagementTools(
+    addTool: AddToolFn,
+    systemUser: UserInfo,
+    sessionContext: MCPSessionContext,
+    registerAgentExecuteTool: (agent: MJAIAgentEntityExtended) => void,
+    options?: AgentManagementToolsOptions
+): Promise<void> {
+    return LoadAgentManagementTools(addTool, systemUser, sessionContext, registerAgentExecuteTool, options);
+}
+
 function registerAgentCatalogTool(addTool: AddToolFn, sessionContext: MCPSessionContext): void {
     addTool({
         name: 'Get_Agent_Catalog',
@@ -67,7 +78,9 @@ function registerAgentCatalogTool(addTool: AddToolFn, sessionContext: MCPSession
         parameters: z.object({
             pattern: z.string().optional().default('*').describe('Name pattern to match agents (supports wildcards: *, prefix*, *suffix, *contains*)'),
             topLevelOnly: z.boolean().optional().default(false).describe('When true, exclude child sub-agents (agents with a ParentID)'),
-            status: z.enum(['Active', 'Inactive', 'Pending', 'all']).optional().default('Active').describe('Filter by agent status')
+            // 'Disabled', not 'Inactive' — AIAgent.Status has never accepted 'Inactive', so that
+            // filter option could only ever return an empty list.
+            status: z.enum(['Active', 'Disabled', 'Pending', 'all']).optional().default('Active').describe('Filter by agent status')
         }),
         scopeInfo: { scopePath: 'agent:read', resource: '*' },
         async execute(props) {
@@ -79,7 +92,7 @@ function registerAgentCatalogTool(addTool: AddToolFn, sessionContext: MCPSession
             const status = props.status as string;
 
             const agents = aiEngine.Agents
-                .filter(a => matchesNamePattern(a.Name, pattern))
+                .filter(a => MatchesNamePattern(a.Name, pattern))
                 .filter(a => !topLevelOnly || !a.ParentID)
                 .filter(a => status === 'all' || a.Status === status);
 
@@ -147,7 +160,7 @@ function registerCreateAgentTool(addTool: AddToolFn, sessionContext: MCPSessionC
         }),
         async execute(props) {
             const spec = props.spec as AgentSpec;
-            const validationError = validateCreateSpec(spec);
+            const validationError = ValidateCreateSpec(spec);
             if (validationError) {
                 return JSON.stringify({ success: false, error: validationError });
             }
@@ -185,7 +198,7 @@ function registerUpdateAgentTool(addTool: AddToolFn, sessionContext: MCPSessionC
         }),
         async execute(props) {
             const spec = props.spec as AgentSpec;
-            const validationError = validateUpdateSpec(spec);
+            const validationError = ValidateUpdateSpec(spec);
             if (validationError) {
                 return JSON.stringify({ success: false, error: validationError });
             }
@@ -252,7 +265,7 @@ function registerActionCatalogTool(addTool: AddToolFn, sessionContext: MCPSessio
             const includeInactive = props.includeInactive as boolean;
 
             const actions = actionEngine.Actions
-                .filter(a => matchesNamePattern(a.Name, pattern))
+                .filter(a => MatchesNamePattern(a.Name, pattern))
                 .filter(a => includeInactive || a.Status === 'Active')
                 .filter(a => !category || (a.Category || '').toLowerCase() === category.toLowerCase());
 

@@ -31,40 +31,220 @@ export class ArtifactLoadDialogComponent extends BaseAngularComponent implements
   @Output() Close = new EventEmitter<ArtifactLoadResult | undefined>();
 
   // Tab state
-  activeTab = 0; // 0 = Artifacts, 1 = Collections
+  ActiveTab = 0;
+
+  /** @deprecated Use {@link ActiveTab}. */
+  get activeTab() {
+    return this.ActiveTab;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  set activeTab(value) {
+    this.ActiveTab = value;
+  } // 0 = Artifacts, 1 = Collections
 
   // Artifacts data
-  artifacts: MJArtifactEntity[] = [];
-  artifactVersions: MJArtifactVersionEntity[] = [];
-  selectedArtifact: MJArtifactEntity | null = null;
-  selectedVersion: MJArtifactVersionEntity | null = null;
+  Artifacts: MJArtifactEntity[] = [];
+
+  /** @deprecated Use {@link Artifacts}. */
+  get artifacts(): MJArtifactEntity[] {
+    return this.Artifacts;
+  }
+  /** @deprecated Use {@link Artifacts}. */
+  set artifacts(value: MJArtifactEntity[]) {
+    this.Artifacts = value;
+  }
+  ArtifactVersions: MJArtifactVersionEntity[] = [];
+
+  /** @deprecated Use {@link ArtifactVersions}. */
+  get artifactVersions(): MJArtifactVersionEntity[] {
+    return this.ArtifactVersions;
+  }
+  /** @deprecated Use {@link ArtifactVersions}. */
+  set artifactVersions(value: MJArtifactVersionEntity[]) {
+    this.ArtifactVersions = value;
+  }
+  SelectedArtifact: MJArtifactEntity | null = null;
+
+  /** @deprecated Use {@link SelectedArtifact}. */
+  get selectedArtifact(): MJArtifactEntity | null {
+    return this.SelectedArtifact;
+  }
+  /** @deprecated Use {@link SelectedArtifact}. */
+  set selectedArtifact(value: MJArtifactEntity | null) {
+    this.SelectedArtifact = value;
+  }
+  SelectedVersion: MJArtifactVersionEntity | null = null;
+
+  /** @deprecated Use {@link SelectedVersion}. */
+  get selectedVersion(): MJArtifactVersionEntity | null {
+    return this.SelectedVersion;
+  }
+  /** @deprecated Use {@link SelectedVersion}. */
+  set selectedVersion(value: MJArtifactVersionEntity | null) {
+    this.SelectedVersion = value;
+  }
 
   // Collections data
-  collections: MJCollectionEntity[] = [];
-  selectedCollection: MJCollectionEntity | null = null;
-  collectionArtifacts: MJArtifactEntity[] = [];
+  Collections: MJCollectionEntity[] = [];
+
+  /** @deprecated Use {@link Collections}. */
+  get collections(): MJCollectionEntity[] {
+    return this.Collections;
+  }
+  /** @deprecated Use {@link Collections}. */
+  set collections(value: MJCollectionEntity[]) {
+    this.Collections = value;
+  }
+  SelectedCollection: MJCollectionEntity | null = null;
+
+  /** @deprecated Use {@link SelectedCollection}. */
+  get selectedCollection(): MJCollectionEntity | null {
+    return this.SelectedCollection;
+  }
+  /** @deprecated Use {@link SelectedCollection}. */
+  set selectedCollection(value: MJCollectionEntity | null) {
+    this.SelectedCollection = value;
+  }
+  CollectionArtifacts: MJArtifactEntity[] = [];
+
+  /** @deprecated Use {@link CollectionArtifacts}. */
+  get collectionArtifacts(): MJArtifactEntity[] {
+    return this.CollectionArtifacts;
+  }
+  /** @deprecated Use {@link CollectionArtifacts}. */
+  set collectionArtifacts(value: MJArtifactEntity[]) {
+    this.CollectionArtifacts = value;
+  }
 
   // Search and filter
-  searchTerm = '';
-  selectedArtifactType = '';
-  userEmail = '';
+  SearchTerm = '';
+
+  /** @deprecated Use {@link SearchTerm}. */
+  get searchTerm() {
+    return this.SearchTerm;
+  }
+  /** @deprecated Use {@link SearchTerm}. */
+  set searchTerm(value) {
+    this.SearchTerm = value;
+  }
+  SelectedArtifactType = '';
+
+  /** @deprecated Use {@link SelectedArtifactType}. */
+  get selectedArtifactType() {
+    return this.SelectedArtifactType;
+  }
+  /** @deprecated Use {@link SelectedArtifactType}. */
+  set selectedArtifactType(value) {
+    this.SelectedArtifactType = value;
+  }
+  UserEmail = '';
+
+  /** @deprecated Use {@link UserEmail}. */
+  get userEmail() {
+    return this.UserEmail;
+  }
+  /** @deprecated Use {@link UserEmail}. */
+  set userEmail(value) {
+    this.UserEmail = value;
+  }
 
   // Paging
-  currentPage = 0;
+  CurrentPage = 0;
+
+  /** @deprecated Use {@link CurrentPage}. */
+  get currentPage() {
+    return this.CurrentPage;
+  }
+  /** @deprecated Use {@link CurrentPage}. */
+  set currentPage(value) {
+    this.CurrentPage = value;
+  }
   pageSize = 25;
-  totalArtifacts = 0;
-  hasMorePages = false;
+  TotalArtifacts = 0;
+
+  /** @deprecated Use {@link TotalArtifacts}. */
+  get totalArtifacts() {
+    return this.TotalArtifacts;
+  }
+  /** @deprecated Use {@link TotalArtifacts}. */
+  set totalArtifacts(value) {
+    this.TotalArtifacts = value;
+  }
+  HasMorePages = false;
+
+  /** @deprecated Use {@link HasMorePages}. */
+  get hasMorePages() {
+    return this.HasMorePages;
+  }
+  /** @deprecated Use {@link HasMorePages}. */
+  set hasMorePages(value) {
+    this.HasMorePages = value;
+  }
 
   // UI state
   isLoading = true;
-  isLoadingVersions = false;
-  isLoadingCollections = false;
-  isFilterPanelCollapsed = false;
+  IsLoadingVersions = false;
+
+  /** @deprecated Use {@link IsLoadingVersions}. */
+  get isLoadingVersions() {
+    return this.IsLoadingVersions;
+  }
+  /** @deprecated Use {@link IsLoadingVersions}. */
+  set isLoadingVersions(value) {
+    this.IsLoadingVersions = value;
+  }
+  IsLoadingCollections = false;
+
+  /** @deprecated Use {@link IsLoadingCollections}. */
+  get isLoadingCollections() {
+    return this.IsLoadingCollections;
+  }
+  /** @deprecated Use {@link IsLoadingCollections}. */
+  set isLoadingCollections(value) {
+    this.IsLoadingCollections = value;
+  }
+  IsFilterPanelCollapsed = false;
+
+  /** @deprecated Use {@link IsFilterPanelCollapsed}. */
+  get isFilterPanelCollapsed() {
+    return this.IsFilterPanelCollapsed;
+  }
+  /** @deprecated Use {@link IsFilterPanelCollapsed}. */
+  set isFilterPanelCollapsed(value) {
+    this.IsFilterPanelCollapsed = value;
+  }
 
   // Preview
-  previewSpec: ComponentSpec | null = null;
-  previewError: string | null = null;
-  showJsonPreview = false;
+  PreviewSpec: ComponentSpec | null = null;
+
+  /** @deprecated Use {@link PreviewSpec}. */
+  get previewSpec(): ComponentSpec | null {
+    return this.PreviewSpec;
+  }
+  /** @deprecated Use {@link PreviewSpec}. */
+  set previewSpec(value: ComponentSpec | null) {
+    this.PreviewSpec = value;
+  }
+  PreviewError: string | null = null;
+
+  /** @deprecated Use {@link PreviewError}. */
+  get previewError(): string | null {
+    return this.PreviewError;
+  }
+  /** @deprecated Use {@link PreviewError}. */
+  set previewError(value: string | null) {
+    this.PreviewError = value;
+  }
+  ShowJsonPreview = false;
+
+  /** @deprecated Use {@link ShowJsonPreview}. */
+  get showJsonPreview() {
+    return this.ShowJsonPreview;
+  }
+  /** @deprecated Use {@link ShowJsonPreview}. */
+  set showJsonPreview(value) {
+    this.ShowJsonPreview = value;
+  }
 
   private get metadata() { return this.ProviderToUse; }
   private destroy$ = new Subject<void>();
@@ -78,12 +258,12 @@ export class ArtifactLoadDialogComponent extends BaseAngularComponent implements
       distinctUntilChanged(),
       takeUntil(this.destroy$)
     ).subscribe(() => {
-      this.filterArtifacts();
+      this.FilterArtifacts();
     });
 
     await Promise.all([
-      this.loadArtifacts(),
-      this.loadCollections()
+      this.LoadArtifacts(),
+      this.LoadCollections()
     ]);
   }
 
@@ -92,12 +272,12 @@ export class ArtifactLoadDialogComponent extends BaseAngularComponent implements
     this.destroy$.complete();
   }
 
-  async loadArtifacts() {
+  async LoadArtifacts() {
     this.isLoading = true;
     this.cdr.detectChanges();
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const startRow = this.currentPage * this.pageSize;
+      const startRow = this.CurrentPage * this.pageSize;
 
       const result = await rv.RunView<MJArtifactEntity>({
         EntityName: 'MJ: Artifacts',
@@ -109,10 +289,10 @@ export class ArtifactLoadDialogComponent extends BaseAngularComponent implements
       });
 
       if (result.Success && result.Results) {
-        this.artifacts = result.Results;
-        this.totalArtifacts = result.TotalRowCount || 0;
-        const totalPages = Math.ceil(this.totalArtifacts / this.pageSize);
-        this.hasMorePages = this.currentPage < totalPages - 1;
+        this.Artifacts = result.Results;
+        this.TotalArtifacts = result.TotalRowCount || 0;
+        const totalPages = Math.ceil(this.TotalArtifacts / this.pageSize);
+        this.HasMorePages = this.CurrentPage < totalPages - 1;
       }
     } catch (error) {
       console.error('Error loading artifacts:', error);
@@ -122,13 +302,18 @@ export class ArtifactLoadDialogComponent extends BaseAngularComponent implements
     }
   }
 
-  async loadCollections() {
-    this.isLoadingCollections = true;
+  /** @deprecated Use {@link LoadArtifacts}. */
+  async loadArtifacts() {
+    return this.LoadArtifacts();
+  }
+
+  async LoadCollections() {
+    this.IsLoadingCollections = true;
     this.cdr.detectChanges();
     try {
       const currentUserId = this.metadata.CurrentUser?.ID;
       if (!currentUserId) {
-        this.collections = [];
+        this.Collections = [];
         return;
       }
 
@@ -144,22 +329,27 @@ export class ArtifactLoadDialogComponent extends BaseAngularComponent implements
       });
 
       if (result.Success) {
-        this.collections = result.Results || [];
+        this.Collections = result.Results || [];
       }
     } catch (error) {
       console.error('Error loading collections:', error);
-      this.collections = [];
+      this.Collections = [];
     } finally {
-      this.isLoadingCollections = false;
+      this.IsLoadingCollections = false;
       this.cdr.detectChanges();
     }
   }
 
-  async selectCollection(collection: MJCollectionEntity) {
-    this.selectedCollection = collection;
-    this.selectedArtifact = null;
-    this.selectedVersion = null;
-    this.artifactVersions = [];
+  /** @deprecated Use {@link LoadCollections}. */
+  async loadCollections() {
+    return this.LoadCollections();
+  }
+
+  async SelectCollection(collection: MJCollectionEntity) {
+    this.SelectedCollection = collection;
+    this.SelectedArtifact = null;
+    this.SelectedVersion = null;
+    this.ArtifactVersions = [];
     this.cdr.detectChanges();
 
     // Load artifacts in this collection
@@ -178,54 +368,64 @@ export class ArtifactLoadDialogComponent extends BaseAngularComponent implements
       });
 
       if (result.Success) {
-        this.collectionArtifacts = result.Results || [];
+        this.CollectionArtifacts = result.Results || [];
       }
     } catch (error) {
       console.error('Error loading collection artifacts:', error);
-      this.collectionArtifacts = [];
+      this.CollectionArtifacts = [];
     } finally {
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link SelectCollection}. */
+  async selectCollection(collection: MJCollectionEntity) {
+    return this.SelectCollection(collection);
   }
 
   private buildArtifactFilter(): string {
     const filters: string[] = [];
 
     // Always filter to Component type by default
-    if (this.selectedArtifactType) {
-      filters.push(`TypeID IN (SELECT ID FROM __mj.vwArtifactTypes WHERE Name = '${this.selectedArtifactType}')`);
+    if (this.SelectedArtifactType) {
+      filters.push(`TypeID IN (SELECT ID FROM __mj.vwArtifactTypes WHERE Name = '${this.SelectedArtifactType}')`);
     } else {
       filters.push(`TypeID IN (SELECT ID FROM __mj.vwArtifactTypes WHERE Name = 'Component')`);
     }
 
     // Search filter
-    if (this.searchTerm?.trim()) {
-      const term = this.searchTerm.toLowerCase();
+    if (this.SearchTerm?.trim()) {
+      const term = this.SearchTerm.toLowerCase();
       filters.push(`(Name LIKE '%${term}%' OR Description LIKE '%${term}%')`);
     }
 
     // User email filter
-    if (this.userEmail?.trim()) {
+    if (this.UserEmail?.trim()) {
       const md = this.ProviderToUse;
       const schemaName = md.EntityByName("MJ: Users")?.SchemaName || "__mj";
-      filters.push(`UserID IN (SELECT ID FROM ${schemaName}.vwUsers WHERE Email LIKE '%${this.userEmail.trim()}%')`);
+      filters.push(`UserID IN (SELECT ID FROM ${schemaName}.vwUsers WHERE Email LIKE '%${this.UserEmail.trim()}%')`);
     }
 
     return filters.length > 0 ? filters.join(' AND ') : '';
   }
 
-  async selectArtifact(artifact: MJArtifactEntity) {
-    this.selectedArtifact = artifact;
-    this.selectedVersion = null;
-    this.previewSpec = null;
-    this.previewError = null;
+  async SelectArtifact(artifact: MJArtifactEntity) {
+    this.SelectedArtifact = artifact;
+    this.SelectedVersion = null;
+    this.PreviewSpec = null;
+    this.PreviewError = null;
     this.cdr.detectChanges();
 
-    await this.loadVersions(artifact.ID);
+    await this.LoadVersions(artifact.ID);
   }
 
-  async loadVersions(artifactId: string) {
-    this.isLoadingVersions = true;
+  /** @deprecated Use {@link SelectArtifact}. */
+  async selectArtifact(artifact: MJArtifactEntity) {
+    return this.SelectArtifact(artifact);
+  }
+
+  async LoadVersions(artifactId: string) {
+    this.IsLoadingVersions = true;
     this.cdr.detectChanges();
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -237,42 +437,52 @@ export class ArtifactLoadDialogComponent extends BaseAngularComponent implements
       });
 
       if (result.Success && result.Results) {
-        this.artifactVersions = result.Results;
+        this.ArtifactVersions = result.Results;
 
         // Auto-select the latest version
-        if (this.artifactVersions.length > 0) {
-          await this.selectVersion(this.artifactVersions[0]);
+        if (this.ArtifactVersions.length > 0) {
+          await this.SelectVersion(this.ArtifactVersions[0]);
         }
       }
     } catch (error) {
       console.error('Error loading versions:', error);
-      this.artifactVersions = [];
+      this.ArtifactVersions = [];
     } finally {
-      this.isLoadingVersions = false;
+      this.IsLoadingVersions = false;
       this.cdr.detectChanges();
     }
   }
 
-  async selectVersion(version: MJArtifactVersionEntity) {
-    this.selectedVersion = version;
-    await this.loadPreview(version);
+  /** @deprecated Use {@link LoadVersions}. */
+  async loadVersions(artifactId: string) {
+    return this.LoadVersions(artifactId);
   }
 
-  async loadPreview(version: MJArtifactVersionEntity) {
+  async SelectVersion(version: MJArtifactVersionEntity) {
+    this.SelectedVersion = version;
+    await this.LoadPreview(version);
+  }
+
+  /** @deprecated Use {@link SelectVersion}. */
+  async selectVersion(version: MJArtifactVersionEntity) {
+    return this.SelectVersion(version);
+  }
+
+  async LoadPreview(version: MJArtifactVersionEntity) {
     try {
-      this.previewError = null;
+      this.PreviewError = null;
 
       const raw = version.Content ?? version.Configuration;
       if (!raw) {
-        this.previewSpec = null;
-        this.previewError = 'No content found in this version';
+        this.PreviewSpec = null;
+        this.PreviewError = 'No content found in this version';
         return;
       }
 
       const spec = this.unwrapSpec(JSON.parse(raw));
       if (!spec) {
-        this.previewSpec = null;
-        this.previewError = 'Artifact content is not a recognized component spec';
+        this.PreviewSpec = null;
+        this.PreviewError = 'Artifact content is not a recognized component spec';
         return;
       }
 
@@ -280,18 +490,23 @@ export class ArtifactLoadDialogComponent extends BaseAngularComponent implements
       const hasDeps = Array.isArray(spec.dependencies) && spec.dependencies.length > 0;
       const isRegistryRef = spec.location === 'registry' && !!spec.registry && !!spec.namespace && !!spec.name;
       if (!hasCode && !hasDeps && !isRegistryRef) {
-        this.previewSpec = null;
-        this.previewError = 'Artifact contains no component code, dependencies, or registry reference';
+        this.PreviewSpec = null;
+        this.PreviewError = 'Artifact contains no component code, dependencies, or registry reference';
         return;
       }
 
-      this.previewSpec = spec;
+      this.PreviewSpec = spec;
     } catch (error) {
-      this.previewError = `Failed to parse: ${error}`;
-      this.previewSpec = null;
+      this.PreviewError = `Failed to parse: ${error}`;
+      this.PreviewSpec = null;
     } finally {
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link LoadPreview}. */
+  async loadPreview(version: MJArtifactVersionEntity) {
+    return this.LoadPreview(version);
   }
 
   /**
@@ -309,64 +524,119 @@ export class ArtifactLoadDialogComponent extends BaseAngularComponent implements
     return parsed as ComponentSpec;
   }
 
+  async FilterArtifacts() {
+    this.CurrentPage = 0;
+    await this.LoadArtifacts();
+  }
+
+  /** @deprecated Use {@link FilterArtifacts}. */
   async filterArtifacts() {
-    this.currentPage = 0;
-    await this.loadArtifacts();
+    return this.FilterArtifacts();
   }
 
+  OnSearchInput() {
+    this.searchSubject.next(this.SearchTerm);
+  }
+
+  /** @deprecated Use {@link OnSearchInput}. */
   onSearchInput() {
-    this.searchSubject.next(this.searchTerm);
+    return this.OnSearchInput();
   }
 
+  OnArtifactTypeChange() {
+    this.SelectedArtifact = null;
+    this.SelectedVersion = null;
+    this.ArtifactVersions = [];
+    this.FilterArtifacts();
+  }
+
+  /** @deprecated Use {@link OnArtifactTypeChange}. */
   onArtifactTypeChange() {
-    this.selectedArtifact = null;
-    this.selectedVersion = null;
-    this.artifactVersions = [];
-    this.filterArtifacts();
+    return this.OnArtifactTypeChange();
   }
 
+  async NextPage() {
+    if (this.HasMorePages) {
+      this.CurrentPage++;
+      await this.LoadArtifacts();
+    }
+  }
+
+  /** @deprecated Use {@link NextPage}. */
   async nextPage() {
-    if (this.hasMorePages) {
-      this.currentPage++;
-      await this.loadArtifacts();
+    return this.NextPage();
+  }
+
+  async PreviousPage() {
+    if (this.CurrentPage > 0) {
+      this.CurrentPage--;
+      await this.LoadArtifacts();
     }
   }
 
+  /** @deprecated Use {@link PreviousPage}. */
   async previousPage() {
-    if (this.currentPage > 0) {
-      this.currentPage--;
-      await this.loadArtifacts();
-    }
+    return this.PreviousPage();
   }
 
+  CanGoNext(): boolean {
+    return this.HasMorePages;
+  }
+
+  /** @deprecated Use {@link CanGoNext}. */
   canGoNext(): boolean {
-    return this.hasMorePages;
+    return this.CanGoNext();
   }
 
+  CanGoPrevious(): boolean {
+    return this.CurrentPage > 0;
+  }
+
+  /** @deprecated Use {@link CanGoPrevious}. */
   canGoPrevious(): boolean {
-    return this.currentPage > 0;
+    return this.CanGoPrevious();
   }
 
+  GetTotalPages(): number {
+    return Math.ceil(this.TotalArtifacts / this.pageSize);
+  }
+
+  /** @deprecated Use {@link GetTotalPages}. */
   getTotalPages(): number {
-    return Math.ceil(this.totalArtifacts / this.pageSize);
+    return this.GetTotalPages();
   }
 
+  ToggleFilterPanel() {
+    this.IsFilterPanelCollapsed = !this.IsFilterPanelCollapsed;
+  }
+
+  /** @deprecated Use {@link ToggleFilterPanel}. */
   toggleFilterPanel() {
-    this.isFilterPanelCollapsed = !this.isFilterPanelCollapsed;
+    return this.ToggleFilterPanel();
   }
 
-  getActiveFilterCount(): number {
+  GetActiveFilterCount(): number {
     let count = 0;
-    if (this.searchTerm?.trim()) count++;
-    if (this.selectedArtifactType) count++;
-    if (this.userEmail?.trim()) count++;
+    if (this.SearchTerm?.trim()) count++;
+    if (this.SelectedArtifactType) count++;
+    if (this.UserEmail?.trim()) count++;
     return count;
   }
 
+  /** @deprecated Use {@link GetActiveFilterCount}. */
+  getActiveFilterCount(): number {
+    return this.GetActiveFilterCount();
+  }
+
+  CanLoad(): boolean {
+    return this.SelectedArtifact !== null &&
+           this.SelectedVersion !== null &&
+           this.PreviewSpec !== null;
+  }
+
+  /** @deprecated Use {@link CanLoad}. */
   canLoad(): boolean {
-    return this.selectedArtifact !== null &&
-           this.selectedVersion !== null &&
-           this.previewSpec !== null;
+    return this.CanLoad();
   }
 
   cancel() {
@@ -374,43 +644,58 @@ export class ArtifactLoadDialogComponent extends BaseAngularComponent implements
   }
 
   load() {
-    if (!this.canLoad()) return;
+    if (!this.CanLoad()) return;
 
     const result: ArtifactLoadResult = {
-      spec: this.previewSpec!,
-      artifactID: this.selectedArtifact!.ID,
-      versionID: this.selectedVersion!.ID,
-      versionNumber: this.selectedVersion!.VersionNumber,
-      artifactName: this.selectedArtifact!.Name
+      spec: this.PreviewSpec!,
+      artifactID: this.SelectedArtifact!.ID,
+      versionID: this.SelectedVersion!.ID,
+      versionNumber: this.SelectedVersion!.VersionNumber,
+      artifactName: this.SelectedArtifact!.Name
     };
 
     this.Close.emit(result);
   }
 
+  OnTabSelect(index: number) {
+    this.ActiveTab = index;
+  }
+
+  /** @deprecated Use {@link OnTabSelect}. */
   onTabSelect(index: number) {
-    this.activeTab = index;
+    return this.OnTabSelect(index);
   }
 
+  GetArtifactsByTab(): MJArtifactEntity[] {
+    return this.ActiveTab === 0 ? this.Artifacts : this.CollectionArtifacts;
+  }
+
+  /** @deprecated Use {@link GetArtifactsByTab}. */
   getArtifactsByTab(): MJArtifactEntity[] {
-    return this.activeTab === 0 ? this.artifacts : this.collectionArtifacts;
+    return this.GetArtifactsByTab();
   }
 
+  GetPreviewJSON(): string {
+    return this.PreviewSpec ? JSON.stringify(this.PreviewSpec, null, 2) : '';
+  }
+
+  /** @deprecated Use {@link GetPreviewJSON}. */
   getPreviewJSON(): string {
-    return this.previewSpec ? JSON.stringify(this.previewSpec, null, 2) : '';
+    return this.GetPreviewJSON();
   }
 
   /** Case-insensitive UUID check whether an artifact is the currently selected artifact. */
   IsArtifactSelected(artifact: MJArtifactEntity): boolean {
-    return UUIDsEqual(this.selectedArtifact?.ID, artifact.ID);
+    return UUIDsEqual(this.SelectedArtifact?.ID, artifact.ID);
   }
 
   /** Case-insensitive UUID check whether a collection is the currently selected collection. */
   IsCollectionSelected(collection: MJCollectionEntity): boolean {
-    return UUIDsEqual(this.selectedCollection?.ID, collection.ID);
+    return UUIDsEqual(this.SelectedCollection?.ID, collection.ID);
   }
 
   /** Case-insensitive UUID check whether a version is the currently selected version. */
   IsVersionSelected(version: MJArtifactVersionEntity): boolean {
-    return UUIDsEqual(this.selectedVersion?.ID, version.ID);
+    return UUIDsEqual(this.SelectedVersion?.ID, version.ID);
   }
 }

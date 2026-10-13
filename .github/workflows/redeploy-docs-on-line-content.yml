@@ -1,0 +1,60 @@
+name: Redeploy docs when line content changes
+
+# THE GAP THIS CLOSES. docs.yml is release-following by design: workflow_run on
+# publish.yml (main), plus an explicit dispatch. A merge into an lts/* branch
+# reaches neither. So release notes backported to a line landed on the branch the
+# docs site builds from and then sat there, invisible, until the NEXT release
+# happened to deploy. That is what happened to v5.51.2's notes.
+#
+# WHY THIS DISPATCHES RATHER THAN TRIGGERING docs.yml DIRECTLY. Adding
+# `push: branches: [lts/**]` to docs.yml looks equivalent and is not: its checkout
+# step uses `ref: ${{ github.sha }}`, which for a push to lts/5 is an lts/5 commit.
+# The site would then be built with the LINE's copy of docs-site/ — breaking the one
+# seam that file is explicit about, that the Astro app and rendering logic always
+# come from next so site fixes never need cherry-picking to a line. Dispatching
+# hands docs.yml a trigger shape it already supports and already handles correctly.
+# It is the same call publish.yml's LTS job makes.
+#
+# 🚨 THIS FILE MUST EXIST ON EACH LINE BRANCH TO DO ANYTHING. A push to lts/5 runs
+# the workflows present ON lts/5, not the ones on next. That is why the PR adding
+# this carries `backport lts/5`. Lines cut from next in future inherit it at the cut;
+# an existing line that never received it is silently uncovered, which looks exactly
+# like the bug this fixes — check the line branch first if notes fail to appear.
+
+on:
+  push:
+    branches:
+      - 'lts/**'
+    # Scoped to release notes, the concrete gap. docs.yml also ingests guides/,
+    # package READMEs and root docs from the line, so a backported doc fix has the
+    # same problem; widening this list is a one-line change if that comes up. Kept
+    # narrow for now so a code-only backport does not rebuild the whole site.
+    paths:
+      - 'releases/**'
+
+permissions:
+  actions: write   # gh workflow run
+  contents: read
+
+# Several backports can land on a line in quick succession. The site is rebuilt
+# whole every time, so only the last dispatch is worth anything.
+concurrency:
+  group: redeploy-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dispatch-docs:
+    name: Dispatch the docs deploy
+    runs-on: ubuntu-latest
+    steps:
+      # --ref next is deliberate and matches publish.yml: the maintained copy of
+      # docs.yml always runs, never whatever a line branch happens to carry. The
+      # line is not a parameter here because docs.yml rebuilds every line's set on
+      # every run — it enumerates lts/* itself.
+      - name: Dispatch docs.yml from next
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run docs.yml --repo "$GITHUB_REPOSITORY" --ref next
+          echo "::notice::docs deploy dispatched after release-notes content landed on ${GITHUB_REF#refs/heads/}"

@@ -4,7 +4,7 @@ import type { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 // Controls what UserCache.Instance.GetSystemUser() serves — undefined simulates an unpopulated
 // cache (no system user available), the fail-closed path.
 const getSystemUserMock = vi.fn<[], UserInfo | undefined>();
-vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
+vi.mock('@memberjunction/generic-database-provider', () => ({
   UserCache: {
     get Instance() {
       return { GetSystemUser: getSystemUserMock };
@@ -13,9 +13,10 @@ vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
 }));
 
 import {
-  resolveWidgetGuestRunContext,
-  elevateUserPayload,
+  ResolveWidgetGuestRunContext,
+  ElevateUserPayload,
   ResolveScopedAnonymousRunUser,
+  ResolveRecordingStoreUser,
 } from '../realtimeWidget/widgetGuestElevation.js';
 import type { UserPayload } from '../types.js';
 
@@ -29,12 +30,12 @@ function payloadWith(userRecord: Partial<UserInfo>): UserPayload {
 
 describe('widgetGuestElevation — resolveWidgetGuestRunContext (guard paths, no DB)', () => {
   it('returns null for a normal authenticated user (not anonymous)', async () => {
-    const result = await resolveWidgetGuestRunContext(payloadWith({ IsMagicLinkAnonymous: false }), providerStub);
+    const result = await ResolveWidgetGuestRunContext(payloadWith({ IsMagicLinkAnonymous: false }), providerStub);
     expect(result).toBeNull();
   });
 
   it('returns null for an anonymous magic-link session that is NOT a widget guest (no WidgetGuestContext)', async () => {
-    const result = await resolveWidgetGuestRunContext(
+    const result = await ResolveWidgetGuestRunContext(
       payloadWith({ IsMagicLinkAnonymous: true, WidgetGuestContext: undefined }),
       providerStub,
     );
@@ -42,7 +43,7 @@ describe('widgetGuestElevation — resolveWidgetGuestRunContext (guard paths, no
   });
 
   it('returns null when userRecord is absent', async () => {
-    const result = await resolveWidgetGuestRunContext({ email: '', userRecord: undefined, sessionId: 's' }, providerStub);
+    const result = await ResolveWidgetGuestRunContext({ email: '', userRecord: undefined, sessionId: 's' }, providerStub);
     expect(result).toBeNull();
   });
 });
@@ -99,12 +100,55 @@ describe('widgetGuestElevation — ResolveScopedAnonymousRunUser (issue #3371)',
   });
 });
 
+describe('widgetGuestElevation — ResolveRecordingStoreUser (#5195: UI-role users lost every recording)', () => {
+  const systemUser = { ID: 'system-1', Email: 'system@system.org' } as UserInfo;
+
+  function userWith(flags: Partial<UserInfo>): UserInfo {
+    return { ID: 'user-1', Email: 'someone@example.com', ...flags } as UserInfo;
+  }
+
+  beforeEach(() => {
+    getSystemUserMock.mockReset();
+    getSystemUserMock.mockReturnValue(systemUser);
+  });
+
+  it('runs a signed-in owner’s recording store as the SYSTEM user (the stock UI role cannot create MJ: Files)', () => {
+    expect(ResolveRecordingStoreUser(userWith({ IsMagicLinkAnonymous: false }))).toBe(systemUser);
+  });
+
+  it('runs a scoped anonymous magic-link session as the SYSTEM user, exactly as before', () => {
+    const scopedAnon = userWith({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'res-1' } });
+    expect(ResolveRecordingStoreUser(scopedAnon)).toBe(systemUser);
+  });
+
+  it('keeps an UNSCOPED anonymous session on the caller, exactly as before', () => {
+    const unscoped = userWith({ IsMagicLinkAnonymous: true, MagicLinkScope: undefined });
+    expect(ResolveRecordingStoreUser(unscoped)).toBe(unscoped);
+  });
+
+  it('keeps a PUBLIC WEB-WIDGET guest on the caller (their RLS read filter depends on it)', () => {
+    const widgetGuest = userWith({
+      IsMagicLinkAnonymous: true,
+      MagicLinkScope: { ResourceID: 'res-1' },
+      WidgetGuestContext: { WidgetID: 'widget-1' },
+    });
+    expect(ResolveRecordingStoreUser(widgetGuest)).toBe(widgetGuest);
+    expect(getSystemUserMock).not.toHaveBeenCalled();
+  });
+
+  it('FAILS CLOSED to the caller when no system user is available', () => {
+    getSystemUserMock.mockReturnValue(undefined);
+    const named = userWith({ IsMagicLinkAnonymous: false });
+    expect(ResolveRecordingStoreUser(named)).toBe(named);
+  });
+});
+
 describe('widgetGuestElevation — elevateUserPayload', () => {
   it('swaps in the elevated principal while preserving the guest sessionId for PubSub routing', () => {
     const guestPayload = payloadWith({ IsMagicLinkAnonymous: true });
     const systemUser = { Email: 'system@system.org' } as UserInfo;
 
-    const elevated = elevateUserPayload(guestPayload, systemUser);
+    const elevated = ElevateUserPayload(guestPayload, systemUser);
 
     expect(elevated.userRecord).toBe(systemUser);
     expect(elevated.email).toBe('system@system.org');
@@ -117,7 +161,7 @@ describe('widgetGuestElevation — elevateUserPayload', () => {
     const guestPayload = payloadWith({ IsMagicLinkAnonymous: true });
     const systemUser = { Email: 'system@system.org' } as UserInfo;
 
-    elevateUserPayload(guestPayload, systemUser);
+    ElevateUserPayload(guestPayload, systemUser);
 
     expect(guestPayload.isSystemUser).toBeUndefined();
     expect(guestPayload.email).toBe('anonymous@magic-link.local');

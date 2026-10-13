@@ -98,9 +98,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Action Filters','ActionFilterID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Action Filters')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Action Filters','ActionFilterID')"
                 [AllowLoad]="IsSectionExpanded('mJEntityActionFilters')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityActionFilters', $event.totalRowCount)"
                 >

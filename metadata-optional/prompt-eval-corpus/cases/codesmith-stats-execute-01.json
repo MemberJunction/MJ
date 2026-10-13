@@ -1,0 +1,46 @@
+{
+  "id": "codesmith-stats-execute-01",
+  "agent": "Codesmith Agent",
+  "tags": [
+    "mid-loop-action",
+    "param-fidelity"
+  ],
+  "description": "Statistics must be computed by code, not inferred. The code param must actually reference the input data rather than hard-coding an answer.",
+  "input": {
+    "payload": {
+      "task": "standard deviation",
+      "inputData": {
+        "values": [
+          12,
+          15,
+          19,
+          22,
+          28,
+          31,
+          44
+        ]
+      }
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Compute the standard deviation of input.values."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Execute Code",
+        "params": {
+          "code": {
+            "matcher": "regex",
+            "pattern": "input",
+            "flags": "i"
+          }
+        }
+      }
+    ]
+  }
+}

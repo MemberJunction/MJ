@@ -39,25 +39,6 @@
             <mj-loading [showText]="false" size="medium"></mj-loading>
           }
         }
-        @case ('Reports') {
-          @if (Reports.length) {
-            <label>Reports
-              <br />
-              <mj-dropdown [Data]="Reports" [TextField]="'Name'" [ValueField]="'ID'"
-                (ValueChange)="onViewChange($any($event))" [(ngModel)]="selectedReport">
-              </mj-dropdown>
-            </label>
-          }
-          @if (!Reports.length && showloader) {
-            <mj-loading [showText]="false" size="medium"></mj-loading>
-          }
-          @if (!Reports.length && !showloader) {
-            <mj-empty-state
-              Size="compact"
-              Icon="fa-solid fa-file-lines"
-              Title="No reports available" />
-          }
-        }
       }
     </div>
   </div>

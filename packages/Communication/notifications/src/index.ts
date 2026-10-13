@@ -36,5 +36,6 @@ export { NotificationEngine } from './NotificationEngine';
 export { SendNotificationParams, NotificationResult, DeliveryChannels } from './types';
 export {
     RegisterResourceSharedNotificationHandler,
-    createResourceSharedHandler
+    CreateResourceSharedHandler, createResourceSharedHandler
 } from './shareNotificationHandler';
+export * from './scoped-notification-config-resolver';

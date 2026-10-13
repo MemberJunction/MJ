@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { ChangeDetectorRef } from '@angular/core';
+import type { ChangeDetectorRef, ElementRef } from '@angular/core';
 import { MessageListComponent } from './message-list.component';
 import type { MessageItemComponent } from './message-item.component';
 
@@ -21,6 +21,20 @@ import type { MessageItemComponent } from './message-item.component';
  * (Co-located as .dom.test.ts because importing the component pulls the Angular graph
  * the node project can't load.)
  */
+/**
+ * Constructs the component with both DI arguments stubbed.
+ *
+ * `hostRef` joined the constructor with the scroll-root work. These specs never reach the
+ * observer paths that dereference it, but the signature is real — and vitest's esbuild
+ * transform strips types without checking them, so omitting it passes the suite while
+ * failing `tsc -p tsconfig.spec.json`. Safe to build a real element here: this file matches
+ * the jsdom project, not the node one.
+ */
+const makeComponent = () => new MessageListComponent(
+  { markForCheck: () => {}, detectChanges: () => {} } as unknown as ChangeDetectorRef,
+  { nativeElement: document.createElement('div') } as ElementRef<HTMLElement>
+);
+
 describe('MessageListComponent — assistant identity re-stamp', () => {
   const makeList = () => {
     const list = Object.create(MessageListComponent.prototype) as MessageListComponent;
@@ -90,7 +104,7 @@ describe('MessageListComponent — assistant identity re-stamp', () => {
   });
 
   it('a real instance defaults both to null (engine-resolved identity)', () => {
-    const list = new MessageListComponent({ markForCheck: () => {}, detectChanges: () => {} } as unknown as ChangeDetectorRef);
+    const list = makeComponent();
     expect(list.assistantDisplayName).toBeNull();
     expect(list.assistantAvatarUrl).toBeNull();
   });
@@ -100,7 +114,7 @@ describe('MessageListComponent — assistant identity re-stamp', () => {
     // order matters: if a restamp could run before the map exists it would throw.
     // Angular always binds inputs post-construction, and this pins that assumption
     // against a future field reorder.
-    const list = new MessageListComponent({ markForCheck: () => {}, detectChanges: () => {} } as unknown as ChangeDetectorRef);
+    const list = makeComponent();
     expect(() => {
       list.assistantDisplayName = 'Betty';
       list.assistantAvatarUrl = 'https://x/b.png';

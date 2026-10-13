@@ -298,12 +298,39 @@ import { takeUntil } from 'rxjs/operators';
   `]
 })
 export class GlobalTasksPanelComponent implements OnInit, OnDestroy {
-  public tasks: ActiveTask[] = [];
-  public isMinimized: boolean = false;
+  public Tasks: ActiveTask[] = [];
+
+  /** @deprecated Use {@link Tasks}. */
+  public get tasks(): ActiveTask[] {
+    return this.Tasks;
+  }
+  /** @deprecated Use {@link Tasks}. */
+  public set tasks(value: ActiveTask[]) {
+    this.Tasks = value;
+  }
+  public IsMinimized: boolean = false;
+
+  /** @deprecated Use {@link IsMinimized}. */
+  public get isMinimized(): boolean {
+    return this.IsMinimized;
+  }
+  /** @deprecated Use {@link IsMinimized}. */
+  public set isMinimized(value: boolean) {
+    this.IsMinimized = value;
+  }
 
   private destroy$ = new Subject<void>();
 
-  @Output() taskClicked = new EventEmitter<ActiveTask>();
+  @Output() TaskClicked = new EventEmitter<ActiveTask>();
+
+  /**
+   * @deprecated Use {@link TaskClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (taskClicked) keeps working. Must stay AFTER TaskClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() taskClicked = this.TaskClicked;
 
   constructor(private activeTasksService: ActiveTasksService) {}
 
@@ -312,10 +339,10 @@ export class GlobalTasksPanelComponent implements OnInit, OnDestroy {
     this.activeTasksService.tasks$.pipe(
       takeUntil(this.destroy$)
     ).subscribe(tasks => {
-      this.tasks = tasks;
+      this.Tasks = tasks;
 
       // Auto-expand if tasks appear and panel was minimized
-      if (this.tasks.length > 0 && this.isMinimized) {
+      if (this.Tasks.length > 0 && this.IsMinimized) {
         // Keep minimized, let user expand manually
       }
     });
@@ -326,25 +353,45 @@ export class GlobalTasksPanelComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
+  Expand() {
+    this.IsMinimized = false;
+  }
+
+  /** @deprecated Use {@link Expand}. */
   expand() {
-    this.isMinimized = false;
+    return this.Expand();
   }
 
+  Minimize() {
+    this.IsMinimized = true;
+  }
+
+  /** @deprecated Use {@link Minimize}. */
   minimize() {
-    this.isMinimized = true;
+    return this.Minimize();
   }
 
+  OnTaskClick(task: ActiveTask) {
+    this.TaskClicked.emit(task);
+  }
+
+  /** @deprecated Use {@link OnTaskClick}. */
   onTaskClick(task: ActiveTask) {
-    this.taskClicked.emit(task);
+    return this.OnTaskClick(task);
   }
 
-  getTrimmedStatus(status: string): string {
+  GetTrimmedStatus(status: string): string {
     // Remove emojis and trim to 50 chars
     const cleaned = status.replace(/[\u{1F600}-\u{1F64F}]/gu, '').trim();
     return cleaned.length > 50 ? cleaned.substring(0, 47) + '...' : cleaned;
   }
 
-  getElapsedTime(task: ActiveTask): string {
+  /** @deprecated Use {@link GetTrimmedStatus}. */
+  getTrimmedStatus(status: string): string {
+    return this.GetTrimmedStatus(status);
+  }
+
+  GetElapsedTime(task: ActiveTask): string {
     const elapsed = Date.now() - task.startTime;
     const seconds = Math.floor(elapsed / 1000);
     const minutes = Math.floor(seconds / 60);
@@ -357,5 +404,10 @@ export class GlobalTasksPanelComponent implements OnInit, OnDestroy {
     } else {
       return `${seconds}s`;
     }
+  }
+
+  /** @deprecated Use {@link GetElapsedTime}. */
+  getElapsedTime(task: ActiveTask): string {
+    return this.GetElapsedTime(task);
   }
 }

@@ -11,7 +11,7 @@
 /**
  * Source types that can contribute to search results.
  */
-export type SearchSource = 'vector' | 'fulltext' | 'entity' | 'storage';
+export type SearchSource = 'vector' | 'fulltext' | 'entity' | 'storage' | 'tag';
 
 /**
  * Discriminator for how a search result should be rendered in the UI.
@@ -40,6 +40,8 @@ export interface SearchScoreBreakdown {
     Entity?: number;
     /** Score from file storage search */
     Storage?: number;
+    /** Score from tag-weighted search */
+    Tag?: number;
     /**
      * Re-rank score from the optional re-ranker stage (post-RRF, pre-dedup).
      * When present, the top-level `Score` has been replaced by this value.
@@ -69,7 +71,11 @@ export interface SearchParams {
     MaxResults?: number;
     /** Optional filters to narrow results */
     Filters?: SearchFilters;
-    /** Minimum score threshold (0-1). Results below this are excluded after RRF fusion. */
+    /**
+     * Minimum semantic similarity (0-1), applied to the vector lane's own score BEFORE fusion.
+     * Vector hits below it are dropped. Keyword, full-text, tag and storage hits have no numeric
+     * floor (a hit already means the text matched), and the fused `Score` is never compared to it.
+     */
     MinScore?: number;
     /** Search mode: 'full' applies enrichment, 'preview' skips it for speed */
     Mode?: SearchMode;
@@ -430,6 +436,8 @@ export interface SearchResultItem {
     ID: string;
     /** The entity this result came from */
     EntityName: string;
+    /** Human-readable display name for the entity (e.g., "People" instead of "MJ_BizApps_Common: People") */
+    EntityDisplayName?: string;
     /** The source record ID */
     RecordID: string;
     /** How the content was sourced: 'vector', 'fulltext', 'entity', or 'fused' */
@@ -438,7 +446,12 @@ export interface SearchResultItem {
     Title: string;
     /** Text snippet showing the relevant content */
     Snippet: string;
-    /** Fused relevance score (higher is more relevant) */
+    /**
+     * Ranking score, 0-1: the RRF score divided by its maximum (1.0 = every lane that returned
+     * results ranked it first), or a reranker's relevance when one ran. Results are ordered by it.
+     * It is rank-based, not a calibrated relevance or confidence; each lane's raw score is in
+     * `ScoreBreakdown`.
+     */
     Score: number;
     /** Per-source score breakdown */
     ScoreBreakdown: SearchScoreBreakdown;
@@ -460,6 +473,18 @@ export interface SearchResultItem {
     ProviderLabel?: string;
     /** Font Awesome icon class from the SearchProvider metadata (e.g., "fa-solid fa-brain") */
     ProviderIcon?: string;
+    /**
+     * Ranked-list key WITHIN a provider's results. Fusion ranks each distinct key as its own RRF
+     * list, so results whose scores are not comparable are merged by rank, never by score. The
+     * vector provider sets it to the embedding model: cosine scales differ by model (gte-small
+     * scores weak matches ~0.9, Gemini strong ones ~0.85), so one model's numbers say nothing
+     * about another's.
+     *
+     * Contract: a provider tags ALL of its results or NONE. Fully untagged = one ranked list.
+     * If a list is only partly tagged, the untagged remainder becomes its own lane rather than
+     * being merged into a tagged lane by raw score, which would compare scales again.
+     */
+    FusionLane?: string;
 }
 
 /**
@@ -495,7 +520,7 @@ export type SearchStreamEvent =
         /** Post-deduplication, post-permission, post-enrich result set — what Search() would have returned. */
         results: SearchResultItem[];
         /** Same shape as the synchronous SearchResult.SourceCounts. */
-        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number };
+        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number };
         /** Total wall-clock duration of the stream. */
         elapsedMs: number;
     }
@@ -525,6 +550,7 @@ export interface SearchResult {
         FullText: number;
         Entity: number;
         Storage: number;
+        Tag?: number;
     };
     /** Metadata for all active search providers (for UI filter facets and labels) */
     Providers: SearchProviderInfo[];

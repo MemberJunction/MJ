@@ -248,15 +248,78 @@ import { Subscription } from 'rxjs';
   `]
 })
 export class ActiveAgentIndicatorComponent implements OnInit, OnDestroy {
-  @Input() conversationId?: string;
-  @Input() currentUser!: UserInfo;
-  @Input() maxVisibleAgents: number = 3;
+  @Input() ConversationId?: string;
 
-  @Output() togglePanel = new EventEmitter<void>();
-  @Output() agentSelected = new EventEmitter<MJAIAgentRunEntity>();
+  /** @deprecated Use {@link ConversationId}. */
+  @Input() set conversationId(value: string | undefined) {
+    this.ConversationId = value;
+  }
+  /** @deprecated Use {@link ConversationId}. */
+  get conversationId(): string | undefined {
+    return this.ConversationId;
+  }
+  @Input() CurrentUser!: UserInfo;
 
-  public activeAgents: Array<{ run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }> = [];
-  public isExpanded: boolean = false;
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() MaxVisibleAgents: number = 3;
+
+  /** @deprecated Use {@link MaxVisibleAgents}. */
+  @Input() set maxVisibleAgents(value: number) {
+    this.MaxVisibleAgents = value;
+  }
+  /** @deprecated Use {@link MaxVisibleAgents}. */
+  get maxVisibleAgents(): number {
+    return this.MaxVisibleAgents;
+  }
+
+  @Output() TogglePanel = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link TogglePanel}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (togglePanel) keeps working. Must stay AFTER TogglePanel: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() togglePanel = this.TogglePanel;
+  @Output() AgentSelected = new EventEmitter<MJAIAgentRunEntity>();
+
+  /**
+   * @deprecated Use {@link AgentSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (agentSelected) keeps working. Must stay AFTER AgentSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() agentSelected = this.AgentSelected;
+
+  public ActiveAgents: Array<{ run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }> = [];
+
+  /** @deprecated Use {@link ActiveAgents}. */
+  public get activeAgents(): Array<{ run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }> {
+    return this.ActiveAgents;
+  }
+  /** @deprecated Use {@link ActiveAgents}. */
+  public set activeAgents(value: Array<{ run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }>) {
+    this.ActiveAgents = value;
+  }
+  public IsExpanded: boolean = false;
+
+  /** @deprecated Use {@link IsExpanded}. */
+  public get isExpanded(): boolean {
+    return this.IsExpanded;
+  }
+  /** @deprecated Use {@link IsExpanded}. */
+  public set isExpanded(value: boolean) {
+    this.IsExpanded = value;
+  }
 
   private subscription?: Subscription;
 
@@ -265,9 +328,9 @@ export class ActiveAgentIndicatorComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     // Subscribe to active agents for this conversation
     this.subscription = this.agentStateService
-      .getActiveAgents(this.conversationId)
+      .getActiveAgents(this.ConversationId)
       .subscribe(agents => {
-        this.activeAgents = agents;
+        this.ActiveAgents = agents;
       });
   }
 
@@ -275,22 +338,32 @@ export class ActiveAgentIndicatorComponent implements OnInit, OnDestroy {
     this.subscription?.unsubscribe();
   }
 
-  get displayAgents(): Array<{ run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }> {
-    if (this.isExpanded) {
-      return this.activeAgents;
+  get DisplayAgents(): Array<{ run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }> {
+    if (this.IsExpanded) {
+      return this.ActiveAgents;
     }
-    return this.activeAgents.slice(0, this.maxVisibleAgents);
+    return this.ActiveAgents.slice(0, this.MaxVisibleAgents);
   }
 
-  getAgentTooltip(agent: { run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }): string {
-    const statusText = this.getStatusText(agent.status);
+  /** @deprecated Use {@link DisplayAgents}. */
+  get displayAgents(): Array<{ run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }> {
+    return this.DisplayAgents;
+  }
+
+  GetAgentTooltip(agent: { run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }): string {
+    const statusText = this.GetStatusText(agent.status);
     const confidenceText = agent.confidence != null
       ? ` (Confidence: ${(agent.confidence * 100).toFixed(0)}%)`
       : '';
     return `${agent.run.Agent || 'Agent'} - ${statusText}${confidenceText}`;
   }
 
-  getStatusText(status: AgentStatus): string {
+  /** @deprecated Use {@link GetAgentTooltip}. */
+  getAgentTooltip(agent: { run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }): string {
+    return this.GetAgentTooltip(agent);
+  }
+
+  GetStatusText(status: AgentStatus): string {
     switch (status) {
       case 'acknowledging': return 'Acknowledging request';
       case 'working': return 'Working on task';
@@ -301,15 +374,35 @@ export class ActiveAgentIndicatorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** @deprecated Use {@link GetStatusText}. */
+  getStatusText(status: AgentStatus): string {
+    return this.GetStatusText(status);
+  }
+
+  ToggleExpanded(): void {
+    this.IsExpanded = !this.IsExpanded;
+  }
+
+  /** @deprecated Use {@link ToggleExpanded}. */
   toggleExpanded(): void {
-    this.isExpanded = !this.isExpanded;
+    return this.ToggleExpanded();
   }
 
+  OnAgentClick(agent: { run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }): void {
+    this.AgentSelected.emit(agent.run);
+  }
+
+  /** @deprecated Use {@link OnAgentClick}. */
   onAgentClick(agent: { run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }): void {
-    this.agentSelected.emit(agent.run);
+    return this.OnAgentClick(agent);
   }
 
+  OnTogglePanel(): void {
+    this.TogglePanel.emit();
+  }
+
+  /** @deprecated Use {@link OnTogglePanel}. */
   onTogglePanel(): void {
-    this.togglePanel.emit();
+    return this.OnTogglePanel();
   }
 }

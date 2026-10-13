@@ -30,7 +30,7 @@ const REACTIVE_EVENT_TYPES: ReadonlySet<BaseEntityEvent['type']> = new Set([
  * @param onChange Callback invoked (fire-and-forget) on a matching save/delete/
  *   new-record event. Should be a stable reference (e.g. a `useCallback`).
  */
-export function useEntityChange(entityName: string | undefined, onChange: () => void): void {
+export function UseEntityChange(entityName: string | undefined, onChange: () => void): void {
     useEffect(() => {
         if (!entityName) return;
         const target = entityName.trim().toLowerCase();
@@ -44,4 +44,9 @@ export function useEntityChange(entityName: string | undefined, onChange: () => 
         });
         return () => subscription.unsubscribe();
     }, [entityName, onChange]);
+}
+
+/** @deprecated Use {@link UseEntityChange}. */
+export function useEntityChange(entityName: string | undefined, onChange: () => void): void {
+    return UseEntityChange(entityName, onChange);
 }

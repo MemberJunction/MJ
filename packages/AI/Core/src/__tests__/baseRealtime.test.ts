@@ -8,7 +8,12 @@ import {
     RealtimeToolCall,
     RealtimeUsage,
     RealtimeSessionError,
+    RealtimeInputFrame,
     ClientRealtimeSessionConfig,
+    REALTIME_SHARED_CONFIG_KEYS,
+    ExtractToolSchedulingHint,
+    RealtimeDiagLog,
+    ParseRealtimeClientTransport,
 } from '../generic/baseRealtime';
 import { IsTranscriptContinuation } from '../generic/transcriptContinuation';
 
@@ -18,7 +23,7 @@ import { IsTranscriptContinuation } from '../generic/transcriptContinuation';
  */
 class MockRealtimeSession implements IRealtimeSession {
     public RegisteredTools: RealtimeToolDefinition[] = [];
-    public SentInput: ArrayBuffer[] = [];
+    public SentInput: RealtimeInputFrame[] = [];
     public Closed = false;
     public SentToolResults: { CallID: string; Output: string }[] = [];
     public SentContextNotes: string[] = [];
@@ -32,8 +37,8 @@ class MockRealtimeSession implements IRealtimeSession {
     public ErrorHandler?: (error: RealtimeSessionError) => void;
     public CloseHandler?: () => void;
 
-    public SendInput(chunk: ArrayBuffer): void {
-        this.SentInput.push(chunk);
+    public SendInput(frame: RealtimeInputFrame): void {
+        this.SentInput.push(frame);
     }
 
     public async RegisterTools(tools: RealtimeToolDefinition[]): Promise<void> {
@@ -189,6 +194,38 @@ describe('BaseRealtimeModel client-direct capability', () => {
     });
 });
 
+describe('ParseRealtimeClientTransport', () => {
+    it("reads 'direct' and 'relay'", () => {
+        expect(ParseRealtimeClientTransport('direct')).toBe('direct');
+        expect(ParseRealtimeClientTransport('relay')).toBe('relay');
+    });
+
+    it('reads anything else as no transport (a direct session): absent, another word, another case, not a string', () => {
+        for (const value of [undefined, null, '', 'bridged', 'Relay', ' relay', 1, { relay: true }]) {
+            expect(ParseRealtimeClientTransport(value)).toBeUndefined();
+        }
+    });
+});
+
+describe('BaseRealtimeModel avatar output', () => {
+    it('SupportsAvatarOutput defaults to false for every model', () => {
+        const model = makeModel();
+        expect(model.SupportsAvatarOutput('gpt-realtime-2')).toBe(false);
+        expect(model.SupportsAvatarOutput('gemini-3.8-live')).toBe(false);
+    });
+
+    it('a driver may answer per model', () => {
+        class AvatarModel extends MockRealtimeModel {
+            public override SupportsAvatarOutput(model: string): boolean {
+                return model === 'avatar-model';
+            }
+        }
+        const model = new AvatarModel('test-api-key');
+        expect(model.SupportsAvatarOutput('avatar-model')).toBe(true);
+        expect(model.SupportsAvatarOutput('other-model')).toBe(false);
+    });
+});
+
 describe('IRealtimeSession', () => {
     let session: MockRealtimeSession;
 
@@ -205,7 +242,7 @@ describe('IRealtimeSession', () => {
 
     it('SendInput is callable and forwards media frames', () => {
         session = newSession();
-        const frame = new ArrayBuffer(8);
+        const frame: RealtimeInputFrame = { Data: new ArrayBuffer(8), Kind: 'video', MimeType: 'image/jpeg', TimestampMs: 40 };
         session.SendInput(frame);
         expect(session.SentInput).toHaveLength(1);
         expect(session.SentInput[0]).toBe(frame);
@@ -341,6 +378,38 @@ describe('IRealtimeSession', () => {
 // IsTranscriptContinuation — streamed-transcription turn-boundary rescue
 // ════════════════════════════════════════════════════════════════════
 
+/**
+ * Membership of the shared neutral vocabulary. This is the half of the contract the DRIVER suites
+ * cannot pin: each of them proves it scrubs whatever is in this registry, using a representative
+ * list, so nothing on their side notices if a key is missing from the real one. That gap is exactly
+ * how `firstMessage` reached the OpenAI wire (issue #3557) — it was added as an agnostic persona
+ * slot, filed onto every driver, and registered nowhere.
+ */
+describe('REALTIME_SHARED_CONFIG_KEYS', () => {
+    it.each([
+        ['voice', 'the agnostic voice id (#3530)'],
+        ['firstMessage', 'the agnostic opening utterance (#3557)'],
+        ['brokerBaseUrl', "OpenAI Live's SDP broker origin, which a provider bag keyed openai also files onto OpenAI Realtime"],
+    ])('registers %s — %s', (key) => {
+        expect(REALTIME_SHARED_CONFIG_KEYS).toContain(key);
+    });
+
+    it('every neutral persona slot filed onto drivers is registered here', () => {
+        // The persona's WIRE-level slots in RealtimeVoicePersona (@memberjunction/ai-agents) are
+        // filed onto WHICHEVER driver resolves, consumed or not, so each one has to be scrubbable.
+        // Stated as a list rather than derived: ai-agents depends on this package, not the reverse,
+        // so importing the persona type here would invert the dependency.
+        const agnosticPersonaWireSlots = ['voice', 'firstMessage'];
+        for (const slot of agnosticPersonaWireSlots) {
+            expect(REALTIME_SHARED_CONFIG_KEYS, `persona slot '${slot}' is filed onto every driver but not registered as shared`).toContain(slot);
+        }
+    });
+
+    it('holds no duplicates (a duplicate hides a rename that only half-landed)', () => {
+        expect(new Set(REALTIME_SHARED_CONFIG_KEYS).size).toBe(REALTIME_SHARED_CONFIG_KEYS.length);
+    });
+});
+
 describe('IsTranscriptContinuation', () => {
     // Verbatim strings from a live Grok session (session 72989D0A) where ONE spoken sentence was
     // persisted as three growing rows because a mid-sentence pause fired speech_started.
@@ -404,5 +473,93 @@ describe('IsTranscriptContinuation', () => {
         // Guarded in practice by clearing the anchor once the model replies, but the helper itself
         // must not treat an unrelated longer sentence as a continuation unless it truly extends.
         expect(IsTranscriptContinuation('Yes, do the first one.', 'Yes, do the second one instead.')).toBe(false);
+    });
+});
+
+describe('ExtractToolSchedulingHint', () => {
+    it('normalizes SILENT, WHEN_IDLE, INTERRUPT, and INTERRUPTED', () => {
+        expect(ExtractToolSchedulingHint({ scheduling: 'SILENT' }, 't1')).toBe('silent');
+        expect(ExtractToolSchedulingHint({ scheduling: 'WHEN_IDLE' }, 't2')).toBe('whenIdle');
+        expect(ExtractToolSchedulingHint({ scheduling: 'INTERRUPT' }, 't3')).toBe('interrupt');
+        expect(ExtractToolSchedulingHint({ scheduling: 'INTERRUPTED' }, 't4')).toBe('interrupt');
+        // Case-insensitive and trimmed
+        expect(ExtractToolSchedulingHint({ scheduling: '  silent  ' }, 't5')).toBe('silent');
+    });
+
+    it('prefers __mj_scheduling over legacy scheduling and strips both keys in-place', () => {
+        const payload: Record<string, unknown> = {
+            __mj_scheduling: 'INTERRUPT',
+            scheduling: 'SILENT',
+            result: 'some_data',
+        };
+        const hint = ExtractToolSchedulingHint(payload, 'my_tool');
+        expect(hint).toBe('interrupt');
+        expect(payload['result']).toBe('some_data');
+        expect(payload['__mj_scheduling']).toBeUndefined();
+        expect(payload['scheduling']).toBeUndefined();
+    });
+
+    it('strips legacy scheduling when present alone', () => {
+        const payload: Record<string, unknown> = {
+            scheduling: 'WHEN_IDLE',
+            data: 123,
+        };
+        const hint = ExtractToolSchedulingHint(payload, 'tool2');
+        expect(hint).toBe('whenIdle');
+        expect(payload['data']).toBe(123);
+        expect(payload['scheduling']).toBeUndefined();
+    });
+
+    it('returns undefined when no scheduling key is present', () => {
+        const payload = { a: 1 };
+        expect(ExtractToolSchedulingHint(payload, 'no_sched')).toBeUndefined();
+        expect(payload).toEqual({ a: 1 });
+    });
+
+    it('warns and returns undefined on unrecognized scheduling value', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const payload = { scheduling: 'BOGUS_SCHED', foo: 'bar' };
+            const hint = ExtractToolSchedulingHint(payload, 'bad_tool', 'TestLogger');
+            expect(hint).toBeUndefined();
+            expect(payload['foo']).toBe('bar');
+            expect(payload['scheduling']).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(
+                expect.stringContaining('[TestLogger] Unrecognized function scheduling value "BOGUS_SCHED" for tool "bad_tool".')
+            );
+        } finally {
+            warn.mockRestore();
+        }
+    });
+});
+
+
+describe('RealtimeDiagLog', () => {
+    it('is a silent no-op when there is no global process (browser client drivers call it)', () => {
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        const nodeProcess = globalThis.process;
+        Reflect.deleteProperty(globalThis, 'process');
+        try {
+            expect(typeof globalThis.process).toBe('undefined');
+            expect(() => RealtimeDiagLog('[GeminiRealtimeClient] Transport closed: code=1011')).not.toThrow();
+        } finally {
+            globalThis.process = nodeProcess;
+        }
+        expect(log).not.toHaveBeenCalled();
+        log.mockRestore();
+    });
+
+    it('still logs when MJ_VERBOSE is on in Node', () => {
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        const previous = process.env.MJ_VERBOSE;
+        process.env.MJ_VERBOSE = 'true';
+        try {
+            RealtimeDiagLog('[diag] turn boundary');
+        } finally {
+            if (previous === undefined) delete process.env.MJ_VERBOSE;
+            else process.env.MJ_VERBOSE = previous;
+        }
+        expect(log).toHaveBeenCalledWith('[diag] turn boundary');
+        log.mockRestore();
     });
 });

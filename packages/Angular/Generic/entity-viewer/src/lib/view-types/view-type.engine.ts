@@ -59,23 +59,28 @@ export class ViewTypeEngine extends BaseEngine<ViewTypeEngine> {
    * whose renderer plugins are out of scope for this round).
    */
   public GetDescriptor(driverClass: string): BaseViewTypeDescriptor | null {
-    if (!driverClass) {
+    if (!driverClass || !this.hasDescriptorRegistration(driverClass)) {
       return null;
     }
     const descriptor = MJGlobal.Instance.ClassFactory.CreateInstance<BaseViewTypeDescriptor>(
       BaseViewTypeDescriptor,
       driverClass
     );
-    // When no concrete descriptor is registered for this DriverClass, the ClassFactory falls
-    // back to instantiating the abstract BaseViewTypeDescriptor itself — which yields a useless
-    // instance with undefined Name/DisplayName/Icon/RendererComponent (and IsAvailableFor()===true
-    // by default). That would render as a blank, clickable item in the switcher. Treat that
-    // fallback as "not registered" so unimplemented view types (e.g. a seeded TagCloud row with
-    // no TagCloudViewType class) are simply omitted.
+    // Defense in depth: if CreateInstance still handed back the abstract base (no renderer,
+    // wrong Name), omit it rather than render a blank switcher item.
     if (!descriptor || !descriptor.RendererComponent || descriptor.Name !== driverClass) {
       return null;
     }
     return descriptor;
+  }
+
+  /**
+   * True when a concrete descriptor is registered for this DriverClass. Probing first avoids
+   * ClassFactory's "no registration found, falling back to the base" warning for seeded rows
+   * whose plugin has not been built yet (TagCloudViewType today).
+   */
+  private hasDescriptorRegistration(driverClass: string): boolean {
+    return MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseViewTypeDescriptor, driverClass).length > 0;
   }
 
   /**

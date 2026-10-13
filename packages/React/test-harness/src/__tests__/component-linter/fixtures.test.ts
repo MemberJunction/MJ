@@ -16,7 +16,7 @@ import { ComponentLinter, LintResult } from '@memberjunction/react-linter';
 import { loadFixturesByCategory, LoadedFixture } from './fixture-loader';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { UserInfo } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Setup helpers
@@ -116,7 +116,7 @@ describe('Broken Component Fixtures', () => {
     const skipReason = shouldSkip(fixture);
 
     if (skipReason) {
-      it.skip(`${fixture.metadata.name} (${skipReason})`, () => {});
+      it.skip(`${fixture.metadata.name} (${skipReason})`, () => {}); // KNOWN LIMITATION: fixture-declared skipReason
     } else {
       it(`${fixture.metadata.name}`, async () => {
         const result = await lintFixture(fixture);
@@ -142,7 +142,7 @@ describe('Fixed Component Fixtures', () => {
     const skipReason = shouldSkip(fixture);
 
     if (skipReason) {
-      it.skip(`${fixture.metadata.name} (${skipReason})`, () => {});
+      it.skip(`${fixture.metadata.name} (${skipReason})`, () => {}); // KNOWN LIMITATION: fixture-declared skipReason
     } else {
       it(`${fixture.metadata.name}`, async () => {
         const result = await lintFixture(fixture);
@@ -171,7 +171,7 @@ describe('Valid Component Fixtures', () => {
     const skipReason = shouldSkip(fixture);
 
     if (skipReason) {
-      it.skip(`${fixture.metadata.name} (${skipReason})`, () => {});
+      it.skip(`${fixture.metadata.name} (${skipReason})`, () => {}); // KNOWN LIMITATION: fixture-declared skipReason
     } else {
       it(`${fixture.metadata.name}`, async () => {
         const result = await lintFixture(fixture);

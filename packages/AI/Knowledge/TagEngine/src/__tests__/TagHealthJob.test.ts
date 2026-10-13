@@ -6,6 +6,7 @@ interface FakeTag {
     ParentID: string | null;
     Status?: string;
     EmbeddingVector?: string | null;
+    EmbeddingVectorBinary?: string | null;
     MaxChildren?: number | null;
 }
 
@@ -53,6 +54,10 @@ vi.mock('../TagGovernanceEngine', () => ({
     },
 }));
 
+vi.mock('@memberjunction/ai-vectors-memory', async () => ({
+    ReadStoredVector: (await import('./helpers/readStoredVectorStub')).ReadStoredVectorStub,
+}));
+
 vi.mock('@memberjunction/global', () => ({
     BaseSingleton: class<T> {
         public constructor() {}
@@ -76,12 +81,20 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
+    // Imported by PriceUnitTypes in @memberjunction/ai-engine-base. Same wholesale-mock
+    // caveat as above: unlisted means uncollectable, not merely unmocked.
+    MJAIModelPriceUnitTypeEntity: class {},
     MJTagCoOccurrenceEntity: class {},
     MJTagSuggestionEntity: class {},
     MJTagEntity: class {},
 }));
 
 import { TagHealthJob, DEFAULT_TAG_HEALTH_THRESHOLDS } from '../TagHealthJob';
+
+/** Base64 of the little-endian float32 bytes — the shape of the EmbeddingVectorBinary column. */
+function toBinary(values: number[]): string {
+    return Buffer.from(new Float32Array(values).buffer).toString('base64');
+}
 
 function pushTags(tags: FakeTag[]): void {
     for (const t of tags) TAGS.push(t);
@@ -160,6 +173,59 @@ describe('TagHealthJob', () => {
             const wide = ENQUEUE_CALLS.find(c => c.reason === 'WideNode');
             expect(wide).toBeDefined();
             expect(wide!.proposedName).toBe('WideRoot');
+        });
+    });
+    describe('merge candidates from the binary embedding column', () => {
+        const coOcc = { Success: true, Results: [{ TagAID: 'A', TagBID: 'B', CoOccurrenceCount: 50 }] };
+
+        it('computes similarity from binary-only tags (no JSON column at all)', async () => {
+            pushTags([
+                { ID: 'A', Name: 'Machine Learning', ParentID: null, Status: 'Active', EmbeddingVector: null, EmbeddingVectorBinary: toBinary([1, 0, 0]) },
+                { ID: 'B', Name: 'MachineLearning', ParentID: null, Status: 'Active', EmbeddingVector: null, EmbeddingVectorBinary: toBinary([1, 0, 0]) },
+            ]);
+            setRunViewResponse('co-occurrence', coOcc);
+
+            const summary = await job.Run(DEFAULT_TAG_HEALTH_THRESHOLDS, ctxUser);
+            expect(summary.mergeCount).toBe(1);
+            const merge = ENQUEUE_CALLS.find(c => c.reason === 'MergeCandidate');
+            expect(merge?.bestMatchScore).toBeCloseTo(1, 6);
+        });
+
+        it('prefers the binary column over a disagreeing JSON column', async () => {
+            // JSON says identical (would merge); binary says orthogonal (must not merge).
+            const sameJSON = JSON.stringify([1, 0, 0]);
+            pushTags([
+                { ID: 'A', Name: 'Machine Learning', ParentID: null, Status: 'Active', EmbeddingVector: sameJSON, EmbeddingVectorBinary: toBinary([1, 0, 0]) },
+                { ID: 'B', Name: 'MachineLearning', ParentID: null, Status: 'Active', EmbeddingVector: sameJSON, EmbeddingVectorBinary: toBinary([0, 1, 0]) },
+            ]);
+            setRunViewResponse('co-occurrence', coOcc);
+
+            const summary = await job.Run(DEFAULT_TAG_HEALTH_THRESHOLDS, ctxUser);
+            expect(summary.mergeCount).toBe(0);
+        });
+
+        it('falls back to JSON when the binary column is unreadable', async () => {
+            const vec = JSON.stringify([1, 0, 0]);
+            pushTags([
+                // 3 bytes: not a multiple of 4, so it is not a float32 vector.
+                { ID: 'A', Name: 'Machine Learning', ParentID: null, Status: 'Active', EmbeddingVector: vec, EmbeddingVectorBinary: Buffer.from([1, 2, 3]).toString('base64') },
+                { ID: 'B', Name: 'MachineLearning', ParentID: null, Status: 'Active', EmbeddingVector: vec, EmbeddingVectorBinary: toBinary([1, 0, 0]) },
+            ]);
+            setRunViewResponse('co-occurrence', coOcc);
+
+            const summary = await job.Run(DEFAULT_TAG_HEALTH_THRESHOLDS, ctxUser);
+            expect(summary.mergeCount).toBe(1);
+        });
+
+        it('emits nothing when one tag has no usable vector in either column', async () => {
+            pushTags([
+                { ID: 'A', Name: 'Machine Learning', ParentID: null, Status: 'Active', EmbeddingVector: null, EmbeddingVectorBinary: toBinary([1, 0, 0]) },
+                { ID: 'B', Name: 'MachineLearning', ParentID: null, Status: 'Active', EmbeddingVector: 'not json', EmbeddingVectorBinary: null },
+            ]);
+            setRunViewResponse('co-occurrence', coOcc);
+
+            const summary = await job.Run(DEFAULT_TAG_HEALTH_THRESHOLDS, ctxUser);
+            expect(summary.mergeCount).toBe(0);
         });
     });
 });
