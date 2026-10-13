@@ -27,7 +27,7 @@
  * LMStudio) cannot be recorded; those findings say so instead of guessing. The AI Prompt Runs the
  * checks create are their own output and are kept, as the prompt-runner bundle does.
  */
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseLLM } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -61,7 +61,7 @@ const KNOWN_EFFORT_GAPS: Record<string, string> = {
  * when the driver or the model's metadata is fixed.
  */
 const KNOWN_EFFORT_REJECTIONS: Record<string, string> = {
-    'grok-build-0.1': 'xAI rejects reasoning_effort ("does not support parameter reasoningEffort") although the model is flagged SupportsEffortLevel',
+    // Empty: Grok Build 0.1, the first entry, was fixed by flagging it SupportsEffortLevel = false.
 };
 
 /** Request-body keys that carry an effort or thinking setting, across vendors. */
@@ -98,9 +98,10 @@ class CredentialProbeRunner extends AIPromptRunner {
 /** Every Active inference-provider row for an Active LLM that supports effort and has a driver loaded here. */
 function effortCapableTargets(): EffortTarget[] {
     const engine = AIEngine.Instance;
+    const modelsByID = IndexByUUID(engine.Models);
     const targets: EffortTarget[] = [];
     for (const mv of engine.ModelVendors) {
-        const model = engine.Models.find(m => UUIDsEqual(m.ID, mv.ModelID));
+        const model = modelsByID.Get(mv.ModelID);
         const driver = mv.DriverClass || model?.DriverClass;
         if (!model || !driver || !model.IsActive || mv.Status !== 'Active' || !engine.IsInferenceProvider(mv)) continue;
         if (model.AIModelType?.trim().toLowerCase() !== 'llm') continue;
