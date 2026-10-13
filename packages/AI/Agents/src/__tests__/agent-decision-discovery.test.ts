@@ -313,6 +313,7 @@ class DiscoveryHarness {
             Agents: [this.self, ...this.catalog],
             AgentRelationships: [],
             AgentCategories: [],
+            ResolveAgentStorageAccountID: () => null,
             ScopedPromptParts: [],
             ScopedPromptConfigs: [],
             AgentTypes: [

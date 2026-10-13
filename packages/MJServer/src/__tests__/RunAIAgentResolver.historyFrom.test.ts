@@ -108,8 +108,8 @@ afterEach(() => {
 describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
     let resolver: RunAIAgentResolver;
     let seams: ResolverSeams;
-    /** The floor's position in executeAIAgent / executeAgentInBackground: last but one, before TrustReservedRunData. */
-    const FLOOR_ARG = -2;
+    /** The floor's position in executeAIAgent / executeAgentInBackground: third from last, before TrustReservedRunData and the branch. */
+    const FLOOR_ARG = -3;
 
     beforeEach(() => {
         ({ resolver, seams } = makeResolver());
@@ -180,7 +180,7 @@ describe('loadConversationHistoryWithAttachments — history floor', () => {
         }).loadConversationHistoryWithAttachments.bind(resolver);
         await load('conv-1', USER, 20, provider, ['detail-1'], floor);
 
-        expect(loadRows).toHaveBeenCalledWith('conv-1', USER, provider, floor);
+        expect(loadRows).toHaveBeenCalledWith('conv-1', USER, provider, floor, undefined);
         expect(assemble.mock.calls[0][1]).toEqual({ maxTailMessages: 20, excludeDetailIds: ['detail-1'], historyFrom: floor });
     });
 });

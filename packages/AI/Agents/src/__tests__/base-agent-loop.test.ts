@@ -326,6 +326,7 @@ class LoopHarness {
             Agents: [],
             AgentRelationships: [],
             AgentCategories: [],
+            ResolveAgentStorageAccountID: () => null,
             ScopedPromptParts: [],
             ScopedPromptConfigs: [],
             AgentTypes: [
