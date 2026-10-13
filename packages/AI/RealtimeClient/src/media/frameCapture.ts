@@ -1,18 +1,29 @@
 /**
  * @fileoverview FRAME CAPTURE for realtime video tracks — camera and screen capture pipelines.
  *
- * Patterned beside `micCapture.ts`:
- * - `CreateCameraCapture`: prompts via `getUserMedia` (consent-gated via {@link RealtimeTrackDescriptor.RequiresConsent}).
- * - `CreateScreenCapture`: prompts via `getDisplayMedia` (consent-gated via {@link RealtimeTrackDescriptor.RequiresConsent}).
- * - `CreateStreamFrameCapture`: extracts periodic JPEG frames from an already-acquired `MediaStream`.
+ * Patterned beside `micCapture.ts`. Every exported function here is deprecated; new code uses the `/media` modules:
+ * - `CreateCameraCapture` (deprecated): prompts via `getUserMedia` (consent-gated via
+ *   {@link RealtimeTrackDescriptor.RequiresConsent}). New code starts the camera with `LocalMediaController` and samples
+ *   its stream with {@link FrameSampler}.
+ * - `CreateScreenCapture` (deprecated): prompts via `getDisplayMedia` (consent-gated via
+ *   {@link RealtimeTrackDescriptor.RequiresConsent}). New code shares with `RequestDisplayCapture` and samples with
+ *   {@link FrameSampler}.
+ * - `CreateStreamFrameCapture` (deprecated): extracts periodic JPEG frames from an already-acquired
+ *   `MediaStream`. It is now a thin wrapper over {@link FrameSampler}, which new code uses directly.
  *
- * Cadence is throttled to at most 1 frame per second (1 fps ceiling per Live API capabilities guide).
+ * The two capture helpers keep their own `getUserMedia` and `getDisplayMedia` calls rather than wrapping the new
+ * modules: those differ in what they offer (the screen picker leaves out the current tab, for one) and in how they
+ * report a failure, so a caller of a helper keeps the behaviour it was written against.
+ *
+ * Capture runs at the device's native frame rate; only the sampling is paced, at the rate the caller passes
+ * (the negotiated track rate). There is no 1 fps ceiling here.
  *
  * @module @memberjunction/ai-realtime-client
  * @author MemberJunction.com
  */
 
 import type { RealtimeTrackDescriptor } from '@memberjunction/ai';
+import { FrameSampler } from './frameSampler';
 
 /**
  * Handle returned by frame capture factories: stops capture and releases video resources.
@@ -36,8 +47,8 @@ export interface FrameCaptureOptions {
      */
     ConsentGranted?: boolean;
     /**
-     * Capture cadence in frames per second (fps).
-     * Capped at 1 fps maximum (Gemini Live ceiling). Defaults to `Descriptor?.Rate ?? 1`.
+     * Frames per second to sample. No ceiling: pass the negotiated track rate. Defaults to
+     * `Descriptor?.Rate ?? 1`.
      */
     Rate?: number;
     /** Output image format ('image/jpeg' or 'image/png'). Defaults to 'image/jpeg'. */
@@ -51,6 +62,8 @@ export interface FrameCaptureOptions {
 /**
  * Creates a frame capture pump over an already-acquired {@link MediaStream}.
  *
+ * @deprecated Use {@link FrameSampler}, which reports whether it started and returns frame sizes and
+ *   timestamps. This wrapper passes `Rate` through unchanged; it no longer caps it at 1 fps.
  * @param stream The media stream containing one or more video tracks.
  * @param options Frame capture options (cadence, format, frame callback).
  */
@@ -58,74 +71,20 @@ export function CreateStreamFrameCapture(
     stream: MediaStream,
     options: FrameCaptureOptions
 ): IFrameCapture {
-    const rawRate = options.Rate ?? options.Descriptor?.Rate ?? 1;
-    // Cadence ceiling: max 1 fps per Gemini Live API specs; minimum 0.1 fps
-    const rate = Math.min(Math.max(rawRate, 0.1), 1);
-    const intervalMs = Math.floor(1000 / rate);
-    const mimeType = options.MimeType ?? 'image/jpeg';
-    const quality = options.Quality ?? 0.8;
+    return startSampler(stream, options);
+}
 
-    let stopped = false;
-    let timer: ReturnType<typeof setInterval> | null = null;
-    let videoEl: HTMLVideoElement | null = null;
-    let canvasEl: HTMLCanvasElement | null = null;
-
-    if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
-        try {
-            videoEl = document.createElement('video');
-            videoEl.muted = true;
-            videoEl.playsInline = true;
-            videoEl.srcObject = stream;
-            void videoEl.play().catch(() => {
-                // Autoplay may be restricted without user interaction; non-fatal for capture
-            });
-            canvasEl = document.createElement('canvas');
-        } catch (err) {
-            console.error('[FrameCapture] Failed to initialize DOM elements for video capture:', err);
-        }
-    }
-
-    const captureTick = () => {
-        if (stopped) {
-            return;
-        }
-        if (videoEl && canvasEl && videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
-            canvasEl.width = videoEl.videoWidth;
-            canvasEl.height = videoEl.videoHeight;
-            const ctx = canvasEl.getContext('2d');
-            if (ctx) {
-                ctx.drawImage(videoEl, 0, 0);
-                const dataUrl = canvasEl.toDataURL(mimeType, quality);
-                const base64 = dataUrl.split(',')[1] ?? '';
-                if (base64.length > 0) {
-                    options.OnFrame({ data: base64, mimeType });
-                }
-            }
-        }
-    };
-
-    if (videoEl && canvasEl) {
-        timer = setInterval(captureTick, intervalMs);
-    } else {
-        console.warn(
-            '[FrameCapture] No video/canvas element available (no DOM, or element construction failed) — ' +
-            'this capture will emit no frames.'
-        );
-    }
-
+/** Samples a stream with a {@link FrameSampler}, behind the older {@link IFrameCapture} handle. */
+function startSampler(stream: MediaStream, options: FrameCaptureOptions): IFrameCapture {
+    const sampler = new FrameSampler(stream, {
+        Rate: options.Rate ?? options.Descriptor?.Rate ?? 1,
+        MimeType: options.MimeType,
+        Quality: options.Quality,
+        OnFrame: (frame) => options.OnFrame({ data: frame.Data, mimeType: frame.MimeType }),
+    });
+    sampler.Start();
     return {
-        Stop: () => {
-            stopped = true;
-            if (timer) {
-                clearInterval(timer);
-                timer = null;
-            }
-            if (videoEl) {
-                videoEl.srcObject = null;
-                videoEl = null;
-            }
-            canvasEl = null;
-        },
+        Stop: () => sampler.Stop(),
         get Stream(): MediaStream {
             return stream;
         },
@@ -136,6 +95,9 @@ export function CreateStreamFrameCapture(
  * Requests user camera video capture via `navigator.mediaDevices.getUserMedia`.
  * Gated on {@link FrameCaptureOptions.ConsentGranted} when consent is required.
  *
+ * @deprecated Start the camera with `LocalMediaController` (in `localMediaController.ts`), which lists and switches
+ *   devices and reports failures as a state, then sample its stream (`GetStream('camera')`) with a
+ *   {@link FrameSampler}.
  * @param options Frame capture options.
  * @param constraints Video track constraints.
  */
@@ -150,10 +112,11 @@ export async function CreateCameraCapture(
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
         throw new Error('Camera capture is unavailable: navigator.mediaDevices.getUserMedia not supported in this environment.');
     }
+    // No frameRate cap: the camera runs at its native rate (a smooth self-view); only sampling is paced.
     const stream = await navigator.mediaDevices.getUserMedia({
-        video: constraints ?? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { max: 1 } },
+        video: constraints ?? { width: { ideal: 1280 }, height: { ideal: 720 } },
     });
-    const capture = CreateStreamFrameCapture(stream, options);
+    const capture = startSampler(stream, options);
     return {
         Stop: () => {
             capture.Stop();
@@ -169,6 +132,8 @@ export async function CreateCameraCapture(
  * Requests screen share video capture via `navigator.mediaDevices.getDisplayMedia`.
  * Gated on {@link FrameCaptureOptions.ConsentGranted} when consent is required.
  *
+ * @deprecated Use `RequestDisplayCapture` (in `displayCapture.ts`), which offers surface hints and panel
+ *   capture and reports what was shared, then a {@link FrameSampler} on its stream.
  * @param options Frame capture options.
  * @param displayMediaOptions Display media options.
  */
@@ -183,10 +148,9 @@ export async function CreateScreenCapture(
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getDisplayMedia) {
         throw new Error('Screen capture is unavailable: navigator.mediaDevices.getDisplayMedia not supported in this environment.');
     }
-    const stream = await navigator.mediaDevices.getDisplayMedia(
-        displayMediaOptions ?? { video: { frameRate: { max: 1 } } }
-    );
-    const capture = CreateStreamFrameCapture(stream, options);
+    // No frameRate cap: the share runs at its native rate; only sampling is paced.
+    const stream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions ?? { video: true });
+    const capture = startSampler(stream, options);
     return {
         Stop: () => {
             capture.Stop();
@@ -198,7 +162,7 @@ export async function CreateScreenCapture(
     };
 }
 
-/** @deprecated Use {@link CreateStreamFrameCapture}. */
+/** @deprecated Use {@link FrameSampler}. */
 export function createStreamFrameCapture(
     stream: MediaStream,
     options: FrameCaptureOptions

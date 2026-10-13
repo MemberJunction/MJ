@@ -1,0 +1,8 @@
+---
+"@memberjunction/ng-conversations": patch
+"@memberjunction/ai-realtime-client": patch
+---
+
+A call keeps the agent's video in its place while the session resumes on a new connection. A resume (Google's `goAway`, a dropped socket, or the Enterprise relay's new socket) takes the call through `'connecting'`, and the overlay used to swap its hero for the connecting screen then: the video lost its place, and the stage laid it over the whole call, banner and controls included, until the call was back. Now the connecting screen gives way to a hero the agent's video presents in (`RealtimeSessionOverlayComponent.ShowConnectingScreen`), so the video keeps its place and its element, its last frame stays on screen, and its tile says "Connecting". After about a second without a frame, the tile's stall fallback shows the orb in the video's place, as before, and the next frame brings the video back. Video that arrives while a call first connects goes to the hero the same way. The console chrome, a video moved to picture-in-picture and a call with no video still show the connecting screen as before.
+
+`@memberjunction/ai-realtime-client` has no code change. Its tests now drive a resume with the real `VideoPlayout` (after `goAway`, after a dropped socket, and through the Enterprise relay) and check that the player keeps one element, media source and source buffer, lets the cut turn play out without a flush, appends the new connection's init segment and fragments to the same buffer and plays on from the last frame, and still flushes on barge-in. The test MSE fake now reopens an ended stream on the next append, as browsers do.

@@ -73,7 +73,11 @@ export function PassesSemanticFloor(result: SearchResultItem, minScore: number):
     const b = result.ScoreBreakdown ?? {};
     const hasTextEvidence = b.Entity != null || b.FullText != null || b.Storage != null || b.Tag != null;
     if (hasTextEvidence) return true;
-    if (b.Vector == null) return true; // nothing to judge it by
+    // No semantic evidence: nothing to judge, so it passes. Unlike the server's
+    // ApplySemanticFloor (which runs before fusion, on raw provider scores), this must NOT fall
+    // back to `Score`: here `Score` is fused and rank-based, and comparing it to the cutoff is
+    // the bug this function exists to avoid.
+    if (b.Vector == null) return true;
     return b.Vector >= minScore;
 }
 
