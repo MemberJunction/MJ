@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
@@ -16282,12 +16282,10 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Resolves the file storage account ID for this agent's file artifacts.
      *
-     * Resolution chain (first non-null wins):
-     * 1. Runtime override (`params.override?.storageAccountId`)
-     * 2. Agent-level (`params.agent.DefaultStorageAccountID`)
-     * 3. Category hierarchy — walks up the agent's category tree via `ParentID`
-     * 4. Agent Type-level (`agentType.DefaultStorageAccountID`)
-     * 5. System fallback — single active storage account, if only one exists
+     * Delegates to {@link AIEngineBase.ResolveAgentStorageAccountID}, the shared golden path:
+     * runtime override (`params.override?.storageAccountId`) → agent → category tree → agent type →
+     * system fallback (the single active account, or the most recently updated one with a
+     * once-per-agent warning when several are active).
      *
      * This method is `protected` so subclasses can override the resolution logic
      * for custom storage routing (e.g., routing by file type or tenant).
@@ -16296,78 +16294,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns The resolved FileStorageAccount ID, or null if none configured
      */
     protected async getStorageAccountID(params: ExecuteAgentParams): Promise<string | null> {
-        // 1. Runtime override — highest priority
-        if (params.override?.storageAccountId) {
-            return params.override.storageAccountId;
-        }
-
-        // 2. Agent-level override
-        if (params.agent.DefaultStorageAccountID) {
-            return params.agent.DefaultStorageAccountID;
-        }
-
-        // 3. Category tree walk
-        const categoryId = params.agent.CategoryID;
-        if (categoryId) {
-            try {
-                const categories = AIEngine.Instance.AgentCategories;
-
-                let currentId: string | null = categoryId;
-                const visited = new Set<string>();
-                while (currentId && !visited.has(currentId)) {
-                    visited.add(currentId);
-                    const cat = categories.find(c => UUIDsEqual(c.ID, currentId));
-                    if (!cat) break;
-                    if (cat.DefaultStorageAccountID) return cat.DefaultStorageAccountID;
-                    currentId = cat.ParentID;
-                }
-            } catch (error) {
-                LogError(`Error resolving category storage account: ${(error as Error).message}`);
-            }
-        }
-
-        // 4. Agent Type-level default
-        const agentTypeId = params.agent.TypeID;
-        if (agentTypeId) {
-            const agentType = AIEngine.Instance.AgentTypes.find(
-                at => UUIDsEqual(at.ID, agentTypeId)
-            );
-            if (agentType?.DefaultStorageAccountID) {
-                return agentType.DefaultStorageAccountID;
-            }
-        }
-
-        // 5. System fallback — use cached metadata (already loaded during engine Config)
-        const activeAccounts = FileStorageEngineBase.Instance.AccountsWithProviders
-            .filter(a => a.provider.IsActive);
-
-        if (activeAccounts.length === 0) {
-            // No storage configured — return null, inline base64 fallback handles it downstream
-            return null;
-        }
-
-        if (activeAccounts.length === 1) {
-            return activeAccounts[0].account.ID;
-        }
-
-        // 2+ active accounts but nothing configured at any level
-        const agentName = params.agent.Name || params.agent.ID;
-        const typeName = params.agent.TypeID
-            ? AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID))?.Name || params.agent.TypeID
-            : 'unknown';
-        const categoryName = params.agent.CategoryID
-            ? AIEngine.Instance.AgentCategories.find(c => UUIDsEqual(c.ID, params.agent.CategoryID))?.Name || params.agent.CategoryID
-            : 'none';
-        const accountNames = activeAccounts.map(a => `'${a.account.Name}' (${a.provider.Name})`).join(', ');
-
-        throw new Error(
-            `Multiple active file storage accounts detected (${accountNames}) but no DefaultStorageAccountID is configured ` +
-            `for agent '${agentName}', category '${categoryName}', or agent type '${typeName}'.\n` +
-            `To fix: Set DefaultStorageAccountID on one of the following (in order of priority):\n` +
-            `  1. Agent '${agentName}' — for this specific agent\n` +
-            `  2. Agent Category '${categoryName}' — for all agents in this category\n` +
-            `  3. Agent Type '${typeName}' — for all agents of this type`
-        );
+        return AIEngine.Instance.ResolveAgentStorageAccountID(params.agent, params.override?.storageAccountId);
     }
 
     /**
