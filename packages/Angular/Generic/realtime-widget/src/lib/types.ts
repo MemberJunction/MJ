@@ -62,6 +62,7 @@ export type WidgetErrorCode =
   | 'start-dropped'
   | 'load-failed'
   | 'connection-lost'
+  | 'time-limit'
   | 'channel-failed';
 
 /**
