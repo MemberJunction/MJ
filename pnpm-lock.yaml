@@ -8251,6 +8251,9 @@ importers:
       dompurify:
         specifier: ^3.3.0
         version: 3.3.1
+      katex:
+        specifier: ^0.16.28
+        version: 0.16.28
       mermaid:
         specifier: ^11.12.2
         version: 11.12.2
