@@ -5328,6 +5328,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Builds a synthetic single-row subquery from entity field values, then tests the RLS filter against it.
      * Null fields are projected as typed NULLs (see {@link BuildRLSSyntheticRowProjections}), so a
      * filter that references a column the new row leaves NULL evaluates instead of failing to bind.
+     * The row is what the caller sends: a column the database fills on insert (a non-literal default
+     * or a trigger) is seen as NULL here.
      */
     protected override async CheckCreateRLS(
         entity: BaseEntity,
@@ -5460,7 +5462,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const baseType = field.Type;
             if (!baseType || baseType.trim().length === 0) {
                 throw new Error(
-                    `Cannot build RLS post-image projection: field ${field.Name} has no resolvable SQL type for a typed NULL`
+                    `Cannot build RLS row projection: field ${field.Name} has no resolvable SQL type for a typed NULL`
                 );
             }
             // `field.Length` is the SYSTEM (byte) length from `sys.columns`, but
