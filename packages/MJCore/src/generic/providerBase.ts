@@ -1860,7 +1860,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             ].join('|');
             return `${base}|${extras}`;
         });
-        return parts.join('||');
+        return `${parts.join('||')}|||${this.RunViewDedupScope}`;
+    }
+
+    /**
+     * What, besides the request itself and the user, decides whether two identical RunViews may
+     * share one execution (in flight or lingering). Empty by default. A provider whose callers can
+     * see different data for the same query — a database provider whose open transaction belongs
+     * to one async scope only (#4786) — returns a value that differs between those callers, so a
+     * transaction member never awaits an outsider's pool read (missing its own writes, or on
+     * SQL Server waiting on its own row lock) and an outsider never receives uncommitted rows.
+     * Read synchronously while the dedup key is built, in the caller's async context.
+     */
+    protected get RunViewDedupScope(): string {
+        return '';
     }
 
     /**

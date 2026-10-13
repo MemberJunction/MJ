@@ -1880,8 +1880,8 @@ importers:
   packages/AI/Providers/Gemini:
     dependencies:
       '@google/genai':
-        specifier: ^2.8.0
-        version: 2.8.0(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))
+        specifier: ^2.16.0
+        version: 2.16.0(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))
       '@memberjunction/ai':
         specifier: 6.2.0-edge.3
         version: link:../../Core
@@ -2245,8 +2245,8 @@ importers:
   packages/AI/Providers/Vertex:
     dependencies:
       '@google/genai':
-        specifier: ^2.8.0
-        version: 2.8.0(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))
+        specifier: ^2.16.0
+        version: 2.16.0(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))
       '@memberjunction/ai':
         specifier: 6.2.0-edge.3
         version: link:../../Core
@@ -2733,8 +2733,8 @@ importers:
   packages/AI/RealtimeClient:
     dependencies:
       '@google/genai':
-        specifier: ^2.8.0
-        version: 2.8.0(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))
+        specifier: ^2.16.0
+        version: 2.16.0(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))
       '@memberjunction/ai':
         specifier: 6.2.0-edge.3
         version: link:../Core
@@ -4160,6 +4160,31 @@ importers:
       vitest:
         specifier: ^3.1.1
         version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Actions/PeopleDataLabs:
+    dependencies:
+      '@memberjunction/actions':
+        specifier: 6.2.0-edge.3
+        version: link:../Engine
+      '@memberjunction/actions-base':
+        specifier: 6.2.0-edge.3
+        version: link:../Base
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.3
+        version: link:../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.2.0-edge.3
+        version: link:../../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.2.0-edge.3
+        version: link:../../Credentials/Engine
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.3
+        version: link:../../MJGlobal
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/Actions/Runtime:
     dependencies:
@@ -6500,6 +6525,43 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/Angular/Generic/charts:
+    dependencies:
+      '@angular/cdk':
+        specifier: ^21.2.14
+        version: 21.2.14(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.3
+        version: link:../../../MJCore
+      d3:
+        specifier: ^7.9.0
+        version: 7.9.0
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.2.0-edge.3
+        version: link:../test-utils
+      '@types/d3':
+        specifier: ^7.4.3
+        version: 7.4.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/Angular/Generic/chat:
     dependencies:
       '@angular/common':
@@ -8189,6 +8251,9 @@ importers:
       dompurify:
         specifier: ^3.3.0
         version: 3.3.1
+      katex:
+        specifier: ^0.16.28
+        version: 0.16.28
       mermaid:
         specifier: ^11.12.2
         version: 11.12.2
@@ -12495,8 +12560,8 @@ importers:
         specifier: 1.1.1
         version: 1.1.1
       '@google/genai':
-        specifier: ^2.8.0
-        version: 2.8.0(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))
+        specifier: ^2.16.0
+        version: 2.16.0(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))
       '@lezer/highlight':
         specifier: ^1.2.3
         version: 1.2.3
@@ -12950,6 +13015,9 @@ importers:
       '@memberjunction/actions-bizapps-social':
         specifier: 6.2.0-edge.3
         version: link:../Actions/BizApps/Social
+      '@memberjunction/actions-peopledatalabs':
+        specifier: 6.2.0-edge.3
+        version: link:../Actions/PeopleDataLabs
       '@memberjunction/ai':
         specifier: 6.2.0-edge.3
         version: link:../AI/Core
@@ -14914,6 +14982,9 @@ importers:
       '@memberjunction/actions-content-autotag':
         specifier: 6.2.0-edge.3
         version: link:../Actions/ContentAutotag
+      '@memberjunction/actions-peopledatalabs':
+        specifier: 6.2.0-edge.3
+        version: link:../Actions/PeopleDataLabs
       '@memberjunction/ai-agent-harness':
         specifier: 6.2.0-edge.3
         version: link:../AI/AgentHarness
@@ -15317,6 +15388,9 @@ importers:
       '@memberjunction/actions-bizapps-social':
         specifier: 6.2.0-edge.3
         version: link:../Actions/BizApps/Social
+      '@memberjunction/actions-peopledatalabs':
+        specifier: 6.2.0-edge.3
+        version: link:../Actions/PeopleDataLabs
       '@memberjunction/ai-agent-harness':
         specifier: 6.2.0-edge.3
         version: link:../AI/AgentHarness
@@ -19565,8 +19639,8 @@ packages:
     resolution: {integrity: sha512-n2FjE7NAOYyshogdc7KQOl/VZb4sneqPjWouSyia9CMDdMhRX5+RIbqalNmC7LOLzuLAN89VlF2HvG8na9G+zQ==}
     engines: {node: '>=14'}
 
-  '@google/genai@2.8.0':
-    resolution: {integrity: sha512-pc2ayxqO5+O7AvnHBqpNHIk7PAZkHZgL31tbyx0gJZBSS9qPYiQoqwK7oYOw/ePmG6QY4EMSu+304vD5QlhXAw==}
+  '@google/genai@2.16.0':
+    resolution: {integrity: sha512-K+1C1sqR0u7NJ5xpKJCQBws0QXpfuklo3WTNuUIMvtbQfNW2O5OohX0BYT2V+PXzsUzQEwGCXPWQxttLyGQ6xw==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -36435,7 +36509,7 @@ snapshots:
       - encoding
       - supports-color
 
-  '@google/genai@2.8.0(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))':
+  '@google/genai@2.16.0(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))':
     dependencies:
       google-auth-library: 10.9.1
       p-retry: 4.6.2
@@ -36448,7 +36522,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@google/genai@2.8.0(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))':
+  '@google/genai@2.16.0(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))':
     dependencies:
       google-auth-library: 10.9.1
       p-retry: 4.6.2
