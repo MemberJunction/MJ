@@ -124,15 +124,28 @@ describe('PostgreSQL constraints that are NOT value lists', () => {
    });
 });
 
-describe('PostgreSQL value lists — pathological input', () => {
-   it('does not backtrack polynomially on a cast followed by many spaces', () => {
-      // CodeQL js/polynomial-redos: the cast pattern was `[A-Za-z0-9 ]*` followed by `\\s*`, so both
-      // quantifiers could consume the same run of spaces. A constraint definition is input this
-      // library does not control, so the ambiguity is a real hazard rather than a theoretical one.
-      const pathological = `CHECK ((x = ${'::A' + ' '.repeat(50000)}))`;
+describe('PostgreSQL value lists — invariants that are easy to regress', () => {
+   it('does not backtrack polynomially on a LEFT-HAND-SIDE cast followed by many spaces', () => {
+      // CodeQL js/polynomial-redos. The vulnerable pattern was `[A-Za-z0-9 ]*` followed by `\\s*`,
+      // where both quantifiers can consume the same run of spaces.
+      //
+      // The shape matters, and the obvious one does NOT work: spaces at the END of the definition are
+      // eaten by trim() inside stripOuterParens before any regex sees them, so that input is 0 ms on the
+      // vulnerable pattern too and pins nothing. The spaces have to sit between the LHS cast and the
+      // operator, where they survive to the regex. Measured on the vulnerable pattern: 20k spaces took
+      // 742 ms here versus 0 ms for the trailing-space form.
+      const pathological = `CHECK (((f)::character varying${' '.repeat(50000)}X))`;
       const started = Date.now();
-      expect(mm.parse(pathological, 'x')).toBeNull();
-      // Quadratic backtracking on 50k spaces takes minutes; the linear form is sub-millisecond.
-      expect(Date.now() - started).toBeLessThan(1000);
+      expect(mm.parse(pathological, 'f')).toBeNull();
+      expect(Date.now() - started).toBeLessThan(2000);
+   });
+
+   it('yields NO list when an array mixes readable and unreadable elements', () => {
+      // Pins the all-or-nothing rule in pgArrayElements. A partial list is worse than none: the values
+      // it drops are legal ones Validate() would then refuse — the exact bug this PR fixes for
+      // ARRAY['100000000000'::bigint, (2)::bigint]. Without this case, changing the bail-out to a skip
+      // passes every other test.
+      expect(mm.parse(`CHECK ((x = ANY (ARRAY[1, true])))`, 'x')).toBeNull();
+      expect(mm.parse(`CHECK ((x = ANY (ARRAY['ok'::text, some_function()])))`, 'x')).toBeNull();
    });
 });

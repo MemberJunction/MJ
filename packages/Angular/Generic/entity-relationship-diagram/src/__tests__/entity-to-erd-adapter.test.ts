@@ -231,6 +231,34 @@ describe('buildERDDataFromEntities', () => {
     expect(result.links[0].relationshipType).toBe('many-to-one');
   });
 
+  it('resolves outgoing related entities case-insensitively, at depth 1 and beyond', () => {
+    // SQL Server returns UUIDs upper-case and PostgreSQL lower-case, so an FK value can differ in
+    // case from the entity ID it points at. Both outgoing loops (depth 1 and the depth > 1 walk)
+    // must still find the related entity.
+    const GRAND = 'cccccccc-0000-0000-0000-000000000003';
+    const PARENT = 'bbbbbbbb-0000-0000-0000-000000000002';
+    const CHILD = 'aaaaaaaa-0000-0000-0000-000000000001';
+    const pk = createMockField({ ID: 'pk', Name: 'ID', IsPrimaryKey: true });
+    const grand = createMockEntity({ ID: GRAND, Name: 'Grand', Fields: [pk], RelatedEntities: [] });
+    const parent = createMockEntity({
+      ID: PARENT, Name: 'Parent', RelatedEntities: [],
+      Fields: [pk, createMockField({ ID: 'fk-g', Name: 'GrandID', RelatedEntityID: GRAND.toUpperCase() })],
+    });
+    const child = createMockEntity({
+      ID: CHILD, Name: 'Child', RelatedEntities: [],
+      Fields: [pk, createMockField({ ID: 'fk-p', Name: 'ParentID', RelatedEntityID: PARENT.toUpperCase() })],
+    });
+
+    const result = BuildERDDataFromEntities(
+      [child as never],
+      { allEntities: [child as never, parent as never, grand as never], includeOutgoing: true, includeIncoming: false, depth: 2 }
+    );
+
+    expect(result.nodes.map(n => n.id).sort()).toEqual([CHILD, PARENT, GRAND].sort());
+    // A link's targetNodeId is the raw FK value, so compare case-insensitively.
+    expect(result.links.map(l => `${l.sourceNodeId}->${l.targetNodeId}`.toLowerCase()).sort()).toEqual([`${CHILD}->${PARENT}`, `${PARENT}->${GRAND}`].sort());
+  });
+
   it('should discover incoming relationships', () => {
     const parentEntity = createMockEntity({
       ID: 'parent',

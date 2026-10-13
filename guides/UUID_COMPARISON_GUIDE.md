@@ -153,17 +153,18 @@ this.selectedId = (this.selectedId != null && UUIDsEqual(this.selectedId, itemId
 
 `UUIDsEqual()` compares two IDs, so matching a list against a list with it means a nested scan: `n × m` comparisons. That's invisible with five items and pegs a CPU with a few hundred, especially in code that re-runs on every render (an Angular getter or a template-bound method). A single top-level `.find()` (Patterns 1–3) is fine.
 
-Every nested scan is one of four operations, and each has a helper that does it in one linear pass:
+Every nested scan is one of five operations, and each has a helper that does it in one linear pass:
 
 | You want | Use |
 |---|---|
 | Items whose ID **is** in a list | `FilterByUUIDs(items, ids)` |
 | Items whose ID is **not** in a list | `ExcludeByUUIDs(items, ids)` |
 | How many items share each ID | `CountByUUID(items).Get(id) ?? 0` |
+| The items that share each ID | `GroupByUUID(items, x => x.ParentID).Get(id) ?? []` (each group in `items` order) |
 | The item for an ID, looked up repeatedly | `IndexByUUID(items).Get(id)` (the first item wins, like `find`) |
 
 ```typescript
-import { FilterByUUIDs, ExcludeByUUIDs, CountByUUID, IndexByUUID } from '@memberjunction/global';
+import { FilterByUUIDs, ExcludeByUUIDs, CountByUUID, GroupByUUID, IndexByUUID } from '@memberjunction/global';
 
 // SLOW - n x m comparisons
 const picked = roles.filter(r => selectedIds.some(id => UUIDsEqual(id, r.ID)));
@@ -174,6 +175,7 @@ const picked = FilterByUUIDs(roles, selectedIds);
 // A different ID field: pass a selector as the third argument
 const stillLoading = ExcludeByUUIDs(pending, loadedIds, p => p.artifactId);
 const perEntity = CountByUUID(relationships, r => r.RelatedEntityID);
+const rolesByUser = GroupByUUID(userRoles, r => r.UserID);
 ```
 
 Every helper keeps the items' own order, accepts IDs in any casing, and takes an existing `UUIDSet` in place of the ID list. The selector defaults to `item => item.ID`.
@@ -232,13 +234,14 @@ The file `packages/MJCoreEntities/src/__tests__/UUIDCrossDbCompliance.test.ts` v
 | `a.filter(x => b.some(y => UUIDsEqual(x.ID, y)))` | `FilterByUUIDs(a, b)` |
 | `a.filter(x => !b.some(y => UUIDsEqual(x.ID, y)))` | `ExcludeByUUIDs(a, b)` |
 | `for (…) { list.find(x => UUIDsEqual(x.ID, id)) }` | `const byID = IndexByUUID(list);` then `byID.Get(id)` |
+| `for (…) { list.filter(x => UUIDsEqual(x.ParentID, id)) }` | `const byParent = GroupByUUID(list, x => x.ParentID);` then `byParent.Get(id) ?? []` |
 
 ## Import
 
 Everything is exported from `@memberjunction/global`:
 
 ```typescript
-import { UUIDsEqual, NormalizeUUID, UUIDSet, UUIDMap, FilterByUUIDs, ExcludeByUUIDs, CountByUUID, IndexByUUID } from '@memberjunction/global';
+import { UUIDsEqual, NormalizeUUID, UUIDSet, UUIDMap, FilterByUUIDs, ExcludeByUUIDs, CountByUUID, GroupByUUID, IndexByUUID } from '@memberjunction/global';
 ```
 
 Sources: [packages/MJGlobal/src/util/UUIDUtils.ts](../packages/MJGlobal/src/util/UUIDUtils.ts), [packages/MJGlobal/src/util/UUIDCollections.ts](../packages/MJGlobal/src/util/UUIDCollections.ts)

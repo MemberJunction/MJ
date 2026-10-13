@@ -137,7 +137,8 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJInteractionEvents', sectionName: 'Interaction Events', isExpanded: false },
             { sectionKey: 'mJMeetingParticipants', sectionName: 'Meeting Participants', isExpanded: false },
             { sectionKey: 'mJMeetings', sectionName: 'Meetings', isExpanded: false },
-            { sectionKey: 'mJInteractionOffers', sectionName: 'Interaction Offers', isExpanded: false }
+            { sectionKey: 'mJInteractionOffers', sectionName: 'Interaction Offers', isExpanded: false },
+            { sectionKey: 'mJConversationBranches', sectionName: 'Conversation Branches', isExpanded: false }
         ]);
     }
 }

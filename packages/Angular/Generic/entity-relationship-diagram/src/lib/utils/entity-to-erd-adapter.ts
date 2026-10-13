@@ -1,5 +1,5 @@
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import { ERDNode, ERDField, ERDFieldValue, ERDLink } from '../interfaces/erd-types';
 
 /**
@@ -163,6 +163,10 @@ export function BuildERDDataFromEntities(
     depth = 1
   } = options;
 
+  // Built once: the outgoing-relationship loops look a related entity up per field, which was a
+  // scan of every entity per field.
+  const allEntitiesByID = IndexByUUID(allEntities);
+
   const nodes: ERDNode[] = [];
   const links: ERDLink[] = [];
   const addedNodeIds = new Set<string>();
@@ -196,7 +200,7 @@ export function BuildERDDataFromEntities(
     if (includeOutgoing) {
       for (const field of entity.Fields) {
         if (field.RelatedEntityID) {
-          const relatedEntity = allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
+          const relatedEntity = allEntitiesByID.Get(field.RelatedEntityID);
           if (relatedEntity) {
             addNode(relatedEntity);
 
@@ -258,7 +262,7 @@ export function BuildERDDataFromEntities(
         if (includeOutgoing) {
           for (const field of entity.Fields) {
             if (field.RelatedEntityID && !addedNodeIds.has(field.RelatedEntityID)) {
-              const relatedEntity = allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
+              const relatedEntity = allEntitiesByID.Get(field.RelatedEntityID);
               if (relatedEntity) {
                 addNode(relatedEntity);
                 nextDepthEntities.push(relatedEntity);
