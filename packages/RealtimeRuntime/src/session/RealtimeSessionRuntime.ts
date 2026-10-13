@@ -4371,6 +4371,15 @@ export class RealtimeSessionRuntime {
     this.flushAllChannelSaves();
     this.disposeChannels();
 
+    // End the recording and START its keepalive terminal request now: stop the recorder (which flushes
+    // the encoder) before anything else that awaits. A tab closed right after End gets only the pagehide
+    // terminal, which carries packets already encoded; releasing the mic and disconnecting the driver can
+    // take long enough for the page to die first, and the audio still inside the encoder would be lost.
+    // It also goes out before the usage flush and the close, so it is on the wire if the page dies during
+    // either. Best-effort — finishRecording never throws. Null when nothing was recorded.
+    const recordingTerminal = await this.finishRecording();
+    this.recordingStartedAtIso = null;
+
     // Defensive: stop the mic even when Connect never ran (the client also stops the
     // tracks it was handed — track.stop() is idempotent).
     this.localStream?.getTracks().forEach(t => t.stop());
@@ -4398,12 +4407,6 @@ export class RealtimeSessionRuntime {
         this.client = null;
       }
     }
-
-    // End the recording and START its keepalive terminal request now, before the usage flush and
-    // the close, so it is already on the wire if the page dies during either. Best-effort —
-    // finishRecording never throws. Null when nothing was recorded.
-    const recordingTerminal = await this.finishRecording();
-    this.recordingStartedAtIso = null;
 
     // Final usage flush WHILE the live session id is still set (the relay mutation also
     // accepts a Closed session, so ordering vs. CloseAgentSession is belt-and-braces).

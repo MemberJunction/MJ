@@ -264,6 +264,27 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         expect(provider.MutationNames.filter((n) => n.startsWith('UploadRealtimeRecording'))).toEqual([]);
     });
 
+    it('End flushes the recorder and starts the terminal before it releases the microphone or disconnects the driver', async () => {
+        // A tab closed right after End must not lose the audio still inside the encoder: releasing the
+        // mic and disconnecting a driver can take long enough for the page to die first, and a pagehide
+        // terminal carries only packets already encoded (#5294 gauntlet: 492 ms lost at End + close).
+        const { runtime, recorder, log } = await startRecorded();
+        const host = (runtime as unknown as { mediaHost: { ReleaseMicrophone?: () => Promise<void> } }).mediaHost;
+        host.ReleaseMicrophone = async () => { log.push('release-microphone'); };
+        vi.spyOn(FakeRealtimeClient.prototype, 'Disconnect').mockImplementation(async () => { log.push('disconnect'); });
+        const stop = recorder.Stop.bind(recorder);
+        recorder.Stop = async () => { log.push('recorder-stop'); return stop(); };
+        recorder.Capture(5);
+
+        await runtime.EndRealtimeSession();
+
+        const at = (entry: string) => log.findIndex((line) => line.startsWith(entry));
+        expect(at('recorder-stop')).toBeGreaterThanOrEqual(0);
+        expect(at('terminal:')).toBeGreaterThan(at('recorder-stop'));
+        expect(at('release-microphone')).toBeGreaterThan(at('terminal:'));
+        expect(at('disconnect')).toBeGreaterThan(at('terminal:'));
+    });
+
     it('EndRealtimeSession resolves once the terminal is acknowledged', async () => {
         const { runtime, store, transport, recorder } = await startRecorded();
         recorder.Capture(5);
