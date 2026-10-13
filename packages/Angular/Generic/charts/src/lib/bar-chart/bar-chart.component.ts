@@ -1,17 +1,16 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, HostBinding, inject, Input, OnDestroy, Output } from '@angular/core';
-import { BarOrientation, ChartPointEvent, ChartSeries, ChartValueFormatter, DefaultValueFormatter } from '../chart.types';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { BarOrientation, ChartPointEvent, ChartSeries } from '../chart.types';
 import { MJChartFrameComponent, TooltipPlacement } from '../internal/chart-frame.component';
 import { ChartController, ChartPreparation } from '../internal/chart-controller';
-import { ActivePoint, BarGeometry, BarSegment, ChartFrameKey } from '../internal/geometry.types';
+import { ActivePoint, BarGeometry, BarSegment } from '../internal/geometry.types';
 import { ChartIssueLog } from '../internal/issue-log';
-import { DefaultChartHeight, ResolveAspectRatioInput, ResolveHeightInput } from '../internal/inputs';
-import { ChartContext, LogMissingAriaLabel, LogSoftCap, ResolveFills } from '../internal/prepare-helpers';
+import { LogMissingAriaLabel, LogSoftCap, ResolveFills } from '../internal/prepare-helpers';
+import { MJBaseChartComponent } from '../internal/base-chart.component';
 import { ValidateCategorySeries } from '../internal/validate';
 import { ComputeBarLayout } from '../internal/bar-layout';
 import { TypeMetrics } from '../internal/scales';
 import { BarAnchor, BarCategoryAnchor, BarPoints, HitTestBar, NavigateGrid } from '../internal/hit-test';
 import { BuildCategoryTable, BuildCategoryTooltip, BuildPointEvent, DescribeCategoryPoint } from '../internal/describe';
-import { LocalPoint, PointerKindOf } from '../internal/pointer';
 
 export const BarSoftCaps = { Categories: 200, Series: 10 } as const;
 
@@ -81,21 +80,17 @@ export const BarSoftCaps = { Categories: 200, Series: 10 } as const;
         </mj-chart-frame>
     `,
 })
-export class MJBarChartComponent implements OnDestroy {
-    private readonly cdr = inject(ChangeDetectorRef);
+export class MJBarChartComponent extends MJBaseChartComponent<BarGeometry> {
+    protected readonly ChartKind = 'bar';
     private categories: ReadonlyArray<string> = [];
     private series: ReadonlyArray<ChartSeries> = [];
     private orientation: BarOrientation = 'vertical';
     private stacked = false;
     private showGridlines = true;
-    private height: number | 'fill' = DefaultChartHeight;
-    private aspectRatio: number | null = null;
-    private formatter: ChartValueFormatter = DefaultValueFormatter;
-    private ariaLabel = '';
     private fills: string[] = [];
 
     public readonly Controller: ChartController<BarGeometry> = new ChartController<BarGeometry>({
-        Context: () => this.context(),
+        Context: () => this.Context(),
         Prepare: (log) => this.prepare(log),
         Table: () => BuildCategoryTable(this.AriaLabelText, this.categories, this.series, this.formatter, null),
         Layout: (surface) => ComputeBarLayout({
@@ -127,38 +122,12 @@ export class MJBarChartComponent implements OnDestroy {
     @Input() set Stacked(value: boolean | null | undefined) { this.stacked = value ?? false; this.Controller.MarkDirty(); }
     get Stacked(): boolean { return this.stacked; }
 
-    // Height, AspectRatio and ShowGridlines skip MarkDirty on purpose: they don't change the controller's view, so the template/frame react to the input change directly.
-    /** A px height (minimum 120; clamped and logged), or `'fill'` to take the parent's height. `undefined`/`null` (an unset binding) means 300 and is not a caller mistake. */
-    @Input() set Height(value: number | 'fill' | null | undefined) { this.height = ResolveHeightInput(value, this.Controller.Log, this.context()); }
-    get Height(): number | 'fill' { return this.height; }
-
-    /** Width ÷ height (e.g. `16 / 9`); wins over `Height`. `undefined`/`null` is off; invalid values are logged and ignored, finite ones clamped to [0.25, 8]. */
-    @Input() set AspectRatio(value: number | null | undefined) { this.aspectRatio = ResolveAspectRatioInput(value, this.Controller.Log, this.context()); }
-    get AspectRatio(): number | null { return this.aspectRatio; }
-
-    @Input() set ValueFormatter(value: ChartValueFormatter) { this.formatter = value ?? DefaultValueFormatter; this.Controller.MarkDirty(); }
-    get ValueFormatter(): ChartValueFormatter { return this.formatter; }
-
-    @Input() set AriaLabel(value: string) { this.ariaLabel = value ?? ''; this.Controller.MarkDirty(); }
-    get AriaLabel(): string { return this.ariaLabel; }
-
-    // No MarkDirty (see Height): gridlines are template-only, so the input change re-renders them directly.
+    // No MarkDirty: gridlines are template-only, so the input change re-renders them directly.
     /** `undefined`/`null` (an unset binding) means true. Axis labels stay; only the lines go. */
     @Input() set ShowGridlines(value: boolean | null | undefined) { this.showGridlines = value ?? true; }
     get ShowGridlines(): boolean { return this.showGridlines; }
 
-    @Input() ShowLegend = true;
-    @Input() ShowTooltip = true;
-    @Input() EmptyMessage = 'No data';
-
     @Output() SegmentClick = new EventEmitter<ChartPointEvent>();
-
-    protected get HeightValue(): number | 'fill' { return this.height; }
-    protected get AspectRatioValue(): number | null { return this.aspectRatio; }
-
-    /** Lets the host fill its parent (the frame measures that height); see Height. */
-    @HostBinding('class.mj-chart-fill') protected get FillsParent(): boolean { return this.height === 'fill'; }
-    public get AriaLabelText(): string { return this.ariaLabel || 'Chart'; }
 
     /** Horizontal bars are stacked rows: a tooltip above the anchor would cover the row above and be unreachable by mouse. */
     public get TooltipPlacementValue(): TooltipPlacement { return this.orientation === 'horizontal' ? 'right' : 'above'; }
@@ -171,51 +140,12 @@ export class MJBarChartComponent implements OnDestroy {
         return g.Segments.find((s) => this.IsActive(s, active));
     }
 
-    public OnPointerMove(event: PointerEvent): void {
-        // Ignore touch moves so a scroll or drag gesture neither moves nor dismisses the value the first tap showed
-        // (a miss goes through Leave(), which would also clear the armed point). Otherwise the second tap's target
-        // would be ambiguous: it could emit a value the user is no longer looking at.
-        if (PointerKindOf(event) === 'touch') {
-            return;
-        }
-        const p = LocalPoint(event);
-        this.Controller.PointerMove(p.X, p.Y);
-    }
-
-    public OnPointerLeave(event: PointerEvent): void {
-        this.Controller.PointerLeave(PointerKindOf(event));
-    }
-
-    public OnPointerUp(event: PointerEvent): void {
-        const p = LocalPoint(event);
-        this.emit(this.Controller.PointerUp(p.X, p.Y, PointerKindOf(event)));
-    }
-
-    public OnClick(event: MouseEvent): void {
-        const p = LocalPoint(event);
-        this.emit(this.Controller.Click(p.X, p.Y));
-    }
-
-    public OnKeyCommand(key: ChartFrameKey): void {
-        this.emit(this.Controller.Key(key));
-    }
-
-    public ngOnDestroy(): void {
-        this.Controller.Destroy();
-    }
-
-    private emit(point: ActivePoint | null): void {
-        if (point !== null) {
-            this.SegmentClick.emit(BuildPointEvent(point, this.categories, this.series, null));
-        }
-    }
-
-    private context(): string {
-        return ChartContext('bar', this.ariaLabel);
+    protected EmitPoint(point: ActivePoint): void {
+        this.SegmentClick.emit(BuildPointEvent(point, this.categories, this.series, null));
     }
 
     private prepare(log: ChartIssueLog): ChartPreparation {
-        const context = this.context();
+        const context = this.Context();
         this.fills = ResolveFills(this.series, (i) => this.series[i].Name, 'series', log, context);
         LogMissingAriaLabel(this.ariaLabel, log, context);
         LogSoftCap(

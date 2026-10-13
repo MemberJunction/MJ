@@ -1,17 +1,17 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, HostBinding, inject, Input, OnDestroy, Output } from '@angular/core';
-import { ChartSliceEvent, ChartValueFormatter, DefaultValueFormatter, DonutSlice } from '../chart.types';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChartSliceEvent, DonutSlice } from '../chart.types';
 import { MJChartFrameComponent } from '../internal/chart-frame.component';
 import { ChartController, ChartPreparation } from '../internal/chart-controller';
-import { ActivePoint, ChartFrameKey, DonutArc, DonutGeometry } from '../internal/geometry.types';
+import { ActivePoint, DonutArc, DonutGeometry } from '../internal/geometry.types';
 import { ChartIssueLog } from '../internal/issue-log';
-import { ClampInput, DefaultChartHeight, ResolveAspectRatioInput, ResolveHeightInput } from '../internal/inputs';
-import { ChartContext, LogMissingAriaLabel, LogSoftCap, ResolveFills } from '../internal/prepare-helpers';
+import { ClampInput } from '../internal/inputs';
+import { LogMissingAriaLabel, LogSoftCap, ResolveFills } from '../internal/prepare-helpers';
+import { MJBaseChartComponent } from '../internal/base-chart.component';
 import { IsFiniteValue, ValidateSlices } from '../internal/validate';
 import { ComputeDonutLayout, ComputeSlicePercents } from '../internal/donut-layout';
 import { DonutAnchor, DonutPoints, HitTestDonut, NavigateList } from '../internal/hit-test';
 import { BuildSliceTable, BuildSliceTooltip, DescribeSlice } from '../internal/describe';
 import { FormatPercent, TypeMetrics } from '../internal/scales';
-import { LocalPoint, PointerKindOf } from '../internal/pointer';
 
 export const DonutSoftCaps = { Slices: 50 } as const;
 
@@ -77,20 +77,16 @@ const MaxInnerRadiusRatio = 0.85;
         </mj-chart-frame>
     `,
 })
-export class MJDonutChartComponent implements OnDestroy {
-    private readonly cdr = inject(ChangeDetectorRef);
+export class MJDonutChartComponent extends MJBaseChartComponent<DonutGeometry> {
+    protected readonly ChartKind = 'donut';
     private slices: ReadonlyArray<DonutSlice> = [];
     private innerRadiusRatio = DefaultInnerRadiusRatio;
     private showPercentLabels = false;
-    private height: number | 'fill' = DefaultChartHeight;
-    private aspectRatio: number | null = null;
-    private formatter: ChartValueFormatter = DefaultValueFormatter;
-    private ariaLabel = '';
     private fills: string[] = [];
     private percents: Array<number | null> = [];
 
     public readonly Controller: ChartController<DonutGeometry> = new ChartController<DonutGeometry>({
-        Context: () => this.context(),
+        Context: () => this.Context(),
         Prepare: (log) => this.prepare(log),
         Table: () => BuildSliceTable(this.AriaLabelText, this.slices, this.formatter, this.percents),
         Layout: (surface) => ComputeDonutLayout({
@@ -115,7 +111,7 @@ export class MJDonutChartComponent implements OnDestroy {
     @Input() set InnerRadiusRatio(value: number | null | undefined) {
         this.innerRadiusRatio = value == null
             ? DefaultInnerRadiusRatio
-            : ClampInput('InnerRadiusRatio', value, 0, MaxInnerRadiusRatio, this.Controller.Log, this.context());
+            : ClampInput('InnerRadiusRatio', value, 0, MaxInnerRadiusRatio, this.Controller.Log, this.Context());
         this.Controller.MarkDirty();
     }
     get InnerRadiusRatio(): number { return this.innerRadiusRatio; }
@@ -124,35 +120,10 @@ export class MJDonutChartComponent implements OnDestroy {
     @Input() set ShowPercentLabels(value: boolean | null | undefined) { this.showPercentLabels = value ?? false; this.Controller.MarkDirty(); }
     get ShowPercentLabels(): boolean { return this.showPercentLabels; }
 
-    // Height and AspectRatio skip MarkDirty on purpose: they don't change the controller's view, so the template/frame react to the input change directly.
-    /** A px height (minimum 120; clamped and logged), or `'fill'` to take the parent's height. `undefined`/`null` (an unset binding) means 300 and is not a caller mistake. */
-    @Input() set Height(value: number | 'fill' | null | undefined) { this.height = ResolveHeightInput(value, this.Controller.Log, this.context()); }
-    get Height(): number | 'fill' { return this.height; }
-
-    /** Width ÷ height (e.g. `16 / 9`); wins over `Height`. `undefined`/`null` is off; invalid values are logged and ignored, finite ones clamped to [0.25, 8]. */
-    @Input() set AspectRatio(value: number | null | undefined) { this.aspectRatio = ResolveAspectRatioInput(value, this.Controller.Log, this.context()); }
-    get AspectRatio(): number | null { return this.aspectRatio; }
-
-    @Input() set ValueFormatter(value: ChartValueFormatter) { this.formatter = value ?? DefaultValueFormatter; this.Controller.MarkDirty(); }
-    get ValueFormatter(): ChartValueFormatter { return this.formatter; }
-
-    @Input() set AriaLabel(value: string) { this.ariaLabel = value ?? ''; this.Controller.MarkDirty(); }
-    get AriaLabel(): string { return this.ariaLabel; }
-
     @Input() CenterLabel?: string;
     @Input() CenterValue?: string;
-    @Input() ShowLegend = true;
-    @Input() ShowTooltip = true;
-    @Input() EmptyMessage = 'No data';
 
     @Output() SliceClick = new EventEmitter<ChartSliceEvent>();
-
-    protected get HeightValue(): number | 'fill' { return this.height; }
-    protected get AspectRatioValue(): number | null { return this.aspectRatio; }
-
-    /** Lets the host fill its parent (the frame measures that height); see Height. */
-    @HostBinding('class.mj-chart-fill') protected get FillsParent(): boolean { return this.height === 'fill'; }
-    public get AriaLabelText(): string { return this.ariaLabel || 'Chart'; }
 
     /**
      * How far the center label sits above, and the center value below, the center when both are shown.
@@ -170,43 +141,7 @@ export class MJDonutChartComponent implements OnDestroy {
         return g.Arcs.find((a) => a.SliceIndex === active.CategoryIndex);
     }
 
-    public OnPointerMove(event: PointerEvent): void {
-        // Ignore touch moves so a scroll or drag gesture neither moves nor dismisses the value the first tap showed
-        // (a miss goes through Leave(), which would also clear the armed point). Otherwise the second tap's target
-        // would be ambiguous: it could emit a value the user is no longer looking at.
-        if (PointerKindOf(event) === 'touch') {
-            return;
-        }
-        const p = LocalPoint(event);
-        this.Controller.PointerMove(p.X, p.Y);
-    }
-
-    public OnPointerLeave(event: PointerEvent): void {
-        this.Controller.PointerLeave(PointerKindOf(event));
-    }
-
-    public OnPointerUp(event: PointerEvent): void {
-        const p = LocalPoint(event);
-        this.emit(this.Controller.PointerUp(p.X, p.Y, PointerKindOf(event)));
-    }
-
-    public OnClick(event: MouseEvent): void {
-        const p = LocalPoint(event);
-        this.emit(this.Controller.Click(p.X, p.Y));
-    }
-
-    public OnKeyCommand(key: ChartFrameKey): void {
-        this.emit(this.Controller.Key(key));
-    }
-
-    public ngOnDestroy(): void {
-        this.Controller.Destroy();
-    }
-
-    private emit(point: ActivePoint | null): void {
-        if (point === null) {
-            return;
-        }
+    protected EmitPoint(point: ActivePoint): void {
         const slice = this.slices[point.CategoryIndex];
         this.SliceClick.emit({
             SliceIndex: point.CategoryIndex,
@@ -216,12 +151,8 @@ export class MJDonutChartComponent implements OnDestroy {
         });
     }
 
-    private context(): string {
-        return ChartContext('donut', this.ariaLabel);
-    }
-
     private prepare(log: ChartIssueLog): ChartPreparation {
-        const context = this.context();
+        const context = this.Context();
         this.fills = ResolveFills(this.slices, (i) => this.slices[i].Label, 'slice', log, context);
         // Donut-only: a negative slice is excluded (not invalid), so say so once. The label names it; the value is never logged.
         this.slices.forEach((s, i) => {

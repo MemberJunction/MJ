@@ -1,17 +1,17 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, HostBinding, inject, Input, OnDestroy, Output } from '@angular/core';
-import { AreaCurve, AreaStackMode, ChartPointEvent, ChartSeries, ChartValueFormatter, DefaultValueFormatter } from '../chart.types';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { AreaCurve, AreaStackMode, ChartPointEvent, ChartSeries } from '../chart.types';
 import { MJChartFrameComponent } from '../internal/chart-frame.component';
 import { ChartController, ChartPreparation } from '../internal/chart-controller';
-import { ActivePoint, AreaGeometry, ChartAnchor, ChartFrameKey } from '../internal/geometry.types';
+import { ActivePoint, AreaGeometry, ChartAnchor } from '../internal/geometry.types';
 import { ChartIssueLog } from '../internal/issue-log';
-import { ClampInput, DefaultChartHeight, ResolveAspectRatioInput, ResolveHeightInput } from '../internal/inputs';
-import { ChartContext, LogMissingAriaLabel, LogSoftCap, ResolveFills } from '../internal/prepare-helpers';
+import { ClampInput } from '../internal/inputs';
+import { LogMissingAriaLabel, LogSoftCap, ResolveFills } from '../internal/prepare-helpers';
+import { MJBaseChartComponent } from '../internal/base-chart.component';
 import { CategoryChartMode, ValidateCategorySeries } from '../internal/validate';
 import { ComputeAreaLayout, ComputePercentShares } from '../internal/area-layout';
 import { TypeMetrics } from '../internal/scales';
 import { AreaAnchor, AreaCategoryAnchor, AreaPoints, HitTestArea, NavigateGrid } from '../internal/hit-test';
 import { BuildCategoryTable, BuildCategoryTooltip, BuildPointEvent, DescribeCategoryPoint } from '../internal/describe';
-import { LocalPoint, PointerKindOf } from '../internal/pointer';
 
 export const AreaSoftCaps = { Categories: 2000, Series: 10 } as const;
 
@@ -75,23 +75,19 @@ const DefaultFillOpacity = 0.85;
         </mj-chart-frame>
     `,
 })
-export class MJAreaChartComponent implements OnDestroy {
-    private readonly cdr = inject(ChangeDetectorRef);
+export class MJAreaChartComponent extends MJBaseChartComponent<AreaGeometry> {
+    protected readonly ChartKind = 'area';
     private categories: ReadonlyArray<string> = [];
     private series: ReadonlyArray<ChartSeries> = [];
     private stackMode: AreaStackMode = 'none';
     private curve: AreaCurve = 'smooth';
     private showGridlines = true;
     private fillOpacity = DefaultFillOpacity;
-    private height: number | 'fill' = DefaultChartHeight;
-    private aspectRatio: number | null = null;
-    private formatter: ChartValueFormatter = DefaultValueFormatter;
-    private ariaLabel = '';
     private fills: string[] = [];
     private shares: number[][] | null = null;
 
     public readonly Controller: ChartController<AreaGeometry> = new ChartController<AreaGeometry>({
-        Context: () => this.context(),
+        Context: () => this.Context(),
         Prepare: (log) => this.prepare(log),
         Table: () => BuildCategoryTable(this.AriaLabelText, this.categories, this.series, this.formatter, this.shares),
         Layout: (surface) => ComputeAreaLayout({
@@ -127,93 +123,29 @@ export class MJAreaChartComponent implements OnDestroy {
     @Input() set FillOpacity(value: number | null | undefined) {
         this.fillOpacity = value == null
             ? DefaultFillOpacity
-            : ClampInput('FillOpacity', value, 0, 1, this.Controller.Log, this.context());
+            : ClampInput('FillOpacity', value, 0, 1, this.Controller.Log, this.Context());
     }
     get FillOpacity(): number { return this.fillOpacity; }
 
-    // Height, AspectRatio and ShowGridlines skip MarkDirty on purpose: they don't change the controller's view, so the template/frame react to the input change directly.
-    /** A px height (minimum 120; clamped and logged), or `'fill'` to take the parent's height. `undefined`/`null` (an unset binding) means 300 and is not a caller mistake. */
-    @Input() set Height(value: number | 'fill' | null | undefined) { this.height = ResolveHeightInput(value, this.Controller.Log, this.context()); }
-    get Height(): number | 'fill' { return this.height; }
-
-    /** Width ÷ height (e.g. `16 / 9`); wins over `Height`. `undefined`/`null` is off; invalid values are logged and ignored, finite ones clamped to [0.25, 8]. */
-    @Input() set AspectRatio(value: number | null | undefined) { this.aspectRatio = ResolveAspectRatioInput(value, this.Controller.Log, this.context()); }
-    get AspectRatio(): number | null { return this.aspectRatio; }
-
-    @Input() set ValueFormatter(value: ChartValueFormatter) { this.formatter = value ?? DefaultValueFormatter; this.Controller.MarkDirty(); }
-    get ValueFormatter(): ChartValueFormatter { return this.formatter; }
-
-    @Input() set AriaLabel(value: string) { this.ariaLabel = value ?? ''; this.Controller.MarkDirty(); }
-    get AriaLabel(): string { return this.ariaLabel; }
-
-    // No MarkDirty (see Height): gridlines are template-only, so the input change re-renders them directly.
+    // No MarkDirty: gridlines are template-only, so the input change re-renders them directly.
     /** `undefined`/`null` (an unset binding) means true. Axis labels stay; only the lines go. */
     @Input() set ShowGridlines(value: boolean | null | undefined) { this.showGridlines = value ?? true; }
     get ShowGridlines(): boolean { return this.showGridlines; }
 
-    @Input() ShowLegend = true;
-    @Input() ShowTooltip = true;
-    @Input() EmptyMessage = 'No data';
-
     @Output() PointClick = new EventEmitter<ChartPointEvent>();
 
-    protected get HeightValue(): number | 'fill' { return this.height; }
-    protected get AspectRatioValue(): number | null { return this.aspectRatio; }
-
-    /** Lets the host fill its parent (the frame measures that height); see Height. */
-    @HostBinding('class.mj-chart-fill') protected get FillsParent(): boolean { return this.height === 'fill'; }
     public get FillOpacityValue(): number { return this.fillOpacity; }
-    public get AriaLabelText(): string { return this.ariaLabel || 'Chart'; }
 
     public FocusPoint(g: AreaGeometry, active: ActivePoint): ChartAnchor | null {
         return AreaAnchor(g, active);
     }
 
-    public OnPointerMove(event: PointerEvent): void {
-        // Ignore touch moves so a scroll or drag gesture neither moves nor dismisses the value the first tap showed
-        // (a miss goes through Leave(), which would also clear the armed point). Otherwise the second tap's target
-        // would be ambiguous: it could emit a value the user is no longer looking at.
-        if (PointerKindOf(event) === 'touch') {
-            return;
-        }
-        const p = LocalPoint(event);
-        this.Controller.PointerMove(p.X, p.Y);
-    }
-
-    public OnPointerLeave(event: PointerEvent): void {
-        this.Controller.PointerLeave(PointerKindOf(event));
-    }
-
-    public OnPointerUp(event: PointerEvent): void {
-        const p = LocalPoint(event);
-        this.emit(this.Controller.PointerUp(p.X, p.Y, PointerKindOf(event)));
-    }
-
-    public OnClick(event: MouseEvent): void {
-        const p = LocalPoint(event);
-        this.emit(this.Controller.Click(p.X, p.Y));
-    }
-
-    public OnKeyCommand(key: ChartFrameKey): void {
-        this.emit(this.Controller.Key(key));
-    }
-
-    public ngOnDestroy(): void {
-        this.Controller.Destroy();
-    }
-
-    private emit(point: ActivePoint | null): void {
-        if (point !== null) {
-            this.PointClick.emit(BuildPointEvent(point, this.categories, this.series, this.shares));
-        }
-    }
-
-    private context(): string {
-        return ChartContext('area', this.ariaLabel);
+    protected EmitPoint(point: ActivePoint): void {
+        this.PointClick.emit(BuildPointEvent(point, this.categories, this.series, this.shares));
     }
 
     private prepare(log: ChartIssueLog): ChartPreparation {
-        const context = this.context();
+        const context = this.Context();
         this.fills = ResolveFills(this.series, (i) => this.series[i].Name, 'series', log, context);
         LogMissingAriaLabel(this.ariaLabel, log, context);
         LogSoftCap(
