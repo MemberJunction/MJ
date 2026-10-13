@@ -4462,6 +4462,9 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.2.0-edge.3
         version: link:../../Generic/ui-components
+      '@memberjunction/realtime-runtime':
+        specifier: 6.2.0-edge.3
+        version: link:../../../RealtimeRuntime
       '@okta/okta-auth-js':
         specifier: ^7.14.1
         version: 7.14.1(encoding@0.1.13)

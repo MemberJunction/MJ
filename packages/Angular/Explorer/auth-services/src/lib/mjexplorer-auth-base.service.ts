@@ -1,5 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject, from } from 'rxjs';
+import { Metadata } from '@memberjunction/core';
+import { ReleaseRecordingShardsAtLogout } from '@memberjunction/realtime-runtime';
 import { IAngularAuthProvider, AngularAuthProviderConfig } from './IAuthProvider';
 import {
   StandardUserInfo,
@@ -241,8 +243,15 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
    * Removes all localStorage entries except those returned by
    * `preservedLocalStorageKeys`, and deletes the `MJ_Metadata` IndexedDB
    * database so a subsequent user session starts with a clean slate.
+   *
+   * First, while the session is still authenticated, it sends this user's
+   * unsent realtime-call recording shards (a few seconds at most) and deletes
+   * whatever is left, so their call audio is neither left on a shared browser
+   * nor re-sent from the next user's session.
    */
   protected async clearClientCaches(): Promise<void> {
+    await ReleaseRecordingShardsAtLogout(Metadata.Provider);
+
     const preserved = this.preservedLocalStorageKeys;
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
