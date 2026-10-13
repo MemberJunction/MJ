@@ -13,13 +13,15 @@
  *     there is no rate constant here. The arbiter and the driver enforce the same rate as a spacing.
  *  3. Clean teardown on Stop(), which also unregisters the source.
  *
+ * An owner that sends frames only when its picture changes learns from {@link ChannelInboundVideoBridge.OnSourceActivated}
+ * when the arbiter starts sending its source to the model again, so it can send the picture the model missed.
+ *
  * @module @memberjunction/ai-realtime-client
  * @author MemberJunction.com
  */
 
-import type { BaseRealtimeClient } from '../generic/baseRealtimeClient';
 import { NominalVideoFrameIntervalMs } from './videoPacing';
-import { VideoSourceArbiter, type VideoSourceKind } from './videoSourceArbiter';
+import { VideoSourceArbiter, type IVideoFrameSink, type VideoSourceKind } from './videoSourceArbiter';
 
 /**
  * Provider implemented by a channel or surface to produce visual frames.
@@ -80,16 +82,28 @@ export class ChannelInboundVideoBridge {
     private registeredWith: VideoSourceArbiter | null = null;
     /** Whether the owner switched this source off (exposure policy or the user). Survives re-registration. */
     private sourceEnabled = true;
+    /** The owner's handlers for {@link OnSourceActivated}. They survive re-registration. */
+    private readonly activatedHandlers = new Set<() => void>();
+    /** Stops following the arbiter's changes; `null` while not following (not registered, or no handler). */
+    private stopFollowingArbiter: (() => void) | null = null;
+    /** Whether the arbiter was sending this source to the model as of its last change. */
+    private forwarded = false;
 
+    /**
+     * @param clientOrGetter The session's client, or a getter for it (a reconnect replaces the client). Any
+     *   {@link IVideoFrameSink} works; a `BaseRealtimeClient` is one.
+     * @param provider Produces the frames.
+     * @param options Source identity, MIME type and the deprecated rate cap.
+     */
     constructor(
-        private readonly clientOrGetter: BaseRealtimeClient | (() => BaseRealtimeClient | null | undefined) | null | undefined,
+        private readonly clientOrGetter: IVideoFrameSink | (() => IVideoFrameSink | null | undefined) | null | undefined,
         private readonly provider: IChannelFrameProvider,
         private readonly options: ChannelInboundVideoBridgeOptions = {}
     ) {
         this.sourceId = options.SourceID ?? `channel-video-${++generatedSourceCounter}`;
     }
 
-    private get client(): BaseRealtimeClient | null | undefined {
+    private get client(): IVideoFrameSink | null | undefined {
         return typeof this.clientOrGetter === 'function' ? this.clientOrGetter() : this.clientOrGetter;
     }
 
@@ -120,6 +134,7 @@ export class ChannelInboundVideoBridge {
             return null;
         }
         if (this.registeredWith !== arbiter) {
+            this.unfollowArbiter();
             this.registeredWith?.UnregisterSource(this.sourceId);
             arbiter.RegisterSource({
                 SourceID: this.sourceId,
@@ -131,8 +146,67 @@ export class ChannelInboundVideoBridge {
             if (!this.sourceEnabled) {
                 arbiter.SetSourceEnabled(this.sourceId, false, false);
             }
+            // Followed from here, once registered as it will stay: the registration itself is not an activation.
+            this.followArbiter();
         }
         return arbiter;
+    }
+
+    /**
+     * Calls `handler` each time the arbiter starts sending this source to the model after it was not: another source
+     * that held the model's only stream stopped or was set aside, or this source was switched back on. The source's
+     * first registration does not count. A frame offered while the source was not sent never reached the model, so an
+     * owner that sends frames only when its picture changes sends its current picture here.
+     *
+     * The handler is kept across a re-registration (a reconnect's new client) and called until removed.
+     *
+     * @param handler Called synchronously from the arbiter's change event; it should not throw.
+     * @returns A function that removes the handler.
+     */
+    public OnSourceActivated(handler: () => void): () => void {
+        this.activatedHandlers.add(handler);
+        this.followArbiter();
+        return () => {
+            this.activatedHandlers.delete(handler);
+            if (this.activatedHandlers.size === 0) {
+                this.unfollowArbiter();
+            }
+        };
+    }
+
+    /** Starts following the arbiter this source is registered with, when an owner asked to hear of activations. */
+    private followArbiter(): void {
+        const arbiter = this.registeredWith;
+        if (!arbiter || this.stopFollowingArbiter || this.activatedHandlers.size === 0) {
+            return;
+        }
+        this.forwarded = arbiter.GetActiveSourceIDs().includes(this.sourceId);
+        this.stopFollowingArbiter = arbiter.OnChange(() => {
+            const forwarded = arbiter.GetActiveSourceIDs().includes(this.sourceId);
+            const activated = forwarded && !this.forwarded;
+            this.forwarded = forwarded;
+            if (activated) {
+                this.notifyActivated();
+            }
+        });
+    }
+
+    /** Stops following the arbiter's changes. */
+    private unfollowArbiter(): void {
+        this.stopFollowingArbiter?.();
+        this.stopFollowingArbiter = null;
+        this.forwarded = false;
+    }
+
+    /** Calls each activation handler, containing a handler that throws. */
+    private notifyActivated(): void {
+        for (const handler of [...this.activatedHandlers]) {
+            try {
+                handler();
+            } catch (err) {
+                console.error('[ChannelInboundVideoBridge] Error in a source-activated handler:', err);
+            }
+        }
     }
 
     /**
@@ -174,7 +248,7 @@ export class ChannelInboundVideoBridge {
     }
 
     /** The poll interval: the negotiated rate, capped by the (deprecated) `Rate` option when one was given. */
-    private pollIntervalMs(client: BaseRealtimeClient): number {
+    private pollIntervalMs(client: IVideoFrameSink): number {
         const negotiated = client.InboundVideoRate;
         const requested = this.options.Rate;
         const rate =
@@ -250,7 +324,8 @@ export class ChannelInboundVideoBridge {
     }
 
     /**
-     * Stops the bridge: clears the poll timer and removes this source from the arbiter.
+     * Stops the bridge: clears the poll timer and removes this source from the arbiter. Activation handlers stay, and
+     * are called again if the source registers again.
      */
     public Stop(): void {
         this.active = false;
@@ -259,6 +334,7 @@ export class ChannelInboundVideoBridge {
             clearInterval(this.timer);
             this.timer = null;
         }
+        this.unfollowArbiter();
         this.registeredWith?.UnregisterSource(this.sourceId);
         this.registeredWith = null;
     }

@@ -1,13 +1,17 @@
 [
   {
-    "_comments": "Bridge provider registry for the Realtime Bridges subsystem. Each row connects the single realtime agent engine to an external endpoint — a meeting (Zoom/Teams/Meet/Webex/Slack/Discord/LiveKit/RingCentral) or a phone call (Twilio/Vonage/RingCentral). SupportedFeatures encodes the per-platform capability matrix from /plans/realtime/realtime-bridges-architecture.md §8 as an IBridgeProviderFeatures JSON string (omitted flag = not supported). STATUS POLICY: Loopback and Zoom are 'Active' — their drivers exist (LoopbackBridge in @memberjunction/ai-bridge-server; ZoomBridge in @memberjunction/ai-bridge-zoom). Every other provider is 'Disabled': the row populates the registry/dashboard and captures the capability matrix, but sessions cannot start until that platform's driver lands. Flip to 'Active' as each driver ships. IDs are assigned by mj-sync on first push — primaryKey/sync intentionally omitted.",
+    "_comments": "Bridge provider registry for the Realtime Bridges subsystem. Each row connects the single realtime agent engine to an external endpoint — a meeting (Zoom/Teams/Meet/Webex/Slack/Discord/LiveKit, plus the in-memory Loopback for development) or a phone call (RingCentral/Twilio/Vonage/OpenAI Direct SIP). SupportedFeatures is an IBridgeProviderFeatures JSON object saying what the row's driver does (omitted flag = not supported). A capability the platform offers but the driver does not carry yet stays off until the driver carries it: the Zoom, Teams, Meet, Webex, Slack and Discord drivers carry audio but no video or screen share. The unit tests of those six drivers and of LiveKit read their rows and check the flags against the driver. STATUS POLICY: a row is 'Active' once its driver ships. Every row is Active except Slack, which stays 'Disabled' until a public join-with-media path to huddles is confirmed (see its Description). Every row has a fixed primaryKey (a new row takes one from uuidgen); mj sync push writes the sync blocks.",
     "fields": {
       "Name": "Loopback",
-      "Description": "In-memory echo bridge for development and testing. Loops the agent's outbound audio back as inbound with no external platform. The only provider whose driver exists today.",
+      "Description": "In-memory echo bridge for development and testing. Loops the agent's outbound audio back as inbound with no external platform.",
       "BridgeType": "Meeting",
       "DriverClass": "LoopbackBridge",
       "Status": "Active",
-      "SupportedFeatures": "{\"OnDemandJoin\":true,\"AudioIn\":true,\"AudioOut\":true}"
+      "SupportedFeatures": {
+        "OnDemandJoin": true,
+        "AudioIn": true,
+        "AudioOut": true
+      }
     },
     "primaryKey": {
       "ID": "C63C4E68-50D4-4596-B25E-69FA14AA7205"
@@ -20,11 +24,20 @@
   {
     "fields": {
       "Name": "Zoom",
-      "Description": "Zoom Meetings bridge. Built first, end-to-end — the reference driver the others subclass. Full meeting AV plus marketplace native-invite.",
+      "Description": "Zoom Meetings bridge. Built first, end-to-end — the reference driver the others mirror. Meeting audio in and out plus marketplace native-invite; the driver carries no video or screen share yet.",
       "BridgeType": "Meeting",
       "DriverClass": "ZoomBridge",
       "Status": "Active",
-      "SupportedFeatures": "{\"OnDemandJoin\":true,\"ScheduledJoin\":true,\"InviteJoin\":true,\"NativeInvite\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true}"
+      "SupportedFeatures": {
+        "OnDemandJoin": true,
+        "ScheduledJoin": true,
+        "InviteJoin": true,
+        "NativeInvite": true,
+        "InboundRouting": true,
+        "AudioIn": true,
+        "AudioOut": true,
+        "SpeakerDiarization": true
+      }
     },
     "primaryKey": {
       "ID": "8852EFFF-6C6F-4B57-B482-2C6660EC445E"
@@ -37,11 +50,20 @@
   {
     "fields": {
       "Name": "Microsoft Teams",
-      "Description": "Microsoft Teams meeting bridge. Full meeting AV plus marketplace native-invite; calendar invite via the agent's Microsoft 365 identity.",
+      "Description": "Microsoft Teams meeting bridge. Meeting audio in and out plus marketplace native-invite; calendar invite via the agent's Microsoft 365 identity. The driver carries no video or screen share yet.",
       "BridgeType": "Meeting",
       "DriverClass": "TeamsBridge",
       "Status": "Active",
-      "SupportedFeatures": "{\"OnDemandJoin\":true,\"ScheduledJoin\":true,\"InviteJoin\":true,\"NativeInvite\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true}"
+      "SupportedFeatures": {
+        "OnDemandJoin": true,
+        "ScheduledJoin": true,
+        "InviteJoin": true,
+        "NativeInvite": true,
+        "InboundRouting": true,
+        "AudioIn": true,
+        "AudioOut": true,
+        "SpeakerDiarization": true
+      }
     },
     "primaryKey": {
       "ID": "6CFAB50A-3060-4AA7-88E9-1B67726688A4"
@@ -58,7 +80,15 @@
       "BridgeType": "Meeting",
       "DriverClass": "GoogleMeetBridge",
       "Status": "Active",
-      "SupportedFeatures": "{\"OnDemandJoin\":true,\"ScheduledJoin\":true,\"InviteJoin\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true}"
+      "SupportedFeatures": {
+        "OnDemandJoin": true,
+        "ScheduledJoin": true,
+        "InviteJoin": true,
+        "InboundRouting": true,
+        "AudioIn": true,
+        "AudioOut": true,
+        "SpeakerDiarization": true
+      }
     },
     "primaryKey": {
       "ID": "D2291A48-1E2A-4CEF-8501-E43CA9D00D8C"
@@ -71,11 +101,19 @@
   {
     "fields": {
       "Name": "Cisco Webex",
-      "Description": "Cisco Webex meeting bridge. Major enterprise platform (finance, healthcare, government, education). Full meeting AV via the Webex bot/embedded-app SDK.",
+      "Description": "Cisco Webex meeting bridge. Major enterprise platform (finance, healthcare, government, education). Meeting audio in and out via the Webex bot/embedded-app SDK; the driver carries no video or screen share yet.",
       "BridgeType": "Meeting",
       "DriverClass": "WebexBridge",
       "Status": "Active",
-      "SupportedFeatures": "{\"OnDemandJoin\":true,\"ScheduledJoin\":true,\"InviteJoin\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true}"
+      "SupportedFeatures": {
+        "OnDemandJoin": true,
+        "ScheduledJoin": true,
+        "InviteJoin": true,
+        "InboundRouting": true,
+        "AudioIn": true,
+        "AudioOut": true,
+        "SpeakerDiarization": true
+      }
     },
     "primaryKey": {
       "ID": "EB46F5DE-E19B-49B8-80EA-EE82CDAB7D7F"
@@ -88,11 +126,19 @@
   {
     "fields": {
       "Name": "Slack",
-      "Description": "Slack huddle bridge — full audio + video + screen share (huddles run on Amazon Chime). Gating unknown: confirm a public join-with-media path to huddles before promoting from Disabled.",
+      "Description": "Slack huddle bridge (huddles run on Amazon Chime). The driver carries huddle audio in and out, not video or screen share. Gating unknown: confirm a public join-with-media path to huddles before promoting from Disabled.",
       "BridgeType": "Meeting",
       "DriverClass": "SlackBridge",
       "Status": "Disabled",
-      "SupportedFeatures": "{\"OnDemandJoin\":true,\"ScheduledJoin\":true,\"InviteJoin\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true}"
+      "SupportedFeatures": {
+        "OnDemandJoin": true,
+        "ScheduledJoin": true,
+        "InviteJoin": true,
+        "InboundRouting": true,
+        "AudioIn": true,
+        "AudioOut": true,
+        "SpeakerDiarization": true
+      }
     },
     "primaryKey": {
       "ID": "21040845-F9DB-480A-89F7-2DBD7FB0D819"
@@ -109,7 +155,13 @@
       "BridgeType": "Meeting",
       "DriverClass": "DiscordBridge",
       "Status": "Active",
-      "SupportedFeatures": "{\"OnDemandJoin\": true, \"InboundRouting\": true, \"AudioIn\": true, \"AudioOut\": true, \"VideoIn\": true, \"VideoOut\": true, \"ScreenIn\": true, \"ScreenOut\": true, \"SpeakerDiarization\": true}"
+      "SupportedFeatures": {
+        "OnDemandJoin": true,
+        "InboundRouting": true,
+        "AudioIn": true,
+        "AudioOut": true,
+        "SpeakerDiarization": true
+      }
     },
     "primaryKey": {
       "ID": "8D72E316-D8D5-4142-B9DD-410F8505FD88"
@@ -126,7 +178,14 @@
       "BridgeType": "Telephony",
       "DriverClass": "RingCentralBridge",
       "Status": "Active",
-      "SupportedFeatures": "{\"OutboundDial\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"DTMF\":true,\"CallTransfer\":true}"
+      "SupportedFeatures": {
+        "OutboundDial": true,
+        "InboundRouting": true,
+        "AudioIn": true,
+        "AudioOut": true,
+        "DTMF": true,
+        "CallTransfer": true
+      }
     },
     "primaryKey": {
       "ID": "1BA475B4-EFAE-4B4B-844C-FBC46A39BC59"
@@ -143,7 +202,15 @@
       "BridgeType": "Telephony",
       "DriverClass": "TwilioBridge",
       "Status": "Active",
-      "SupportedFeatures": "{\"InviteJoin\":true,\"OutboundDial\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"DTMF\":true,\"CallTransfer\":true}"
+      "SupportedFeatures": {
+        "InviteJoin": true,
+        "OutboundDial": true,
+        "InboundRouting": true,
+        "AudioIn": true,
+        "AudioOut": true,
+        "DTMF": true,
+        "CallTransfer": true
+      }
     },
     "primaryKey": {
       "ID": "DBFA558F-3DE3-49D4-AE79-72871ADBBF76"
@@ -160,7 +227,15 @@
       "BridgeType": "Telephony",
       "DriverClass": "VonageBridge",
       "Status": "Active",
-      "SupportedFeatures": "{\"InviteJoin\":true,\"OutboundDial\":true,\"InboundRouting\":true,\"AudioIn\":true,\"AudioOut\":true,\"DTMF\":true,\"CallTransfer\":true}"
+      "SupportedFeatures": {
+        "InviteJoin": true,
+        "OutboundDial": true,
+        "InboundRouting": true,
+        "AudioIn": true,
+        "AudioOut": true,
+        "DTMF": true,
+        "CallTransfer": true
+      }
     },
     "primaryKey": {
       "ID": "77647313-4F5C-4F6C-94AE-A76507E4D6EC"
@@ -177,7 +252,15 @@
       "BridgeType": "Meeting",
       "DriverClass": "LiveKitBridge",
       "Status": "Active",
-      "SupportedFeatures": "{\"OnDemandJoin\":true,\"AudioIn\":true,\"AudioOut\":true,\"VideoIn\":true,\"VideoOut\":true,\"ScreenIn\":true,\"ScreenOut\":true,\"SpeakerDiarization\":true}"
+      "SupportedFeatures": {
+        "OnDemandJoin": true,
+        "AudioIn": true,
+        "AudioOut": true,
+        "VideoIn": true,
+        "VideoOut": true,
+        "ScreenIn": true,
+        "SpeakerDiarization": true
+      }
     },
     "primaryKey": {
       "ID": "94DA5B27-F5D8-42D8-AE92-D9C402195D07"
@@ -194,7 +277,12 @@
       "BridgeType": "Telephony",
       "DriverClass": "OpenAISipBridge",
       "Status": "Active",
-      "SupportedFeatures": "{\"InboundRouting\":true,\"DTMF\":true,\"CallTransfer\":true,\"DetachedMediaPlane\":true}"
+      "SupportedFeatures": {
+        "InboundRouting": true,
+        "DTMF": true,
+        "CallTransfer": true,
+        "DetachedMediaPlane": true
+      }
     },
     "primaryKey": {
       "ID": "98B5C42D-4DFB-455F-AA36-F5B478C5F2D1"
