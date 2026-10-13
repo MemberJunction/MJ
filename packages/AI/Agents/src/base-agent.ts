@@ -8166,17 +8166,20 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * The ID of this agent's newest root run in the conversation IF the user stopped it, else
-     * null. One query over the runs that could be the predecessor (settled, or stopped by the
-     * user): the newest decides. A stopped run older than a settled one is history the settled
-     * run already built on, so it is not carried again.
+     * The ID of this agent's newest root run on this turn's branch path IF the user stopped it,
+     * else null. One query over the runs that could be the predecessor (settled, or stopped by
+     * the user): the newest decides. A stopped run older than a settled one is history the
+     * settled run already built on, so it is not carried again. The path scopes it the same way
+     * as {@link loadPriorTurnToolResultSteps}: a run stopped on a sibling branch is never resumed.
      * @private
      */
     private async findUserStoppedPredecessorRunId(params: ExecuteAgentParams): Promise<string | null> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const newest = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
             EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter(params.conversationId!, params.agent.ID),
+            ExtraFilter: MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter(
+                params.conversationId!, params.agent.ID, params.ConversationBranchID ?? null, this._conversationBranches
+            ),
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
             Fields: ['ID', 'Status', 'CancellationReason'],
@@ -8319,9 +8322,8 @@ The context is now within limits. Please retry your request with the recovered c
         branches: ReadonlyArray<ConversationBranchRow>,
         statusList: string
     ): string {
-        const pathFilter = ConversationEngine.BuildBranchPathFilter(conversationId, branchId, branches);
         return `ConversationID='${conversationId}' AND Status IN (${statusList}) AND ParentRunID IS NULL AND AgentID='${agentId}'`
-            + ` AND ConversationDetailID IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE ${ConversationEngine.LiveRowsFilter(pathFilter)})`;
+            + ` AND ${MJAIAgentRunEntityExtended.BuildReplyOnBranchPathFilter(conversationId, branchId, branches)}`;
     }
 
     /**

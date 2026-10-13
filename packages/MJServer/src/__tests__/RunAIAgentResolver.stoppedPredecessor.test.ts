@@ -70,9 +70,9 @@ function makeResolver(): { resolver: RunAIAgentResolver; seams: ResolverSeams } 
     return { resolver, seams };
 }
 
-function makeContext(): AppContext {
+function makeContext(branchId: string | null = null): AppContext {
     const provider = {
-        GetEntityObject: vi.fn().mockResolvedValue({ ConversationID: 'conv-1', Load: vi.fn().mockResolvedValue(true) }),
+        GetEntityObject: vi.fn().mockResolvedValue({ ConversationID: 'conv-1', BranchID: branchId, Load: vi.fn().mockResolvedValue(true) }),
     };
     return {
         userPayload: { sessionId: 'session-1', userRecord: USER } as unknown as UserPayload,
@@ -85,10 +85,10 @@ const pubSub = { publish: vi.fn() } as unknown as PubSubEngine;
 
 async function runMutation(
     resolver: RunAIAgentResolver,
-    options: { payload?: string; lastRunId?: string; autoPopulate?: boolean; fireAndForget?: boolean }
+    options: { payload?: string; lastRunId?: string; autoPopulate?: boolean; fireAndForget?: boolean; branchId?: string | null }
 ) {
     return resolver.RunAIAgentFromConversationDetail(
-        'detail-1', 'agent-1', makeContext(), 'session-1', pubSub,
+        'detail-1', 'agent-1', makeContext(options.branchId ?? null), 'session-1', pubSub,
         undefined, undefined, options.payload, options.lastRunId, options.autoPopulate, undefined, undefined, undefined,
         undefined, undefined, options.fireAndForget, undefined, undefined,
         undefined
@@ -113,7 +113,7 @@ describe('RunAIAgentFromConversationDetail — continuing from a user-stopped ru
         const result = await runMutation(resolver, {});
 
         expect(result.success).toBe(true);
-        expect(seams.findUserStoppedPredecessorRunId).toHaveBeenCalledWith('conv-1', 'agent-1', USER, expect.anything());
+        expect(seams.findUserStoppedPredecessorRunId).toHaveBeenCalledWith('conv-1', 'agent-1', null, USER, expect.anything());
         const args = seams.executeAIAgent.mock.calls[0];
         expect(args[SYNC_LAST_RUN]).toBe(STOPPED_RUN);
         expect(args[SYNC_AUTO]).toBe(true);
@@ -138,6 +138,13 @@ describe('RunAIAgentFromConversationDetail — continuing from a user-stopped ru
         const args = seams.executeAgentInBackground.mock.calls[0];
         expect(args[BG_LAST_RUN]).toBe(STOPPED_RUN);
         expect(args[BG_AUTO]).toBe(true);
+    });
+
+    it('looks up the predecessor on the branch the reply row was created on', async () => {
+        await runMutation(resolver, { branchId: 'B' });
+        expect(seams.findUserStoppedPredecessorRunId).toHaveBeenCalledWith('conv-1', 'agent-1', 'B', expect.anything(), expect.anything());
+        await runMutation(resolver, {});
+        expect(seams.findUserStoppedPredecessorRunId).toHaveBeenLastCalledWith('conv-1', 'agent-1', null, expect.anything(), expect.anything());
     });
 
     it('a caller-supplied lastRunId wins and the lookup is skipped', async () => {

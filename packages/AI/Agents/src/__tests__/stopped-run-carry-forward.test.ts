@@ -56,6 +56,7 @@ function toolStep(n: number, tool: string, data: unknown): StoppedRunStackStepRe
 
 interface Internals {
     _depth: number;
+    _conversationBranches: Array<{ ID: string; ConversationID: string; ParentBranchID: string | null; ForkFromSequence: number | null }>;
     injectStoppedRunResults(params: unknown): Promise<void>;
 }
 const internals = (a: BaseAgent) => a as unknown as Internals;
@@ -140,6 +141,7 @@ describe('BaseAgent.injectStoppedRunResults', () => {
         expect(runFilter).toContain(`AgentID='${AGENT_A}'`);
         expect(runFilter).toContain('ParentRunID IS NULL');
         expect(runFilter).toContain(`Status='Cancelled' AND CancellationReason='User Request'`);
+        expect(runFilter).toContain(`[BranchID] IS NULL AND [ReplacedAt] IS NULL`); // no branch: the trunk's own rows
         const stepFilter = (runViewFn.mock.calls[1][0] as { ExtraFilter: string }).ExtraFilter;
         expect(stepFilter).toContain(`AgentRunID='${STOPPED_RUN}'`);
         expect(stepFilter).toContain(`StepType IN ('Actions', 'Tool')`);
@@ -176,6 +178,16 @@ describe('BaseAgent.injectStoppedRunResults', () => {
         await internals(sub).injectStoppedRunResults(paramsFor([]));
 
         expect(fromProvider).not.toHaveBeenCalled();
+    });
+
+    it('on a branch, looks only at runs that replied on that branch\'s path', async () => {
+        const runViewFn = vi.fn().mockResolvedValueOnce({ Success: true, Results: [] });
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runViewFn } as unknown as RunView);
+        const agent = new BaseAgent();
+        internals(agent)._conversationBranches = [{ ID: 'B', ConversationID: CONV_ID, ParentBranchID: null, ForkFromSequence: 2 }];
+        await internals(agent).injectStoppedRunResults(paramsFor([], { ConversationBranchID: 'B' }));
+        const runFilter = (runViewFn.mock.calls[0][0] as { ExtraFilter: string }).ExtraFilter;
+        expect(runFilter).toContain(`([BranchID]='B' OR ([BranchID] IS NULL AND [Sequence] <= 2)) AND [ReplacedAt] IS NULL`);
     });
 
     it('a lookup failure is contained and leaves the messages untouched', async () => {

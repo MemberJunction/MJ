@@ -767,14 +767,18 @@ export class RunAIAgentResolver extends ResolverBase {
     private async findUserStoppedPredecessorRunId(
         conversationId: string,
         agentId: string,
+        branchId: string | null,
         contextUser: UserInfo,
         provider: IMetadataProvider
     ): Promise<string | null> {
         try {
+            // The run must have replied on this turn's branch path: a run stopped on a sibling branch is not
+            // this path's history. The trunk needs no branch rows; a branch needs them to walk its ancestry.
+            const branches = branchId ? await ConversationEngine.LoadBranchesFresh(conversationId, contextUser, provider) : [];
             const rv = RunView.FromMetadataProvider(provider);
             const newest = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
                 EntityName: 'MJ: AI Agent Runs',
-                ExtraFilter: MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter(conversationId, agentId),
+                ExtraFilter: MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter(conversationId, agentId, branchId, branches),
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
                 Fields: ['ID', 'Status', 'CancellationReason'],
@@ -981,7 +985,7 @@ export class RunAIAgentResolver extends ResolverBase {
             let effectiveLastRunId = lastRunId;
             let effectiveAutoPopulate = autoPopulateLastRunPayload;
             if (!effectiveLastRunId) {
-                const stoppedRunId = await this.findUserStoppedPredecessorRunId(conversationId, effectiveAgentId, currentUser, p);
+                const stoppedRunId = await this.findUserStoppedPredecessorRunId(conversationId, effectiveAgentId, branchId, currentUser, p);
                 if (stoppedRunId) {
                     effectiveLastRunId = stoppedRunId;
                     if (effectiveAutoPopulate === undefined && payload == null) {

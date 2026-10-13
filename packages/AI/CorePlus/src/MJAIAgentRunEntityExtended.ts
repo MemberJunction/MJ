@@ -1,5 +1,5 @@
 import { BaseEntity, CompositeKey, LogErrorEx, IMetadataProvider } from "@memberjunction/core";
-import { MJAIAgentRunEntity } from "@memberjunction/core-entities";
+import { MJAIAgentRunEntity, ConversationEngine, type ConversationBranchRow } from "@memberjunction/core-entities";
 import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { MJAIAgentRunStepEntityExtended } from "./MJAIAgentRunStepEntityExtended";
 
@@ -42,17 +42,40 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
     }
 
     /**
-     * The `ExtraFilter` selecting, for one agent in one conversation, the root runs that could be
-     * the next turn's predecessor: those that settled, and those the user stopped. Ordered
-     * newest-first by the caller, the first row decides; a stopped run older than a settled one is
-     * history the settled run already built on and is not chained to again.
+     * The `ExtraFilter` predicate for runs whose reply row is on one branch path of the
+     * conversation and was not replaced by a rerun of its turn. A run made on a sibling branch,
+     * or whose answer a rerun superseded, is not this path's history, so nothing that reads a
+     * previous run for the next turn (carry-forward, a stopped run's resume) may pick it.
+     * A null branch is the trunk alone.
      */
-    public static BuildStoppedPredecessorFilter(conversationId: string, agentId: string): string {
+    public static BuildReplyOnBranchPathFilter(
+        conversationId: string,
+        branchId: string | null,
+        branches: ReadonlyArray<ConversationBranchRow>
+    ): string {
+        const pathFilter = ConversationEngine.BuildBranchPathFilter(conversationId, branchId, branches);
+        return `ConversationDetailID IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE ${ConversationEngine.LiveRowsFilter(pathFilter)})`;
+    }
+
+    /**
+     * The `ExtraFilter` selecting, for one agent in one conversation, the root runs that could be
+     * the next turn's predecessor: those that settled, and those the user stopped, with a reply
+     * row on the turn's branch path ({@link BuildReplyOnBranchPathFilter}). Ordered newest-first
+     * by the caller, the first row decides; a stopped run older than a settled one is history
+     * the settled run already built on and is not chained to again.
+     */
+    public static BuildStoppedPredecessorFilter(
+        conversationId: string,
+        agentId: string,
+        branchId: string | null,
+        branches: ReadonlyArray<ConversationBranchRow>
+    ): string {
         const settled = MJAIAgentRunEntityExtended.SettledStatuses.map((status) => `'${status}'`).join(', ');
         return (
             `ConversationID='${conversationId}' AND ParentRunID IS NULL AND AgentID='${agentId}' ` +
             `AND (Status IN (${settled}) OR (Status='${MJAIAgentRunEntityExtended.CancelledStatus}' ` +
-            `AND CancellationReason='${MJAIAgentRunEntityExtended.UserRequestCancellationReason}'))`
+            `AND CancellationReason='${MJAIAgentRunEntityExtended.UserRequestCancellationReason}')) ` +
+            `AND ${MJAIAgentRunEntityExtended.BuildReplyOnBranchPathFilter(conversationId, branchId, branches)}`
         );
     }
 
