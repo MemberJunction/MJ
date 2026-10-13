@@ -87,10 +87,25 @@ export function TransformHtml(html: string, options: HtmlTransformOptions): Reco
   return result;
 }
 
+/**
+ * The bytes in the one shape pdf-parse 1.1.4 reads correctly everywhere: a plain `Uint8Array` that
+ * owns its whole `ArrayBuffer`.
+ *
+ * pdf-parse hands its input to pdf.js 1.10, which copies it with `new input.constructor(input)` and
+ * later reads the copy's entire underlying `ArrayBuffer`, ignoring its `byteOffset`. Copying a Node
+ * `Buffer` can land in Node's shared allocation pool at a nonzero offset, so a `Buffer` input
+ * misparses ("bad XRef entry", "Command token too long") depending on the PDF's size and the Node
+ * version. A plain `Uint8Array` copies into its own buffer at offset 0. pdf-parse is typed as taking
+ * a `Buffer`, but at runtime it accepts any `Uint8Array`, hence the narrowing assertion.
+ */
+function pdfParseInput(data: Uint8Array): Buffer {
+  return new Uint8Array(data) as Buffer;
+}
+
 /** Extracts a PDF's text and metadata, the shape `processPdf` has always returned. */
 export async function TransformPdf(data: Uint8Array, options: PdfTransformOptions): Promise<Record<string, unknown>> {
   const { OutputType: outputType, IncludeMetadata: includeMetadata, MaxLength: maxLength } = options;
-  const pdfData = await pdfParse(Buffer.from(data.buffer, data.byteOffset, data.byteLength));
+  const pdfData = await pdfParse(pdfParseInput(data));
 
   const result: Record<string, unknown> = {
     detectedType: 'pdf',

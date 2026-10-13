@@ -20,11 +20,7 @@ const PAGE = `<!doctype html><html><head>
 const html = (outputType: string, extra: Partial<{ ExtractMainContent: boolean; IncludeMetadata: boolean; MaxLength: number }> = {}) =>
   TransformHtml(PAGE, { OutputType: outputType, ExtractMainContent: false, IncludeMetadata: false, MaxLength: 100_000, ...extra });
 
-/**
- * A one-page PDF whose page draws `text` in Helvetica, with a correct xref table. Padded with an
- * 8KB comment: pdf-parse 1.1.4 rejects a valid PDF of only a few hundred bytes ("bad XRef entry")
- * when it arrives as a Buffer over its own ArrayBuffer, which no real document is that small to hit.
- */
+/** A one-page PDF (a few hundred bytes) whose page draws `text` in Helvetica, with a correct xref table. */
 function minimalPdf(text: string): Uint8Array {
   const stream = `BT /F1 24 Tf 72 72 Td (${text}) Tj ET`;
   const objects = [
@@ -34,7 +30,7 @@ function minimalPdf(text: string): Uint8Array {
     `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
   ];
-  let body = `%PDF-1.4\n%${'x'.repeat(8192)}\n`;
+  let body = '%PDF-1.4\n';
   const offsets: number[] = [];
   objects.forEach((obj, i) => {
     offsets.push(body.length);
@@ -108,6 +104,25 @@ describe('TransformPdf', () => {
     expect(result.metadata).toBeUndefined();
     expect(result.content).toMatchObject({ pages: 1 });
     expect((result.content as { text: string }).text).toContain('Hello renewals');
+  });
+
+  // pdf.js 1.10 (inside pdf-parse) copies its input with `new input.constructor(input)` and then reads
+  // the copy's whole ArrayBuffer, ignoring its byteOffset. A copied Node Buffer can sit in Node's shared
+  // allocation pool at a nonzero offset, so a Buffer input misparses ("bad XRef entry") depending on
+  // size and Node version. These pin that every input shape parses.
+  it('extracts a PDF that arrives as a pooled Buffer', async () => {
+    const pooled = Buffer.from(minimalPdf('Hello renewals')); // a few hundred bytes: Node allocates it from its pool
+    expect(pooled.byteOffset > 0 || pooled.buffer.byteLength > pooled.byteLength).toBe(true);
+    const result = await TransformPdf(pooled, { OutputType: 'text', IncludeMetadata: false, MaxLength: 100_000 });
+    expect(result.content).toContain('Hello renewals');
+  });
+
+  it('extracts a PDF that is a view into a larger buffer', async () => {
+    const pdf = minimalPdf('Hello renewals');
+    const backing = new Uint8Array(pdf.length + 4096).fill(0x73);
+    backing.set(pdf, 2048);
+    const result = await TransformPdf(backing.subarray(2048, 2048 + pdf.length), { OutputType: 'text', IncludeMetadata: false, MaxLength: 100_000 });
+    expect(result.content).toContain('Hello renewals');
   });
 });
 
