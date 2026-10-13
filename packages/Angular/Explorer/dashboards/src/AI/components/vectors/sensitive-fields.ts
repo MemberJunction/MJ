@@ -14,7 +14,8 @@
  *
  * Two layers, deliberately:
  *
- *   1. The model never sees these fields, so it cannot suggest them.
+ *   1. The model never sees these fields, on the entity or on its related entities, so it
+ *      cannot suggest them.
  *   2. The saved template is re-checked, because the template is hand-editable after the
  *      model returns and a user can type a field name the picker never offered.
  *

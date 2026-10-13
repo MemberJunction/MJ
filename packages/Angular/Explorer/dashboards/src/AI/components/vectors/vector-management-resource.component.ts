@@ -45,6 +45,7 @@ import {
     MAX_TEMPLATE_FIELDS,
     CapSelectedFields,
     EntityDocumentTypeForUseCase,
+    SuggestionUseCaseForDocumentType,
     IsVectorizableEntity,
     TemplateFieldCapRefusal,
 } from './vector-document-rules';
@@ -54,6 +55,8 @@ interface EntitySyncRow {
     EntityDocumentID: string;
     EntityName: string;
     DocumentName: string;
+    /** Entity Document Type name, e.g. 'Search'. Fixed at creation, shown read-only. */
+    DocumentType: string;
     VectorCount: number;
     LastSynced: Date | null;
     Status: 'Synced' | 'Syncing' | 'Error' | 'Pending';
@@ -144,6 +147,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public EditDocVectorIndexID = '';
     public EditDocStatus = '';
     public EditDocTemplate = '';
+    /** Entity Document Type of the document being edited. Fixed at creation, shown read-only. */
+    public EditDocType = '';
     public IsEditRegenerating = false;
 
     /** Parse {{ FieldName }} patterns from the edit panel's template */
@@ -170,6 +175,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.EditDocAIModelID = doc.AIModelID ?? '';
         this.EditDocVectorIndexID = doc.VectorIndexID || '';
         this.EditDocStatus = doc.Status;
+        this.EditDocType = doc.Type || '';
         this.EditDocTemplate = '';
         this.IsEditRegenerating = false;
         this.ShowEditPanel = true;
@@ -275,11 +281,22 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public async RegenerateTemplate(): Promise<void> {
         if (!this.EditDocEntityName || this.IsEditRegenerating) return;
 
+        // Ask for the use case this document's type stands for, so the regenerated template
+        // still matches the type. Refuse rather than fall back to another use case.
+        const useCase = SuggestionUseCaseForDocumentType(this.EditDocType);
+        if (!useCase) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Can't regenerate: documents of type "${this.EditDocType || 'unknown'}" have no AI template use case.`,
+                'error', 5000
+            );
+            return;
+        }
+
         this.IsEditRegenerating = true;
         this.cdr.detectChanges();
 
         try {
-            const result = await this.callSuggestionPrompt(this.EditDocEntityName, 'duplicate detection');
+            const result = await this.callSuggestionPrompt(this.EditDocEntityName, useCase);
             if (result) {
                 this.EditDocTemplate = result.template;
                 MJNotificationService.Instance.CreateSimpleNotification(
@@ -1297,6 +1314,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 EntityDocumentID: doc.ID,
                 EntityName: doc.Entity || '',
                 DocumentName: doc.Name,
+                DocumentType: doc.Type || '',
                 VectorCount: vectorCount,
                 LastSynced: lastSynced,
                 Status: status,
@@ -1601,10 +1619,13 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
         // Find-or-create, so a retry after a mid-flow failure converges on one set of rows.
         const templateName = this.templateNameForDocument();
-        const template = await this.findOrCreateTemplate(templateName);
+        const template = await this.findOrCreateTemplate(templateName, entityDoc.TemplateID);
         template.Name = templateName;
         template.Description = `Auto-generated template for entity document: ${this.SaveDocumentName}`;
-        template.UserID = md.CurrentUser.ID;
+        // An adopted template keeps its owner; only a new one is the current user's.
+        if (!template.UserID) {
+            template.UserID = md.CurrentUser.ID;
+        }
         template.IsActive = true;
         const templateSaved = await template.Save();
         if (!templateSaved) {
@@ -1694,15 +1715,23 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     /**
      * The Template for the current document, reusing an earlier attempt's row.
      *
-     * Matched on Name + UserID: `Template` carries no unique index, and that pair is exactly
-     * what this flow writes, so it identifies our own prior row without claiming anyone else's.
+     * An adopted Entity Document already points at its template (findOrCreateEntityDocument
+     * checked its name), so that row is reused by ID. Matching it on Name + UserID instead
+     * misses it when another user created it, writes a second template, re-points the document
+     * and orphans the first Template and Template Content.
+     *
+     * For a new document, matched on Name + UserID: `Template` carries no unique index, and that
+     * pair is exactly what this flow writes, so it identifies our own prior row without claiming
+     * anyone else's.
      */
-    private async findOrCreateTemplate(templateName: string): Promise<MJTemplateEntity> {
+    private async findOrCreateTemplate(templateName: string, adoptedTemplateId?: string | null): Promise<MJTemplateEntity> {
         const md = this.ProviderToUse;
         const rv = RunView.FromMetadataProvider(md);
         const existing = await rv.RunView<MJTemplateEntity>({
             EntityName: 'MJ: Templates',
-            ExtraFilter: `Name='${this.escapeForFilter(templateName)}' AND UserID='${md.CurrentUser.ID}'`,
+            ExtraFilter: adoptedTemplateId
+                ? `ID='${this.escapeForFilter(adoptedTemplateId)}'`
+                : `Name='${this.escapeForFilter(templateName)}' AND UserID='${md.CurrentUser.ID}'`,
             ResultType: 'entity_object',
             MaxRows: 1,
         });
@@ -1919,8 +1948,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             .slice(0, 20)
             .map(r => {
                 const relatedEntity = md.Entities.find(e => e.Name === r.RelatedEntity);
+                // Layer 1 covers related entities too: their fields reach the model here.
                 const relFields = relatedEntity
-                    ? relatedEntity.Fields
+                    ? WithoutSensitiveFields(relatedEntity.Fields)
                         .filter(f => !f.IsPrimaryKey && f.Type !== 'datetimeoffset')
                         .map(f => f.Name)
                     : [];

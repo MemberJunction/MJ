@@ -22,7 +22,7 @@ import { TemplatePlaceholderNames } from './sensitive-fields';
 /**
  * The Entity Document Type each use case writes.
  *
- * The dialog offers three use cases, and until now every one of them produced a
+ * The dialog offers these use cases, and until now every one of them produced a
  * `Record Duplicate` document — the type name was hardcoded in the save path, so choosing
  * "search" silently discarded the choice and wrote the wrong type. A vector pool is typed:
  * `Provider.SearchEntity` and the Search Entity action read `Search`-typed documents, so a
@@ -33,15 +33,13 @@ import { TemplatePlaceholderNames } from './sensitive-fields';
  * the Vectorize Entity action's `EntityDocumentType` parameter is documented as defaulting
  * to `Record Duplicate` and accepting `Search`.
  *
- * `classification` maps to `Classification`, which MJ does **not** currently seed. That is
- * deliberate: the use case is offered by the UI, so it resolves to the type it means, and an
- * install without that type gets a refusal that names it. Silently substituting a type that
- * does exist is the exact defect this map removes.
+ * The dialog's Use Case buttons are exactly this map's keys. There is no `classification`
+ * entry: MJ seeds no `Classification` type, so that button failed on every stock install and
+ * was removed until the type exists (#5630).
  */
 export const ENTITY_DOCUMENT_TYPE_BY_USE_CASE: Readonly<Record<string, string>> = {
     'duplicate detection': 'Record Duplicate',
     'search': 'Search',
-    'classification': 'Classification',
 };
 
 /**
@@ -55,6 +53,24 @@ export function EntityDocumentTypeForUseCase(useCase: string | null | undefined)
         return null;
     }
     return ENTITY_DOCUMENT_TYPE_BY_USE_CASE[useCase.trim().toLowerCase()] ?? null;
+}
+
+/**
+ * The use case the suggestion prompt is given for an existing document of this type, or null
+ * when the type has none (e.g. `Context`).
+ *
+ * The edit panel's "Regenerate template" uses it, so a regenerated template still matches the
+ * document's type. It reads the same map as {@link EntityDocumentTypeForUseCase}, so the two
+ * directions cannot drift. Callers refuse on null rather than substitute a use case.
+ */
+export function SuggestionUseCaseForDocumentType(typeName: string | null | undefined): string | null {
+    if (!typeName) {
+        return null;
+    }
+    const wanted = typeName.trim().toLowerCase();
+    const match = Object.entries(ENTITY_DOCUMENT_TYPE_BY_USE_CASE)
+        .find(([, documentType]) => documentType.toLowerCase() === wanted);
+    return match ? match[0] : null;
 }
 
 // ─── 2. How many fields a template may interpolate ───────────────────────────

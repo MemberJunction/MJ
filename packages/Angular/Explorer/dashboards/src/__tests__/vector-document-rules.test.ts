@@ -2,8 +2,8 @@
  * Tests for the four rules the Vectors tab applies when it turns a model suggestion into
  * real metadata.
  *
- * The headline one: the dialog offers three use cases — duplicate detection, search,
- * classification — and the save path used to hardcode the `Record Duplicate` document type.
+ * The headline one: the dialog offers use cases — duplicate detection and search — and the
+ * save path used to hardcode the `Record Duplicate` document type.
  * So choosing "search" silently produced a duplicate-detection document. A vector pool is
  * typed (Provider.SearchEntity reads Search-typed documents), so that is not a cosmetic
  * mislabel: the document is invisible to the feature that asked for it.
@@ -212,12 +212,23 @@ import {
     CapSelectedFields,
     EntityDocumentTypeForUseCase,
     IsVectorizableEntity,
+    SuggestionUseCaseForDocumentType,
     TemplateFieldCapRefusal,
     TemplateFieldNames,
 } from '../AI/components/vectors/vector-document-rules';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { VectorManagementResourceComponent } from '../AI/components/vectors/vector-management-resource.component';
 
 const RECORD_DUPLICATE_ID = 'type-record-duplicate';
+
+/** The EntityInfo members buildPromptData reads. */
+interface FakePromptEntity {
+    ID: string;
+    Name: string;
+    SchemaName: string;
+    Fields: { Name: string; Type: string; IsPrimaryKey: boolean }[];
+    RelatedEntities: { Type: string; RelatedEntity: string; RelatedEntityJoinField: string }[];
+}
 const SEARCH_TYPE_ID = 'type-search';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -225,10 +236,15 @@ const SEARCH_TYPE_ID = 'type-search';
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('EntityDocumentTypeForUseCase', () => {
-    it('gives each of the three offered use cases its own type', () => {
+    it('gives each offered use case its own type', () => {
         expect(EntityDocumentTypeForUseCase('duplicate detection')).toBe('Record Duplicate');
         expect(EntityDocumentTypeForUseCase('search')).toBe('Search');
-        expect(EntityDocumentTypeForUseCase('classification')).toBe('Classification');
+    });
+
+    it('does not offer classification, because MJ seeds no Classification type', () => {
+        // Every stock install refused it, so the dialog dropped it until the type exists.
+        expect(Object.keys(ENTITY_DOCUMENT_TYPE_BY_USE_CASE)).not.toContain('classification');
+        expect(EntityDocumentTypeForUseCase('classification')).toBeNull();
     });
 
     it('never resolves anything but duplicate detection to Record Duplicate', () => {
@@ -456,23 +472,35 @@ describe('the save path writes what the user chose', () => {
         expect(doc['TypeID']).toBe(RECORD_DUPLICATE_ID);
     });
 
+    /** An install that lacks the Search type, so picking "search" has no type to write. */
+    function buildWithoutSearchType(): VectorManagementResourceComponent {
+        const c = build({
+            types: [
+                { ID: RECORD_DUPLICATE_ID, Name: 'Record Duplicate' },
+                { ID: 'type-context', Name: 'Context' },
+            ],
+        });
+        c.SuggestUseCase = 'search';
+        return c;
+    }
+
     it('an absent type fails with a message naming the type that was wanted', async () => {
-        // 'Classification' is offered by the dialog but MJ does not seed that type. The
-        // refusal has to name it — substituting a type that does exist is the original defect.
-        component.SuggestUseCase = 'classification';
+        // The refusal has to name the missing type: substituting a type that does exist is the
+        // original defect.
+        component = buildWithoutSearchType();
         const doc = makeRow(activeStore, 'MJ: Entity Documents');
-        await expect(component['populateEntityDocumentFKs'](doc as never)).rejects.toThrow(/Classification/);
+        await expect(component['populateEntityDocumentFKs'](doc as never)).rejects.toThrow(/"Search"/);
         expect(doc['TypeID']).toBeUndefined();
     });
 
     it('the absent-type message lists the types that do exist, so it is diagnosable', async () => {
-        component.SuggestUseCase = 'classification';
+        component = buildWithoutSearchType();
         const doc = makeRow(activeStore, 'MJ: Entity Documents');
-        await expect(component['populateEntityDocumentFKs'](doc as never)).rejects.toThrow(/Record Duplicate.*Search|Search.*Record Duplicate/s);
+        await expect(component['populateEntityDocumentFKs'](doc as never)).rejects.toThrow(/Record Duplicate.*Context|Context.*Record Duplicate/s);
     });
 
     it('writes nothing at all when the wanted type is missing', async () => {
-        component.SuggestUseCase = 'classification';
+        component = buildWithoutSearchType();
         const doc = makeRow(activeStore, 'MJ: Entity Documents');
         await expect(component['populateEntityDocumentFKs'](doc as never)).rejects.toThrow();
         expect(activeStore.saves).toHaveLength(0);
@@ -533,6 +561,71 @@ describe('the save path writes what the user chose', () => {
         await expect(component['findOrCreateEntityDocument']()).rejects.toThrow(/already exists/);
     });
 
+    it('an adopted document keeps the template it already points at, even when another user made it', async () => {
+        // Adoption checks the template by name only, so a document another user created through
+        // this dialog is adopted. Its template must be reused by ID: looking it up by Name +
+        // UserID misses it, writes a second template, re-points the document and orphans the
+        // original Template and Template Content.
+        component.SuggestUseCase = 'search';
+        seedRow(activeStore, 'MJ: Templates', {
+            ID: 'tpl-user-2', Name: 'Template for Members - search', UserID: 'user-2',
+        });
+        seedRow(activeStore, 'MJ: Template Contents', {
+            ID: 'content-user-2', TemplateID: 'tpl-user-2', TemplateText: '{{FirstName}}', Priority: 1,
+        });
+        const priorDoc = seedRow(activeStore, 'MJ: Entity Documents', {
+            ID: 'doc-user-2', Name: 'Members - search', TemplateID: 'tpl-user-2',
+        });
+
+        await component.SaveAsEntityDocument();
+
+        expect(table(activeStore, 'MJ: Templates')).toHaveLength(1);
+        expect(table(activeStore, 'MJ: Template Contents')).toHaveLength(1);
+        expect(table(activeStore, 'MJ: Entity Documents')).toHaveLength(1);
+        expect(priorDoc['TemplateID']).toBe('tpl-user-2');
+        // The template still belongs to the user who created it.
+        expect(table(activeStore, 'MJ: Templates')[0]['UserID']).toBe('user-2');
+        expect(activeStore.newRecordCalls).not.toContain('MJ: Templates');
+    });
+
+    it('the suggestion prompt never receives sensitive fields of a related entity', () => {
+        // Layer 1 filtered only the entity's own fields; a related entity's columns went to the
+        // model unfiltered inside RelationshipsJSON.
+        const provider = component.Provider as unknown as { Entities: FakePromptEntity[] };
+        const users: FakePromptEntity = {
+            ID: 'e-users', Name: 'Users', SchemaName: 'dbo', RelatedEntities: [],
+            Fields: [
+                { Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true },
+                { Name: 'Email', Type: 'nvarchar', IsPrimaryKey: false },
+                { Name: 'PasswordHash', Type: 'nvarchar', IsPrimaryKey: false },
+                { Name: 'SSN', Type: 'nvarchar', IsPrimaryKey: false },
+            ],
+        };
+        const members: FakePromptEntity = {
+            ID: 'e-members', Name: 'Members', SchemaName: 'dbo',
+            Fields: [{ Name: 'FirstName', Type: 'nvarchar', IsPrimaryKey: false }],
+            RelatedEntities: [{ Type: 'Many to One', RelatedEntity: 'Users', RelatedEntityJoinField: 'UserID' }],
+        };
+        provider.Entities.push(users);
+
+        const data = component['buildPromptData'](members as never, 'search');
+        const relationships = JSON.parse(String(data['RelationshipsJSON'])) as { Fields: string[] }[];
+
+        expect(relationships).toHaveLength(1);
+        expect(relationships[0].Fields).toContain('Email');
+        expect(relationships[0].Fields).not.toContain('PasswordHash');
+        expect(relationships[0].Fields).not.toContain('SSN');
+    });
+
+    it('each documents-table row carries the document type', () => {
+        component['entityDocuments'] = [
+            { ID: 'd1', Name: 'Members - search', Entity: 'Members', Type: 'Search', Status: 'Active' },
+            { ID: 'd2', Name: 'Members - duplicate detection', Entity: 'Members', Type: 'Record Duplicate', Status: 'Active' },
+        ] as unknown as typeof component['entityDocuments'];
+        component['buildSyncRows']();
+        expect(component.SyncRows.map((r) => r.DocumentType)).toEqual(['Search', 'Record Duplicate']);
+    });
+
     it('the picker offers business entities and not MJ internals', () => {
         component['loadEntityGroups']();
         const offered = component.EntityGroups.flatMap((g) => g.Entities).map((e) => e.Name);
@@ -540,6 +633,90 @@ describe('the save path writes what the user chose', () => {
         expect(offered).toContain('Orders');
         expect(offered).not.toContain('MJ: AI Prompts');
         expect(component.EntityGroups.map((g) => g.SchemaName)).not.toContain('__mj');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The edit panel: the document's own type drives what it shows and regenerates
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('the edit panel works from the document type', () => {
+    /** A component holding one document of the given type, with the suggestion prompt stubbed. */
+    function buildWithDocument(docType: string): {
+        component: VectorManagementResourceComponent;
+        prompt: ReturnType<typeof vi.fn>;
+    } {
+        activeStore = newStore();
+        const component = new VectorManagementResourceComponent();
+        component['entityDocuments'] = [{
+            ID: 'doc-1', Name: `Courses - ${docType}`, Entity: 'Courses', Type: docType,
+            // No template, so OpenEditPanel makes no template lookup.
+            TemplateID: '', VectorDatabaseID: null, AIModelID: null, VectorIndexID: null, Status: 'Active',
+        }] as unknown as typeof component['entityDocuments'];
+        const prompt = vi.fn(async () => ({ template: 'REGENERATED' }));
+        component['callSuggestionPrompt'] = prompt as unknown as typeof component['callSuggestionPrompt'];
+        return { component, prompt };
+    }
+
+    beforeEach(() => {
+        vi.mocked(MJNotificationService.Instance.CreateSimpleNotification).mockClear();
+    });
+
+    it('shows the type of the document being edited', async () => {
+        const { component } = buildWithDocument('Search');
+        await component.OpenEditPanel('doc-1');
+        expect(component.EditDocType).toBe('Search');
+    });
+
+    it('regenerates a Search document with the "search" use case', async () => {
+        const { component, prompt } = buildWithDocument('Search');
+        await component.OpenEditPanel('doc-1');
+        await component.RegenerateTemplate();
+        expect(prompt).toHaveBeenCalledTimes(1);
+        expect(prompt).toHaveBeenCalledWith('Courses', 'search');
+        expect(component.EditDocTemplate).toBe('REGENERATED');
+    });
+
+    it('regenerates a Record Duplicate document with the "duplicate detection" use case', async () => {
+        const { component, prompt } = buildWithDocument('Record Duplicate');
+        await component.OpenEditPanel('doc-1');
+        await component.RegenerateTemplate();
+        expect(prompt).toHaveBeenCalledWith('Courses', 'duplicate detection');
+    });
+
+    it('refuses, naming the type, for a type with no use case, and leaves the template alone', async () => {
+        const { component, prompt } = buildWithDocument('Context');
+        await component.OpenEditPanel('doc-1');
+        component.EditDocTemplate = 'ORIGINAL';
+        await component.RegenerateTemplate();
+
+        expect(prompt).not.toHaveBeenCalled();
+        expect(component.EditDocTemplate).toBe('ORIGINAL');
+        expect(component.IsEditRegenerating).toBe(false);
+        const notify = vi.mocked(MJNotificationService.Instance.CreateSimpleNotification);
+        expect(notify).toHaveBeenCalledTimes(1);
+        expect(notify.mock.calls[0][0]).toContain('"Context"');
+        expect(notify.mock.calls[0][1]).toBe('error');
+    });
+});
+
+describe('SuggestionUseCaseForDocumentType', () => {
+    it('is the reverse of the use-case map, so the two directions cannot drift', () => {
+        for (const [useCase, typeName] of Object.entries(ENTITY_DOCUMENT_TYPE_BY_USE_CASE)) {
+            expect(SuggestionUseCaseForDocumentType(typeName), typeName).toBe(useCase);
+        }
+    });
+
+    it('ignores case and surrounding whitespace', () => {
+        expect(SuggestionUseCaseForDocumentType('  search ')).toBe('search');
+        expect(SuggestionUseCaseForDocumentType('RECORD DUPLICATE')).toBe('duplicate detection');
+    });
+
+    it('returns null for a type with no use case, never falling back to duplicate detection', () => {
+        expect(SuggestionUseCaseForDocumentType('Context')).toBeNull();
+        expect(SuggestionUseCaseForDocumentType('')).toBeNull();
+        expect(SuggestionUseCaseForDocumentType(null)).toBeNull();
+        expect(SuggestionUseCaseForDocumentType(undefined)).toBeNull();
     });
 });
 
@@ -572,11 +749,34 @@ describe('the component keeps the rules wired', () => {
         // text the old code used. The pin for this defect is the behavioural retry test above,
         // which counts the rows that end up in the store.
         expect(CODE).toMatch(/const entityDoc = await this\.findOrCreateEntityDocument\(\)/);
-        expect(CODE).toMatch(/const template = await this\.findOrCreateTemplate\(templateName\)/);
+        expect(CODE).toMatch(/const template = await this\.findOrCreateTemplate\(templateName, entityDoc\.TemplateID\)/);
         expect(CODE).toMatch(/const content = await this\.findOrCreateTemplateContent\(template\.ID\)/);
     });
 
     it('the entity picker filters through the rule', () => {
         expect(CODE).toMatch(/IsVectorizableEntity\(entity\)/);
+    });
+});
+
+describe('the template offers what the rules support', () => {
+    const HTML = readFileSync(
+        join(__dirname, '..', 'AI', 'components', 'vectors', 'vector-management-resource.component.html'),
+        'utf-8',
+    );
+
+    it('the Use Case buttons are exactly the use cases that have a document type', () => {
+        const offered = [...HTML.matchAll(/\(click\)="SuggestUseCase = '([^']+)'"/g)].map((m) => m[1]);
+        expect(new Set(offered)).toEqual(new Set(Object.keys(ENTITY_DOCUMENT_TYPE_BY_USE_CASE)));
+        expect(HTML).not.toMatch(/Classification/);
+    });
+
+    it('the documents table has a Type column bound to the row', () => {
+        expect(HTML).toMatch(/<th>Type<\/th>/);
+        expect(HTML).toMatch(/\{\{\s*row\.DocumentType\s*\}\}/);
+    });
+
+    it('the edit panel shows the type read-only, not as an input', () => {
+        expect(HTML).toMatch(/<span class="edit-readonly-value">\{\{\s*EditDocType\s*\}\}<\/span>/);
+        expect(HTML).not.toMatch(/\[\(ngModel\)\]="EditDocType"/);
     });
 });
