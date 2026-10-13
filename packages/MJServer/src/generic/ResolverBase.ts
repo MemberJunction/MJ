@@ -47,7 +47,6 @@ import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
 
-
 /**
  * Entities whose update is always hydrated from the stored row, never from the client's `OldValues___`, though they
  * do not track record changes: their server-side write rules compare against the prior state, which a client could
