@@ -50,20 +50,26 @@ describe('AgentRunStepSaveQueue', () => {
     });
 
     it('Flush reports failures for saves that resolve false', async () => {
+        const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const q = new AgentRunStepSaveQueue();
         q.Insert(fakeStep({ result: false }));
         const result = await q.Flush();
         expect(result.failures).toBe(1);
         expect(result.rejections).toBe(0);
+        expect(logged.mock.calls.some((args) => String(args[0]).includes('failed: save failed'))).toBe(true);
+        logged.mockRestore();
     });
 
     it('swallows a throwing Save (logged, never propagated) and counts it as a failure', async () => {
+        const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const q = new AgentRunStepSaveQueue();
         q.Insert(fakeStep({ throws: true }));
         // save() catches internally and returns false, so it surfaces as a failure, not an unhandled rejection.
         const result = await q.Flush();
         expect(result.failures).toBe(1);
         expect(result.rejections).toBe(0);
+        expect(logged.mock.calls.some((args) => String(args[0]).includes('threw: db exploded'))).toBe(true);
+        logged.mockRestore();
     });
 
     it('Flush drains — a second Flush after no new work reports nothing', async () => {

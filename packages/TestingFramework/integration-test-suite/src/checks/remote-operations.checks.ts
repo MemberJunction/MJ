@@ -18,7 +18,6 @@ import { RunView } from '@memberjunction/core';
 import type { UserInfo, RemoteOpProgress } from '@memberjunction/core';
 import {
     MJTemplateEntity,
-    MJTemplateContentEntity,
     MJActionCategoryEntity,
     MJRecordProcessEntity,
     MJProcessRunEntity,
@@ -34,6 +33,7 @@ import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import type { RemoteOpsFixture } from '@memberjunction/testing-integration';
+import { DeterministicEntityFactory } from './deterministic-entity-factory';
 
 const ACT_ENTITY = 'MJ: Action Categories';
 const PREFIX = 'mj-remote-op-test';
@@ -219,7 +219,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('remote-operations', {
         Assert(await tmpl.Save(), `creating test template failed: ${tmpl.LatestResult?.CompleteMessage}`);
         fx.Tmpl = tmpl;
 
-        const content = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents', user);
+        const content = await DeterministicEntityFactory.NewTemplateContent(ctx.Provider, user);
         content.NewRecord();
         content.TemplateID = tmpl.ID;
         content.TypeID = textTypeID;

@@ -84,6 +84,34 @@ Depth 1 is a physical `BEGIN`. Depth 2+ is a dialect savepoint on that same tran
 
 **Failure semantics.** A server abort of the ambient TX (mssql `ENOTBEGUN`/`EABORT`, pg `25P01`) is not recoverable. The physical handle is abandoned and the provider stays **doomed until the outermost frame settles**: nested `BeginTransaction` throws `DoomedTransactionError` without opening a new physical TX, nested `Commit` pops a frame, outermost `Commit` throws `DoomedTransactionError`, outermost `Rollback` resolves. While doomed, **every statement without an explicit `connectionSource` — reads included — throws `DoomedTransactionError`**, so a plain `Save()` returns false instead of autocommitting on the pool. `ResetTransactionState()` is the fixture/ops escape hatch — do not poke private fields.
 
+The outermost rollback of a transaction the server already aborted resolves rather than throwing:
+the rollback asked for has already happened. It is logged verbose-only (with the driver code), since
+the statement that failed has already reported its own error.
+
+**The end of the ambient transaction is reported to the metadata layer.** `HasOpenAmbientTransaction`
+(depth > 0, or a physical handle still open) is this provider's answer to "inside a transaction?" —
+`MetadataMemberRefreshMustWait` is defined as the same condition. Every path that can reach depth 0
+calls `ProviderBase.OnAmbientTransactionEnded(committed)` exactly once, and only when the transaction
+has really ended: a successful outermost commit (`committed = true`), a failed commit, an outermost
+rollback (including one that threw but left depth 0) and `ResetTransactionState()`. A savepoint
+commit or rollback ends nothing and reports nothing. The call is made in a `finally`, so a post-commit
+step (`AfterPhysicalCommit`, post-commit tasks) that throws cannot skip it. Subclasses that add their
+own settle paths must keep this contract: the metadata may be **pinned** to the transaction (see
+`@memberjunction/core` — "Metadata reloads inside a transaction"), and a missed end would hold back
+every later metadata reload for the life of the process.
+
+**Dataset reads and the ambient transaction.** `GetDatasetByName` / `GetDatasetStatusByName` take
+`DatasetReadOptions`. The MJ_Metadata dataset reads on the pool by default (a timer-driven metadata
+refresh must not land beside a caller's `COMMIT`, #4514); only `JoinAmbientTransaction: true` — set
+by the transaction-joined pass of `ProviderBase.RefreshWithinTransaction` — reads inside the open
+transaction, so it sees that transaction's own uncommitted metadata rows (MJ#4836). The option is
+per call, never provider state, so a pool pass running at the same time stays on the pool.
+`ReadOnPool: true` puts ANY dataset's reads on the pool (it wins over `JoinAmbientTransaction`), and
+`RunViewParams.ReadOnPool` does the same for a view's data, count and aggregate queries (a count-only
+batch is coalesced into one statement only when its views agree on it). Both are set by background
+engine reloads (`BaseEngine.BackgroundReloadReads`), which run detached from the write that triggered
+them and must never join a transaction another unit of work opened meanwhile.
+
 **`TransactionDepth` vs `IsInTransaction` vs SQL Server `isTransactionActive`:**
 
 | Accessor | Meaning |

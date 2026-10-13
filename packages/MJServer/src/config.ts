@@ -5,6 +5,8 @@ import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
+import type { SaveTimeAIKind } from '@memberjunction/ai';
+import type { EmbeddingBackfillConfig } from '@memberjunction/aiengine';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -168,7 +170,7 @@ const scheduledJobsSchema = z.object({
 });
 
 /**
- * Integration sync worker (PR 1 item 8). When enabled, this process polls
+ * Integration sync worker. When enabled, this process polls
  * `CompanyIntegrationRun` for `Status='Queued'` rows, atomically claims them, executes
  * the sync, and releases. The claim sproc is the mutual exclusion, so any number of
  * processes may run a worker against the same database.
@@ -190,6 +192,40 @@ const queryDialectSchema = z.object({
   /** List of SQLDialect PlatformKey values to auto-convert to (e.g., ['postgresql']) */
   targetPlatforms: z.array(z.string()).optional().default([]),
 });
+
+/** One save-time AI switch: enabled unless the config sets it to false. */
+const saveTimeAISwitch = () => zodBooleanWithTransforms().default(true);
+
+/**
+ * The `saveTimeAI` section: one switch per `SaveTimeAIKind` (`@memberjunction/ai`), which documents
+ * what each switch covers. Typed as a `Record` over the kinds, so a switch missing here or one the
+ * kinds do not have is a compile error — zod would otherwise silently strip an unknown config key.
+ */
+const saveTimeAIShape: Record<SaveTimeAIKind, ReturnType<typeof saveTimeAISwitch>> = {
+  /** false: no AI call to describe query parameters/fields when a Query or Query SQL is saved. Deterministic extraction still runs. */
+  QueryParameters: saveTimeAISwitch(),
+  /** false: no AI call to describe template parameters when a Template Content is saved. Deterministic extraction still runs. */
+  TemplateParameters: saveTimeAISwitch(),
+  /** false: no Smart Filter WHERE-clause generation when a User View is saved. */
+  ViewSmartFilters: saveTimeAISwitch(),
+  /** false: no code generation when an Action or a Remote Operation is saved. */
+  CodeGeneration: saveTimeAISwitch(),
+  /** false: no local embedding of text fields (Queries, Tags, AI Agent Notes/Examples, Components) on save. */
+  Embeddings: saveTimeAISwitch(),
+};
+const saveTimeAISchema = z.object(saveTimeAIShape);
+
+/**
+ * The `embeddingBackfill` section: how the engines work off records saved without a vector (`mj sync push` saves
+ * with SkipEmbeddings) — at most `BatchSize` records per pass, the rest in later passes `PassDelaySeconds` apart.
+ * Typed as a `Record` over `EmbeddingBackfillConfig` (`@memberjunction/aiengine`), so a key missing here or one the
+ * config does not have is a compile error. Omitted values use its defaults (100 records, 10 seconds).
+ */
+const embeddingBackfillShape: Record<keyof EmbeddingBackfillConfig, z.ZodOptional<z.ZodNumber>> = {
+  BatchSize: z.number().int().positive().optional(),
+  PassDelaySeconds: z.number().nonnegative().optional(),
+};
+const embeddingBackfillSchema = z.object(embeddingBackfillShape);
 
 const multiTenancySchema = z.object({
   /** Master switch — when false (default), no tenant isolation is applied */
@@ -829,6 +865,8 @@ const configInfoSchema = z.object({
   workQueue: WorkQueueSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
+  saveTimeAI: saveTimeAISchema.optional().default({}),
+  embeddingBackfill: embeddingBackfillSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),
   serverExtensions: z.array(serverExtensionSchema).optional().default([]),
   cacheSettings: cacheSettingsSchema.optional().default({}),

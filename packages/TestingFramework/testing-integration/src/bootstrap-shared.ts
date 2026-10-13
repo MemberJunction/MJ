@@ -131,9 +131,27 @@ export function getActiveIntegrationClientBootstrap(): IntegrationClientContext 
 }
 
 /**
+ * MJAPI did not answer at all (connection refused, DNS failure, timeout). The driver reports a
+ * client-transport test that hits this as an environment-gap skip rather than an error, so it is a
+ * type of its own: callers branch on `instanceof`, never on the message text.
+ */
+export class MJAPIUnreachableError extends Error {
+    /** The GraphQL URL that did not answer. */
+    public readonly URL: string;
+
+    constructor(url: string, cause: string) {
+        super(`MJAPI is not reachable at ${url} (${cause}). Start it first: cd packages/MJAPI && npm run start`);
+        this.name = 'MJAPIUnreachableError';
+        this.URL = url;
+    }
+}
+
+/**
  * Fail fast with a clear message when MJAPI isn't reachable, before any cache or
  * provider state is mutated. Used by both the driver (via bootstrapIntegrationClient)
  * and the tsx scripts so they preflight identically.
+ * @throws MJAPIUnreachableError when nothing answers at `url`
+ * @throws Error when MJAPI answers with a non-OK HTTP status
  */
 export async function PreflightMJAPI(url: string, apiKey: string): Promise<void> {
     let response: Response;
@@ -145,10 +163,7 @@ export async function PreflightMJAPI(url: string, apiKey: string): Promise<void>
             signal: AbortSignal.timeout(5000)
         });
     } catch (error) {
-        throw new Error(
-            `MJAPI is not reachable at ${url} (${error instanceof Error ? error.message : String(error)}). ` +
-            `Start it first: cd packages/MJAPI && npm run start`
-        );
+        throw new MJAPIUnreachableError(url, error instanceof Error ? error.message : String(error));
     }
     if (!response.ok) {
         throw new Error(`MJAPI at ${url} answered HTTP ${response.status} — check MJ_API_KEY and server logs.`);

@@ -6,6 +6,7 @@ export * from './custom/MJConversationDetailAttachmentEntityServer.server';
 export * from './custom/MJDuplicateRunEntityServer.server';
 export * from './custom/MJQueryEntityServer.server';
 export * from './custom/MJQuerySQLEntityServer.server';
+export * from './custom/saveEnrichmentOptOut';
 export * from './custom/MJTemplateContentEntityServer.server';
 export * from './custom/MJUserViewEntityServer.server';
 export * from './custom/MJListEntityServer.server';
@@ -52,7 +53,6 @@ export * from './custom/fieldPermissionReconciler';
 export * from './custom/rowFilterValidation';
 export * from './custom/json-schema-lite';
 export * from './custom/IntegrationLLMPKCallback';
-export * from './custom/util';
 
 export * from './engines/QueryEngineServer';
 export * from './engines/QueryMatchResult';

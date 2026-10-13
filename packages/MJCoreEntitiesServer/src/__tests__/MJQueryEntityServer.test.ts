@@ -2,14 +2,14 @@
  * Unit tests for the MJ: Queries server-side extraction pipeline heuristics.
  *
  * Drives the REAL production code exported from `custom/query-extraction`:
- *   - enrich.ts  — MergeParametersWithLLM, GenerateParameterDescription,
+ *   - enrich.ts  — QueryParameterEnricher.MergeParameters, GenerateParameterDescription,
  *                  BuildPassthroughDescription, GenerateSampleValue, NormalizeDefaultForType
  *   - resolve.ts — ResolveCompositionReferences, BuildPassthroughParams,
  *                  MergePassthroughParams, MapQueryParamTypeToParserType,
  *                  EnrichFieldTypesFromCompositions, EnrichFieldTypesFromEntityMetadata
  *
  * The SQLParser provides the deterministic structure; these tests verify the merge
- * with LLM enrichment, passthrough inheritance from dependency queries, and the
+ * with AI enrichment, passthrough inheritance from dependency queries, and the
  * heuristic fallbacks — all without a database connection.
  */
 import { describe, it, expect } from 'vitest';
@@ -23,13 +23,7 @@ import type {
     MJQueryFieldEntity,
     MJQueryParameterEntity,
 } from '@memberjunction/core-entities';
-import {
-    MergeParametersWithLLM,
-    GenerateParameterDescription,
-    BuildPassthroughDescription,
-    GenerateSampleValue,
-    NormalizeDefaultForType,
-} from '../custom/query-extraction/enrich';
+import { QueryParameterEnricher } from '../custom/query-extraction/enrich';
 import {
     ResolveCompositionReferences,
     ResolveQueryByNameAndCategory,
@@ -451,7 +445,7 @@ LEFT JOIN PrimaryChapters pc ON mac.MemberID = pc.MemberID`;
 // ═══════════════════════════════════════════════════
 
 describe('Parameter Merge Logic', () => {
-    describe('MergeParametersWithLLM', () => {
+    describe('QueryParameterEnricher.MergeParameters', () => {
         it('should use deterministic values for name, type, isRequired', () => {
             const det: MJParameterInfo[] = [{
                 name: 'Region',
@@ -472,13 +466,62 @@ describe('Parameter Merge Logic', () => {
                 SampleValue: 'West',
             }];
 
-            const result = MergeParametersWithLLM(det, llmResult(llm));
+            const result = QueryParameterEnricher.MergeParameters(det, llmResult(llm));
             expect(result).toHaveLength(1);
             expect(result[0].name).toBe('Region'); // deterministic
             expect(result[0].type).toBe('string'); // deterministic wins over LLM's "number"
             expect(result[0].isRequired).toBe(false); // deterministic wins over LLM's "true"
             expect(result[0].description).toBe('Geographic region filter'); // LLM enrichment
             expect(result[0].SampleValue).toBe('West'); // LLM enrichment
+        });
+
+        it('an EMPTY AI answer (description, type, sample, usage) falls back exactly like a missing one', () => {
+            const det: MJParameterInfo[] = [{
+                name: 'MinActivityCount',
+                type: 'unknown',
+                isRequired: false,
+                defaultValue: null,
+                filters: [],
+                usageLocations: ['{{ MinActivityCount }}'],
+            }];
+            const ai: ExtractedParameter[] = [{
+                name: 'MinActivityCount',
+                type: '' as ExtractedParameter['type'], // an empty answer, not a type
+                isRequired: false,
+                description: '',
+                usage: [],
+                DefaultValue: '',
+                SampleValue: '',
+            }];
+
+            const result = QueryParameterEnricher.MergeParameters(det, llmResult(ai));
+            expect(result[0].type).toBe('string');
+            expect(result[0].description).toBe('Optional value for Min Activity Count');
+            expect(result[0].SampleValue).toBeNull(); // the heuristic for an unknown-typed parameter, not ''
+            expect(result[0].DefaultValue).toBe(''); // '' IS a real default (kept on purpose)
+            expect(result[0].usage).toEqual(['{{ MinActivityCount }}']); // an empty AI usage list is no answer
+        });
+
+        it('a non-empty AI usage list wins over the deterministic usage locations', () => {
+            const det: MJParameterInfo[] = [{
+                name: 'Region', type: 'string', isRequired: false, defaultValue: null, filters: [], usageLocations: ['{{ Region }}'],
+            }];
+            const ai: ExtractedParameter[] = [{
+                name: 'Region', type: 'string', isRequired: false, description: 'd', usage: ['WHERE filter on region'], DefaultValue: null, SampleValue: 'West',
+            }];
+            const result = QueryParameterEnricher.MergeParameters(det, llmResult(ai));
+            expect(result[0].usage).toEqual(['WHERE filter on region']);
+        });
+
+        it('an empty caller hint does not win over the AI sample', () => {
+            const det: MJParameterInfo[] = [{
+                name: 'Region', type: 'string', isRequired: false, defaultValue: null, filters: [], usageLocations: [],
+            }];
+            const ai: ExtractedParameter[] = [{
+                name: 'Region', type: 'string', isRequired: false, description: 'd', usage: [], DefaultValue: null, SampleValue: 'West',
+            }];
+            const result = QueryParameterEnricher.MergeParameters(det, llmResult(ai), new Map<string, PassthroughParamContext>(), new Map([['Region', '']]));
+            expect(result[0].SampleValue).toBe('West');
         });
 
         it('should use heuristic description when LLM is null', () => {
@@ -491,7 +534,7 @@ describe('Parameter Merge Logic', () => {
                 usageLocations: ['{{ MinActivityCount | sqlNumber }}'],
             }];
 
-            const result = MergeParametersWithLLM(det, null);
+            const result = QueryParameterEnricher.MergeParameters(det, null);
             expect(result).toHaveLength(1);
             expect(result[0].description).toBe('Optional numeric value for Min Activity Count');
             expect(result[0].SampleValue).toBe('10'); // heuristic for number
@@ -517,7 +560,7 @@ describe('Parameter Merge Logic', () => {
                 SampleValue: null,
             }];
 
-            const result = MergeParametersWithLLM(det, llmResult(llm));
+            const result = QueryParameterEnricher.MergeParameters(det, llmResult(llm));
             expect(result[0].description).toBe('Required date value for Start Date');
             expect(result[0].SampleValue).toBe('2024-01-01');
         });
@@ -532,7 +575,7 @@ describe('Parameter Merge Logic', () => {
                 usageLocations: ['{{ Limit | default(25) | sqlNumber }}'],
             }];
 
-            const result = MergeParametersWithLLM(det, null);
+            const result = QueryParameterEnricher.MergeParameters(det, null);
             expect(result[0].DefaultValue).toBe('25');
             expect(result[0].SampleValue).toBe('25'); // uses default as sample
         });
@@ -547,7 +590,7 @@ describe('Parameter Merge Logic', () => {
                 usageLocations: ['{{ RawParam }}'],
             }];
 
-            const result = MergeParametersWithLLM(det, null);
+            const result = QueryParameterEnricher.MergeParameters(det, null);
             expect(result[0].type).toBe('string');
         });
 
@@ -571,7 +614,7 @@ describe('Parameter Merge Logic', () => {
                 SampleValue: '42',
             }];
 
-            const result = MergeParametersWithLLM(det, llmResult(llm));
+            const result = QueryParameterEnricher.MergeParameters(det, llmResult(llm));
             expect(result[0].type).toBe('number'); // LLM wins when deterministic is unknown
         });
 
@@ -595,7 +638,7 @@ describe('Parameter Merge Logic', () => {
                 SampleValue: '5',
             }];
 
-            const result = MergeParametersWithLLM(det, llmResult(llm));
+            const result = QueryParameterEnricher.MergeParameters(det, llmResult(llm));
             expect(result[0].description).toBe('Minimum activity threshold');
             expect(result[0].SampleValue).toBe('5');
         });
@@ -616,7 +659,7 @@ describe('Parameter Merge Logic', () => {
                 { name: 'HallucinatedParam', type: 'string', isRequired: true, description: 'Does not exist', usage: [], DefaultValue: null, SampleValue: 'fake' },
             ];
 
-            const result = MergeParametersWithLLM(det, llmResult(llm));
+            const result = QueryParameterEnricher.MergeParameters(det, llmResult(llm));
             expect(result).toHaveLength(1); // Only Region, not HallucinatedParam
             expect(result[0].name).toBe('Region');
         });
@@ -636,7 +679,7 @@ describe('Parameter Merge Logic', () => {
                 }],
             ]);
 
-            const result = MergeParametersWithLLM(det, null, ptContext);
+            const result = QueryParameterEnricher.MergeParameters(det, null, ptContext);
             expect(result).toHaveLength(1);
             expect(result[0].description).toBe(
                 'Number of days to look back for changes (passed through to "Recent Entity Changes" as "lookbackDays")'
@@ -665,7 +708,7 @@ describe('Parameter Merge Logic', () => {
                 }],
             ]);
 
-            const result = MergeParametersWithLLM(det, llmResult(llm), ptContext);
+            const result = QueryParameterEnricher.MergeParameters(det, llmResult(llm), ptContext);
             expect(result[0].description).toBe('LLM-generated description for numDays'); // LLM wins
             expect(result[0].SampleValue).toBe('14'); // LLM wins
         });
@@ -685,7 +728,7 @@ describe('Parameter Merge Logic', () => {
                 }],
             ]);
 
-            const result = MergeParametersWithLLM(det, null, ptContext);
+            const result = QueryParameterEnricher.MergeParameters(det, null, ptContext);
             expect(result[0].description).toBe(
                 'Required numeric value for fiscal Year (passed through to "Sales Summary" as "year")'
             );
@@ -714,7 +757,7 @@ describe('Parameter Merge Logic', () => {
                 }],
             ]);
 
-            const result = MergeParametersWithLLM(det, llmResult(llm), ptContext);
+            const result = QueryParameterEnricher.MergeParameters(det, llmResult(llm), ptContext);
             expect(result[0].description).toBe('LLM description'); // LLM wins
             expect(result[0].SampleValue).toBe('West'); // Inherited wins over heuristic
         });
@@ -732,7 +775,7 @@ describe('Parameter Merge Logic', () => {
 
             const hints = new Map<string, string>([['Region', 'TestedValue']]);
 
-            const result = MergeParametersWithLLM(det, llmResult(llm), new Map<string, PassthroughParamContext>(), hints);
+            const result = QueryParameterEnricher.MergeParameters(det, llmResult(llm), new Map<string, PassthroughParamContext>(), hints);
             expect(result[0].SampleValue).toBe('TestedValue'); // hint beats LLM
             expect(result[0].description).toBe('Region filter'); // description untouched by hints
         });
@@ -745,7 +788,7 @@ describe('Parameter Merge Logic', () => {
 
             const hints = new Map<string, string>([['mincount', '99']]);
 
-            const result = MergeParametersWithLLM(det, null, new Map<string, PassthroughParamContext>(), hints);
+            const result = QueryParameterEnricher.MergeParameters(det, null, new Map<string, PassthroughParamContext>(), hints);
             expect(result[0].SampleValue).toBe('99');
         });
 
@@ -758,12 +801,54 @@ describe('Parameter Merge Logic', () => {
                 defaultValue: 'Attended', filters: [], usageLocations: [],
             }];
 
-            const result = MergeParametersWithLLM(det, null);
+            const result = QueryParameterEnricher.MergeParameters(det, null);
             expect(result[0].DefaultValue).toBe('["Attended"]');
             // NOTE (real behavior): sampleValue still reflects the RAW default,
             // not the normalized JSON array — GenerateSampleValue stringifies
             // dp.defaultValue before normalization is applied.
             expect(result[0].SampleValue).toBe('Attended');
+        });
+    });
+
+    describe('GenerateSampleValue — identifier parameters', () => {
+        const stringParam = (name: string): MJParameterInfo => ({
+            name, type: 'string', isRequired: true, defaultValue: null, filters: [], usageLocations: [],
+        });
+
+        it('samples a string parameter named like a key with a GUID that a uniqueidentifier comparison accepts', () => {
+            expect(QueryParameterEnricher.GenerateSampleValue(stringParam('ActivityID'))).toBe('00000000-0000-0000-0000-000000000000');
+            expect(QueryParameterEnricher.GenerateSampleValue(stringParam('ID'))).toBe('00000000-0000-0000-0000-000000000000');
+        });
+
+        it('keeps the generic sample for other string parameters', () => {
+            expect(QueryParameterEnricher.GenerateSampleValue(stringParam('Category'))).toBe('Example');
+            expect(QueryParameterEnricher.GenerateSampleValue(stringParam('Valid'))).toBe('Example');
+        });
+
+        const guid = '00000000-0000-0000-0000-000000000000';
+
+        it.each(['ID', 'Id', 'id'])('treats the bare name %s as a key', (name) => {
+            expect(QueryParameterEnricher.GenerateSampleValue(stringParam(name))).toBe(guid);
+        });
+
+        it.each(['AIAgentRunID', 'userId', 'UserId', 'step2Id', 'Step2ID'])('treats the PascalCase/camelCase key %s as a key', (name) => {
+            expect(QueryParameterEnricher.GenerateSampleValue(stringParam(name))).toBe(guid);
+        });
+
+        it.each(['user_id', 'USER_ID', 'User_Id', 'agent_run_ID'])('treats the snake_case key %s as a key', (name) => {
+            expect(QueryParameterEnricher.GenerateSampleValue(stringParam(name))).toBe(guid);
+        });
+
+        it.each(['VALID', 'PAID', 'paid', 'valid', 'Paid', 'Avoid', 'USERID', 'userid'])(
+            'keeps the generic sample for %s (all-caps or lowercase word ending in the letters, no word boundary)',
+            (name) => {
+                expect(QueryParameterEnricher.GenerateSampleValue(stringParam(name))).toBe('Example');
+            }
+        );
+
+        it('uses the GUID only for string parameters', () => {
+            const numberKey: MJParameterInfo = { ...stringParam('userId'), type: 'number' };
+            expect(QueryParameterEnricher.GenerateSampleValue(numberKey)).toBe('10');
         });
     });
 
@@ -779,7 +864,7 @@ describe('Parameter Merge Logic', () => {
                 DepQueryName: 'Recent Changes',
                 DepParamName: 'lookbackDays',
             };
-            expect(BuildPassthroughDescription(param, context)).toBe(
+            expect(QueryParameterEnricher.BuildPassthroughDescription(param, context)).toBe(
                 'How many days to look back (passed through to "Recent Changes" as "lookbackDays")'
             );
         });
@@ -795,7 +880,7 @@ describe('Parameter Merge Logic', () => {
                 DepQueryName: 'Activity Query',
                 DepParamName: 'minActivityCount',
             };
-            expect(BuildPassthroughDescription(param, context)).toBe(
+            expect(QueryParameterEnricher.BuildPassthroughDescription(param, context)).toBe(
                 'Optional numeric value for Min Count (passed through to "Activity Query" as "minActivityCount")'
             );
         });
@@ -803,7 +888,7 @@ describe('Parameter Merge Logic', () => {
 
     describe('GenerateParameterDescription', () => {
         it('should generate description for required string param', () => {
-            const desc = GenerateParameterDescription({
+            const desc = QueryParameterEnricher.GenerateParameterDescription({
                 name: 'Region', type: 'string', isRequired: true,
                 defaultValue: null, filters: [], usageLocations: [],
             });
@@ -811,7 +896,7 @@ describe('Parameter Merge Logic', () => {
         });
 
         it('should generate description for optional number param', () => {
-            const desc = GenerateParameterDescription({
+            const desc = QueryParameterEnricher.GenerateParameterDescription({
                 name: 'MinCount', type: 'number', isRequired: false,
                 defaultValue: null, filters: [], usageLocations: [],
             });
@@ -819,7 +904,7 @@ describe('Parameter Merge Logic', () => {
         });
 
         it('should include default value in description', () => {
-            const desc = GenerateParameterDescription({
+            const desc = QueryParameterEnricher.GenerateParameterDescription({
                 name: 'Limit', type: 'number', isRequired: true,
                 defaultValue: 25, filters: [], usageLocations: [],
             });
@@ -827,7 +912,7 @@ describe('Parameter Merge Logic', () => {
         });
 
         it('should split camelCase names into human-readable form', () => {
-            const desc = GenerateParameterDescription({
+            const desc = QueryParameterEnricher.GenerateParameterDescription({
                 name: 'MinActivityCount', type: 'number', isRequired: false,
                 defaultValue: null, filters: [], usageLocations: [],
             });
@@ -837,7 +922,7 @@ describe('Parameter Merge Logic', () => {
 
     describe('GenerateSampleValue', () => {
         it('should return default value when available', () => {
-            expect(GenerateSampleValue({
+            expect(QueryParameterEnricher.GenerateSampleValue({
                 name: 'x', type: 'number', isRequired: true,
                 defaultValue: 42, filters: [], usageLocations: [],
             })).toBe('42');
@@ -853,7 +938,7 @@ describe('Parameter Merge Logic', () => {
             ];
 
             for (const [type, expected] of cases) {
-                expect(GenerateSampleValue({
+                expect(QueryParameterEnricher.GenerateSampleValue({
                     name: 'x', type, isRequired: true,
                     defaultValue: null, filters: [], usageLocations: [],
                 })).toBe(expected);
@@ -861,7 +946,7 @@ describe('Parameter Merge Logic', () => {
         });
 
         it('should return null for unknown type', () => {
-            expect(GenerateSampleValue({
+            expect(QueryParameterEnricher.GenerateSampleValue({
                 name: 'x', type: 'unknown', isRequired: true,
                 defaultValue: null, filters: [], usageLocations: [],
             })).toBeNull();
@@ -1127,7 +1212,7 @@ JOIN {{query:"Q2(yr=fiscalYear)"}} b ON a.ID = b.ID`;
 
             // And the context feeds the real merge to produce the inherited description
             // (the suffix names the DEPENDENCY's parameter, not the parent's variable)
-            const merged = MergeParametersWithLLM(BuildPassthroughParams(refs).params, null, contextMap);
+            const merged = QueryParameterEnricher.MergeParameters(BuildPassthroughParams(refs).params, null, contextMap);
             expect(merged[0].description).toBe(
                 'Number of days to look back for changes (passed through to "Recent Entity Changes" as "lookbackDays")'
             );
@@ -1712,29 +1797,29 @@ WHERE a.IsPersonAccount = 1
 
 describe('NormalizeDefaultForType', () => {
     it('should pass through non-array types unchanged', () => {
-        expect(NormalizeDefaultForType('hello', 'string')).toBe('hello');
-        expect(NormalizeDefaultForType('42', 'number')).toBe('42');
-        expect(NormalizeDefaultForType('true', 'boolean')).toBe('true');
+        expect(QueryParameterEnricher.NormalizeDefaultForType('hello', 'string')).toBe('hello');
+        expect(QueryParameterEnricher.NormalizeDefaultForType('42', 'number')).toBe('42');
+        expect(QueryParameterEnricher.NormalizeDefaultForType('true', 'boolean')).toBe('true');
     });
 
     it('should pass through valid JSON array strings for array type', () => {
-        expect(NormalizeDefaultForType('["a","b"]', 'array')).toBe('["a","b"]');
-        expect(NormalizeDefaultForType('[1,2,3]', 'array')).toBe('[1,2,3]');
+        expect(QueryParameterEnricher.NormalizeDefaultForType('["a","b"]', 'array')).toBe('["a","b"]');
+        expect(QueryParameterEnricher.NormalizeDefaultForType('[1,2,3]', 'array')).toBe('[1,2,3]');
     });
 
     it('should wrap plain string in JSON array for array type', () => {
-        expect(NormalizeDefaultForType('Attended', 'array')).toBe('["Attended"]');
-        expect(NormalizeDefaultForType('Active', 'array')).toBe('["Active"]');
+        expect(QueryParameterEnricher.NormalizeDefaultForType('Attended', 'array')).toBe('["Attended"]');
+        expect(QueryParameterEnricher.NormalizeDefaultForType('Active', 'array')).toBe('["Active"]');
     });
 
     it('should wrap non-array JSON value in array for array type', () => {
-        expect(NormalizeDefaultForType('42', 'array')).toBe('[42]');
-        expect(NormalizeDefaultForType('"hello"', 'array')).toBe('["hello"]');
+        expect(QueryParameterEnricher.NormalizeDefaultForType('42', 'array')).toBe('[42]');
+        expect(QueryParameterEnricher.NormalizeDefaultForType('"hello"', 'array')).toBe('["hello"]');
     });
 
     it('should handle JSON object default by wrapping in array', () => {
         const obj = '{"key":"value"}';
-        const result = NormalizeDefaultForType(obj, 'array');
+        const result = QueryParameterEnricher.NormalizeDefaultForType(obj, 'array');
         expect(JSON.parse(result)).toEqual([{ key: 'value' }]);
     });
 });

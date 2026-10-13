@@ -171,6 +171,39 @@ describe('TemplateEngineServer sandbox: names that could change the compiled cod
     });
 });
 
+/**
+ * A saved edit to a Template Content keeps its ID, so the compiled-template cache recompiles that content
+ * when its text changes. The recompiled template must pass the same compile guard and runtime
+ * guard as a first compile: an edit cannot turn a cached, safe content row into one that escapes.
+ */
+describe('TemplateEngineServer sandbox: an edited, previously cached template content', () => {
+    /** The row a template-engine reload hands back after a saved edit: a new object with the same ID. */
+    function reloadedContent(id: string, templateText: string): MJTemplateContentEntity {
+        const content = new MJTemplateContentEntity(CONTENT_ENTITY);
+        content.Hydrate({ ID: id, TemplateID: 'template-1', TemplateText: templateText });
+        return content;
+    }
+
+    it('is still refused after its text changes to an escape', async () => {
+        const template = makeTemplate();
+        const original = makeContent('[{{ x }}]');
+
+        const safe = await engine.RenderTemplate(template, original, { x: 'ok' }, true);
+        const compileEscape = await engine.RenderTemplate(
+            template, reloadedContent(original.ID, '{% set d = {__proto__: {a: "MJ-MARKER"} } %}[{{ d.a }}]'), {}, true);
+        const runtimeEscape = await engine.RenderTemplate(
+            template, reloadedContent(original.ID, `{{ range.constructor("${CODE}")() }}`), {}, true);
+
+        expect(safe.Output).toBe('[ok]');
+        expect(compileEscape.Success).toBe(false);
+        expect(compileEscape.Message).toContain('TemplateSandboxError');
+        expect(compileEscape.Output ?? '').not.toContain('MJ-MARKER');
+        expect(runtimeEscape.Success).toBe(false); // the runtime guard hides constructor, so the call fails
+        expect(runtimeEscape.Output ?? '').not.toContain('RAN');
+        expect(globalThis.__mjTemplateSandboxCanary).toBeUndefined();
+    });
+});
+
 describe('TemplateEngineServer sandbox: ordinary names still compile', () => {
     it('accepts letters from any script, digits, _ and $ in names', async () => {
         const result = await render('{{ città }}|{{ _x1 }}|{{ $y }}', { città: 'Roma', _x1: 1, $y: 2 });

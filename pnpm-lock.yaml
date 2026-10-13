@@ -14336,6 +14336,9 @@ importers:
         specifier: 6.2.0-edge.3
         version: link:../../Templates/engine
     devDependencies:
+      '@memberjunction/templates-base-types':
+        specifier: 6.2.0-edge.3
+        version: link:../../Templates/base-types
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -16019,6 +16022,9 @@ importers:
       '@memberjunction/storage':
         specifier: 6.2.0-edge.3
         version: link:../../MJStorage
+      '@memberjunction/tag-engine':
+        specifier: 6.2.0-edge.3
+        version: link:../../AI/Knowledge/TagEngine
       '@memberjunction/task-graph':
         specifier: 6.2.0-edge.3
         version: link:../../TaskGraph

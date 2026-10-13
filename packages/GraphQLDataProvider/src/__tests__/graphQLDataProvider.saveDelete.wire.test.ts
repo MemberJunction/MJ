@@ -421,6 +421,52 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(entity.LatestResult.Message).toContain('Primary key value mismatch');
         });
 
+        it('accepts the record\'s key echoed in another letter case (UUIDs compare case-insensitively)', async () => {
+            const entity = loadedCustomer();
+            GraphQLWire.EnqueueResponse({ DeleteCRMCustomer: { ID: 'cust-0001' } });
+
+            expect(await provider.Delete(entity, new EntityDeleteOptions(), user)).toBe(true);
+            expect(entity.LatestResult.Success).toBe(true);
+        });
+
+        it('fails when the server echoes a NULL key (nothing was deleted)', async () => {
+            const entity = loadedCustomer();
+            GraphQLWire.EnqueueResponse({ DeleteCRMCustomer: { ID: null } });
+
+            expect(await provider.Delete(entity, new EntityDeleteOptions(), user)).toBe(false);
+            expect(entity.LatestResult.Message).toContain('Primary key value mismatch');
+        });
+
+        describe('inside a transaction group, the queued delete is judged by the same key match', () => {
+            class InspectableTransactionGroup extends GraphQLTransactionGroup {
+                public get Pending(): TransactionItem[] {
+                    return this.PendingTransactions;
+                }
+            }
+
+            async function queuedDelete(): Promise<{ entity: TestCustomerEntity; item: TransactionItem }> {
+                const group = new InspectableTransactionGroup(provider);
+                const entity = loadedCustomer();
+                entity.TransactionGroup = group;
+                expect(await provider.Delete(entity, new EntityDeleteOptions(), user)).toBe(true); // queued, not sent
+                expect(GraphQLWire.Requests).toHaveLength(0);
+                return { entity, item: group.Pending[0] };
+            }
+
+            it('the record\'s key in another letter case succeeds', async () => {
+                const { entity, item } = await queuedDelete();
+                await item.CallBack({ ID: 'cust-0001' }, true);
+                expect(entity.LatestResult.Success).toBe(true);
+            });
+
+            it('a NULL key fails the delete', async () => {
+                const { entity, item } = await queuedDelete();
+                await item.CallBack({ ID: null }, true);
+                expect(entity.LatestResult.Success).toBe(false);
+                expect(entity.LatestResult.Message).toBe('Transaction failed to commit');
+            });
+        });
+
         it('fails when the response lacks the mutation key', async () => {
             const entity = loadedCustomer();
             GraphQLWire.EnqueueResponse({ SomethingElse: {} });

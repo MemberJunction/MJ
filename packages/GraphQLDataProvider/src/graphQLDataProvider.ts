@@ -2475,20 +2475,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // and when the transaction is committed, we will send all the queries at once
                 entity.TransactionGroup.AddTransaction(new TransactionItem(entity, 'Delete', inner, vars, {mutationName: queryName,
                                                                                             mutationInputTypes: mutationInputTypes},
-                                                                                        (results: any, success: boolean) => {
+                                                                                        (results: Record<string, unknown>, success: boolean) => {
                     // we get here whenever the transaction group does gets around to committing
                     // our query.
                     result.EndedAt = new Date(); // done processing
                     if (success && results) {
-                        // success indicated by the entity.PrimaryKey.Value matching the return value of the mutation
-                        let success: boolean = true;
-                        for (const pk of entity.PrimaryKey.KeyValuePairs) {
-                            // check each primary key value to see if it matches the return value of the mutation
-                            if (pk.Value !== results[pk.FieldName]) {
-                                success = false;
-                            }
-                        }
-                        if (success) {
+                        // Success means the mutation's row reports THIS record's keys: non-NULL, UUIDs
+                        // compared case-insensitively — the same test every database provider applies
+                        // (BaseEntity.DeleteResultMatchesEntity).
+                        if (entity.DeleteResultMatches(results)) {
                             result.Success = true;
                         }
                         else {
@@ -2511,20 +2506,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // no transaction just go for it
                 const d = await this.ExecuteGQL(query, vars)
                 if (d && d[queryName]) {
-                    const data = d[queryName];
-                    for (let key of entity.PrimaryKey.KeyValuePairs) {
-                        // we want to now compare key.Value against data[key.FieldName]
-                        let returnedVal = data[key.FieldName];
-                        let originalVal = key.Value;
-                        // we want to ignore types so we should convert numbers to strings for the comparison
-                        if (typeof originalVal === 'number')
-                            originalVal = originalVal.toString();
-                        if (typeof returnedVal === 'number')
-                            returnedVal = returnedVal.toString();
-                        // now compare the two values
-                        if (originalVal !== returnedVal) {
-                            throw new Error (`Primary key value mismatch in server Delete response. Field: ${key.FieldName}, Original: ${originalVal}, Returned: ${returnedVal}`);
-                        }
+                    const data: Record<string, unknown> = d[queryName];
+                    // The returned row must report THIS record's keys: non-NULL, UUIDs compared
+                    // case-insensitively, numbers matching their text — the one test every provider
+                    // applies (BaseEntity.DeleteResultMatchesEntity).
+                    if (!entity.DeleteResultMatches(data)) {
+                        const returned = entity.PrimaryKeys.map((key) => `${key.Name}=${String(data[key.Name])}`).join(', ');
+                        throw new Error(`Primary key value mismatch in server Delete response. Original: ${entity.PrimaryKey.ToString()}, Returned: ${returned}`);
                     }
                     result.Success = true;
                     result.EndedAt = new Date(); // done processing

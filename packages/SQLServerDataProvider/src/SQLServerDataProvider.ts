@@ -342,6 +342,8 @@ type SQLQueueItem = SQLQueueQuery | SQLQueueAction;
 
 interface InternalMSSQLTransaction extends sql.Transaction {
   _activeRequest?: sql.Request | null;
+  /** Set by mssql when the server rolled the transaction back (tedious/transaction.js `_abort`). */
+  _aborted?: boolean;
 }
 
 export class SQLServerDataProvider
@@ -419,7 +421,7 @@ export class SQLServerDataProvider
    * Process-wide view-column-order cache, scoped PER CONNECTION POOL and shared across provider
    * instances. MJServer creates 1–2 fresh, fully-Config()'d provider instances per GraphQL request
    * (read-write + read-only) around the same boot-time pools; without this sharing, the full
-   * `sys.columns` scan in {@link loadViewColumnOrderCache} ran once or twice on EVERY request
+   * `sys.columns` scan in {@link LoadViewColumnOrderCache} ran once or twice on EVERY request
    * (issue #3102 — ~9.6k scans/day in production vs the ~2 needed).
    *
    * Keyed by the `ConnectionPool` object (NOT by `schema.view` alone) because one process can hold
@@ -572,7 +574,7 @@ export class SQLServerDataProvider
       // After metadata is loaded, capture each base view's REAL column order so the save-capture
       // @ResultTable is declared to match it (see _viewColumnOrderCache + getAllEntityColumnsSQL).
       if (configured) {
-        await this.loadViewColumnOrderCache();
+        await this.LoadViewColumnOrderCache();
       }
       return configured;
     } catch (e) {
@@ -593,7 +595,7 @@ export class SQLServerDataProvider
    * instance's cache empty (getAllEntityColumnsSQL falls back to the metadata-derived order) and
    * removes the shared entry so the next Config() retries instead of pinning the failure.
    */
-  private async loadViewColumnOrderCache(): Promise<void> {
+  protected async LoadViewColumnOrderCache(): Promise<void> {
     const pool = this._pool;
     let scanPromise = SQLServerDataProvider._viewColumnOrderCacheByPool.get(pool);
     if (!scanPromise) {
@@ -664,14 +666,49 @@ export class SQLServerDataProvider
   public override async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
     // An explicit Refresh must really reload: base Refresh() is a silent no-op while a save is in
     // flight, which left callers (CodeGen after a fire-and-forget prompt-run save) on stale metadata.
+    if (!(await this.PrepareForMetadataReload('Refresh'))) {
+      return false;
+    }
+    return super.Refresh(providerToUse);
+  }
+
+  /**
+   * The in-transaction reload (MJ#4836) does the same extra work as {@link Refresh}
+   * ({@link PrepareForMetadataReload}) and — because the base runs its reload pass directly rather
+   * than through {@link Config} — rescans the column order afterwards, as Config does after a
+   * refresh. The rescan joins the ambient transaction, so it sees views the transaction itself
+   * created.
+   */
+  public override async RefreshWithinTransaction(providerToUse?: IMetadataProvider): Promise<boolean> {
+    if (!(await this.PrepareForMetadataReload('RefreshWithinTransaction'))) {
+      return false;
+    }
+    const refreshed = await super.RefreshWithinTransaction(providerToUse);
+    if (refreshed) {
+      await this.LoadViewColumnOrderCache();
+    }
+    return refreshed;
+  }
+
+  /**
+   * The work every explicit metadata reload of this provider does first: wait for in-flight saves
+   * (the base reload is a silent no-op while one runs), then invalidate this pool's
+   * view-column-order cache so the rescan after the reload picks up view changes from
+   * migrations/CodeGen. Shared by {@link Refresh} and {@link RefreshWithinTransaction} so the two
+   * cannot drift.
+   * @param callerName Named in the error logged when the wait times out.
+   * @returns false (logged) when saves were still in flight after REFRESH_WAIT_TIMEOUT_MS — the
+   * caller must not reload.
+   */
+  protected async PrepareForMetadataReload(callerName: string): Promise<boolean> {
     if (!(await this.waitForSavesToFinish())) {
-      LogError(`SQLServerDataProvider.Refresh: ${this._refreshSuspendCount} save(s) still in flight after ${SQLServerDataProvider.REFRESH_WAIT_TIMEOUT_MS}ms; metadata was NOT refreshed`);
+      LogError(`SQLServerDataProvider.${callerName}: ${this._refreshSuspendCount} save(s) still in flight after ${SQLServerDataProvider.REFRESH_WAIT_TIMEOUT_MS}ms; metadata was NOT refreshed`);
       return false;
     }
     if (this._pool) {
       SQLServerDataProvider.InvalidateViewColumnOrderCache(this._pool);
     }
-    return super.Refresh(providerToUse);
+    return true;
   }
 
   /** Resolves true once no save is in flight, or false after REFRESH_WAIT_TIMEOUT_MS. */
@@ -1862,36 +1899,57 @@ export class SQLServerDataProvider
    * @returns Object with fullSQL and simpleSQL properties
    */
   private getDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo, skipRecordChanges = false): { fullSQL: string; simpleSQL: string } {
-    let sSQL: string = '';
-    const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.BaseTableCodeName}`;
-    const sParams = entity.PrimaryKey.KeyValuePairs.map((kv) => {
-      const f = entity.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase());
-      const quotes = f.NeedsQuotes ? "'" : '';
-      return `@${f.CodeName}=${quotes}${kv.Value}${quotes}`;
-    }).join(', ');
-    const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
+    const simpleSQL = this.RenderDeleteProcCall(entity);
+    // don't track changes for the record changes entity
+    const tracksDelete = entity.EntityInfo.TrackRecordChanges && !skipRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes';
+    if (!tracksDelete) {
+      // no record change tracking — just delete the record
+      return { fullSQL: simpleSQL, simpleSQL };
+    }
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
+    const fullSQL = entity.EntityInfo.CascadeDeletes
+      ? this.renderCascadingTrackedDeleteSQL(entity, user, simpleSQL, recordChangesEntityInfo)
+      : this.RenderTrackedDeleteSQL(entity, user, simpleSQL, recordChangesEntityInfo);
+    return { fullSQL, simpleSQL };
+  }
 
-    if (entity.EntityInfo.TrackRecordChanges && !skipRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
-      // don't track changes for the record changes entity
-      const oldData = entity.GetAll(true); // get all the OLD values
-      const sTableDeclare: string = entity.PrimaryKeys.map((pk) => {
-        return `${pk.CodeName} ${pk.EntityFieldInfo.SQLFullType}`;
-      }).join(', ');
-      const sVariableDeclare: string = entity.PrimaryKeys.map((pk) => {
-        return `@${pk.CodeName} ${pk.EntityFieldInfo.SQLFullType}`;
-      }).join(', ');
-      const sSelectDeclare: string = entity.PrimaryKeys.map((pk) => {
-        return `@${pk.CodeName}=${pk.CodeName}`;
-      }).join(', ');
-      const sIF: string = entity.PrimaryKeys.map((pk) => {
-        return `@${pk.CodeName} IS NOT NULL`;
-      }).join(' AND ');
-      const sCombinedPrimaryKey: string = entity.PrimaryKey.ToConcatenatedString();
-      const sReturnList: string = entity.PrimaryKeys.map((pk) => {
-        return `@${pk.CodeName} AS [${pk.Name}]`;
-      }).join(', ');
-      sSQL = `
+  /**
+   * The bare call of the entity's delete procedure (`spDelete…` or the entity's configured
+   * `spDelete`) with this record's primary key as named arguments. Key values go through
+   * {@link RenderPrimaryKeyLiteral} — the same escaped/validated literal the existence checks use;
+   * a key value is never spliced raw, and an absent one is refused rather than rendered as text.
+   */
+  protected RenderDeleteProcCall(entity: BaseEntity): string {
+    const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.BaseTableCodeName}`;
+    const sParams = entity.EntityInfo.PrimaryKeys.map((pk) => `@${pk.CodeName}=${this.RenderPrimaryKeyLiteral(entity, pk)}`).join(', ');
+    return `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
+  }
+
+  /**
+   * Record-change-tracked delete for an entity whose delete procedure does NOT cascade: captures the
+   * proc's single `SELECT <pk>` into `@ResultTable`, writes the Delete record change only when the
+   * returned keys are not NULL (something was deleted), and selects the keys for
+   * {@link ValidateDeleteResult}.
+   */
+  protected RenderTrackedDeleteSQL(entity: BaseEntity, user: UserInfo, simpleSQL: string, recordChangesEntityInfo: EntityInfo): string {
+    const oldData = entity.GetAll(true); // get all the OLD values
+    const sTableDeclare: string = entity.PrimaryKeys.map((pk) => {
+      return `${pk.CodeName} ${pk.EntityFieldInfo.SQLFullType}`;
+    }).join(', ');
+    const sVariableDeclare: string = entity.PrimaryKeys.map((pk) => {
+      return `@${pk.CodeName} ${pk.EntityFieldInfo.SQLFullType}`;
+    }).join(', ');
+    const sSelectDeclare: string = entity.PrimaryKeys.map((pk) => {
+      return `@${pk.CodeName}=${pk.CodeName}`;
+    }).join(', ');
+    const sIF: string = entity.PrimaryKeys.map((pk) => {
+      return `@${pk.CodeName} IS NOT NULL`;
+    }).join(' AND ');
+    const sCombinedPrimaryKey: string = entity.PrimaryKey.ToConcatenatedString();
+    const sReturnList: string = entity.PrimaryKeys.map((pk) => {
+      return `@${pk.CodeName} AS [${pk.Name}]`;
+    }).join(', ');
+    return `
                     IF OBJECT_ID('tempdb..#ResultTable') IS NOT NULL
                         DROP TABLE #ResultTable
 
@@ -1900,7 +1958,7 @@ export class SQLServerDataProvider
                     )
 
                     INSERT INTO @ResultTable
-                    ${sSimpleSQL}
+                    ${simpleSQL};
 
                     DECLARE ${sVariableDeclare}
                     SELECT ${sSelectDeclare} FROM @ResultTable
@@ -1915,12 +1973,135 @@ export class SQLServerDataProvider
                     END
 
                     SELECT ${sReturnList}`;
-    } else {
-      // no record change tracking
-      // just delete the record
-      sSQL = sSimpleSQL;
+  }
+
+  /**
+   * Record-change-tracked delete for an entity whose generated spDelete CASCADES (`CascadeDeletes`).
+   *
+   * Such a proc calls the related entity's spUpdate (to NULL a nullable FK) or spDelete for every
+   * child row before deleting its own row, and each of those calls returns its own result set —
+   * spUpdate a full base-view row, spDelete its primary key — ahead of the proc's own final
+   * `SELECT <pk>`. The non-cascading wrapper captures the proc's output with a positional
+   * `INSERT INTO @ResultTable EXEC spDelete…`, which fails with error 213 ("Column name or number of
+   * supplied values does not match table definition") on the first child view row, and silently
+   * captures child keys as extra rows when the children are deletes. T-SQL has no way to keep only the
+   * LAST result set of an EXEC, so this form does not capture at all:
+   *
+   *  - the proc's result sets go to the client, whose {@link ValidateDeleteResult} reads the LAST set;
+   *  - whether the delete happened is read from the table itself: the row was visible before the EXEC
+   *    and is not after it ({@link RenderRowVisibleSQL});
+   *  - only then is the Delete record change written and the primary key selected — that final
+   *    SELECT is the batch's last result set, so validation sees the record itself (or NULL keys
+   *    when nothing was deleted, which {@link BaseEntity.DeleteResultMatchesEntity} reports as a
+   *    failed delete on the direct AND transaction-group paths).
+   *
+   * ATOMICITY: the before-check reads the row with {@link CascadingDeleteLockHints}, and check + EXEC
+   * + re-check run inside one transaction, so no other session can delete (or insert) the row between
+   * them — otherwise, under READ COMMITTED, a concurrent delete between the check and the EXEC would
+   * credit THIS caller with a delete that did nothing and write its audit row. The update/range lock
+   * is held to the end of the enclosing transaction: when one is already open (the generated Delete
+   * override of a CascadeDeletes entity always opens one; a transaction group does too) the batch
+   * joins it; otherwise the batch opens and commits its own. A batch-owned transaction is rolled back
+   * in CATCH so an error never leaves a transaction open on a pooled connection; a joined one is left
+   * to its owner (the error is re-thrown either way).
+   */
+  private renderCascadingTrackedDeleteSQL(entity: BaseEntity, user: UserInfo, simpleSQL: string, recordChangesEntityInfo: EntityInfo): string {
+    return `
+                    DECLARE @__mj_OwnsDeleteTransaction BIT = CASE WHEN @@TRANCOUNT = 0 THEN 1 ELSE 0 END;
+                    IF @__mj_OwnsDeleteTransaction = 1 BEGIN TRANSACTION;
+
+                    BEGIN TRY
+                        DECLARE @__mj_DeleteTargetExisted BIT = CASE WHEN ${this.RenderRowVisibleSQL(entity, this.CascadingDeleteLockHints)} THEN 1 ELSE 0 END;
+
+                        ${simpleSQL};
+
+                        IF @__mj_DeleteTargetExisted = 1 AND NOT ${this.RenderRowVisibleSQL(entity, '')}
+                        BEGIN
+                            ${this.RenderDeleteRecordChangeBlock(entity, user, recordChangesEntityInfo)}SELECT ${this.RenderDeletedKeysSelectList(entity)};
+                        END
+                        ELSE
+                            SELECT ${this.RenderNullKeysSelectList(entity.EntityInfo)};
+
+                        IF @__mj_OwnsDeleteTransaction = 1 COMMIT TRANSACTION;
+                    END TRY
+                    BEGIN CATCH
+                        IF @__mj_OwnsDeleteTransaction = 1 AND @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+                        THROW;
+                    END CATCH;`;
+  }
+
+  /**
+   * Table hints on the cascading delete's before-check ({@link renderCascadingTrackedDeleteSQL}):
+   * an update lock so no other session can delete the row before this batch's EXEC, held as a
+   * range lock to the end of the transaction so none can re-insert it before the re-check.
+   */
+  protected get CascadingDeleteLockHints(): string {
+    return ' WITH (UPDLOCK, HOLDLOCK)';
+  }
+
+  /**
+   * The record's value for one primary key column, as a safe SQL literal ({@link RenderKeyValueLiteral}).
+   * @throws Error when the record has no value for that column — rendering the absent value would
+   * splice the literal `'undefined'` into the statement and check a row that cannot exist.
+   */
+  protected RenderPrimaryKeyLiteral(entity: BaseEntity, pk: EntityFieldInfo): string {
+    const kv = entity.PrimaryKey.KeyValuePairs.find((k) => k.FieldName.trim().toLowerCase() === pk.Name.trim().toLowerCase());
+    if (!kv || kv.Value === null || kv.Value === undefined) {
+      throw new Error(`Cannot render the delete of ${entity.EntityInfo.Name}: the record has no value for primary key ${pk.Name}`);
     }
-    return { fullSQL: sSQL, simpleSQL: sSimpleSQL };
+    return SQLServerDataProvider.RenderKeyValueLiteral(kv.Value, pk.NeedsQuotes, pk.Name, entity.EntityInfo.Name);
+  }
+
+  /**
+   * `EXISTS (…)` over this record's row in the base table, with `hints` applied. For a soft-delete
+   * entity "visible" means `__mj_DeletedAt IS NULL` — the same rows the base view shows.
+   */
+  protected RenderRowVisibleSQL(entity: BaseEntity, hints: string): string {
+    const info = entity.EntityInfo;
+    const softDeleteClause = info.DeleteType === 'Soft' ? ` AND [${EntityInfo.DeletedAtFieldName}] IS NULL` : '';
+    const keyMatch = info.PrimaryKeys.map((pk) => `[${pk.Name}] = ${this.RenderPrimaryKeyLiteral(entity, pk)}`).join(' AND ');
+    return `EXISTS (SELECT 1 FROM [${info.SchemaName}].[${info.BaseTable}]${hints} WHERE ${keyMatch}${softDeleteClause})`;
+  }
+
+  /** The select list reporting this record's keys as deleted, each cast to its column type. */
+  protected RenderDeletedKeysSelectList(entity: BaseEntity): string {
+    return entity.EntityInfo.PrimaryKeys.map((pk) => `CAST(${this.RenderPrimaryKeyLiteral(entity, pk)} AS ${pk.SQLFullType}) AS [${pk.Name}]`).join(', ');
+  }
+
+  /** The select list reporting "nothing deleted": NULL for every key, the generated spDelete's own answer. */
+  protected RenderNullKeysSelectList(info: EntityInfo): string {
+    return info.PrimaryKeys.map((pk) => `CAST(NULL AS ${pk.SQLFullType}) AS [${pk.Name}]`).join(', ');
+  }
+
+  /**
+   * The statements that write this record's Delete record change (ending in a separator so the
+   * caller can append its SELECT); empty when {@link GetLogRecordChangeSQL} has nothing to write.
+   */
+  protected RenderDeleteRecordChangeBlock(entity: BaseEntity, user: UserInfo, recordChangesEntityInfo: EntityInfo): string {
+    const info = entity.EntityInfo;
+    const recordChangeSQL = this.GetLogRecordChangeSQL(
+      null /*no new data for a deleted record*/,
+      entity.GetAll(true),
+      info.Name,
+      entity.PrimaryKey.ToConcatenatedString(),
+      info,
+      'Delete',
+      user,
+      true,
+      entity.RestoreContext,
+      entity.CloneContext,
+    );
+    if (!recordChangeSQL) {
+      return '';
+    }
+    return `DECLARE @ResultChangesTable TABLE (
+                            ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
+                        );
+
+                        INSERT INTO @ResultChangesTable
+                        ${recordChangeSQL};
+
+                        `;
   }
 
   /**************************************************************************/
@@ -1975,13 +2156,7 @@ export class SQLServerDataProvider
     const deletedRecord = isMultipleResultSets
       ? (rawResult[rawResult.length - 1] as unknown as Record<string, unknown>[])[0]
       : rawResult[0];
-    for (const key of entity.PrimaryKeys) {
-      if (key.Value !== deletedRecord[key.Name]) {
-        entityResult.Message = `Transaction failed to commit, record with primary key ${key.Name}=${key.Value} not found`;
-        return false;
-      }
-    }
-    return true;
+    return SQLServerDataProvider.CheckDeleteResultRow(entity, deletedRecord, entityResult);
   }
 
   /**************************************************************************/
@@ -2740,6 +2915,15 @@ IF ${varName} IS NOT NULL
     }
     const tx = this._transaction as InternalMSSQLTransaction;
     if (!tx._activeRequest) {
+      return;
+    }
+    if (tx._aborted) {
+      // The server already rolled this transaction back. mssql then leaves `_activeRequest` set for good:
+      // its `_abort` nulls the acquired connection before the failing request releases it, so `release()`
+      // no longer recognizes the connection and never clears the marker (mssql 12.7.0,
+      // tedious/transaction.js `_abort` + base/transaction.js `release`). Nothing is in flight; waiting
+      // would only time out and report a queue bypass that never happened. Commit and rollback then
+      // answer EABORT, which the base class reads as "already rolled back".
       return;
     }
     const start = Date.now();

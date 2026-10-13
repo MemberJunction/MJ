@@ -20,7 +20,7 @@ import { EntitySaveOptions } from '@memberjunction/core';
 import { SqlLoggingSessionImpl } from '@memberjunction/generic-database-provider';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 import { mssqlState, MockConnectionPool } from './helpers/mock-mssql';
-import { TEST_USER, makeWidgetEntityInfo, makeSavedWidgetEntity, savedWidgetRow } from './helpers/entity-fixtures';
+import { TEST_USER, MakeWidgetEntityInfo, MakeSavedWidgetEntity, SavedWidgetRow } from './helpers/entity-fixtures';
 
 interface ProviderPrivateSurface {
   _pool: MockConnectionPool;
@@ -92,7 +92,7 @@ describe('SQL logging capture of the same record saved twice (threshold mode)', 
   });
 
   async function saveTwiceAndCapture(options: { variableBatchThreshold?: number }): Promise<string> {
-    const info = makeWidgetEntityInfo();
+    const info = MakeWidgetEntityInfo();
     const provider = new LoggingTestProvider();
     provider.AttachPool(new MockConnectionPool());
     provider.SetTestEntities([info]);
@@ -106,12 +106,12 @@ describe('SQL logging capture of the same record saved twice (threshold mode)', 
     });
     await provider.Session.initialize();
 
-    const first = makeSavedWidgetEntity(info, TEST_USER);
-    const second = makeSavedWidgetEntity(info, TEST_USER);
+    const first = MakeSavedWidgetEntity(info, TEST_USER);
+    const second = MakeSavedWidgetEntity(info, TEST_USER);
     first.Set('Name', 'Once');
     second.Set('Name', 'Twice');
-    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'Once' }] });
-    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'Twice' }] });
+    mssqlState.QueueResult({ rows: [{ ...SavedWidgetRow(), Name: 'Once' }] });
+    mssqlState.QueueResult({ rows: [{ ...SavedWidgetRow(), Name: 'Twice' }] });
 
     expect(await provider.Save(first, TEST_USER, new EntitySaveOptions())).toBeTruthy();
     expect(await provider.Save(second, TEST_USER, new EntitySaveOptions())).toBeTruthy();

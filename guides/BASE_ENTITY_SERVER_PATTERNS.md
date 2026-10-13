@@ -17,7 +17,7 @@ The patterns assume `@memberjunction/core-entities-server`'s convention: one fil
 
 **Server class** — three responsibilities, all routed through `Save()` so callers don't need to coordinate:
 
-1. **Override `EmbedTextLocal`** to plug in `EmbedTextLocalHelper` from `@memberjunction/core-entities-server` (this is what wires `AIEngine.EmbedTextLocal` to the framework's `GenerateEmbedding` machinery).
+1. **Override `EmbedTextLocal`** to return `AIEngine.EmbedTextLocalForEntity(this, text)` from `@memberjunction/aiengine` (this is what wires `AIEngine.EmbedTextLocal` to the framework's `GenerateEmbedding` machinery).
 2. **Override `SupportsEmbedTextLocal()` → `true`** so the framework knows it can call your override.
 3. **Override `Save()`** to refresh the embedding when the source text is dirty *before* `super.Save()` (so it persists in one round-trip), then sync the engine's in-memory vector service *after* a successful save.
 

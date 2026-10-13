@@ -10,10 +10,13 @@
  */
 import { BaseSingleton } from '@memberjunction/global';
 import { NamedCheck, BundleLifecycle } from './check';
+import type { IntegrationTier } from './tiers';
+import type { IntegrationTierScope, IntegrationTierScopeExit } from './tier-scope';
 
 export class IntegrationCheckRegistry extends BaseSingleton<IntegrationCheckRegistry> {
     private checks = new Map<string, NamedCheck>();
     private lifecycles = new Map<string, BundleLifecycle>();
+    private tierScopes = new Map<string, IntegrationTierScope>();
 
     protected constructor() {
         super();
@@ -96,6 +99,50 @@ export class IntegrationCheckRegistry extends BaseSingleton<IntegrationCheckRegi
         return this.lifecycles.get(bundle);
     }
 
+    /**
+     * Register a tier scope (see tier-scope.ts). Same rules as {@link Register}: re-registering the
+     * same name with an equivalent scope (a bundler's duplicate module copy) replaces it; a different
+     * scope under an existing name throws.
+     */
+    public RegisterTierScope(scope: IntegrationTierScope): void {
+        const existing = this.tierScopes.get(scope.Name);
+        if (existing && existing !== scope && !IntegrationCheckRegistry.isSameTierScope(existing, scope)) {
+            throw new Error(`IntegrationCheckRegistry: tier scope '${scope.Name}' is already registered to a different scope.`);
+        }
+        this.tierScopes.set(scope.Name, scope);
+    }
+
+    /** Removes a tier scope by name (used by unit tests that register temporary scopes). */
+    public UnregisterTierScope(name: string): void {
+        this.tierScopes.delete(name);
+    }
+
+    /**
+     * Enters every registered scope bound to `tier`, in registration order, and returns one function
+     * that exits them in reverse order. If a scope's Enter throws, the scopes already entered are
+     * exited before the error propagates.
+     */
+    public EnterTierScopes(tier: IntegrationTier): IntegrationTierScopeExit {
+        const exits: IntegrationTierScopeExit[] = [];
+        const exitAll = (): void => {
+            while (exits.length > 0) {
+                const exit = exits.pop();
+                exit?.();
+            }
+        };
+        try {
+            for (const scope of this.tierScopes.values()) {
+                if (scope.Tiers.includes(tier)) {
+                    exits.push(scope.Enter());
+                }
+            }
+        } catch (e) {
+            exitAll();
+            throw e;
+        }
+        return exitAll;
+    }
+
     /** True when two check objects define the same check (a re-evaluated module's copy). */
     private static isSameCheck(a: NamedCheck, b: NamedCheck): boolean {
         return a.Id === b.Id
@@ -103,6 +150,13 @@ export class IntegrationCheckRegistry extends BaseSingleton<IntegrationCheckRegi
             && (a.RequiresMutation ?? false) === (b.RequiresMutation ?? false)
             && (a.RequiresLiveModel ?? false) === (b.RequiresLiveModel ?? false)
             && a.Fn.toString() === b.Fn.toString();
+    }
+
+    /** True when two tier scopes have the same tiers and Enter source. */
+    private static isSameTierScope(a: IntegrationTierScope, b: IntegrationTierScope): boolean {
+        return a.Tiers.length === b.Tiers.length
+            && a.Tiers.every(t => b.Tiers.includes(t))
+            && a.Enter.toString() === b.Enter.toString();
     }
 
     /** True when two lifecycles have the same Setup and Teardown source. */

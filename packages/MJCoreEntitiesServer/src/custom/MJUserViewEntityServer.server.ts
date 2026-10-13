@@ -4,6 +4,7 @@ import { MJUserViewEntityExtended } from '@memberjunction/core-entities'
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
+import { SaveTimeAISettings } from "@memberjunction/ai";
 
 /**
  * Expected response format from the Smart Filter AI prompt
@@ -31,10 +32,13 @@ interface SmartFilterTemplateData extends Record<string, unknown> {
 @RegisterClass(BaseEntity, 'MJ: User Views')
 export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
     /**
-     * This property is hard-coded to true in this class because we DO support smart filters in this class. If you want to disable smart filters for a specific view you can override this property in your subclass and set it to false.
+     * True in this class because it DOES generate smart filters on save, unless the host has switched
+     * save-time smart-filter generation off (`SaveTimeAISettings`, kind `ViewSmartFilters`): then the
+     * save makes no model call and the view keeps its current WhereClause. To disable smart filters
+     * for one view type, override this property in a subclass and return false.
      */
     protected override get SmartFilterImplemented(): boolean {
-        return true;
+        return !SaveTimeAISettings.Instance.IsDisabled('ViewSmartFilters');
     }
 
     public override Validate(): ValidationResult {

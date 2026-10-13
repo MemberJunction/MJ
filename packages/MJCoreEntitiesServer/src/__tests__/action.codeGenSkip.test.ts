@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -87,6 +87,33 @@ vi.mock('@memberjunction/doc-utils', () => ({
 }));
 
 import { MJActionEntityServer } from '../custom/MJActionEntityServer.server';
+import { SaveTimeAISettings } from '@memberjunction/ai';
+
+/**
+ * The mocked base class's test-only surface: it records field dirtiness through SetFieldDirty and holds IsSaved as a
+ * plain field. The server class's type declares neither (IsSaved is a read-only getter on the real BaseEntity).
+ */
+interface MockedBaseStub {
+    SetFieldDirty(name: string, dirty: boolean): void;
+    IsSaved: boolean;
+}
+
+/** Marks a field dirty (or clean) on the mocked base. */
+function setFieldDirty(entity: MJActionEntityServer, name: string, dirty: boolean): void {
+    (entity as unknown as MockedBaseStub).SetFieldDirty(name, dirty);
+}
+
+/** The mocked base's post-save helpers (protected on the real base class), stubbed so a save has no dependencies. */
+interface PostSaveStub {
+    PostSaveProcessLibraries(): Promise<void>;
+    PostSaveProcessParamsAndResults(): Promise<void>;
+}
+
+/** Sets whether the mocked base counts as already saved (an update) or not (a create). */
+function setSaved(entity: MJActionEntityServer, saved: boolean): void {
+    (entity as unknown as MockedBaseStub).IsSaved = saved;
+}
+
 
 describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated Actions', () => {
     let action: MJActionEntityServer;
@@ -97,7 +124,7 @@ describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated A
         action.Type = 'Generated';
         action.CodeLocked = false;
         action.ForceCodeGeneration = false;
-        (action as unknown as { SetFieldDirty: (n: string, d: boolean) => void }).SetFieldDirty('UserPrompt', false);
+        setFieldDirty(action, 'UserPrompt', false);
 
         // Spy on GenerateCode and provide stub return
         generateCodeSpy = vi.spyOn(action, 'GenerateCode').mockResolvedValue({
@@ -110,12 +137,13 @@ describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated A
         });
 
         // Mock post-save helpers to avoid dependencies
-        vi.spyOn(action, 'PostSaveProcessLibraries' as never).mockResolvedValue(undefined as never);
-        vi.spyOn(action, 'PostSaveProcessParamsAndResults' as never).mockResolvedValue(undefined as never);
+        const postSave = action as unknown as PostSaveStub;
+        vi.spyOn(postSave, 'PostSaveProcessLibraries').mockResolvedValue(undefined);
+        vi.spyOn(postSave, 'PostSaveProcessParamsAndResults').mockResolvedValue(undefined);
     });
 
     it('skips GenerateCode when saving a new action that ALREADY HAS code (e.g. cloned action)', async () => {
-        action.IsSaved = false;
+        setSaved(action, false);
         action.Code = 'return { Success: true, Data: "cloned pre-existing code" };';
 
         const result = await action.Save();
@@ -126,7 +154,7 @@ describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated A
     });
 
     it('invokes GenerateCode when saving a new action with EMPTY / NULL code', async () => {
-        action.IsSaved = false;
+        setSaved(action, false);
         action.Code = null;
 
         const result = await action.Save();
@@ -137,9 +165,9 @@ describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated A
     });
 
     it('invokes GenerateCode when saving an existing action whose UserPrompt is dirty', async () => {
-        action.IsSaved = true;
+        setSaved(action, true);
         action.Code = 'old code';
-        (action as unknown as { SetFieldDirty: (n: string, d: boolean) => void }).SetFieldDirty('UserPrompt', true);
+        setFieldDirty(action, 'UserPrompt', true);
 
         const result = await action.Save();
 
@@ -149,7 +177,7 @@ describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated A
     });
 
     it('invokes GenerateCode when ForceCodeGeneration is true even if code is present', async () => {
-        action.IsSaved = false;
+        setSaved(action, false);
         action.Code = 'some existing code';
         action.ForceCodeGeneration = true;
 
@@ -157,5 +185,44 @@ describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated A
 
         expect(result).toBe(true);
         expect(generateCodeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    describe('host switch saveTimeAI.CodeGeneration = false', () => {
+        afterEach(() => {
+            SaveTimeAISettings.Instance.Config = {};
+        });
+
+        it('saves a new Generated action without calling GenerateCode, keeping its current code', async () => {
+            SaveTimeAISettings.Instance.Config = { CodeGeneration: false };
+            setSaved(action, false);
+            action.Code = null;
+
+            const result = await action.Save();
+
+            expect(result).toBe(true);
+            expect(generateCodeSpy).not.toHaveBeenCalled();
+            expect(action.Code).toBeNull();
+        });
+
+        it('wins over ForceCodeGeneration and a dirty UserPrompt', async () => {
+            SaveTimeAISettings.Instance.Config = { CodeGeneration: false };
+            setSaved(action, true);
+            action.Code = 'old code';
+            action.ForceCodeGeneration = true;
+            setFieldDirty(action, 'UserPrompt', true);
+
+            expect(await action.Save()).toBe(true);
+            expect(generateCodeSpy).not.toHaveBeenCalled();
+            expect(action.Code).toBe('old code');
+        });
+
+        it('another kind switched off still generates', async () => {
+            SaveTimeAISettings.Instance.Config = { QueryParameters: false, ViewSmartFilters: false };
+            setSaved(action, false);
+            action.Code = null;
+
+            expect(await action.Save()).toBe(true);
+            expect(generateCodeSpy).toHaveBeenCalledTimes(1);
+        });
     });
 });

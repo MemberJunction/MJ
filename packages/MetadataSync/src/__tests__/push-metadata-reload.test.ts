@@ -22,7 +22,11 @@ class Host {
 
     async BeginTransaction(): Promise<void> {}
     async CommitTransaction(): Promise<void> {}
-    async RollbackTransaction(): Promise<void> {}
+    async RollbackTransaction(): Promise<void> {
+        this.events.push('rollback');
+    }
+    /** What RefreshWithinTransaction answers; false = the in-transaction reload was not adopted. */
+    refreshWithinTransactionResult = true;
 
     IsMetadataDatasetMember(entityName: string): boolean {
         this.membershipChecks.push(entityName);
@@ -32,7 +36,7 @@ class Host {
 
     async RefreshWithinTransaction(): Promise<boolean> {
         this.events.push('refresh');
-        return true;
+        return this.refreshWithinTransactionResult;
     }
 
     async Refresh(): Promise<boolean> {
@@ -131,7 +135,7 @@ vi.mock('../lib/deletion-auditor', () => ({
 }));
 
 import { PushService } from '../services/PushService';
-import { PushAbortedError } from '../lib/push-outcome';
+import { MetadataReloadNotAdoptedError, PushAbortedError } from '../lib/push-outcome';
 
 class ReloadProbe extends PushService {
     protected override async processFlattenedRecord(
@@ -267,7 +271,7 @@ describe('PushService reloads metadata between directories (MJ#4836)', () => {
         expect(host.events).toContain('save:b1');
     });
 
-    it('reloads from the pool after a rollback, so uncommitted metadata is dropped', async () => {
+    it('rolls back through the host provider, which drops the uncommitted metadata itself', async () => {
         await writeFixture(root, [
             { name: 'a', records: [{ Name: 'a1', TouchesMetadata: true }] },
             { name: 'b', records: [{ Name: 'b1', Behavior: 'throw' }] },
@@ -277,8 +281,24 @@ describe('PushService reloads metadata between directories (MJ#4836)', () => {
         expect(failure).toBeInstanceOf(PushAbortedError);
         const secondSave = host.events.indexOf('save:b1');
         expect(host.events.slice(0, secondSave)).toEqual(['save:a1', 'refresh']);
-        expect(host.events).toContain('pool-refresh');
-        expect(host.events.indexOf('pool-refresh')).toBeGreaterThan(secondSave);
+        // The reload after the rollback is the provider's (OnAmbientTransactionEnded);
+        // PushService no longer issues its own pool Refresh.
+        expect(host.events.indexOf('rollback')).toBeGreaterThan(secondSave);
+        expect(host.events).not.toContain('pool-refresh');
+    });
+
+    it('fails the push when the in-transaction reload is not adopted (MJ#4836)', async () => {
+        host.refreshWithinTransactionResult = false;
+        await writeFixture(root, [
+            { name: 'a', records: [{ Name: 'a1', TouchesMetadata: true }] },
+            { name: 'b', records: [{ Name: 'b1' }] },
+        ]);
+        const failure = await service.push({ dir: root }, {}).catch((error: unknown) => error);
+
+        expect(failure).toBeInstanceOf(PushAbortedError);
+        expect((failure as PushAbortedError).cause).toBeInstanceOf(MetadataReloadNotAdoptedError);
+        expect(host.events).not.toContain('save:b1'); // the next directory never ran
+        expect(host.events).toContain('rollback');
     });
 
     it('does not reload again at the start of Phase 2, and reloads before Phase 2.5 when a later deletion touches metadata', async () => {

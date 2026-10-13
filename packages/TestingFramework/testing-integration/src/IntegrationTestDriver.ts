@@ -42,14 +42,16 @@ import {
     BootstrapIntegrationServer,
     serverProcessAlreadyClaimed
 } from './bootstrap';
+import { MJAPIUnreachableError } from './bootstrap-shared';
 import { BootstrapIntegrationClient } from './bootstrap-client';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import type { IntegrationCheckContext, RlsFixture } from './check';
 import { IntegrationCheckRegistry } from './check-registry';
-import { IntegrationTestConfig, IntegrationCheckSelectionConfig } from './types';
+import { IntegrationTestConfig, IntegrationCheckSelection, IntegrationCheckSelectionConfig } from './types';
 import { IntegrationTier, TIER_ENV_GATE, IsTierEnabled } from './tiers';
 import { TestOutcome, WriteOutcomesFile } from './test-runner';
 import { DiscoverRlsFixture } from './rls-fixture';
+import { SuspensionMonitor } from './suspension-monitor';
 
 const TARGET_TYPE = 'Integration Check Bundle';
 /** Bundles that run against the GraphQL client transport (everything else: SQL server). */
@@ -81,7 +83,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
                 context.Data[RLS_FIXTURE_KEY] = DiscoverRlsFixture(this.Provider, users);
             }
         } catch (e) {
-            this.log(`SetupSuite RLS discovery skipped: ${(e as Error).message}`);
+            this.log(`SetupSuite RLS discovery skipped: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 
@@ -121,7 +123,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
         try {
             config = this.parseConfig<IntegrationTestConfig>(context.test);
         } catch (err) {
-            return this.buildErrorResult(context, startTime, (err as Error).message);
+            return this.buildErrorResult(context, startTime, err instanceof Error ? err.message : String(err));
         }
 
         // 2) Whole-test tier gate (gated-tier / local-dev safety net). The tier decides the
@@ -157,6 +159,39 @@ export class IntegrationTestDriver extends BaseTestDriver {
             );
         }
 
+        // 2c) Tier scopes: process state that content binds to this test's tier (e.g. the
+        //     deterministic tier switches off the save-time AI prompts). Entered only now — after
+        //     the gates, so a skipped test changes nothing — and always undone when this test ends.
+        //     Entering has its own try, so only a throwing Enter is reported as a scope-setup
+        //     failure (EnterTierScopes already undoes any scope it entered before throwing). An
+        //     error from the run itself is reported as such, still as a result: a re-throw would
+        //     leave the TestRun 'Running'.
+        let exitTierScopes: () => void;
+        try {
+            exitTierScopes = IntegrationCheckRegistry.Instance.EnterTierScopes(tier);
+        } catch (scopeErr) {
+            return this.buildErrorResult(context, startTime, `Tier scope setup failed: ${scopeErr instanceof Error ? scopeErr.message : String(scopeErr)}`);
+        }
+        try {
+            return await this.ExecuteSelected(context, startTime, selectors, transport);
+        } catch (runErr) {
+            return this.buildErrorResult(context, startTime, `Integration test execution failed: ${runErr instanceof Error ? runErr.message : String(runErr)}`);
+        } finally {
+            exitTierScopes();
+        }
+    }
+
+    /**
+     * Steps 3–5 of {@link Execute}: run the selected bundles under a deadline and build the result.
+     * Runs inside the test's tier scopes; whatever it throws, {@link Execute} reports as an
+     * execution failure (never as a scope-setup failure) after exiting the scopes.
+     */
+    protected async ExecuteSelected(
+        context: DriverExecutionContext,
+        startTime: number,
+        selectors: IntegrationCheckSelection[],
+        transport: 'server' | 'client'
+    ): Promise<DriverExecutionResult> {
         // 3) Arm a driver-side timeout (the engine never applies one). The timer flips `timedOut`
         //    to abort the loop BETWEEN checks; the `deadline` additionally bounds EACH check via a
         //    per-check race (C6), so a single hung check can't run past the budget forever.
@@ -179,13 +214,13 @@ export class IntegrationTestDriver extends BaseTestDriver {
             }
         } catch (bootErr) {
             clearTimeout(timer);
-            const msg = (bootErr as Error).message ?? String(bootErr);
+            const msg = bootErr instanceof Error ? bootErr.message : String(bootErr);
             // ENVIRONMENT GAP, not a product defect: client-transport bundles need a live MJAPI.
             // When the preflight says the server is simply absent (no MJAPI reachable), report a
             // REAL 'Skipped' result loudly — visible in every summary, never masquerading as
             // executed coverage. Any OTHER bootstrap failure (bad credentials, cache ownership,
             // config) stays a hard error.
-            if (transport === 'client' && /MJAPI is not reachable/i.test(msg)) {
+            if (transport === 'client' && bootErr instanceof MJAPIUnreachableError) {
                 return this.buildSkipResult(context, startTime,
                     `SKIPPED (environment gap): ${msg} Client-transport checks need a live MJAPI; start it and re-run for full coverage.`);
             }
@@ -199,7 +234,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
             try {
                 await WriteOutcomesFile(emitPath, outcomes);
             } catch (e) {
-                this.logToTestRun(context, 'warn', `EMIT_OUTCOMES write failed: ${(e as Error).message}`);
+                this.logToTestRun(context, 'warn', `EMIT_OUTCOMES write failed: ${e instanceof Error ? e.message : String(e)}`);
             }
         }
 
@@ -338,12 +373,18 @@ export class IntegrationTestDriver extends BaseTestDriver {
         if (remaining <= 0) {
             throw new Error(`integration run budget exhausted before check '${id}' started`);
         }
+        // The budget timer's clock keeps running while the host sleeps (macOS) or the process is
+        // stopped, so a check in flight across a sleep "exceeds the budget" the moment the host
+        // wakes. Measure event-loop stalls so that case is reported as what it is, not as a hang.
+        const monitor = new SuspensionMonitor();
+        const startedAt = Date.now();
+        monitor.Start();
         let timer: ReturnType<typeof setTimeout> | undefined;
         const timeout = new Promise<never>((_, reject) => {
-            timer = setTimeout(
-                () => reject(new Error(`check '${id}' exceeded the ${remaining}ms remaining run budget (hung check)`)),
-                remaining
-            );
+            timer = setTimeout(() => {
+                monitor.Sample();
+                reject(new Error(IntegrationTestDriver.BudgetExceededMessage(id, remaining, monitor.StalledMs, Date.now() - startedAt)));
+            }, remaining);
         });
         try {
             await Promise.race([fn(checkCtx), timeout]);
@@ -351,7 +392,28 @@ export class IntegrationTestDriver extends BaseTestDriver {
             if (timer) {
                 clearTimeout(timer);
             }
+            monitor.Stop();
         }
+    }
+
+    /**
+     * Failure message for a check that outlived the remaining run budget. A suspension is reported
+     * only when the stall explains the overrun: `elapsedMs - stalledMs < remainingMs`, i.e. the check
+     * would have finished inside its budget had the process been running. Otherwise the check is a
+     * hung check, and any stall that was measured is appended as a note.
+     */
+    public static BudgetExceededMessage(id: string, remainingMs: number, stalledMs: number, elapsedMs: number): string {
+        const hung = `check '${id}' exceeded the ${remainingMs}ms remaining run budget (hung check)`;
+        if (stalledMs <= 0) {
+            return hung;
+        }
+        if (elapsedMs - stalledMs >= remainingMs) {
+            return `${hung} (also stalled ${Math.round(stalledMs / 1000)}s)`;
+        }
+        return `check '${id}' exceeded the ${remainingMs}ms remaining run budget, but the process did not run for ` +
+            `${Math.round(stalledMs / 1000)}s of that time (host sleep, SIGSTOP, or a synchronous block of the event ` +
+            `loop) — not a hung check. Keep the host awake for the whole run (on macOS the mj test CLI holds a ` +
+            `caffeinate assertion; a closed lid or a forced sleep still suspends it).`;
     }
 
     /**

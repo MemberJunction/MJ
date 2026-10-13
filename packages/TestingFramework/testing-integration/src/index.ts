@@ -6,6 +6,7 @@
  */
 export * from './config';
 export * from './tiers';
+export * from './tier-scope';
 export * from './instrumented-cache';
 export * from './test-runner';
 export * from './bootstrap';
@@ -24,6 +25,7 @@ export * from './fls-fixture';
 // every bundle on this registry. This framework package deliberately ships content-free.
 export * from './types';
 export * from './IntegrationTestDriver';
+export * from './suspension-monitor';
 
 // The @RegisterClass decorator on IntegrationTestDriver fires via the export above.
 //

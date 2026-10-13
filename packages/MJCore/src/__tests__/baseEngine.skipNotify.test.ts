@@ -23,7 +23,7 @@ class TestEngine extends BaseEngine<TestEngine> {
     }
 
     public SetConfigsForTest(configs: BaseEnginePropertyConfig[]): void {
-        (this as unknown as { _metadataConfigs: BaseEnginePropertyConfig[] })._metadataConfigs = configs;
+        this.AdoptConfigs(configs);
     }
 
     public async ProcessEntityEventForTest(event: BaseEntityEvent): Promise<void> {

@@ -26,7 +26,7 @@ class ItemsEngine extends BaseEngine<ItemsEngine> {
     }
 
     public UseConfigs(configs: BaseEnginePropertyConfig[]): void {
-        (this as unknown as { _metadataConfigs: BaseEnginePropertyConfig[] })._metadataConfigs = configs;
+        this.AdoptConfigs(configs);
     }
 
     public Handle(event: BaseEntityEvent): Promise<boolean> {
@@ -37,7 +37,11 @@ class ItemsEngine extends BaseEngine<ItemsEngine> {
     // one also rebinds the provider, which is not what this test is about).
     protected override async cloneEntityForCache(source: BaseEntity): Promise<BaseEntity | null> {
         const id = (source as unknown as { ID: string }).ID;
-        return createdItem(id, source.ProviderToUse as DatabaseProviderBase).baseEntity;
+        const provider = source.ProviderToUse;
+        if (!(provider instanceof DatabaseProviderBase)) {
+            throw new Error('the cached entity must be bound to a database provider');
+        }
+        return createdItem(id, provider).baseEntity;
     }
 }
 

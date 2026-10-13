@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { UserInfo } from '@memberjunction/core';
+import type { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { IRecordProcessor, RecordProcessorContext, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import { InferProcessor } from '../processors/InferProcessor';
@@ -31,9 +31,9 @@ class MockInferHookSubclass extends InferProcessor {
 // Register with ClassFactory under a unique key
 RegisterClass(InferProcessor, 'MockInferHookSubclass')(MockInferHookSubclass);
 
-describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
+describe('InferProcessor Lifecycle Hooks', () => {
     it('allows subclasses to override beforeWriteBack and invokes it in WriteBackProcessor', async () => {
-        const processor = new MockInferHookSubclass('prompt-123');
+        const processor = new MockInferHookSubclass('prompt-123', undefined, undefined, null);
         const mockInner: IRecordProcessor = {
             ProcessRecord: async () => ({
                 Status: 'Succeeded',
@@ -47,8 +47,15 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
         });
 
         const writeBackProc = new WriteBackProcessor(processor, { fields: { TargetField: '$.foo' } }, true);
+        // A dry-run write-back reads only the processed record's entity metadata: Name and Fields[].Name. EntityInfo is
+        // a class with a constructor and many required members, so this partial double needs the widening cast.
+        const widgets = { Name: 'Widgets', Fields: [{ Name: 'TargetField' }] } as unknown as EntityInfo;
+        const provider: Pick<IMetadataProvider, 'EntityByID'> = {
+            EntityByID: (id: string) => (id === 'ent-1' ? widgets : undefined),
+        };
         const context: RecordProcessorContext = {
             contextUser: {} as UserInfo,
+            provider: provider as IMetadataProvider,
             recordProcessID: 'rp-1',
             entityID: 'ent-1',
         };
@@ -57,8 +64,10 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
             RecordID: 'rec-1',
         };
 
-        await writeBackProc.ProcessRecord(record, context);
+        const result = await writeBackProc.ProcessRecord(record, context);
         expect(processor.beforeWriteBackCalled).toBe(true);
+        expect(result.Status).toBe('Succeeded');
+        expect(result.ResultPayload).toEqual({ output: { foo: 'bar' }, writeBack: { updatedRecord: false, dryRun: true, previewFields: { TargetField: 'bar' } } });
     });
 
     it('resolves custom subclass via ClassFactory using DataFeatureSpec.ProcessorExtensionKey', () => {

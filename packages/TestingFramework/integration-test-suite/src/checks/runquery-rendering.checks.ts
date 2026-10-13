@@ -683,7 +683,8 @@ function withPathEverywhere(definition: RenderQueryDefinition, path: string): Re
 async function setupRenderFixtures(ctx: IntegrationCheckContext): Promise<void> {
     await CreateRenderTable(ctx);
     const fixtures: RenderFixtures = renderFixtures = {
-        Category: await CreateRenderCategory(ctx.User),
+        Provider: ctx.Provider,
+        Category: await CreateRenderCategory(ctx.Provider, ctx.User),
         Queries: new Map(),
         Variants: []
     };

@@ -13,7 +13,7 @@
  * components and the form and panel rows that use them.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { PlatformSQL } from '@memberjunction/core';
+import type { EntityInfo, PlatformSQL } from '@memberjunction/core';
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -116,7 +116,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...actual, RunView: StubRunView, LogError: vi.fn() };
 });
 
-vi.mock('../custom/util.js', () => ({ EmbedTextLocalHelper: vi.fn() }));
+vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { EmbedTextLocalForEntity: vi.fn() } }));
 
 vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
@@ -218,7 +218,8 @@ function use(componentID: string, scope: string, userID: string | null, entity: 
 
 /** The component as loaded, for a caller, matching the stored COMP-1 until a test changes it. */
 function make(caller: StubCaller | null, over: Partial<StubHooks> = {}): StubHooks {
-    const e = new MJComponentEntityServer() as unknown as StubHooks;
+    // The generated base is stubbed below, so the EntityInfo its constructor takes is never read.
+    const e = new MJComponentEntityServer({} as EntityInfo) as unknown as StubHooks;
     e.ContextCurrentUser = caller;
     Object.assign(e, over);
     return e;

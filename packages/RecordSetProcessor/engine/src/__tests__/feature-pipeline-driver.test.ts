@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { KnowledgeHubMetadataEngine, type MJFeaturePipelineTypeEntity } from '@memberjunction/core-entities';
@@ -12,8 +12,9 @@ import {
     type DataFeatureSpec,
     type FeaturePipelineDriverCapabilities,
     type FeaturePipelineFieldValueLookup,
+    type RecordFeatureValuesOutcome,
 } from '@memberjunction/feature-pipelines';
-import { InferProcessor } from '../processors/InferProcessor';
+import { InferProcessor, type FeatureValueWriteParams } from '../processors/InferProcessor';
 import {
     BaseFeaturePipelineDriver,
     type FeaturePipelineComputeRequest,
@@ -100,9 +101,9 @@ class RecordingProcessor extends InferProcessor {
 /** Captures what reaches the history hook. */
 class HistoryCapturingProcessor extends InferProcessor {
     public HistoryParams: Array<Record<string, unknown>> = [];
-    protected override async recordFeatureValuesHistory(params: Parameters<InferProcessor['recordFeatureValuesHistory']>[0]): Promise<void> {
+    protected override async UpsertFeatureValues(params: FeatureValueWriteParams): Promise<RecordFeatureValuesOutcome | null> {
         this.HistoryParams.push({ ...params });
-        return super.recordFeatureValuesHistory(params);
+        return super.UpsertFeatureValues(params);
     }
 }
 
@@ -147,9 +148,18 @@ const LLM_ROW = pipelineTypeRow({ Name: 'LLM', DriverClass: 'LLMFeaturePipelineD
 const HASH_ON_NEXT_WITH_SPEC = '464618d69ef78d5fe369cb9a1f5a32b79fb54cc4586417525117e4c2cc6f4fa7';
 const HASH_ON_NEXT_WITHOUT_SPEC = '851bd19d440ee5324b4fd5c133145319bdaefcd631e28b021bbd5b24bac1d015';
 
+/** What a history write that inserted every output returns. */
+const UPSERTED: RecordFeatureValuesOutcome = { Upserted: 1, Unchanged: 0, Previous: {} };
+
 describe('Feature Pipeline driver seam', () => {
+    /**
+     * A provider with no entity metadata: every lookup by entity ID answers undefined, as the processor's field and
+     * value lookups see when the context carries no metadata for the entity (a partial test double).
+     */
+    const noEntityMetadata = { EntityByID: () => undefined } as unknown as IMetadataProvider;
     const context: RecordProcessorContext = {
         contextUser: {} as UserInfo,
+        provider: noEntityMetadata,
         recordProcessID: 'RP-1',
         entityID: 'ENT-1',
         processRunID: 'RUN-1',
@@ -163,7 +173,7 @@ describe('Feature Pipeline driver seam', () => {
     let catalogRows: MJFeaturePipelineTypeEntity[];
     let executePrompt: ReturnType<typeof vi.fn>;
     let catalogConfig: ReturnType<typeof vi.spyOn>;
-    let recordFeatureValues: ReturnType<typeof vi.spyOn>;
+    let recordFeatureValues: MockInstance<FeatureValueCacheService['RecordFeatureValues']>;
 
     beforeEach(() => {
         catalogRows = [LLM_ROW];
@@ -173,7 +183,7 @@ describe('Feature Pipeline driver seam', () => {
         vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'FeaturePipelineTypes', 'get').mockImplementation(() => catalogRows);
         executePrompt = vi.fn(async () => ({ success: true, result: { seniority: 'Director' }, promptRun: { ID: 'PROMPT-RUN-1' } }));
         vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockImplementation(executePrompt);
-        recordFeatureValues = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue();
+        recordFeatureValues = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
     });
 
     // ================================================================
@@ -182,7 +192,7 @@ describe('Feature Pipeline driver seam', () => {
 
     describe('ResolveDriver', () => {
         it('resolves a spec without PipelineType to the LLM driver, once per processor instance', async () => {
-            const processor = new ProbeProcessor(PROMPT_ID, undefined, buildSpec());
+            const processor = new ProbeProcessor(PROMPT_ID, undefined, buildSpec(), null);
             const first = await processor.Resolve(context);
             const second = await processor.Resolve(context);
 
@@ -194,17 +204,17 @@ describe('Feature Pipeline driver seam', () => {
 
         it('resolves PipelineType LLM in any case, trimmed, to the LLM driver', async () => {
             for (const pipelineType of ['LLM', 'llm', 'Llm', '  lLm  ']) {
-                const processor = new ProbeProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: pipelineType }));
+                const processor = new ProbeProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: pipelineType }), null);
                 expect(await processor.Resolve(context)).toBeInstanceOf(LLMFeaturePipelineDriver);
             }
         });
 
         it('resolves LLM when the catalog has no LLM row', async () => {
             catalogRows = [];
-            const processor = new ProbeProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'LLM' }));
+            const processor = new ProbeProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'LLM' }), null);
             expect(await processor.Resolve(context)).toBeInstanceOf(LLMFeaturePipelineDriver);
 
-            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec()).ProcessRecord(makeRecord(), context);
+            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec(), null).ProcessRecord(makeRecord(), context);
             expect(result.Status).toBe('Succeeded');
         });
 
@@ -212,12 +222,14 @@ describe('Feature Pipeline driver seam', () => {
             vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'FeaturePipelineTypes', 'get').mockImplementation(() => {
                 throw new Error('permission constrained');
             });
-            const processor = new ProbeProcessor(PROMPT_ID, undefined, buildSpec());
+            const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const processor = new ProbeProcessor(PROMPT_ID, undefined, buildSpec(), null);
             expect(await processor.Resolve(context)).toBeInstanceOf(LLMFeaturePipelineDriver);
+            expect(consoleError).toHaveBeenCalledWith('InferProcessor: MJ: Feature Pipeline Types could not be read (permission constrained); running as LLM');
         });
 
         it('fails the record, without running the prompt, when the type is not in the catalog', async () => {
-            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'Decision' })).ProcessRecord(makeRecord(), context);
+            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'Decision' }), null).ProcessRecord(makeRecord(), context);
 
             expect(result.Status).toBe('Failed');
             expect(result.ErrorMessage).toBe("Feature Pipeline type 'Decision' was not found in MJ: Feature Pipeline Types.");
@@ -228,7 +240,7 @@ describe('Feature Pipeline driver seam', () => {
             vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'FeaturePipelineTypes', 'get').mockImplementation(() => {
                 throw new Error('permission constrained');
             });
-            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'Decision' })).ProcessRecord(makeRecord(), context);
+            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'Decision' }), null).ProcessRecord(makeRecord(), context);
 
             expect(result.Status).toBe('Failed');
             expect(result.ErrorMessage).toContain("Feature Pipeline type 'Decision' could not be resolved");
@@ -237,7 +249,7 @@ describe('Feature Pipeline driver seam', () => {
 
         it('fails the record when the type is Disabled', async () => {
             catalogRows = [LLM_ROW, pipelineTypeRow({ Name: 'Decision', DriverClass: 'FeaturePipelineDriverTest_ConfidenceStub', Status: 'Disabled' })];
-            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'decision' })).ProcessRecord(makeRecord(), context);
+            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'decision' }), null).ProcessRecord(makeRecord(), context);
 
             expect(result.Status).toBe('Failed');
             expect(result.ErrorMessage).toBe("Feature Pipeline type 'Decision' is Disabled; only an Active type can run.");
@@ -245,16 +257,19 @@ describe('Feature Pipeline driver seam', () => {
 
         it('fails the record when the DriverClass is not registered', async () => {
             catalogRows = [LLM_ROW, pipelineTypeRow({ Name: 'Decision', DriverClass: 'FeaturePipelineDriverTest_NoSuchDriver', Status: 'Active' })];
-            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'Decision' })).ProcessRecord(makeRecord(), context);
+            // The ClassFactory warns that it fell back to the base driver; the processor then rejects that fallback
+            const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'Decision' }), null).ProcessRecord(makeRecord(), context);
 
             expect(result.Status).toBe('Failed');
             expect(result.ErrorMessage).toContain("names DriverClass 'FeaturePipelineDriverTest_NoSuchDriver', which is not registered");
+            expect(consoleWarn.mock.calls.some(([m]) => String(m).includes("with key 'FeaturePipelineDriverTest_NoSuchDriver'"))).toBe(true);
         });
 
         it('fails the record when the ClassFactory returns no driver at all', async () => {
             catalogRows = [LLM_ROW, pipelineTypeRow({ Name: 'Decision', DriverClass: 'FeaturePipelineDriverTest_ConfidenceStub', Status: 'Active' })];
             vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockReturnValue(null);
-            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'Decision' })).ProcessRecord(makeRecord(), context);
+            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'Decision' }), null).ProcessRecord(makeRecord(), context);
 
             expect(result.Status).toBe('Failed');
             expect(result.ErrorMessage).toContain('which is not registered');
@@ -270,7 +285,7 @@ describe('Feature Pipeline driver seam', () => {
                     { Ref: '$.topics', Name: 'Topics', Constraint: { Type: 'boolean', OnViolation: 'fail' }, Target: { Mode: 'tags', RootTagID: 'ROOT-1' } },
                 ],
             });
-            const result = await new InferProcessor(PROMPT_ID, undefined, spec).ProcessRecord(makeRecord(), context);
+            const result = await new InferProcessor(PROMPT_ID, undefined, spec, null).ProcessRecord(makeRecord(), context);
 
             expect(result.Status).toBe('Failed');
             expect(result.ErrorMessage).toContain("Feature Pipeline type 'Yes/No' cannot produce every output");
@@ -283,7 +298,7 @@ describe('Feature Pipeline driver seam', () => {
         it('fails every record of a cached batch, without throwing, when resolution fails', async () => {
             const lookup = vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
             const spec = buildSpec({ PipelineType: 'Decision', Caching: { Cacheable: true, KeyFields: ['Title'] } });
-            const results = await new InferProcessor(PROMPT_ID, undefined, spec).ProcessBatch([makeRecord('r1'), makeRecord('r2')], context);
+            const results = await new InferProcessor(PROMPT_ID, undefined, spec, null).ProcessBatch([makeRecord('r1'), makeRecord('r2')], context);
 
             expect(results.get('r1')).toEqual({ Status: 'Failed', ErrorMessage: "Feature Pipeline type 'Decision' was not found in MJ: Feature Pipeline Types." });
             expect(results.get('r2')?.Status).toBe('Failed');
@@ -291,7 +306,7 @@ describe('Feature Pipeline driver seam', () => {
         });
 
         it('fails every record of an uncached batch, without throwing, when resolution fails', async () => {
-            const results = await new InferProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'Decision' }))
+            const results = await new InferProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'Decision' }), null)
                 .ProcessBatch([makeRecord('r1'), makeRecord('r2')], context);
 
             expect(results.get('r1')?.Status).toBe('Failed');
@@ -343,7 +358,7 @@ describe('Feature Pipeline driver seam', () => {
                 order.push('ExecutePrompt');
                 return { success: true, result: { seniority: 'Director' }, promptRun: { ID: 'PROMPT-RUN-1' } };
             });
-            const processor = new RecordingProcessor(PROMPT_ID, undefined, buildSpec());
+            const processor = new RecordingProcessor(PROMPT_ID, undefined, buildSpec(), null);
             const record = makeRecord();
             const result = await processor.ProcessRecord(record, context);
 
@@ -381,7 +396,7 @@ describe('Feature Pipeline driver seam', () => {
 
         it('returns the failure, with the prompt run, and skips afterPromptExecute when the prompt fails', async () => {
             executePrompt.mockResolvedValue({ success: false, errorMessage: 'model unavailable', promptRun: { ID: 'PROMPT-RUN-2' } });
-            const processor = new RecordingProcessor(PROMPT_ID, undefined, buildSpec());
+            const processor = new RecordingProcessor(PROMPT_ID, undefined, buildSpec(), null);
             const result = await processor.ProcessRecord(makeRecord(), context);
 
             expect(result).toEqual({ Status: 'Failed', ErrorMessage: 'model unavailable', AIPromptRunID: 'PROMPT-RUN-2' });
@@ -411,7 +426,7 @@ describe('Feature Pipeline driver seam', () => {
     // ================================================================
 
     describe('computePromptVersionHash', () => {
-        const probe = new ProbeProcessor(PROMPT_ID);
+        const probe = new ProbeProcessor(PROMPT_ID, undefined, undefined, null);
 
         it('is identical for a spec without PipelineType and one naming LLM in any case', () => {
             const withoutType = probe.Hash(mockPrompt, buildSpec());
@@ -440,23 +455,23 @@ describe('Feature Pipeline driver seam', () => {
     describe('Confidence', () => {
         it('passes the driver\'s confidence to history, by output name', async () => {
             catalogRows = [LLM_ROW, pipelineTypeRow({ Name: 'Decision', DriverClass: 'FeaturePipelineDriverTest_ConfidenceStub', Status: 'Active' })];
-            const processor = new HistoryCapturingProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'Decision' }));
+            const processor = new HistoryCapturingProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'Decision' }), null);
             const result = await processor.ProcessRecord(makeRecord(), context);
 
             expect(result.Status).toBe('Succeeded');
             expect(result.Confidence).toEqual({ Seniority: 0.87 });
-            expect(processor.HistoryParams[0].outputConfidence).toEqual({ Seniority: 0.87 });
-            const outputs = recordFeatureValues.mock.calls[0][0].outputs as Array<{ featureName: string; confidence?: number | null }>;
-            expect(outputs).toEqual([expect.objectContaining({ featureName: 'Seniority', confidence: 0.87 })]);
+            expect(processor.HistoryParams[0].OutputConfidence).toEqual({ Seniority: 0.87 });
+            const outputs = recordFeatureValues.mock.calls[0][0].Outputs;
+            expect(outputs).toEqual([expect.objectContaining({ FeatureName: 'Seniority', Confidence: 0.87 })]);
         });
 
         it('passes no confidence to history for the LLM driver', async () => {
-            const processor = new HistoryCapturingProcessor(PROMPT_ID, undefined, buildSpec());
+            const processor = new HistoryCapturingProcessor(PROMPT_ID, undefined, buildSpec(), null);
             const result = await processor.ProcessRecord(makeRecord(), context);
 
             expect(result.Status).toBe('Succeeded');
-            expect('outputConfidence' in processor.HistoryParams[0]).toBe(false);
-            const outputs = recordFeatureValues.mock.calls[0][0].outputs as Array<{ featureName: string; confidence?: number | null }>;
+            expect('OutputConfidence' in processor.HistoryParams[0]).toBe(false);
+            const outputs = recordFeatureValues.mock.calls[0][0].Outputs;
             expect(outputs[0].confidence).toBeUndefined();
         });
     });
@@ -508,7 +523,7 @@ describe('Feature Pipeline driver seam', () => {
                 provider: mockProvider as unknown as IMetadataProvider,
             };
 
-            const processor = new ProbeProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'CustomType' }));
+            const processor = new ProbeProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'CustomType' }), null);
             await processor.Resolve(ctxWithEntity);
 
             expect(LookupCapturingDriver.LastLookup).toBeDefined();
@@ -530,7 +545,7 @@ describe('Feature Pipeline driver seam', () => {
                 entityID: undefined,
             };
 
-            const processor = new ProbeProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'CustomType' }));
+            const processor = new ProbeProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'CustomType' }), null);
             await processor.Resolve(ctxNoEntity);
 
             expect(LookupCapturingDriver.LastLookup).toBeUndefined();

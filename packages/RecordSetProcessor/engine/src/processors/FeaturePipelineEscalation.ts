@@ -18,9 +18,18 @@ import type { RecordProcessorContext, RecordRef, RecordResult } from '@memberjun
 import {
     type DataFeatureOutput,
     type DataFeatureSpec,
+    type FeaturePipelinePinData,
     FindEscalationTargetRowProblem,
     FindEscalationTargetSpecProblem,
 } from '@memberjunction/feature-pipelines';
+
+/** What, besides the record and feature, keys a computed Feature Value: the pin it was computed under and its input hash. */
+export interface FeatureValueKeyParts {
+    /** The pipeline's pin: prompt version hash, primary model, parameters hash and spec hash. */
+    Pin: FeaturePipelinePinData;
+    /** SHA-256 of the record's normalised inputs (the pipeline's cache key hash). */
+    InputHash: string | null;
+}
 
 /** A Decision pipeline's escalation settings (`DataFeatureSpec.Escalation`). */
 export type FeaturePipelineEscalationSettings = NonNullable<DataFeatureSpec['Escalation']>;
@@ -40,6 +49,8 @@ export interface EscalationTargetProcessor {
     WritesHistory: boolean;
     /** The target's normal batch path: validation and violation policy apply exactly as when it runs on its own. */
     ProcessBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>>;
+    /** The pin and input hash the target computed a record's answer under in its last batch; undefined when it did not succeed. */
+    FeatureValueKeyOf(recordID: string): FeatureValueKeyParts | undefined;
 }
 
 /** Builds an Infer Feature Pipeline's processor from its `MJ: Record Processes` row. */
@@ -77,6 +88,10 @@ export interface EscalatedAnswer {
     ConstraintHash: string;
     /** The target's own Dedup Cache entry for the answer, when the target caches. */
     FeatureValueCacheID?: string;
+    /** The target's pin the answer was computed under (its prompt version, primary model and parameters key the answer's Feature Values). */
+    Pin: FeaturePipelinePinData;
+    /** The target's input hash for the record (its cache key hash). */
+    InputHash: string | null;
     /** For the history row's reasoning: that the record escalated, to which pipeline, and from what confidence. */
     Note: string;
     /** Why the record escalated (`Decision confidence below 0.7 (IsVIP 0.4)`), for a failure message. */
@@ -266,7 +281,22 @@ export class FeaturePipelineEscalator {
                 AIPromptRunID: result?.AIPromptRunID,
             };
         }
+        const key = target.Processor.FeatureValueKeyOf(request.Record.RecordID);
+        if (!key) {
+            // a target reports success only after its Feature Value write (InferProcessor.WithFeatureValues), so a
+            // success without a key means the target is not keying its answers: the answer cannot be keyed either
+            return {
+                ErrorMessage: DescribeEscalationFailure(
+                    this.escalationReason(request.BelowFloor),
+                    target.Name,
+                    'it returned no Feature Value key (pin and input hash) for the record'
+                ),
+                AIPromptRunID: result.AIPromptRunID,
+            };
+        }
         return {
+            Pin: key.Pin,
+            InputHash: key.InputHash,
             Payload: result.ResultPayload,
             TargetOutputs: target.Processor.Spec?.Outputs ?? [],
             PromptID: target.Processor.PromptID,

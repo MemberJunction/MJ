@@ -136,6 +136,12 @@ await txGroup.Submit(); // Executes all items in a single BEGIN/COMMIT block
 
 The `PostgreSQLTransactionGroup` supports variable dependencies between transaction items, allowing later items to reference values produced by earlier items in the same transaction.
 
+The group is all-or-nothing, with the same rule as the SQL Server group: an item whose statement
+throws, a save that returns no row, or a delete whose returned row does not report the record's
+primary key (the generated delete function answers a no-op with NULL keys) fails the whole group —
+`ROLLBACK`, no `COMMIT`, `Submit()` false, every item reported failed — on the sequential paths and
+the batched path alike. Each item's rows are processed with its own entity's provider.
+
 #### Nested transactions (SAVEPOINTs)
 
 `BeginTransaction()` / `CommitTransaction()` / `RollbackTransaction()` use the shared `GenericDatabaseProvider` depth machine. PostgreSQL supplies the physical hooks (acquire client + `BEGIN`, `COMMIT`/`ROLLBACK` + release) and savepoint names `mj_sp_n`:

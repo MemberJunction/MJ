@@ -221,6 +221,52 @@ describe('MJTemplateEntityExtended', () => {
             expect(result).toBeDefined();
             expect(result.Priority).toBe(2);
         });
+
+        it('breaks a priority tie by the oldest row, then the lowest ID, whatever order the rows arrived in', () => {
+            const newer = { ID: 'b', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-02-01') };
+            const older = { ID: 'c', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-01-01') };
+            const olderLowerID = { ID: 'a', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-01-01') };
+            template.Content = [newer, older] as never[];
+            expect(template.GetHighestPriorityContent()).toBe(older);
+            template.Content = [older, newer] as never[];
+            expect(template.GetHighestPriorityContent()).toBe(older);
+            template.Content = [older, olderLowerID] as never[];
+            expect(template.GetHighestPriorityContent()).toBe(olderLowerID);
+        });
+
+        it('breaks an ID tie the same way whatever the ID case (SQL Server upper, PostgreSQL lower) and locale', () => {
+            const at = new Date('2026-01-01');
+            const upperB = { ID: 'B0000000-0000-0000-0000-000000000000', Type: 'Text', Priority: 1, __mj_CreatedAt: at };
+            const lowerA = { ID: 'a0000000-0000-0000-0000-000000000000', Type: 'Text', Priority: 1, __mj_CreatedAt: at };
+            // ordinal on the raw IDs would pick 'B…' (upper-case sorts before lower-case); normalised, 'a…' wins
+            expect(MJTemplateEntityExtended.SelectHighestPriorityContent([upperB, lowerA])).toBe(lowerA);
+            expect(MJTemplateEntityExtended.SelectHighestPriorityContent([lowerA, upperB])).toBe(lowerA);
+        });
+
+        it('returns undefined when the template has no content', () => {
+            template.Content = [];
+            expect(template.GetHighestPriorityContent()).toBeUndefined();
+            expect(template.GetHighestPriorityContent('HTML')).toBeUndefined();
+        });
+
+        it('does not reorder Content', () => {
+            const rows = [createContent('HTML', 5), createContent('HTML', 1)];
+            template.Content = rows as never[];
+            template.GetHighestPriorityContent();
+            expect(template.Content.map((c) => c.Priority)).toEqual([5, 1]);
+        });
+    });
+
+    describe('SelectHighestPriorityContent', () => {
+        it('selects the same row as GetHighestPriorityContent', () => {
+            const rows = [
+                { ID: 'x', Type: 'Text', Priority: 2, __mj_CreatedAt: new Date('2026-01-01') },
+                { ID: 'y', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-03-01') },
+            ];
+            template.Content = rows as never[];
+            expect(MJTemplateEntityExtended.SelectHighestPriorityContent(rows)).toBe(template.GetHighestPriorityContent());
+            expect(MJTemplateEntityExtended.SelectHighestPriorityContent(rows)?.ID).toBe('y');
+        });
     });
 
     // ---------------------------------------------------------------

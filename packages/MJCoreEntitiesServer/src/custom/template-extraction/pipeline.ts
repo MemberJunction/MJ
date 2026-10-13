@@ -3,7 +3,8 @@
 //
 // Orchestrates:
 //   1. PARSE  — deterministic AST extraction (parser.ts)
-//   2. ENRICH — AI fills in descriptions (best-effort, non-fatal)
+//   2. ENRICH — AI fills in descriptions (best-effort, non-fatal; skipped when
+//      `skipAIEnrichment` is set)
 //   3. MERGE  — deterministic wins, AI fills gaps
 //
 // Produces MergedTemplateParameter[] ready for database sync.
@@ -25,18 +26,22 @@ import type {
 /**
  * Runs the full template parameter extraction pipeline:
  *   1. PARSE  — deterministic Nunjucks AST analysis
- *   2. ENRICH — AI generates descriptions (best-effort)
+ *   2. ENRICH — AI generates descriptions (best-effort; skipped when `skipAIEnrichment` is set)
  *   3. MERGE  — combine deterministic + AI results
  *
  * @param templateText  The raw Nunjucks template content
  * @param templateName  The template name (used for self-extraction skip)
  * @param contextUser   Server-side user context
+ * @param skipAIEnrichment  When true, stage 2 is skipped: no model call is made and parameters keep
+ *                      their deterministic (heuristic) descriptions. Required, so a caller that
+ *                      forgets to resolve the opt-out is a compile error, not a silent model call.
  * @returns Array of merged parameters ready for sync, plus any parse warnings
  */
 export async function RunTemplateExtractionPipeline(
     templateText: string,
     templateName: string,
     contextUser: UserInfo,
+    skipAIEnrichment: boolean,
 ): Promise<TemplateExtractionResult> {
     // ── STAGE 1: PARSE ──
     const parseResult = ParseTemplateParameters(templateText);
@@ -55,7 +60,7 @@ export async function RunTemplateExtractionPipeline(
     // ── STAGE 2: ENRICH (best-effort, non-fatal) ──
     let enrichedDescriptions: Map<string, string> = new Map();
 
-    if (userParams.length > 0) {
+    if (userParams.length > 0 && !skipAIEnrichment) {
         enrichedDescriptions = await runAIEnrichment(
             templateText,
             userParams,

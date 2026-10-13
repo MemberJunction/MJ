@@ -107,6 +107,19 @@ mj test suite --name "Suite" --fail-fast
 mj test suite --name "Suite" --sequence-start 3 --sequence-end 7
 ```
 
+### Host sleep guard (`run` and `suite`)
+
+On macOS, `mj test run` and `mj test suite` keep the machine from idle-sleeping for the length of
+the command: they start `/usr/bin/caffeinate -i -s -w <pid>` and print one line, `Holding a host
+sleep assertion for this run (caffeinate -i -s -w <pid>)`. A sleep in the middle of a run freezes
+the runner, the database container and MJAPI; on wake every timer that expired during the sleep
+fires at once, so checks in flight fail as hung and SQL requests time out although nothing is
+wrong. The assertion is released when the command finishes, and `-w <pid>` ends it with the process
+however the run exits, so a crashed or killed run never leaves the machine pinned awake. Other
+platforms get no guard (servers and CI do not idle-sleep). A missing or failing `caffeinate` prints
+a warning and the run continues without the guard. Implementation: `HostSleepGuard` in
+[`src/lib/host-sleep-guard.ts`](src/lib/host-sleep-guard.ts).
+
 ### list -- List Tests and Suites
 
 ```bash
@@ -166,6 +179,7 @@ Configuration includes database connection settings for the MJ Provider.
 | `SpinnerManager` | Manages ora spinners for long-running operations |
 | `VariableParser` | Parses `--var key=value` CLI arguments into typed variables |
 | `MJProvider` | Initializes the MemberJunction SQL Server data provider |
+| `HostSleepGuard` | Holds a macOS sleep assertion for the length of a `run` / `suite` command |
 
 ## Dependencies
 

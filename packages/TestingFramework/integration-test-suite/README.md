@@ -120,6 +120,29 @@ gates the one-process catalog can't provide, and they are **not** dispatched by 
 npx tsx packages/TestingFramework/integration-test-suite/rigs/runview-matrix-tests.ts
 ```
 
+### Feature-pipeline and transaction rigs (`rigs/feature-pipelines/`)
+
+These drive one scenario against the real database and print `PASS`/`FAIL` lines. Unless noted, every one
+of them follows the exit-code contract of [`rigs/lib/rig-cli.ts`](rigs/lib/rig-cli.ts): **0** = every
+expectation held, **1** = an expectation failed, **2** = bootstrap or usage error. Run them on a private
+database (one database per agent): the SQL Server rigs read physical rows and DMVs, and several create
+triggers or hold locks.
+
+| Rig | Needs | Mutates |
+|---|---|---|
+| `run-feature-pipeline.ts <RecordProcessID> [--dry-run] [--trigger …] [--records a,b] [--backfill]` | any database; live model credentials when the pipeline's prompt runs. Exit 0 = the run returned (any status) | yes — the pipeline's Feature Values (none with `--dry-run`) |
+| `edit-template-and-run.ts <RecordProcessID> <RecordID> [--revert]` | any database; live model credentials (runs the pipeline twice) | yes — appends (or `--revert` removes) a marker in the prompt's highest-priority template content |
+| `delete-prompt-cascade.ts [--via direct\|group\|batched] [--force-failure]` | SQL Server (mssql pool) | scratch AI Prompts only, deleted at the end; `--force-failure` also creates and drops one trigger |
+| `cascade-delete-lock-race.ts [--mode joined\|owned] [--flip lock-hints]` | SQL Server; two sessions on one pool | one scratch AI Prompt; `--flip lock-hints` is a mutation run that is expected to FAIL |
+| `joined-delete-rollback-guard.ts` | SQL Server | two scratch AI Prompts, deleted at the end |
+| `in-transaction-refresh-race.ts` | SQL Server (DMVs); the scenarios depend on `READ_COMMITTED_SNAPSHOT` | no — updates one Entity row inside a transaction it always rolls back |
+| `deferred-embeddings.ts` | SQL Server; the local embedding model (in-process, no credentials). Turns save-time AI prompts off for its own process | scratch queries and one scratch tag, deleted at the end |
+
+The rigs sit outside the package's `tsconfig` `include`, so `pnpm build` does not type-check them;
+`pnpm run check:rigs` (`tsconfig.rigs.json`) does, for this folder and `rigs/lib/rig-cli.ts`; it also runs as part of
+the package's `pnpm test` (so in CI's unit-test workflow), and the package's `turbo.json` makes every file in the
+package — rigs included — an input of that task.
+
 ## Further reading
 
 - [`docs/README.md`](docs/README.md) — **this suite's documentation home**: comprehensive per-sub-suite docs (cache, data-access, security, writes/transactions, AI, platform — mechanism, per-check inventory, tiers/transports, known pinned gaps) plus the [candidate test-catalog](docs/test-catalog.md)

@@ -38,6 +38,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
+import { DeterministicEntityFactory } from './deterministic-entity-factory';
 
 /** The saved query the paging + cache checks (QF5/QF6/QF7) reuse. */
 interface RunQueryFeatureFixtures {
@@ -70,7 +71,7 @@ const ADHOC_SIX_ROWS =
  * mid-Setup crash still leaves Teardown a reference to whatever was created (partial-safe).
  */
 export async function CreateRunQueryFeatureFixtures(ctx: IntegrationCheckContext): Promise<void> {
-    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const md = ctx.Provider; // one provider for the category and its queries
     const schema = ctx.Schema ?? '__mj';
     const user = ctx.User;
 
@@ -85,7 +86,7 @@ export async function CreateRunQueryFeatureFixtures(ctx: IntegrationCheckContext
     // A stable, deterministically ORDERED read: single uniqueidentifier column, hundreds of rows.
     // ORDER BY ID makes page1/page2 disjointness deterministic within a platform. (Follows the
     // `runquery-cache` precedent of referencing a core __mj view by unquoted schema.view.)
-    const pageQuery = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', user);
+    const pageQuery = await DeterministicEntityFactory.NewQuery(ctx.Provider, user);
     pageQuery.Name = `RunQuery Features Page ${Date.now()}`;
     pageQuery.CategoryID = category.ID;
     pageQuery.SQL = `SELECT ID FROM ${schema}.vwEntities ORDER BY ID`;
@@ -374,14 +375,14 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
         Name: 'QF12 (RQ-F2): two same-named queries — CategoryPath and CategoryID each disambiguate to the right one',
         Fn: async (ctx): Promise<void> => {
             const { PageQuery, Category } = requireFixtures();
-            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const md = ctx.Provider; // the same provider as the twin query it holds
             // A CHILD category holding a query with the SAME NAME as the fixture PageQuery.
             const child = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', ctx.User);
             child.Name = `QF12 Child ${Date.now()}`;
             child.ParentID = Category.ID;
             child.UserID = ctx.User.ID;
             Assert(await child.Save(), `QF12 child category save: ${child.LatestResult?.CompleteMessage}`);
-            const twin = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+            const twin = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
             try {
                 twin.Name = PageQuery.Name; // deliberate name collision
                 twin.CategoryID = child.ID;
@@ -418,8 +419,7 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const { Category } = requireFixtures();
             const schema = ctx.Schema ?? '__mj';
-            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
-            const q = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+            const q = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
             try {
                 q.Name = `QF13 Injection Probe ${Date.now()}`;
                 q.CategoryID = Category.ID;
@@ -456,8 +456,7 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const { Category } = requireFixtures();
             const schema = ctx.Schema ?? '__mj';
-            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
-            const q = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+            const q = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
             try {
                 q.Name = `QF14 Wildcard Probe ${Date.now()}`;
                 q.CategoryID = Category.ID;
@@ -489,8 +488,7 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const { Category } = requireFixtures();
             const schema = ctx.Schema ?? '__mj';
-            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
-            const q = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+            const q = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
             try {
                 q.Name = `QF15 Identifier Probe ${Date.now()}`;
                 q.CategoryID = Category.ID;

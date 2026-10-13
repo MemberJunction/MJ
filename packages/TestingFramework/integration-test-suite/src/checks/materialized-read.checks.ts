@@ -29,7 +29,7 @@
  * RequiresMutation-gated — they always run when the bundle is selected.
  */
 import { randomUUID } from 'node:crypto';
-import { RunQuery, RunView, Metadata, LogError } from '@memberjunction/core';
+import { RunQuery, RunView, LogError } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { QueryEngine } from '@memberjunction/core-entities';
 import type {
@@ -43,6 +43,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
+import { DeterministicEntityFactory } from './deterministic-entity-factory';
 
 /** Everything the bundle creates, held module-scoped so Teardown can clean up whatever Setup got to. */
 interface MaterializedReadFixtures {
@@ -77,7 +78,7 @@ export async function CreateMaterializedReadFixtures(ctx: IntegrationCheckContex
         console.log(`      → materialized-read SKIPPED (no assertions will run): no mssql pool on this run path — snapshot fabrication is T-SQL only`);
         return;
     }
-    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const md = ctx.Provider; // one provider for every fixture row (category, query, snapshot rows)
     const schema = ctx.Schema ?? '__mj';
     const user = ctx.User;
     const stamp = Date.now();
@@ -94,7 +95,7 @@ export async function CreateMaterializedReadFixtures(ctx: IntegrationCheckContex
 
     // 2) A single-row-filter template query (no top-level ORDER BY — an ordered query refuses to live). Saving a
     //    template query makes MJQueryEntityServer auto-extract the `marker` parameter (and the output QueryFields).
-    const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', user);
+    const query = await DeterministicEntityFactory.NewQuery(ctx.Provider, user);
     query.Name = `Materialized Read Probe ${stamp}`;
     query.CategoryID = category.ID;
     // `| sqlString` so the LIVE path (negative control) renders a quoted string literal; without it the value
@@ -153,7 +154,7 @@ export async function createMaterializedReadFixtures(ctx: IntegrationCheckContex
  * Template save normally auto-extracts both; create any missing piece so the bundle is deterministic regardless
  * of the extraction path on the credential-free lane.
  */
-async function ensureQueryMetadata(md: Metadata, user: UserInfo, queryID: string): Promise<void> {
+async function ensureQueryMetadata(md: IMetadataProvider, user: UserInfo, queryID: string): Promise<void> {
     const q = QueryEngine.Instance.Queries.find((x) => UUIDsEqual(x.ID, queryID));
     const haveFields = new Set((q?.QueryFields ?? []).map((f) => (f.Name ?? '').toLowerCase()));
     let seq = (q?.QueryFields ?? []).length;

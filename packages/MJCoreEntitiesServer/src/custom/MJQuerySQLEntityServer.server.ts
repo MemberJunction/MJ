@@ -9,6 +9,7 @@ import { MJQuerySQLEntity, QueryEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJQueryEntityServer } from './MJQueryEntityServer.server';
+import type { ISaveEnrichmentOptOut } from './saveEnrichmentOptOut';
 
 /**
  * Server-side subclass for MJ: Query SQLs.
@@ -23,7 +24,12 @@ import { MJQueryEntityServer } from './MJQueryEntityServer.server';
  * no force refresh needed.
  */
 @RegisterClass(BaseEntity, 'MJ: Query SQLs')
-export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
+export class MJQuerySQLEntityServer extends MJQuerySQLEntity implements ISaveEnrichmentOptOut {
+    /** When true, the parent-query re-extraction this save triggers skips the AI enrichment stage
+     *  (see `MJQueryEntityServer.SkipAIEnrichment`). Set it before `Save()`; left unset, the parent
+     *  query's own flag applies. The host switch (`SaveTimeAISettings`, `QueryParameters`) applies either way. */
+    public SkipAIEnrichment?: boolean;
+
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const saveResult = await super.Save(options);
         if (!saveResult) {
@@ -75,7 +81,7 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
         // will find the dialect variant via GetPlatformSQL().
         if (parentQuery.SQL && parentQuery.SQL.trim().length > 0) {
             LogStatus(`[MJQuerySQLEntityServer] Triggering re-extraction on "${parentQuery.Name}" — dialect variant saved for ${currentPlatform}`);
-            await parentQuery.RerunExtraction();
+            await parentQuery.RerunExtraction(this.SkipAIEnrichment);
         }
     }
 

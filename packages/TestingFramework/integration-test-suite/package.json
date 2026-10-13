@@ -9,7 +9,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc && tsc-alias -f",
-    "test": "vitest run",
+    "check:rigs": "tsc -p tsconfig.rigs.json",
+    "test": "vitest run && tsc -p tsconfig.rigs.json",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -68,6 +69,7 @@
     "@memberjunction/server-bootstrap-lite": "6.2.0-edge.3",
     "@memberjunction/sqlserver-dataprovider": "6.2.0-edge.3",
     "@memberjunction/storage": "6.2.0-edge.3",
+    "@memberjunction/tag-engine": "6.2.0-edge.3",
     "@memberjunction/task-graph": "6.2.0-edge.3",
     "@memberjunction/telephony-adapters": "6.2.0-edge.3",
     "@memberjunction/templates": "6.2.0-edge.3",

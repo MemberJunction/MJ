@@ -122,7 +122,8 @@ vi.mock('@memberjunction/templates', () => ({
             Templates: [
                 {
                     ID: 'tmpl-1',
-                    Content: [{ TemplateText: '{{Name}} - {{Description}}' }]
+                    Content: [{ TemplateText: '{{Name}} - {{Description}}' }],
+                    GetHighestPriorityContent() { return this.Content[0]; }
                 }
             ]
         }

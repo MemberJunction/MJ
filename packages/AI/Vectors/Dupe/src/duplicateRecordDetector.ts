@@ -48,7 +48,7 @@ import { CombineExtraFilters, EntityDocumentTemplateDataBuilder, EntityVectorSyn
 import { AIEngine } from "@memberjunction/aiengine";
 import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
-import type { MJTemplateEntityExtended, MJTemplateContentEntity } from "@memberjunction/core-entities";
+import type { MJTemplateEntityExtended } from "@memberjunction/core-entities";
 import {
     DuplicateReasoningProvider,
     DECISION_REASONING_PROVIDER_KEY,
@@ -352,12 +352,12 @@ export class DuplicateRecordDetector extends VectorBase {
             }
 
             const batchIDs = recordIDs.slice(offset, offset + batchSize);
-            const batchResults = await this.processBatch(
+            const batchResults = await this.ProcessBatch(
                 batchIDs, entityInfo, entityDocument, templateParser, duplicateRun.ID,
                 topK, concurrency, options, startTime, recordIDs.length, offset, totalMatchesFound, contextUser
             );
             // Retain a bounded sample for the response, and collect the auto-merge queue.
-            // Everything in batchResults.Results is already persisted (processBatch writes the
+            // Everything in batchResults.Results is already persisted (ProcessBatch writes the
             // Detail and Detail Match rows), so dropping the overflow loses no data — only the
             // in-memory copy that used to grow for the whole run.
             totalRecordsWithDuplicates += batchResults.Results.length;
@@ -860,7 +860,7 @@ export class DuplicateRecordDetector extends VectorBase {
      * @param contextUser - The user context for entity operations
      * @returns Combined results and match count for this batch
      */
-    private async processBatch(
+    protected async ProcessBatch(
         batchIDs: string[],
         entityInfo: EntityInfo,
         entityDocument: MJEntityDocumentEntity,
@@ -1341,7 +1341,10 @@ export class DuplicateRecordDetector extends VectorBase {
     ): Promise<string[]> {
         await TemplateEngineServer.Instance.Config(false, contextUser);
         const template = this.loadTemplate(entityDocument);
-        const templateContent = template.Content[0] as MJTemplateContentEntity;
+        const templateContent = template.GetHighestPriorityContent(); // the content the template renders
+        if (!templateContent) {
+            throw new Error(`Template ${template.ID} has no content records`);
+        }
         TemplateEngineServer.Instance.SetupNunjucks();
         if (records.length === 0) {
             return [];
@@ -1418,9 +1421,6 @@ export class DuplicateRecordDetector extends VectorBase {
 
         if (!template) {
             throw new Error(`Template not found for ID ${entityDocument.TemplateID}`);
-        }
-        if (template.Content.length === 0) {
-            throw new Error(`Template ${template.ID} has no content records`);
         }
         return template;
     }

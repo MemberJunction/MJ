@@ -51,6 +51,7 @@ import {
     AggregateValue,
     CompositeKey,
     DatasetItemFilterType,
+    DatasetReadOptions,
     DatasetResultType,
     DatasetItemResultType,
     DatasetStatusResultType,
@@ -1637,6 +1638,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 ResultType: 'simple',
                 MaxRows: 1,
                 BypassCache: true,
+                // the status lookup belongs to the view that asked for it: pool reads when that view reads on the pool
+                ...(params.ReadOnPool === true ? { ReadOnPool: true } : {}),
             },
             contextUser,
         );
@@ -1927,6 +1930,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
 
         const startTime = new Date();
+        // A background engine reload asks for pool reads (RunViewParams.ReadOnPool): it is not part of whatever
+        // transaction is open on this provider when its queries are issued
+        const viewReadOptions: ExecuteSQLOptions | undefined = params?.ReadOnPool === true ? { ignoreAmbientTransaction: true } : undefined;
         try {
             if (!params) return null as unknown as RunViewResult<T>;
 
@@ -2247,7 +2253,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const queryKeys: string[] = [];
 
             if (params.ResultType !== 'count_only') {
-                queries.push(this.ExecuteSQL(viewSQL, undefined, undefined, contextUser));
+                queries.push(this.ExecuteSQL(viewSQL, undefined, viewReadOptions, contextUser));
                 queryKeys.push('data');
             }
 
@@ -2256,13 +2262,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (willNeedCount) {
                 queries.push(countExecutor && params.ResultType === 'count_only'
                     ? countExecutor(countSQL!)
-                    : this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
+                    : this.ExecuteSQL(countSQL!, undefined, viewReadOptions, contextUser));
                 queryKeys.push('count');
             }
 
             const aggregateStartTime = Date.now();
             if (aggregateSQL) {
-                queries.push(this.ExecuteSQL(aggregateSQL, undefined, undefined, contextUser));
+                queries.push(this.ExecuteSQL(aggregateSQL, undefined, viewReadOptions, contextUser));
                 queryKeys.push('aggregate');
             }
 
@@ -2282,7 +2288,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 const countResult = resultMap['count'] as { TotalRowCount: number }[];
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
             } else if (countSQL && maxRowsUsed && retData.length === maxRowsUsed) {
-                const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, undefined, contextUser);
+                const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, viewReadOptions, contextUser);
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
             }
 
@@ -2359,7 +2365,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     protected override async InternalRunViews<T = unknown>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
-        if (IsCoalescibleCountBatch(params)) {
+        // one coalesced statement runs on one connection, so only views that agree on ReadOnPool share it
+        const poolReads = params.filter((p) => p?.ReadOnPool === true).length;
+        if (IsCoalescibleCountBatch(params) && (poolReads === 0 || poolReads === params.length)) {
             return this.RunCoalescedCountBatch<T>(params, contextUser);
         }
         const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
@@ -2376,7 +2384,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     protected async RunCoalescedCountBatch<T = unknown>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         const batch = new CountOnlyBatchCoalescer(
             params.length,
-            (sql) => this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser),
+            (sql) => this.ExecuteSQL<Record<string, unknown>>(sql, undefined,
+                params.every((p) => p?.ReadOnPool === true) ? { ignoreAmbientTransaction: true } : undefined, contextUser),
             (name) => this.QuoteIdentifier(name),
             (error) => this.isConnectionError(error),
         );
@@ -5472,12 +5481,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * dataset inside one transaction expects to see its own rows.
      *
      * {@link ProviderBase.RefreshWithinTransaction} is the exception: the caller owns the
-     * transaction and is waiting for the reload, so the metadata reads join that transaction and
-     * see the caller's uncommitted rows (MJ#4836).
+     * transaction and is waiting for the reload, so that pass's metadata reads carry
+     * `JoinAmbientTransaction`, join the transaction and see the caller's uncommitted rows
+     * (MJ#4836). The option travels with the call, not on the provider, so a pool reload running
+     * at the same time keeps its reads on the pool.
+     *
+     * An event-driven engine reload sets `ReadOnPool`, which puts any dataset's reads on the pool: it is
+     * not part of the unit of work that may hold a transaction on this provider when its reads run.
      */
-    protected datasetReadsOnPool(datasetName: string): boolean {
+    protected datasetReadsOnPool(datasetName: string, readOptions?: Readonly<DatasetReadOptions>): boolean {
+        if (readOptions?.ReadOnPool === true) {
+            return true;
+        }
         return datasetName === GenericDatabaseProvider._mjMetadataDatasetName
-            && !this.MetadataReadsJoinTransaction;
+            && readOptions?.JoinAmbientTransaction !== true;
     }
 
     /**
@@ -5494,6 +5511,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      *
      * ExecuteSQLBatch gives SQL Server true multi-result-set batching automatically,
      * while PG (and the default) use parallel individual queries.
+     *
+     * @param datasetName The dataset's name.
+     * @param itemFilters Optional per-item filters.
+     * @param contextUser The user to read as.
+     * @param providerToUse The provider to read through; defaults to this one.
+     * @param forceRefresh Bypass every cache layer.
+     * @param datasetReadOptions Where the reads run — see {@link DatasetReadOptions}. The metadata
+     * dataset reads on the pool unless `JoinAmbientTransaction` is true (only the transaction-joined
+     * pass of `ProviderBase.RefreshWithinTransaction` sets it); see {@link datasetReadsOnPool}.
      */
     public async GetDatasetByName(
         datasetName: string,
@@ -5501,6 +5527,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         contextUser?: UserInfo,
         providerToUse?: IMetadataProvider,
         forceRefresh?: boolean,
+        datasetReadOptions?: Readonly<DatasetReadOptions>,
     ): Promise<DatasetResultType> {
         const provider = (providerToUse ?? this) as GenericDatabaseProvider;
         const schema = provider.MJCoreSchemaName;
@@ -5516,7 +5543,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             `INNER JOIN ${provider.QuoteSchemaAndView(schema, 'vwEntities')} e ON di.${provider.QuoteIdentifier('EntityID')} = e.${provider.QuoteIdentifier('ID')} ` +
             `WHERE d.${provider.QuoteIdentifier('Name')} = ${provider.BuildParameterPlaceholder(0)}`;
 
-        const readOptions: ExecuteSQLOptions = { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName) };
+        const readOptions: ExecuteSQLOptions = { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName, datasetReadOptions) };
         const items = await provider.ExecuteSQL<Record<string, unknown>>(sSQL, [datasetName], readOptions, contextUser);
 
         if (!items || items.length === 0) {
@@ -5783,12 +5810,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Retrieves status information for a dataset by name: per-entity row count and
      * latest update date. Uses ExecuteSQLBatch for per-item status queries.
+     *
+     * @param datasetName The dataset's name.
+     * @param itemFilters Optional per-item filters.
+     * @param contextUser The user to read as.
+     * @param providerToUse The provider to read through; defaults to this one.
+     * @param datasetReadOptions Where the reads run — see {@link DatasetReadOptions} and
+     * {@link datasetReadsOnPool}.
      */
     public async GetDatasetStatusByName(
         datasetName: string,
         itemFilters?: DatasetItemFilterType[],
         contextUser?: UserInfo,
         providerToUse?: IMetadataProvider,
+        datasetReadOptions?: Readonly<DatasetReadOptions>,
     ): Promise<DatasetStatusResultType> {
         const overallStart = performance.now();
         const provider = (providerToUse ?? this) as GenericDatabaseProvider;
@@ -5805,7 +5840,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             `INNER JOIN ${provider.QuoteSchemaAndView(schema, 'vwEntities')} e ON di.${provider.QuoteIdentifier('EntityID')} = e.${provider.QuoteIdentifier('ID')} ` +
             `WHERE d.${provider.QuoteIdentifier('Name')} = ${provider.BuildParameterPlaceholder(0)}`;
 
-        const readOptions: ExecuteSQLOptions = { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName) };
+        const readOptions: ExecuteSQLOptions = { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName, datasetReadOptions) };
         const items = await provider.ExecuteSQL<Record<string, unknown>>(
             sSQL, [datasetName], readOptions, contextUser,
         );
@@ -6213,7 +6248,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * transaction is #4514 (alongside #4454, the commit-side half of the same window).
      */
     protected override get MetadataMemberRefreshMustWait(): boolean {
+        // "Must wait" and "inside a transaction" are the same condition: the timer-driven refresh
+        // waits exactly while an ambient transaction is open. One definition, so they cannot drift.
+        return this.HasOpenAmbientTransaction;
+    }
+
+    /** Inside an ambient transaction: depth above 0, or a physical handle still open. */
+    protected override get HasOpenAmbientTransaction(): boolean {
         return this.CurrentTransactionDepth > 0 || this.HasPhysicalTransaction;
+    }
+
+    /**
+     * Tells the metadata layer the ambient transaction has fully ended — but only when it has:
+     * a nested commit or rollback, or a settle that left a frame open, ends nothing. Called on
+     * every path that can reach depth 0: commit (success and failure), rollback (success and
+     * failure) and {@link ResetTransactionState}. See {@link ProviderBase.OnAmbientTransactionEnded}.
+     */
+    private async notifyIfAmbientTransactionEnded(committed: boolean): Promise<void> {
+        if (this.HasOpenAmbientTransaction) {
+            return;
+        }
+        await this.OnAmbientTransactionEnded(committed);
     }
 
     protected AssertAmbientTransactionUsable(): void {
@@ -6452,12 +6507,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * (that would re-enter the mutex).
      */
     public async ResetTransactionState(): Promise<void> {
-        await this.WithTransactionLock(() => this.abandonDoomedTransaction());
-        await this.drainIdlePostCommitTasks();
-        // The frames are gone, so no settle will ever close this instance's batch. Drop it here or
-        // its entities count as pending forever and every cached read of them misses.
-        this._openBatchLevels = 0;
-        await LocalCacheManager.Instance.AbandonEntityEventBatch(this);
+        try {
+            await this.WithTransactionLock(() => this.abandonDoomedTransaction());
+            await this.drainIdlePostCommitTasks();
+        } finally {
+            // All of this runs even when the abandon or the drain threw. The frames are gone, so no
+            // settle will ever close this instance's batch: drop it here, or its entities count as
+            // pending forever and every cached read of them misses. And report the end: a pin left
+            // on an abandoned transaction would hold back every later pool reload.
+            this._openBatchLevels = 0;
+            try {
+                await LocalCacheManager.Instance.AbandonEntityEventBatch(this);
+            } finally {
+                await this.notifyIfAmbientTransactionEnded(false);
+            }
+        }
     }
 
     /**
@@ -6468,8 +6532,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * The batch is opened HERE, on the raw primitive, not only in
      * `DatabaseProviderBase.BeginEntityTransaction` — 41 call sites across the repo use
      * `BeginTransaction()` directly, including new-user creation on first login, the magic-link
-     * service, the roles/users sync resolver, `MergeRecords` and every generated cascade-delete
-     * override. Those saves each published their own cache write, and a rollback left rows in the
+     * service, the roles/users sync resolver and `MergeRecords`. Those saves each published their
+     * own cache write, and a rollback left rows in the
      * shared cache that were never committed. `BeginEntityTransaction` still opens
      * its own level on top; the levels are depth-counted, so the batch applies once, at the
      * outermost settle, either way.
@@ -6486,8 +6550,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * The open happens only after a begin SUCCEEDS, while a commit or rollback closes in a
      * `finally` — so a rollback issued for a begin that threw would close a level it never opened.
      * That happens for real: a nested begin whose savepoint creation fails leaves the caller's
-     * catch to roll back, and the seventeen generated cascade-delete overrides are written exactly
-     * that way. Closing an outer unit of work's batch early un-batches the rest of its saves, which
+     * catch to roll back, and hand-written `BeginTransaction()` call sites are written exactly that
+     * way. Closing an outer unit of work's batch early un-batches the rest of its saves, which
      * then write to the shared cache one by one — the uncommitted-rows-in-the-fleet failure the
      * batch exists to prevent.
      */
@@ -6513,25 +6577,43 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             });
         } catch (e) {
             // The commit failed: the rows may not be in the database, so the batch settles as a
-            // failure (its slots are invalidated) rather than being left open.
-            await this.endBatchLevelIfOpen(false);
+            // failure (its slots are invalidated) rather than being left open. The end is reported
+            // even if that settle throws, for the same reason as on the success path below.
+            try {
+                await this.endBatchLevelIfOpen(false);
+            } finally {
+                await this.notifyIfAmbientTransactionEnded(false);
+            }
             throw e;
         }
-        await this.endBatchLevelIfOpen(true);
-        if (committedTasks) {
-            await this.runPostCommitTasks(committedTasks);
-            await this.AfterPhysicalCommit();
+        // The commit has happened. The end is reported in `finally`: a post-commit step that throws
+        // must not leave the metadata pinned to a transaction that no longer exists, which would hold
+        // back every later pool reload for the life of the process.
+        try {
+            await this.endBatchLevelIfOpen(true);
+            if (committedTasks) {
+                await this.runPostCommitTasks(committedTasks);
+                await this.AfterPhysicalCommit();
+            }
+            await this.drainIdlePostCommitTasks();
+        } finally {
+            await this.notifyIfAmbientTransactionEnded(committedTasks !== null);
         }
-        await this.drainIdlePostCommitTasks();
     }
 
     public async RollbackTransaction(): Promise<void> {
         try {
-            await this.WithTransactionLock(() => this.rollbackTransactionCore());
+            try {
+                await this.WithTransactionLock(() => this.rollbackTransactionCore());
+            } finally {
+                await this.endBatchLevelIfOpen(false);
+            }
+            await this.drainIdlePostCommitTasks();
         } finally {
-            await this.endBatchLevelIfOpen(false);
+            // Also when the rollback threw: a failed rollback that still left depth 0 (the handle
+            // was dropped) has ended the transaction all the same.
+            await this.notifyIfAmbientTransactionEnded(false);
         }
-        await this.drainIdlePostCommitTasks();
     }
 
     private async beginTransactionCore(): Promise<void> {
@@ -6601,12 +6683,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * wrappers nest the original error. Do not match English message text.
      */
     private isDoomedPhysicalTransactionError(error: unknown): boolean {
+        return this.doomedPhysicalTransactionErrorCode(error) !== null;
+    }
+
+    /**
+     * The driver code that marks `error` as a server-aborted ambient transaction (mssql `ENOTBEGUN` /
+     * `EABORT`, pg `25P01`), or null when it is not one. `error` is a caught value, `unknown` by
+     * definition; it is narrowed structurally because drivers throw their own error shapes.
+     */
+    private doomedPhysicalTransactionErrorCode(error: unknown): string | null {
         let current: unknown = error;
         for (let i = 0; i < 5 && current; i++) {
             if (current && typeof current === 'object' && 'code' in current) {
                 const code = String((current as { code: unknown }).code);
                 if (code === 'ENOTBEGUN' || code === 'EABORT' || code === '25P01') {
-                    return true;
+                    return code;
                 }
             }
             current =
@@ -6614,7 +6705,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     ? (current as { cause: unknown }).cause
                     : undefined;
         }
-        return false;
+        return null;
     }
 
     private async abandonDoomedTransaction(): Promise<void> {
@@ -6699,6 +6790,24 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (this._transactionDepth === 1) {
             try {
                 await this.RollbackPhysicalTransaction();
+            } catch (rollbackError) {
+                // A statement inside the transaction made the server roll it back (mssql marks the
+                // handle aborted and rejects rollback with EABORT; ENOTBEGUN / pg 25P01 are the same
+                // signal). The rollback asked for has therefore already happened, so this is not a
+                // failure — the same reading AbandonPhysicalTransaction gives EABORT. Throwing it made
+                // callers' failure paths roll back a second time and report "No active transaction to
+                // rollback", hiding the statement error that actually explains the failure.
+                const driverCode = this.doomedPhysicalTransactionErrorCode(rollbackError);
+                if (driverCode === null) {
+                    throw rollbackError;
+                }
+                // Routine, not a failure: the statement that failed has already been reported by
+                // its own caller. Verbose-only, with the driver code kept for diagnosis.
+                LogStatusEx({
+                    message: `RollbackTransaction: the transaction was already rolled back by the server ` +
+                        `(driver code ${driverCode}: a statement inside it failed); treating the rollback as done`,
+                    verboseOnly: true,
+                });
             } finally {
                 this.clearTransactionState();
             }

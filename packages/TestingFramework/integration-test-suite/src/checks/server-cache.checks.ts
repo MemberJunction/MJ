@@ -23,6 +23,7 @@ import { UniqueFilter } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck } from '@memberjunction/testing-integration';
+import { DeterministicEntityFactory } from './deterministic-entity-factory';
 
 const ENTITY = 'MJ: Entities';
 const SMALL_ENTITY = 'MJ: Query Categories';
@@ -784,7 +785,7 @@ export const ServerCacheChecks: NamedCheck[] = [
             // carry the parent Category name). This check verifies that after renaming the parent
             // category, cached child rows reflect the new name. Self-contained: creates and
             // deletes a throwaway Category + Query, so no real data is touched.
-            const md = new Metadata(); // global-provider-ok: integration test — single-provider process by design
+            const md = ctx.Provider; // one provider for the category and its query
             const rv = new RunView();
 
             const category = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', ctx.User);
@@ -793,7 +794,7 @@ export const ServerCacheChecks: NamedCheck[] = [
             Assert(await category.Save(), `category fixture save failed: ${category.LatestResult?.CompleteMessage ?? 'unknown'}`);
             const originalName = category.Name;
 
-            const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+            const query = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
             query.Name = `zzz-integrationtest-query-${Date.now()}`;
             query.CategoryID = category.ID;
             query.SQL = 'SELECT 1 AS X';

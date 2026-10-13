@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -47,7 +47,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     class StubRemoteOperationEntity {
         public ID = 'ro-1';
         public Name = 'Test Op';
-        public GenerationType: 'AI' | 'Standard' = 'AI';
+        public GenerationType: 'AI' | 'Manual' | 'Default' = 'AI';
         public CodeLocked = false;
         public IsSaved = false;
         public Code: string | null = null;
@@ -85,6 +85,27 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 });
 
 import { MJRemoteOperationEntityServer } from '../custom/MJRemoteOperationEntityServer.server';
+import { SaveTimeAISettings } from '@memberjunction/ai';
+
+/**
+ * The mocked base class's test-only surface: it records field dirtiness through SetFieldDirty and holds IsSaved as a
+ * plain field. The server class's type declares neither (IsSaved is a read-only getter on the real BaseEntity).
+ */
+interface MockedBaseStub {
+    SetFieldDirty(name: string, dirty: boolean): void;
+    IsSaved: boolean;
+}
+
+/** Marks a field dirty (or clean) on the mocked base. */
+function setFieldDirty(entity: MJRemoteOperationEntityServer, name: string, dirty: boolean): void {
+    (entity as unknown as MockedBaseStub).SetFieldDirty(name, dirty);
+}
+
+/** Sets whether the mocked base counts as already saved (an update) or not (a create). */
+function setSaved(entity: MJRemoteOperationEntityServer, saved: boolean): void {
+    (entity as unknown as MockedBaseStub).IsSaved = saved;
+}
+
 
 describe('MJRemoteOperationEntityServer Code Generation Skip for Cloned / Pre-populated Ops', () => {
     let op: MJRemoteOperationEntityServer;
@@ -95,9 +116,9 @@ describe('MJRemoteOperationEntityServer Code Generation Skip for Cloned / Pre-po
         op.GenerationType = 'AI';
         op.CodeLocked = false;
         op.ForceCodeGeneration = false;
-        (op as unknown as { SetFieldDirty: (n: string, d: boolean) => void }).SetFieldDirty('Description', false);
+        setFieldDirty(op, 'Description', false);
 
-        generateCodeSpy = vi.spyOn(op as unknown as { GenerateCode: () => Promise<unknown> }, 'GenerateCode').mockResolvedValue({
+        generateCodeSpy = vi.spyOn(op, 'GenerateCode').mockResolvedValue({
             Success: true,
             Code: 'generated op code',
             Comments: 'generated op comments',
@@ -106,7 +127,7 @@ describe('MJRemoteOperationEntityServer Code Generation Skip for Cloned / Pre-po
     });
 
     it('skips GenerateCode when saving a new AI op that ALREADY HAS code (e.g. cloned op)', async () => {
-        op.IsSaved = false;
+        setSaved(op, false);
         op.Code = 'return { Success: true, Data: "cloned remote op" };';
 
         const result = await op.Save();
@@ -117,7 +138,7 @@ describe('MJRemoteOperationEntityServer Code Generation Skip for Cloned / Pre-po
     });
 
     it('invokes GenerateCode when saving a new AI op with EMPTY / NULL code', async () => {
-        op.IsSaved = false;
+        setSaved(op, false);
         op.Code = null;
 
         const result = await op.Save();
@@ -128,9 +149,9 @@ describe('MJRemoteOperationEntityServer Code Generation Skip for Cloned / Pre-po
     });
 
     it('invokes GenerateCode when saving an existing AI op whose Description is dirty', async () => {
-        op.IsSaved = true;
+        setSaved(op, true);
         op.Code = 'old code';
-        (op as unknown as { SetFieldDirty: (n: string, d: boolean) => void }).SetFieldDirty('Description', true);
+        setFieldDirty(op, 'Description', true);
 
         const result = await op.Save();
 
@@ -140,7 +161,7 @@ describe('MJRemoteOperationEntityServer Code Generation Skip for Cloned / Pre-po
     });
 
     it('invokes GenerateCode when ForceCodeGeneration is true even if code is present', async () => {
-        op.IsSaved = false;
+        setSaved(op, false);
         op.Code = 'some existing code';
         op.ForceCodeGeneration = true;
 
@@ -151,13 +172,39 @@ describe('MJRemoteOperationEntityServer Code Generation Skip for Cloned / Pre-po
     });
 
     it('skips GenerateCode when GenerationType is not AI', async () => {
-        op.GenerationType = 'Standard';
-        op.IsSaved = false;
+        op.GenerationType = 'Manual';
+        setSaved(op, false);
         op.Code = null;
 
         const result = await op.Save();
 
         expect(result).toBe(true);
         expect(generateCodeSpy).not.toHaveBeenCalled();
+    });
+
+    describe('host switch saveTimeAI.CodeGeneration = false', () => {
+        afterEach(() => {
+            SaveTimeAISettings.Instance.Config = {};
+        });
+
+        it('saves a new AI op without calling GenerateCode, keeping its current code', async () => {
+            SaveTimeAISettings.Instance.Config = { CodeGeneration: false };
+            setSaved(op, false);
+            op.Code = null;
+
+            expect(await op.Save()).toBe(true);
+            expect(generateCodeSpy).not.toHaveBeenCalled();
+            expect(op.Code).toBeNull();
+        });
+
+        it('wins over ForceCodeGeneration', async () => {
+            SaveTimeAISettings.Instance.Config = { CodeGeneration: false };
+            setSaved(op, false);
+            op.Code = 'existing';
+            op.ForceCodeGeneration = true;
+
+            expect(await op.Save()).toBe(true);
+            expect(generateCodeSpy).not.toHaveBeenCalled();
+        });
     });
 });

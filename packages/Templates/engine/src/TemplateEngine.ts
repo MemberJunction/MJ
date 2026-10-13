@@ -202,9 +202,10 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     }
 
     /**
-     * Cache for templates that have been created by nunjucks so we don't have to create them over and over
+     * Compiled nunjucks templates (shared autoescape environment), keyed by template content ID. Each entry keeps the text it was
+     * compiled from, so a saved edit to a content row (same ID, new text) recompiles instead of serving the old text.
      */
-    private _templateCache: Map<string, any> = new Map<string, any>();
+    private _templateCache = new Map<string, { Text: string; Template: nunjucks.Template }>();
 
     public AddTemplate(templateEntity: MJTemplateEntityExtended) {
         this._templateLoader.AddTemplate(templateEntity.ID, templateEntity);
@@ -316,26 +317,25 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     }
 
     /**
-     * This method is responsible for creating a new Nunjucks template, caching it, and returning it.
-     * If the templateContentId already had a template created, it will return that template from the cache.
-     * @param templateId - must be provided if you want to cache the template, if not provided the template will not be cached
-     * @param templateText 
+     * Returns the compiled template for a content row, compiling it when the cached copy was compiled from different
+     * text (a saved edit). Every cached template is compiled against the shared autoescape environment. Every compile goes through {@link createNunjucksTemplate}, and every
+     * render through {@link renderTemplateAsync}, so a recompiled edit passes the same sandbox guards as a first compile.
+     * @param templateContentId - must be provided to cache the template; without it the template is compiled every time
+     * @param templateText the content's current text
      * @param cacheTemplate - if true, the template will be cached, otherwise it will not be cached
      */
-    protected getNunjucksTemplate(templateContentId: string, templateText: string, cacheTemplate: boolean): any {
+    protected getNunjucksTemplate(templateContentId: string, templateText: string, cacheTemplate: boolean): nunjucks.Template {
         if (templateContentId && cacheTemplate) {
-            let template = this._templateCache.get(templateContentId);
-            if (!template) {
-                template = this.createNunjucksTemplate(templateText);
-                this._templateCache.set(templateContentId, template);
+            const cached = this._templateCache.get(templateContentId);
+            if (cached && cached.Text === templateText) {
+                return cached.Template;
             }
-            return template;    
+            const template = this.createNunjucksTemplate(templateText);
+            this._templateCache.set(templateContentId, { Text: templateText, Template: template });
+            return template;
         }
-        else {
-            // we don't have a template ID which means this is a dyanmic template, and so we don't want to do
-            // anything with the cache, we just create a new nunjucks template and return it
-            return this.createNunjucksTemplate(templateText);
-        }
+        // no content ID: a dynamic template, compiled fresh and never cached
+        return this.createNunjucksTemplate(templateText);
     }
 
     /**
@@ -344,7 +344,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param env the environment to bind to; defaults to the shared autoescape environment
      * @returns
      */
-    protected createNunjucksTemplate(templateText: string, env: nunjucks.Environment = this._nunjucksEnv): any {
+    protected createNunjucksTemplate(templateText: string, env: nunjucks.Environment = this._nunjucksEnv): nunjucks.Template {
         return new nunjucks.Template(templateText, env);
     }
 

@@ -74,6 +74,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 
 vi.mock('@memberjunction/core', () => ({
     UserInfo: class {},
+    EntitySaveOptions: class { SkipAsyncValidation?: boolean = undefined; },
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     Metadata: class { Entities = []; CurrentUser = {}; },
@@ -88,6 +89,10 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
+    // Reached through the real @memberjunction/aiengine entry (the aiengine mock below takes EmbeddingBackfill
+    // from it): @memberjunction/actions-base subclasses these when it loads.
+    MJEntityActionEntity: class {},
+    MJActionEntity: class {},
     MJAIModelPriceUnitTypeEntity: class {},
     MJTagEntity: class {},
     MJTaggedItemEntity: class {},
@@ -119,6 +124,8 @@ vi.mock('@memberjunction/tag-engine-base', () => ({
     TagEngineBase: {
         Instance: {
             Config: vi.fn().mockResolvedValue(undefined),
+            /** TagEngine subscribes to tag changes after it loads; these tests never emit one. */
+            DataChange$: { subscribe: () => ({ unsubscribe: () => undefined }) },
             get Tags() { return h.state.tags; },
             GetTagByID: (id: string) => h.state.tags.find(t => t.ID.toLowerCase() === id.toLowerCase()),
             GetTagByName: (name: string) => h.state.tags.find(t => t.Name.toLowerCase() === name.trim().toLowerCase()),
@@ -142,11 +149,22 @@ vi.mock('@memberjunction/ai-vectors-memory', async () => ({
     VectorEntry: class {},
 }));
 
-vi.mock('@memberjunction/ai', () => ({
+vi.mock('@memberjunction/ai', async (importOriginal) => ({
+    // The real save-time AI switch, pinned to one shared instance: this file's BaseSingleton mock hands out a
+    // fresh instance per call, which would forget the config a test sets.
+    SaveTimeAISettings: await (async () => {
+        const real = (await importOriginal<typeof import('@memberjunction/ai')>()).SaveTimeAISettings;
+        const shared = new real();
+        return class SaveTimeAISettings extends real {
+            public static override get Instance(): InstanceType<typeof real> { return shared; }
+        };
+    })(),
     BaseEmbeddings: class {},
 }));
 
-vi.mock('@memberjunction/aiengine', () => ({
+vi.mock('@memberjunction/aiengine', async () => ({
+    // The real shared backfill from the package entry, so TagEngine's load and EmbedMissingTags run its actual loop.
+    EmbeddingBackfill: (await vi.importActual<typeof import('@memberjunction/aiengine')>('@memberjunction/aiengine')).EmbeddingBackfill,
     AIEngine: {
         Instance: {
             Config: vi.fn(),

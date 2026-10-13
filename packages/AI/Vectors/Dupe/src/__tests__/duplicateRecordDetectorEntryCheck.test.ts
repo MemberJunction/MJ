@@ -159,7 +159,11 @@ vi.mock('@memberjunction/templates', () => ({
         Instance: {
             Config: vi.fn().mockResolvedValue(undefined),
             SetupNunjucks: vi.fn(),
-            Templates: [{ ID: 'template-1', Content: [{ ID: 'template-content-1' }] }],
+            Templates: [{
+                ID: 'template-1',
+                Content: [{ ID: 'template-content-1' }],
+                GetHighestPriorityContent() { return this.Content[0]; },
+            }],
             RenderTemplate: mocks.RenderTemplate,
         },
     },

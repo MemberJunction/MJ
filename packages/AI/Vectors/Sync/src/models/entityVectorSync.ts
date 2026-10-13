@@ -26,6 +26,18 @@ import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
  * Class that specializes in vectorizing entities using embedding models and upserting them into Vector Databases 
  */
 export class EntityVectorSyncer extends VectorBase {
+  /**
+   * The content an entity document's template renders (its only content row).
+   * @throws Error when the template has no content, so nothing can be vectorized from it
+   */
+  protected static RenderedContentOf(template: MJTemplateEntityExtended): MJTemplateContentEntity {
+    const content = template.GetHighestPriorityContent();
+    if (!content) {
+      throw new Error(`Template ${template.ID} does not have an associated Template Content record`);
+    }
+    return content;
+  }
+
   StartTime: Date;
 
   /** @deprecated Use {@link StartTime}. */
@@ -132,10 +144,6 @@ export class EntityVectorSyncer extends VectorBase {
       throw new Error(`Template not found with ID ${entityDocument.TemplateID}`);
     }
 
-    if(template.Content.length === 0){
-      throw new Error(`Template ${template.ID} does not have an associated Template Content record`);
-    }
-
     if(template.Content.length > 1){
       throw new Error('Templates used by Entity Documents should only have one associated Template Content record.');
     }
@@ -145,7 +153,7 @@ export class EntityVectorSyncer extends VectorBase {
     // Pipeline tuning: explicit params override config, config overrides defaults
     const pageSize: number = params.listBatchCount || pipelineConfig?.fetchBatchSize || 50;
     const dataStream = new PagedRecords();
-    const templateContent = template.Content[0];
+    const templateContent = EntityVectorSyncer.RenderedContentOf(template);
 
     const vectorCreator = this.createVectorCreator(
       template, templateContent, obj.embeddingRunner, obj.aiModelID, obj.embeddingModelAPIName, delayTimeMS,
@@ -241,7 +249,7 @@ export class EntityVectorSyncer extends VectorBase {
       originalEndStream();
     };
 
-    this.startDataPaging(dataStream, params, md, entity, template, vectorIndexEntity, entityDocument, pageSize);
+    this.startDataPaging(dataStream, params, md, entity, template, templateContent.TemplateText, vectorIndexEntity, entityDocument, pageSize);
 
     this.vlog(entityDocument.Name, 'pipeline started');
     // Terminal sink: a Writable that discards each chunk after the
@@ -812,6 +820,7 @@ export class EntityVectorSyncer extends VectorBase {
 
   /**
    * Starts the async data paging loop that feeds records into the stream pipeline.
+   * `renderedText` is the text of the content the template renders, resolved once by the caller (not per record).
    */
   private startDataPaging(
     dataStream: PagedRecords,
@@ -819,6 +828,7 @@ export class EntityVectorSyncer extends VectorBase {
     md: IMetadataProvider,
     entity: EntityInfo,
     template: MJTemplateEntityExtended,
+    renderedText: string,
     vectorIndexEntity: MJVectorIndexEntity,
     entityDocument: MJEntityDocumentEntity,
     pageSize: number
@@ -873,7 +883,7 @@ export class EntityVectorSyncer extends VectorBase {
           templateData.__mj_recordID = this.BuildRecordID(entity, typedRecord);
           templateData.__mj_compositeKey = entity.PrimaryKeys.map((key) => `${key.Name}|${typedRecord[key.Name]}`).join('||');
           templateData.VectorIndexID = vectorIndexEntity.ID;
-          templateData.TemplateContent = template.Content[0].TemplateText;
+          templateData.TemplateContent = renderedText;
           templateData.__mj_entityDocument = { ID: entityDocument.ID, EntityID: entityDocument.EntityID, Name: entityDocument.Name };
           items.push(templateData);
         }

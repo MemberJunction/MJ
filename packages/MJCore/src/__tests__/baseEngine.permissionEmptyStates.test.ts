@@ -29,12 +29,16 @@ class TestEngine extends BaseEngine<TestEngine> {
         // configs are injected directly
     }
 
+    /** The provider the test binds (SetProvider is first-wins and registers the engine, so it is not used here). */
+    private boundProvider: IMetadataProvider | null = null;
+
+    public override get ProviderToUse(): IMetadataProvider {
+        return this.boundProvider ?? super.ProviderToUse;
+    }
+
     public Prepare(provider: IMetadataProvider, configs: BaseEnginePropertyConfig[]): void {
-        // SetProvider is first-wins; tests bind their own provider directly.
-        const internals = this as unknown as { _provider: IMetadataProvider; _metadataConfigs: BaseEnginePropertyConfig[]; _contextUser: UserInfo };
-        internals._provider = provider;
-        internals._metadataConfigs = configs;
-        internals._contextUser = USER;
+        this.boundProvider = provider;
+        this.AdoptConfigs(configs);
     }
 
     public SkipAllForTest(configs: BaseEnginePropertyConfig[]): BaseEnginePropertyConfig[] {

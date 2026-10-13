@@ -79,7 +79,9 @@ export class GenericProcessRunTracker implements IProcessRunTracker {
         detail.DurationMs = result.DurationMs ?? null;
         detail.AttemptCount = result.AttemptCount ?? 1;
         detail.ResultPayload = result.ResultPayload !== undefined ? JSON.stringify(result.ResultPayload) : null;
-        detail.ErrorMessage = result.ErrorMessage ?? null;
+        detail.ErrorMessage = result.ErrorMessage || null;
+        // Warnings are a succeeded record's non-fatal problems: their own JSON column, never ErrorMessage (failures only)
+        detail.Warnings = result.Warnings && result.Warnings.length > 0 ? JSON.stringify(result.Warnings) : null;
         detail.ActionExecutionLogID = result.ActionExecutionLogID ?? null;
         detail.AIAgentRunID = result.AIAgentRunID ?? null;
         // Fire-and-forget — the detail write must not block the per-record loop, and a failed write must

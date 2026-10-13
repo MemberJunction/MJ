@@ -2,11 +2,21 @@ import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView, IMetadataPr
 import { MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity } from "@memberjunction/core-entities";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { RunTemplateExtractionPipeline } from "./template-extraction";
+import { SaveTimeAISettings } from "@memberjunction/ai";
+import type { ISaveEnrichmentOptOut } from "./saveEnrichmentOptOut";
 import type { MergedTemplateParameter } from "./template-extraction";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 
 @RegisterClass(BaseEntity, 'MJ: Template Contents')
-export class MJTemplateContentEntityServer extends MJTemplateContentEntity {
+export class MJTemplateContentEntityServer extends MJTemplateContentEntity implements ISaveEnrichmentOptOut {
+    /** When true, saving this template content skips the AI enrichment stage of template parameter
+     *  extraction. Parameters are still extracted deterministically and keep heuristic descriptions.
+     *  Set it before `Save()` on callers that must not call a model, such as deterministic tests or
+     *  bulk imports. Sticky: it stays set until cleared, so it applies to every later save of this
+     *  instance. Defaults to false. The host can also disable this enrichment for every save it
+     *  serves (`SaveTimeAISettings`, kind `TemplateParameters`). */
+    public SkipAIEnrichment?: boolean;
+
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const provider = this.ProviderToUse as unknown as SQLServerDataProvider;
 
@@ -72,6 +82,7 @@ export class MJTemplateContentEntityServer extends MJTemplateContentEntity {
                 this.TemplateText,
                 this.Template,
                 this.ContextCurrentUser,
+                this.SkipAIEnrichment === true || SaveTimeAISettings.Instance.IsDisabled('TemplateParameters'),
             );
 
             if (result.Warnings.length > 0) {

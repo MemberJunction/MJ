@@ -4,7 +4,7 @@
  * No database — uses the real ArraySource + FunctionRecordProcessor and a spy tracker.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
     ArraySource,
@@ -125,6 +125,7 @@ describe('RecordSetProcessor.Process', () => {
             ProcessRecord: (r: RecordRef, c: Parameters<typeof inner.ProcessRecord>[1]) => inner.ProcessRecord(r, c),
             Preflight: async () => { throw new Error('ML Model needs training'); },
         };
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const result = await engine.Process({
             source: new ArraySource(recs(5), 'E'),
             processor,
@@ -139,6 +140,7 @@ describe('RecordSetProcessor.Process', () => {
         expect(processed).toBe(0);
         expect(tracker.details).toHaveLength(0);
         expect(tracker.completed?.Status).toBe('Failed'); // the run is still recorded honestly
+        expect(consoleError).toHaveBeenCalledWith('RecordSetProcessor: run failed: ML Model needs training');
     });
 
     it('runs normally when the processor Preflight passes, calling it exactly once', async () => {

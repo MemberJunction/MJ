@@ -517,7 +517,7 @@ export class AutotagEntity extends AutotagBase {
         if (!template || template.Content.length === 0) {
             return null;
         }
-        return template.Content[0].TemplateText;
+        return template.GetHighestPriorityContent()?.TemplateText || null;
     }
 
     /**

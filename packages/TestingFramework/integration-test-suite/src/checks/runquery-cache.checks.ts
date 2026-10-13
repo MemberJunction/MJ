@@ -22,6 +22,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, RunQueryFixtures } from '@memberjunction/testing-integration';
+import { DeterministicEntityFactory } from './deterministic-entity-factory';
 
 /** All fixture-mutated settings share this prefix so teardown can sweep leftovers. */
 export const RUNQUERY_SETTING_PREFIX = 'mj.integrationtest.rq';
@@ -98,7 +99,7 @@ async function createSetting(user: UserInfo, tag: string): Promise<MJUserSetting
  * bootstrap). Forces QueryEngine to refresh so resolveQuery sees them.
  */
 export async function CreateRunQueryFixtures(ctx: IntegrationCheckContext): Promise<RunQueryFixtures> {
-    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const md = ctx.Provider; // the fixture's own provider, for the category as for its queries
     const schema = ctx.Schema ?? '__mj';
     const user = ctx.User;
 
@@ -118,7 +119,7 @@ export async function CreateRunQueryFixtures(ctx: IntegrationCheckContext): Prom
 
     const countSQL = `SELECT COUNT(*) AS SettingCount FROM ${schema}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
 
-    const ttlQuery = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', user);
+    const ttlQuery = await DeterministicEntityFactory.NewQuery(ctx.Provider, user);
     ttlQuery.Name = `CacheTest TTL ${Date.now()}`;
     ttlQuery.CategoryID = category.ID;
     ttlQuery.SQL = countSQL;
@@ -128,7 +129,7 @@ export async function CreateRunQueryFixtures(ctx: IntegrationCheckContext): Prom
     }
     fixtures.TtlQuery = ttlQuery;
 
-    const validatedQuery = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', user);
+    const validatedQuery = await DeterministicEntityFactory.NewQuery(ctx.Provider, user);
     validatedQuery.Name = `CacheTest Validated ${Date.now()}`;
     validatedQuery.CategoryID = category.ID;
     validatedQuery.SQL = countSQL;
@@ -357,8 +358,7 @@ export const RunQueryCacheChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const { Category } = requireFixtures(ctx);
             const rq = new RunQuery();
-            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
-            const broken = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+            const broken = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
             broken.Name = `CacheTest Broken ${Date.now()}`;
             broken.CategoryID = Category.ID;
             broken.SQL = 'SELECT FROM nowhere_at_all';
@@ -420,7 +420,7 @@ export const RunQueryCacheChecks: NamedCheck[] = [
             // now carries the resolved query's full CategoryPath. This check builds the collision
             // shape directly: two queries, one shared name, two categories, DISTINGUISHABLE rows.
             const { Category } = requireFixtures(ctx);
-            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const md = ctx.Provider; // one provider for the categories and the queries of this fixture
             const rq = new RunQuery();
             const stamp = Date.now();
             const sharedName = `CacheTest Collide ${stamp}`;
@@ -432,14 +432,14 @@ export const RunQueryCacheChecks: NamedCheck[] = [
             let queryA: MJQueryEntity | undefined;
             let queryB: MJQueryEntity | undefined;
             try {
-                queryA = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+                queryA = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
                 queryA.Name = sharedName;
                 queryA.CategoryID = Category.ID;
                 queryA.SQL = `SELECT 'A' AS Slot`;
                 queryA.Status = 'Approved';
                 Assert(await queryA.Save(), `query A save failed: ${queryA.LatestResult?.CompleteMessage}`);
 
-                queryB = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+                queryB = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
                 queryB.Name = sharedName;
                 queryB.CategoryID = categoryB.ID;
                 queryB.SQL = `SELECT 'B' AS Slot`;
@@ -496,7 +496,7 @@ export const RunQueryCacheChecks: NamedCheck[] = [
                 return;
             }
             const { Category } = requireFixtures(ctx);
-            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const md = ctx.Provider; // one provider for the query, its bridge row and the entity lookup
             const rq = new RunQuery();
             const settingsEntity = md.EntityByName('MJ: User Settings');
             Assert(!!settingsEntity, "entity 'MJ: User Settings' must exist");
@@ -504,7 +504,7 @@ export const RunQueryCacheChecks: NamedCheck[] = [
             let query: MJQueryEntity | undefined;
             let bridge: MJQueryEntityEntity | undefined;
             try {
-                query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+                query = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
                 query.Name = `CacheTest Perm ${Date.now()}`;
                 query.CategoryID = Category.ID;
                 query.SQL = `SELECT COUNT(*) AS SettingCount FROM ${ctx.Schema ?? '__mj'}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;

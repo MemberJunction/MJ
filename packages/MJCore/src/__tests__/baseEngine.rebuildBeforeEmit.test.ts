@@ -24,33 +24,33 @@ const ROWS = [{ ID: '1', __mj_UpdatedAt: '2026-09-01T00:00:00.000Z' }];
 /** Records the order of rebuilds and emissions; every reload returns rows. */
 class OrderEngine extends BaseEngine<OrderEngine> {
     public readonly Order: string[] = [];
+    /** The engine's one config, the instance the engine itself holds. */
+    public readonly Config0 = new BaseEnginePropertyConfig({ Type: 'entity', EntityName: ENTITY, PropertyName: '_models' });
 
     public constructor() {
         super();
-        const config: BaseEnginePropertyConfig = { Type: 'entity', EntityName: ENTITY, PropertyName: '_models' };
+        this.AdoptConfigs([this.Config0]);
         const self = this as unknown as {
-            _metadataConfigs: BaseEnginePropertyConfig[];
             _dataMap: Map<string, unknown>;
             _loaded: boolean;
             _contextUser: unknown;
         };
-        self._metadataConfigs = [config];
         self._dataMap = new Map([['_models', { entityName: ENTITY, data: [...ROWS], loadedSuccessfully: true }]]);
         self._loaded = true;
         self._contextUser = { Email: 'test@example.com' };
     }
 
-    public get Config0(): BaseEnginePropertyConfig {
-        return (this as unknown as { _metadataConfigs: BaseEnginePropertyConfig[] })._metadataConfigs[0];
-    }
-
     public override get Loaded(): boolean { return true; }
 
-    protected override get ProviderToUse() {
+    public async Config(): Promise<void> {
+        // the constructor seeds the one config
+    }
+
+    public override get ProviderToUse() {
         return { EntityByName: () => ({ Name: ENTITY, PrimaryKeys: [{ Name: 'ID' }], Fields: [] } as unknown as EntityInfo) } as never;
     }
 
-    protected override get RunViewProviderToUse() {
+    public override get RunViewProviderToUse() {
         return {
             EntityByName: () => ({ Name: ENTITY, PrimaryKeys: [{ Name: 'ID' }], Fields: [] } as unknown as EntityInfo),
             RunView: async () => ({ Success: true, Results: ROWS, RowCount: 1, TotalRowCount: 1, ErrorMessage: '', ExecutionTime: 0, UserViewRunID: '' }),

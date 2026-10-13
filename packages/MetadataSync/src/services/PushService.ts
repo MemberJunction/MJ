@@ -23,7 +23,7 @@ import {
   IsolatedModeWarning,
   UnusedBatchSizeWarning,
 } from '../lib/push-write-mode';
-import { CommittedWrite, PushAbortedError, DescribeCommitFailure, DescribeRollbackOutcome } from '../lib/push-outcome';
+import { CommittedWrite, PushAbortedError, DescribeCommitFailure, DescribeRollbackOutcome, MetadataReloadNotAdoptedError } from '../lib/push-outcome';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
@@ -758,21 +758,10 @@ export class PushService {
     }
     const host = this.hostProvider();
     const touched = this.changeDetails.slice(since).some((change) => host.IsMetadataDatasetMember(change.entityName));
-    if (touched) {
-      await host.RefreshWithinTransaction();
-    }
-  }
-
-  /**
-   * After a rollback, drop any metadata the within-transaction reloads copied in. A pool read
-   * sees only committed rows. A failure here must not hide the rollback error.
-   */
-  private async refreshHostMetadataAfterRollback(callbacks?: PushCallbacks): Promise<void> {
-    try {
-      await this.hostProvider().Refresh();
-    } catch (refreshError) {
-      const message = refreshError instanceof Error ? refreshError.message : String(refreshError);
-      callbacks?.onWarn?.(`⚠️  Metadata could not be reloaded after the push rolled back: ${message}`);
+    if (touched && !(await host.RefreshWithinTransaction())) {
+      // The next directory would resolve lookups and dependencies against metadata that does
+      // not contain the rows this push just wrote, so fail the push (and roll it back) instead.
+      throw new MetadataReloadNotAdoptedError();
     }
   }
 
@@ -854,12 +843,11 @@ export class PushService {
     let rolledBack = true;
     if (!options.dryRun) {
       callbacks?.onWarn?.('\n⚠️  Rolling back database transaction due to error...');
+      // The within-transaction reloads copied uncommitted rows into memory. The host provider
+      // drops them itself: its RollbackTransaction ends the transaction it pinned them to and
+      // reloads from the pool (ProviderBase.OnAmbientTransactionEnded, MJ#4836) — on this
+      // rollback, on the retry in ensureTransactionClosed, and on a failed commit alike.
       rolledBack = await transactionManager.rollbackTransaction();
-      if (rolledBack) {
-        // The within-transaction reloads copied uncommitted rows into memory. A pool read
-        // puts back only what survived the rollback (MJ#4836).
-        await this.refreshHostMetadataAfterRollback(callbacks);
-      }
       await this.writeFilesWithCommittedRecords(run);
       for (const line of DescribeRollbackOutcome(rolledBack, this.committedWrites, configManager.getOriginalCwd())) {
         callbacks?.onWarn?.(line);

@@ -1,4 +1,4 @@
-import type { QuerySyncContext, ExtractedField, ResolveResult } from "./types";
+import type { QuerySyncContext, ExtractedField, ExtractedParameter, ParameterExtractionResult, ResolveResult } from "./types";
 import { ParseQuerySQL } from "./parse";
 import {
     ResolveCompositionReferences,
@@ -10,7 +10,7 @@ import {
     EnrichFieldTypesFromCompositions,
     EnrichFieldTypesFromEntityMetadata,
 } from "./resolve";
-import { RunLLMEnrichment, MergeParametersWithLLM } from "./enrich";
+import { QueryParameterEnricher } from "./enrich";
 import { SyncParameters, SyncFields, SyncEntities, SyncDependencies, RemoveAllRecords } from "./sync";
 import { QueryEngine } from "@memberjunction/core-entities";
 
@@ -26,8 +26,9 @@ export interface PipelineResult {
  * Runs the full query extraction pipeline:
  *   1. PARSE — single-pass SQL analysis
  *   2. RESOLVE — deterministic composition, parameter, field, and entity resolution
- *   3. ENRICH — LLM fills in descriptions and sample values (best-effort)
- *   4. MERGE — deterministic wins, LLM fills gaps
+ *   3. ENRICH — AI fills in descriptions and sample values (best-effort; skipped when
+ *      `ctx.skipAIEnrichment` is set)
+ *   4. MERGE — deterministic wins, AI fills gaps
  *   5. SYNC — parallel database writes
  *
  * Throws on invalid composition references (non-existent, non-Reusable, circular).
@@ -40,15 +41,17 @@ export async function RunExtractionPipeline(ctx: QuerySyncContext): Promise<Pipe
     const resolveResult = resolve(ctx, parseResult);
 
     // ── STAGE 3: ENRICH (best-effort, non-fatal) ──
-    const llmResult = await RunLLMEnrichment(
-        ctx.sql,
-        resolveResult.EntityMetadata,
-        ctx.contextUser,
-        ctx.metadataProvider
-    );
+    const aiResult = ctx.skipAIEnrichment
+        ? null
+        : await QueryParameterEnricher.RunAIEnrichment(
+              ctx.sql,
+              resolveResult.EntityMetadata,
+              ctx.contextUser,
+              ctx.metadataProvider
+          );
 
     // ── STAGE 4: MERGE ──
-    const { finalParams, finalFields } = merge(resolveResult, llmResult, parseResult, ctx);
+    const { finalParams, finalFields } = merge(resolveResult, aiResult, parseResult, ctx);
 
     // ── STAGE 5: SYNC (parallel DB writes) ──
     await sync(ctx, finalParams, finalFields, resolveResult);
@@ -84,7 +87,7 @@ function resolve(ctx: QuerySyncContext, parseResult: ReturnType<typeof ParseQuer
     const { params: passthroughParams, contextMap: passthroughContext } = BuildPassthroughParams(resolvedCompositionRefs);
     const allDeterministicParams = MergePassthroughParams(parseResult.DeterministicParams, passthroughParams);
 
-    // Entity metadata (for LLM context and entity sync)
+    // Entity metadata (for AI context and entity sync)
     const entityMetadata = ExtractEntityMetadataFromSQL(ctx.sql, parseResult.TableRefs, md, ctx.platform);
 
     // Field resolution: try SELECT * expansion first (uses entity metadata), fall back to explicit SELECT columns
@@ -102,27 +105,27 @@ function resolve(ctx: QuerySyncContext, parseResult: ReturnType<typeof ParseQuer
 
 function merge(
     resolveResult: ResolveResult,
-    llmResult: ReturnType<typeof RunLLMEnrichment> extends Promise<infer T> ? T : never,
+    aiResult: ParameterExtractionResult | null,
     parseResult: ReturnType<typeof ParseQuerySQL>,
     ctx: QuerySyncContext
-): { finalParams: ReturnType<typeof MergeParametersWithLLM> | null; finalFields: ExtractedField[] | null } {
+): { finalParams: ExtractedParameter[] | null; finalFields: ExtractedField[] | null } {
     const md = ctx.metadataProvider;
 
-    // Parameters: merge deterministic + LLM
+    // Parameters: merge deterministic + AI
     const finalParams = resolveResult.AllDeterministicParams.length > 0
-        ? MergeParametersWithLLM(resolveResult.AllDeterministicParams, llmResult, resolveResult.PassthroughContext, ctx.parameterHints)
+        ? QueryParameterEnricher.MergeParameters(resolveResult.AllDeterministicParams, aiResult, resolveResult.PassthroughContext, ctx.parameterHints)
         : null;
 
-    // Fields priority: deterministic (SELECT * or explicit columns) → LLM selectClause
+    // Fields priority: deterministic (SELECT * or explicit columns) → AI selectClause
     const resolvedFields = resolveResult.ResolvedFields;
-    const llmFields = llmResult?.selectClause && Array.isArray(llmResult.selectClause) && llmResult.selectClause.length > 0
-        ? llmResult.selectClause
+    const aiFields = aiResult?.selectClause && Array.isArray(aiResult.selectClause) && aiResult.selectClause.length > 0
+        ? aiResult.selectClause
         : null;
 
-    // When we have deterministic fields, supplement them with LLM descriptions
+    // When we have deterministic fields, supplement them with AI descriptions
     const rawFields = resolvedFields
-        ? supplementDeterministicWithLLM(resolvedFields, llmFields)
-        : llmFields;
+        ? supplementDeterministicWithAI(resolvedFields, aiFields)
+        : aiFields;
 
     const finalFields = rawFields
         ? EnrichFieldTypesFromEntityMetadata(
@@ -138,7 +141,7 @@ function merge(
 
 async function sync(
     ctx: QuerySyncContext,
-    finalParams: ReturnType<typeof MergeParametersWithLLM> | null,
+    finalParams: ExtractedParameter[] | null,
     finalFields: ExtractedField[] | null,
     resolveResult: ResolveResult
 ): Promise<void> {
@@ -172,36 +175,37 @@ async function sync(
 }
 
 /**
- * Supplements deterministic fields with richer descriptions from LLM output.
- * The deterministic field list is authoritative for names; the LLM may provide
+ * Supplements deterministic fields with richer descriptions from AI output.
+ * The deterministic field list is authoritative for names; the AI may provide
  * better descriptions, type hints, and computation descriptions.
  */
-function supplementDeterministicWithLLM(
+function supplementDeterministicWithAI(
     resolvedFields: ExtractedField[],
-    llmFields: ExtractedField[] | null
+    aiFields: ExtractedField[] | null
 ): ExtractedField[] {
-    if (!llmFields || llmFields.length === 0) return resolvedFields;
+    if (!aiFields || aiFields.length === 0) return resolvedFields;
 
-    const llmByName = new Map<string, ExtractedField>();
-    for (const lf of llmFields) {
-        llmByName.set(lf.name.toLowerCase(), lf);
+    const aiByName = new Map<string, ExtractedField>();
+    for (const lf of aiFields) {
+        aiByName.set(lf.name.toLowerCase(), lf);
     }
 
     return resolvedFields.map(df => {
-        const llmMatch = llmByName.get(df.name.toLowerCase());
-        if (!llmMatch) return df;
+        const aiMatch = aiByName.get(df.name.toLowerCase());
+        if (!aiMatch) return df;
 
         return {
             ...df,
-            // LLM provides richer descriptions than the deterministic defaults
-            description: llmMatch.description || df.description,
-            // LLM may provide a better type guess for expression columns
-            type: df.isComputed ? (llmMatch.type || df.type) : df.type,
-            // LLM may identify summary/computed nature better
-            isSummary: llmMatch.isSummary ?? df.isSummary,
-            computationDescription: llmMatch.computationDescription ?? df.computationDescription,
-            // LLM may identify source entity for columns the parser can't resolve
-            sourceEntity: df.sourceEntity ?? llmMatch.sourceEntity,
+            // AI provides richer descriptions than the deterministic defaults
+            description: aiMatch.description || df.description,
+            // AI may provide a better type guess for expression columns
+            type: df.isComputed ? (aiMatch.type || df.type) : df.type,
+            // AI may identify summary/computed nature better
+            // ?? on purpose: false is a real isSummary answer and must win over the deterministic guess.
+            isSummary: aiMatch.isSummary ?? df.isSummary,
+            computationDescription: aiMatch.computationDescription || df.computationDescription,
+            // AI may identify source entity for columns the parser can't resolve
+            sourceEntity: df.sourceEntity || aiMatch.sourceEntity,
         };
     });
 }

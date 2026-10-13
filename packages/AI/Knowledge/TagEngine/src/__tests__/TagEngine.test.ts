@@ -43,6 +43,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
 
 vi.mock('@memberjunction/core', () => ({
     UserInfo: class {},
+    EntitySaveOptions: class { SkipAsyncValidation?: boolean = undefined; },
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     Metadata: class { Entities = []; CurrentUser = {}; },
@@ -57,6 +58,10 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
+    // Reached through the real @memberjunction/aiengine entry (the aiengine mock below takes EmbeddingBackfill
+    // from it): @memberjunction/actions-base subclasses these when it loads.
+    MJEntityActionEntity: class {},
+    MJActionEntity: class {},
     // Imported by PriceUnitTypes in @memberjunction/ai-engine-base. Same wholesale-mock
     // caveat as above: unlisted means uncollectable, not merely unmocked.
     MJAIModelPriceUnitTypeEntity: class {},
@@ -109,11 +114,12 @@ vi.mock('@memberjunction/clustering-engine', () => ({
 }));
 
 // Mock tag data — also needs to be hoisted since it's used in vi.mock factories
+// Each tag saves successfully, so the vector the load embeds is persisted on it and the next load hydrates it.
 const { mockTags } = vi.hoisted(() => ({
     mockTags: [
-    { ID: 'tag-1', Name: 'Machine Learning', DisplayName: 'Machine Learning', Description: 'ML algorithms', ParentID: 'tag-root' },
-    { ID: 'tag-2', Name: 'Deep Learning', DisplayName: 'Deep Learning', Description: null, ParentID: 'tag-1' },
-    { ID: 'tag-root', Name: 'Technology', DisplayName: 'Technology', Description: null, ParentID: null },
+    { ID: 'tag-1', Name: 'Machine Learning', DisplayName: 'Machine Learning', Description: 'ML algorithms', ParentID: 'tag-root', Save: async () => true },
+    { ID: 'tag-2', Name: 'Deep Learning', DisplayName: 'Deep Learning', Description: null, ParentID: 'tag-1', Save: async () => true },
+    { ID: 'tag-root', Name: 'Technology', DisplayName: 'Technology', Description: null, ParentID: null, Save: async () => true },
 ],
 }));
 
@@ -121,6 +127,8 @@ vi.mock('@memberjunction/tag-engine-base', () => ({
     TagEngineBase: {
         Instance: {
             Config: vi.fn().mockResolvedValue(undefined),
+            /** TagEngine subscribes to tag changes after it loads; these tests never emit one. */
+            DataChange$: { subscribe: () => ({ unsubscribe: () => undefined }) },
             Tags: mockTags,
             GetTagByID: vi.fn().mockImplementation((id: string) => mockTags.find(t => t.ID.toLowerCase() === id.toLowerCase())),
             GetTagByName: vi.fn().mockImplementation((name: string) => mockTags.find(t => t.Name.toLowerCase() === name.trim().toLowerCase())),
@@ -166,14 +174,25 @@ vi.mock('@memberjunction/ai-vectors-memory', async () => {
     };
 });
 
-vi.mock('@memberjunction/ai', () => ({
+vi.mock('@memberjunction/ai', async (importOriginal) => ({
+    // The real save-time AI switch, pinned to one shared instance: this file's BaseSingleton mock hands out a
+    // fresh instance per call, which would forget the config a test sets.
+    SaveTimeAISettings: await (async () => {
+        const real = (await importOriginal<typeof import('@memberjunction/ai')>()).SaveTimeAISettings;
+        const shared = new real();
+        return class SaveTimeAISettings extends real {
+            public static override get Instance(): InstanceType<typeof real> { return shared; }
+        };
+    })(),
     BaseEmbeddings: class {},
     EmbedTextParams: class {},
     EmbedTextResult: class {},
     GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
 }));
 
-vi.mock('@memberjunction/aiengine', () => ({
+vi.mock('@memberjunction/aiengine', async () => ({
+    // The real shared backfill from the package entry, so TagEngine's load and EmbedMissingTags run its actual loop.
+    EmbeddingBackfill: (await vi.importActual<typeof import('@memberjunction/aiengine')>('@memberjunction/aiengine')).EmbeddingBackfill,
     AIEngine: {
         Instance: {
             Config: vi.fn(),

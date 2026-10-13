@@ -105,6 +105,120 @@ Extends the Query entity with automatic Template management similar to AIPromptE
 - **Automatic Template Management**: Creates and updates Template records when saving
 - **Dynamic SQL Support**: Supports parameterized queries with Nunjucks templates
 
+### Save-time AI: the host switches and the per-instance opt-out
+
+Several server entities call a model while they save. `SaveTimeAISettings` (a process-wide
+`BaseSingleton` in `@memberjunction/ai`, the lowest package every reader depends on) holds one switch per kind of call — every save-time model
+call of a server entity class except Duplicate Runs (by design, see below); every switch is on
+unless the host sets it to `false`, and only an explicit `false` turns one off:
+
+| Switch (`SaveTimeAIConfig`) | Entities whose save calls the model | When `false` |
+|---|---|---|
+| `QueryParameters` | `MJ: Queries`, `MJ: Query SQLs` | no enrichment prompt; parameters, fields, entities and dependencies are still extracted deterministically, with heuristic descriptions |
+| `TemplateParameters` | `MJ: Template Contents` | no enrichment prompt; parameters are still extracted deterministically |
+| `ViewSmartFilters` | `MJ: User Views` | no Smart Filter generation; the view keeps its current WhereClause |
+| `CodeGeneration` | `MJ: Actions` (Type `Generated`), `MJ: Remote Operations` (GenerationType `AI`) | no code generation; the record saves with its current code |
+| `Embeddings` | `MJ: Queries`, `MJ: Tags`, `MJ: AI Agent Notes`, `MJ: AI Agent Examples`, `MJ: Components` | nothing is embedded or cleared; stored vectors are left exactly as they are, even when the source text is now empty |
+
+The first four run an AI prompt (a live model, credentials, an AI Prompt Run row) —
+`SaveTimeAISettings.PromptKinds`. `Embeddings` runs the local, in-process embedding model. Not in
+the family:
+
+- **`MJ: Duplicate Runs` (by design).** Saving a new run starts duplicate detection, which vectorizes
+  the source records through the Entity Document's embedding model. Creating the run *is* the request
+  to detect, so a switch would turn the entity into a no-op.
+- `MJ: AI Agent Requests`: a responded request resumes the agent — the run is the feature, not work
+  done for the save.
+- Entity Actions and Entity AI Actions that metadata attaches to an entity (including the
+  `Run Record Process` action a Record Process's on-change trigger owns). The provider fires them on
+  save; attaching them is the request, and Entity AI Actions have a per-save opt-out
+  (`EntitySaveOptions.SkipEntityAIActions`).
+- `MJ: Vector Indexes` (vector-database index creation, not a model call) and `MJ: AI Prompt Runs`
+  (cost arithmetic).
+
+**Deferred embeddings (`SkipEmbeddings`).** `mj sync push` saves every record with
+`BaseEntity.SkipEmbeddings = true` so a short-lived CLI never loads the embedding model. A Query, Tag,
+AI Agent Note, AI Agent Example or Component saved that way with changed text gets its now-stale vector
+cleared instead of recomputed, and the engine that serves the vectors embeds it later, with no manual step:
+
+| Records | Engine | When it embeds and persists the missing vectors |
+|---|---|---|
+| Queries | `QueryEngineServer.EmbedMissingQueries` | started when the engine loads (on first use), and after every `MJ: Queries` change |
+| Tags | `TagEngine` (load) / `EmbedMissingTags` | on load — awaited (`RunUntilDone`): the load finishes only when every tag without a current-model vector has been embedded and indexed, because new-tag de-duplication needs them (a tag whose save fails is indexed anyway, and its save is retried by the next run) — and after every `MJ: Tags` change |
+| AI Agent Notes, AI Agent Examples | `AIEngine.EmbedMissingNoteAndExampleVectors` | started once its note/example embeddings load (server startup — AIEngine is a deferred startup engine — or the first similarity search), and after every change to either entity from then on — never in a process that has not loaded them, so the pushing CLI still loads no model |
+| Components | `ComponentMetadataEngineServer.EmbedMissingComponentVectors` | started at server startup (`HandleStartup`: the engine is a deferred `@RegisterForStartup` engine, full startup mode only), reading only the components that lack a vector — not the bulk list `Config` loads — and after every component save in that process that leaves a vector missing |
+
+All of them run on `EmbeddingBackfill` (`@memberjunction/aiengine`), the one implementation of the loop and of
+"embed, write the vector columns, save, put them back on failure":
+
+- **Started, not awaited** — except TagEngine's load. A load or startup starts the backfill and returns; a similarity
+  search waits for its engine to load, never for the backfill. TagEngine's load uses the awaited mode
+  (`RunUntilDone`: the same bounded passes, back to back) so tag de-duplication always sees every tag's vector; the
+  load is therefore slower, once, in proportion to the tags without a vector.
+- **One pass at a time.** A trigger during a pass schedules exactly one more pass after it (never dropped).
+- **Bounded per pass.** A pass embeds and saves at most `embeddingBackfill.BatchSize` records (default 100); the
+  rest continue in later passes, `embeddingBackfill.PassDelaySeconds` apart (default 10), on their own.
+- **Failures never starve the rest.** A record whose embedding or save fails is skipped for the rest of that run, so
+  records that keep failing cannot fill every batch; neither can rows a database read returns with nothing to embed
+  (whitespace-only text passes `<> ''` on PostgreSQL). Each failure is logged, and the run ends with one error line
+  counting them; the next load or change retries them.
+- **Stops when embedding is unavailable.** No local embedding model (`EmbeddingUnavailableError`), or a batch
+  embedder that throws or returns a result list not matching the texts: the run stops with one error line instead of walking the backlog; the
+  records wait for the next load or change. A text the model rejects is only that record's failure; the pass goes on.
+- **Persisted through the entity.** Each vector is saved with the record (so `MJ: Record Changes` records it); a
+  failed embedding or save puts the record's vector columns back as they were, and the next run retries it. The
+  engine's in-memory index (tags, queries) takes a computed vector whether or not its save succeeds, and keeps it
+  across an index rebuild from the persisted vectors (`EmbeddingBackfill.ReplayUnsavedVectors`) until the record
+  is saved, edited or deleted.
+
+Every one of these engines computes nothing while `saveTimeAI.Embeddings` is false (they only load stored
+vectors then); `TagEngine` also skips embedding the tags it creates or renames. An explicit
+`TagEngine.RebuildTagEmbeddings` (an admin action) and similarity searches are not save-time work and still run.
+
+Other vector columns are not written by a save, so push skips nothing there: `MJ: Entity Record Documents`
+`VectorJSON` and the Content Items/Chunks vectors are produced by the vectorization pipelines, and
+`MJ: AI Result Cache` `PromptEmbedding` is not written by any code path.
+
+MJServer installs the switches from the `saveTimeAI` section of `mj.config.cjs`, and the backfill bounds from the
+`embeddingBackfill` section, at startup — before any startup engine runs:
+
+```javascript
+module.exports = {
+  // ...
+  saveTimeAI: {
+    // a host that must make no live model call (e.g. a deterministic integration-test MJAPI)
+    QueryParameters: false,
+    TemplateParameters: false,
+    ViewSmartFilters: false,
+    CodeGeneration: false,
+    // Embeddings: false,   // also stop local embedding on save, and every backfill
+  },
+  embeddingBackfill: {
+    BatchSize: 100,         // records one backfill pass embeds and saves (default 100)
+    PassDelaySeconds: 10,   // wait before the next pass when records are left over (default 10)
+  },
+};
+```
+
+Code that holds the entity can opt one instance out instead: `MJQueryEntityServer`,
+`MJQuerySQLEntityServer` and `MJTemplateContentEntityServer` implement `ISaveEnrichmentOptOut` —
+set `SkipAIEnrichment = true` before `Save()` and that instance's parameter enrichment is skipped on
+every later save too (it is sticky). On a query, `RerunExtraction(skipAIEnrichment)` overrides the
+instance flag for one run; the host switch applies either way.
+
+**Re-extraction keeps declared sample values.** When a query's SQL changes, extraction updates each
+existing parameter's Type, IsRequired, DefaultValue and Description from the SQL, but a parameter
+whose `DetectionMethod` is `'Manual'` and whose `SampleValue` is not empty keeps that SampleValue (a
+value declared by a user or by metadata is not overwritten by a heuristic or AI sample), unless the
+parameter's Type changed. Re-extraction no longer flips `DetectionMethod` to `'AI'`. Because the
+column defaults to `'Manual'`, a row created without an explicit DetectionMethod counts as Manual;
+set its `DetectionMethod` to `'AI'` to let the next extraction refresh its SampleValue again.
+
+**Identifier samples.** A string parameter whose name reads as a key — `ID`, a name ending in
+`ID`/`Id` after a lowercase letter or digit (`ActivityID`, `userId`), `_id`, or a GUID/UUID name —
+gets the empty GUID `00000000-0000-0000-0000-000000000000` as its heuristic sample, so a test run of
+the query is valid SQL and returns no rows (`QueryParameterEnricher.IsIdentifierParameterName`).
+
 ### MJAIAgentNoteEntityServer (v5.30.x+)
 
 Extends the agent note entity to keep the in-process vector store in sync with persisted state:
@@ -207,34 +321,35 @@ This package works seamlessly with:
 
 ## Vector Embeddings Support (v2.90.0+)
 
-This package provides a utility helper for server-side entities to easily implement vector embedding generation using the MemberJunction AI Engine.
+The server-side entities of this package embed their text with the local embedding model through `AIEngine.EmbedTextLocalForEntity` (`@memberjunction/aiengine`); an entity of your own does the same.
 
-### EmbedTextLocalHelper
+### AIEngine.EmbedTextLocalForEntity
 
-A shared utility function that simplifies embedding generation for any server-side entity:
+The shared embedding call for any server-side entity (a static on `AIEngine` in `@memberjunction/aiengine`; it
+replaces the former free function `EmbedTextLocalHelper` of this package):
 
 ```typescript
-import { EmbedTextLocalHelper } from '@memberjunction/core-entities-server';
+import { AIEngine } from '@memberjunction/aiengine';
 import { BaseEntity, SimpleEmbeddingResult } from '@memberjunction/core';
 
 @RegisterClass(BaseEntity, 'MyEntity')
 export class MyEntityServer extends MyEntity {
     protected async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
-        return EmbedTextLocalHelper(this, textToEmbed);
+        return AIEngine.EmbedTextLocalForEntity(this, textToEmbed);
     }
 }
 ```
 
-The helper:
-- Configures the AI Engine with the current user context
-- Calls the embedding generation
-- Validates the response
+`AIEngine.EmbedTextLocalForEntity`:
+- Configures the AI Engine with the entity's current user (`ContextCurrentUser`)
+- Throws `EmbeddingUnavailableError` when no local embedding model is configured
+- Embeds the text with the highest-power local embedding model and validates the result
 - Returns a properly typed `SimpleEmbeddingResult`
 
 ### Using Vector Embeddings in Your Entity
 
 1. **Add database fields** for storing vectors and model IDs — a JSON vector column plus a `VARBINARY(MAX)` binary companion (see the [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md))
-2. **Override EmbedTextLocal** using the helper function
+2. **Override EmbedTextLocal** to return `AIEngine.EmbedTextLocalForEntity(this, textToEmbed)`
 3. **Call GenerateEmbeddings** in your Save method:
 
 ```typescript

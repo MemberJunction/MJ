@@ -12,4 +12,5 @@ export * from './validation/constraint-validator.js';
 export * from './materialization/target-validator.js';
 export * from './cache/FeatureValueCacheService.js';
 export * from './spec/escalation-target.js';
+export * from './spec/feature-value-key.js';
 export * from './entities/MJRecordProcessEntityExtended.js';

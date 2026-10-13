@@ -363,6 +363,15 @@ export class RunViewParams {
     IncludeRelatedRecords?: string[];
 
     /**
+     * Run this view's reads on the database connection pool even while a transaction is open on the provider.
+     * Set by background engine reloads (`BaseEngine.BackgroundReloadReads`): such a reload runs detached from the
+     * write that triggered it, so a transaction another unit of work opened on the same provider meanwhile is not its
+     * own, and its reads must never join it. Database providers honour it; a network provider does not forward it
+     * (the server runs its own reloads). Omitted (false) by default: a caller inside a transaction sees its own rows.
+     */
+    ReadOnPool?: boolean;
+
+    /**
      * Internal flag set by BaseEngine when loading entity configurations.
      * When true, telemetry analyzers will skip false-positive warnings about
      * "entity already loaded by engine" since the engine IS the one calling RunView.

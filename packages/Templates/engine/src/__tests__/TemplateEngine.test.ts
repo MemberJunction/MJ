@@ -8,7 +8,7 @@ vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
     UserInfo: class {},
     BaseEngine: class {
-        static getInstance<T>(): T { return new (this as never)() as T; }
+        static getInstance<T>(this: new () => T): T { return new this(); }
         protected ContextUser = { ID: 'test-user', Name: 'Test' };
         protected Loaded = true;
         async Config() {}
@@ -88,7 +88,7 @@ vi.mock('@memberjunction/templates-base-types', () => ({
     TemplateEngineBase: class {
         // TemplateEngineServer now composes this via `TemplateEngineBase.Instance` (cached singleton).
         private static _inst: unknown;
-        static get Instance() { return (this._inst ??= new (this as never)()); }
+        static get Instance() { return (this._inst ||= new this()); }
         static getInstance<T>(): T { return (this as unknown as { Instance: T }).Instance; }
         public ContextUser = { ID: 'test-user', Name: 'Test' };
         public Loaded = true;
@@ -178,7 +178,8 @@ describe('TemplateEngineServer', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        engine = new TemplateEngineServer();
+        // the mocked BaseSingleton builds a fresh instance on every Instance read, so each test gets its own engine
+        engine = TemplateEngineServer.Instance;
         // Call SetupNunjucks to initialize the nunjucks environment
         engine.SetupNunjucks();
     });
@@ -600,6 +601,14 @@ describe('TemplateEngineServer', () => {
                 { x: 'second' }
             );
             expect(result2.Output).toBe('second');
+        });
+
+        it('recompiles a cached template when its content text changes', async () => {
+            const templateEntity = { ID: 't-1', ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }), GetParametersForContent: vi.fn().mockReturnValue([]) };
+            const first = await engine.RenderTemplate(templateEntity as never, { ID: 'tc-9', TemplateText: 'A {{ x }}' } as never, { x: 1 });
+            const second = await engine.RenderTemplate(templateEntity as never, { ID: 'tc-9', TemplateText: 'B {{ x }}' } as never, { x: 1 });
+            expect(first.Output).toBe('A 1');
+            expect(second.Output).toBe('B 1');
         });
     });
 

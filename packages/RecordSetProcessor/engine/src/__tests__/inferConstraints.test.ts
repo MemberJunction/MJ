@@ -5,6 +5,7 @@ import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, type AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import { DataFeatureSpec } from '@memberjunction/feature-pipelines';
+import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { InferProcessor, SetNestedValue } from '../processors/InferProcessor';
 
 describe('InferProcessor constraint enforcement', () => {
@@ -28,6 +29,19 @@ describe('InferProcessor constraint enforcement', () => {
     let mockSuccess = true;
     let mockErrorMessage: string | undefined;
 
+    /**
+     * The runner's result as a partial test double: the processor reads only success, errorMessage, result and
+     * promptRun.ID, so the model's chatResult and the full prompt-run entity are left out.
+     */
+    function promptRunResult(): AIPromptRunResult<unknown> {
+        return {
+            success: mockSuccess,
+            errorMessage: mockErrorMessage,
+            result: mockResult,
+            promptRun: { ID: 'RUN-AI-1' },
+        } as unknown as AIPromptRunResult<unknown>;
+    }
+
     beforeEach(() => {
         executedParams = undefined;
         executedValidationBehavior = undefined;
@@ -37,20 +51,17 @@ describe('InferProcessor constraint enforcement', () => {
         mockErrorMessage = undefined;
 
         vi.spyOn(AIEngine.Instance, 'Config').mockResolvedValue(undefined);
+        // An empty Feature Pipeline Types catalog: the pipeline runs on the built-in LLM driver
+        vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'FeaturePipelineTypes', 'get').mockReturnValue([]);
         // @ts-expect-error mock prompt getter
         vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([mockPrompt]);
 
-        vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockImplementation(async (params: unknown) => {
+        vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockImplementation(async (params: AIPromptParams) => {
             executedParams = params;
-            const promptParams = params as AIPromptParams;
-            executedValidationBehavior = promptParams.prompt?.ValidationBehavior;
-            executedParamsValidationBehavior = promptParams.validationBehavior;
-            return {
-                success: mockSuccess,
-                errorMessage: mockErrorMessage,
-                result: mockResult,
-                promptRun: { ID: 'RUN-AI-1' },
-            };
+            executedValidationBehavior = params.prompt?.ValidationBehavior;
+            executedParamsValidationBehavior = params.validationBehavior;
+            return promptRunResult();
         });
     });
 
@@ -91,7 +102,7 @@ describe('InferProcessor constraint enforcement', () => {
 
         mockResult = { seniority: 'Director' };
 
-        const processor = new InferProcessor('PROMPT-1', undefined, spec);
+        const processor = new InferProcessor('PROMPT-1', undefined, spec, null);
         const result = await processor.ProcessRecord(record, mockContext);
 
         expect(result.Status).toBe('Succeeded');
@@ -132,7 +143,7 @@ describe('InferProcessor constraint enforcement', () => {
         // Out of vocabulary answer
         mockResult = { seniority: 'Intern' };
 
-        const processor = new InferProcessor('PROMPT-1', undefined, spec);
+        const processor = new InferProcessor('PROMPT-1', undefined, spec, null);
         const result = await processor.ProcessRecord(record, mockContext);
 
         expect(result.Status).toBe('Failed');
@@ -164,7 +175,7 @@ describe('InferProcessor constraint enforcement', () => {
 
         mockResult = { seniority: 'VP' };
 
-        const processor = new InferProcessor('PROMPT-1', undefined, spec);
+        const processor = new InferProcessor('PROMPT-1', undefined, spec, null);
         const result = await processor.ProcessRecord(record, mockContext);
 
         expect(result.Status).toBe('Succeeded');
@@ -198,7 +209,7 @@ describe('InferProcessor constraint enforcement', () => {
 
         mockResult = { seniority: 'VP' };
 
-        const processor = new InferProcessor('PROMPT-1', undefined, spec);
+        const processor = new InferProcessor('PROMPT-1', undefined, spec, null);
         const result = await processor.ProcessRecord(record, mockContext);
 
         expect(result.Status).toBe('Succeeded');
@@ -234,7 +245,7 @@ describe('InferProcessor constraint enforcement', () => {
         // Target field Compensation has TSType: 'number' in mock provider
         mockResult = { comp: '150000' };
 
-        const processor = new InferProcessor('PROMPT-1', undefined, spec);
+        const processor = new InferProcessor('PROMPT-1', undefined, spec, null);
         const result = await processor.ProcessRecord(record, mockContext);
 
         expect(result.Status).toBe('Succeeded');
@@ -266,7 +277,7 @@ describe('InferProcessor constraint enforcement', () => {
         // Target field Notes has TSType: 'string' in mock provider
         mockResult = { rating: '5' };
 
-        const processor = new InferProcessor('PROMPT-1', undefined, spec);
+        const processor = new InferProcessor('PROMPT-1', undefined, spec, null);
         const result = await processor.ProcessRecord(record, mockContext);
 
         expect(result.Status).toBe('Failed');
@@ -276,6 +287,9 @@ describe('InferProcessor constraint enforcement', () => {
     it('populates PromptVersionHash on successful RecordResult', async () => {
         const spec: DataFeatureSpec = {
             Name: 'Provenance Test',
+            Description: '',
+            Context: {},
+            Caching: { Cacheable: false },
             PromptID: 'PROMPT-1',
             Outputs: [
                 {
@@ -287,7 +301,7 @@ describe('InferProcessor constraint enforcement', () => {
         };
         mockResult = { res: 'Done' };
 
-        const processor = new InferProcessor('PROMPT-1', undefined, spec);
+        const processor = new InferProcessor('PROMPT-1', undefined, spec, null);
         const result = await processor.ProcessRecord(record, mockContext);
 
         expect(result.Status).toBe('Succeeded');
@@ -299,6 +313,8 @@ describe('InferProcessor constraint enforcement', () => {
     it('filters record fields when Context.Fields is specified', async () => {
         const spec: DataFeatureSpec = {
             Name: 'Field Filter Pipeline',
+            Description: '',
+            Caching: { Cacheable: false },
             PromptID: 'PROMPT-1',
             Context: { Fields: ['Title'] }, // Only Title, exclude RawComp
             Outputs: [
@@ -311,7 +327,7 @@ describe('InferProcessor constraint enforcement', () => {
         };
         mockResult = { res: 'Done' };
 
-        const processor = new InferProcessor('PROMPT-1', undefined, spec);
+        const processor = new InferProcessor('PROMPT-1', undefined, spec, null);
         await processor.ProcessRecord(record, mockContext);
 
         const promptData = (executedParams as { data: Record<string, unknown> }).data;
@@ -320,7 +336,7 @@ describe('InferProcessor constraint enforcement', () => {
         expect(promptRecord.RawComp).toBeUndefined();
     });
 
-    it('allows subclasses to override P1-6 lifecycle hooks', async () => {
+    it('allows subclasses to override lifecycle hooks', async () => {
         let beforeExecuteCalled = false;
         let afterExecuteCalled = false;
 
@@ -336,6 +352,9 @@ describe('InferProcessor constraint enforcement', () => {
 
         const spec: DataFeatureSpec = {
             Name: 'Hook Pipeline',
+            Description: '',
+            Context: {},
+            Caching: { Cacheable: false },
             PromptID: 'PROMPT-1',
             Outputs: [
                 {
@@ -346,7 +365,7 @@ describe('InferProcessor constraint enforcement', () => {
             ],
         };
 
-        const processor = new CustomInferProcessor('PROMPT-1', undefined, spec);
+        const processor = new CustomInferProcessor('PROMPT-1', undefined, spec, null);
         const result = await processor.ProcessRecord(record, mockContext);
 
         expect(result.Status).toBe('Succeeded');
@@ -358,6 +377,9 @@ describe('InferProcessor constraint enforcement', () => {
     it('writes back coerced nested property paths and enum casing without mutating prompt singleton', async () => {
         const spec: DataFeatureSpec = {
             Name: 'Nested Pipeline',
+            Description: '',
+            Context: {},
+            Caching: { Cacheable: false },
             PromptID: 'PROMPT-1',
             Outputs: [
                 {
@@ -392,7 +414,7 @@ describe('InferProcessor constraint enforcement', () => {
             },
         };
 
-        const processor = new InferProcessor('PROMPT-1', undefined, spec);
+        const processor = new InferProcessor('PROMPT-1', undefined, spec, null);
         const result = await processor.ProcessRecord(record, mockContext);
 
         expect(result.Status).toBe('Succeeded');
@@ -470,11 +492,14 @@ describe('InferProcessor constraint enforcement', () => {
 
         const spec: DataFeatureSpec = {
             Name: 'Prototype Isolation Spec',
+            Description: '',
+            Context: {},
+            Caching: { Cacheable: false },
             PromptID: 'PROMPT-FAKE',
             Outputs: [{ Ref: '$.out', Name: 'Out', Target: { Mode: 'field', EntityFieldName: 'Notes' } }],
         };
 
-        const processor = new InferProcessor('PROMPT-FAKE', undefined, spec);
+        const processor = new InferProcessor('PROMPT-FAKE', undefined, spec, null);
         await processor.ProcessRecord(record, mockContext);
 
         // The shared singleton's setter was NOT called

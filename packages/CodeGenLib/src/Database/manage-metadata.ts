@@ -33,7 +33,7 @@ import {
 } from "./search-guardrails";
 import { MapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
 import { SQLParser } from "@memberjunction/sql-parser";
-import { createDisplayName, EscapeSQLString, generatePluralName, MJGlobal, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
+import { createDisplayName, EscapeSQLString, generatePluralName, IsValidUUID, MJGlobal, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 
 import * as fs from 'fs';
@@ -306,6 +306,21 @@ export type ViewRegenReason = 'Geocoding';
 export interface ViewRegenEntry {
    EntityName: string;
    Reason: ViewRegenReason;
+}
+
+/**
+ * An entity field CodeGen's first pass found whose column is gone from its entity's base table (a dropped or renamed
+ * column), as read back by {@link ManageMetadataBase.DeleteFieldsOfDroppedColumns}.
+ */
+export interface DroppedColumnField {
+   /** The EntityField's ID. */
+   ID: string;
+   /** The owning entity's ID. */
+   EntityID: string;
+   /** The field name, which is the name of the column that is gone. */
+   Name: string;
+   /** The owning entity's name. */
+   Entity: string;
 }
 
 export class ManageMetadataBase {
@@ -4155,10 +4170,9 @@ export class ManageMetadataBase {
          }
 
          // NOTE: Stale relationship cleanup is intentionally NOT done here because this
-         // method runs BEFORE deleteUnneededEntityFields(). Stale EntityField records
-         // (for dropped columns) still exist at this point and would prevent detection
-         // of stale relationships. The cleanup is handled by cleanupStaleEntityRelationships()
-         // which is called from sql_codegen.ts AFTER entity fields are fully synced.
+         // method runs BEFORE deleteUnneededEntityFields(): the field row of a renamed or
+         // dropped FK column still exists at this point. deleteUnneededEntityFields() removes
+         // the relationships joined on the fields it deletes (BuildDeletedJoinFieldRelationshipSQL).
 
          return true;
       }
@@ -4292,7 +4306,9 @@ export class ManageMetadataBase {
     * Public entry point for cleaning up stale EntityRelationship records. This must be called
     * AFTER deleteUnneededEntityFields() has run, so that stale EntityField records (for dropped
     * columns) are removed before we check which relationships are still valid.
-    * Called from sql_codegen.ts after the second manageEntityFields() pass.
+    * NOT called by the CodeGen pipeline: its broad sweep was reverted in f4daef01c4 (it deleted valid
+    * relationships). The pipeline removes relationships joined on deleted fields instead, inside
+    * deleteUnneededEntityFields (see BuildDeletedJoinFieldRelationshipSQL).
     * @param pool - database connection
     * @param excludeSchemas - schemas to exclude from FK field lookup
     */
@@ -4547,6 +4563,13 @@ export class ManageMetadataBase {
       const step1StartTime: Date = new Date();
       if (skipDeleteUnneededFields) {
          logStatus(`      Skipping deletion of unneeded entity fields (deferred to post-SQL pass)`);
+         // Fields whose column is gone from the base table are stale whatever the views say, so they go now: a renamed
+         // column's old field row would otherwise keep its Sequence while the new field takes the same ordinal
+         // (UQ_EntityField_EntityID_Sequence), and the relationship pass would keep the old relationship.
+         if (! await this.DeleteFieldsOfDroppedColumns(pool, excludeSchemas, scopedEntityIDs)) {
+            logError('Error deleting entity fields whose column was dropped');
+            bSuccess = false;
+         }
       } else {
          if (! await this.deleteUnneededEntityFields(pool, excludeSchemas, scopedEntityIDs)) {
             logError ('Error deleting unneeded entity fields');
@@ -5805,14 +5828,199 @@ export class ManageMetadataBase {
          // result contains the DELETED entity fields. Get a distinct list of entity names
          // and add them to the modified entity list if they're not already in there.
          if (result && result.length > 0) {
-            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Entity: any; }) => r.Entity));
+            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Entity: string }) => r.Entity));
+         }
+         // A relationship joined on a field that no longer exists can never load again (a renamed or dropped FK
+         // column): those deleted now, and those the first pass deleted whose relationship the relationship pass did
+         // not re-point to a new field. Remove them.
+         const deleted: Array<{ EntityID?: unknown; Name?: unknown }> = [...(result ?? []), ...ManageMetadataBase.pendingDroppedColumnFields];
+         ManageMetadataBase.pendingDroppedColumnFields = [];
+         const cleanupSQL = this.BuildDeletedJoinFieldRelationshipSQL(deleted);
+         if (cleanupSQL.length > 0) {
+            await this.logSQLAndExecute(pool, cleanupSQL, 'SQL text to remove EntityRelationships joined on deleted entity fields');
          }
          return true;
       }
       catch (e) {
-         logError(e as string);
+         logError(e instanceof Error ? e.message : String(e));
          return false;
       }
+   }
+
+   /**
+    * Fields {@link DeleteFieldsOfDroppedColumns} deleted in the first pass; the relationships still joined on them after
+    * the relationship pass are removed by deleteUnneededEntityFields in the second pass. Static, like the run's other
+    * cross-pass state (newEntityList, modifiedEntityList): each pass creates its own ManageMetadataBase instance. Reset
+    * at the start of every first pass, so a run whose second pass never reached the cleanup (an earlier throw) cannot
+    * carry its list into the next run in the same process.
+    */
+   private static pendingDroppedColumnFields: DroppedColumnField[] = [];
+
+   /**
+    * Deletes the non-virtual entity fields whose column no longer exists in the entity's base table
+    * (`INFORMATION_SCHEMA.COLUMNS`, both platforms) — a dropped or renamed column — together with their value lists.
+    * Runs in CodeGen's first pass, where the full `deleteUnneededEntityFields` is deferred because the views are not
+    * regenerated yet: that deferral is right for view-derived (virtual) fields, but a field whose column is gone from
+    * the base table is stale whatever the views say. Without this, a renamed column's old field keeps its Sequence and
+    * the new field is renumbered onto the same value (`UQ_EntityField_EntityID_Sequence` fails the run), and the
+    * relationship pass keeps the old relationship instead of re-pointing it.
+    *
+    * Kept in step with `spDeleteUnneededEntityFields` (SQL Server procedure and PostgreSQL function), which deletes the
+    * same rows later in the run when this has not:
+    * - same scope: non-virtual entities, no external-data-source entities (gated on
+    *   {@link entityHasExternalDataSourceColumn}, as every EDS read in this file is), excluded schemas (`includeSchemas`
+    *   is already compiled into `excludeSchemas` before any pass runs), the scoped entity IDs;
+    * - same deletes: `EntityFieldValue`, then `EntityField` (`EntityFieldPermission` goes with the field through its
+    *   ON DELETE CASCADE foreign key on both platforms);
+    * - same bookkeeping: touches `Entity.__mj_UpdatedAt` of every affected entity and adds it to the modified-entity list.
+    *
+    * It cannot be the procedure, and differs from it on purpose:
+    * 1. Evidence. The procedure compares against `vwSQLColumnsAndEntityFields`, which lists base-VIEW columns. In the
+    *    first pass the views have not been regenerated, so that comparison would delete every field a pending view
+    *    change is about to bring back. This compares against the base TABLE instead.
+    * 2. Virtual fields (`IsVirtual`) are skipped: they exist only in the view, so the base table is no evidence about
+    *    them. The procedure handles them in the second pass, once the views are current.
+    * 3. An entity whose base table is missing is skipped (`INFORMATION_SCHEMA.TABLES` guard): without the table there is
+    *    no column evidence, and a missing table is the entity-level prune's case, not a field's.
+    * 4. A scope whose IDs are all invalid deletes nothing, where the procedure falls back to the whole database: a
+    *    first-pass delete never reaches beyond the entities its caller named.
+    */
+   protected async DeleteFieldsOfDroppedColumns(pool: CodeGenConnection, excludeSchemas: string[], entityIDs?: string[]): Promise<boolean> {
+      ManageMetadataBase.pendingDroppedColumnFields = [];
+      try {
+         const findSQL = this.BuildDroppedColumnFieldsQuerySQL(excludeSchemas, entityIDs, await this.entityHasExternalDataSourceColumn(pool));
+         if (findSQL === null) {
+            return true;
+         }
+         const stale = ManageMetadataBase.ToDroppedColumnFields((await this.runQuery(pool, findSQL)).recordset);
+         if (stale.length === 0) {
+            return true;
+         }
+         await this.logSQLAndExecute(pool, this.BuildDroppedColumnFieldsDeleteSQL(stale), 'SQL text to delete entity fields whose column was dropped');
+         // Their relationships are NOT removed here: the relationship pass that follows re-points a renamed column's
+         // relationship to the new field (keeping its ID and settings). Whatever still joins on a deleted name after
+         // that pass is removed with the fields deleteUnneededEntityFields deletes.
+         ManageMetadataBase.pendingDroppedColumnFields.push(...stale);
+         ManageMetadataBase.addNewEntitiesToModifiedList([...new Set(stale.map((f) => f.Entity))]);
+         return true;
+      }
+      catch (e) {
+         logError(e instanceof Error ? e.message : String(e));
+         return false;
+      }
+   }
+
+   /**
+    * The query {@link DeleteFieldsOfDroppedColumns} runs to find the fields whose column is gone from the base table.
+    * @param excludeSchemas schemas never touched (with `includeSchemas` already compiled in)
+    * @param entityIDs the entities in scope; undefined or empty for every entity
+    * @param hasExternalDataSourceColumn whether `vwEntities` has `ExternalDataSourceID` (absent on databases that predate
+    *   External Data Sources, where referencing it would abort the run)
+    * @returns the SELECT, or null when a scope was given and none of its IDs is a valid UUID (nothing is in scope)
+    */
+   protected BuildDroppedColumnFieldsQuerySQL(excludeSchemas: string[], entityIDs: string[] | undefined, hasExternalDataSourceColumn: boolean): string | null {
+      let scoped = '';
+      if (entityIDs && entityIDs.length > 0) {
+         const validIDs = entityIDs.filter((id) => IsValidUUID(id));
+         if (validIDs.length === 0) {
+            return null;
+         }
+         scoped = `
+              AND e.${this.qi('ID')} IN (${validIDs.map((id) => `'${id}'`).join(', ')})`;
+      }
+      const excluded = excludeSchemas.length > 0
+         ? `
+              AND e.${this.qi('SchemaName')} NOT IN (${excludeSchemas.map((schema) => `'${EscapeSQLString(schema)}'`).join(', ')})`
+         : '';
+      const external = hasExternalDataSourceColumn
+         ? `
+              AND e.${this.qi('ExternalDataSourceID')} IS NULL`
+         : '';
+      return `SELECT ef.${this.qi('ID')} AS ${this.qi('ID')}, ef.${this.qi('EntityID')} AS ${this.qi('EntityID')}, ef.${this.qi('Name')} AS ${this.qi('Name')}, e.${this.qi('Name')} AS ${this.qi('Entity')}
+            FROM ${this.qs(MjCoreSchema(), 'EntityField')} ef
+            INNER JOIN ${this.qs(MjCoreSchema(), 'vwEntities')} e ON e.${this.qi('ID')} = ef.${this.qi('EntityID')}
+            WHERE ef.${this.qi('IsVirtual')} = ${this.boolLit(false)}
+              AND e.${this.qi('VirtualEntity')} = ${this.boolLit(false)}${external}${excluded}${scoped}
+              AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES t
+                          WHERE t.TABLE_SCHEMA = e.${this.qi('SchemaName')} AND t.TABLE_NAME = e.${this.qi('BaseTable')})
+              AND NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS c
+                              WHERE c.TABLE_SCHEMA = e.${this.qi('SchemaName')} AND c.TABLE_NAME = e.${this.qi('BaseTable')}
+                                AND c.COLUMN_NAME = ef.${this.qi('Name')})`;
+   }
+
+   /**
+    * The statements that delete the fields {@link BuildDroppedColumnFieldsQuerySQL} found, in the order
+    * `spDeleteUnneededEntityFields` uses: touch the entities, delete the value lists, delete the fields. The
+    * `__mj_UpdatedAt` value written is a formality on both platforms — each `Entity` update trigger stamps its own.
+    */
+   protected BuildDroppedColumnFieldsDeleteSQL(fields: DroppedColumnField[]): string {
+      const fieldIDs = fields.map((f) => `'${f.ID}'`).join(', ');
+      const entityIDs = [...new Set(fields.map((f) => f.EntityID))].map((id) => `'${id}'`).join(', ');
+      return `
+/* Delete the entity fields whose column was dropped from the base table */
+   UPDATE ${this.qs(MjCoreSchema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()} WHERE ${this.qi('ID')} IN (${entityIDs});
+   DELETE FROM ${this.qs(MjCoreSchema(), 'EntityFieldValue')} WHERE ${this.qi('EntityFieldID')} IN (${fieldIDs});
+   DELETE FROM ${this.qs(MjCoreSchema(), 'EntityField')} WHERE ${this.qi('ID')} IN (${fieldIDs});
+`;
+   }
+
+   /**
+    * Narrows the untyped rows of {@link BuildDroppedColumnFieldsQuerySQL} to {@link DroppedColumnField}s, dropping any
+    * row whose IDs are not UUIDs or whose names are not strings (none can be, from that query; the delete statements
+    * embed these values, so nothing unchecked reaches them).
+    */
+   protected static ToDroppedColumnFields(rows: ReadonlyArray<Record<string, unknown>>): DroppedColumnField[] {
+      const fields: DroppedColumnField[] = [];
+      for (const row of rows) {
+         const { ID, EntityID, Name, Entity } = row;
+         if (typeof ID === 'string' && IsValidUUID(ID) && typeof EntityID === 'string' && IsValidUUID(EntityID)
+             && typeof Name === 'string' && typeof Entity === 'string') {
+            fields.push({ ID, EntityID, Name, Entity });
+         }
+      }
+      return fields;
+   }
+
+   /**
+    * SQL that removes every auto-maintained One To Many EntityRelationship joined on an entity field
+    * `spDeleteUnneededEntityFields` just deleted: the relationship's child entity (`RelatedEntityID`) is the deleted
+    * field's entity and its `RelatedEntityJoinField` is the deleted field's name.
+    *
+    * Physical evidence only: the field row was deleted in this run AND the column is gone from the entity's base table
+    * (`INFORMATION_SCHEMA.COLUMNS`, both platforms) — a field deleted only because its base view failed to build in
+    * this run keeps its relationship. So,
+    * unlike the broad stale-relationship sweep reverted in f4daef01c4, this never touches a relationship whose field
+    * still exists — excluded schemas, soft foreign keys and manually maintained relationships
+    * (`AutoUpdateFromSchema = false`) are all left alone. Uses only `EntityID` and `Name` of the deleted rows, which
+    * both platforms' procedures return.
+    * @param deletedFields the rows `spDeleteUnneededEntityFields` returned — an untyped recordset at this boundary,
+    *   so the two fields read are `unknown` and narrowed before use
+    * @returns the DELETE statements, or '' when there is nothing to remove
+    */
+   protected BuildDeletedJoinFieldRelationshipSQL(deletedFields: Array<{ EntityID?: unknown; Name?: unknown }>): string {
+      let sql = '';
+      for (const field of deletedFields) {
+         const entityID = typeof field.EntityID === 'string' ? field.EntityID : '';
+         const name = typeof field.Name === 'string' ? field.Name.trim() : '';
+         if (!IsValidUUID(entityID) || name.length === 0) {
+            continue; // not a row this cleanup can match safely
+         }
+         sql += `
+/* Remove EntityRelationships joined on the deleted field '${name.replace(/\*\//g, '')}' */
+   DELETE FROM ${this.qs(MjCoreSchema(), 'EntityRelationship')}
+      WHERE ${this.qi('RelatedEntityID')} = '${entityID}'
+        AND ${this.qi('RelatedEntityJoinField')} = '${EscapeSQLString(name)}'
+        AND ${this.qi('Type')} = 'One To Many'
+        AND ${this.qi('AutoUpdateFromSchema')} = ${this.boolLit(true)}
+        AND NOT EXISTS (
+           SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS c
+              INNER JOIN ${this.qs(MjCoreSchema(), 'Entity')} e ON e.${this.qi('ID')} = '${entityID}'
+           WHERE c.TABLE_SCHEMA = e.${this.qi('SchemaName')}
+             AND c.TABLE_NAME = e.${this.qi('BaseTable')}
+             AND c.COLUMN_NAME = '${EscapeSQLString(name)}');
+`;
+      }
+      return sql;
    }
 
    protected async manageEntityFieldValuesAndValidatorFunctions(pool: CodeGenConnection, excludeSchemas: string[], currentUser: UserInfo, skipDBUpdate: boolean): Promise<boolean> {

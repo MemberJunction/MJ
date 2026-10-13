@@ -186,16 +186,38 @@ function applyParameterValues(
 }
 
 /**
+ * True when an existing parameter carries a SampleValue that was declared rather than extracted:
+ * the row is `DetectionMethod = 'Manual'` (defined explicitly by a user or by metadata) and has a
+ * non-empty SampleValue. Re-extraction keeps such a value; a heuristic or LLM sample never replaces it.
+ *
+ * Note that the column default for DetectionMethod is 'Manual', so a row created without an explicit
+ * DetectionMethod counts as Manual here. Manual rows are still overwritten by extraction for Type,
+ * IsRequired, DefaultValue and Description; only the SampleValue is protected.
+ */
+function hasDeclaredSampleValue(existing: MJQueryParameterEntity): boolean {
+    return existing.DetectionMethod === 'Manual'
+        && (existing.SampleValue || '').trim().length > 0;
+}
+
+/**
  * Updates an existing parameter entity from extracted data if any property changed.
  * Returns true if changes were detected (and the entity was mutated).
+ *
+ * Type, IsRequired, DefaultValue and Description always follow the extraction, because they are
+ * derived from the SQL. DetectionMethod is left as it is: a 'Manual' row stays 'Manual' (rows the
+ * extraction creates are 'AI'), and a 'Manual' row's non-empty SampleValue is kept (see
+ * {@link hasDeclaredSampleValue}). A declared value, for example one seeded through metadata, is
+ * therefore not overwritten by the next save that re-extracts.
  */
 function updateParameterIfChanged(
     existing: MJQueryParameterEntity,
     extracted: ExtractedParameter
 ): boolean {
     let hasChanges = false;
-
     const { type: targetType } = normalizeParamType(extracted.type);
+    // A declared sample was written for the old type; it must not survive a type change.
+    const keepSampleValue = hasDeclaredSampleValue(existing) && existing.Type === targetType;
+
     if (existing.Type !== targetType) {
         existing.Type = targetType;
         hasChanges = true;
@@ -212,12 +234,8 @@ function updateParameterIfChanged(
         existing.Description = extracted.description;
         hasChanges = true;
     }
-    if (existing.SampleValue !== extracted.SampleValue) {
+    if (!keepSampleValue && existing.SampleValue !== extracted.SampleValue) {
         existing.SampleValue = extracted.SampleValue;
-        hasChanges = true;
-    }
-    if (existing.DetectionMethod !== 'AI') {
-        existing.DetectionMethod = 'AI';
         hasChanges = true;
     }
 

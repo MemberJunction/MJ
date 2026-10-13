@@ -40,13 +40,7 @@ export {
 } from "./resolve";
 
 // Enrich stage (exported for testing)
-export {
-    RunLLMEnrichment,
-    MergeParametersWithLLM,
-    GenerateParameterDescription,
-    BuildPassthroughDescription,
-    GenerateSampleValue,
-} from "./enrich";
+export { QueryParameterEnricher } from "./enrich";
 
 // Sync engine
 export { SyncParameters, SyncFields, SyncEntities, SyncDependencies, RemoveAllRecords } from "./sync";

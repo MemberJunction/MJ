@@ -13,9 +13,20 @@
  */
 import type { BaseEntity, BaseEntityEvent } from './baseEntity';
 import { CompositeKey, KeyValuePair } from './compositeKey';
-import type { IMetadataProvider } from './interfaces';
+import type { RunViewResult } from './interfaces';
+import type { RunViewParams } from '../views/runView';
 import type { UserInfo } from './securityInfo';
 import { LogError } from './logging';
+
+/**
+ * What re-reading an event's record needs from a provider: a view run on the pool, and an entity object to load the
+ * row into. Every MJ data provider satisfies it (`ProviderBase` implements `RunView` and `GetEntityObject`);
+ * `RunView` is optional because `IMetadataProvider` does not declare it, and a provider without it cannot re-read.
+ */
+export interface EntityEventRowProvider {
+    GetEntityObject(entityName: string, contextUser?: UserInfo): Promise<Pick<BaseEntity, 'LoadFromData' | 'GetAll'>>;
+    RunView?(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<Record<string, unknown>>>;
+}
 
 /** The `remote-invalidate` payload shape published by `@memberjunction/server`. */
 interface RemoteInvalidatePayload {
@@ -41,7 +52,7 @@ interface RemoteInvalidatePayload {
  */
 export async function ResolveEntityEventRow(
     event: BaseEntityEvent,
-    provider?: IMetadataProvider,
+    provider?: EntityEventRowProvider,
     contextUser?: UserInfo,
 ): Promise<Record<string, unknown> | null> {
     if (event.baseEntity) {
@@ -96,27 +107,53 @@ export function ResolveEntityEventKey(event: BaseEntityEvent): CompositeKey | nu
     return parseKey(payload?.primaryKeyValues);
 }
 
-/** Re-read one record by key. Never throws — a consumer's event handler must not die on it. */
+/**
+ * Re-read one record by key. Never throws — a consumer's event handler must not die on it.
+ *
+ * The read runs on the pool (`RunViewParams.ReadOnPool`, as `BaseEngine.BackgroundReloadReads` does for engine
+ * reloads): an event handler runs detached from whatever else is using the provider, so a transaction another unit
+ * of work has open at that moment is not this read's — joining it would hand the handler uncommitted rows, or fail
+ * once that transaction ends first. The row comes back as plain fields through `RunView` (which applies the user's
+ * row-level and field-level read permissions, as a keyed load does) and is then loaded into an entity object with
+ * `LoadFromData`, so the caller gets the same field values a keyed `GetEntityObject` would have produced.
+ */
 async function reReadByPrimaryKey(
     event: BaseEntityEvent,
     payload: RemoteInvalidatePayload | undefined,
-    provider: IMetadataProvider | undefined,
+    provider: EntityEventRowProvider | undefined,
     contextUser: UserInfo | undefined,
 ): Promise<Record<string, unknown> | null> {
     const entityName = event.entityName;
     // `event.provider` is populated for remote-invalidate specifically because `baseEntity` is
     // null there and listeners have nothing else to read through.
-    const p = provider ?? event.provider;
+    const p: EntityEventRowProvider | undefined = provider ?? event.provider;
     const key = parseKey(payload?.primaryKeyValues);
     if (!entityName || !p || !key) {
         return null;
     }
+    if (!p.RunView) {
+        LogError(`ResolveEntityEventRow: the provider cannot run views, so ${entityName} cannot be re-read`);
+        return null;
+    }
 
     try {
-        const record = await p.GetEntityObject<BaseEntity>(entityName, key, contextUser);
+        const params: RunViewParams = {
+            EntityName: entityName,
+            ExtraFilter: key.ToWhereClause(),
+            ResultType: 'simple',
+            MaxRows: 1,
+            ReadOnPool: true,
+        };
+        const result = await p.RunView(params, contextUser);
         // A refused read and a deleted record both land here, and both mean the same thing to a
         // caller: there is no row to apply.
-        return record?.IsSaved ? record.GetAll() : null;
+        const row = result.Success ? result.Results?.[0] : undefined;
+        if (!row) {
+            return null;
+        }
+        const record = await p.GetEntityObject(entityName, contextUser);
+        await record.LoadFromData(row);
+        return record.GetAll();
     } catch (e) {
         LogError(`ResolveEntityEventRow: could not re-read ${entityName} by key: ${e instanceof Error ? e.message : String(e)}`);
         return null;

@@ -13,7 +13,8 @@ import { BaseEngineRegistry } from '../generic/baseEngineRegistry';
 import { BaseEngineSweeper } from '../generic/baseEngineSweeper';
 import { LocalCacheManager } from '../generic/localCacheManager';
 import { UserInfo } from '../generic/securityInfo';
-import { IMetadataProvider, RunViewDatabaseStatus, RunViewParams, RunViewResult } from '../generic/interfaces';
+import { IMetadataProvider, RunViewDatabaseStatus, RunViewResult } from '../generic/interfaces';
+import { RunViewParams } from '../views/runView';
 import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
 
 type Row = { ID: string; Name: string; __mj_UpdatedAt?: string };
@@ -35,11 +36,21 @@ class SweepEngine extends BaseEngine<SweepEngine> {
         // configs are injected directly
     }
 
+    /** The provider the test binds (SetProvider is first-wins and registers the engine, so it is not used here). */
+    private boundProvider: IMetadataProvider | null = null;
+
+    public override get ProviderToUse(): IMetadataProvider {
+        return this.boundProvider ?? super.ProviderToUse;
+    }
+
+    /** The configs are seeded by Prepare, so the engine counts as loaded. */
+    public override get Loaded(): boolean {
+        return this.boundProvider !== null;
+    }
+
     public Prepare(provider: IMetadataProvider, rows: Row[]): void {
-        const internals = this as unknown as { _provider: IMetadataProvider; _metadataConfigs: BaseEnginePropertyConfig[]; _loaded: boolean };
-        internals._provider = provider;
-        internals._metadataConfigs = [CONFIG];
-        internals._loaded = true;
+        this.boundProvider = provider;
+        this.AdoptConfigs([CONFIG]);
         this.HandleSingleViewResult(CONFIG, result(rows));
     }
 
@@ -269,7 +280,7 @@ describe('the sweep only visits entities that declare they can drift', () => {
 
     /** The database reports far more rows than the engine holds — drift a sweep would catch. */
     const DRIFTED: RunViewDatabaseStatus = { Success: true, RowCount: 99, MaxUpdatedAt: '2026-06-01T00:00:00.000Z' };
-    const HELD: Row[] = [{ ID: '1', __mj_UpdatedAt: '2026-01-01T00:00:00.000Z' }];
+    const HELD: Row[] = [{ ID: '1', Name: 'one', __mj_UpdatedAt: '2026-01-01T00:00:00.000Z' }];
 
     it('asks the database NOTHING for an entity that still trusts its cache', async () => {
         const p = trustingProvider(DRIFTED);

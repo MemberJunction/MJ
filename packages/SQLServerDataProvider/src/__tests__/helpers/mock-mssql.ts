@@ -151,11 +151,30 @@ export class MockTransaction {
     this.savepoints.clear();
   }
 
-  /** Server-side abort (trigger THROW, deadlock, XACT_ABORT). Next statement is ENOTBEGUN; commit/rollback are EABORT. */
+  /**
+   * mssql's in-flight request marker. Real mssql (12.7.0, base/transaction.js acquire/release) sets it
+   * when a request borrows the connection and clears it on release.
+   */
+  public _activeRequest: object | null = null;
+
+  /** mssql's own name for the aborted flag, read by the provider through its internal transaction type. */
+  public get _aborted(): boolean {
+    return this.aborted;
+  }
+
+  /**
+   * Server-side abort (trigger THROW, deadlock, XACT_ABORT). Next statement is ENOTBEGUN; commit/rollback are EABORT.
+   *
+   * Like real mssql, the abort leaves `_activeRequest` set for good: tedious/transaction.js `_abort` nulls
+   * `_acquiredConnection` before the failing request releases, so base/transaction.js `release()` no longer
+   * recognizes the connection and never clears the marker. mssql-abort-contract.test.ts pins that fact
+   * against the real driver.
+   */
   public abortServerSide(): void {
     this.aborted = true;
     this.begun = false;
     this.savepoints.clear();
+    this._activeRequest = {};
   }
 }
 

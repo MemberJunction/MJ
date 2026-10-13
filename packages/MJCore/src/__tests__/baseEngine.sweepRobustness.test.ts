@@ -53,24 +53,22 @@ class SweepEngine extends BaseEngine<SweepEngine> {
     }
 
     private installConfig(rows: Array<Record<string, unknown>>): void {
-        const config: BaseEnginePropertyConfig = { Type: 'entity', EntityName: ENTITY, PropertyName: '_models' };
+        this.AdoptConfigs([{ Type: 'entity', EntityName: ENTITY, PropertyName: '_models' }]);
         const self = this as unknown as {
-            _metadataConfigs: BaseEnginePropertyConfig[];
             _dataMap: Map<string, unknown>;
             _loaded: boolean;
         };
-        self._metadataConfigs = [config];
         self._dataMap = new Map([['_models', { entityName: ENTITY, data: rows, loadedSuccessfully: true }]]);
         self._loaded = true;
     }
 
     public override get Loaded(): boolean { return true; }
 
-    protected override get ProviderToUse() {
+    public override get ProviderToUse() {
         return { EntityByName: () => entityInfo(this.HasUpdatedAtColumn) } as never;
     }
 
-    protected override get RunViewProviderToUse() {
+    public override get RunViewProviderToUse() {
         return {
             EntityByName: () => entityInfo(this.HasUpdatedAtColumn),
             GetRunViewsDatabaseStatus: async () => [this.Status],
@@ -96,7 +94,7 @@ class SweepEngine extends BaseEngine<SweepEngine> {
         this.EmitOrder.push(`emit:${propertyName}`);
     }
 
-    protected override async Config(): Promise<void> { /* pre-loaded */ }
+    public override async Config(): Promise<void> { /* pre-loaded */ }
 }
 
 describe('the sweep compares the way the database does', () => {

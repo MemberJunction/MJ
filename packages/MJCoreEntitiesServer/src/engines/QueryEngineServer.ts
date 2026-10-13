@@ -13,6 +13,8 @@ import {
     MJQueryPermissionEntity
 } from '@memberjunction/core-entities';
 import { QueryEmbeddingMetadata, QueryMatchResult } from './QueryMatchResult';
+import { AIEngine, EmbeddingBackfill } from '@memberjunction/aiengine';
+import { MJQueryEntityServer } from '../custom/MJQueryEntityServer.server';
 import { Subscription } from 'rxjs';
 
 /**
@@ -48,6 +50,15 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
     private _loadingPromise: Promise<void> | null = null;
     private _contextUser: UserInfo | undefined;
     private _dataChangeSubscription: Subscription | null = null;
+    /** Gives a vector to the cached queries saved without one (see {@link EmbedMissingQueries}). */
+    private _backfill = new EmbeddingBackfill<MJQueryEntity>({
+        Name: 'QueryEngineServer',
+        Slots: [EmbeddingBackfill.StandardSlot<MJQueryEntity>(query => MJQueryEntityServer.CompositeEmbeddingText(query))],
+        LoadCandidates: async () => this.Base.Queries,
+        EmbedText: (text, query) => AIEngine.EmbedTextLocalForEntity(query, text),
+        // Indexed whether or not the save then succeeds, so a query whose save fails is still found by similarity.
+        OnEmbedded: (query, vectors) => this._queryVectorService?.AddVector(query.ID, vectors[0].vector, this.PackageQueryMetadata(query)),
+    });
 
     // ========================================================================
     // Delegated Properties from QueryEngine
@@ -179,6 +190,11 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
             this.subscribeToDataChanges();
 
             this._loaded = true;
+
+            // 4. Embed (and persist) the queries saved without a vector — `mj sync push` saves with
+            //    SkipEmbeddings so the CLI never loads the embedding model; this is where they get one.
+            //    Started, not awaited: a search waits for the load, never for this backfill.
+            this._backfill.Trigger();
         } catch (error) {
             LogError(error);
             throw error;
@@ -190,7 +206,8 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
     // ========================================================================
 
     /**
-     * Rebuilds the in-memory vector index from QueryEngine's cached queries.
+     * Rebuilds the in-memory vector index from QueryEngine's cached queries, plus the vectors the backfill computed
+     * for queries whose save failed ({@link EmbeddingBackfill.ReplayUnsavedVectors}).
      * This is a synchronous, in-memory-only operation — no database call.
      *
      * Called automatically on Config() and whenever QueryEngine emits a
@@ -220,7 +237,27 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
         if (entries.length > 0) {
             this._queryVectorService.LoadVectors(entries);
         }
-        LogStatus(`QueryEngineServer: Loaded ${entries.length} query embeddings from cached queries`);
+        // Queries whose vector the backfill computed but could not save have no persisted vector to load: put their
+        // computed vectors back, so a query whose save failed stays findable by similarity.
+        const unsaved = this._backfill.ReplayUnsavedVectors(queries);
+        LogStatus(`QueryEngineServer: Loaded ${entries.length} query embeddings from cached queries${unsaved > 0 ? ` (+${unsaved} computed but not yet saved)` : ''}`);
+    }
+
+    /**
+     * Embeds every cached query that has text (see `MJQueryEntityServer.CompositeEmbeddingText`) but no stored
+     * vector, persists the vector on the query, and adds it to the index. These are the queries saved with
+     * `SkipEmbeddings` (`mj sync push` sets it so a short-lived CLI never loads the embedding model; the query's
+     * own save then clears the now-stale vector instead of computing it). Started, without being awaited, when the
+     * engine loads and after every 'MJ: Queries' change, so every query this engine serves gets its vector without
+     * a manual step; call this to run it and wait for it.
+     *
+     * The work is done by the shared {@link EmbeddingBackfill}: one pass at a time, at most
+     * `EmbeddingBackfillSettings.BatchSize` queries per pass with the rest in later passes, a failed query retried,
+     * nothing computed while the host has switched save-time embeddings off.
+     * @returns how many queries were saved with new vectors
+     */
+    public async EmbedMissingQueries(): Promise<number> {
+        return this._backfill.Run();
     }
 
     /**
@@ -256,6 +293,8 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
         this._dataChangeSubscription = this.Base.DataChange$.subscribe(event => {
             if (event.config.EntityName === 'MJ: Queries') {
                 this.RefreshQueryEmbeddings();
+                // A query saved meanwhile without a vector (e.g. by a push into this database) gets one now.
+                this._backfill.Trigger();
             }
         });
     }

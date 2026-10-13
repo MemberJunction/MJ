@@ -7,6 +7,7 @@ import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { DocumentationEngine, MJLibraryEntityExtended, MJLibraryItemEntityExtended } from "@memberjunction/doc-utils";
 import { ActionEngineBase, MJActionEntityExtended, ActionLibrary, GeneratedCode } from "@memberjunction/actions-base";
+import { SaveTimeAISettings } from "@memberjunction/ai";
 
 /**
  * Extended GeneratedCode interface to include parameters and result codes
@@ -68,10 +69,7 @@ export class MJActionEntityServer extends MJActionEntityExtended {
             let generatedParameters: Array<any> = [];
             let generatedResultCodes: Array<any> = [];
             
-            if ( this.Type === 'Generated' && // only generate when the type is Generated
-                 !this.CodeLocked && // only generate when the code is not locked
-                 (this.GetFieldByName('UserPrompt').Dirty || (!this.IsSaved && !this.Code) || this.ForceCodeGeneration)  // only generate when the UserPrompt field is dirty or this is a new record without code or we are being asked to FORCE code generation
-               ) {
+            if (this.ShouldGenerateCode()) {
                 // UserPrompt field is dirty, or this is a new record, either way, this is the condition where we want to generate the Code.
                 const result = await this.GenerateCode();
                 if (result.Success) {
@@ -126,6 +124,19 @@ export class MJActionEntityServer extends MJActionEntityExtended {
             await provider.RollbackTransaction();
             throw e;
         }
+    }
+
+    /**
+     * Whether this save generates the action's code: only for a Generated action whose code is not
+     * locked, when the UserPrompt changed, the record is new without code, or generation is forced —
+     * and never while the host has switched save-time code generation off (`SaveTimeAISettings`,
+     * kind `CodeGeneration`); the action then saves with its current code.
+     */
+    protected ShouldGenerateCode(): boolean {
+        return this.Type === 'Generated'
+            && !this.CodeLocked
+            && (this.GetFieldByName('UserPrompt').Dirty || (!this.IsSaved && !this.Code) || this.ForceCodeGeneration)
+            && !SaveTimeAISettings.Instance.IsDisabled('CodeGeneration');
     }
 
     protected async manageLibraries(codeLibraries: ActionLibrary[], wasNewRecord: boolean): Promise<void> {

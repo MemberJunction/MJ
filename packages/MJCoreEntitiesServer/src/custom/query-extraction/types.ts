@@ -8,7 +8,7 @@ import type { MJParameterInfo, MJParseResult, SQLSelectColumn, SQLTableReference
 
 /**
  * A parameter extracted from a query's SQL — the final merged result
- * combining deterministic parsing, dependency metadata, and LLM enrichment.
+ * combining deterministic parsing, dependency metadata, and AI enrichment.
  */
 export interface ExtractedParameter {
     name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
@@ -42,7 +42,7 @@ export interface ExtractedField {
 }
 
 /**
- * Result from LLM enrichment prompt.
+ * Result from AI enrichment prompt.
  */
 export interface ParameterExtractionResult {
     parameters: ExtractedParameter[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
@@ -51,7 +51,7 @@ export interface ParameterExtractionResult {
 
 /**
  * Metadata inherited from a dependency query's parameter for passthrough parameters.
- * Used as a fallback source for description and sampleValue when LLM enrichment is unavailable.
+ * Used as a fallback source for description and sampleValue when AI enrichment is unavailable.
  */
 export interface PassthroughParamContext {
     Description: string | null;
@@ -125,6 +125,11 @@ export interface QuerySyncContext {
      *  is used for parsing and which SQL types are used for field extraction. */
     platform: DatabasePlatform;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Caller-provided tested parameter sample values (paramName → sampleValue).
-     *  When present, these take highest priority over LLM-generated or heuristic sampleValues. */
+     *  When present, these take highest priority over AI-generated or heuristic sampleValues. */
     parameterHints?: Map<string, string>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    /** When true, the pipeline skips the AI enrichment stage and relies on the deterministic
+     *  parse plus heuristic descriptions. Extraction of parameters, fields, entities and
+     *  dependencies still runs. Required: the caller resolves the per-instance flag and the host
+     *  switch once (`MJQueryEntityServer`), so the pipeline never re-derives it. */
+    skipAIEnrichment: boolean;  // case-violation-ok-legacy-back-compat: camelCase matches the other QuerySyncContext members
 }

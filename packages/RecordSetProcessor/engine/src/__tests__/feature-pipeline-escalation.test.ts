@@ -5,6 +5,7 @@ import { RegisterClass } from '@memberjunction/global';
 import {
     KnowledgeHubMetadataEngine,
     type MJFeaturePipelineTypeEntity,
+    type MJAIPromptModelEntity,
     type MJFeatureValueCacheEntity,
     type MJRecordProcessEntity,
 } from '@memberjunction/core-entities';
@@ -24,8 +25,9 @@ import {
     type FeatureValueOutputItem,
     type CacheStoreParams,
     type RecordFeatureValuesParams,
+    type RecordFeatureValuesOutcome,
 } from '@memberjunction/feature-pipelines';
-import { InferProcessor } from '../processors/InferProcessor';
+import { InferProcessor, type FeatureValueWriteParams } from '../processors/InferProcessor';
 import { WriteBackProcessor } from '../processors/WriteBackProcessor';
 import type { WriteBackResult } from '../writeBack';
 import {
@@ -125,8 +127,8 @@ class HashProbe extends InferProcessor {
 
 /** Exposes the protected history recording. */
 class HistoryProbe extends InferProcessor {
-    public RecordHistory(params: Parameters<InferProcessor['recordFeatureValuesHistory']>[0]): Promise<void> {
-        return this.recordFeatureValuesHistory(params);
+    public RecordHistory(params: FeatureValueWriteParams): Promise<RecordFeatureValuesOutcome | null> {
+        return this.UpsertFeatureValues(params);
     }
 }
 
@@ -142,8 +144,10 @@ type TargetRowDouble = Pick<
     'ID' | 'Name' | 'WorkType' | 'Status' | 'EntityID' | 'Entity' | 'PromptID' | 'Configuration' | 'InputMapping' | 'Load'
 >;
 type ProviderDouble = Pick<IMetadataProvider, 'GetEntityObject' | 'EntityByID' | 'EntityByName'>;
+type PromptModelDouble = Pick<MJAIPromptModelEntity, 'PromptID' | 'ModelID' | 'Priority' | 'Status' | 'EffortLevel' | 'ModelParameters'>;
 
 const asPrompt = (p: PromptDouble): MJAIPromptEntityExtended => p as MJAIPromptEntityExtended;
+const asPromptModel = (m: PromptModelDouble): MJAIPromptModelEntity => m as MJAIPromptModelEntity;
 const asPipelineType = (t: PipelineTypeDouble): MJFeaturePipelineTypeEntity => t as MJFeaturePipelineTypeEntity;
 const asCacheEntry = (e: Pick<MJFeatureValueCacheEntity, 'ID'> | CacheEntryDouble): MJFeatureValueCacheEntity => e as MJFeatureValueCacheEntity;
 
@@ -230,8 +234,11 @@ describe('Decision pipeline escalation', () => {
     let historyCalls: RecordFeatureValuesParams[];
     let store: MockInstance<FeatureValueCacheService['Store']>;
     let batchLookup: MockInstance<FeatureValueCacheService['BatchLookup']>;
+    /** Captures the escalation summary that InferProcessor reports through LogStatus. */
+    let consoleLog: MockInstance<typeof console.log>;
 
     beforeEach(() => {
+        consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
         decisionAnswers.clear();
         llmResults.clear();
         decisionRunnerResults.length = 0;
@@ -249,10 +256,11 @@ describe('Decision pipeline escalation', () => {
         historyCalls = [];
         vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockImplementation(async (params) => {
             historyCalls.push(params);
+            return { Upserted: params.Outputs.length, Unchanged: 0, Previous: {} };
         });
         batchLookup = vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
         store = vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async (params) =>
-            asCacheEntry({ ID: `CACHE-${params.promptID}-${params.keyDisplay}` })
+            asCacheEntry({ ID: `CACHE-${params.PromptID}-${params.KeyDisplay}` })
         );
 
         loadTarget = vi.fn().mockResolvedValue(true);
@@ -283,15 +291,15 @@ describe('Decision pipeline escalation', () => {
         };
     });
 
-    const historyFor = (recordID: string): RecordFeatureValuesParams[] => historyCalls.filter((h) => h.recordID === recordID);
+    const historyFor = (recordID: string): RecordFeatureValuesParams[] => historyCalls.filter((h) => h.RecordID === recordID);
     /** Whether a history row records a decision an escalation superseded (its reasoning says so). */
-    const isSuperseded = (h: RecordFeatureValuesParams): boolean => h.outputs.some((o) => o.reasoning?.startsWith('Superseded:') ?? false);
+    const isSuperseded = (h: RecordFeatureValuesParams): boolean => h.Outputs.some((o) => o.Reasoning?.startsWith('Superseded:') ?? false);
     /** A record's answer rows: its history without the superseded decision's row. */
     const answersFor = (recordID: string): RecordFeatureValuesParams[] => historyFor(recordID).filter((h) => !isSuperseded(h));
     /** A record's superseded-decision rows. */
     const supersededFor = (recordID: string): RecordFeatureValuesParams[] => historyFor(recordID).filter(isSuperseded);
     const valuesOf = (h: RecordFeatureValuesParams): Record<string, unknown> =>
-        Object.fromEntries(h.outputs.map((o: FeatureValueOutputItem) => [o.featureName, o.value]));
+        Object.fromEntries(h.Outputs.map((o: FeatureValueOutputItem) => [o.FeatureName, o.Value]));
 
     // ================================================================
     // Which records escalate
@@ -300,7 +308,7 @@ describe('Decision pipeline escalation', () => {
     describe('which records escalate', () => {
         it('does not escalate a record whose every output is at or above the floor', async () => {
             decisionAnswers.set('r1', { RawResult: { seniority: 'Staff', isVip: true }, Confidence: { Seniority: 0.7, IsVIP: 0.99 } });
-            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec());
+            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null);
             const result = await processor.ProcessRecord(makeRecord('r1'), context);
 
             expect(result.Status).toBe('Succeeded');
@@ -310,7 +318,7 @@ describe('Decision pipeline escalation', () => {
             expect(llmCalls).toEqual([]);
             expect(getEntityObject).not.toHaveBeenCalled();
             expect(processor.EscalatedRecordCount).toBe(0);
-            expect(historyFor('r1')[0].promptID).toBe(DECISION_PROMPT.ID);
+            expect(historyFor('r1')[0].PromptID).toBe(DECISION_PROMPT.ID);
         });
 
         it('does not escalate a confident "no" from the real Decision mapping: P(yes) 0.03 writes false, with confidence 0.97', async () => {
@@ -325,7 +333,7 @@ describe('Decision pipeline escalation', () => {
                     IsVIP: { Kind: 'Likelihood', Probability: 0.03 },
                 },
             });
-            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec());
+            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null);
             const result = await processor.ProcessRecord(makeRecord('r1'), context);
 
             expect(result.Status).toBe('Succeeded');
@@ -339,7 +347,7 @@ describe('Decision pipeline escalation', () => {
 
         it('escalates the whole record when one output is below the floor, and the LLM outputs are written back', async () => {
             decisionAnswers.set('r1', BELOW_FLOOR);
-            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec());
+            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null);
             const writeBack = new WriteBackProcessor(processor, { fields: { Seniority: '$.seniority', IsVIP: '$.isVip' } }, true);
             const result = await writeBack.ProcessRecord(makeRecord('r1'), context);
 
@@ -351,6 +359,9 @@ describe('Decision pipeline escalation', () => {
             expect(output).toEqual({ seniority: 'Executive', isVip: true });
             expect(applied.previewFields).toEqual({ Seniority: 'Executive', IsVIP: true });
             expect(processor.EscalatedRecordCount).toBe(1);
+            expect(consoleLog).toHaveBeenCalledWith(
+                "InferProcessor: escalated 1 record(s) whose decision confidence was below 0.7 to Feature Pipeline 'LLM-PIPE-1' (0 failed); 1 escalated in this run."
+            );
         });
 
         it('gives write-back one run\'s provenance: an escalated record\'s $run names the LLM prompt with its run and hash', async () => {
@@ -358,8 +369,8 @@ describe('Decision pipeline escalation', () => {
             const spec = decisionSpec();
             const provenance = { Title: '$run.PromptID', Seniority: '$run.AIPromptRunID' };
             const run = { RecordProcessID: DECISION_PIPELINE_ID, PromptID: DECISION_PROMPT.ID };
-            const single = new WriteBackProcessor(new InferProcessor(DECISION_PROMPT.ID, undefined, spec), { fields: provenance }, true, run);
-            const batch = new WriteBackProcessor(new InferProcessor(DECISION_PROMPT.ID, undefined, spec), { fields: provenance }, true, run);
+            const single = new WriteBackProcessor(new InferProcessor(DECISION_PROMPT.ID, undefined, spec, null), { fields: provenance }, true, run);
+            const batch = new WriteBackProcessor(new InferProcessor(DECISION_PROMPT.ID, undefined, spec, null), { fields: provenance }, true, run);
 
             const escalated = await single.ProcessRecord(makeRecord('r1'), context);
             const results = await batch.ProcessBatch([makeRecord('r1'), makeRecord('r2')], context);
@@ -374,11 +385,11 @@ describe('Decision pipeline escalation', () => {
 
         it('escalates a record when an output has no confidence', async () => {
             decisionAnswers.set('r1', { RawResult: { seniority: 'Manager', isVip: false }, Confidence: { Seniority: 0.99 } });
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec()).ProcessRecord(makeRecord('r1'), context);
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
 
             expect(llmCalls).toEqual(['r1']);
             expect(result.ResultPayload).toEqual({ seniority: 'Executive', isVip: true });
-            expect(answersFor('r1')[0].outputs[0].reasoning).toContain('IsVIP none');
+            expect(answersFor('r1')[0].Outputs[0].Reasoning).toContain('IsVIP none');
         });
 
         it('lists every output below the floor or without a finite confidence', () => {
@@ -399,10 +410,19 @@ describe('Decision pipeline escalation', () => {
     // ================================================================
 
     describe('when the escalation fails', () => {
+        it('fails the record when the target reports success without a Feature Value key', async () => {
+            decisionAnswers.set('r1', BELOW_FLOOR);
+            vi.spyOn(InferProcessor.prototype, 'FeatureValueKeyOf').mockReturnValue(undefined);
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
+            expect(result.Status).toBe('Failed');
+            expect(result.ErrorMessage).toContain('it returned no Feature Value key');
+            expect(answersFor('r1')).toHaveLength(0);
+        });
+
         it('fails the record with both reasons, and writes none of the decision answers', async () => {
             decisionAnswers.set('r1', BELOW_FLOOR);
             llmResults.set('r1', { Success: false, ErrorMessage: 'model unavailable', AIPromptRunID: 'LLM-RUN-FAILED' });
-            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec({ Caching: { Cacheable: true, KeyFields: ['Title'] } }));
+            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec({ Caching: { Cacheable: true, KeyFields: ['Title'] } }), null);
             const writeBack = new WriteBackProcessor(processor, { fields: { Seniority: '$.seniority', IsVIP: '$.isVip' } }, true);
             const result = await writeBack.ProcessRecord(makeRecord('r1'), context);
 
@@ -419,7 +439,7 @@ describe('Decision pipeline escalation', () => {
         it('fails the record when the LLM answer violates the LLM pipeline\'s own constraints', async () => {
             decisionAnswers.set('r1', BELOW_FLOOR);
             llmResults.set('r1', { Success: true, RawResult: { seniority: 'Wizard', isVip: true }, AIPromptRunID: 'LLM-RUN-r1' });
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec()).ProcessRecord(makeRecord('r1'), context);
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
 
             expect(result.Status).toBe('Failed');
             expect(result.ErrorMessage).toContain('Decision confidence below 0.7 (IsVIP 0.4)');
@@ -430,7 +450,7 @@ describe('Decision pipeline escalation', () => {
         it('fails the record when the LLM driver throws', async () => {
             decisionAnswers.set('r1', BELOW_FLOOR);
             vi.spyOn(LLMStubDriver.prototype, 'ComputeOutputs').mockRejectedValue(new Error('socket hang up'));
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec()).ProcessRecord(makeRecord('r1'), context);
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
 
             expect(result.Status).toBe('Failed');
             expect(result.ErrorMessage).toBe("Decision confidence below 0.7 (IsVIP 0.4); escalation to LLM pipeline 'Seniority (LLM)' failed: socket hang up");
@@ -461,7 +481,7 @@ describe('Decision pipeline escalation', () => {
             it(`fails the record when the LLM, with ${target.name}, answers outside the Decision pipeline's enum, and writes nothing`, async () => {
                 escalateToDirector(target.seniority);
                 const log = vi.spyOn(console, 'log');
-                const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec());
+                const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null);
                 const writeBack = new WriteBackProcessor(processor, { fields: { Seniority: '$.seniority', IsVIP: '$.isVip' } }, true);
                 const result = await writeBack.ProcessRecord(makeRecord('r1'), context);
 
@@ -485,7 +505,7 @@ describe('Decision pipeline escalation', () => {
             escalateToDirector(undefined);
             const [seniority, isVip] = outputs();
             const spec = decisionSpec({ Outputs: [{ ...seniority, Constraint: { ...seniority.Constraint, OnViolation: 'null' } }, isVip] });
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, spec).ProcessRecord(makeRecord('r1'), context);
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, spec, null).ProcessRecord(makeRecord('r1'), context);
 
             expect(result.Status).toBe('Succeeded');
             expect(result.ResultPayload).toMatchObject({ seniority: null, isVip: true });
@@ -498,7 +518,7 @@ describe('Decision pipeline escalation', () => {
         it('keeps an escalated value inside the Decision pipeline\'s enum, in the enum\'s casing', async () => {
             escalateToDirector(undefined);
             llmResults.set('r1', { Success: true, RawResult: { seniority: 'manager', isVip: true }, AIPromptRunID: 'LLM-RUN-r1' });
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec()).ProcessRecord(makeRecord('r1'), context);
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
 
             expect(result).toMatchObject({ Status: 'Succeeded', ResultPayload: { seniority: 'Manager', isVip: true } });
             expect(valuesOf(answersFor('r1')[0])).toEqual({ Seniority: 'Manager', IsVIP: true });
@@ -560,7 +580,7 @@ describe('Decision pipeline escalation', () => {
             it(`fails only the records that would escalate when the target ${c.name}`, async () => {
                 c.arrange();
                 decisionAnswers.set('r2', BELOW_FLOOR);
-                const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec());
+                const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null);
                 const results = await processor.ProcessBatch([makeRecord('r1'), makeRecord('r2')], context);
 
                 expect(results.get('r1')).toMatchObject({ Status: 'Succeeded', ResultPayload: { seniority: 'Manager', isVip: false } });
@@ -577,7 +597,7 @@ describe('Decision pipeline escalation', () => {
             for (const usable of [true, false]) {
                 getEntityObject.mockClear();
                 loadTarget.mockResolvedValue(usable);
-                const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec());
+                const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null);
                 for (const id of ['r1', 'r2', 'r3', 'r4', 'r5']) {
                     decisionAnswers.set(id, BELOW_FLOOR);
                 }
@@ -596,7 +616,7 @@ describe('Decision pipeline escalation', () => {
             targetRow.Configuration = JSON.stringify(llmSpec({ Outputs: outputs({ Seniority: '$.level', IsVIP: '$.flags.vip' }) }));
             llmResults.set('r1', { Success: true, RawResult: { level: 'Staff', flags: { vip: true } }, AIPromptRunID: 'LLM-RUN-r1' });
             decisionAnswers.set('r1', BELOW_FLOOR);
-            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec());
+            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null);
             const writeBack = new WriteBackProcessor(processor, { fields: { Seniority: '$.seniority', IsVIP: '$.isVip' } }, true);
             const result = await writeBack.ProcessRecord(makeRecord('r1'), context);
 
@@ -615,7 +635,7 @@ describe('Decision pipeline escalation', () => {
             decisionAnswers.set('r2', BELOW_FLOOR);
             decisionAnswers.set('r4', { RawResult: { seniority: 'Staff', isVip: false }, Confidence: { Seniority: 0.2, IsVIP: 0.9 } });
             const processBatch = vi.spyOn(InferProcessor.prototype, 'ProcessBatch');
-            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec());
+            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null);
             const records = ['r1', 'r2', 'r3', 'r4'].map((id) => makeRecord(id));
             const results = await processor.ProcessBatch(records, context);
 
@@ -630,8 +650,8 @@ describe('Decision pipeline escalation', () => {
             expect(results.get('r2')).toMatchObject({ Status: 'Succeeded', ResultPayload: { seniority: 'Executive', isVip: true }, AIPromptRunID: 'LLM-RUN-r2' });
             expect(results.get('r4')).toMatchObject({ Status: 'Succeeded', AIPromptRunID: 'LLM-RUN-r4' });
             // One answer row per record, and one superseded-decision row per escalated record
-            expect(historyCalls.filter((h) => !isSuperseded(h)).map((h) => h.recordID)).toEqual(['r1', 'r2', 'r3', 'r4']);
-            expect(historyCalls.filter(isSuperseded).map((h) => [h.recordID, h.aiPromptRunID])).toEqual([['r2', 'DEC-RUN-r2'], ['r4', 'DEC-RUN-r4']]);
+            expect(historyCalls.filter((h) => !isSuperseded(h)).map((h) => h.RecordID)).toEqual(['r1', 'r2', 'r3', 'r4']);
+            expect(historyCalls.filter(isSuperseded).map((h) => [h.RecordID, h.AIPromptRunID])).toEqual([['r2', 'DEC-RUN-r2'], ['r4', 'DEC-RUN-r4']]);
             expect(processor.EscalatedRecordCount).toBe(2);
         });
 
@@ -639,7 +659,7 @@ describe('Decision pipeline escalation', () => {
             decisionAnswers.set('r2', BELOW_FLOOR);
             const spec = decisionSpec({ Caching: { Cacheable: true, KeyFields: ['Title'] } });
             const processBatch = vi.spyOn(InferProcessor.prototype, 'ProcessBatch');
-            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, spec);
+            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, spec, null);
             const records = [makeRecord('r1', 'CEO'), makeRecord('r2', 'Analyst'), makeRecord('r3', 'Analyst'), makeRecord('r4', 'Clerk')];
             const results = await processor.ProcessBatch(records, context);
 
@@ -649,16 +669,16 @@ describe('Decision pipeline escalation', () => {
             for (const id of ['r2', 'r3']) {
                 expect(results.get(id)).toMatchObject({ Status: 'Succeeded', ResultPayload: { seniority: 'Executive', isVip: true }, AIPromptRunID: 'LLM-RUN-r2' });
                 expect(answersFor(id)).toHaveLength(1);
-                expect(answersFor(id)[0]).toMatchObject({ promptID: LLM_PROMPT.ID, aiPromptRunID: 'LLM-RUN-r2' });
+                expect(answersFor(id)[0]).toMatchObject({ PromptID: LLM_PROMPT.ID, AIPromptRunID: 'LLM-RUN-r2' });
             }
             // The decision ran once for the key, so its prompt run is recorded once, on the record it ran for
-            expect(supersededFor('r2').map((h) => h.aiPromptRunID)).toEqual(['DEC-RUN-r2']);
+            expect(supersededFor('r2').map((h) => h.AIPromptRunID)).toEqual(['DEC-RUN-r2']);
             expect(supersededFor('r3')).toEqual([]);
             expect(results.get('r1')?.AIPromptRunID).toBe('DEC-RUN-r1');
             expect(results.get('r4')?.AIPromptRunID).toBe('DEC-RUN-r4');
             expect(processor.EscalatedRecordCount).toBe(2);
             // Only the confident decisions are cached; the escalated key is not
-            expect(store.mock.calls.map(([params]) => [params.promptID, params.keyDisplay])).toEqual([
+            expect(store.mock.calls.map(([params]) => [params.PromptID, params.KeyDisplay])).toEqual([
                 [DECISION_PROMPT.ID, 'CEO'],
                 [DECISION_PROMPT.ID, 'Clerk'],
             ]);
@@ -668,19 +688,19 @@ describe('Decision pipeline escalation', () => {
             targetRow.Configuration = JSON.stringify(llmSpec({ Caching: { Cacheable: true, KeyFields: ['Title'] } }));
             decisionAnswers.set('r1', BELOW_FLOOR);
             decisionAnswers.set('r2', BELOW_FLOOR);
-            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec());
+            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null);
             const results = await processor.ProcessBatch([makeRecord('r1', 'Analyst'), makeRecord('r2', 'Analyst')], context);
 
             expect(decisionCalls).toEqual(['r1', 'r2']);
             expect(llmCalls).toEqual(['r1']);
             expect(results.get('r2')).toMatchObject({ Status: 'Succeeded', ResultPayload: { seniority: 'Executive', isVip: true }, AIPromptRunID: 'LLM-RUN-r1' });
-            expect(batchLookup).toHaveBeenCalledWith(expect.objectContaining({ recordProcessID: LLM_PIPELINE_ID, promptID: LLM_PROMPT.ID }));
+            expect(batchLookup).toHaveBeenCalledWith(expect.objectContaining({ RecordProcessID: LLM_PIPELINE_ID, PromptID: LLM_PROMPT.ID }));
             // The target's history is off: each record has exactly one answer row, written by the Decision pipeline,
             // and the row of its superseded decision
             expect(answersFor('r1')).toHaveLength(1);
             expect(answersFor('r2')).toHaveLength(1);
-            expect(supersededFor('r1').map((h) => h.aiPromptRunID)).toEqual(['DEC-RUN-r1']);
-            expect(supersededFor('r2').map((h) => h.aiPromptRunID)).toEqual(['DEC-RUN-r2']);
+            expect(supersededFor('r1').map((h) => h.AIPromptRunID)).toEqual(['DEC-RUN-r1']);
+            expect(supersededFor('r2').map((h) => h.AIPromptRunID)).toEqual(['DEC-RUN-r2']);
         });
     });
 
@@ -695,54 +715,140 @@ describe('Decision pipeline escalation', () => {
             const targetSpec = llmSpec({ Outputs: [seniority, { ...isVip, Constraint: { Type: 'boolean', OnViolation: 'null' } }] });
             targetRow.Configuration = JSON.stringify(targetSpec);
             decisionAnswers.set('r1', BELOW_FLOOR);
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec()).ProcessRecord(makeRecord('r1'), context);
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
 
-            const targetVersionHash = new HashProbe(LLM_PROMPT.ID).Hash(asPrompt(LLM_PROMPT), targetSpec);
-            const targetConstraintHash = new InferProcessor(LLM_PROMPT.ID, undefined, targetSpec).ConstraintHash;
-            expect(targetConstraintHash).not.toBe(new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec()).ConstraintHash);
+            const targetVersionHash = new HashProbe(LLM_PROMPT.ID, undefined, undefined, null).Hash(asPrompt(LLM_PROMPT), targetSpec);
+            const targetConstraintHash = new InferProcessor(LLM_PROMPT.ID, undefined, targetSpec, null).ConstraintHash;
+            expect(targetConstraintHash).not.toBe(new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ConstraintHash);
             expect(answersFor('r1')).toHaveLength(1);
             const [history] = answersFor('r1');
             expect(history).toMatchObject({
-                recordProcessID: DECISION_PIPELINE_ID,
-                recordID: 'r1',
-                promptID: LLM_PROMPT.ID,
-                promptVersionHash: targetVersionHash,
-                constraintHash: targetConstraintHash,
-                aiPromptRunID: 'LLM-RUN-r1',
-                processRunID: 'RUN-1',
+                RecordProcessID: DECISION_PIPELINE_ID,
+                RecordID: 'r1',
+                PromptID: LLM_PROMPT.ID,
+                PromptVersionHash: targetVersionHash,
+                ConstraintHash: targetConstraintHash,
+                AIPromptRunID: 'LLM-RUN-r1',
+                ProcessRunID: 'RUN-1',
             });
             expect(result.PromptVersionHash).toBe(targetVersionHash);
             expect(valuesOf(history)).toEqual({ Seniority: 'Executive', IsVIP: true });
             const note = "Escalated to LLM pipeline 'Seniority (LLM)': decision confidence below 0.7 (IsVIP 0.4).";
-            expect(history.outputs.map((o) => o.reasoning)).toEqual([note, note]);
-            expect(history.outputs.map((o) => o.confidence)).toEqual([undefined, undefined]);
+            expect(history.Outputs.map((o) => o.Reasoning)).toEqual([note, note]);
+            expect(history.Outputs.map((o) => o.Confidence)).toEqual([undefined, undefined]);
+        });
+
+        it('keys the answer under the target\'s pin and input hash, and the superseded row under the Decision pipeline\'s', async () => {
+            vi.spyOn(AIEngine.Instance, 'PromptModels', 'get').mockReturnValue([
+                asPromptModel({ PromptID: DECISION_PROMPT.ID, ModelID: 'DEC-MODEL', Priority: 1, Status: 'Active', EffortLevel: null, ModelParameters: null }),
+                asPromptModel({ PromptID: LLM_PROMPT.ID, ModelID: 'LLM-MODEL', Priority: 1, Status: 'Active', EffortLevel: 3, ModelParameters: null }),
+            ]);
+            // The target keys its input on more fields than the Decision pipeline, so the two input hashes differ
+            const targetSpec = llmSpec({ Context: { Fields: ['Title', 'ID'] } });
+            targetRow.Configuration = JSON.stringify(targetSpec);
+            decisionAnswers.set('r1', BELOW_FLOOR);
+            const record = makeRecord('r1');
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(record, context);
+
+            const target = new InferProcessor(LLM_PROMPT.ID, undefined, targetSpec, null);
+            const targetPin = await target.ResolvePin(asPrompt(LLM_PROMPT));
+            const decisionPin = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ResolvePin(asPrompt(DECISION_PROMPT));
+            const targetInput = await FeatureValueCacheService.Instance.ComputeCacheKey({ KeyFields: ['Title', 'ID'], RecordData: { ID: 'r1', Title: 'Title of r1' } });
+            const decisionInput = await FeatureValueCacheService.Instance.ComputeCacheKey({ KeyFields: ['Title'], RecordData: { ID: 'r1', Title: 'Title of r1' } });
+            expect(targetInput.KeyHash).not.toBe(decisionInput.KeyHash);
+            expect(targetPin.ParametersHash).not.toBe(decisionPin.ParametersHash);
+
+            expect(result.Status).toBe('Succeeded');
+            expect(answersFor('r1')[0]).toMatchObject({
+                AIModelID: 'LLM-MODEL',
+                ParametersHash: targetPin.ParametersHash,
+                PromptVersionHash: targetPin.PromptVersionHash,
+                InputHash: targetInput.KeyHash,
+            });
+            expect(supersededFor('r1')[0]).toMatchObject({
+                AIModelID: 'DEC-MODEL',
+                ParametersHash: decisionPin.ParametersHash,
+                InputHash: decisionInput.KeyHash,
+            });
+        });
+
+        it('keeps the values from before the run: the first write\'s capture, not the answer row\'s', async () => {
+            const typed = (v: string | null) => (v === null ? null : { ValueText: v, ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null });
+            vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockImplementation(async (params) => {
+                historyCalls.push(params);
+                // The answer's write would capture the superseded row this run wrote (null values) as the latest
+                const previous = isSuperseded(params) ? { Seniority: typed('Staff'), IsVIP: null } : { Seniority: typed(null), IsVIP: typed('x') };
+                return { Upserted: params.Outputs.length, Unchanged: 0, Previous: previous };
+            });
+            decisionAnswers.set('r1', BELOW_FLOOR);
+            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null);
+            await processor.ProcessRecord(makeRecord('r1'), context);
+            expect(processor.PreviousFeatureValues('r1')).toEqual({ Seniority: typed('Staff'), IsVIP: null });
+        });
+
+        it('fails the escalated record when its superseded decision\'s row cannot be written', async () => {
+            const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockImplementation(async (params) => {
+                if (isSuperseded(params)) {
+                    throw new Error('FK_FeatureValue_AIPromptRun');
+                }
+                historyCalls.push(params);
+                return { Upserted: params.Outputs.length, Unchanged: 0, Previous: {} };
+            });
+            decisionAnswers.set('r1', BELOW_FLOOR);
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
+
+            expect(result).toMatchObject({ Status: 'Failed', ErrorMessage: 'Feature Value write failed: FK_FeatureValue_AIPromptRun', AIPromptRunID: 'LLM-RUN-r1' });
+            expect(answersFor('r1')).toHaveLength(0);
+            expect(logged.mock.calls.flat().join(' ')).toContain("(record 'r1')");
+        });
+
+        it('fails the escalated record, and the group\'s other records, when the answer\'s row cannot be written', async () => {
+            const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockImplementation(async (params) => {
+                historyCalls.push(params);
+                if (!isSuperseded(params)) {
+                    throw new Error('FK_FeatureValue_Entity');
+                }
+                return { Upserted: params.Outputs.length, Unchanged: 0, Previous: {} };
+            });
+            decisionAnswers.set('r1', BELOW_FLOOR);
+            decisionAnswers.set('r2', BELOW_FLOOR);
+            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec({ Caching: { Cacheable: true, KeyFields: ['Title'] } }), null);
+            const results = await processor.ProcessBatch([makeRecord('r1', 'Analyst'), makeRecord('r2', 'Analyst')], context);
+
+            expect(results.get('r1')).toMatchObject({ Status: 'Failed', ErrorMessage: 'Feature Value write failed: FK_FeatureValue_Entity' });
+            expect(results.get('r2')).toMatchObject({ Status: 'Failed', ErrorMessage: 'Feature Value write failed: FK_FeatureValue_Entity' });
+            // The failed answer is not fanned out: r2 gets no row of its own
+            expect(answersFor('r2')).toHaveLength(0);
+            expect(logged).toHaveBeenCalled();
         });
 
         it('links both model calls to the process run: the superseded decision\'s prompt run first, then the LLM\'s', async () => {
             decisionAnswers.set('r1', BELOW_FLOOR);
             const spec = decisionSpec();
-            await new InferProcessor(DECISION_PROMPT.ID, undefined, spec).ProcessRecord(makeRecord('r1'), context);
+            await new InferProcessor(DECISION_PROMPT.ID, undefined, spec, null).ProcessRecord(makeRecord('r1'), context);
 
-            expect(historyCalls.map((h) => [h.aiPromptRunID, h.processRunID])).toEqual([
+            expect(historyCalls.map((h) => [h.AIPromptRunID, h.ProcessRunID])).toEqual([
                 ['DEC-RUN-r1', 'RUN-1'],
                 ['LLM-RUN-r1', 'RUN-1'],
             ]);
             const [superseded] = historyCalls;
             expect(superseded).toMatchObject({
-                recordProcessID: DECISION_PIPELINE_ID,
-                recordID: 'r1',
-                promptID: DECISION_PROMPT.ID,
-                promptVersionHash: new HashProbe(DECISION_PROMPT.ID).Hash(asPrompt(DECISION_PROMPT), spec),
-                constraintHash: new InferProcessor(DECISION_PROMPT.ID, undefined, spec).ConstraintHash,
+                RecordProcessID: DECISION_PIPELINE_ID,
+                RecordID: 'r1',
+                PromptID: DECISION_PROMPT.ID,
+                PromptVersionHash: new HashProbe(DECISION_PROMPT.ID, undefined, undefined, null).Hash(asPrompt(DECISION_PROMPT), spec),
+                ConstraintHash: new InferProcessor(DECISION_PROMPT.ID, undefined, spec, null).ConstraintHash,
             });
-            expect(superseded.featureValueCacheID).toBeUndefined();
+            expect(superseded.FeatureValueCacheID).toBeUndefined();
             // The low-confidence answer is never recorded as a value; its confidence and the reason are
             expect(valuesOf(superseded)).toEqual({ Seniority: null, IsVIP: null });
-            expect(superseded.outputs.map((o) => o.confidence)).toEqual([0.91, 0.4]);
+            expect(superseded.Outputs.map((o) => o.Confidence)).toEqual([0.91, 0.4]);
             const note =
                 "Superseded: decision confidence below 0.7 (IsVIP 0.4), so the record escalated to LLM pipeline 'Seniority (LLM)', " +
                 "whose answer is the record's value. This row records the decision model's prompt run.";
-            expect(superseded.outputs.map((o) => o.reasoning)).toEqual([note, note]);
+            expect(superseded.Outputs.map((o) => o.Reasoning)).toEqual([note, note]);
         });
 
         it('records no superseded row when the decision has no prompt run to link', async () => {
@@ -751,19 +857,21 @@ describe('Decision pipeline escalation', () => {
                 RawResult: { ...BELOW_FLOOR.RawResult },
                 Confidence: { ...BELOW_FLOOR.Confidence },
             });
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec()).ProcessRecord(makeRecord('r1'), context);
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
 
             expect(result).toMatchObject({ Status: 'Succeeded', AIPromptRunID: 'LLM-RUN-r1' });
-            expect(historyCalls.map((h) => h.aiPromptRunID)).toEqual(['LLM-RUN-r1']);
+            expect(historyCalls.map((h) => h.AIPromptRunID)).toEqual(['LLM-RUN-r1']);
         });
 
         it('records every value as null when asked to, whatever the payload and the Refs hold', async () => {
             const spec = decisionSpec({ Outputs: outputs({ Seniority: 'seniority', IsVIP: '$.isVip' }) });
-            await new HistoryProbe(DECISION_PROMPT.ID, undefined, spec).RecordHistory({
-                record: makeRecord('r1'),
-                context,
-                payload: { seniority: 'Manager', isVip: true },
-                omitValues: true,
+            await new HistoryProbe(DECISION_PROMPT.ID, undefined, spec, null).RecordHistory({
+                Record: makeRecord('r1'),
+                Context: context,
+                Payload: { seniority: 'Manager', isVip: true },
+                OmitValues: true,
+                InputHash: null,
+                Pin: { PromptID: DECISION_PROMPT.ID, PromptVersionHash: 'pv', AIModelID: null, ParametersHash: 'ph', SpecHash: 'sh' },
             });
 
             expect(valuesOf(historyCalls[0])).toEqual({ Seniority: null, IsVIP: null });
@@ -777,7 +885,7 @@ describe('Decision pipeline escalation', () => {
     });
 
     describe('the Dedup Cache', () => {
-        const probe = new HashProbe(DECISION_PROMPT.ID);
+        const probe = new HashProbe(DECISION_PROMPT.ID, undefined, undefined, null);
         const prompt = asPrompt(DECISION_PROMPT);
 
         it('changes the key when the escalation settings change', () => {
@@ -800,22 +908,22 @@ describe('Decision pipeline escalation', () => {
             store.mockImplementation(async (params) => {
                 const entry = asCacheEntry({
                     ID: `CACHE-${entries.length + 1}`,
-                    OutputsJSON: params.outputsJSON,
-                    Reasoning: params.reasoning ?? null,
-                    AIPromptRunID: params.aiPromptRunID ?? null,
+                    OutputsJSON: params.OutputsJSON,
+                    Reasoning: params.Reasoning ?? null,
+                    AIPromptRunID: params.AIPromptRunID ?? null,
                 });
                 entries.push({ Params: params, Entry: entry });
                 return entry;
             });
             batchLookup.mockImplementation(async (params) => {
                 const hits = entries.filter((e) =>
-                    e.Params.recordProcessID === params.recordProcessID &&
-                    e.Params.promptID === params.promptID &&
-                    e.Params.promptVersionHash === params.promptVersionHash &&
-                    e.Params.constraintHash === params.constraintHash &&
-                    params.keyHashes.includes(e.Params.keyHash)
+                    e.Params.RecordProcessID === params.RecordProcessID &&
+                    e.Params.PromptID === params.PromptID &&
+                    e.Params.PromptVersionHash === params.PromptVersionHash &&
+                    e.Params.ConstraintHash === params.ConstraintHash &&
+                    params.KeyHashes.includes(e.Params.KeyHash)
                 );
-                return new Map(hits.map((e): [string, MJFeatureValueCacheEntity] => [e.Params.keyHash, e.Entry]));
+                return new Map(hits.map((e): [string, MJFeatureValueCacheEntity] => [e.Params.KeyHash, e.Entry]));
             });
         }
 
@@ -823,21 +931,21 @@ describe('Decision pipeline escalation', () => {
             useInMemoryCache();
             decisionAnswers.set('r1', BELOW_FLOOR);
             const spec = decisionSpec({ Caching: { Cacheable: true, KeyFields: ['Title'] } });
-            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, spec);
+            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, spec, null);
             const escalated = await processor.ProcessRecord(makeRecord('r1', 'Analyst'), context);
             const confident = await processor.ProcessRecord(makeRecord('r2', 'CEO'), context);
 
             expect(escalated).toMatchObject({ Status: 'Succeeded', AIPromptRunID: 'LLM-RUN-r1' });
             expect(escalated.FeatureValueCacheID).toBeUndefined();
-            expect(answersFor('r1')[0].featureValueCacheID).toBeUndefined();
+            expect(answersFor('r1')[0].FeatureValueCacheID).toBeUndefined();
             expect(confident.FeatureValueCacheID).toBe('CACHE-1');
             expect(store).toHaveBeenCalledTimes(1);
-            expect(store.mock.calls[0][0]).toMatchObject({ recordProcessID: DECISION_PIPELINE_ID, promptID: DECISION_PROMPT.ID, keyDisplay: 'CEO' });
+            expect(store.mock.calls[0][0]).toMatchObject({ RecordProcessID: DECISION_PIPELINE_ID, PromptID: DECISION_PROMPT.ID, KeyDisplay: 'CEO' });
 
             // The next run: the escalated record misses the Decision cache and escalates again; the confident one is served
             decisionCalls.length = 0;
             llmCalls.length = 0;
-            const next = new InferProcessor(DECISION_PROMPT.ID, undefined, spec);
+            const next = new InferProcessor(DECISION_PROMPT.ID, undefined, spec, null);
             await next.ProcessRecord(makeRecord('r1', 'Analyst'), context);
             const served: RecordResult = await next.ProcessRecord(makeRecord('r2', 'CEO'), context);
             expect(decisionCalls).toEqual(['r1']);
@@ -852,26 +960,26 @@ describe('Decision pipeline escalation', () => {
             decisionAnswers.set('r1', BELOW_FLOOR);
             decisionAnswers.set('r2', BELOW_FLOOR);
             const spec = decisionSpec({ Caching: { Cacheable: true, KeyFields: ['Title'] } });
-            const first = await new InferProcessor(DECISION_PROMPT.ID, undefined, spec).ProcessRecord(makeRecord('r1', 'Analyst'), context);
+            const first = await new InferProcessor(DECISION_PROMPT.ID, undefined, spec, null).ProcessRecord(makeRecord('r1', 'Analyst'), context);
 
-            const targetVersionHash = new HashProbe(LLM_PROMPT.ID).Hash(asPrompt(LLM_PROMPT), targetSpec);
+            const targetVersionHash = new HashProbe(LLM_PROMPT.ID, undefined, undefined, null).Hash(asPrompt(LLM_PROMPT), targetSpec);
             expect(store).toHaveBeenCalledTimes(1);
             expect(store.mock.calls[0][0]).toMatchObject({
-                recordProcessID: LLM_PIPELINE_ID,
-                promptID: LLM_PROMPT.ID,
-                promptVersionHash: targetVersionHash,
-                aiPromptRunID: 'LLM-RUN-r1',
+                RecordProcessID: LLM_PIPELINE_ID,
+                PromptID: LLM_PROMPT.ID,
+                PromptVersionHash: targetVersionHash,
+                AIPromptRunID: 'LLM-RUN-r1',
             });
-            expect(batchLookup.mock.calls.map(([params]) => [params.recordProcessID, params.promptID])).toEqual([
+            expect(batchLookup.mock.calls.map(([params]) => [params.RecordProcessID, params.PromptID])).toEqual([
                 [DECISION_PIPELINE_ID, DECISION_PROMPT.ID],
                 [LLM_PIPELINE_ID, LLM_PROMPT.ID],
             ]);
             expect(first.FeatureValueCacheID).toBe('CACHE-1');
-            expect(answersFor('r1')[0].featureValueCacheID).toBe('CACHE-1');
+            expect(answersFor('r1')[0].FeatureValueCacheID).toBe('CACHE-1');
 
             // The next run asks the decision again and escalates again, and the target answers from its own cache
             llmCalls.length = 0;
-            const second = await new InferProcessor(DECISION_PROMPT.ID, undefined, spec).ProcessRecord(makeRecord('r2', 'Analyst'), context);
+            const second = await new InferProcessor(DECISION_PROMPT.ID, undefined, spec, null).ProcessRecord(makeRecord('r2', 'Analyst'), context);
             expect(decisionCalls).toEqual(['r1', 'r2']);
             expect(llmCalls).toEqual([]);
             expect(second).toMatchObject({
@@ -891,7 +999,7 @@ describe('Decision pipeline escalation', () => {
         it('keeps a low-confidence decision, as before', async () => {
             decisionAnswers.set('r1', BELOW_FLOOR);
             const processRecord = vi.spyOn(InferProcessor.prototype, 'ProcessRecord');
-            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec({ Escalation: undefined }));
+            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec({ Escalation: undefined }), null);
             const results = await processor.ProcessBatch([makeRecord('r1'), makeRecord('r2')], context);
 
             expect(results.get('r1')).toMatchObject({
@@ -903,7 +1011,7 @@ describe('Decision pipeline escalation', () => {
             expect(processRecord).toHaveBeenCalledTimes(2);
             expect(llmCalls).toEqual([]);
             expect(getEntityObject).not.toHaveBeenCalled();
-            expect(historyFor('r1')[0].outputs.map((o) => o.confidence)).toEqual([0.91, 0.4]);
+            expect(historyFor('r1')[0].Outputs.map((o) => o.Confidence)).toEqual([0.91, 0.4]);
             expect(processor.EscalatedRecordCount).toBe(0);
         });
     });
@@ -911,7 +1019,7 @@ describe('Decision pipeline escalation', () => {
     describe('a pipeline that is not a Decision pipeline', () => {
         it('never escalates, even when a spec built without ValidateSpec carries Escalation', async () => {
             const spec = llmSpec({ Escalation: { PipelineID: LLM_PIPELINE_ID, BelowConfidence: 0.7 } });
-            const processor = new InferProcessor(LLM_PROMPT.ID, undefined, spec);
+            const processor = new InferProcessor(LLM_PROMPT.ID, undefined, spec, null);
             const results = await processor.ProcessBatch([makeRecord('r1'), makeRecord('r2')], context);
 
             expect(results.get('r1')).toMatchObject({ Status: 'Succeeded', ResultPayload: { seniority: 'Executive', isVip: true }, AIPromptRunID: 'LLM-RUN-r1' });

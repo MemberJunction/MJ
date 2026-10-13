@@ -1253,14 +1253,18 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     protected ValidateDeleteResult(entity: BaseEntity, rawResult: Record<string, unknown>[], entityResult: BaseEntityResult): boolean {
         if (!rawResult || rawResult.length === 0) return false;
-        const deletedRecord = rawResult[0];
-        for (const key of entity.PrimaryKeys) {
-            if (key.Value !== deletedRecord[key.Name]) {
-                entityResult.Message = `Delete failed: record with primary key ${key.Name}=${key.Value} not found`;
-                return false;
-            }
-        }
-        return true;
+        return DatabaseProviderBase.CheckDeleteResultRow(entity, rawResult[0], entityResult);
+    }
+
+    /**
+     * {@link BaseEntity.DeleteResultMatchesEntity}, recording the failure message on `entityResult`
+     * when the row does not match.
+     */
+    protected static CheckDeleteResultRow(entity: BaseEntity, row: Record<string, unknown> | null | undefined, entityResult: BaseEntityResult): boolean {
+        if (entity.DeleteResultMatches(row)) return true;
+        const keys = entity.PrimaryKeys.map((key) => `${key.Name}=${key.Value}`).join(', ');
+        entityResult.Message = `Delete failed: record with primary key ${keys} not found`;
+        return false;
     }
 
     /**************************************************************************/
@@ -1912,15 +1916,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         (transactionResult: Record<string, unknown>, success: boolean) => {
                             entityResult.EndedAt = new Date();
                             if (success && transactionResult) {
-                                this.OnAfterDeleteExecute(entity, user, options);
-                                for (const key of entity.PrimaryKeys) {
-                                    if (key.Value !== transactionResult[key.Name]) {
-                                        entityResult.Success = false;
-                                        entityResult.Message = 'Transaction failed to commit';
-                                    }
+                                // The row must report THIS record as deleted (NULL keys = nothing deleted).
+                                const matched = DatabaseProviderBase.CheckDeleteResultRow(entity, transactionResult, entityResult);
+                                entityResult.Success = matched;
+                                if (matched) {
+                                    entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
+                                    this.OnAfterDeleteExecute(entity, user, options);
                                 }
-                                entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
-                                entityResult.Success = true;
                             } else {
                                 entityResult.Success = false;
                                 entityResult.Message = 'Transaction failed to commit';

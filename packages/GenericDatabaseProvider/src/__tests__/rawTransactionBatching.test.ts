@@ -6,7 +6,7 @@
  * `BeginEntityTransaction` through a hand-written stub whose `BeginTransaction()` does nothing but
  * count depth — so it proves the wrapper batches and says nothing about the 41 production call
  * sites that use the raw primitive directly (new-user creation on first login, the magic-link
- * service, the roles/users sync resolver, `MergeRecords`, every generated cascade-delete override).
+ * service, the roles/users sync resolver, `MergeRecords`).
  * Those published one cache write per save, and a rollback left rows in the shared cache that were
  * never committed. These tests use a real `GenericDatabaseProvider` subclass, which is where the
  * hook lives.
@@ -197,7 +197,7 @@ describe('a rollback for a begin that never happened', () => {
 
     /**
      * A nested begin whose savepoint fails, with the caller rolling back in its catch — the shape
-     * the generated cascade-delete overrides are written in. A batch is opened only after a begin
+     * hand-written `BeginTransaction()` call sites are written in. A batch is opened only after a begin
      * succeeds, so that rollback closes a level it never opened.
      *
      * The invariant covered here is that opens and closes stay paired and a rollback with nothing

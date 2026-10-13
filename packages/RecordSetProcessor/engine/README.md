@@ -43,6 +43,23 @@ By default the engine persists to `MJ: Process Runs` / `MJ: Process Run Details`
 `GenericProcessRunTracker`. Pass `tracker: new NoOpTracker()` for fire-and-forget single-record work,
 or your own `IProcessRunTracker` to persist into domain-specific tables.
 
+## Feature Pipeline results
+
+`InferProcessor` (WorkType `Infer`) writes each record's Feature Values keyed upserts (see
+`@memberjunction/feature-pipelines`), and a record whose values cannot be written fails. Its `RecordResult` carries:
+
+| Field | Meaning |
+|---|---|
+| `Outcome` | `Unchanged` when every value already existed as it is, else `Upserted` |
+| `PipelineVersion` | the `MJ: Feature Pipeline Versions.Version` the values were computed under (null until versions are resolved) |
+| `Warnings` | non-fatal problems of a record that succeeded (e.g. its Dedup Cache entry could not be stored); the default tracker stores them as a JSON array in `MJ: Process Run Details.Warnings`, never in `ErrorMessage` |
+
+Per batch, the processor also exposes `PreviousFeatureValues(recordID)` (each feature's value before this run wrote it)
+and `FeatureValueKeyOf(recordID)` (the pin and input hash the result was written under). Both are kept for the batch
+that produced them and dropped when the next `ProcessBatch` starts. The Record Process's OutputMapping text is a
+constructor argument (`new InferProcessor(promptID, inputMapping, spec, outputMappingText)`), so every construction path
+hashes the same spec.
+
 ## Exports
 
 | Export | Purpose |

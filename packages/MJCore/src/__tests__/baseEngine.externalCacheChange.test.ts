@@ -54,7 +54,7 @@ class TestEngine extends BaseEngine<TestEngine> {
     }
 
     public SetConfigsForTest(configs: BaseEnginePropertyConfig[]): void {
-        (this as unknown as { _metadataConfigs: BaseEnginePropertyConfig[] })._metadataConfigs = configs;
+        this.AdoptConfigs(configs);
     }
 
     public SetProviderForTest(provider: IMetadataProvider): void {

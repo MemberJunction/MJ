@@ -6,11 +6,12 @@
  * mapping (a statement returning no rows produces NO recordset, so positional zipping would
  * drift), and pin the global renumbering of per-item `?` placeholders into one @p namespace.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const queryCalls: Array<{ text: string; inputs: Record<string, unknown> }> = [];
 let scriptedRecordsets: unknown[][] = [];
 let throwOnQuery: Error | undefined;
+const txEvents: string[] = [];
 
 vi.mock('mssql', () => {
     class FakeRequest {
@@ -28,8 +29,8 @@ vi.mock('mssql', () => {
     class FakeTransaction {
         constructor(_pool: unknown) {}
         async begin() {}
-        async commit() {}
-        async rollback() {}
+        async commit() { txEvents.push('commit'); }
+        async rollback() { txEvents.push('rollback'); }
     }
     return { default: { Request: FakeRequest, Transaction: FakeTransaction } };
 });
@@ -38,21 +39,33 @@ vi.mock('mssql', () => {
 // batched path must still log PER ITEM (migration capture replays statements one record at a
 // time and reads each item's own simpleSQLFallback).
 const logCalls: Array<{ query: string; description?: string; fallback?: string }> = [];
-vi.mock('@memberjunction/generic-database-provider', () => ({
-    GenericDatabaseProvider: {
-        LogSQLStatement: async (query: string, _params: unknown, description?: string, _isMutation?: boolean, fallback?: string) => {
-            logCalls.push({ query, description, fallback });
-        },
-    },
-}));
 
+import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { SQLServerTransactionGroup } from '../SQLServerTransactionGroup.js';
+import { SQLServerDataProvider } from '../SQLServerDataProvider.js';
 import type { TransactionItem, TransactionResult } from '@memberjunction/core';
 import sql from 'mssql';
 
+beforeEach(() => {
+    vi.spyOn(GenericDatabaseProvider, 'LogSQLStatement').mockImplementation(
+        async (query: string, _params?: unknown, description?: string, _isMutation?: boolean, fallback?: string) => {
+            logCalls.push({ query, description, fallback });
+        },
+    );
+});
+
+/** The real provider with row processing reduced to a pass-through (the fixtures carry stub EntityInfo). */
+class PassThroughProvider extends SQLServerDataProvider {
+    public override async ProcessEntityRows(rows: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
+        return rows;
+    }
+}
+/** The provider each item's entity saves through; the group processes the item's rows with it. */
+const itemProvider = new PassThroughProvider();
+
 function makeItem(instruction: string, vars: unknown[] | null, entityName: string): TransactionItem {
     return {
-        BaseEntity: { EntityInfo: { Name: entityName }, ContextCurrentUser: undefined },
+        BaseEntity: { EntityInfo: { Name: entityName }, ContextCurrentUser: undefined, ProviderToUse: itemProvider },
         Instruction: instruction,
         Vars: vars,
         OperationType: 'Create',
@@ -60,31 +73,29 @@ function makeItem(instruction: string, vars: unknown[] | null, entityName: strin
     } as unknown as TransactionItem;
 }
 
-type Runner = {
-    executeBatchedNoVars: (
-        items: TransactionItem[],
-        transaction: unknown,
-        sqlProvider: unknown,
-        returnResults: TransactionResult[]
-    ) => Promise<void>;
-};
+/** Exposes the batched path so it can be driven against a fake transaction. */
+class BatchedTestGroup extends SQLServerTransactionGroup {
+    public RunBatched(items: TransactionItem[], transaction: sql.Transaction, results: TransactionResult[]): Promise<void> {
+        return this.ExecuteBatchedNoVars(items, transaction, results);
+    }
+}
 
 function run(items: TransactionItem[], results: TransactionResult[]) {
-    const g = new SQLServerTransactionGroup() as unknown as Runner;
-    const provider = { ProcessEntityRows: async (rows: unknown[]) => rows };
-    const tx = new (sql as unknown as { Transaction: new (p: unknown) => unknown }).Transaction({});
-    return g.executeBatchedNoVars(items, tx, provider, results);
+    // The mocked mssql module's Transaction is the fake below, which takes any pool.
+    const tx = new sql.Transaction({} as sql.ConnectionPool);
+    return new BatchedTestGroup().RunBatched(items, tx, results);
 }
 
 describe('SQLServerTransactionGroup.BatchedSubmit', () => {
     it('sends the whole group as ONE query with sentinel-mapped per-item results', async () => {
         queryCalls.length = 0;
+        txEvents.length = 0;
         throwOnQuery = undefined;
         scriptedRecordsets = [
             [{ __mj_batch_item: 0 }],
             [{ ID: 'a1' }],
             [{ __mj_batch_item: 1 }],
-            // item 1's statement returned NO rows → no recordset at all
+            [{ ID: 'b1' }],
             [{ __mj_batch_item: 2 }],
             [{ ID: 'c1' }],
         ];
@@ -102,15 +113,62 @@ describe('SQLServerTransactionGroup.BatchedSubmit', () => {
         expect(text).toContain('SELECT 2 AS [__mj_batch_item]');
         expect(text.indexOf('spCreateA')).toBeLessThan(text.indexOf('spCreateB')); // order preserved
         expect(results.length).toBe(3);
-        expect((results[0] as unknown as { Success: boolean }).Success).toBe(true);
-        expect((results[1] as unknown as { Success: boolean }).Success).toBe(false); // empty ≠ drifted
-        expect((results[2] as unknown as { Result: { ID: string } }).Result.ID).toBe('c1');
+        expect(results.every((r) => r.Success)).toBe(true);
+        const ids: string[] = results.map((r) => r.Result.ID);
+        expect(ids).toEqual(['a1', 'b1', 'c1']);
+        expect(txEvents).toEqual([]); // commit belongs to HandleSubmit, after this returns
+    });
+
+    it('an item that returned NO rows fails the whole batch: rolled back, every item failed, never adopts the next item\'s rows', async () => {
+        queryCalls.length = 0;
+        txEvents.length = 0;
+        throwOnQuery = undefined;
+        scriptedRecordsets = [
+            [{ __mj_batch_item: 0 }],
+            [{ ID: 'a1' }],
+            [{ __mj_batch_item: 1 }],
+            // item 1's statement returned NO rows → no recordset at all
+            [{ __mj_batch_item: 2 }],
+            [{ ID: 'c1' }],
+        ];
+        const items = [
+            makeItem('EXEC spCreateA @x=1', null, 'A'),
+            makeItem('EXEC spCreateB @y=2', null, 'B'),
+            makeItem('EXEC spCreateC @z=3', null, 'C'),
+        ];
+        const results: TransactionResult[] = [];
+
+        // item 1 (B) is judged empty — not drifted onto C's row — and that fails the batch
+        await expect(run(items, results)).rejects.toThrow(/rolled back.*Create of B did not persist the record/);
+        expect(txEvents).toEqual(['rollback']);
+        expect(results.length).toBe(3);
+        expect(results.every((r) => r.Success === false)).toBe(true);
+    });
+
+    it('maps an item that returned several result sets to its LAST one (cascading delete)', async () => {
+        queryCalls.length = 0;
+        throwOnQuery = undefined;
+        scriptedRecordsets = [
+            [{ __mj_batch_item: 0 }],
+            [{ ID: 'child-1', Name: 'Child' }], // cascaded spUpdateChild → base-view row
+            [{ ID: 'a1' }], // item 0's own keys
+            [{ __mj_batch_item: 1 }],
+            [{ ID: 'b1' }],
+        ];
+        const items = [makeItem('EXEC spDeleteA @ID=1', null, 'A'), makeItem('EXEC spCreateB @y=2', null, 'B')];
+        const results: TransactionResult[] = [];
+        await run(items, results);
+
+        const first: { ID: string } = results[0].Result;
+        const second: { ID: string } = results[1].Result;
+        expect(first.ID).toBe('a1');
+        expect(second.ID).toBe('b1');
     });
 
     it('renumbers per-item ? placeholders into one global @p namespace', async () => {
         queryCalls.length = 0;
         throwOnQuery = undefined;
-        scriptedRecordsets = [];
+        scriptedRecordsets = [[{ __mj_batch_item: 0 }], [{ ID: 'a1' }], [{ __mj_batch_item: 1 }], [{ ID: 'b1' }]]; // each item returns its row
         const items = [
             makeItem('EXEC spA @v=?', ['first'], 'A'),
             makeItem('EXEC spB @v=?, @w=?', ['second', 'third'], 'B'),
@@ -134,7 +192,7 @@ describe('SQLServerTransactionGroup.BatchedSubmit', () => {
         queryCalls.length = 0;
         logCalls.length = 0;
         throwOnQuery = undefined;
-        scriptedRecordsets = [];
+        scriptedRecordsets = [[{ __mj_batch_item: 0 }], [{ ID: 'a1' }], [{ __mj_batch_item: 1 }], [{ ID: 'b1' }], [{ __mj_batch_item: 2 }], [{ ID: 'c1' }]]; // each item returns its row
         const items = [
             makeItem('EXEC spCreateA', null, 'A'),
             makeItem('EXEC spCreateB', null, 'B'),
@@ -163,7 +221,7 @@ describe('SQLServerTransactionGroup.BatchedSubmit', () => {
         const results: TransactionResult[] = [];
         await expect(run(items, results)).rejects.toThrow(/rolled back/);
         expect(results.length).toBe(2);
-        expect(results.every(r => (r as unknown as { Success: boolean }).Success === false)).toBe(true);
+        expect(results.every(r => r.Success === false)).toBe(true);
         throwOnQuery = undefined;
     });
 });

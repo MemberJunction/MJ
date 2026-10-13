@@ -59,12 +59,15 @@ describe('Templates/base-types exports', () => {
 
     it('attaches each template its own content and params, the same on every rebuild', async () => {
       type Row = { TemplateID: string; Name: string };
-      type Tpl = { ID: string; Content: Row[]; Params: Row[] };
+      /** A template double: its rendered content is its first content row (the real selection is tested in MJCoreEntities). */
+      class Tpl {
+        public Content: Row[] = [];
+        public Params: Row[] = [];
+        constructor(public ID: string) {}
+        GetHighestPriorityContent(): Row | undefined { return this.Content[0]; }
+      }
       const engine = new TemplateEngineBase();
-      const templates: Tpl[] = [
-        { ID: 'AAA', Content: [], Params: [] },
-        { ID: 'bbb', Content: [], Params: [] },
-      ];
+      const templates: Tpl[] = [new Tpl('AAA'), new Tpl('bbb'), new Tpl('ccc')];
       (engine as unknown as { _metadata: Record<string, unknown[]> })._metadata = {
         Templates: templates,
         TemplateContents: [{ TemplateID: 'aaa', Name: 'c1' }, { TemplateID: 'BBB', Name: 'c2' }, { TemplateID: 'aaa', Name: 'c3' }],
@@ -81,6 +84,13 @@ describe('Templates/base-types exports', () => {
       expect(templates[0].Params).toEqual([]);
       expect(templates[1].Content.map(c => c.Name)).toEqual(['c2']);
       expect(templates[1].Params.map(p => p.Name)).toEqual(['p1']);
+      // O(1) lookups by ID, in any case, rebuilt with the associations
+      expect(engine.FindTemplateByID('aaa')).toBe(templates[0]);
+      expect(engine.FindTemplateByID('BBB')).toBe(templates[1]);
+      expect(engine.FindTemplateByID('zzz')).toBeUndefined();
+      // the rendered content is the template's own first content row (c1), the same object
+      expect(engine.FindRenderedContent('AAA')).toBe(templates[0].Content[0]);
+      expect(engine.FindRenderedContent('ccc')).toBeUndefined();
     });
   });
 });

@@ -54,3 +54,13 @@ describe('GenerateDeleteSQL — SkipRecordChanges', () => {
         expect(r.fullSQL.toLowerCase()).not.toContain('delete_result');
     });
 });
+
+describe('GenerateDeleteSQL — the Delete Record Change needs a deleted record', () => {
+    it('writes the audit row only for a result row whose keys are all non-NULL (a NULL-key row = nothing deleted)', () => {
+        const sql = makeHost().GenerateDeleteSQL(entity, user).fullSQL;
+        expect(sql).toContain('FROM delete_result AS deleted');
+        expect(sql).toMatch(/WHERE deleted IS NOT NULL\s+RETURNING "ID"/);
+        // the old condition held for the NULL-key row too
+        expect(sql).not.toContain('WHERE EXISTS (SELECT 1 FROM delete_result)');
+    });
+});

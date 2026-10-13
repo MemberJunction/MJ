@@ -1,7 +1,7 @@
 import { RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntityDeleteOptions, EntitySaveOptions, LogError, SimpleEmbeddingResult } from "@memberjunction/core";
 import { MJAIAgentExampleEntity } from "@memberjunction/core-entities";
-import { EmbedTextLocalHelper } from "./util";
+import { SaveTimeAISettings } from "@memberjunction/ai";
 import { AIEngine } from "@memberjunction/aiengine";
 
 /**
@@ -18,7 +18,7 @@ export class MJAIAgentExampleEntityServer extends MJAIAgentExampleEntity {
      * Override EmbedTextLocal to use helper
      */
     protected override async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
-        return EmbedTextLocalHelper(this, textToEmbed);
+        return AIEngine.EmbedTextLocalForEntity(this, textToEmbed);
     }
 
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
@@ -27,7 +27,19 @@ export class MJAIAgentExampleEntityServer extends MJAIAgentExampleEntity {
             const inputField = this.GetFieldByName('ExampleInput');
             const shouldGenerateEmbedding = !this.IsSaved || inputField.Dirty;
 
-            if (shouldGenerateEmbedding && this.ExampleInput && this.ExampleInput.trim().length > 0) {
+            // The host can switch save-time embeddings off (SaveTimeAISettings, kind 'embeddings'):
+            // then nothing is computed or cleared — the stored vector is left exactly as it is, even
+            // when the text is now empty.
+            if (SaveTimeAISettings.Instance.IsDisabled('Embeddings')) {
+                // leave the vector columns untouched
+            } else if (shouldGenerateEmbedding && this.SkipEmbeddings) {
+                // Deferred (`mj sync push` sets SkipEmbeddings so a short-lived CLI never loads the model): the
+                // now-stale vector is cleared, and AIEngine embeds and persists examples without a vector when its
+                // embeddings load and on every change after that (AIEngine.EmbedMissingNoteAndExampleVectors).
+                this.EmbeddingVector = null;
+                this.EmbeddingVectorBinary = null;
+                this.EmbeddingModelID = null;
+            } else if (shouldGenerateEmbedding && this.ExampleInput && this.ExampleInput.trim().length > 0) {
                 await this.GenerateEmbeddingByFieldName("ExampleInput", "EmbeddingVector", "EmbeddingModelID", "EmbeddingVectorBinary");
             } else if (!this.ExampleInput || this.ExampleInput.trim().length === 0) {
                 this.EmbeddingVector = null;

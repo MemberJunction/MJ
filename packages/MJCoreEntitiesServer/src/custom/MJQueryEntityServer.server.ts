@@ -8,7 +8,9 @@ import {
 } from "@memberjunction/core";
 import { MJQuerySQLEntity, MJQueryEntityExtended, MJSQLDialectEntity, QueryEngine } from "@memberjunction/core-entities";
 import { Float32VectorToBase64, RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
-import { EmbedTextLocalHelper } from "./util";
+import { AIEngine } from "@memberjunction/aiengine";
+import { SaveTimeAISettings } from "@memberjunction/ai";
+import type { ISaveEnrichmentOptOut } from "./saveEnrichmentOptOut";
 import {
     RunExtractionPipeline,
     CleanupQueryData,
@@ -25,12 +27,20 @@ import { resolveDbPlatformFromEnv } from "@memberjunction/generic-database-provi
  * child-relationship getters and business logic available on both client and server.
  */
 @RegisterClass(BaseEntity, 'MJ: Queries')
-export class MJQueryEntityServer extends MJQueryEntityExtended {
+export class MJQueryEntityServer extends MJQueryEntityExtended implements ISaveEnrichmentOptOut {
     /** Optional caller-provided parameter sample values. When set, these override
-     *  LLM-generated sampleValues during the extraction pipeline. Use this to pass
+     *  AI-generated sampleValues during the extraction pipeline. Use this to pass
      *  tested/validated values from the calling system.
      *  Keys are parameter names, values are the tested sample values. */
     public ParameterHints?: Map<string, string>;
+
+    /** When true, saving this query skips the AI enrichment stage of the extraction pipeline.
+     *  Parameters, fields, entities and dependencies are still extracted deterministically and
+     *  described with heuristic text. Set it before `Save()` on callers that must not call a
+     *  model, such as deterministic tests or bulk imports. Sticky: it stays set until cleared, so it
+     *  applies to every later save of this instance. Defaults to false. The host can also disable
+     *  this enrichment for every save it serves (`SaveTimeAISettings`, kind `QueryParameters`). */
+    public SkipAIEnrichment?: boolean;
 
     // ─── Embedding Methods ───────────────────────────────────────────────────────
 
@@ -38,7 +48,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * Simple proxy to local helper method for embeddings. Needed for BaseEntity sub-classes that want to use embeddings built into BaseEntity
      */
     protected override async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
-        return EmbedTextLocalHelper(this, textToEmbed);
+        return AIEngine.EmbedTextLocalForEntity(this, textToEmbed);
     }
 
     /**
@@ -52,18 +62,12 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * has no semantic match until its next successful embedding.
      */
     protected async GenerateCompositeEmbedding(): Promise<void> {
-        const parts = [
-            this.Name || '',
-            this.UserQuestion || '',
-            this.Description || ''
-        ].filter(p => p.trim().length > 0);
-
-        if (parts.length === 0) {
+        const compositeText = MJQueryEntityServer.CompositeEmbeddingText(this);
+        if (compositeText.length === 0) {
             this.clearEmbedding();
             return;
         }
 
-        const compositeText = parts.join(' | ');
         try {
             const result = await this.EmbedTextLocal(compositeText);
             if (result?.vector && result.vector.length > 0) {
@@ -78,11 +82,43 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         this.clearEmbedding();
     }
 
+    /**
+     * The text a query's vector is computed from: Name, UserQuestion and Description, the non-empty ones
+     * joined with ' | '. Empty string when all three are empty. One definition, shared by the save path and
+     * by `QueryEngineServer`, which embeds queries saved with {@link SkipEmbeddings} later.
+     */
+    public static CompositeEmbeddingText(query: Pick<MJQueryEntityExtended, 'Name' | 'UserQuestion' | 'Description'>): string {
+        return [query.Name || '', query.UserQuestion || '', query.Description || '']
+            .filter(p => p.trim().length > 0)
+            .join(' | ');
+    }
+
     /** Clears the stored vector (both forms) and the model it was computed with. */
     private clearEmbedding(): void {
         this.EmbeddingVector = null;
         this.EmbeddingVectorBinary = null;
         this.EmbeddingModelID = null;
+    }
+
+    /**
+     * The embedding step of {@link Save}, in this order:
+     * - the host switched save-time embeddings off (`SaveTimeAISettings`, kind `embeddings`): nothing is
+     *   computed or cleared — the stored vector is left exactly as it is;
+     * - the embedded text did not change: nothing to do (a save that touches other fields keeps the vector);
+     * - {@link SkipEmbeddings} is set (`mj sync push` sets it so a short-lived CLI never loads the embedding
+     *   model): the now-stale vector is cleared, and `QueryEngineServer` embeds the query when it next loads
+     *   (it embeds and persists every query that has text but no vector);
+     * - otherwise the composite vector is computed now ({@link GenerateCompositeEmbedding}).
+     */
+    protected async RefreshEmbeddingForSave(textChanged: boolean): Promise<void> {
+        if (SaveTimeAISettings.Instance.IsDisabled('Embeddings') || !textChanged) {
+            return;
+        }
+        if (this.SkipEmbeddings) {
+            this.clearEmbedding();
+            return;
+        }
+        await this.GenerateCompositeEmbedding();
     }
 
     // ─── Save / Delete Overrides ─────────────────────────────────────────────────
@@ -96,14 +132,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             const shouldExtractData = !this.IsSaved || sqlField.Dirty;
             const shouldGenerateEmbedding = !this.IsSaved || nameField.Dirty || descriptionField.Dirty || userQuestionField.Dirty;
 
-            // Generate embedding from composite text for better semantic search
-            if (shouldGenerateEmbedding) {
-                await this.GenerateCompositeEmbedding();
-            } else if (!this.Description || this.Description.trim().length === 0) {
-                this.EmbeddingVector = null;
-                this.EmbeddingVectorBinary = null;
-                this.EmbeddingModelID = null;
-            }
+            await this.RefreshEmbeddingForSave(shouldGenerateEmbedding);
 
             // Save the query first without AI processing
             const saveResult = await super.Save(options);
@@ -113,7 +142,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
 
             // Extract and sync parameters AFTER saving, outside of any transaction
             if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
-                await this.extractAndSyncDataAsync();
+                await this.extractAndSyncDataAsync(this.resolveSkipAIEnrichment(undefined));
                 await this.autoConvertDialectsAsync();
             } else if (!this.SQL || this.SQL.trim().length === 0) {
                 this.UsesTemplate = false;
@@ -208,10 +237,22 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
     }
 
     /**
+     * Whether this extraction run skips AI enrichment: the run's own override when the caller gave
+     * one, else this instance's {@link SkipAIEnrichment}; and always when the host has switched
+     * query-parameter enrichment off. Resolved once per run, so the pipeline only sees a boolean.
+     */
+    private resolveSkipAIEnrichment(runOverride: boolean | undefined): boolean {
+        // ?? on purpose: an explicit `false` override is a real answer ("enrich this run") and must
+        // not fall back to the instance flag.
+        const requested = runOverride ?? this.SkipAIEnrichment;
+        return requested === true || SaveTimeAISettings.Instance.IsDisabled('QueryParameters');
+    }
+
+    /**
      * Builds the QuerySyncContext from this entity instance for use by the extraction pipeline.
      * Resolves the SQL to the appropriate dialect variant for the connected database.
      */
-    private buildSyncContext(): QuerySyncContext {
+    private buildSyncContext(skipAIEnrichment: boolean): QuerySyncContext {
         return {
             queryID: this.ID,
             queryName: this.Name,
@@ -222,6 +263,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             runViewProvider: this.RunViewProviderToUse,
             platform: this.currentPlatform,
             parameterHints: this.ParameterHints,
+            skipAIEnrichment,
         };
     }
 
@@ -230,18 +272,21 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * when a dialect variant matching the current platform is saved — this handles
      * the timing issue where the parent Query is saved before its QuerySQL children
      * exist in the cache.
+     *
+     * @param skipAIEnrichment - Overrides this instance's `SkipAIEnrichment` for this run only;
+     *   omitted (or undefined), the instance flag applies. The host switch applies either way.
      */
-    public async RerunExtraction(): Promise<void> {
-        await this.extractAndSyncDataAsync();
+    public async RerunExtraction(skipAIEnrichment?: boolean): Promise<void> {
+        await this.extractAndSyncDataAsync(this.resolveSkipAIEnrichment(skipAIEnrichment));
     }
 
     /**
      * Runs the extraction pipeline and saves the UsesTemplate flag.
      * On error, sets UsesTemplate=false and attempts to save so the query remains usable.
      */
-    private async extractAndSyncDataAsync(): Promise<void> {
+    private async extractAndSyncDataAsync(skipAIEnrichment: boolean): Promise<void> {
         try {
-            const ctx = this.buildSyncContext();
+            const ctx = this.buildSyncContext(skipAIEnrichment);
             const pipelineResult = await RunExtractionPipeline(ctx);
             this.UsesTemplate = pipelineResult.UsesTemplate;
 
@@ -266,7 +311,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      */
     private async cleanupEmptyQueryAsync(): Promise<void> {
         try {
-            const ctx = this.buildSyncContext();
+            const ctx = this.buildSyncContext(this.resolveSkipAIEnrichment(undefined));
             await CleanupQueryData(ctx);
 
             // Also remove dialect records (not managed by the pipeline)

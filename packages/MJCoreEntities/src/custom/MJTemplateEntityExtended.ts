@@ -1,6 +1,9 @@
 import { BaseEntity, ValidationResult } from "@memberjunction/core";
 import { MJTemplateContentEntity, MJTemplateEntity, MJTemplateParamEntity } from "../generated/entity_subclasses";
-import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
+import { NormalizeUUID, OrdinalCompare, RegisterClass, UUIDsEqual } from "@memberjunction/global";
+
+/** The content-row fields {@link MJTemplateEntityExtended.SelectHighestPriorityContent} reads. */
+export type TemplateContentSelectionFields = Pick<MJTemplateContentEntity, 'ID' | 'Type' | 'Priority' | '__mj_CreatedAt'>;
 
 @RegisterClass(BaseEntity, 'MJ: Templates')
 export class MJTemplateEntityExtended extends MJTemplateEntity {
@@ -30,18 +33,34 @@ export class MJTemplateEntityExtended extends MJTemplateEntity {
     }
 
     /**
-     * Returns the highest priority content for the template
-     * @param type If provided, returns the highest priority content of the specified type
-     * @returns
+     * The content a template renders: the lowest `Priority` value (optionally of one content type); ties go to the
+     * oldest row, then the lowest ID — compared normalised and ordinally, so the choice depends neither on ID case
+     * (SQL Server stores UUIDs upper-case, PostgreSQL lower-case) nor on the runtime locale. Every caller therefore
+     * picks the same row whatever order the rows arrived in. This is the one selection used by
+     * {@link GetHighestPriorityContent} (what the AI prompt runner renders) and by an AI prompt's and an entity
+     * document's `TemplateText` (what a feature pipeline's prompt version hash reads), so the hash changes exactly when
+     * the rendered text does. Does not reorder `contents`.
+     * @param contents the template's content rows
+     * @param type if provided, only rows of this content type (case- and whitespace-insensitive)
+     * @returns the selected row, or undefined when none qualifies
      */
-    public GetHighestPriorityContent(type?: string): MJTemplateContentEntity {
-        if (type) {
-            return this.Content.filter(c => c.Type.trim().toLowerCase() === type.trim().toLowerCase())
-                .sort((a, b) => a.Priority - b.Priority)[0];
-        }
-        else {
-            return this.Content.sort((a, b) => a.Priority - b.Priority)[0];
-        }
+    public static SelectHighestPriorityContent<T extends TemplateContentSelectionFields>(contents: readonly T[], type?: string): T | undefined {
+        const wanted = type?.trim().toLowerCase();
+        const candidates = wanted ? contents.filter((c) => c.Type?.trim().toLowerCase() === wanted) : [...contents];
+        const time = (d: Date | null | undefined): number => (d ? new Date(d).getTime() : 0);
+        return candidates.sort((a, b) =>
+            (a.Priority - b.Priority)
+            || (time(a.__mj_CreatedAt) - time(b.__mj_CreatedAt))
+            || OrdinalCompare(NormalizeUUID(a.ID), NormalizeUUID(b.ID)))[0];
+    }
+
+    /**
+     * Returns the highest priority content for the template (see {@link SelectHighestPriorityContent}).
+     * @param type If provided, returns the highest priority content of the specified type
+     * @returns the selected content row; undefined when the template has no content (of that type)
+     */
+    public GetHighestPriorityContent(type?: string): MJTemplateContentEntity | undefined {
+        return MJTemplateEntityExtended.SelectHighestPriorityContent(this.Content, type);
     }
 
     /**

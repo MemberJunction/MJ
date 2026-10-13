@@ -50,6 +50,12 @@ export type TriggeredByValue = 'OnChange' | 'Schedule' | 'OnDemand' | 'Manual';
 /** The kind of record-set source. Mirrors the `MJ: Process Runs.SourceType` value list. */
 export type SourceTypeValue = 'View' | 'List' | 'Filter' | 'Array' | 'Keyset' | 'SingleRecord';
 
+/**
+ * Whether a Feature Pipeline record changed anything. Mirrors `FeatureValueWriteResult` in
+ * `@memberjunction/feature-pipelines`, which this base package cannot depend on: keep the two in step.
+ */
+export type RecordWriteOutcome = 'Upserted' | 'Unchanged';
+
 /** The outcome of processing a single record, returned by an {@link IRecordProcessor}. */
 export interface RecordResult {
     /** Whether the record succeeded, failed, or was skipped. */
@@ -58,6 +64,8 @@ export interface RecordResult {
     ResultPayload?: unknown;
     /** Error detail when `Status` is `Failed`. */
     ErrorMessage?: string;
+    /** Non-fatal problems with this record's processing (e.g. its cache entry could not be stored). */
+    Warnings?: string[];
     /** Processing duration in milliseconds (the engine fills this in if the processor does not). */
     DurationMs?: number;
     /** Number of attempts made for this record. */
@@ -80,6 +88,10 @@ export interface RecordResult {
     FeatureValueCacheID?: string;
     /** Per-output confidence scores keyed by output Name, when produced by the driver. */
     Confidence?: Record<string, number>;
+    /** Feature Pipelines: whether this record's values and write-back changed anything. */
+    Outcome?: RecordWriteOutcome;
+    /** Feature Pipelines: the pipeline version (MJ: Feature Pipeline Versions.Version) that computed the result. */
+    PipelineVersion?: number | null;
 }
 
 /** Running tallies for a process run. */

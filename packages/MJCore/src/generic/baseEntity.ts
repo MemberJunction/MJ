@@ -15,7 +15,7 @@ import { RelatedRecordCollection, RelatedRecordCollectionOptions } from './relat
 import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload } from './entityCompanion';
 import { EmbeddedRecord, type EmbeddedRecordOptions } from './embeddedRecord';
 import { EntitySavePlan, ExecuteEntitySavePlan } from './entitySavePlan';
-import { EntityTransactionScope } from './entityTransactionScope';
+import { EntityTransactionScope, RunInEntityTransaction } from './entityTransactionScope';
 import { JSONFieldBinding, JSONFieldRuleSet, JSONFieldSeverity, ValidateJSONFieldValue } from './jsonFieldBinding';
 import { BaseRemotableOperation } from './baseRemotableOperation';
 import {
@@ -6299,6 +6299,73 @@ export abstract class BaseEntity<T = unknown> {
         const result = new ValidationResult();
         result.Success = true;
         return result;
+    }
+
+    /**
+     * Runs this record's delete as one unit of work on its own provider ({@link ProviderToUse}):
+     * commits when `deleteRecord` returns true, rolls back when it returns false or throws. The
+     * generated `Delete()` override of every entity with `CascadeDeletes` calls this, so the cascaded
+     * child deletes and the record's own delete commit or roll back together.
+     *
+     * - Inside a {@link TransactionGroup} it does not open a transaction: the group supplies its own
+     *   atomicity when it submits, and the statements have not run yet.
+     * - On a provider without local transactions (`SupportsEntityTransactions !== true`, a client)
+     *   the delete runs as-is; cascading deletes are then handled server-side.
+     * - A failed delete has already recorded its real error in `LatestResult`; a rollback failure is
+     *   logged, never thrown over it (see {@link RunInEntityTransaction}).
+     *
+     * @param deleteRecord The delete itself — the generated override passes its `super.Delete(options)`,
+     * so subclasses of the generated class keep their place in the chain.
+     * @returns The delete's own result: true when it succeeded and committed.
+     * @throws Whatever `deleteRecord` throws, after rolling back.
+     */
+    protected async DeleteWithinEntityTransaction(deleteRecord: () => Promise<boolean>): Promise<boolean> {
+        if (this.TransactionGroup) {
+            return deleteRecord();
+        }
+        return RunInEntityTransaction(this.ProviderToUse, deleteRecord, (deleted) => deleted);
+    }
+
+    /**
+     * Whether a delete's result row reports THIS record as deleted. See {@link BaseEntity.DeleteResultMatchesEntity}.
+     * @param row The row the delete returned (the deleted record's primary key columns).
+     */
+    public DeleteResultMatches(row: Record<string, unknown> | null | undefined): boolean {
+        return BaseEntity.DeleteResultMatchesEntity(this, row);
+    }
+
+    /**
+     * The one test of whether a delete's result row reports `entity` as deleted: every primary key
+     * column is present in the row and equals the entity's key. UUID keys are compared with
+     * {@link UUIDsEqual}, since the database may return a different letter case (SQL Server upper,
+     * PostgreSQL lower). A number and a numeric string match when their text matches — drivers and
+     * transports differ in how they return integer keys (mssql returns BIGINT as a string, GraphQL
+     * may serialize either way); every other key compares strictly. A generated delete reports
+     * "nothing deleted" with NULL keys, which never matches; neither does an entity whose key value
+     * is absent (no `String(undefined)` coercion).
+     * Every provider judges its deletes with this — the database providers' direct and
+     * transaction-group paths and the GraphQL provider's transaction-group callback — so none can
+     * drift from the others.
+     * @param entity The record that was deleted.
+     * @param row The row the delete returned.
+     */
+    public static DeleteResultMatchesEntity(entity: BaseEntity, row: Record<string, unknown> | null | undefined): boolean {
+        if (!row) return false;
+        return entity.PrimaryKeys.every((key) => {
+            const returned = row[key.Name];
+            if (returned === null || returned === undefined) return false;
+            if (key.EntityFieldInfo.IsUniqueIdentifier) {
+                return typeof key.Value === 'string' && typeof returned === 'string' && UUIDsEqual(key.Value, returned);
+            }
+            if (typeof key.Value === 'number' || typeof returned === 'number') {
+                // `returned` is present (checked above); a key value that is absent stays absent here:
+                // only a number or a string can match a number's text.
+                return (typeof key.Value === 'number' || typeof key.Value === 'string')
+                    && (typeof returned === 'number' || typeof returned === 'string')
+                    && String(key.Value) === String(returned);
+            }
+            return key.Value === returned;
+        });
     }
 
     /**

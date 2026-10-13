@@ -356,7 +356,7 @@ export const loadModule = () => {
 }
 `
       : '';
-    return `import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
+    return `import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, RunView } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 ${loadModule}
@@ -636,10 +636,15 @@ ${loadModule}
         throw new Error('Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.');
     }`;
       } else if (entity.CascadeDeletes) {
-        // Entity has cascading deletes, wrap in transaction
+        // Entity has cascading deletes: run the delete as one unit of work on the record's own provider.
+        // The lifecycle (transaction-group bypass, capability check, begin/commit/rollback, rollback-error
+        // logging) lives once in BaseEntity.DeleteWithinEntityTransaction, not in every generated class.
         deleteFunction = `    /**
     * ${entity.Name} - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
+    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
+    * provider (ProviderToUse) and commits only when the delete succeeded.
+    * A failed delete returns false with its real error in LatestResult.
     * @public
     * @method
     * @override
@@ -647,29 +652,7 @@ ${loadModule}
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
-            // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
-            
-            try {
-                await provider.BeginTransaction();
-                const result = await super.Delete(options);
-                
-                if (result) {
-                    await provider.CommitTransaction();
-                    return true;
-                } else {
-                    await provider.RollbackTransaction();
-                    return false;
-                }
-            } catch (error) {
-                await provider.RollbackTransaction();
-                throw error;
-            }
-        } else {
-            // For network providers, cascading deletes are handled server-side
-            return super.Delete(options);
-        }
+        return this.DeleteWithinEntityTransaction(() => super.Delete(options));
     }`;
       }
 
