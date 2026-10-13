@@ -88,12 +88,24 @@ export interface LiveKitAgentRoomSessionResult {
   Identity: string;
 }
 
-/** A selectable provider-native voice (dev voice picker). */
+/**
+ * A selectable provider-native voice (dev voice picker): one per persona, or one per voice only the driver declares.
+ * Two personas can share an `ID` (a voice, and the same voice with a face); `PersonaID` tells them apart.
+ */
 export interface RealtimeVoiceOption {
   /** The provider-native voice id sent to the model (e.g. `echo`). */
   ID: string;
   /** The human label shown in the picker (e.g. `Echo`). */
   Name: string;
+  /** The persona this voice belongs to (`MJ: AI Personas.ID`), or null/absent for a voice only the driver declares. */
+  PersonaID?: string | null;
+  /**
+   * The avatar that comes with this voice (the `APIName` of its persona's preset Video binding on the model's vendor,
+   * which is what `realtime.video.avatarId` takes), or null/absent when it has none.
+   */
+  AvatarID?: string | null;
+  /** The persona's preview image URL, or null/absent when it has none. */
+  PreviewImageURL?: string | null;
 }
 
 /** An active Realtime model with the voices its driver supports (dev model/voice picker). */
@@ -122,6 +134,14 @@ export interface LiveKitRecordingResult {
    * meeting-recording storage provider isn't configured.
    */
   RecordingFileID?: string;
+}
+
+/** Result of recording a person's choice of whether agents may see their camera and shared screen. */
+export interface LiveKitAgentVisionResult {
+  /** Whether LiveKit applied the choice. */
+  Success: boolean;
+  /** Why it was not applied, when {@link Success} is false (for example "You are not in this room."). */
+  ErrorMessage?: string;
 }
 
 /** The kinds of events a room's turn-taking log records. */
@@ -382,7 +402,8 @@ export class GraphQLLiveKitClient {
 
   /**
    * Fetches active Realtime models with each driver's supported voices — populates the dev model/voice
-   * picker. Best-effort: any failure resolves to `[]` so the picker simply offers no overrides.
+   * picker. A persona voice also names the avatar that comes with it and the persona's preview image.
+   * Best-effort: any failure resolves to `[]` so the picker simply offers no overrides.
    *
    * @returns The active realtime models + their voices.
    */
@@ -396,6 +417,9 @@ export class GraphQLLiveKitClient {
             Voices {
               ID
               Name
+              PersonaID
+              AvatarID
+              PreviewImageURL
             }
           }
         }
@@ -456,6 +480,36 @@ export class GraphQLLiveKitClient {
       'StopLiveKitRecording',
       egressID,
     );
+  }
+
+  /**
+   * Records whether the current user lets agents see their camera and shared screen in a room. The server works out
+   * who is asking from the signed-in user, sets their LiveKit attribute and audits the choice; the room shows the change
+   * once LiveKit reports it. Never throws.
+   *
+   * @param roomName The room the user is in.
+   * @param allow `true` to let agents see, `false` to stop.
+   */
+  public async SetAgentVision(roomName: string, allow: boolean): Promise<LiveKitAgentVisionResult> {
+    try {
+      const mutation = gql`
+        mutation SetLiveKitAgentVision($input: SetLiveKitAgentVisionInput!) {
+          SetLiveKitAgentVision(input: $input) {
+            Success
+            ErrorMessage
+          }
+        }
+      `;
+      const result = await this._dataProvider.ExecuteGQL(mutation, { input: { RoomName: roomName, Allow: allow } });
+      const raw: LiveKitAgentVisionResult | undefined = result?.SetLiveKitAgentVision;
+      if (!raw) {
+        throw new Error('Invalid response from server');
+      }
+      return raw;
+    } catch (error: unknown) {
+      LogError('GraphQLLiveKitClient.SetAgentVision failed', undefined, error);
+      return { Success: false, ErrorMessage: (error instanceof Error ? error.message : String(error)) || 'Unknown error' };
+    }
   }
 
   /** Runs a recording mutation and normalizes the result/error shape. */

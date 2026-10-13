@@ -14,7 +14,7 @@
  */
 
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { CountByUUID, UUIDsEqual } from "@memberjunction/global";
 import { setupSQLServerClient, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -1514,6 +1514,7 @@ async function loadActionTools(
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     const actions = await discoverActions(props.pattern as string || '*', props.category as string | undefined, sessionUser);
+                    const paramCounts = CountByUUID(actionEngine.ActionParams, (p: MJActionParamEntity) => p.ActionID);
                     return JSON.stringify(actions.map(action => ({
                         id: action.ID,
                         name: action.Name,
@@ -1522,7 +1523,7 @@ async function loadActionTools(
                         categoryId: action.CategoryID,
                         type: action.Type,
                         status: action.Status,
-                        paramCount: actionEngine.ActionParams.filter((p: MJActionParamEntity) => UUIDsEqual(p.ActionID, action.ID)).length
+                        paramCount: paramCounts.Get(action.ID) ?? 0
                     })));
                 }
             });

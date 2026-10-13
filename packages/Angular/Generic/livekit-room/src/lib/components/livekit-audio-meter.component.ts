@@ -1,56 +1,32 @@
-import { ChangeDetectionStrategy, Component, ElementRef, Input, NgZone, OnDestroy, inject } from '@angular/core';
-import { LiveKitAudioMeter, AUDIO_METER_BIN_COUNT, type LiveKitParticipantView } from '@memberjunction/livekit-room-core';
+import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
+import { AUDIO_METER_BIN_COUNT, type LiveKitParticipantView } from '@memberjunction/livekit-room-core';
+import { MediaAudioMeterComponent } from '@memberjunction/ng-realtime-media';
+import { LIVEKIT_METER_SETTINGS } from '../models';
 
 /**
- * A compact, animated audio-level visualizer for a single participant. Runs a `requestAnimationFrame`
- * loop OUTSIDE Angular (via {@link NgZone.runOutsideAngular}) reading the live participant audio level and
- * writing bar heights directly to the DOM — so a 60fps meter never triggers change detection.
+ * `mj-livekit-audio-meter`: a participant's audio level as animated bars.
+ *
+ * @deprecated Use `mj-audio-meter` (`MediaAudioMeterComponent`) from `@memberjunction/ng-realtime-media` with a
+ * level reader and {@link LIVEKIT_METER_SETTINGS}, which this renders: the bars move as they always did.
  */
 @Component({
   selector: 'mj-livekit-audio-meter',
   standalone: true,
+  imports: [MediaAudioMeterComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="lk-meter" [class.lk-meter--silent]="false" role="presentation" aria-hidden="true">
-      @for (bar of bars; track $index) {
-        <span class="lk-meter__bar"></span>
-      }
-    </div>
-  `,
-  styles: [
-    `
-      :host {
-        display: inline-flex;
-        align-items: center;
-        height: 100%;
-      }
-      .lk-meter {
-        display: flex;
-        align-items: center;
-        gap: 2px;
-        height: 100%;
-      }
-      .lk-meter__bar {
-        display: block;
-        width: 3px;
-        height: 10%;
-        min-height: 2px;
-        border-radius: 2px;
-        background: var(--mj-brand-primary, #0076b6);
-        transform-origin: center;
-        transition: background-color 120ms ease;
-      }
-    `,
-  ],
+  template: `<mj-audio-meter [Level]="Level" [Settings]="Settings"></mj-audio-meter>`,
+  styles: [':host { display: inline-flex; align-items: center; height: 100%; }'],
 })
-export class LiveKitAudioMeterComponent implements OnDestroy {
-  private readonly host = inject(ElementRef<HTMLElement>);
-  private readonly zone = inject(NgZone);
-  private readonly meter = new LiveKitAudioMeter();
-  private rafId: number | null = null;
+export class LiveKitAudioMeterComponent {
   private participant: LiveKitParticipantView | null = null;
 
-  /** The bar slots to render (count comes from the core constant). */
+  /** Reads the participant's live level, or `null` without a participant. */
+  public Level: (() => number) | null = null;
+
+  /** The room's meter settings. */
+  public readonly Settings = LIVEKIT_METER_SETTINGS;
+
+  /** The bar slots. */
   public readonly Bars = new Array(AUDIO_METER_BIN_COUNT).fill(0);
 
   /** @deprecated Use {@link Bars}. */
@@ -62,48 +38,9 @@ export class LiveKitAudioMeterComponent implements OnDestroy {
   @Input()
   public set Participant(value: LiveKitParticipantView | null) {
     this.participant = value;
-    if (value && this.rafId === null) {
-      this.startLoop();
-    } else if (!value) {
-      this.stopLoop();
-    }
+    this.Level = value ? () => value.Raw.audioLevel : null;
   }
   public get Participant(): LiveKitParticipantView | null {
     return this.participant;
-  }
-
-  public ngOnDestroy(): void {
-    this.stopLoop();
-  }
-
-  /** Starts the rAF loop outside Angular so the high-frequency meter never schedules change detection. */
-  private startLoop(): void {
-    this.zone.runOutsideAngular(() => {
-      const tick = (): void => {
-        this.renderFrame();
-        this.rafId = requestAnimationFrame(tick);
-      };
-      this.rafId = requestAnimationFrame(tick);
-    });
-  }
-
-  /** Reads the latest audio level, smooths it, and writes bar heights to the DOM directly. */
-  private renderFrame(): void {
-    const level = this.participant?.Raw.audioLevel ?? 0;
-    const frame = this.meter.Next(level);
-    const root = this.host.nativeElement as HTMLElement;
-    const barEls = root.querySelectorAll<HTMLElement>('.lk-meter__bar');
-    for (let i = 0; i < barEls.length; i++) {
-      const pct = Math.max(0.1, frame.Bins[i] ?? 0);
-      barEls[i].style.height = `${Math.round(pct * 100)}%`;
-    }
-  }
-
-  /** Cancels the rAF loop. */
-  private stopLoop(): void {
-    if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = null;
-    }
   }
 }

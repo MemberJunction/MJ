@@ -151,8 +151,6 @@ export class FakeRoomClient implements NativeRoomClient {
     this.Published.push(pcm);
   }
   public flushOutbound(): void {}
-  public publishVideo(): void {}
-  public publishScreen(): void {}
   public onAudioFrame(): void {}
   public onParticipantConnected(): void {}
   public onParticipantDisconnected(): void {}

@@ -324,6 +324,130 @@
     }
   },
   {
+    "_comments": [
+      "Vertex AI voice name assumed to match the Gemini Developer API voice of the same name; unverified until the Vertex AI spike."
+    ],
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Puck",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Puck",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "4C699EF4-5AD4-454E-965F-F2ACE2C146D2"
+    }
+  },
+  {
+    "_comments": [
+      "Vertex AI voice name assumed to match the Gemini Developer API voice of the same name; unverified until the Vertex AI spike."
+    ],
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Charon",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Charon",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "7DBC8C6C-C70D-42AE-B782-908C4BA94B43"
+    }
+  },
+  {
+    "_comments": [
+      "Vertex AI voice name assumed to match the Gemini Developer API voice of the same name; unverified until the Vertex AI spike."
+    ],
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Kore",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Kore",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "376C9056-2036-426A-B2CD-1C589BEA99D9"
+    }
+  },
+  {
+    "_comments": [
+      "Vertex AI voice name assumed to match the Gemini Developer API voice of the same name; unverified until the Vertex AI spike."
+    ],
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Fenrir",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Fenrir",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "E1B458AF-9984-4182-A666-5A80AB0C08EA"
+    }
+  },
+  {
+    "_comments": [
+      "Vertex AI voice name assumed to match the Gemini Developer API voice of the same name; unverified until the Vertex AI spike."
+    ],
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Aoede",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Aoede",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "75D9DAE7-B0E9-4672-B233-EEA2D36E2E07"
+    }
+  },
+  {
+    "_comments": [
+      "Ben speaks with the Puck voice, the pairing in Google's live-avatar sample. Vertex AI voice name assumed to match the Gemini Developer API voice of the same name; unverified until the Vertex AI spike."
+    ],
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ben",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Puck",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "B8205D0F-4B86-47B3-9657-32297A4D4046"
+    }
+  },
+  {
+    "_comments": [
+      "Google's \"Ben\" avatar preset (the documented sample); whether this project's Vertex AI catalog offers it is unverified until the Vertex AI spike. An unknown preset fails the session at setup."
+    ],
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ben",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Video",
+      "APIName": "Ben",
+      "Status": "Active",
+      "Priority": 0,
+      "VendorSettings": {
+        "Avatar": {
+          "Kind": "preset"
+        }
+      }
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "549D0E7C-2E3F-44C6-A60A-6F40F418336B"
+    }
+  },
+  {
     "fields": {
       "PersonaID": "@lookup:MJ: AI Personas.Name=Ivy",
       "VendorID": "@lookup:MJ: AI Vendors.Name=AssemblyAI",

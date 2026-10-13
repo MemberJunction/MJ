@@ -7,7 +7,7 @@ import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, RegisterClass, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo, LogError } from '@memberjunction/core';
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
 import { MJApplicationEntityEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
@@ -198,6 +198,21 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** @deprecated Use {@link Entities}. */
   public set entities(value: EntityInfo[]) {
     this.Entities = value;
+  }
+
+  private entitiesIndexSource: EntityInfo[] | null = null;
+  private entitiesIndex = new UUIDMap<EntityInfo>();
+
+  /**
+   * Entities keyed by ID, rebuilt only when Entities is replaced (it is never mutated in place),
+   * so the per-render RecentEntities / FavoriteEntities getters don't scan every entity per item.
+   */
+  private get entitiesByID(): UUIDMap<EntityInfo> {
+    if (this.entitiesIndexSource !== this.Entities) {
+      this.entitiesIndex = IndexByUUID(this.Entities);
+      this.entitiesIndexSource = this.Entities;
+    }
+    return this.entitiesIndex;
   }
   // Application entity groups for the home view (Concept D)
   public AppEntityGroups: AppEntityGroup[] = [];
@@ -520,7 +535,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   get RecentEntities(): EntityInfo[] {
     return this.State.recentEntityAccesses
       .slice(0, 5)
-      .map(r => this.Entities.find(e => UUIDsEqual(e.ID, r.entityId)))
+      .map(r => this.entitiesByID.Get(r.entityId))
       .filter((e): e is EntityInfo => e !== undefined);
   }
 
@@ -534,7 +549,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   get FavoriteEntities(): EntityInfo[] {
     return this.State.favoriteEntities
-      .map(f => this.Entities.find(e => UUIDsEqual(e.ID, f.entityId)))
+      .map(f => this.entitiesByID.Get(f.entityId))
       .filter((e): e is EntityInfo => e !== undefined);
   }
 

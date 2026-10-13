@@ -3,7 +3,7 @@ import { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
-import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
+import { ChannelInboundVideoBridge, IChannelFrameProvider, type MediaPlacement } from '@memberjunction/ai-realtime-client';
 import { BaseRealtimeChannelClient, BuildToolBackedVerbs, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import {
   ApplyWhiteboardAgentTool, BuildWhiteboardExportSvg, RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS,
@@ -132,14 +132,14 @@ interface InteractionThrottleEntry {
  *    ({@link WHITEBOARD_TOOL_DEFINITIONS}); {@link ApplyAgentTool} prefers the BOUND host
  *    component (board mutation + violet pop-in / toast / presence-cursor garnish) and
  *    falls back to the pure {@link ApplyWhiteboardAgentTool} engine call when no surface
- *    is bound (e.g. the surface panel is collapsed) — the channel keeps working, just
+ *    is bound (e.g. the board has not been shown yet) — the channel keeps working, just
  *    without the garnish.
  *  - **Perception**: {@link BindSurface} subscribes the host's coalesced (750 ms)
  *    `SceneDelta` stream and pipes each delta into the live model's context as a
  *    `[whiteboard]` background note; the agent-undo toast click flows the same way.
- *  - **Surface**: {@link RealtimeWhiteboardHostComponent}, created dynamically by the
- *    overlay's channel tab; the host's Focus toggle rides `Context.SetFocusMode` so the
- *    shell can collapse/restore the main call column.
+ *  - **Surface**: {@link RealtimeWhiteboardHostComponent}, created on the overlay's stage; the
+ *    host's "Move to stage" button rides `Context.SetFocusMode`, and the board hears where the
+ *    overlay placed it ({@link OnSurfacePlacementChange}) so the button offers the way back.
  *  - **State of record**: every board mutation (user edits AND agent tool calls) requests
  *    a save of {@link WhiteboardState.ToJSON} under channel name `'Whiteboard'` — the
  *    host debounces and flushes at teardown.
@@ -212,6 +212,11 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
 
   public get TabIcon(): string {
     return 'fa-solid fa-chalkboard';
+  }
+
+  /** The board can be shared on its own: the call's Share menu offers it under "This panel" while it is on screen. */
+  public override get SurfaceShareable(): boolean {
+    return true;
   }
 
   public GetToolDefinitions(): RealtimeToolDefinition[] {
@@ -428,7 +433,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   /**
    * Executes one `Whiteboard_*` tool call LOCALLY. Prefers the live bound host (board
    * mutation + UI garnish); falls back to the pure engine function when no surface is
-   * bound so the channel keeps working with the pane collapsed.
+   * bound so the channel keeps working before the board is first shown.
    */
   public ApplyAgentTool(toolName: string, argsJson: string): string {
     let result: string;
@@ -462,6 +467,11 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
    */
   public override RestoreState(stateJson: string): boolean {
     return this.State.LoadFromJSON(stateJson);
+  }
+
+  /** Keeps the board's "Move to stage" / "Back to tab" button true to where the host placed it. */
+  public override OnSurfacePlacementChange(placement: MediaPlacement): void {
+    this.host?.SetOnStage(placement === 'stage');
   }
 
   /**
