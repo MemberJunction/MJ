@@ -429,7 +429,7 @@ describe('MjFormFieldComponent (DOM)', () => {
 
     it('DOES flag the resolved NAME field when it is blanked — the save refuses it (#4683)', () => {
       // The one case where '' IS missing: the field the record is identified by. `Name` is what
-      // EntityInfo.NameField resolves to here, and EntityField.Validate() refuses a blank there, so
+      // EntityInfo.NameField resolves to here, and BaseEntity.Validate() refuses a blank there, so
       // the form must agree — the same form/save alignment #4359 established, reached by both refusing.
       const f = render({ Record: makeWidget({ Name: '' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
       expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);

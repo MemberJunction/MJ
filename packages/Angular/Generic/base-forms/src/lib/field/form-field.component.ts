@@ -476,7 +476,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * `''` as empty therefore painted a field red that would save perfectly well — the form and the
    * save disagreed about the same value, and the section indicators inherited the disagreement.
    *
-   * The one exception is the entity's resolved NAME field (MJ #4683): `EntityField.Validate()`
+   * The one exception is the entity's resolved NAME field (MJ #4683): `BaseEntity.Validate()`
    * refuses a blank or whitespace-only value there, so this getter flags it too.
    *
    * Requiring actual text anywhere else is a separate, deliberate constraint (an `IsRequired`-style
@@ -500,7 +500,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * Whether this field is the one `EntityInfo.NameField` resolves to — the single field the record is
    * identified by. NOT the same as `IsNameField`: 45 entities flag several fields, and `NameField`
    * applies the tie-break (prefer the field literally named `Name`). Mirrors the core rule in
-   * `EntityField.Validate()` so the form and the save agree about blank names.
+   * `BaseEntity.Validate()` so the form and the save agree about blank names.
    */
   get IsResolvedNameField(): boolean {
     const nameField = this.Record?.EntityInfo?.NameField;

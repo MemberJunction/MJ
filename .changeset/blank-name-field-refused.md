@@ -7,7 +7,7 @@ A record can no longer be saved with a blank name (#4683).
 
 An entity's name field is how every other surface REFERS to the record — FK display, CodeGen's JOIN aliases, search, pickers, related-record grids. A blank one does not corrupt the row; it makes the row unidentifiable everywhere it is referenced from. `EntityField.Validate()` did not refuse it: the nullability rung only rejects `null`, and SQL Server accepts `''` in a NOT NULL column.
 
-`EntityField.Validate()` now refuses a blank (trimmed, so whitespace-only counts) value in the field `EntityInfo.NameField` resolves to, with a field-named error. `MjFormFieldComponent.IsRequiredEmpty` mirrors the rule, so the form and the save agree.
+`BaseEntity.Validate()` now refuses a blank (trimmed, so whitespace-only counts) value in the field `EntityInfo.NameField` resolves to, with a field-named error. `MjFormFieldComponent.IsRequiredEmpty` mirrors the rule, so the form and the save agree.
 
 Deliberately narrow, and each narrowing is load-bearing:
 
@@ -15,8 +15,8 @@ Deliberately narrow, and each narrowing is load-bearing:
 - **Only when that column is NOT NULL.** Where the name field is nullable the developer has said absence is legal, and `''` is absence's twin — the column's own declaration is the authority rather than a constraint invented in the application layer.
 - **Not-loaded fields are exempt**, for the same reason the required check already exempts them: the save does not write them.
 
-This completes the other half of #4359, which established that `''` is a value rather than absence for every *other* column. A blank name that also carries a value list reports one error, not two.
+This completes the other half of #4359, which established that `''` is a value rather than absence for every *other* column. If the field's own rules already refuse the value (a value list, say), that single error stands; the blank-name error is not added on top.
 
 **Behavior change**: saving a record whose name field is blank or whitespace-only now fails validation where it previously succeeded. A scan of three instance databases found no existing rows this would refuse.
 
-`EntityField.Validate()` takes a new optional `isResolvedNameField` parameter, supplied by `BaseEntity.Validate()`. It defaults to false, so a field validated in isolation behaves exactly as before.
+The rule lives in `BaseEntity.Validate()` because which field names a record is entity knowledge. `EntityField.Validate()` is unchanged.
