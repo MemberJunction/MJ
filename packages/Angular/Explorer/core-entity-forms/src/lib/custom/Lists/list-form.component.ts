@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
 import { Subject, debounceTime, takeUntil } from 'rxjs';
-import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { IndexByUUID, RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { MJListFormComponent } from '../../generated/Entities/MJList/mjlist.form.component';
@@ -796,8 +796,9 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             const tg = await this.metadata.CreateTransactionGroup();
             let queued = 0;
             let failedToQueue = 0;
+            const itemsByID = IndexByUUID(this.ListItems, i => i.detail.ID);
             for (const id of this.SelectedItems) {
-                const item = this.ListItems.find(i => UUIDsEqual(i.detail.ID, id));
+                const item = itemsByID.Get(id);
                 if (item) {
                     item.detail.TransactionGroup = tg;
                     // With a TransactionGroup set, Delete() returns true once
