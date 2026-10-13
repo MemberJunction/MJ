@@ -40,7 +40,8 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 vi.mock('@memberjunction/ai-prompts', () => ({
-    AIEmbeddingRunner: class {},
+    // This line's ai-vector-sync and ai-vector-dupe import only AIPromptRunner from ai-prompts.
+    AIPromptRunner: class {},
 }));
 
 vi.mock('@memberjunction/ai', () => ({
