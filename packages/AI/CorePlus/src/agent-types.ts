@@ -1056,6 +1056,9 @@ export interface InputArtifact {
  *   the agent picks up where it left off. Falls back to `'summary'` when the stack cannot be resumed.
  * - `'summary'`: the stopped run's completed action and tool results are rendered into one
  *   carried-forward message.
+ *
+ * The default is `'full_stack'` (`BaseAgent.DefaultStopContinuationMode`); a caller sets
+ * `ExecuteAgentParams.stopContinuationMode` only to choose `'summary'`.
  */
 export type StopContinuationMode = 'full_stack' | 'summary';
 

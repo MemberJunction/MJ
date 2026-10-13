@@ -3,9 +3,9 @@ import { GetGlobalObjectStore, ShutdownRegistry } from '@memberjunction/global';
 import type { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 import { AgentRunWatchdog } from '../agent-run-watchdog';
 
-/** Predictable T-SQL-flavored dialect so we can assert on the generated SQL. The watchdog now
- *  reaches the DB only through stored procs (writes) + the base view (reads), so the proc-call
- *  builder is the key piece to mock. */
+/** Predictable T-SQL-flavored dialect so we can assert on the generated SQL. The watchdog
+ *  reaches the DB through stored procs (writes) and RunView over the entity (reads), so the
+ *  proc-call builder and the provider's RunView are the pieces to mock. */
 const mockDialect = {
     QuoteIdentifier: (n: string) => `[${n}]`,
     QuoteSchema: (s: string, o: string) => `[${s}].[${o}]`,
@@ -19,6 +19,17 @@ interface MockProvider {
     Dialect: typeof mockDialect;
     EntityByName: (name: string) => { SchemaName: string; BaseTable: string; BaseView: string } | undefined;
     ExecuteSQL: ReturnType<typeof vi.fn>;
+    /** `RunView.FromMetadataProvider(provider)` routes every entity read here. */
+    RunView: ReturnType<typeof vi.fn>;
+}
+
+/** The RunView params the watchdog's reads are asserted on. */
+interface ReadParams {
+    EntityName: string;
+    ExtraFilter: string;
+    Fields: string[];
+    BypassCache?: boolean;
+    IgnoreMaxRows?: boolean;
 }
 
 function makeProvider(resolveEntity = true): MockProvider {
@@ -29,8 +40,11 @@ function makeProvider(resolveEntity = true): MockProvider {
                 ? { SchemaName: '__mj', BaseTable: 'AIAgentRun', BaseView: 'vwAIAgentRuns' }
                 : undefined,
         ExecuteSQL: vi.fn().mockResolvedValue([]),
+        RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
     };
 }
+
+const isPoll = (params: ReadParams) => /Status='Cancelled'/.test(params.ExtraFilter);
 
 const asProvider = (p: MockProvider) => p as unknown as DatabaseProviderBase;
 const mockUser = {} as UserInfo;
@@ -154,6 +168,26 @@ describe('AgentRunWatchdog', () => {
             expect(String(cancelCall![0])).toContain(`'${RUN_A}'`);
         });
 
+        it('the periodic prune reads the still-running subset through the entity and drops the rest', async () => {
+            const p = makeProvider();
+            p.RunView.mockImplementation(async (params: ReadParams) =>
+                ({ Success: true, Results: /Status='Running'/.test(params.ExtraFilter) ? [{ ID: RUN_A }] : [] }));
+            const wd = AgentRunWatchdog.Instance;
+            wd.Track(RUN_A, asProvider(p), mockUser);
+            wd.Track(RUN_B, asProvider(p), mockUser);
+
+            await vi.advanceTimersByTimeAsync(5 * 60_000); // the sweep interval
+
+            const prune = p.RunView.mock.calls.map(c => c[0] as ReadParams).find(x => /Status='Running'/.test(x.ExtraFilter));
+            expect(prune).toBeTruthy();
+            expect(prune!.EntityName).toBe('MJ: AI Agent Runs');
+            expect(prune!.Fields).toEqual(['ID']);
+            expect(prune!.ExtraFilter).toContain(`'${RUN_A}'`);
+            expect(prune!.ExtraFilter).toContain(`'${RUN_B}'`);
+            expect(wd.TrackedCount).toBe(1);
+            expect(wd.IsStoppable(RUN_B)).toBe(false);
+        });
+
         it('Untrack removes a run from the guarded set', () => {
             const p = makeProvider();
             const wd = AgentRunWatchdog.Instance;
@@ -175,11 +209,11 @@ describe('AgentRunWatchdog stop relay (cancellation poll)', () => {
         vi.useRealTimers();
     });
 
-    /** Routes the poll's SELECT to `cancelledRows` and every other statement to `[]`. */
+    /** Routes the poll's read to `cancelledRows` and every other read to `[]`. */
     function providerWithCancelledRows(cancelledRows: Array<{ ID: string; CancellationReason: string | null }>): MockProvider {
         const p = makeProvider();
-        p.ExecuteSQL.mockImplementation(async (sql: string) =>
-            /\[Status\] = 'Cancelled'/.test(sql) ? cancelledRows : []);
+        p.RunView.mockImplementation(async (params: ReadParams) =>
+            ({ Success: true, Results: isPoll(params) ? cancelledRows : [] }));
         return p;
     }
 
@@ -203,16 +237,22 @@ describe('AgentRunWatchdog stop relay (cancellation poll)', () => {
         const wd = AgentRunWatchdog.Instance;
         wd.Track(RUN_A, asProvider(p), mockUser); // no controller — a stop cannot reach it
         await vi.advanceTimersByTimeAsync(3_000);
-        expect(p.ExecuteSQL.mock.calls.some(c => /\[Status\] = 'Cancelled'/.test(String(c[0])))).toBe(false);
+        expect(p.RunView.mock.calls.some(c => isPoll(c[0] as ReadParams))).toBe(false);
 
         wd.Track(RUN_B, asProvider(p), mockUser, new AbortController());
         await vi.advanceTimersByTimeAsync(3_000);
-        const pollCall = p.ExecuteSQL.mock.calls.find(c => /\[Status\] = 'Cancelled'/.test(String(c[0])));
+        const pollCall = p.RunView.mock.calls.find(c => isPoll(c[0] as ReadParams));
         expect(pollCall).toBeTruthy();
-        const sql = String(pollCall![0]);
-        expect(sql).toContain(`'${RUN_B}'`);
-        expect(sql).not.toContain(`'${RUN_A}'`);
-        expect(sql).toContain('[__mj].[vwAIAgentRuns]');
+        const params = pollCall![0] as ReadParams;
+        expect(params.ExtraFilter).toContain(`'${RUN_B}'`);
+        expect(params.ExtraFilter).not.toContain(`'${RUN_A}'`);
+        // Through the entity, not a hand-built SELECT: the named fields, no cache, no row cap.
+        expect(params.EntityName).toBe('MJ: AI Agent Runs');
+        expect(params.Fields).toEqual(['ID', 'CancellationReason']);
+        expect(params.BypassCache).toBe(true);
+        expect(params.IgnoreMaxRows).toBe(true);
+        expect(p.ExecuteSQL.mock.calls.some(c => /SELECT/i.test(String(c[0])))).toBe(false);
+        expect(pollCall![1]).toBe(mockUser); // the tracked user's read permission applies
     });
 
     it('leaves a run alone while its row is still Running', async () => {
@@ -270,11 +310,11 @@ describe('AgentRunWatchdog stop relay (cancellation poll)', () => {
 
     it('a failing poll query is logged, not thrown, and the run stays tracked', async () => {
         const p = makeProvider();
-        p.ExecuteSQL.mockImplementation(async (sql: string) => {
-            if (/\[Status\] = 'Cancelled'/.test(sql)) {
+        p.RunView.mockImplementation(async (params: ReadParams) => {
+            if (isPoll(params)) {
                 throw new Error('boom');
             }
-            return [];
+            return { Success: true, Results: [] };
         });
         const controller = new AbortController();
         const wd = AgentRunWatchdog.Instance;

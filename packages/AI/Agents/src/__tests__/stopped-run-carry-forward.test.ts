@@ -168,6 +168,35 @@ describe('BaseAgent.injectStoppedRunResults', () => {
         expect(messages).toHaveLength(0);
     });
 
+    it('a run chained to a user-stopped predecessor checks that one row instead of searching the conversation', async () => {
+        const runViewFn = vi.fn()
+            .mockResolvedValueOnce({ Success: true, Results: [{ ID: STOPPED_RUN, Status: 'Cancelled', CancellationReason: 'User Request' }] })
+            .mockResolvedValueOnce({ Success: true, Results: [actionStep(4, 'Get Weather', { Location: 'Sydney' }, { CurrentTemp: '57.7°F' })] });
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runViewFn } as unknown as RunView);
+
+        const messages: Array<{ role: string; content: string }> = [];
+        await internals(new BaseAgent()).injectStoppedRunResults(paramsFor(messages, { lastRunId: STOPPED_RUN }));
+
+        expect(messages).toHaveLength(1);
+        expect(messages[0].content).toContain('Get Weather');
+        // The resolver (or the client) named the run: a primary-key read, not the conversation search.
+        const check = runViewFn.mock.calls[0][0] as { ExtraFilter: string; BypassCache?: boolean };
+        expect(check.ExtraFilter).toBe(`ID='${STOPPED_RUN}'`);
+        expect(check.BypassCache).toBe(true);
+    });
+
+    it('a run chained to a settled predecessor is an ordinary continuation: nothing to resume, and no search', async () => {
+        const runViewFn = vi.fn().mockResolvedValueOnce({ Success: true, Results: [{ ID: 'r1', Status: 'Completed', CancellationReason: null }] });
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runViewFn } as unknown as RunView);
+
+        const messages: unknown[] = [];
+        await internals(new BaseAgent()).injectStoppedRunResults(paramsFor(messages, { lastRunId: '2b1f0f3e-6a44-4c6f-9d0a-1f3e5c7b9a21' }));
+
+        expect(messages).toHaveLength(0);
+        expect(runViewFn).toHaveBeenCalledTimes(1);
+        expect((runViewFn.mock.calls[0][0] as { ExtraFilter: string }).ExtraFilter).not.toContain('ConversationID');
+    });
+
     it('is gated like its sibling: no conversation, a sub-agent, or a history floor means no lookup', async () => {
         const fromProvider = vi.spyOn(RunView, 'FromMetadataProvider');
 

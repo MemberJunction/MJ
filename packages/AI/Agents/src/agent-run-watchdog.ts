@@ -1,5 +1,5 @@
 import { BaseSingleton, ShutdownRegistry, IShutdownable } from '@memberjunction/global';
-import { DatabaseProviderBase, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo, LogError, LogStatus, RunView } from '@memberjunction/core';
 import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 
 /** The provider's SQL dialect, referenced via indexed access so we don't take a direct
@@ -326,34 +326,25 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
     }
 
     /**
-     * The stop relay's read side. One SELECT against the base view for the tracked runs that have
-     * a registered controller and whose row is now `Cancelled`; each one has its controller aborted
-     * with a reason derived from the row's `CancellationReason`, and leaves the tracked set (the
-     * agent's own cancelled-result save follows). Runs without a controller are left to the prune.
-     * Never throws (runs on a timer); overlapping ticks are skipped rather than stacked.
+     * The stop relay's read side. One RunView over the AI Agent Runs entity for the tracked runs
+     * that have a registered controller and whose row is now `Cancelled`; each one has its
+     * controller aborted with a reason derived from the row's `CancellationReason`, and leaves the
+     * tracked set (the agent's own cancelled-result save follows). Runs without a controller are
+     * left to the prune. Never throws (runs on a timer); overlapping ticks are skipped rather than
+     * stacked.
      */
     private async pollCancellations(): Promise<void> {
         if (this._cancellationPollInFlight || !this._provider || this._abortControllers.size === 0) {
             return;
         }
-        const ids = Array.from(this._abortControllers.keys()).filter(id => UUID_RE.test(id)).map(id => `'${id}'`).join(',');
+        const ids = AgentRunWatchdog.idList(Array.from(this._abortControllers.keys()));
         if (!ids) {
             return;
         }
-        const view = AgentRunWatchdog.viewOf(this._provider);
-        if (!view) {
-            return;
-        }
-        const d = this._provider.Dialect;
         this._cancellationPollInFlight = true;
         try {
-            const rows = await this._provider.ExecuteSQL<CancelledRunRow>(
-                `SELECT ${d.QuoteIdentifier('ID')}, ${d.QuoteIdentifier('CancellationReason')} FROM ${view} ` +
-                `WHERE ${d.QuoteIdentifier('Status')} = 'Cancelled' AND ${d.QuoteIdentifier('ID')} IN (${ids});`,
-                undefined, { ignoreLogging: true, description: 'AgentRunWatchdog cancellation poll' }, this._contextUser ?? undefined);
-            if (!Array.isArray(rows)) {
-                return;
-            }
+            const rows = await this.readTrackedRuns<CancelledRunRow>(
+                MJAIAgentRunEntityExtended.CancelledStatus, ids, ['ID', 'CancellationReason'], 'AgentRunWatchdog cancellation poll');
             for (const row of rows) {
                 if (typeof row?.ID !== 'string') {
                     continue;
@@ -370,6 +361,32 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
         }
     }
 
+    /**
+     * The tracked runs (among `ids`) whose row carries `status`, read through RunView against the
+     * entity so the read goes where every other entity read goes: the entity's view, under the
+     * tracked user's read permission, with the fields named. `ids` is the quoted, UUID-validated
+     * list from {@link idList}. Reads the database, not the cache: the rows this looks for were
+     * written moments ago by a Stop button or by the finishing agent.
+     */
+    private async readTrackedRuns<T>(status: string, ids: string, fields: string[], description: string): Promise<T[]> {
+        if (!this._provider || !this._contextUser) {
+            return [];
+        }
+        const rv = RunView.FromMetadataProvider(this._provider);
+        const result = await rv.RunView<T>({
+            EntityName: AGENT_RUN_ENTITY,
+            ExtraFilter: `Status='${status}' AND ID IN (${ids})`,
+            Fields: fields,
+            ResultType: 'simple',
+            IgnoreMaxRows: true,
+            BypassCache: true,
+        }, this._contextUser);
+        if (!result.Success) {
+            throw new Error(result.ErrorMessage || `${description}: RunView failed`);
+        }
+        return Array.isArray(result.Results) ? result.Results : [];
+    }
+
     /** Maps a run row's `CancellationReason` to the abort reason the owning agent will see. */
     private static abortReasonFor(cancellationReason: string | null): string {
         return cancellationReason === MJAIAgentRunEntityExtended.UserRequestCancellationReason ? AgentRunWatchdog.UserCancelAbortReason : AgentRunWatchdog.ExternalCancelAbortReason;
@@ -377,30 +394,20 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /**
      * Drop any tracked run that is no longer `Running` so the in-memory set can't grow unbounded
-     * over a long-lived process. A single SELECT (against the base VIEW — the runtime user has no
-     * table access) of the still-running subset; the rest are pruned.
+     * over a long-lived process. One RunView (through the entity, so the view the runtime user
+     * can read) of the still-running subset; the rest are pruned.
      */
     private async pruneTerminalRuns(): Promise<void> {
         const ids = this.trackedIdList();
         if (!ids || !this._provider) {
             return;
         }
-        const view = AgentRunWatchdog.viewOf(this._provider);
-        if (!view) {
-            return;
-        }
-        const d = this._provider.Dialect;
         try {
-            const rows = await this._provider.ExecuteSQL<{ ID: string }>(
-                `SELECT ${d.QuoteIdentifier('ID')} FROM ${view} ` +
-                `WHERE ${d.QuoteIdentifier('Status')} = 'Running' AND ${d.QuoteIdentifier('ID')} IN (${ids});`,
-                undefined, { ignoreLogging: true, description: 'AgentRunWatchdog tracked-set prune' }, this._contextUser ?? undefined);
+            const rows = await this.readTrackedRuns<{ ID: string }>('Running', ids, ['ID'], 'AgentRunWatchdog tracked-set prune');
             const stillRunning = new Set<string>();
-            if (Array.isArray(rows)) {
-                for (const row of rows) {
-                    if (typeof row?.ID === 'string') {
-                        stillRunning.add(row.ID.toLowerCase());
-                    }
+            for (const row of rows) {
+                if (typeof row?.ID === 'string') {
+                    stillRunning.add(row.ID.toLowerCase());
                 }
             }
             for (const tracked of Array.from(this._trackedRuns)) {
@@ -431,22 +438,17 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /** Comma-joined, quoted, validated UUID list for an `ID IN (...)` clause, or '' if none. */
     private trackedIdList(): string {
-        return this.trackedIds().map(id => `'${id}'`).join(',');
+        return AgentRunWatchdog.idList(this.trackedIds());
+    }
+
+    /** `ids` as a quoted SQL list, keeping only well-formed UUIDs: the values reach a filter string. */
+    private static idList(ids: string[]): string {
+        return ids.filter(id => UUID_RE.test(id)).map(id => `'${id}'`).join(',');
     }
 
     /** Schema that owns the AIAgentRun objects (for qualifying proc calls), or null if unresolved. */
     private static schemaOf(provider: DatabaseProviderBase): string | null {
         const entity = provider.EntityByName(AGENT_RUN_ENTITY);
         return entity?.SchemaName || null;
-    }
-
-    /** Fully-qualified, dialect-quoted base VIEW for AIAgentRun reads, or null if unresolved. */
-    private static viewOf(provider: DatabaseProviderBase): string | null {
-        const entity = provider.EntityByName(AGENT_RUN_ENTITY);
-        if (!entity || !entity.BaseView) {
-            return null;
-        }
-        const d = provider.Dialect;
-        return entity.SchemaName ? d.QuoteSchema(entity.SchemaName, entity.BaseView) : d.QuoteIdentifier(entity.BaseView);
     }
 }

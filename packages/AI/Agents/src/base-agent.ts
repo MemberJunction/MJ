@@ -7845,7 +7845,12 @@ The context is now within limits. Please retry your request with the recovered c
             return null;
         }
         try {
-            const runId = await this.findUserStoppedPredecessorRunId(params);
+            // A caller that chained this run (the run resolver, after its own stopped-predecessor
+            // lookup, or a client continuing a run) already named the predecessor: check that one
+            // row rather than searching the conversation again. Only an unchained run searches.
+            const runId = params.lastRunId
+                ? await this.userStoppedRunIdIfStopped(params.lastRunId, params)
+                : await this.findUserStoppedPredecessorRunId(params);
             if (!runId) {
                 return null;
             }
@@ -8188,6 +8193,31 @@ The context is now within limits. Please retry your request with the recovered c
             BypassCache: true,
         }, params.contextUser);
         const run = newest.Success ? newest.Results?.[0] : undefined;
+        return run && MJAIAgentRunEntityExtended.IsUserStopped(run.Status, run.CancellationReason) ? run.ID : null;
+    }
+
+    /**
+     * `runId` if that run is one the user stopped, else null. The chained-run counterpart of
+     * {@link findUserStoppedPredecessorRunId}: one primary-key read of the named run instead of a
+     * search of the conversation, so a run the resolver already resolved is not looked up twice,
+     * and a run chained to a settled predecessor (an ordinary continuation) resumes nothing.
+     * @private
+     */
+    private async userStoppedRunIdIfStopped(runId: string, params: ExecuteAgentParams): Promise<string | null> {
+        if (!IsValidUUID(runId)) {
+            return null;
+        }
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `ID='${runId}'`,
+            MaxRows: 1,
+            Fields: ['ID', 'Status', 'CancellationReason'],
+            ResultType: 'simple',
+            // The row this checks was written by the Stop button moments ago; read the database, not a cache.
+            BypassCache: true,
+        }, params.contextUser);
+        const run = result.Success ? result.Results?.[0] : undefined;
         return run && MJAIAgentRunEntityExtended.IsUserStopped(run.Status, run.CancellationReason) ? run.ID : null;
     }
 
