@@ -1,17 +1,13 @@
 /**
- * @fileoverview Worker-thread entry point for {@link EmbeddingWorkerHost}: answers each request
- * with {@link HandleEmbeddingRequest}. The model loads and runs on this thread, so inference never
+ * @fileoverview Worker-thread entry point for {@link EmbeddingWorkerHost}: answers each call with
+ * {@link HandleEmbeddingRequest}. The model loads and runs on this thread, so inference never
  * blocks the event loop that serves requests (MJ #5510).
  *
  * @module @memberjunction/ai-local-embeddings
  */
 
-import { parentPort } from 'node:worker_threads';
+import { ServeWorkerRequests } from '@memberjunction/worker-host';
 import { HandleEmbeddingRequest } from './EmbeddingWorkerHandler';
-import type { EmbeddingWorkerRequest } from './EmbeddingWorkerProtocol';
+import type { EmbeddingWorkerCall } from './EmbeddingWorkerProtocol';
 
-parentPort?.on('message', (request: EmbeddingWorkerRequest) => {
-  void HandleEmbeddingRequest(request).then(({ Response, Transfer }) => {
-    parentPort!.postMessage(Response, Transfer);
-  });
-});
+ServeWorkerRequests<EmbeddingWorkerCall, Float32Array[]>((call) => HandleEmbeddingRequest(call));

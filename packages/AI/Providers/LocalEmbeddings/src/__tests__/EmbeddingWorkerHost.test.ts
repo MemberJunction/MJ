@@ -1,7 +1,8 @@
 /**
  * EmbeddingWorkerHost runs local embedding inference on a worker thread so it cannot block the
- * event loop that serves requests (MJ #5510). These tests drive a real worker thread running a
- * fake model (fixtures/fake-embedding-worker.mjs) that speaks the same protocol.
+ * event loop that serves requests (MJ #5510). The thread lifecycle (crash restart, disable,
+ * missing script) is tested in @memberjunction/worker-host; these tests cover what this host adds,
+ * against a real worker thread running a fake model (fixtures/fake-embedding-worker.mjs).
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
@@ -48,25 +49,15 @@ describe('EmbeddingWorkerHost', () => {
     await expect(embed(['FAIL'])).rejects.toThrow('model exploded');
   });
 
-  it('rejects a pending call when the worker dies, and starts a new worker for the next call', async () => {
-    await expect(embed(['CRASH'])).rejects.toThrow(/Embedding worker stopped/);
-    const vectors = await embed(['abc']);
-    expect(Array.from(vectors[0])).toEqual([3]);
-    expect(EmbeddingWorkerHost.Instance.IsAvailable).toBe(true);
+  it('names itself in its errors', async () => {
+    const rejected = expect(embed(['BLOCK:2000'])).rejects.toThrow('Embedding worker shut down');
+    await EmbeddingWorkerHost.Instance.Shutdown();
+    await rejected;
   });
 
-  it('disables itself after three worker deaths within a minute, so callers run in-process', async () => {
-    for (let i = 0; i < 3; i++) {
-      await expect(embed(['CRASH'])).rejects.toThrow(/Embedding worker stopped/);
-    }
-    expect(EmbeddingWorkerHost.Instance.IsAvailable).toBe(false);
-    expect(EmbeddingWorkerHost.Instance.DisabledReason).toMatch(/3 worker crashes/);
-  });
-
-  it('is unavailable when the worker script is missing', () => {
-    EmbeddingWorkerHost.Instance.UseScriptPath('/nonexistent/EmbeddingWorker.js');
-    expect(EmbeddingWorkerHost.Instance.IsAvailable).toBe(false);
-    expect(EmbeddingWorkerHost.Instance.DisabledReason).toMatch(/worker script not found/);
+  it('defaults to EmbeddingWorker.js beside the compiled host', () => {
+    EmbeddingWorkerHost.Instance.UseScriptPath(null);
+    expect(EmbeddingWorkerHost.Instance.ScriptPath).toMatch(/[\\/]worker[\\/]EmbeddingWorker\.js$/);
   });
 
   it(`is unavailable when ${LOCAL_EMBEDDINGS_IN_PROCESS_ENV}=true`, () => {

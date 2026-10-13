@@ -66,6 +66,7 @@
     "@memberjunction/sqlserver-dataprovider": "6.2.0-edge.3",
     "@memberjunction/storage": "6.2.0-edge.3",
     "@memberjunction/web-search-engine": "6.2.0-edge.3",
+    "@memberjunction/worker-host": "6.2.0-edge.3",
     "@types/d3-cloud": "^1.2.9",
     "@types/d3-force": "^3.0.10",
     "@types/d3-hierarchy": "^3.1.7",

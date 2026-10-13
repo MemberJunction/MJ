@@ -1,5 +1,6 @@
 /**
- * @fileoverview Messages between {@link EmbeddingWorkerHost} and the embedding worker thread.
+ * @fileoverview The calls {@link EmbeddingWorkerHost} sends to the embedding worker thread. The
+ * request/response envelope around them comes from `@memberjunction/worker-host`.
  *
  * @module @memberjunction/ai-local-embeddings
  */
@@ -10,43 +11,24 @@ export interface EmbeddingSettings {
   LocalURL?: string;
 }
 
-/** Embed texts with a model. */
-export interface EmbedRequest {
-  ID: number;
+/** Embed texts with a model. Resolves with one vector per text, in order. */
+export interface EmbedCall {
   Kind: 'embed';
   Model: string;
   Texts: string[];
   Settings: EmbeddingSettings;
 }
 
-/** Drop the worker's loaded pipelines. */
-export interface ClearRequest {
-  ID: number;
+/** Drop the worker's loaded pipelines. Resolves with no vectors. */
+export interface ClearCall {
   Kind: 'clear';
 }
 
-/** Load a model ahead of its first use. */
-export interface PreloadRequest {
-  ID: number;
+/** Load a model ahead of its first use. Resolves with no vectors. */
+export interface PreloadCall {
   Kind: 'preload';
   Model: string;
   Settings: EmbeddingSettings;
 }
 
-export type EmbeddingWorkerRequest = EmbedRequest | ClearRequest | PreloadRequest;
-
-/** A request that succeeded. `Vectors` is empty for anything but `embed`. */
-export interface EmbeddingWorkerSuccess {
-  ID: number;
-  Ok: true;
-  Vectors: Float32Array[];
-}
-
-/** A request that failed inside the worker (the model failed to load, inference threw). */
-export interface EmbeddingWorkerFailure {
-  ID: number;
-  Ok: false;
-  Error: string;
-}
-
-export type EmbeddingWorkerResponse = EmbeddingWorkerSuccess | EmbeddingWorkerFailure;
+export type EmbeddingWorkerCall = EmbedCall | ClearCall | PreloadCall;

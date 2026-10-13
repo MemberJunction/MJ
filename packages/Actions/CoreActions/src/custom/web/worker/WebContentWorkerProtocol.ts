@@ -1,5 +1,6 @@
 /**
- * @fileoverview Messages between {@link WebContentWorkerHost} and the web-content worker thread.
+ * @fileoverview The calls {@link WebContentWorkerHost} sends to the web-content worker thread. The
+ * request/response envelope around them comes from `@memberjunction/worker-host`.
  *
  * @module @memberjunction/core-actions
  */
@@ -7,33 +8,20 @@
 import type { HtmlTransformOptions, PdfTransformOptions } from '../web-content-transforms';
 
 /** Convert an HTML page. */
-export interface HtmlTransformRequest {
-  ID: number;
+export interface HtmlTransformCall {
   Kind: 'html';
   Html: string;
   Options: HtmlTransformOptions;
 }
 
 /** Extract a PDF. `Data` is transferred to the worker, not copied. */
-export interface PdfTransformRequest {
-  ID: number;
+export interface PdfTransformCall {
   Kind: 'pdf';
   Data: Uint8Array;
   Options: PdfTransformOptions;
 }
 
-export type WebContentWorkerRequest = HtmlTransformRequest | PdfTransformRequest;
+export type WebContentWorkerCall = HtmlTransformCall | PdfTransformCall;
 
-export interface WebContentWorkerSuccess {
-  ID: number;
-  Ok: true;
-  Result: Record<string, unknown>;
-}
-
-export interface WebContentWorkerFailure {
-  ID: number;
-  Ok: false;
-  Error: string;
-}
-
-export type WebContentWorkerResponse = WebContentWorkerSuccess | WebContentWorkerFailure;
+/** The converted page, as `WebPageContentAction` returns it. */
+export type WebContentResult = Record<string, unknown>;

@@ -1,14 +1,15 @@
 /**
- * @fileoverview Answers one embedding-worker request. All the worker's logic lives here so it can
- * be tested in-process; `EmbeddingWorker.ts` is only the thread wiring.
+ * @fileoverview Answers one embedding-worker call. All the worker's logic lives here so it can be
+ * tested in-process; `EmbeddingWorker.ts` is only the thread wiring.
  *
  * @module @memberjunction/ai-local-embeddings
  */
 
+import type { WorkerAnswer } from '@memberjunction/worker-host';
 import { ApplyEmbeddingSettings, ClearEmbeddingPipelines, EmbedTextsWithModel, PreloadEmbeddingModel } from '../models/embeddingRuntime';
-import type { EmbeddingWorkerRequest, EmbeddingWorkerResponse } from './EmbeddingWorkerProtocol';
+import type { EmbeddingWorkerCall } from './EmbeddingWorkerProtocol';
 
-/** The model operations a request can call; swapped for fakes in tests. */
+/** The model operations a call can use; swapped for fakes in tests. */
 export interface EmbeddingRuntimeOperations {
   ApplySettings: typeof ApplyEmbeddingSettings;
   Embed: typeof EmbedTextsWithModel;
@@ -23,41 +24,30 @@ const DEFAULT_OPERATIONS: EmbeddingRuntimeOperations = {
   Clear: ClearEmbeddingPipelines,
 };
 
-/** The response to post, plus the buffers to transfer with it rather than copy. */
-export interface HandledEmbeddingRequest {
-  Response: EmbeddingWorkerResponse;
-  Transfer: ArrayBuffer[];
-}
-
-/** Runs one request. Never throws: a failure becomes an `Ok: false` response. */
+/**
+ * Runs one call. The vectors' buffers are transferred back rather than copied. Throws when the
+ * model fails to load or inference fails; the worker turns that into a failed response.
+ */
 export async function HandleEmbeddingRequest(
-  request: EmbeddingWorkerRequest,
+  call: EmbeddingWorkerCall,
   operations: EmbeddingRuntimeOperations = DEFAULT_OPERATIONS,
-): Promise<HandledEmbeddingRequest> {
-  try {
-    switch (request.Kind) {
-      case 'embed': {
-        operations.ApplySettings(request.Settings);
-        const vectors = await operations.Embed(request.Model, request.Texts);
-        return { Response: { ID: request.ID, Ok: true, Vectors: vectors }, Transfer: transferablesOf(vectors) };
-      }
-      case 'preload':
-        operations.ApplySettings(request.Settings);
-        await operations.Preload(request.Model);
-        return { Response: { ID: request.ID, Ok: true, Vectors: [] }, Transfer: [] };
-      case 'clear':
-        operations.Clear();
-        return { Response: { ID: request.ID, Ok: true, Vectors: [] }, Transfer: [] };
-      default:
-        return failure((request as { ID: number }).ID, 'Unknown embedding worker request');
+): Promise<WorkerAnswer<Float32Array[]>> {
+  switch (call.Kind) {
+    case 'embed': {
+      operations.ApplySettings(call.Settings);
+      const vectors = await operations.Embed(call.Model, call.Texts);
+      return { Result: vectors, Transfer: transferablesOf(vectors) };
     }
-  } catch (error) {
-    return failure(request.ID, error instanceof Error ? error.message : String(error));
+    case 'preload':
+      operations.ApplySettings(call.Settings);
+      await operations.Preload(call.Model);
+      return { Result: [] };
+    case 'clear':
+      operations.Clear();
+      return { Result: [] };
+    default:
+      throw new Error(`Unknown embedding worker call: ${(call as { Kind: string }).Kind}`);
   }
-}
-
-function failure(id: number, message: string): HandledEmbeddingRequest {
-  return { Response: { ID: id, Ok: false, Error: message }, Transfer: [] };
 }
 
 /** Each vector's own buffer, deduplicated (a transfer list may not name a buffer twice). */

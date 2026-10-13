@@ -1,7 +1,9 @@
 /**
  * WebContentWorkerHost runs WebPageContentAction's HTML/PDF conversion on a worker thread so it
- * cannot block the event loop that serves requests (MJ #5510). These tests drive a real worker
- * thread running a fake converter (fixtures/fake-web-content-worker.mjs) that speaks the protocol.
+ * cannot block the event loop that serves requests (MJ #5510). The thread lifecycle (crash
+ * restart, disable, missing script) is tested in @memberjunction/worker-host; these tests cover
+ * what this host adds, against a real worker thread running a fake converter
+ * (fixtures/fake-web-content-worker.mjs).
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
@@ -55,24 +57,19 @@ describe('WebContentWorkerHost', () => {
     await expect(convert('FAIL')).rejects.toThrow('parser exploded');
   });
 
-  it('rejects a pending call when the worker dies, and starts a new worker for the next call', async () => {
-    await expect(convert('CRASH')).rejects.toThrow(/Web content worker stopped/);
-    expect(await convert('abc')).toEqual({ length: 3 });
+  it('names itself in its errors', async () => {
+    const rejected = expect(convert('BLOCK:2000')).rejects.toThrow('Web content worker shut down');
+    await WebContentWorkerHost.Instance.Shutdown();
+    await rejected;
   });
 
-  it('disables itself after three worker deaths within a minute, so the action converts in-process', async () => {
-    for (let i = 0; i < 3; i++) {
-      await expect(convert('CRASH')).rejects.toThrow(/Web content worker stopped/);
-    }
-    expect(WebContentWorkerHost.Instance.IsAvailable).toBe(false);
-    expect(WebContentWorkerHost.Instance.DisabledReason).toMatch(/3 worker crashes/);
+  it('defaults to WebContentWorker.js beside the compiled host', () => {
+    WebContentWorkerHost.Instance.UseScriptPath(null);
+    expect(WebContentWorkerHost.Instance.ScriptPath).toMatch(/[\\/]worker[\\/]WebContentWorker\.js$/);
   });
 
-  it('is unavailable when the worker script is missing, or when the in-process switch is on', () => {
+  it(`is unavailable when ${WEB_CONTENT_IN_PROCESS_ENV}=true`, () => {
     process.env[WEB_CONTENT_IN_PROCESS_ENV] = 'true';
-    expect(WebContentWorkerHost.Instance.IsAvailable).toBe(false);
-    delete process.env[WEB_CONTENT_IN_PROCESS_ENV];
-    WebContentWorkerHost.Instance.UseScriptPath('/nonexistent/WebContentWorker.js');
     expect(WebContentWorkerHost.Instance.IsAvailable).toBe(false);
   });
 });
