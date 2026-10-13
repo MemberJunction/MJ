@@ -6,7 +6,7 @@ import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
-import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
+import { MJGlobal, MJEventType, IndexByUUID, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
@@ -340,8 +340,9 @@ const ORPHAN_DETAIL_SWEEP_INTERVAL_MS = 5 * 60_000;
 function describeBackgroundWorkInFlight(): string[] {
   const agentRuns = AgentRunWatchdog.Instance.TrackedRunIDs.map((id) => `agent run ${id}`);
   const engine = SchedulingEngine.Instance;
+  const jobsByID = IndexByUUID(engine.ScheduledJobs);
   const jobs = engine.InflightJobIDs.map((id) => {
-    const job = engine.ScheduledJobs.find((j) => UUIDsEqual(j.ID, id));
+    const job = jobsByID.Get(id);
     return job ? `scheduled job "${job.Name}" (${id})` : `scheduled job ${id}`;
   });
   return [...agentRuns, ...jobs];
