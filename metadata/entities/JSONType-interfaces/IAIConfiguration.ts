@@ -31,12 +31,13 @@
  * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
  * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
  * type in ONE file is what makes a shared section possible at all; the cost is that each of the
- * five entities emits the full (prefixed) set, including outer types it does not use.
+ * six entities emits the full (prefixed) set, including outer types it does not use.
  *
  * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
  * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
- * compiles against. Keep the two in step when adding a section or property — the same pact
- * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ * compiles against (the track types mirror its `realtimeTracks.ts`). Keep the two in step when
+ * adding a section or property — the same pact `IAgentSettings` follows with
+ * `@memberjunction/ai-core-plus`. Core's `modelConfiguration.test.ts` fails when they differ.
  *
  * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
  * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
@@ -126,46 +127,175 @@ export interface LLMConfigurationSettings {
 }
 
 /**
+ * MJ-normalized turn-detection mode, provider-neutral so a shared catalog is safe on every provider:
+ * - `'default'` — let the provider profile decide (today's behavior).
+ * - `'serverVad'` — classic silence-based server VAD.
+ * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+ * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+ *   to; the forward slot for full-duplex reasoning voice models.
+ */
+export type RealtimeTurnDetectionMode = 'default' | 'serverVad' | 'semanticVad' | 'native';
+
+/**
+ * What a turn's input may include (distinct from detection, which decides when a turn ends):
+ * - `'audioActivityOnly'` — audio activity only; video frames are sent deliberately.
+ * - `'audioActivityAndAllVideo'` — audio activity plus every video frame (Gemini 3.8 Live's default).
+ */
+export type RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVideo';
+
+/**
  * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
  * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
  * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
  * default — a wrong inherited value degrades safely, it never rejects a session.
  */
 export interface RealtimeTurnDetectionSettings {
-    /**
-     * - `'default'` — let the provider profile decide (today's behavior).
-     * - `'serverVad'` — classic silence-based server VAD.
-     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
-     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
-     *   to; the forward slot for full-duplex reasoning voice models.
-     */
-    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** The normalized mode; absent = `'default'`. */
+    Mode?: RealtimeTurnDetectionMode;
     /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
-    Eagerness?: 'low' | 'auto' | 'high' | null;
+    Eagerness?: 'low' | 'auto' | 'high';
     /** Server-VAD activation threshold (0–1); ignored without a mapping. */
-    Threshold?: number | null;
+    Threshold?: number;
     /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
-    SilenceDurationMs?: number | null;
+    SilenceDurationMs?: number;
+    /**
+     * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
+     * and consuming context) a decision rather than an inherited cost. Ignored without a mapping.
+     */
+    Coverage?: RealtimeTurnCoverage;
+}
+
+/** Which plane handles reasoning: `'local'` (the application/agent loop, the default) or `'remote'`. */
+export type RealtimeReasoningPlane = 'local' | 'remote';
+
+/** A reasoning effort in MJ's neutral vocabulary; each provider profile maps the values its model accepts. */
+export type RealtimeReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+/** The remote reasoning target, used when `Plane` is `'remote'`. */
+export interface RealtimeRemoteReasoning {
+    /** What the reference denotes: `'model'` (Live, Inworld) or `'hostedAgent'` (ElevenLabs). */
+    Kind?: 'model' | 'hostedAgent';
+    /** The target, e.g. `'gpt-5.6-terra'`, `'anthropic/claude-sonnet-4-6'`, `'MJ Realtime Co-Agent'`. */
+    Ref?: string;
+    /** The target's reasoning effort, for models that support one. */
+    Effort?: RealtimeReasoningEffort;
+    /** The most output tokens for the remote reasoning pass. */
+    MaxOutputTokens?: number;
+}
+
+/** Reasoning-plane settings for realtime models — dual delegation configuration. */
+export interface RealtimeReasoningSettings {
+    /** Absent = `'local'`. Fixed when the session is created. */
+    Plane?: RealtimeReasoningPlane;
+    /** The remote target when `Plane` is `'remote'`. */
+    Remote?: RealtimeRemoteReasoning;
+    /**
+     * How hard the model itself reasons (Gemini `thinkingConfig.thinkingLevel`). A profile that cannot
+     * honour the value logs a warning and uses its own default.
+     */
+    Level?: RealtimeReasoningEffort;
+    /**
+     * Ask the model for human-readable summaries of its own reasoning (Gemini `includeThoughts`). They
+     * are progress narration, not assistant speech. Absent = off.
+     */
+    IncludeThoughtSummaries?: boolean;
+}
+
+/** Which way samples flow on a track, relative to the model. */
+export type RealtimeTrackDirection = 'inbound' | 'outbound';
+
+/** The modalities MJ itself reasons about (cost, consent, transcripts). */
+export type RealtimeWellKnownModality = 'audio' | 'video' | 'image' | 'text';
+
+/** A modality key: one of the well-known values, or any registered string. */
+export type RealtimeModalityKey = RealtimeWellKnownModality | (string & {});
+
+/** How a track's usage is metered. */
+export type RealtimeTrackUsageBasis = 'tokens' | 'seconds' | 'frames' | 'bytes';
+
+/**
+ * One directional stream of one modality, as {@link RealtimeConfigurationSettings.RequestedTracks}
+ * requests it. Mirrors the track descriptor in `@memberjunction/ai` (`realtimeTracks.ts`).
+ */
+export interface RealtimeTrackDescriptor {
+    /** The modality this track carries. */
+    Modality: RealtimeModalityKey;
+    /** Which way samples flow, relative to the model. */
+    Direction: RealtimeTrackDirection;
+    /** Wire encoding, e.g. `'audio/pcm;rate=16000'` or `'image/jpeg'`; absent = the profile's default. */
+    Encoding?: string;
+    /** Sample or frame cadence: fps for video, Hz for audio. */
+    Rate?: number;
+    /** How this track is metered; absent = the session's own basis. */
+    UsageBasis?: readonly RealtimeTrackUsageBasis[];
+    /** Whether establishing this track needs an explicit human grant (camera, screen, microphone). */
+    RequiresConsent?: boolean;
+    /** Whether the session needs this track (`true`) or treats it as best-effort (`false`). */
+    Required?: boolean;
+    /** Which source feeds this track, when several streams of one modality and direction can exist. */
+    SourceID?: string;
+    /** A human-readable name for that source ("Whiteboard", "Camera"). */
+    Label?: string;
 }
 
 /**
- * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
- * `'local'`.
+ * Which server signal means "the session has gone idle and deferred work may be flushed":
+ * `'turnComplete'` (the default) or `'interactionStatus'`, for models with asynchronous reasoning
+ * whose `turnComplete` arrives while they still reason and call tools.
  */
-export interface RealtimeReasoningSettings {
+export type RealtimeIdleSignal = 'turnComplete' | 'interactionStatus';
+
+/** Tool-execution semantics a model permits. Capability declarations, not requests. */
+export interface RealtimeToolingSettings {
     /**
-     * Which plane handles reasoning:
-     * - `'local'` — application/agent loop (default).
-     * - `'remote'` — delegated to remote model or hosted agent.
+     * Whether synchronous blocking tool execution is legal. Absent = permitted. `false` on models that
+     * reject blocking mode outright (Gemini 3.8 Live Extended Thinking).
      */
-    Plane?: 'local' | 'remote' | null;
-    /** Remote reasoning target configuration. */
-    Remote?: {
-        Kind?: 'model' | 'hostedAgent' | null;
-        Ref?: string | null;
-        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
-        MaxOutputTokens?: number | null;
-    } | null;
+    SupportsBlockingExecution?: boolean;
+    /**
+     * Whether per-function scheduling hints are legal (Gemini `SILENT` / `WHEN_IDLE` / `INTERRUPTED`).
+     * Absent = not supported.
+     */
+    SupportsScheduling?: boolean;
+    /** Preferred function-calling behavior. */
+    Behavior?: 'BLOCKING' | 'NON_BLOCKING';
+}
+
+/**
+ * One price for a quantity a realtime session produces, in one currency. It applies only when all
+ * three fields are set; a partial price, or a unit or currency the reader does not handle, counts
+ * as no price.
+ */
+export interface RealtimeUnitPrice {
+    /** The amount charged per {@link RealtimeUnitPrice.Unit}. Never negative. */
+    Price?: number | null;
+    /**
+     * The billing unit, named as in `MJ: AI Model Price Unit Types`. `'Per Minute'`: one minute.
+     * `'Per 1M Tokens'`: one million tokens.
+     */
+    Unit?: 'Per Minute' | 'Per 1M Tokens' | null;
+    /** ISO 4217 currency code, uppercase (e.g. `USD`), as on `MJ: AI Model Costs`. */
+    Currency?: string | null;
+}
+
+/**
+ * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own; the cost rows stay the authority for token prices. A price belongs to the host that
+ * charges it, so set this on the model-vendor row: a price on the model or the model type would
+ * reach every vendor that serves the model.
+ */
+export interface RealtimePricingSettings {
+    /**
+     * The price of avatar video output, charged on top of the session's token cost. `'Per Minute'`
+     * prices the seconds of avatar video the model generates; `'Per 1M Tokens'` prices the output
+     * tokens the provider counts as video. Set the price and its unit together: the cascade merges
+     * per key, so a layer that sets only one of them keeps the other from the layer below.
+     *
+     * Unverified until checked against Google's bill (#5312): Gemini 3.8 Live on Vertex AI is
+     * seeded at $0.37152 per minute, derived from Google's $1.00 per 1M avatar video output tokens
+     * at 6,192 tokens per second.
+     */
+    AvatarVideoOutput?: RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -181,7 +311,7 @@ export interface RealtimeConfigurationSettings {
     /**
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
-    Reasoning?: RealtimeReasoningSettings | null;
+    Reasoning?: RealtimeReasoningSettings;
 
     /**
      * Whether this realtime model natively supports full-duplex conversational audio
@@ -192,6 +322,25 @@ export interface RealtimeConfigurationSettings {
      * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
      */
     FullDuplex?: boolean | null;
+
+    /** Tool-execution semantics this model permits. Absent = the profile's own defaults. */
+    Tooling?: RealtimeToolingSettings;
+
+    /**
+     * Media tracks a session asks the model to establish beyond audio. Absent or empty establishes
+     * audio only, so a video track exists only because something asked for it and never arrives as an
+     * inherited cost. Requests are intersected with what the model supports.
+     */
+    RequestedTracks?: readonly RealtimeTrackDescriptor[];
+
+    /** Which server signal means the session has gone idle. Absent = `'turnComplete'`. */
+    IdleSignal?: RealtimeIdleSignal;
+
+    /**
+     * Prices for output the token cost rows do not cover, such as avatar video. Set it on the
+     * model-vendor row.
+     */
+    Pricing?: RealtimePricingSettings | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
