@@ -1,4 +1,4 @@
-import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 import {
     FileStorageEngineBase,
@@ -424,10 +424,29 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         await this.Config(false, contextUser, provider);
         let accounts = this.Base.GetAccountsByProviderID(providerID);
         if (accounts.length === 0) {
-            await this.Config(true, contextUser, provider);
+            await this.RefreshAfterMiss(provider);
             accounts = this.Base.GetAccountsByProviderID(providerID);
         }
         return accounts[0] ?? null;
+    }
+
+    /**
+     * Reloads the shared account cache after a lookup missed, as the MJ system user. A forced `Config` loads as the user
+     * it is given, and `BaseEngine` empties a config that user cannot read (`MJ: File Storage Accounts`), so a restricted
+     * caller forcing the reload would blank the cache, and re-initialize every driver, for everyone. With no system user
+     * nothing is reloaded and the miss stands.
+     */
+    public async RefreshAfterMiss(provider?: IMetadataProvider): Promise<void> {
+        const md = provider ?? Metadata.Provider;
+        let systemUser: UserInfo | null = null;
+        try {
+            systemUser = await WellKnownUserSource.Instance.GetSystemUser(md);
+        } catch (error) {
+            LogError(`FileStorageEngine: resolving the system user for a cache refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        if (systemUser) {
+            await this.Config(true, systemUser, md);
+        }
     }
 
     /**

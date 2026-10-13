@@ -520,4 +520,35 @@ describe('FileResolver — storage routes honour account permissions', () => {
             expect(result.objects.map(o => o.fullPath)).toEqual(['hr/notes.md']);
         });
     });
+    describe('a cache miss is refreshed as the system user, never as the caller', () => {
+        /** Each engine lookup misses until a forced Config has run, as it would for an account added after the last load. */
+        function missUntilRefreshed(): void {
+            let refreshed = false;
+            mocks.engine.Config.mockImplementation(async (force?: boolean) => { if (force) refreshed = true; });
+            const byId = mocks.engine.GetAccountById.getMockImplementation();
+            const withProvider = mocks.engine.GetAccountWithProvider.getMockImplementation();
+            mocks.engine.GetAccountById.mockImplementation((id: string) => (refreshed ? byId?.(id) : undefined));
+            mocks.engine.GetAccountWithProvider.mockImplementation((id: string) => (refreshed ? withProvider?.(id) : null));
+        }
+        const forcedConfigUsers = () => mocks.engine.Config.mock.calls.filter(c => c[0] === true).map(c => c[1]);
+
+        it('ListStorageObjects: the tracked-file check reloads the account as the system user', async () => {
+            missUntilRefreshed();
+            mocks.listObjects.mockResolvedValueOnce({
+                objects: [{ name: 'notes.md', path: 'hr', fullPath: 'hr/notes.md', size: 1, contentType: 'text/plain',
+                    lastModified: new Date(0), isDirectory: false }],
+                prefixes: [],
+            });
+            await resolver.ListStorageObjects({ AccountID: ACCOUNT_OPEN, Prefix: 'hr/' }, contextFor(plainUser)).catch(() => undefined);
+            expect(forcedConfigUsers().length).toBeGreaterThan(0);
+            expect(forcedConfigUsers().every(u => u === systemUser)).toBe(true);
+        });
+
+        it('SearchAcrossAccounts: a readable account missing from the cache is reloaded as the system user', async () => {
+            missUntilRefreshed();
+            mocks.searchAcrossAccounts.mockResolvedValue({ accountResults: [], totalResultsReturned: 0, successfulAccounts: 0, failedAccounts: 0 });
+            await resolver.SearchAcrossAccounts({ AccountIDs: [ACCOUNT_OPEN], Query: 'q' }, contextFor(plainUser));
+            expect(forcedConfigUsers()).toEqual([systemUser]);
+        });
+    });
 });

@@ -152,6 +152,26 @@ describe('FileStorageEngine.ResolveFileObject — the gate for routes that go fr
         expect(resolved).toBeNull();
     });
 
+    it('refreshes the shared account cache on a miss as the system user, never as the caller', async () => {
+        await engine.ResolveFileObject({ ProviderID: PROVIDER_EMPTY, ProviderKey: 'x', Name: 'x' }, plainUser, 'Read', provider);
+        const forced = mockBase.Config.mock.calls.filter(call => call[0] === true);
+        expect(forced).toHaveLength(1);
+        expect(forced[0][1]).toBe(systemUser);
+    });
+
+    it('does not refresh at all when no system user can be resolved', async () => {
+        systemUserSpy.mockResolvedValue(null);
+        const resolved = await engine.ResolveFileObject({ ProviderID: PROVIDER_EMPTY, ProviderKey: 'x', Name: 'x' }, plainUser, 'Read', provider);
+        expect(resolved).toBeNull();
+        expect(mockBase.Config.mock.calls.filter(call => call[0] === true)).toHaveLength(0);
+    });
+
+    it('falls back to Name when the row\'s ProviderKey is empty', async () => {
+        const file = { ProviderID: PROVIDER_S3, ProviderKey: '', Name: 'public/brochure.pdf' };
+        const resolved = await engine.ResolveFileObject(file, plainUser, 'Read', provider);
+        expect(resolved?.ObjectKey).toBe('public/brochure.pdf');
+    });
+
     it('UploadFile refuses to overwrite an object behind a row the caller cannot read, before PutObject', async () => {
         const upload = engine.UploadFile({
             content: Buffer.from('x'), fileName: 'secret.pdf', mimeType: 'application/pdf', contextUser: plainUser,

@@ -619,7 +619,7 @@ export class FileResolver extends FileResolverBase {
     await FileStorageEngine.Instance.Config(false, user, md);
     let account = FileStorageEngine.Instance.GetAccountById(accountId);
     if (!account) {
-      await FileStorageEngine.Instance.Config(true, user, md);
+      await FileStorageEngine.Instance.RefreshAfterMiss(md);
       account = FileStorageEngine.Instance.GetAccountById(accountId);
     }
     if (!account) {
@@ -1293,7 +1293,7 @@ export class FileResolver extends FileResolverBase {
     const readable = await StorageAccessEvaluator.Instance.AccessibleAccountIDs(accountIDs, user, 'Read', md);
     await FileStorageEngine.Instance.Config(false, user, md);
     if ([...readable].some((id) => !FileStorageEngine.Instance.GetAccountWithProvider(id))) {
-      await FileStorageEngine.Instance.Config(true, user, md);
+      await FileStorageEngine.Instance.RefreshAfterMiss(md);
     }
 
     const searchable: AccountSearchInput[] = [];
