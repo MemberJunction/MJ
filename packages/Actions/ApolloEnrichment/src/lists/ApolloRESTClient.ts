@@ -34,6 +34,7 @@
  */
 import { LogError, LogStatus } from '@memberjunction/core';
 import { ApolloRESTEndpoint } from '../config.js';
+import { ApolloRequest } from '../http/ApolloHttp.js';
 import type {
     ApolloAccount,
     ApolloAccountSearchFilter,
@@ -207,6 +208,8 @@ export class ApolloRESTClient implements IApolloRESTClient {
      * method, path, status and whatever detail Apollo supplied; a 403 on a
      * master-key operation throws the master-key explanation instead (quirk #4).
      * Nothing is swallowed — a body that will not parse still surfaces its text.
+     * The HTTP plumbing itself lives in ../http/ApolloHttp.ts, shared with the
+     * people client.
      */
     private async request(args: {
         method: 'GET' | 'POST' | 'PATCH';
@@ -216,58 +219,17 @@ export class ApolloRESTClient implements IApolloRESTClient {
         /** When true, a 403 is reported as the master-key requirement (quirk #4). */
         masterKeyOp?: boolean;
     }): Promise<unknown> {
-        const { method, path, context, body, masterKeyOp } = args;
-        const url = `${ApolloRESTEndpoint}${path}`;
-        const headers: Record<string, string> = {
-            'X-Api-Key': this.apiKey,
-            accept: 'application/json',
-        };
-        if (body !== undefined) {
-            headers['Content-Type'] = 'application/json';
-        }
-
-        const response = await this.fetchImpl(url, {
-            method,
-            headers,
-            body: body !== undefined ? JSON.stringify(body) : undefined,
+        const response = await ApolloRequest({
+            ApiKey: this.apiKey,
+            FetchImpl: this.fetchImpl,
+            BaseURL: ApolloRESTEndpoint,
+            Method: args.method,
+            Path: args.path,
+            Context: `ApolloRESTClient.${args.context}`,
+            Body: args.body,
+            MasterKeyOp: args.masterKeyOp,
         });
-
-        if (!response.ok) {
-            let rawText = '';
-            let detail = '';
-            try {
-                rawText = await response.text();
-                const parsed: unknown = JSON.parse(rawText);
-                if (isRecord(parsed)) {
-                    detail = stringOr(parsed.error, stringOr(parsed.message, ''));
-                }
-            } catch {
-                // Body was not JSON. The error thrown below still carries rawText,
-                // so nothing is lost here.
-            }
-            if (response.status === 403 && masterKeyOp) {
-                const message =
-                    `ApolloRESTClient.${context}: ${method} ${path} returned HTTP 403. ` +
-                    `This endpoint requires a MASTER Apollo API key — scoped keys 403 on label reads/writes ` +
-                    `and on account/contact updates.` +
-                    (detail ? ` (${detail})` : '');
-                LogError(message);
-                throw new Error(message);
-            }
-            const fallback = detail || rawText.slice(0, 500);
-            const message = `ApolloRESTClient.${context}: ${method} ${path} failed with HTTP ${response.status}${fallback ? ` — ${fallback}` : ''}`;
-            LogError(message);
-            throw new Error(message);
-        }
-
-        try {
-            return (await response.json()) as unknown;
-        } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : String(error);
-            const message = `ApolloRESTClient.${context}: ${method} ${path} returned a non-JSON body: ${msg}`;
-            LogError(message);
-            throw new Error(message);
-        }
+        return response.Body;
     }
 
     // ─── Labels ──────────────────────────────────────────────────────────────
