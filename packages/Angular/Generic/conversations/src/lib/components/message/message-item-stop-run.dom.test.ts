@@ -6,7 +6,8 @@ import type { BeforeStopClickedEventArgs } from '../../events/chat-events';
  * The Stop control's render gate and click behavior.
  *
  * `CanStopRun` mirrors the template: shown only for an AI reply still In-Progress, in a
- * conversation the viewer may write to, when the host allows stopping (`AllowStopRun`).
+ * conversation the viewer may write to, when the host allows stopping (`AllowStopRun`), and while
+ * more than one reply is in flight (`InFlightCount`); with one, the composer's send slot stops it.
  * A click fires the cancelable `BeforeStopClicked` first; a listener that cancels keeps the
  * run going and the control available. Otherwise the item enters its stopping state and emits
  * `StopRequested`; `ngDoCheck` clears the state when the message leaves In-Progress, and a
@@ -27,6 +28,7 @@ describe('MessageItemComponent — Stop control', () => {
       _stableIsInProgressAIMessage: true,
       ReadOnly: false,
       AllowStopRun: true,
+      InFlightCount: 2, // the pill is for the many-runs case; with one run the composer's slot is the control
       IsStopping: false,
       BeforeStopClicked: {
         emit: (e: BeforeStopClickedEventArgs) => {
@@ -51,6 +53,12 @@ describe('MessageItemComponent — Stop control', () => {
 
   it('is offered for an in-progress AI reply the viewer may write to', () => {
     expect(item({}).CanStopRun).toBe(true);
+  });
+
+  it('is hidden while only one reply is in flight (the composer\'s send slot is the stop control then)', () => {
+    expect(item({ InFlightCount: 1 }).CanStopRun).toBe(false);
+    expect(item({ InFlightCount: 0 }).CanStopRun).toBe(false);
+    expect(item({ InFlightCount: 2 }).CanStopRun).toBe(true);
   });
 
   it('is hidden once the reply is no longer in progress', () => {

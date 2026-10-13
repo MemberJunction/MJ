@@ -289,6 +289,23 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   /** Whether message items offer Stop on an in-progress agent reply. Default true. */
   @Input() public AllowStopRun = true;
 
+  /**
+   * How many agent replies are in flight in the open view; items offer their own Stop only above
+   * one. Changes mid-session as runs start and finish, so it is restamped onto rendered items.
+   */
+  @Input()
+  public set InFlightCount(value: number) {
+    if (value === this._inFlightCount) {
+      return;
+    }
+    this._inFlightCount = value;
+    this.restampAssistantIdentity();
+  }
+  public get InFlightCount(): number {
+    return this._inFlightCount;
+  }
+  private _inFlightCount = 0;
+
   // ── Windowed-transcript paging state ────────────────────────────────────────
   // The list renders only the LOADED window, not the whole conversation. These two
   // describe what lies above it. Unused until the Phase 5 sentinel lands; wired now so
@@ -2083,6 +2100,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.allowMessageDelete = this.AllowMessageDelete;
     instance.ReadOnly = this.ReadOnly;
     instance.AllowStopRun = this.AllowStopRun;
+    instance.InFlightCount = this.InFlightCount;
     instance.CanFork = this.CanFork;
     instance.assistantDisplayName = this.AssistantDisplayName;
     instance.assistantAvatarUrl = this.AssistantAvatarUrl;
