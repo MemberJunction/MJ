@@ -157,6 +157,7 @@ export default class ArtifactsReclassify extends Command {
         if (!artifactsResult.Success || artifactsResult.Results.length === 0) return [];
 
         const artifactIds = artifactsResult.Results.map(a => `'${a.ID}'`).join(',');
+        // conversation-scope: artifact-wide read, no conversation path applies
         const versionsResult = await rv.RunView<{
             ID: string;
             ArtifactID: string;

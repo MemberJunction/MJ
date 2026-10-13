@@ -31,6 +31,7 @@
         [ShowGear]="!IsReviewing && Ui.showGear"
         [ShowDensityPicker]="Ui.showDensityPicker"
         [ShowMinimize]="!IsReviewing && Ui.showMinimize"
+        [ShowStartLive]="AllowStartLive"
         [Density]="Disclosure.Milestones.Density"
         (OpenSessionRequested)="OnOpenSessionRequested($event)"
         (DevModeToggled)="OnDevModeToggled($event)"
