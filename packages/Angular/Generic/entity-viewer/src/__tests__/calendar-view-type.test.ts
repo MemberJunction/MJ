@@ -45,6 +45,12 @@ describe('CalendarViewType', () => {
     expect(new CalendarViewType().IsAvailableFor(entityWith([...stamps, { Name: 'DueDate', Type: 'date' }]))).toBe(true);
   });
 
+  it('does not count a time-of-day column, which holds no day', () => {
+    expect(new CalendarViewType().IsAvailableFor(entityWith([{ Name: 'OpensAt', Type: 'time' }]))).toBe(false);
+    expect(new CalendarViewType().IsAvailableFor(entityWith([{ Name: 'OpensAt', Type: 'time with time zone' }]))).toBe(false);
+    expect(new CalendarViewType().IsAvailableFor(entityWith([{ Name: 'OpensAt', Type: 'time' }, { Name: 'StartsAt', Type: 'timestamptz' }]))).toBe(true);
+  });
+
   it('mounts the calendar renderer and offers its prop sheet', () => {
     const d = new CalendarViewType();
     expect(d.Name).toBe('CalendarViewType');

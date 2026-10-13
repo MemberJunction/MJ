@@ -91,7 +91,10 @@ export type CreateEventParams = {
 export type UpdateEventParams = {
     Target: CalendarTarget;
     ExternalEventID: string;
-    /** Only the fields to change. */
+    /**
+     * Only the fields to change. A change to `Start` or `End` must also carry `IsAllDay` and
+     * `TimeZone` ({@link CalendarUpdateError}).
+     */
     Changes: Partial<CalendarEventInput>;
 };
 
@@ -149,6 +152,19 @@ export function CalendarTargetError(operation: string, target: CalendarTarget | 
         return null;
     }
     return `${operation} needs a Target with an Identifier (whose calendar). Calendar operations never fall back to a default account.`;
+}
+
+/**
+ * The check `UpdateEvent` runs on its changes: a time change must say how to read the times. Without
+ * `IsAllDay` and `TimeZone` a provider would write the event back as a timed event in UTC, so a
+ * moved all-day event would turn timed and a local one would change zone. A message when they are
+ * missing, `null` otherwise.
+ */
+export function CalendarUpdateError(changes: Partial<CalendarEventInput>): string | null {
+    if ((changes.Start || changes.End) && (changes.IsAllDay === undefined || !changes.TimeZone?.trim())) {
+        return 'UpdateEvent: a change to Start or End must also carry IsAllDay and TimeZone; without them the event would be rewritten as a timed event in UTC.';
+    }
+    return null;
 }
 
 /**

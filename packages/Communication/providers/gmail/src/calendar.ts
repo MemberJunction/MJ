@@ -24,13 +24,13 @@ type GoogleEventDateTime = googleApis.calendar_v3.Schema$EventDateTime;
  * all-day slot is the calendar day in that zone. Google's descriptions take HTML, so `BodyType`
  * needs no translation.
  */
-export function BuildGoogleEventBody(input: Partial<CalendarEventInput>): GoogleEvent {
+export function BuildGoogleEventBody(input: Partial<CalendarEventInput>, isPatch = false): GoogleEvent {
     const body: GoogleEvent = {};
     const zone = input.TimeZone?.trim() || 'UTC';
     if (input.Subject !== undefined) body.summary = input.Subject;
     if (input.Body !== undefined) body.description = input.Body;
-    if (input.Start) body.start = googleSlot(input.Start, zone, input.IsAllDay === true);
-    if (input.End) body.end = googleSlot(input.End, zone, input.IsAllDay === true);
+    if (input.Start) body.start = googleSlot(input.Start, zone, input.IsAllDay === true, isPatch);
+    if (input.End) body.end = googleSlot(input.End, zone, input.IsAllDay === true, isPatch);
     if (input.Location !== undefined) body.location = input.Location;
     if (input.Attendees) {
         body.attendees = input.Attendees.map((a) => ({
@@ -47,8 +47,16 @@ export function BuildGoogleEventBody(input: Partial<CalendarEventInput>): Google
     return body;
 }
 
-function googleSlot(when: Date, zone: string, allDay: boolean): GoogleEventDateTime {
-    return allDay ? { date: CalendarWallClock(when, zone).slice(0, 10) } : { dateTime: when.toISOString(), timeZone: zone };
+/**
+ * On a patch the other form is sent as null: `events.patch` merges `start`/`end` into the stored
+ * value, so without it an event switched between all-day and timed would carry both `date` and
+ * `dateTime`. An insert has nothing to merge, so it sends only the form in use.
+ */
+function googleSlot(when: Date, zone: string, allDay: boolean, isPatch: boolean): GoogleEventDateTime {
+    const slot: GoogleEventDateTime = allDay
+        ? { date: CalendarWallClock(when, zone).slice(0, 10) }
+        : { dateTime: when.toISOString(), timeZone: zone };
+    return isPatch ? { date: null, dateTime: null, timeZone: null, ...slot } : slot;
 }
 
 /** A Google event as MemberJunction's read model. */

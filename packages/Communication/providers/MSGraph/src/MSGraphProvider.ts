@@ -50,9 +50,11 @@ import {
     ParseNotificationResult,
     NormalizedNotification,
     BaseMessageResult,
+    CalendarEventChange,
     CalendarEventResult,
     CalendarTarget,
     CalendarTargetError,
+    CalendarUpdateError,
     CancelEventParams,
     CreateEventParams,
     GetEventParams,
@@ -1116,6 +1118,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
     /** Patches the given fields. Graph sends updates to attendees when the organizer changes a meeting. */
     public override async UpdateEvent(params: UpdateEventParams, credentials?: MSGraphCredentials): Promise<CalendarEventResult> {
+        const changeError = CalendarUpdateError(params.Changes);
+        if (changeError) return { Success: false, ErrorMessage: changeError };
         return this.calendarCall<CalendarEventResult>('UpdateEvent', params.Target, credentials, (message) => ({ Success: false, ErrorMessage: message }), async (client, mailbox) => {
             const path = `${mailbox}/events/${encodeURIComponent(params.ExternalEventID)}`;
             const updated: GraphEvent = await client.api(path).header('Prefer', 'outlook.timezone="UTC"').patch(BuildGraphEventBody(params.Changes));
@@ -1130,11 +1134,12 @@ export class MSGraphProvider extends BaseCommunicationProvider {
      * (with the comment) but refuses a non-organizer with a 400. So the event's `isOrganizer` is read
      * first: the organizer's mailbox cancels, an attendee's mailbox deletes its own copy, which removes
      * it from that calendar only and tells nobody. An event that is already gone (404) counts as
-     * cancelled, so a retry after a lost reply does not fail.
+     * cancelled, so a retry after a lost reply does not fail. A 404 for the MAILBOX does not: Graph
+     * answers an unknown or mailbox-less user with 404 too, and that cancelled nothing.
      */
     public override async CancelEvent(params: CancelEventParams, credentials?: MSGraphCredentials): Promise<BaseMessageResult> {
         const failure = (message: string, err?: unknown): BaseMessageResult =>
-            this.getGraphStatusCode(err) === 404 ? { Success: true } : { Success: false, ErrorMessage: message };
+            this.getGraphStatusCode(err) === 404 && !this.isMailboxNotFound(err) ? { Success: true } : { Success: false, ErrorMessage: message };
         return this.calendarCall('CancelEvent', params.Target, credentials, failure, async (client, mailbox) => {
             const path = `${mailbox}/events/${encodeURIComponent(params.ExternalEventID)}`;
             const current: GraphEvent = await client.api(path).select('isOrganizer').get();
@@ -1180,8 +1185,32 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 result.NextSyncToken = response?.['@odata.deltaLink'];
                 url = result.NextSyncToken ? undefined : response?.['@odata.nextLink'];
             }
-            return result.NextSyncToken ? result : failure('Graph delta read ended without a deltaLink; nothing was applied.');
+            if (!result.NextSyncToken) return failure('Graph delta read ended without a deltaLink; nothing was applied.');
+            for (let i = 0; i < result.Changes.length; i++) {
+                if (result.Changes[i].Kind === 'Removed') result.Changes[i] = await this.confirmRemoval(client, mailbox, result.Changes[i]);
+            }
+            return result;
         });
+    }
+
+    /**
+     * Graph lists under `@removed` both an event that was deleted and one added, moved or changed
+     * OUTSIDE the delta's window (see Graph's event: delta). A caller that took every tombstone as a
+     * deletion would cancel a meeting that was only rescheduled past the window. So each one is read:
+     * a 404 is a real removal, anything found comes back as an upsert of the event as it is now.
+     *
+     * ponytail: one GET per tombstone; batch them (Graph $batch, 20 per call) if a calendar's syncs
+     * ever carry many.
+     */
+    private async confirmRemoval(client: Client, mailbox: string, change: CalendarEventChange): Promise<CalendarEventChange> {
+        try {
+            const path = `${mailbox}/events/${encodeURIComponent(change.ExternalEventID)}`;
+            const event: GraphEvent = await client.api(path).header('Prefer', 'outlook.timezone="UTC"').get();
+            return { Kind: 'Upserted', ExternalEventID: change.ExternalEventID, Event: ToCalendarEvent(event) };
+        } catch (err) {
+            if (this.getGraphStatusCode(err) === 404) return change;
+            throw err;
+        }
     }
 
     /** The first page of a full delta read. Throws when there is no window, which the caller reports. */
@@ -1194,6 +1223,12 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         const start = encodeURIComponent(params.WindowStart.toISOString());
         const end = encodeURIComponent(params.WindowEnd.toISOString());
         return `${view}?startDateTime=${start}&endDateTime=${end}`;
+    }
+
+    /** True when a Graph 404 is about the mailbox (no such user, or no Exchange mailbox), not the item. */
+    private isMailboxNotFound(err: unknown): boolean {
+        const code = err && typeof err === 'object' && 'code' in err ? String((err as { code?: unknown }).code) : '';
+        return code === 'ErrorInvalidUser' || code === 'MailboxNotEnabledForRESTAPI';
     }
 
     /** True when Graph refused a delta token as expired or unknown, so the caller must start over. */

@@ -385,6 +385,25 @@ describe('SyncCalendar', () => {
         expect(states()[0].SyncToken).toBe('tok-old');
     });
 
+    it('delivers a cancellation again when the handler fails: the link stays Active so the replay matches it', async () => {
+        states().push({ ID: 'state-1', CommunicationProviderID: 'prov-graph', AccountIdentifier: 'organizer@contoso.com', CalendarID: null, SyncToken: 'tok-old' });
+        addLink({ ExternalEventID: 'evt-1', ICalUID: 'uid-1', RecordID: 'meeting-1' });
+        const removed: CalendarEventChange = { Kind: 'Removed', ExternalEventID: 'evt-1' };
+        handlerAnswer = false;
+        engine.GetProvider.mockReturnValue(fakeProvider([{ Success: true, Changes: [removed], NextSyncToken: 'tok-new' }]));
+        const first = await service.SyncCalendar(SYNC, user);
+        expect(first.Success).toBe(false);
+        expect(links()[0].Status).toBe('Active');
+
+        handlerAnswer = true;
+        engine.GetProvider.mockReturnValue(fakeProvider([{ Success: true, Changes: [removed], NextSyncToken: 'tok-new' }]));
+        const replay = await service.SyncCalendar(SYNC, user);
+        expect(replay).toMatchObject({ Success: true, LinksUpdated: 1 });
+        expect(handled).toHaveLength(2);
+        expect(links()[0].Status).toBe('Cancelled');
+        expect(states()[0].SyncToken).toBe('tok-new');
+    });
+
     it('clears a refused token and runs a full sync of the window', async () => {
         states().push({ ID: 'state-1', CommunicationProviderID: 'prov-graph', AccountIdentifier: 'organizer@contoso.com', CalendarID: null, SyncToken: 'tok-expired' });
         engine.GetProvider.mockReturnValue(

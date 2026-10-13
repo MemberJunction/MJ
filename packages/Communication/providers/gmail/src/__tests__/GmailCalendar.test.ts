@@ -135,12 +135,12 @@ describe('the target is required on every calendar call', () => {
 });
 
 describe('CreateEvent', () => {
-    it('inserts into the primary calendar, sends invitations to the attendees, and asks for a Meet link', async () => {
+    it('inserts into the calendar the target names (its primary, for the account itself), sends invitations to the attendees, and asks for a Meet link', async () => {
         events.insert.mockResolvedValue({ data: INSERTED });
         await provider.CreateEvent({ Target: ACCOUNT, Event: MEETING });
 
         const request = events.insert.mock.calls[0][0];
-        expect(request).toMatchObject({ calendarId: 'primary', sendUpdates: 'all', conferenceDataVersion: 1 });
+        expect(request).toMatchObject({ calendarId: 'organizer@example.org', sendUpdates: 'all', conferenceDataVersion: 1 });
         expect(request.requestBody).toMatchObject({
             summary: 'Board planning',
             description: '<p>Agenda attached.</p>',
@@ -191,6 +191,17 @@ describe('CreateEvent', () => {
         const allDay = { Subject: 'Offsite', Start: new Date('2026-10-20T02:00:00Z'), End: new Date('2026-10-21T02:00:00Z'), TimeZone: 'America/New_York', IsAllDay: true };
         await provider.CreateEvent({ Target: ACCOUNT, Event: allDay });
         expect(events.insert.mock.calls[0][0].requestBody).toMatchObject({ start: { date: '2026-10-19' }, end: { date: '2026-10-20' } });
+        expect(events.insert.mock.calls[0][0].requestBody.start).toEqual({ date: '2026-10-19' }); // an insert sends no null forms
+    });
+
+    /**
+     * The refresh token decides the account. Writing to 'primary' would put a meeting for anyone the
+     * caller names into the token owner's calendar; the target's address as calendarId cannot.
+     */
+    it('never falls back to the token owner\'s primary calendar for another address', async () => {
+        events.insert.mockResolvedValue({ data: INSERTED });
+        await provider.CreateEvent({ Target: { Identifier: ' someone.else@example.org ' }, Event: MEETING });
+        expect(events.insert.mock.calls[0][0].calendarId).toBe('someone.else@example.org');
     });
 
     it('reports a missing calendar scope as a failure', async () => {
@@ -202,10 +213,34 @@ describe('CreateEvent', () => {
 });
 
 describe('UpdateEvent', () => {
+    /** A patch merges into the stored start/end, so switching form must clear the other one. */
+    it('clears the other form when an event switches between all-day and timed', async () => {
+        events.patch.mockResolvedValue({ data: INSERTED });
+        await provider.UpdateEvent({
+            Target: ACCOUNT,
+            ExternalEventID: 'evt1',
+            Changes: { IsAllDay: true, TimeZone: 'UTC', Start: new Date('2026-10-20T00:00:00Z'), End: new Date('2026-10-21T00:00:00Z') },
+        });
+        await provider.UpdateEvent({
+            Target: ACCOUNT,
+            ExternalEventID: 'evt1',
+            Changes: { IsAllDay: false, TimeZone: 'UTC', Start: new Date('2026-10-20T14:00:00Z'), End: new Date('2026-10-20T15:00:00Z') },
+        });
+        expect(events.patch.mock.calls[0][0].requestBody.start).toEqual({ date: '2026-10-20', dateTime: null, timeZone: null });
+        expect(events.patch.mock.calls[1][0].requestBody.start).toEqual({ date: null, dateTime: '2026-10-20T14:00:00.000Z', timeZone: 'UTC' });
+    });
+
+    it('refuses a time change that does not say whether it is all-day and in which zone', async () => {
+        const result = await provider.UpdateEvent({ Target: ACCOUNT, ExternalEventID: 'evt1', Changes: { End: new Date('2026-10-20T15:00:00Z') } });
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/must also carry IsAllDay and TimeZone/);
+        expect(events.patch).not.toHaveBeenCalled();
+    });
+
     it('patches only the changed fields and tells attendees', async () => {
         events.patch.mockResolvedValue({ data: INSERTED });
         await provider.UpdateEvent({ Target: ACCOUNT, ExternalEventID: 'evt1', Changes: { Location: 'Room 9' } });
-        expect(events.patch.mock.calls[0][0]).toEqual({ calendarId: 'primary', eventId: 'evt1', sendUpdates: 'all', requestBody: { location: 'Room 9' } });
+        expect(events.patch.mock.calls[0][0]).toEqual({ calendarId: 'organizer@example.org', eventId: 'evt1', sendUpdates: 'all', requestBody: { location: 'Room 9' } });
     });
 });
 
@@ -214,7 +249,7 @@ describe('CancelEvent', () => {
         events.delete.mockResolvedValue({ data: '' });
         const result = await provider.CancelEvent({ Target: ACCOUNT, ExternalEventID: 'evt1', Comment: 'not sent: Google has no comment' });
         expect(result.Success).toBe(true);
-        expect(events.delete.mock.calls[0][0]).toEqual({ calendarId: 'primary', eventId: 'evt1', sendUpdates: 'all' });
+        expect(events.delete.mock.calls[0][0]).toEqual({ calendarId: 'organizer@example.org', eventId: 'evt1', sendUpdates: 'all' });
     });
 
     it.each([404, 410])('treats an event that is already gone (%i) as cancelled', async (status) => {
@@ -231,7 +266,7 @@ describe('SyncEvents', () => {
         events.list.mockResolvedValueOnce({ data: fixture('google-sync-page-1.json') }).mockResolvedValueOnce({ data: fixture('google-sync-page-2.json') });
         await provider.SyncEvents({ Target: ACCOUNT, ...WINDOW });
         expect(events.list.mock.calls[0][0]).toEqual({
-            calendarId: 'primary',
+            calendarId: 'organizer@example.org',
             singleEvents: true,
             timeMin: '2026-10-01T00:00:00.000Z',
             timeMax: '2026-11-01T00:00:00.000Z',
@@ -243,8 +278,8 @@ describe('SyncEvents', () => {
         events.list.mockResolvedValueOnce({ data: page1 }).mockResolvedValueOnce({ data: fixture('google-sync-page-2.json') });
         const result = await provider.SyncEvents({ Target: ACCOUNT, SyncToken: 'CPDAold=', ...WINDOW });
 
-        expect(events.list.mock.calls[0][0]).toEqual({ calendarId: 'primary', singleEvents: true, syncToken: 'CPDAold=' });
-        expect(events.list.mock.calls[1][0]).toEqual({ calendarId: 'primary', singleEvents: true, syncToken: 'CPDAold=', pageToken: page1.nextPageToken });
+        expect(events.list.mock.calls[0][0]).toEqual({ calendarId: 'organizer@example.org', singleEvents: true, syncToken: 'CPDAold=' });
+        expect(events.list.mock.calls[1][0]).toEqual({ calendarId: 'organizer@example.org', singleEvents: true, syncToken: 'CPDAold=', pageToken: page1.nextPageToken });
         expect(result.NextSyncToken).toBe('CPDAlvWDx70CEPDAlvWDx70CGAUggICA6NKw8wI=');
     });
 

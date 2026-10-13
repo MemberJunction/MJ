@@ -390,12 +390,21 @@ export class CalendarEventLinks {
 
         const handler = this.handlerFor(link.Entity);
         if (!handler) return null;
+        let error: string | null;
         try {
             const handled = await handler.HandleChange({ Link: link, Kind: change.Kind, Event: change.Event, IsCancelled: isCancelled }, contextUser, this.md);
-            return handled ? null : `Link ${link.ID}: the ${link.Entity} handler did not apply the change.`;
+            error = handled ? null : `Link ${link.ID}: the ${link.Entity} handler did not apply the change.`;
         } catch (err) {
-            return `Link ${link.ID}: the ${link.Entity} handler failed: ${err instanceof Error ? err.message : String(err)}`;
+            error = `Link ${link.ID}: the ${link.Entity} handler failed: ${err instanceof Error ? err.message : String(err)}`;
         }
+        // A replay matches Active links only, so a cancellation the handler did not apply must leave the link Active.
+        if (error && isCancelled) await this.reactivate(link);
+        return error;
+    }
+
+    private async reactivate(link: MJCalendarEventLinkEntity): Promise<void> {
+        link.Status = 'Active';
+        if (!(await link.Save())) LogError(`SyncCalendar: reactivating link ${link.ID} after a failed cancellation failed: ${link.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
 
     /** The registered handler for an entity, or null when it has none (the link alone is updated). */

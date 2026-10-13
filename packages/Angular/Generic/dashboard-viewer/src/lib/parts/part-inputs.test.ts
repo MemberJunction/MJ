@@ -132,6 +132,7 @@ describe('Query part', () => {
     const parameters = [
         { Name: 'chapter_id', Type: 'string', Description: null, IsRequired: true, DefaultValue: null, IsServerSet: false },
         { Name: 'org_id', Type: 'string', Description: null, IsRequired: true, DefaultValue: null, IsServerSet: true },
+        { Name: 'status', Type: 'string', Description: null, IsRequired: false, DefaultValue: null, IsServerSet: false },
     ];
     const engine = {
         Config: vi.fn(async () => undefined),
@@ -166,6 +167,13 @@ describe('Query part', () => {
         await flush();
         expect(part.ErrorMessage).toBeNull();
         expect(part.MappedParameters).toEqual({ chapter_id: 'ch-1' });
+    });
+
+    it('passes a mapped parameter with no value as null, so the user\'s saved value never stands in for it', async () => {
+        const part = queryPart({ type: 'Query', queryId: 'Q1', inputMappings: [{ Input: 'status', Property: 'Chapter' }] }, { Properties: [{ Name: 'Chapter', Type: 'string' }], Values: { Chapter: null } });
+        await flush();
+        expect(part.ErrorMessage).toBeNull();
+        expect(part.MappedParameters).toEqual({ status: null });
     });
 
     it('refuses to map a server-set parameter', async () => {

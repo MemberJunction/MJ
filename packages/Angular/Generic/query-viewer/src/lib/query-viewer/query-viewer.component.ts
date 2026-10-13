@@ -586,9 +586,18 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
     // Mapped and server-set parameters
     // ========================================
 
-    /** The values with the mapped ones over them. Without mapped parameters, the values themselves. */
+    /**
+     * The values with the mapped ones over them. A mapped parameter whose value is null (mapped, but
+     * nothing set it) is left out, so it never takes the user's saved value. Without mapped
+     * parameters, the values themselves.
+     */
     private withMappedParameters(params: QueryParameterValues): QueryParameterValues {
-        return this._mappedParameters ? { ...params, ...this._mappedParameters } : params;
+        if (!this._mappedParameters) return params;
+        const result = { ...params, ...this._mappedParameters };
+        for (const [name, value] of Object.entries(this._mappedParameters)) {
+            if (value === null || value === undefined) delete result[name];
+        }
+        return result;
     }
 
     /**

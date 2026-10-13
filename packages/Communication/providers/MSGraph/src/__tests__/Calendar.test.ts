@@ -219,7 +219,7 @@ describe('UpdateEvent', () => {
         const result = await provider.UpdateEvent({
             Target: ORGANIZER,
             ExternalEventID: 'AAMk=1',
-            Changes: { Start: new Date('2026-10-20T16:00:00Z'), End: new Date('2026-10-20T17:00:00Z') },
+            Changes: { Start: new Date('2026-10-20T16:00:00Z'), End: new Date('2026-10-20T17:00:00Z'), TimeZone: 'UTC', IsAllDay: false },
         });
 
         expect(calls[0].method).toBe('patch');
@@ -227,8 +227,24 @@ describe('UpdateEvent', () => {
         expect(calls[0].body).toEqual({
             start: { dateTime: '2026-10-20T16:00:00', timeZone: 'UTC' },
             end: { dateTime: '2026-10-20T17:00:00', timeZone: 'UTC' },
+            isAllDay: false,
         });
         expect(result.Event?.Start).toEqual(new Date('2026-10-20T16:00:00Z'));
+    });
+
+    /** Without them the patch would rewrite an all-day or local event as timed, in UTC. */
+    it.each([
+        ['IsAllDay', { TimeZone: 'Europe/Paris' }],
+        ['TimeZone', { IsAllDay: true }],
+    ])('refuses a time change without %s and sends nothing', async (_missing, extra) => {
+        const result = await provider.UpdateEvent({
+            Target: ORGANIZER,
+            ExternalEventID: 'AAMk=1',
+            Changes: { Start: new Date('2026-10-20T00:00:00Z'), ...extra },
+        });
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/must also carry IsAllDay and TimeZone/);
+        expect(calls).toHaveLength(0);
     });
 });
 
@@ -255,6 +271,13 @@ describe('CancelEvent', () => {
         queue.push(graphError(404, 'ErrorItemNotFound'));
         const result = await provider.CancelEvent({ Target: ORGANIZER, ExternalEventID: 'gone' });
         expect(result.Success).toBe(true);
+    });
+
+    /** Graph answers an unknown mailbox with 404 too. That cancelled nothing, so it must not read as done. */
+    it('reports a 404 for the mailbox as a failure, not as already cancelled', async () => {
+        queue.push(graphError(404, 'ErrorInvalidUser'));
+        const result = await provider.CancelEvent({ Target: { Identifier: 'typo@contoso.com' }, ExternalEventID: 'AAMk=1' });
+        expect(result.Success).toBe(false);
     });
 
     it('reports any other failure', async () => {
@@ -305,7 +328,7 @@ describe('SyncEvents', () => {
     });
 
     it('reports a moved time, changed RSVPs and a deletion as changes', async () => {
-        queue.push(fixture('graph-delta-page-1.json'), fixture('graph-delta-page-2.json'));
+        queue.push(fixture('graph-delta-page-1.json'), fixture('graph-delta-page-2.json'), graphError(404, 'ErrorItemNotFound'));
         const result = await provider.SyncEvents({ Target: ORGANIZER, ...WINDOW });
 
         expect(result.Changes.map((c) => c.Kind)).toEqual(['Upserted', 'Upserted', 'Removed']);
@@ -314,6 +337,31 @@ describe('SyncEvents', () => {
         expect(moved?.Start).toEqual(new Date('2026-10-20T16:00:00Z'));
         expect(result.Changes[1].Event?.Attendees.find((a) => a.Email === 'grace@fabrikam.com')?.Response).toBe('Declined');
         expect(result.Changes[2]).toEqual({ Kind: 'Removed', ExternalEventID: 'AAMkAGI1AGU4LTk4ZmEtNDhkMy1iYTU2LTQ5NzEwNjc5NTA2NgBGAAAAAAAt9AHlAAA=' });
+    });
+
+    /**
+     * Graph also lists under `@removed` an event changed or moved OUTSIDE the window. Read as a
+     * deletion, a meeting rescheduled past the window would be cancelled in MJ. The provider reads
+     * the event: still there is an upsert, and only a 404 stays a removal.
+     */
+    it('reads each tombstone, and reports one whose event still exists as an upsert', async () => {
+        const moved = { ...CREATED, start: { dateTime: '2027-12-01T15:00:00.0000000', timeZone: 'UTC' } };
+        queue.push(fixture('graph-delta-page-1.json'), fixture('graph-delta-page-2.json'), moved);
+        const result = await provider.SyncEvents({ Target: ORGANIZER, ...WINDOW });
+
+        const removedID = 'AAMkAGI1AGU4LTk4ZmEtNDhkMy1iYTU2LTQ5NzEwNjc5NTA2NgBGAAAAAAAt9AHlAAA=';
+        expect(calls[2]).toMatchObject({ method: 'get', path: `${GRAPH}/${encodeURIComponent('organizer@contoso.com')}/events/${encodeURIComponent(removedID)}` });
+        expect(calls[2].headers.Prefer).toBe('outlook.timezone="UTC"');
+        expect(result.Changes[2].Kind).toBe('Upserted');
+        expect(result.Changes[2].ExternalEventID).toBe(removedID);
+        expect(result.Changes[2].Event?.Start).toEqual(new Date('2027-12-01T15:00:00Z'));
+    });
+
+    it('fails the whole sync when a tombstone cannot be read, so its token is not stored', async () => {
+        queue.push(fixture('graph-delta-page-1.json'), fixture('graph-delta-page-2.json'), graphError(503, 'ServiceUnavailable'));
+        const result = await provider.SyncEvents({ Target: ORGANIZER, ...WINDOW });
+        expect(result.Success).toBe(false);
+        expect(result.NextSyncToken).toBeUndefined();
     });
 
     it('requests a stored token verbatim and ignores the window', async () => {

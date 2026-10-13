@@ -52,6 +52,7 @@ import {
   CalendarEventResult,
   CalendarTarget,
   CalendarTargetError,
+  CalendarUpdateError,
   CancelEventParams,
   CreateEventParams,
   GetEventParams,
@@ -897,9 +898,11 @@ export class GmailProvider extends BaseCommunicationProvider {
   // broader .../auth/calendar). A token consented for Gmail scopes only gets 403 here, and the account
   // has to consent again with the calendar scope added.
   //
-  // WHOSE CALENDAR: the refresh token decides the account. Target.Identifier is that account's
-  // address, required like every calendar call and recorded by callers, but Google is not asked to
-  // check it. Target.CalendarID defaults to 'primary'.
+  // WHOSE CALENDAR: the refresh token decides the account, and Target.Identifier names the calendar.
+  // Target.CalendarID defaults to Target.Identifier, not 'primary': a Google account's primary
+  // calendar ID is its address, so for the token's own account the two are the same calendar, and for
+  // anyone else Google answers 404 instead of writing into the token owner's calendar (the deployment
+  // default these operations must never fall back to).
   // ========================================================================
 
   /** Inserts an event and sends invitations to its attendees (`sendUpdates: 'all'`). */
@@ -917,13 +920,15 @@ export class GmailProvider extends BaseCommunicationProvider {
 
   /** Patches the given fields and sends the update to attendees. */
   public override async UpdateEvent(params: UpdateEventParams, credentials?: GmailCredentials): Promise<CalendarEventResult> {
+    const changeError = CalendarUpdateError(params.Changes);
+    if (changeError) return { Success: false, ErrorMessage: changeError };
     return this.calendarCall<CalendarEventResult>('UpdateEvent', params.Target, credentials, (message) => ({ Success: false, ErrorMessage: message }), async (calendar, calendarId) => {
       const response = await calendar.events.patch({
         calendarId,
         eventId: params.ExternalEventID,
         sendUpdates: 'all',
         ...(params.Changes.IsOnlineMeeting ? { conferenceDataVersion: 1 } : {}),
-        requestBody: BuildGoogleEventBody(params.Changes)
+        requestBody: BuildGoogleEventBody(params.Changes, true)
       });
       return { Success: true, Event: ToCalendarEvent(response.data) };
     });
@@ -1014,7 +1019,7 @@ export class GmailProvider extends BaseCommunicationProvider {
     try {
       const cached = this.getGmailClient(this.resolveCredentials(credentials));
       cached.calendar ??= googleApis.google.calendar({ version: 'v3', auth: cached.auth });
-      return await work(cached.calendar, target.CalendarID?.trim() || 'primary');
+      return await work(cached.calendar, target.CalendarID?.trim() || target.Identifier.trim());
     } catch (err) {
       return failure(`Google Calendar ${operation} failed for ${target.Identifier}: ${err instanceof Error ? err.message : String(err)}`, err);
     }

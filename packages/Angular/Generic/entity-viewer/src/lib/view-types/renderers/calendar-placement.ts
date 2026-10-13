@@ -90,10 +90,12 @@ export function ToCalendarDate(value: unknown, dateOnly: boolean): Date | null {
 /**
  * True for a date field a calendar can place records by. MJ's `__mj_CreatedAt` / `__mj_UpdatedAt`
  * stamps don't count: every entity has them, so counting them would offer Calendar everywhere and
- * open it on "created at".
+ * open it on "created at". Nor does a `time` column: it maps to a Date but holds no day.
  */
 export function IsCalendarDateField(field: EntityFieldInfo): boolean {
-  return field.TSType === EntityFieldTSType.Date && !field.Name.toLowerCase().startsWith('__mj_');
+  const type = (field.Type ?? '').trim().toLowerCase();
+  const isTimeOnly = type === 'time' || type.startsWith('time with');
+  return field.TSType === EntityFieldTSType.Date && !isTimeOnly && !field.Name.toLowerCase().startsWith('__mj_');
 }
 
 /** The entity's date fields: `DefaultInView` ones first, each group by Sequence (Timeline's order). */

@@ -281,8 +281,20 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
             this.setError(problem);
             return false;
         }
-        this.MappedParameters = resolution ? { ...resolution.Values } : null;
+        this.MappedParameters = resolution ? this.mappedValues(resolution) : null;
         return true;
+    }
+
+    /**
+     * Every mapped parameter with its value, or null when nothing set it, so the query viewer never
+     * falls back to the user's saved value for a parameter the dashboard drives.
+     */
+    private mappedValues(resolution: PartInputResolution): QueryParameterValues {
+        const values: QueryParameterValues = {};
+        for (const mapping of this.InputMappings) {
+            values[mapping.Input] = resolution.Values[mapping.Input] ?? null;
+        }
+        return values;
     }
 
     /** New input values: the query viewer reruns the query with them. */

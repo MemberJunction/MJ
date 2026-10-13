@@ -50,7 +50,7 @@ describe('QueryViewerComponent mapped parameters', () => {
         vi.restoreAllMocks();
     });
 
-    function viewer(mapped: Record<string, string> | null): QueryViewerComponent {
+    function viewer(mapped: Record<string, string | null> | null): QueryViewerComponent {
         const v = new QueryViewerComponent(cdr);
         v.Provider = { CurrentUser: { ID: 'u1' }, RunQuery: runQuery } as unknown as IMetadataProvider;
         v.MappedParameters = mapped;
@@ -83,6 +83,16 @@ describe('QueryViewerComponent mapped parameters', () => {
         await flush();
         await v.RunQuery({ status: 'Active' });
         expect(JSON.parse(settings.get(SETTINGS_KEY) ?? '{}')).toEqual({ status: 'Active' });
+    });
+
+    it("a mapped parameter with no value is left out, never filled from the user's saved value", async () => {
+        settings.set(SETTINGS_KEY, JSON.stringify({ chapter_id: 'mine', status: 'Active' }));
+        const v = viewer({ chapter_id: 'mapped', status: null });
+        await flush();
+        expect(sent()).toEqual({ chapter_id: 'mapped' });
+        expect(v.ReadOnlyParameters).toEqual(['chapter_id', 'status']);
+        expect(v.ParameterFormValues).toEqual({ chapter_id: 'mapped' });
+        expect(JSON.parse(settings.get(SETTINGS_KEY) ?? '{}')).toEqual({ chapter_id: 'mine', status: 'Active' });
     });
 
     it('reruns with a new mapped value once it has run', async () => {
