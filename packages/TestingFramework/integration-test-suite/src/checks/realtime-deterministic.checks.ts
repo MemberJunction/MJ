@@ -15,9 +15,11 @@
  *    the ML Algorithms / Use Cases / Rankings guidance-matrix integrity (RD8) and the
  *    ProductionModelPromotionGate's deterministic refusal paths — non-UUID injection refusal,
  *    leakage refusal, sign-off-reason gate, and the lifecycle state machine (RD9),
- *  - live avatars (RD13): a tagged persona with a face on the session's vendor, bound to the voiced agent, becomes the
+ *  - live avatars (RD13): a tagged persona with a face on the session's vendor, bound to a tagged voiced agent, becomes the
  *    session's avatar request through the real session prep, on a run-scoped placeholder key (nothing is minted, no
- *    network); on a phone call (even one in a room that could publish it) the prep asks for none and says why
+ *    network), once that agent's own video setting (its TypeConfiguration) is on. With the agent's setting off it asks
+ *    for none, even when the call's override turns video on (the override can't), and a call that picked an avatar
+ *    then hears why (`video-off`); on a phone call (even one in a room that could publish it) the prep asks for none and says why
  *    (`phone`), and in an app that shows no agent video it asks for none (`host`), both keeping the persona's voice;
  *    without that face, the prep asks for no avatar and says why (`no-binding`); its fixture rows are deleted afterwards,
  *  - realtime driver wiring (RD14): every Active realtime vendor row's DriverClass resolves to a BaseRealtimeModel in the
@@ -32,7 +34,8 @@
  *    `video-out`), and the native room module the bots join with answers the avatar probe (ffmpeg found or not, both
  *    reported) without opening anything.
  *  - the Modalities gate for avatars (RD18): through the real session prep on a run-scoped placeholder key, Gemini 3.8
- *    Live × Vertex AI asks for the voiced agent's face (its Video/Output row and its endpoint allow it); a tagged model
+ *    Live × Vertex AI asks for the face of a tagged voiced agent whose video setting is on (its Video/Output row and its
+ *    endpoint allow it); a tagged model
  *    on the same driver and API name whose Video/Output row has IsSupported=false asks for none (`endpoint`); without
  *    that row, its endpoint alone decides and it asks again. Its fixture rows are deleted afterwards.
  *
@@ -51,6 +54,7 @@ import {
     RealtimeModelShowsAvatar,
     type PrepareClientSessionInput,
     type RealtimeSessionParamsPrep,
+    type RealtimeVideoConfig,
 } from '@memberjunction/ai-agents';
 import {
     MJAIAgentChannelSchema,
@@ -161,9 +165,13 @@ const RD14_NOT_IN_THIS_PROCESS: ReadonlyMap<string, string> = new Map([
 /** The run-scoped key RD13 hands the session prep: a placeholder, since nothing is minted. */
 const RD13_PLACEHOLDER_KEY = 'mj-integration-test-placeholder-key';
 
-/** What RD13 needs from the deployment's metadata (nothing it creates). */
+/**
+ * What RD13 needs: the deployment's metadata (nothing it creates), until {@link createAvatarFixture} puts the fixture's
+ * voiced agent in `Target`.
+ */
 interface AvatarFixtureAnchors {
     CoAgent: MJAIAgentEntityExtended;
+    /** The voiced agent: a deployment agent (read only, for its type), then the fixture's tagged agent of that type. */
     Target: MJAIAgentEntityExtended;
     Model: MJAIModelEntityExtended;
     VendorRow: MJAIModelVendorEntity;
@@ -176,6 +184,8 @@ interface AvatarFixture {
     /** The check that owns the fixture, for its messages. */
     Check: 'RD13' | 'RD18';
     Rows: BaseEntity[];
+    /** The tagged voiced agent, once saved: its TypeConfiguration carries the video setting the check turns on and off. */
+    VoicedAgent?: MJAIAgentEntityExtended;
     /** The tagged persona, once saved. */
     PersonaID?: string;
     /** The persona's face binding on the session's vendor, once saved; the no-binding leg removes it. */
@@ -268,9 +278,43 @@ async function personaBinding(md: Metadata, ctx: { User: UserInfo }, personaID: 
     return binding;
 }
 
-/** Creates the tagged persona, its voice and face on the session's vendor, its model persona row, and the voiced agent's persona row. */
-async function createAvatarFixture(ctx: { User: UserInfo }, anchors: AvatarFixtureAnchors, fixture: AvatarFixture): Promise<void> {
+/** The voiced agent's own video setting, as a deployment turns it on: `realtime.video.enabled` in its TypeConfiguration. */
+function videoTypeConfiguration(enabled: boolean): string {
+    return JSON.stringify({ realtime: { video: { enabled } } });
+}
+
+/**
+ * Saves the tagged voiced agent: the deployment voiced agent's type (that agent is never changed), Active, with its
+ * video setting as given. The check owns it, so it can turn the setting on and off as a deployment would.
+ */
+async function createVoicedAgent(md: Metadata, ctx: { User: UserInfo }, deployment: AvatarFixtureAnchors, fixture: AvatarFixture, videoEnabled: boolean): Promise<MJAIAgentEntityExtended> {
+    const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', ctx.User);
+    agent.NewRecord();
+    agent.Name = fixture.PersonaName.replace('-persona-', '-agent-');
+    agent.Description = TAG;
+    agent.TypeID = deployment.Target.TypeID;
+    agent.Status = 'Active';
+    agent.TypeConfiguration = videoTypeConfiguration(videoEnabled);
+    await saveFixtureRow(fixture, agent, 'voiced agent');
+    fixture.VoicedAgent = agent;
+    return agent;
+}
+
+/** Turns the tagged voiced agent's own video setting on or off, and has the engine read it now. */
+async function setVoicedAgentVideo(ctx: IntegrationCheckContext, fixture: AvatarFixture, enabled: boolean): Promise<void> {
+    const agent = fixture.VoicedAgent!;
+    agent.TypeConfiguration = videoTypeConfiguration(enabled);
+    Assert(await agent.Save(), `${fixture.Check}: the voiced agent's video setting did not save: ${agent.LatestResult?.CompleteMessage}`);
+    await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider);
+}
+
+/**
+ * Creates the tagged voiced agent (its video setting as given), the tagged persona, its voice and face on the session's
+ * vendor, its model persona row, and the voiced agent's persona row. Returns the anchors with that agent as `Target`.
+ */
+async function createAvatarFixture(ctx: { User: UserInfo }, deployment: AvatarFixtureAnchors, fixture: AvatarFixture, videoEnabled: boolean): Promise<AvatarFixtureAnchors> {
     const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const anchors: AvatarFixtureAnchors = { ...deployment, Target: await createVoicedAgent(md, ctx, deployment, fixture, videoEnabled) };
     const persona = await md.GetEntityObject<MJAIPersonaEntity>('MJ: AI Personas', ctx.User);
     persona.NewRecord();
     persona.Name = fixture.PersonaName;
@@ -292,6 +336,7 @@ async function createAvatarFixture(ctx: { User: UserInfo }, anchors: AvatarFixtu
     agentPersona.IsAllowed = true;
     agentPersona.Sequence = 1;
     await saveFixtureRow(fixture, agentPersona, 'agent persona row');
+    return anchors;
 }
 
 /** A model persona row: the persona is one of the model's personas (unsaved). */
@@ -312,8 +357,11 @@ async function deleteAvatarFixture(fixture: AvatarFixture): Promise<void> {
     }
 }
 
-/** The prep input: the voiced agent and its co-agent, the picked model, a run-scoped key for its driver only, and the video setting. */
-function avatarPrepInput(anchors: AvatarFixtureAnchors, videoEnabled: boolean): PrepareClientSessionInput {
+/**
+ * The prep input: the voiced agent and its co-agent, the picked model, and a run-scoped key for its driver only. The
+ * video setting is the voiced agent's own; `override` is the call's runtime override of it, when the leg sends one.
+ */
+function avatarPrepInput(anchors: AvatarFixtureAnchors, override?: RealtimeVideoConfig): PrepareClientSessionInput {
     const runKey: AIAPIKey = { driverClass: anchors.VendorRow.DriverClass!, apiKey: RD13_PLACEHOLDER_KEY };
     return {
         CoAgentID: anchors.CoAgent.ID,
@@ -322,7 +370,7 @@ function avatarPrepInput(anchors: AvatarFixtureAnchors, videoEnabled: boolean): 
         PreferredModelID: anchors.Model.ID,
         APIKeys: [runKey],
         CredentialScope: 'RuntimeOnly',
-        ConfigOverridesJson: JSON.stringify({ realtime: { video: { enabled: videoEnabled } } }),
+        ConfigOverridesJson: override ? JSON.stringify({ realtime: { video: override } }) : undefined,
     };
 }
 
@@ -346,7 +394,7 @@ function assertAvatarResolved(prep: RealtimeSessionParamsPrep, anchors: AvatarFi
  * asks the driver for no avatar, says why (`phone`), and keeps the face's persona's voice.
  */
 async function assertPhoneCallAsksForNone(ctx: IntegrationCheckContext, service: RealtimeClientSessionService, anchors: AvatarFixtureAnchors, fixture: AvatarFixture): Promise<void> {
-    const input: PrepareClientSessionInput = { ...avatarPrepInput(anchors, true), ServerSide: true, PhoneCall: true, AvatarDelivery: 'room' };
+    const input: PrepareClientSessionInput = { ...avatarPrepInput(anchors), ServerSide: true, PhoneCall: true, AvatarDelivery: 'room' };
     const prep = await service.PrepareRealtimeSessionParams(input, ctx.User, ctx.Provider);
     Assert(prep.Success, `RD13: the phone-call prep failed: ${prep.ErrorMessage}`);
     AssertEqual(prep.SessionParams?.Avatar, undefined, 'RD13: a phone call asks the driver for no avatar: the caller sees no video');
@@ -359,12 +407,35 @@ async function assertPhoneCallAsksForNone(ctx: IntegrationCheckContext, service:
  * embeddable widget or the mobile app) asks the driver for no avatar, says why (`host`), and keeps the voice.
  */
 async function assertNoAgentVideoAsksForNone(ctx: IntegrationCheckContext, service: RealtimeClientSessionService, anchors: AvatarFixtureAnchors, fixture: AvatarFixture): Promise<void> {
-    const input: PrepareClientSessionInput = { ...avatarPrepInput(anchors, true), ShowsAgentVideo: false };
+    const input: PrepareClientSessionInput = { ...avatarPrepInput(anchors), ShowsAgentVideo: false };
     const prep = await service.PrepareRealtimeSessionParams(input, ctx.User, ctx.Provider);
     Assert(prep.Success, `RD13: the prep for an app without agent video failed: ${prep.ErrorMessage}`);
     AssertEqual(prep.SessionParams?.Avatar, undefined, 'RD13: an app that shows no agent video asks the driver for no avatar');
     AssertEqual(prep.AvatarResolution?.Reason, 'host', 'RD13: the prep says why: the app shows no agent video');
     AssertEqual(prep.SessionParams?.Config?.['voice'], fixture.Voice, "RD13: an app without agent video keeps the face's persona's voice");
+}
+
+/**
+ * RD13's video-off legs, with the voiced agent's own video setting off and its face on the vendor: the session asks for
+ * no avatar, with no reason to give when the call picked none. The call's runtime override can't turn the setting on,
+ * so an override of `enabled: true` alone changes nothing, and a call that also picked the face hears why (`video-off`).
+ */
+async function assertAgentVideoOffAsksForNone(ctx: IntegrationCheckContext, service: RealtimeClientSessionService, anchors: AvatarFixtureAnchors, fixture: AvatarFixture): Promise<void> {
+    const off = await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors), ctx.User, ctx.Provider);
+    Assert(off.Success, `RD13: the prep with the agent's video setting off failed: ${off.ErrorMessage}`);
+    AssertEqual(off.SessionParams?.Avatar, undefined, "RD13: with the agent's video setting off, the session asks for no avatar");
+    AssertEqual(off.AvatarResolution?.Reason, undefined, "RD13: with the agent's video setting off and no pick, there is no reason to give");
+
+    const overridden = await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, { enabled: true }), ctx.User, ctx.Provider);
+    Assert(overridden.Success, `RD13: the prep with the override turning video on failed: ${overridden.ErrorMessage}`);
+    Assert(overridden.EffectiveConfig?.realtime?.video?.enabled !== true, "RD13: the call's override can't turn the agent's video setting on");
+    AssertEqual(overridden.SessionParams?.Avatar, undefined, "RD13: with the agent's video setting off, the override alone asks for no avatar");
+    AssertEqual(overridden.AvatarResolution?.Reason, undefined, 'RD13: the override picked no avatar, so there is no reason to give');
+
+    const picked = await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, { enabled: true, avatarId: fixture.AvatarID }), ctx.User, ctx.Provider);
+    Assert(picked.Success, `RD13: the prep with a picked avatar failed: ${picked.ErrorMessage}`);
+    AssertEqual(picked.SessionParams?.Avatar, undefined, "RD13: a picked avatar with the agent's video setting off asks for no avatar");
+    AssertEqual(picked.AvatarResolution?.Reason, 'video-off', "RD13: the prep says why: the call picked an avatar and the agent's video setting is off");
 }
 
 // ── RD18: the Modalities gate for avatars ──────────────────────────────────────────────────────────
@@ -478,7 +549,7 @@ async function assertNoRowLeavesItToTheEndpoint(ctx: IntegrationCheckContext, se
     Assert(await gated.VideoOutput.Delete(), `RD18: the fixture Video/Output row did not delete: ${gated.VideoOutput.LatestResult?.CompleteMessage}`);
     fixture.Rows.splice(fixture.Rows.indexOf(gated.VideoOutput), 1);
     await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider);
-    const prep = await service.PrepareRealtimeSessionParams(avatarPrepInput(onGatedModel(anchors, gated), true), ctx.User, ctx.Provider);
+    const prep = await service.PrepareRealtimeSessionParams(avatarPrepInput(onGatedModel(anchors, gated)), ctx.User, ctx.Provider);
     Assert(prep.Success, `RD18: the prep on the tagged model without its row failed: ${prep.ErrorMessage}`);
     AssertEqual(ReadRealtimeVideoOutputRow(gated.Model.ID, AIEngineBase.Instance), 'unstated', 'RD18: the tagged model has no Video/Output row now');
     AssertEqual(prep.SessionParams?.Avatar?.AvatarID, fixture.AvatarID, 'RD18: with no row, the endpoint decides, and the session asks for the face');
@@ -596,7 +667,7 @@ async function assertNoBindingReason(ctx: IntegrationCheckContext, service: Real
     Assert(await face.Delete(), `RD13: the fixture face binding did not delete: ${face.LatestResult?.CompleteMessage}`);
     fixture.Rows.splice(fixture.Rows.indexOf(face), 1);
     await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider);
-    const prep = await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, true), ctx.User, ctx.Provider);
+    const prep = await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors), ctx.User, ctx.Provider);
     Assert(prep.Success, `RD13: the prep without a face failed: ${prep.ErrorMessage}`);
     AssertEqual(prep.SessionParams?.Avatar, undefined, 'RD13: a voiced agent without a face on this vendor asks for no avatar');
     AssertEqual(prep.AvatarResolution?.Reason, 'no-binding', 'RD13: the prep says why: the persona has no face on this vendor');
@@ -1616,25 +1687,23 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
     },
     {
         Id: 'realtime-deterministic.RD13',
-        Name: "RD13: a voiced agent's persona with a face on the session's vendor becomes the session's avatar request; on a phone call, none (phone); in an app that shows no agent video, none (host); without the face, no-binding (run-scoped key, no network)",
+        Name: "RD13: a voiced agent's persona with a face on the session's vendor becomes the session's avatar request once the agent's video setting is on; with it off, none, even when the call's override turns video on (a picked avatar: video-off); on a phone call, none (phone); in an app that shows no agent video, none (host); without the face, no-binding (run-scoped key, no network)",
         Fn: async (ctx): Promise<void> => {
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
-            const anchors = findAvatarFixtureAnchors(AIEngineBase.Instance);
-            if (typeof anchors === 'string') {
-                console.warn(`  ⚠ realtime-deterministic.RD13 SKIPPED — ${anchors}`);
+            const deployment = findAvatarFixtureAnchors(AIEngineBase.Instance);
+            if (typeof deployment === 'string') {
+                console.warn(`  ⚠ realtime-deterministic.RD13 SKIPPED — ${deployment}`);
                 return;
             }
             const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
             const fixture: AvatarFixture = { Check: 'RD13', Rows: [], AvatarID: `mj-it-avatar-${stamp}`, Voice: `mj-it-voice-${stamp}`, PersonaName: `mj-it-rd13-persona-${stamp} ${TAG}` };
             try {
-                await createAvatarFixture(ctx, anchors, fixture);
+                const anchors = await createAvatarFixture(ctx, deployment, fixture, false);
                 await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider); // the engine reads the fixture rows now, not after its debounce
                 const service = new RealtimeClientSessionService();
-                assertAvatarResolved(await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, true), ctx.User, ctx.Provider), anchors, fixture);
-                const off = await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, false), ctx.User, ctx.Provider);
-                Assert(off.Success, `RD13: the prep with the video setting off failed: ${off.ErrorMessage}`);
-                AssertEqual(off.SessionParams?.Avatar, undefined, 'RD13: with the video setting off, the session asks for no avatar');
-                AssertEqual(off.AvatarResolution?.Reason, undefined, 'RD13: with the video setting off, there is no reason to give');
+                await assertAgentVideoOffAsksForNone(ctx, service, anchors, fixture);
+                await setVoicedAgentVideo(ctx, fixture, true); // as a deployment turns it on: the voiced agent's own setting
+                assertAvatarResolved(await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors), ctx.User, ctx.Provider), anchors, fixture);
                 await assertPhoneCallAsksForNone(ctx, service, anchors, fixture);
                 await assertNoAgentVideoAsksForNone(ctx, service, anchors, fixture);
                 await assertNoBindingReason(ctx, service, anchors, fixture);
@@ -1642,7 +1711,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 await deleteAvatarFixture(fixture);
                 await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider).catch(() => undefined);
             }
-            console.log(`      → '${anchors.Target.Name}' asks for its persona's face on ${anchors.VendorRow.DriverClass} (${anchors.Model.Name}), and none on a phone call or in an app without agent video; fixture removed`);
+            console.log(`      → a tagged voiced agent (the type of '${deployment.Target.Name}') asks for its persona's face on ${deployment.VendorRow.DriverClass} (${deployment.Model.Name}) once its video setting is on, and none with it off, on a phone call, or in an app without agent video; fixture removed`);
         }
     },
     {
@@ -1750,26 +1819,26 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Name: "RD18: an avatar shows only when the model's Video/Output modality row and its endpoint allow it: Gemini 3.8 Live × Vertex AI asks for one; a tagged model on the same endpoint whose row has IsSupported=false asks for none (endpoint); without the row, the endpoint decides (run-scoped key, no network)",
         Fn: async (ctx): Promise<void> => {
             await AIEngineBase.Instance.Config(false, ctx.User, ctx.Provider);
-            const anchors = findModalitiesGateAnchors(AIEngineBase.Instance);
-            if (typeof anchors === 'string') {
-                console.warn(`  ⚠ realtime-deterministic.RD18 SKIPPED — ${anchors}`);
+            const deployment = findModalitiesGateAnchors(AIEngineBase.Instance);
+            if (typeof deployment === 'string') {
+                console.warn(`  ⚠ realtime-deterministic.RD18 SKIPPED — ${deployment}`);
                 return;
             }
             const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
             const fixture: AvatarFixture = { Check: 'RD18', Rows: [], AvatarID: `mj-it-avatar-${stamp}`, Voice: `mj-it-voice-${stamp}`, PersonaName: `mj-it-rd18-persona-${stamp} ${TAG}` };
             try {
-                await createAvatarFixture(ctx, anchors, fixture);
+                const anchors = await createAvatarFixture(ctx, deployment, fixture, true); // the voiced agent's own video setting is on
                 const gated = await createVideoOffModel(ctx, anchors, fixture);
                 await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider); // the engine reads the fixture rows now, not after its debounce
                 const service = new RealtimeClientSessionService();
-                assertGateOpen(await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors, true), ctx.User, ctx.Provider), anchors, fixture);
-                assertGateClosedByRow(await service.PrepareRealtimeSessionParams(avatarPrepInput(onGatedModel(anchors, gated), true), ctx.User, ctx.Provider), gated);
+                assertGateOpen(await service.PrepareRealtimeSessionParams(avatarPrepInput(anchors), ctx.User, ctx.Provider), anchors, fixture);
+                assertGateClosedByRow(await service.PrepareRealtimeSessionParams(avatarPrepInput(onGatedModel(anchors, gated)), ctx.User, ctx.Provider), gated);
                 await assertNoRowLeavesItToTheEndpoint(ctx, service, anchors, fixture, gated);
             } finally {
                 await deleteAvatarFixture(fixture);
                 await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider).catch(() => undefined);
             }
-            console.log(`      → ${anchors.Model.Name} on ${anchors.VendorRow.DriverClass} asks for the face; a tagged model there with IsSupported=false asks for none (endpoint), and with no row asks again; fixture removed`);
+            console.log(`      → ${deployment.Model.Name} on ${deployment.VendorRow.DriverClass} asks for the face; a tagged model there with IsSupported=false asks for none (endpoint), and with no row asks again; fixture removed`);
         }
     }
 ];
