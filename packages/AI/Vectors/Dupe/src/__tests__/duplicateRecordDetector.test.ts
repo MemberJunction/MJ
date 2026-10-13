@@ -1291,4 +1291,97 @@ describe('GetDuplicateRecords — bounded result retention', () => {
         await run(d);
         expect(merge).not.toHaveBeenCalled();
     });
+
+    it('marks DuplicateRun as Failed when no records are found to check', async () => {
+        const { d } = makeDetector(0, 0.5);
+        const fakeRun = {
+            ID: 'run-empty',
+            ProcessingStatus: 'In Progress',
+            ProcessingErrorMessage: null as string | null,
+            EndedAt: null as Date | null,
+            LastProcessedOffset: 0,
+            CancellationRequested: false,
+            Load: vi.fn().mockResolvedValue(true),
+        };
+        d.ResolveOrCreateDuplicateRun = vi.fn().mockResolvedValue(fakeRun);
+
+        const res = await run(d);
+        expect(res.Status).toBe('Error');
+        expect(res.ErrorMessage).toContain('No records found');
+        expect(fakeRun.ProcessingStatus).toBe('Failed');
+        expect(fakeRun.ProcessingErrorMessage).toContain('No records found');
+        expect(fakeRun.EndedAt).toBeInstanceOf(Date);
+        expect(d.SaveEntity).toHaveBeenCalledWith(fakeRun);
+    });
+
+    it('reports global totalRecords and cumulative processedSoFar during PersistMatchResults', async () => {
+        const detectorInstance = new DuplicateRecordDetector();
+        const progressEvents: Array<{ Phase: string; TotalRecords: number; ProcessedRecords: number; CurrentRecordID?: string }> = [];
+        const queryResults = [
+            {
+                SourceKey: { Values: () => 'rec-101', ToString: () => 'ID|rec-101', KeyValuePairs: [] },
+                Duplicates: {
+                    Duplicates: [{ KeyValuePairs: [{ FieldName: 'ID', Value: 'rec-201' }], Values: () => 'rec-201', ProbabilityScore: 0.9 }],
+                    DuplicateRunDetailMatchRecordIDs: [],
+                },
+                VectorMatches: [],
+                TemplateText: 't1',
+            },
+            {
+                SourceKey: { Values: () => 'rec-102', ToString: () => 'ID|rec-102', KeyValuePairs: [] },
+                Duplicates: {
+                    Duplicates: [],
+                    DuplicateRunDetailMatchRecordIDs: [],
+                },
+                VectorMatches: [],
+                TemplateText: 't2',
+            },
+        ];
+
+        const persistDetailMatchesSpy = vi
+            .spyOn(detectorInstance as never as { persistDetailMatches: () => Promise<void> }, 'persistDetailMatches')
+            .mockResolvedValue(undefined);
+
+        await (detectorInstance as never as {
+            PersistMatchResults: (
+                qr: unknown[],
+                details: unknown[],
+                entityInfo: unknown,
+                entityDoc: unknown,
+                opts: { OnProgress: (p: { Phase: string; TotalRecords: number; ProcessedRecords: number; CurrentRecordID?: string }) => void },
+                start: number,
+                user: unknown,
+                totalRecords: number,
+                processedSoFar: number,
+                matchesSoFar: number
+            ) => Promise<unknown[]>;
+        }).PersistMatchResults(
+            queryResults,
+            [],
+            { ID: 'entity-1', Name: 'Contacts', Fields: [] },
+            { ID: 'doc-1', EnableLLMReasoning: false },
+            {
+                OnProgress: (p) => {
+                    progressEvents.push({
+                        Phase: p.Phase,
+                        TotalRecords: p.TotalRecords,
+                        ProcessedRecords: p.ProcessedRecords,
+                        CurrentRecordID: p.CurrentRecordID,
+                    });
+                },
+            },
+            Date.now(),
+            undefined,
+            500, // global totalRecords
+            100, // processedSoFar from prior batch
+            5    // matchesSoFar
+        );
+
+        expect(persistDetailMatchesSpy).toHaveBeenCalledTimes(2);
+        expect(progressEvents).toEqual([
+            { Phase: 'Matching', TotalRecords: 500, ProcessedRecords: 101, CurrentRecordID: 'rec-101' },
+            { Phase: 'Matching', TotalRecords: 500, ProcessedRecords: 102, CurrentRecordID: 'rec-102' },
+        ]);
+    });
 });
+

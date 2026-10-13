@@ -305,6 +305,10 @@ export class DuplicateRecordDetector extends VectorBase {
         if (!entityInfo) {
             response.ErrorMessage = `Entity not found for ID ${entityDocument.EntityID}`;
             response.Status = 'Error';
+            duplicateRun.ProcessingStatus = 'Failed';
+            duplicateRun.ProcessingErrorMessage = response.ErrorMessage;
+            duplicateRun.EndedAt = new Date();
+            await this.SaveEntity(duplicateRun);
             return response;
         }
 
@@ -312,6 +316,10 @@ export class DuplicateRecordDetector extends VectorBase {
         if (recordIDs.length === 0) {
             response.ErrorMessage = 'No records found to check for duplicates';
             response.Status = 'Error';
+            duplicateRun.ProcessingStatus = 'Failed';
+            duplicateRun.ProcessingErrorMessage = response.ErrorMessage;
+            duplicateRun.EndedAt = new Date();
+            await this.SaveEntity(duplicateRun);
             return response;
         }
 
@@ -897,11 +905,12 @@ export class DuplicateRecordDetector extends VectorBase {
         const allQueryResults: RecordQueryResult[] = [];
         const subBatches = chunkArray(records, VECTOR_QUERY_BATCH_SIZE);
 
+        let subBatchOffset = 0;
         for (let i = 0; i < subBatches.length; i++) {
             const subRecords = subBatches[i];
 
             // Embed this sub-batch
-            this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
+            this.reportProgress(options, 'Embedding', totalRecords, processedSoFar + subBatchOffset, matchesSoFar, startTime);
             const subTemplateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, subRecords, contextUser);
             const subEmbedResult = await this.EmbeddingRunner.RunEmbedding({
                 Texts: subTemplateTexts,
@@ -915,11 +924,12 @@ export class DuplicateRecordDetector extends VectorBase {
             }
 
             // Query vector DB for each record in the sub-batch with concurrency control
-            this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
+            this.reportProgress(options, 'Querying', totalRecords, processedSoFar + subBatchOffset, matchesSoFar, startTime);
             const subQueryResults = await this.QueryDuplicatesForRecords(
                 subRecords, subEmbedResult.Vectors, subTemplateTexts, entityDocument, queryTopK, options, concurrency
             );
             allQueryResults.push(...subQueryResults);
+            subBatchOffset += subRecords.length;
         }
 
         // 6d.5: Drop matches that point to records which no longer exist in the source
@@ -930,9 +940,10 @@ export class DuplicateRecordDetector extends VectorBase {
         this.TrimToTopK(allQueryResults, topK);
 
         // 6e: Persist match results and update run details
-        this.reportProgress(options, 'Matching', totalRecords, processedSoFar + records.length, matchesSoFar, startTime);
+        this.reportProgress(options, 'Matching', totalRecords, processedSoFar, matchesSoFar, startTime);
         const results = await this.PersistMatchResults(
-            allQueryResults, duplicateRunDetails, entityInfo, entityDocument, options, startTime, contextUser
+            allQueryResults, duplicateRunDetails, entityInfo, entityDocument, options, startTime, contextUser,
+            totalRecords, processedSoFar, matchesSoFar
         );
 
         const batchMatches = results.reduce((sum, r) => sum + r.Duplicates.length, 0);
@@ -1861,7 +1872,10 @@ export class DuplicateRecordDetector extends VectorBase {
         entityDocument: MJEntityDocumentEntity,
         options: DuplicateDetectionOptions,
         startTime: number,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        totalRecords?: number,
+        processedSoFar: number = 0,
+        matchesSoFar: number = 0
     ): Promise<PotentialDuplicateResult[]> {
         const results: PotentialDuplicateResult[] = [];
         let matchesFound = 0;
@@ -1881,7 +1895,10 @@ export class DuplicateRecordDetector extends VectorBase {
 
             await this.persistDetailMatches(qr, duplicateRunDetails, reasoning?.Output);
 
-            this.reportProgress(options, 'Matching', queryResults.length, results.length, matchesFound, startTime);
+            const effectiveTotal = totalRecords ?? queryResults.length;
+            const effectiveProcessed = totalRecords != null ? processedSoFar + results.length : results.length;
+            const effectiveMatches = matchesSoFar + matchesFound;
+            this.reportProgress(options, 'Matching', effectiveTotal, effectiveProcessed, effectiveMatches, startTime, qr.SourceKey.Values());
         }
 
         return results;

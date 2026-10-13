@@ -38,10 +38,10 @@ function detectionInFlightSet(): Set<string> {
 const PHASE_TO_STAGE: Record<DuplicateDetectionProgress['Phase'], string> = {
     'Loading': 'extract',
     'Vectorizing': 'vectorize',
-    'Embedding': 'autotag',
+    'Embedding': 'extract',
     'Querying': 'extract',
     'Matching': 'autotag',
-    'Merging': 'complete'
+    'Merging': 'autotag'
 };
 
 @RegisterClass(BaseEntity, 'MJ: Duplicate Runs')
@@ -71,7 +71,7 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
 
     /**
      * Run duplicate detection asynchronously. On failure, updates the run's
-     * ProcessingStatus to 'Error' so the UI can surface the problem.
+     * ProcessingStatus to 'Failed' with ProcessingErrorMessage so the UI can surface the problem.
      */
     private async runDetectionAsync(): Promise<void> {
         const startTime = Date.now();
@@ -85,11 +85,12 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
             request.EntityID = this.EntityID;
             request.ListID = this.SourceListID || undefined; // Optional — if not set, scans all entity records
 
-            // Find the first active entity document for this entity to get template/thresholds
+            // Find the most recently updated active entity document for this entity to get template/thresholds
             const rv = new RunView(this.RunViewProviderToUse);
             const edResult = await rv.RunView<MJEntityDocumentEntity>({
                 EntityName: 'MJ: Entity Documents',
                 ExtraFilter: `EntityID='${this.EntityID}' AND Status='Active'`,
+                OrderBy: '__mj_UpdatedAt DESC',
                 MaxRows: 1,
                 ResultType: 'entity_object'
             }, this.ContextCurrentUser);
@@ -120,22 +121,28 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
             request.Options = detectionOptions;
 
             // Publish initial progress
-            this.publishPipelineNotification('autotag', 0, 0, 0, startTime, 'Starting duplicate detection...');
+            this.publishPipelineNotification('extract', 0, 0, 0, startTime, 'Starting duplicate detection...');
 
-            await detector.GetDuplicateRecords(request, this.ContextCurrentUser);
+            const response = await detector.GetDuplicateRecords(request, this.ContextCurrentUser);
+            if (response.Status === 'Error') {
+                throw new Error(response.ErrorMessage || 'Duplicate detection failed');
+            }
             LogStatus(`Duplicate detection completed for run ${this.ID}`);
 
             // Publish completion
             this.publishPipelineNotification('complete', 100, 100, 100, startTime);
         } catch (error) {
-            LogError(`Duplicate detection error for run ${this.ID}`, undefined, error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            LogError(`Duplicate detection error for run ${this.ID}: ${errorMsg}`, undefined, error);
 
             // Publish error
-            this.publishPipelineNotification('error', 0, 0, 0, startTime, String(error));
+            this.publishPipelineNotification('error', 0, 0, 0, startTime, errorMsg);
 
             // Update the run record to reflect the error
             try {
+                await this.Load(this.ID);
                 this.ProcessingStatus = 'Failed';
+                this.ProcessingErrorMessage = errorMsg;
                 this.EndedAt = new Date();
                 await super.Save();
             } catch (updateError) {

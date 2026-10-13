@@ -20,7 +20,7 @@ import {
     MJEntityDocumentEntity,
     KnowledgeHubMetadataEngine
 } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import {
@@ -267,6 +267,11 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     public DetectionStage = '';
     /** Raw stage key from the last progress event — used to detect phase transitions */
     private detectionRawStage = '';
+    /** Run IDs that were found unresponsive so reconnectToActiveRun does not loop on them */
+    private staleRunIDs = new Set<string>();
+    private activeProgressSub: { unsubscribe(): void } | null = null;
+    private idleTimer: ReturnType<typeof setTimeout> | null = null;
+    private closeComparisonTimer: ReturnType<typeof setTimeout> | null = null;
 
     /** Runtime threshold overrides — initialized from entity doc, adjustable via sliders */
     public RunPotentialThreshold = 0.70;
@@ -352,9 +357,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     public FilterByEntity(entityName: string): void {
         this.SelectedEntityFilter = entityName;
         this.Filters.EntityName = entityName;
-        this.autoSelectDisplayMode();
-        this.emitAgentContext();
-        this.cdr.detectChanges();
+        this.applyFilters();
     }
 
     /** Get paged groups for table view */
@@ -587,6 +590,16 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
     ngOnDestroy(): void {
         super.ngOnDestroy();
+        if (this.idleTimer) {
+            clearTimeout(this.idleTimer);
+            this.idleTimer = null;
+        }
+        if (this.closeComparisonTimer) {
+            clearTimeout(this.closeComparisonTimer);
+            this.closeComparisonTimer = null;
+        }
+        this.activeProgressSub?.unsubscribe();
+        this.activeProgressSub = null;
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -778,17 +791,31 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     /**
      * Check if there's an in-progress detection run and reconnect to its
      * progress subscription. This handles the case where the user navigated
-     * away and came back while a run was active.
+     * away and came back while a run was active, while ignoring abandoned/stale runs.
      */
     private reconnectToActiveRun(): void {
         if (this.IsDetecting) return; // Already tracking a run
 
-        const activeRun = this.Runs.find(r => r.ProcessingStatus === 'In Progress');
+        const now = Date.now();
+        const maxStaleAgeMs = 5 * 60 * 1000; // 5 minutes without a DB update
+        const activeRun = this.Runs.find(r => {
+            if (r.ProcessingStatus !== 'In Progress' || r.EndedAt != null || r.CancellationRequested) {
+                return false;
+            }
+            if (this.staleRunIDs.has(r.ID)) {
+                return false;
+            }
+            const lastActivity = r.__mj_UpdatedAt ?? r.StartedAt;
+            const lastTime = lastActivity ? new Date(lastActivity).getTime() : 0;
+            return lastTime > 0 && (now - lastTime) < maxStaleAgeMs;
+        });
         if (!activeRun) return;
 
         LogStatus(`[DuplicateDetection] Reconnecting to in-progress run ${activeRun.ID}`);
         this.IsDetecting = true;
-        this.DetectionProgress = 0;
+        this.DetectionProgress = (activeRun.TotalItemCount && activeRun.TotalItemCount > 0 && activeRun.ProcessedItemCount != null)
+            ? Math.min(99, Math.round((activeRun.ProcessedItemCount / activeRun.TotalItemCount) * 100))
+            : 0;
         this.DetectionStage = 'Reconnecting...';
         this.cdr.detectChanges();
         this.subscribeToPipelineProgress(activeRun.ID);
@@ -813,8 +840,6 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
         try {
             const md = this.ProviderToUse;
-            const dupeRun = await md.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs');
-            dupeRun.NewRecord();
 
             // Look up the EntityID from the entity document's entity name
             const entityInfo = md.Entities.find(e => e.Name === selectedDoc.EntityName);
@@ -829,19 +854,57 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 return;
             }
 
+            // Persist threshold slider overrides onto the selected Entity Document so the
+            // server hook (which reads thresholds from MJ: Entity Documents) uses them.
+            if (
+                this.RunPotentialThreshold !== selectedDoc.PotentialMatchThreshold ||
+                this.RunAbsoluteThreshold !== selectedDoc.AbsoluteMatchThreshold
+            ) {
+                const ed = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents', md.CurrentUser);
+                if (await ed.Load(selectedDoc.ID)) {
+                    ed.PotentialMatchThreshold = this.RunPotentialThreshold;
+                    ed.AbsoluteMatchThreshold = this.RunAbsoluteThreshold;
+                    if (await ed.Save()) {
+                        selectedDoc.PotentialMatchThreshold = this.RunPotentialThreshold;
+                        selectedDoc.AbsoluteMatchThreshold = this.RunAbsoluteThreshold;
+                    }
+                }
+            }
+
             // DD-1: Track whether merging is available for the selected entity
             this.MergeEnabled = entityInfo.AllowRecordMerge;
             this.ShowMergeWarningBanner = !entityInfo.AllowRecordMerge;
 
+            const dupeRun = await md.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs');
+            dupeRun.NewRecord();
             dupeRun.EntityID = entityInfo.ID;
-
             dupeRun.StartedByUserID = this.ProviderToUse.CurrentUser.ID;
             dupeRun.StartedAt = new Date();
             dupeRun.ProcessingStatus = 'In Progress';
             dupeRun.ApprovalStatus = 'Pending';
 
+            this.detectionActivityID = this.activityService.Start('Duplicate detection', {
+                icon: 'fa-solid fa-clone',
+                detail: selectedDoc.EntityName,
+                progress: 0,
+            });
+
+            // Subscribe BEFORE Save() so fast runs or immediate errors that publish
+            // during the server Save() hook are not missed before the subscription connects.
+            this.subscribeToPipelineProgress(dupeRun.ID);
+
             const saved = await dupeRun.Save();
             if (!saved) {
+                if (this.idleTimer) {
+                    clearTimeout(this.idleTimer);
+                    this.idleTimer = null;
+                }
+                this.activeProgressSub?.unsubscribe();
+                this.activeProgressSub = null;
+                if (this.detectionActivityID) {
+                    this.activityService.Complete(this.detectionActivityID, 'error');
+                    this.detectionActivityID = null;
+                }
                 console.error('Failed to create duplicate run:', dupeRun.LatestResult?.Message || 'unknown error');
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to start detection: ${dupeRun.LatestResult?.Message || 'unknown error'}`,
@@ -853,17 +916,22 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 this.cdr.detectChanges();
                 return;
             }
-
-            this.detectionActivityID = this.activityService.Start('Duplicate detection', {
-                icon: 'fa-solid fa-clone',
-                detail: selectedDoc.EntityName,
-                progress: 0,
-            });
-            // Subscribe to progress using the run ID as PipelineRunID
-            this.subscribeToPipelineProgress(dupeRun.ID);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             console.error('[DuplicateDetection] Error starting detection:', msg);
+            if (this.idleTimer) {
+                clearTimeout(this.idleTimer);
+                this.idleTimer = null;
+            }
+            this.activeProgressSub?.unsubscribe();
+            this.activeProgressSub = null;
+            if (this.detectionActivityID) {
+                this.activityService.Complete(this.detectionActivityID, 'error');
+                this.detectionActivityID = null;
+            }
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Failed to start duplicate detection: ${msg}`, 'error', 5000
+            );
             this.IsDetecting = false;
             this.DetectionStage = '';
             this.emitAgentContext();
@@ -1209,11 +1277,23 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             }
         `;
 
-        let idleTimer: ReturnType<typeof setTimeout> | null = null;
+        if (this.idleTimer) {
+            clearTimeout(this.idleTimer);
+            this.idleTimer = null;
+        }
+        this.activeProgressSub?.unsubscribe();
+        this.activeProgressSub = null;
 
-        const finishDetection = (success: boolean) => {
-            if (idleTimer) clearTimeout(idleTimer);
-            rxSub?.unsubscribe();
+        let consecutiveUnchangedPolls = 0;
+        let lastPolledProcessed = -1;
+
+        const finishDetection = (success: boolean, errorMessage?: string) => {
+            if (this.idleTimer) {
+                clearTimeout(this.idleTimer);
+                this.idleTimer = null;
+            }
+            this.activeProgressSub?.unsubscribe();
+            this.activeProgressSub = null;
 
             Promise.resolve().then(async () => {
                 this.IsDetecting = false;
@@ -1224,6 +1304,12 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     this.detectionActivityID = null;
                 }
 
+                if (!success && errorMessage) {
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        errorMessage, 'error', 6000
+                    );
+                }
+
                 if (success) {
                     await this.LoadData();
                 }
@@ -1232,13 +1318,69 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             });
         };
 
-        const resetIdleTimer = () => {
-            if (idleTimer) clearTimeout(idleTimer);
-            idleTimer = setTimeout(() => {
-                if (this.IsDetecting) {
-                    finishDetection(true);
+        const checkRunStatusOnIdle = async () => {
+            if (!this.IsDetecting) return;
+            try {
+                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+                const res = await rv.RunView<MJDuplicateRunEntity>({
+                    EntityName: 'MJ: Duplicate Runs',
+                    ExtraFilter: `ID='${EscapeSQLString(pipelineRunID)}'`,
+                    MaxRows: 1,
+                    ResultType: 'entity_object'
+                });
+                if (!this.IsDetecting) return;
+
+                if (res.Success && res.Results.length > 0) {
+                    const run = res.Results[0];
+                    if (run.ProcessingStatus === 'Complete') {
+                        finishDetection(true);
+                        return;
+                    }
+                    if (run.ProcessingStatus === 'Failed') {
+                        finishDetection(false, run.ProcessingErrorMessage || 'Duplicate detection run failed');
+                        return;
+                    }
+                    if (run.EndedAt != null) {
+                        finishDetection(true);
+                        return;
+                    }
+                    if (run.TotalItemCount && run.TotalItemCount > 0 && run.ProcessedItemCount != null) {
+                        const dbPct = Math.min(99, Math.round((run.ProcessedItemCount / run.TotalItemCount) * 100));
+                        if (dbPct > this.DetectionProgress) {
+                            this.DetectionProgress = dbPct;
+                            this.cdr.detectChanges();
+                        }
+                    }
+                    const currentProcessed = run.ProcessedItemCount ?? 0;
+                    if (currentProcessed === lastPolledProcessed) {
+                        consecutiveUnchangedPolls++;
+                    } else {
+                        lastPolledProcessed = currentProcessed;
+                        consecutiveUnchangedPolls = 0;
+                    }
+                } else {
+                    consecutiveUnchangedPolls++;
                 }
-            }, 60000); // 60s timeout for duplicate detection (can be very long)
+
+                if (consecutiveUnchangedPolls >= 8) {
+                    // 8 consecutive 15s checks (2 minutes) with zero DB or WS progress
+                    this.staleRunIDs.add(pipelineRunID);
+                    finishDetection(false, 'Duplicate detection timed out with no progress from the server.');
+                    return;
+                }
+
+                resetIdleTimer();
+            } catch (err) {
+                console.error('[DuplicateDetection] Error polling run status:', err);
+                resetIdleTimer();
+            }
+        };
+
+        const resetIdleTimer = () => {
+            if (this.idleTimer) clearTimeout(this.idleTimer);
+            this.idleTimer = setTimeout(() => {
+                void checkRunStatusOnIdle();
+            }, 15000); // Check DB status after 15s of subscription silence
         };
 
         resetIdleTimer();
@@ -1256,36 +1398,38 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 const pct = Math.max(0, Math.min(100, progress['PercentComplete'] as number));
                 const currentItem = progress['CurrentItem'] as string | undefined;
 
-                // Detect phase transitions vs. within-phase updates
-                const isNewPhase = stage !== this.detectionRawStage;
-                if (isNewPhase) {
-                    // New phase: reset progress and update display
-                    this.detectionRawStage = stage;
+                // Only reset progress when transitioning out of 'vectorize' into the detection pass;
+                // within the detection pass ('extract' and 'autotag' share the global record counter),
+                // keep progress strictly monotonic so the bar never jumps backward.
+                const isLeavingVectorize = this.detectionRawStage === 'vectorize' && stage !== 'vectorize';
+                this.detectionRawStage = stage;
+                this.DetectionStage = this.formatDetectionStage(stage);
+
+                if (isLeavingVectorize) {
                     this.DetectionProgress = pct;
-                    this.DetectionStage = this.formatDetectionStage(stage);
-                } else {
-                    // Same phase: only move forward (never backward)
-                    if (pct >= this.DetectionProgress) {
-                        this.DetectionProgress = pct;
-                    }
+                } else if (pct >= this.DetectionProgress) {
+                    this.DetectionProgress = pct;
                 }
 
                 this.DetectionCurrentItem = currentItem ?? '';
+                consecutiveUnchangedPolls = 0;
                 this.cdr.detectChanges();
 
                 if (stage === 'complete') {
                     finishDetection(true);
                 } else if (stage === 'error') {
-                    finishDetection(false);
+                    finishDetection(false, currentItem || 'Duplicate detection failed');
                 } else {
                     resetIdleTimer();
                 }
             },
             error: (err: unknown) => {
+                const msg = err instanceof Error ? err.message : String(err);
                 console.error('[DuplicateDetection] Pipeline subscription error:', err);
-                finishDetection(false);
+                finishDetection(false, `Progress stream error: ${msg}`);
             }
         });
+        this.activeProgressSub = rxSub;
     }
 
     /** Format detection stage names for display */
@@ -1389,6 +1533,10 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
     /** Open the comparison slide-in panel for a group — loads real entity records */
     public async OpenComparison(group: DuplicateGroup): Promise<void> {
+        if (this.closeComparisonTimer) {
+            clearTimeout(this.closeComparisonTimer);
+            this.closeComparisonTimer = null;
+        }
         this.ComparisonGroup = group;
         this.ComparisonShowAllFields = true;
         this.SurvivorColumnIndex = 0;
@@ -1422,14 +1570,18 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.ShowMergeConfirm = false;
         this.ComparisonClosing = true;
         this.cdr.detectChanges();
-        setTimeout(() => {
+        if (this.closeComparisonTimer) {
+            clearTimeout(this.closeComparisonTimer);
+        }
+        this.closeComparisonTimer = setTimeout(() => {
+            this.closeComparisonTimer = null;
             this.ComparisonGroup = null;
             this.ComparisonClosing = false;
             this.ComparisonFields = [];
             this.ComparisonMatches = [];
             this.ComparisonDependencies.clear();
             this.DepsExpandedColumns.clear();
-        this.depsEntityGroupExpanded.clear();
+            this.depsEntityGroupExpanded.clear();
             this.ReasoningPopover = null;
             this.LLMProposalsApplied = false;
             this.cdr.detectChanges();
@@ -2018,28 +2170,41 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
     /** Approve an individual match */
     public async ApproveIndividualMatch(matchInfo: ComparisonMatchInfo): Promise<void> {
-        this.IsSaving = true;
-        matchInfo.Match.ApprovalStatus = 'Approved';
-        await matchInfo.Match.Save();
-        this.IsSaving = false;
-        this.cdr.detectChanges();
+        await this.updateIndividualMatchStatus(matchInfo, 'Approved');
     }
 
     /** Reject an individual match (skip it from merge) */
     public async RejectIndividualMatch(matchInfo: ComparisonMatchInfo): Promise<void> {
-        this.IsSaving = true;
-        matchInfo.Match.ApprovalStatus = 'Rejected';
-        await matchInfo.Match.Save();
-        this.IsSaving = false;
-        this.cdr.detectChanges();
+        await this.updateIndividualMatchStatus(matchInfo, 'Rejected');
     }
 
     /** Undo a rejected individual match (restore to Pending) */
     public async UndoRejectIndividualMatch(matchInfo: ComparisonMatchInfo): Promise<void> {
+        await this.updateIndividualMatchStatus(matchInfo, 'Pending');
+    }
+
+    private async updateIndividualMatchStatus(
+        matchInfo: ComparisonMatchInfo,
+        status: 'Approved' | 'Rejected' | 'Pending'
+    ): Promise<void> {
+        const previousStatus = matchInfo.Match.ApprovalStatus;
         this.IsSaving = true;
-        matchInfo.Match.ApprovalStatus = 'Pending';
-        await matchInfo.Match.Save();
+        matchInfo.Match.ApprovalStatus = status;
+        const saved = await matchInfo.Match.Save();
         this.IsSaving = false;
+        if (!saved) {
+            matchInfo.Match.ApprovalStatus = previousStatus;
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Failed to update match status to ${status}`, 'error', 4000
+            );
+            this.cdr.detectChanges();
+            return;
+        }
+        if (this.ComparisonGroup) {
+            this.ComparisonGroup.ApprovalStatus = this.computeDominantApprovalStatus(this.ComparisonGroup.Matches);
+            this.applyFilters();
+            this.emitAgentContext();
+        }
         this.cdr.detectChanges();
     }
 
