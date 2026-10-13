@@ -65,6 +65,8 @@ describe('what the server refuses', () => {
     ['an overlay out of range', raw((d) => { (d['Background'] as Record<string, unknown>)['Overlay'] = 200; })],
     ['a fractional overlay', raw((d) => { (d['Background'] as Record<string, unknown>)['Overlay'] = 40.5; })],
     ['a color that is not #rrggbb', raw((d) => { d['Colors'] = { PanelBg: 'red;}body{display:none' }; })],
+    ['a #rrggbb color with CSS after it', raw((d) => { d['Colors'] = { PanelBg: '#ffffff;}body{display:none' }; })],
+    ['a #rrggbb color with CSS before it', raw((d) => { d['Colors'] = { PanelBg: 'red;}a{color:#ffffff' }; })],
     ['a color token the page does not have', raw((d) => { d['Colors'] = { ButtonBg: '#ffffff' }; })],
     ['an unknown card radius', raw((d) => { d['CardRadius'] = 'huge'; })],
     ['a missing field', raw((d) => { delete d['BannerShare']; })],
@@ -121,6 +123,11 @@ describe('reading a stored design never throws and never draws what is unsafe', 
     }));
     const card = d?.Regions.Banner[0];
     expect(card?.Type === 'card' && card.Href).toBeNull();
+  });
+
+  it('drops a color with CSS after a valid #rrggbb from a hand-edited row', () => {
+    const d = ParseLoginDesign(raw((x) => { x['Colors'] = { PanelBg: '#ffffff;}body{display:none' }; }));
+    expect(d?.Colors.PanelBg).toBeUndefined();
   });
 });
 

@@ -52,6 +52,21 @@ describe('LoginScreenLoader', () => {
     await expect(LoginScreenLoader.Fetch(URI)).resolves.toBeNull();
   });
 
+  it('gives up on a server that never answers, so a hung request cannot hold up bootstrap', async () => {
+    vi.useFakeTimers();
+    try {
+      // Like a real fetch to a hung server: it never answers, and only the abort signal ends it.
+      vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')));
+      })));
+      const pending = LoginScreenLoader.Load(URI, 1000);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(await Promise.race([pending, Promise.resolve('still waiting')])).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('makes one request per page load however many callers ask', async () => {
     const fetchMock = respond(200, { ThemeName: null, Design: null, Seeds: null, Logos: {} });
     vi.stubGlobal('fetch', fetchMock);
