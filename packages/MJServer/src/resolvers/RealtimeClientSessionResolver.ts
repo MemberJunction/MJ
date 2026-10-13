@@ -44,6 +44,8 @@ import {
     MJConversationDetailArtifactEntity,
     MJConversationDetailEntity,
     ConversationEngine,
+    MJConversationDetailEntityExtended,
+    MJConversationEntity,
 } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIAgentPermissionHelper, AIEngineBase, HasRealtimeUsage, ParseRealtimeUsageRecord, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
@@ -902,6 +904,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
+        if (this.mapTranscriptRole(role) !== 'User' && !(await this.callerOwnsConversation(session, contextUser, provider))) {
+            return false;
+        }
 
         const saved = replacesPrevious
             ? await this.replacePreviousTranscriptTurn(session, role, text, contextUser, provider, utteranceStartMs, utteranceEndMs)
@@ -2599,8 +2604,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         callerUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<string | null> {
-        const detail = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, callerUser);
+        const detail = await provider.GetEntityObject<MJConversationDetailEntityExtended>(CONVERSATION_DETAIL_ENTITY, callerUser);
         detail.NewRecord();
+        detail.MarkServerAuthoredReply(); // a server-written system anchor, not the caller's words
         detail.ConversationID = session.ConversationID;
         detail.BranchID = this.sessionBranchIdOf(session);
         detail.Role = 'AI';
@@ -2913,11 +2919,14 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         utteranceStartMs?: number,
         utteranceEndMs?: number,
     ): Promise<boolean> {
-        const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
+        const detail = await provider.GetEntityObject<MJConversationDetailEntityExtended>(
             CONVERSATION_DETAIL_ENTITY,
             contextUser,
         );
         detail.NewRecord();
+        // The agent's side of the session's transcript is written here, on the server, for the session's owner
+        // (the user's side is theirs and the marker does not touch it).
+        detail.MarkServerAuthoredReply();
         detail.ConversationID = session.ConversationID;
         detail.BranchID = this.sessionBranchIdOf(session);
         detail.Role = this.mapTranscriptRole(role);
@@ -3006,10 +3015,11 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // failure here looked like before the re-load. The insert path beside this one has
         // always used `GetEntityObject`; this now matches it, which is also why they now succeed
         // and fail for the same reasons.
-        const previous = await provider.GetEntityObject<MJConversationDetailEntity>(
+        const previous = await provider.GetEntityObject<MJConversationDetailEntityExtended>(
             CONVERSATION_DETAIL_ENTITY,
             writeUser,
         );
+        previous.MarkServerAuthoredReply(); // as persistTranscriptTurn: the session's own transcript turn
         if (!(await previous.Load(found.ID))) {
             LogError(
                 `RealtimeClientSessionResolver.replacePreviousTranscriptTurn could not re-load turn `
@@ -3051,6 +3061,28 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
+     * True when the session's conversation belongs to the caller. In client-direct mode the agent's
+     * words and tool facts reach the server only from the browser, so the server can't vouch for them:
+     * they are stored as the agent's reply only in the caller's own conversation (A19). In a
+     * conversation shared with the caller, only the caller's own side of the session is kept.
+     */
+    private async callerOwnsConversation(
+        session: MJAIAgentSessionEntity,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        if (!session.ConversationID) {
+            return false;
+        }
+        const conversation = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+        const owned = (await conversation.Load(session.ConversationID)) && UUIDsEqual(conversation.UserID, contextUser.ID);
+        if (!owned) {
+            LogStatus(`RealtimeClientSessionResolver: session ${session.ID} relays the agent's side only into the caller's own conversation; conversation ${session.ConversationID} is not the caller's, so the agent's turn is not stored.`);
+        }
+        return owned;
+    }
+
+    /**
      * Persists a direct action or channel tool execution as a hidden ConversationDetail turn.
      * Stored as stable facts (Role: 'AI', HiddenToUser: true, ExternalID: callId, CompletionTime: durationMs,
      * Message: JSON-serialized tool facts) so that session review can reconstruct the action card dynamically
@@ -3083,15 +3115,16 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<boolean> {
-        if (!session.ConversationID) {
+        if (!(await this.callerOwnsConversation(session, contextUser, provider))) {
             return false;
         }
         try {
-            const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
+            const detail = await provider.GetEntityObject<MJConversationDetailEntityExtended>(
                 CONVERSATION_DETAIL_ENTITY,
                 contextUser,
             );
             detail.NewRecord();
+            detail.MarkServerAuthoredReply(); // the tool's facts are recorded by the server, as the session's owner
             detail.ConversationID = session.ConversationID;
             detail.BranchID = this.sessionBranchIdOf(session);
             detail.Role = 'AI';

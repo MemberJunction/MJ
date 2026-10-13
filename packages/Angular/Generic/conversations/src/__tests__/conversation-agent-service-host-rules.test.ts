@@ -61,6 +61,7 @@ function buildService(branchLoad: BranchLoadResult = BRANCH_B_LOAD): ServiceHarn
 }
 
 const MESSAGE = { ID: 'user-msg-1' } as never;
+const ON_REPLY = (): void => undefined;
 
 describe('ConversationAgentService — host rules on the wire', () => {
     beforeEach(() => {
@@ -76,7 +77,7 @@ describe('ConversationAgentService — host rules on the wire', () => {
     describe('InvokeSubAgent', () => {
         it('sends the history floor when set', async () => {
             const h = buildService();
-            await h.service.InvokeSubAgent('Research', 'conv-1', MESSAGE, [], 'why', 'detail-1',
+            await h.service.InvokeSubAgent('Research', 'conv-1', MESSAGE, [], 'why', ON_REPLY,
                 null, undefined, undefined, undefined, undefined, null, false, [], FLOOR);
 
             expect(h.runFromDetail.mock.calls[0][0].AgentHistoryFrom).toBe(FLOOR);
@@ -84,8 +85,8 @@ describe('ConversationAgentService — host rules on the wire', () => {
 
         it('leaves it out when unset', async () => {
             const h = buildService();
-            await h.service.InvokeSubAgent('Research', 'conv-1', MESSAGE, [], 'why', 'detail-1');
-            await h.service.InvokeSubAgent('Research', 'conv-1', MESSAGE, [], 'why', 'detail-1',
+            await h.service.InvokeSubAgent('Research', 'conv-1', MESSAGE, [], 'why', ON_REPLY);
+            await h.service.InvokeSubAgent('Research', 'conv-1', MESSAGE, [], 'why', ON_REPLY,
                 null, undefined, undefined, undefined, undefined, null, false, [], null);
 
             for (const call of h.runFromDetail.mock.calls) {
@@ -95,10 +96,40 @@ describe('ConversationAgentService — host rules on the wire', () => {
 
         it('the deprecated alias forwards it too', async () => {
             const h = buildService();
-            await h.service.invokeSubAgent('Research', 'conv-1', MESSAGE, [], 'why', 'detail-1',
+            await h.service.invokeSubAgent('Research', 'conv-1', MESSAGE, [], 'why', ON_REPLY,
                 null, undefined, undefined, undefined, undefined, null, false, [], FLOOR);
 
             expect(h.runFromDetail.mock.calls[0][0].AgentHistoryFrom).toBe(FLOOR);
+        });
+    });
+
+    describe('the reply row', () => {
+        it("InvokeSubAgent names the user's message and hands the server's reply row back", async () => {
+            const h = buildService();
+            const onReply = vi.fn();
+            const reply = { ConversationDetailId: 'reply-1', CreatedAt: new Date('2026-10-12T10:00:00.000Z') };
+            h.runFromDetail.mockImplementationOnce(async (params: { OnAccepted?: (r: typeof reply) => void }) => {
+                params.OnAccepted?.(reply);
+                return { Success: true, Result: { success: true } };
+            });
+
+            await h.service.InvokeSubAgent('Research', 'conv-1', MESSAGE, [], 'why', onReply);
+
+            const sent = h.runFromDetail.mock.calls[0][0];
+            expect(sent.UserMessageId).toBe('user-msg-1');
+            expect(sent).not.toHaveProperty('ConversationDetailId');
+            expect(onReply).toHaveBeenCalledWith(reply);
+        });
+
+        it('ProcessMessage hands its callback to the runtime', async () => {
+            const processMessage = vi.fn(async (_input: Record<string, unknown>) => ({ success: true }));
+            vi.spyOn(ConversationsRuntime.Instance.AgentRunner, 'processMessage').mockImplementation(processMessage as never);
+            const h = buildService();
+
+            await h.service.ProcessMessage('conv-1', MESSAGE, [], ON_REPLY);
+
+            expect(processMessage.mock.calls[0][0]).toMatchObject({ message: MESSAGE, onReplyAccepted: ON_REPLY });
+            expect(processMessage.mock.calls[0][0]).not.toHaveProperty('conversationDetailId');
         });
     });
 
@@ -113,7 +144,7 @@ describe('ConversationAgentService — host rules on the wire', () => {
             const processMessage = spyRunner();
             const h = buildService();
 
-            await h.service.ProcessMessage('conv-1', MESSAGE, [], 'detail-1', undefined, null, false, [], [RESEARCH.ID], FLOOR);
+            await h.service.ProcessMessage('conv-1', MESSAGE, [], ON_REPLY, undefined, null, false, [], [RESEARCH.ID], FLOOR);
 
             expect(processMessage.mock.calls[0][0]).toMatchObject({ AllowedAgentIDs: [RESEARCH.ID], AgentHistoryFrom: FLOOR });
         });
@@ -122,8 +153,8 @@ describe('ConversationAgentService — host rules on the wire', () => {
             const processMessage = spyRunner();
             const h = buildService();
 
-            await h.service.ProcessMessage('conv-1', MESSAGE, [], 'detail-1', undefined, null, false, [], [], null);
-            await h.service.ProcessMessage('conv-1', MESSAGE, [], 'detail-1');
+            await h.service.ProcessMessage('conv-1', MESSAGE, [], ON_REPLY, undefined, null, false, [], [], null);
+            await h.service.ProcessMessage('conv-1', MESSAGE, [], ON_REPLY);
 
             expect(processMessage.mock.calls[0][0].AllowedAgentIDs).toEqual([]);
             expect(processMessage.mock.calls[1][0]).not.toHaveProperty('AllowedAgentIDs');

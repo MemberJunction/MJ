@@ -8,6 +8,7 @@
  */
 
 import type { ClientToolMediaItem } from '@memberjunction/ai-core-plus';
+import type { AgentReplyAcknowledgement } from '@memberjunction/graphql-dataprovider';
 
 /**
  * Message sent from client to server.
@@ -275,8 +276,11 @@ export interface RunAgentParams {
     /** Skill IDs the user requested via `/skill-name` mentions. Server intersects these with the
      *  agent's accepted skills AND the user's Run permission before any are activated. */
     RequestedSkillIDs?: string[];
-    /** Optional conversation detail ID (triggers artifact/notification creation) */
-    ConversationDetailId?: string;
+    /**
+     * The person's message the run answers, already saved. The run goes through `RunAIAgentFromConversationDetail`,
+     * which needs one: the server creates the agent's reply row for it.
+     */
+    UserMessageId?: string;
     /** Whether to create artifacts from the agent's payload */
     CreateArtifacts?: boolean;
     /** Whether to create a user notification on completion */
@@ -294,8 +298,24 @@ export interface RunAgentParams {
  * This is the optimized path that loads conversation history server-side.
  */
 export interface RunAgentFromConversationDetailParams {
-    /** The ID of the conversation detail (user's message) */
-    ConversationDetailId: string;
+    /**
+     * The person's message this turn answers, already saved. The server creates the agent's reply row (only the server
+     * writes agent replies) and names it to {@link OnAccepted}.
+     */
+    UserMessageId: string;
+    /**
+     * Called once the server accepts the run, before any progress, with the reply row it created: its ID keys the
+     * run's progress and completion, and its creation time starts the reply's timer. Not called when a headless
+     * provider runs the turn synchronously; the result's `agentRun.ConversationDetailID` names the row then.
+     */
+    OnAccepted?: (reply: AgentReplyAcknowledgement) => void;
+    /** The message the reply threads under, when not the user's message: one of the same conversation. */
+    ReplyParentId?: string;
+    /**
+     * An active agent whose fixed line "Continuing with **{agent}** for refinement..." the server posts before the
+     * reply, which then threads under it. {@link OnAccepted} names the line as `AnnouncementDetailId`.
+     */
+    AnnouncedByAgentId?: string;
     /** The ID of the agent to run */
     AgentId: string;
     /** Maximum number of history messages to include */

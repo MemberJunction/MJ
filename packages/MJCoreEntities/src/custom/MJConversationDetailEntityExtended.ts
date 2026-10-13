@@ -47,11 +47,43 @@ const ACCESS_GATED_FIELDS = ['ID', 'ConversationID', ...OWNER_ONLY_RATING_FIELDS
 const GATED_FIELDS = [...ACCESS_GATED_FIELDS, 'BranchID', ...AUTHORED_FIELDS];
 
 /**
+ * The fields of an agent's reply (`Role` `AI` or `Error`) that say what the agent said and who said it: the authored
+ * fields, plus its conversation and fork, its agent, its status and error, the form, commands and suggested replies it
+ * offers, and the turn bookkeeping that identifies it. Only a server write marked with
+ * {@link MJConversationDetailEntityExtended.MarkServerAuthoredReply} changes them. Pinning, hiding, the owner's rating
+ * and the other bookkeeping keep the conversation-level rules.
+ */
+const REPLY_FIELDS = [
+    ...AUTHORED_FIELDS,
+    'ConversationID',
+    'BranchID',
+    'AgentID',
+    'Status',
+    'Error',
+    'ResponseForm',
+    'ActionableCommands',
+    'AutomaticCommands',
+    'SuggestedResponses',
+    'ReflectionInsights',
+    'CompletionTime',
+    'ExternalID'
+];
+
+/** The refusal for a write that would put words in an agent's mouth. */
+const REPLY_REFUSAL = "Only the server writes an agent's reply.";
+
+/**
  * Whether a `Role` value is a person's message. Compared the way validation and the database's CHECK constraint
  * compare it (trimmed, any case), so `'user'` or `'User '`, which both store, cannot slip past these rules.
  */
 function isPersonRole(role: string | null | undefined): boolean {
     return role != null && EntityFieldInfo.NormalizeValueListValue(role) === 'user';
+}
+
+/** Whether a `Role` value is an agent's reply (`AI` or `Error`), compared as {@link isPersonRole} compares. */
+function isReplyRole(role: string | null | undefined): boolean {
+    const normalized = role == null ? null : EntityFieldInfo.NormalizeValueListValue(role);
+    return normalized === 'ai' || normalized === 'error';
 }
 
 /**
@@ -82,9 +114,15 @@ function isPersonRole(role: string | null | undefined): boolean {
  * The system user is exempt from these authorship rules, since server code writes on people's behalf, but it still
  * needs to own the conversation or hold a grant on it, as before: some server paths elevate an anonymous visitor to
  * the system user (MJ#4791), and this gate keeps those paths out of other people's conversations, so no transaction
- * variable may set the row or conversation it writes ({@link ACCESS_GATED_FIELDS}) for it either. The plan's "the
- * system user may write any message" lands with A19's second half, which must design that boundary. Agent replies
- * (`Role='AI'`/`'Error'`) keep today's rules until MJ's chat stops writing them from the browser.
+ * variable may set the row or conversation it writes ({@link ACCESS_GATED_FIELDS}) for it either.
+ *
+ * **Only the server writes an agent's reply** (A19, second half). A reply (`Role` `AI` or `Error`) is created, and
+ * what it says ({@link REPLY_FIELDS}) changed, only on an instance server code marked with
+ * {@link MarkServerAuthoredReply}. The marker is not a field: no GraphQL input, `OldValues___` or transaction
+ * variable reaches it, so a person's save of a reply is refused whatever its user, and so is an unmarked save as the
+ * system user. A marked write still needs its context user (the person the reply is for, or whoever runs a
+ * host-driven turn) to own the conversation or hold a grant on it, so being the system user grants nothing new.
+ * Pinning, hiding, the owner's rating and other bookkeeping keep the conversation-level rules.
  * MJ's permissions engine has no native primitive for per-field row-conditional
  * write rules, so this gate lives here rather than in `MJ: Entity Permissions`.
  *
@@ -95,6 +133,25 @@ function isPersonRole(role: string | null | undefined): boolean {
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Details')
 export class MJConversationDetailEntityExtended extends MJConversationDetailEntity {
+    private serverAuthoredReply = false;
+
+    /**
+     * Marks this instance as server code writing an agent's reply, so it may create a reply (`Role` `AI` or `Error`)
+     * and change what one says. Call it before `Save()`; it stays on the instance for every later save, like
+     * `SetCloneContext()`. The context user still needs to own the conversation or hold a grant on it.
+     *
+     * It is not a field: no GraphQL input, `OldValues___` or transaction variable can set it, and the browser's copy of
+     * this class never sends it. It has no effect on a person's message.
+     */
+    public MarkServerAuthoredReply(): void {
+        this.serverAuthoredReply = true;
+    }
+
+    /** Whether {@link MarkServerAuthoredReply} was called on this instance. */
+    public get IsServerAuthoredReply(): boolean {
+        return this.serverAuthoredReply;
+    }
+
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const callerUserID = this.UserID; // the gate may fill in a grantee's; a save that fails keeps the caller's
         if (!(await this.currentUserMayWrite('save'))) {
@@ -132,10 +189,12 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
         // the conversation or hold a grant on it: some server paths elevate an anonymous visitor to the system user
         // (MJ#4791), and this gate is what keeps those paths out of other people's conversations.
         const isSystemUser = WellKnownUserSource.Instance.IsSystemUser(user);
-        if (operation === 'save' && this.fieldSetByTransactionVariable(isSystemUser ? ACCESS_GATED_FIELDS : GATED_FIELDS)) {
+        const variableGated = isSystemUser ? ACCESS_GATED_FIELDS : GATED_FIELDS;
+        const touchesReply = isReplyRole(this.Role) || isReplyRole(this.originalFieldText('Role'));
+        if (operation === 'save' && this.fieldSetByTransactionVariable(touchesReply && !this.serverAuthoredReply ? [...variableGated, ...REPLY_FIELDS] : variableGated)) {
             // A transaction variable sets its field after this check has passed, at submit, to any value an earlier
             // item in the group produced: a message would be checked as one row, author or conversation and saved as
-            // another.
+            // another, and an unmarked save could rewrite what an agent's reply says.
             this.recordDenied('A conversation message cannot take its values from a transaction variable.', resultType);
             return false;
         }
@@ -152,7 +211,8 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
         try {
             const access = await UserMayWriteConversation(provider, user, this.ConversationID);
             const refusal = (await this.accessRefusal(provider, access))
-                ?? (isSystemUser ? null : this.authorshipRefusal(operation, user, access.IsOwner));
+                ?? (isSystemUser ? null : this.authorshipRefusal(operation, user, access.IsOwner))
+                ?? this.replyRefusal(operation);
             if (refusal) {
                 this.recordDenied(refusal, resultType);
                 return false;
@@ -195,6 +255,22 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
             return 'You do not have access to this conversation.';
         }
         return null;
+    }
+
+    /**
+     * Why this write would put words in an agent's mouth, or `null` when it does not: an unmarked save that creates a
+     * reply, turns a message into one, or changes what one says ({@link REPLY_FIELDS}). Applies to every user, the
+     * system user included. Deleting a reply keeps the conversation-level rules.
+     */
+    private replyRefusal(operation: 'save' | 'delete'): string | null {
+        if (operation === 'delete' || this.serverAuthoredReply) {
+            return null;
+        }
+        if (!this.IsSaved) {
+            return isReplyRole(this.Role) ? REPLY_REFUSAL : null;
+        }
+        const touchesReply = isReplyRole(this.originalFieldText('Role')) || isReplyRole(this.Role);
+        return touchesReply && REPLY_FIELDS.some((name) => this.isFieldDirty(name)) ? REPLY_REFUSAL : null;
     }
 
     /**

@@ -592,8 +592,9 @@ export class ConversationStreaming {
                 return;
             }
 
-            // Regular progress message.
-            const conversationDetailId = agentRun?.ConversationDetailID as string | undefined;
+            // Regular progress message. The run's own detail wins; the reply row the server stamps on every
+            // message covers a run whose payload doesn't carry one.
+            const conversationDetailId = (agentRun?.ConversationDetailID ?? data.conversationDetailId) as string | undefined;
             const message = progress?.message as string | undefined;
             const percentComplete = progress?.percentage as number | undefined;
             const stepCount = progress?.stepCount as number | undefined;
@@ -652,7 +653,7 @@ export class ConversationStreaming {
             return; // raw prompt stream — not user-facing content; keep dropping it
         }
 
-        const conversationDetailId = agentRun?.ConversationDetailID as string | undefined;
+        const conversationDetailId = (agentRun?.ConversationDetailID ?? data.conversationDetailId) as string | undefined;
         if (!conversationDetailId) {
             console.warn('[ConversationStreaming] Streaming chunk missing conversationDetailId', {
                 agentName: agentRun?.Agent,

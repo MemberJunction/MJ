@@ -188,7 +188,6 @@ describe('ConversationAgentRunner', () => {
             const result = await runner.processMessage({
                 conversationId: 'c1',
                 message: { ID: 'm1' } as never,
-                conversationDetailId: 'cd1',
             });
 
             expect(result).toBeNull();
@@ -211,7 +210,6 @@ describe('ConversationAgentRunner', () => {
             const result = await runner.processMessage({
                 conversationId: 'c1',
                 message: { ID: 'm1' } as never,
-                conversationDetailId: 'cd1',
             });
 
             expect(result).toEqual({ success: true, executionTimeMs: 42 });
@@ -222,24 +220,37 @@ describe('ConversationAgentRunner', () => {
             await runner.processMessage({
                 conversationId: 'c1',
                 message: { ID: 'm1' } as never,
-                conversationDetailId: 'cd1',
                 applicationId: 'app-1',
                 appContext: { something: 'else' },
             });
 
             const callArgs = hoisted.sessionRun.mock.calls[0][0];
-            expect(callArgs.ConversationDetailId).toBe('cd1');
+            // The turn names the user's message; the server creates the reply row and reports it to OnAccepted.
+            expect(callArgs.UserMessageId).toBe('m1');
+            expect(callArgs).not.toHaveProperty('ConversationDetailId');
             expect(callArgs.AgentId).toBe('sage-uuid');
             expect(callArgs.Data.conversationId).toBe('c1');
             expect(callArgs.Data.latestMessageId).toBe('m1');
             expect(callArgs.Data.appContext).toEqual({ something: 'else' });
         });
 
+        it("passes the reply row the server accepts the run with to onReplyAccepted", async () => {
+            const onReplyAccepted = vi.fn();
+            const reply = { ConversationDetailId: 'reply-1', CreatedAt: new Date('2026-10-12T10:00:00.000Z') };
+            hoisted.sessionRun.mockImplementationOnce(async (params: { OnAccepted?: (r: typeof reply) => void }) => {
+                params.OnAccepted?.(reply);
+                return { Success: true, Result: { success: true } };
+            });
+
+            await runner.processMessage({ conversationId: 'c1', message: { ID: 'm1' } as never, onReplyAccepted });
+
+            expect(onReplyAccepted).toHaveBeenCalledWith(reply);
+        });
+
         it('toggles isProcessing$ around the call', async () => {
             await runner.processMessage({
                 conversationId: 'c1',
                 message: { ID: 'm1' } as never,
-                conversationDetailId: 'cd1',
             });
 
             // First emit is the initial `false` from the BehaviorSubject; then true; then false again.
@@ -260,7 +271,6 @@ describe('ConversationAgentRunner', () => {
             await runner.processMessage({
                 conversationId: 'c1',
                 message: { ID: 'm1' } as never,
-                conversationDetailId: 'cd1',
             });
 
             const data = hoisted.sessionRun.mock.calls[0][0].Data;
@@ -274,7 +284,6 @@ describe('ConversationAgentRunner', () => {
             await runner.processMessage({
                 conversationId: 'c1',
                 message: { ID: 'm1' } as never,
-                conversationDetailId: 'cd1',
                 AllowedAgentIDs: ['SAGE-UUID', 'OTHER-2'],
             });
 
@@ -286,7 +295,6 @@ describe('ConversationAgentRunner', () => {
             await runner.processMessage({
                 conversationId: 'c1',
                 message: { ID: 'm1' } as never,
-                conversationDetailId: 'cd1',
                 AllowedAgentIDs: [],
             });
 
@@ -305,7 +313,6 @@ describe('ConversationAgentRunner', () => {
             await runner.processMessage({
                 conversationId: 'c1',
                 message: { ID: 'm1' } as never,
-                conversationDetailId: 'cd1',
                 AgentHistoryFrom: floor,
             });
 
@@ -316,7 +323,6 @@ describe('ConversationAgentRunner', () => {
             await runner.processMessage({
                 conversationId: 'c1',
                 message: { ID: 'm1' } as never,
-                conversationDetailId: 'cd1',
                 AgentHistoryFrom: null,
             });
 
@@ -334,7 +340,6 @@ describe('ConversationAgentRunner', () => {
             await runner.processMessage({
                 conversationId: 'c1',
                 message: { ID: 'm1' } as never,
-                conversationDetailId: 'cd1',
                 explicitAgentId: 'other-1',
             });
 
@@ -353,7 +358,6 @@ describe('ConversationAgentRunner', () => {
             const result = await runner.processMessage({
                 conversationId: 'c1',
                 message: { ID: 'm1' } as never,
-                conversationDetailId: 'cd1',
             });
 
             expect(result).toEqual({ success: false, errorMessage: 'timeout' });
@@ -373,7 +377,6 @@ describe('ConversationAgentRunner', () => {
             const result = await runner.processMessage({
                 conversationId: 'c1',
                 message: { ID: 'm1' } as never,
-                conversationDetailId: 'cd1',
             });
 
             expect(result?.success).toBe(false);
@@ -390,8 +393,7 @@ describe('ConversationAgentRunner', () => {
                 const result = await runner.processMessage({
                     conversationId: 'c1',
                     message: { ID: 'm1' } as never,
-                    conversationDetailId: 'cd1',
-                });
+                    });
 
                 expect(result?.success).toBe(false);
                 expect(result?.errorMessage).toContain('network');

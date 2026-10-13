@@ -31,6 +31,7 @@ import {
     MJConversationEntity,
     MJConversationBranchEntity,
     MJConversationDetailEntity,
+    MJConversationDetailEntityExtended,
     MJAIAgentSessionEntity,
     MJArtifactEntity,
     MJArtifactVersionEntity,
@@ -72,7 +73,8 @@ async function CreateConversationFixture(
 
     const details: MJConversationDetailEntity[] = [];
     for (const message of messages) {
-        const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+        const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', ctx.User);
+        detail.MarkServerAuthoredReply(); // an 'AI' row stands in for an agent reply, which only the server writes
         detail.ConversationID = conversation.ID;
         detail.Role = message.role;
         detail.Message = message.text;
@@ -832,9 +834,10 @@ export const ConversationCompactionChecks: NamedCheck[] = [
             const entry = fixture.Conversations[fixture.Conversations.length - 1];
 
             for (let i = 2; i <= 10; i++) {
-                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>(
+                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntityExtended>(
                     'MJ: Conversation Details', ctx.User
                 );
+                detail.MarkServerAuthoredReply(); // stands in for an agent reply, which only the server writes
                 detail.ConversationID = conversationId;
                 detail.Role = 'AI';
                 detail.Message = `w${i}`;

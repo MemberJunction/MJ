@@ -24,6 +24,7 @@ export type {
     EmbedTextParams,
     EmbedTextResult,
     RunAIAgentFromConversationDetailParams,
+    AgentReplyAcknowledgement,
     AutotagPipelineResult,
     VectorizeEntityParams,
     VectorizeEntityResult,

@@ -17,7 +17,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
 import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
-import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ConversationEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ConversationEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 
 /**
@@ -212,6 +212,57 @@ export class AgentRunner {
     }
 
     /**
+     * Creates the reply row for an agent's turn on the server: `Role` `AI`, In-Progress, '⏳ Starting...', marked with
+     * `MarkServerAuthoredReply()` so the conversation detail gate accepts it. Only the server writes replies, so this is
+     * the one place a reply row starts; pass the returned instance to {@link RunAgentInConversation} as
+     * `agentResponseDetail` and the run writes its progress and result into it.
+     *
+     * @param args.conversationId The conversation the reply belongs to.
+     * @param args.branchId The fork it sits on, the same as the message it answers; null or omitted is Main.
+     * @param args.agentId The agent the reply is from; null for a status line no agent wrote (a workflow's).
+     * @param args.contextUser Whom the row is written as: the person the reply is for. They must own the conversation
+     *   or hold an `Edit` grant on it.
+     * @param args.parentId The message the reply answers, when known.
+     * @param args.testRunId A test run to link the row to.
+     * @param args.provider The provider to write through; defaults to this runner's.
+     * @param args.message The row's text, for a server-composed status line; defaults to '⏳ Starting...'.
+     * @param args.status The row's status; defaults to In-Progress (a reply a run will fill).
+     * @returns The saved row. Throws with the gate's reason when the save is refused.
+     */
+    public async CreateAgentReplyDetail(args: {
+        conversationId: string;
+        branchId?: string | null;
+        agentId: string | null;
+        contextUser: UserInfo;
+        parentId?: string;
+        testRunId?: string;
+        provider?: IMetadataProvider;
+        message?: string;
+        status?: MJConversationDetailEntity['Status'];
+    }): Promise<MJConversationDetailEntityExtended> {
+        const md = args.provider || this._provider;
+        const reply = await md.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', args.contextUser);
+        reply.MarkServerAuthoredReply();
+        reply.ConversationID = args.conversationId;
+        reply.BranchID = args.branchId ?? null;
+        reply.Message = args.message ?? '⏳ Starting...';
+        reply.Role = 'AI';
+        reply.Status = args.status ?? 'In-Progress';
+        reply.HiddenToUser = false;
+        reply.AgentID = args.agentId;
+        if (args.parentId) {
+            reply.ParentID = args.parentId;
+        }
+        if (args.testRunId) {
+            reply.TestRunID = args.testRunId; // test execution traceability
+        }
+        if (!(await reply.Save())) {
+            throw new Error(`Failed to create agent response conversation detail: ${AgentRunner.saveFailureReason(reply)}`);
+        }
+        return reply;
+    }
+
+    /**
      * Runs an AI agent within a conversation context, handling conversation and artifact management.
      *
      * This method provides a complete workflow for running agents in conversations:
@@ -246,6 +297,12 @@ export class AgentRunner {
             conversationId?: string;
             /** Optional existing conversation detail ID. If provided, skips conversation/detail creation */
             conversationDetailId?: string;
+            /**
+             * The reply row the caller already created on the server for this run, with
+             * {@link CreateAgentReplyDetail}. The run's progress and result are written into this instance, so the
+             * writes carry its server-authored marker and its context user. Wins over `conversationDetailId`.
+             */
+            agentResponseDetail?: MJConversationDetailEntityExtended;
             /** The user's message text for this conversation turn (required if conversationDetailId not provided) */
             userMessage?: string;
             /** Whether to create artifacts from the agent's payload (default: true) */
@@ -284,15 +341,22 @@ export class AgentRunner {
             throw new Error('contextUser is required for RunAgentInConversation');
         }
 
-        let agentResponseDetail: MJConversationDetailEntity | undefined;
+        let agentResponseDetail: MJConversationDetailEntityExtended | undefined;
 
         try {
             let conversationId: string;
             let userMessageDetailId: string;
             let agentResponseDetailId: string | undefined;
 
-            // If conversationDetailId is provided, use it (UI-created agent response detail)
-            if (options.conversationDetailId) {
+            if (options.agentResponseDetail) {
+                // The server created the reply row for this run (RunAIAgentFromConversationDetail): write into it.
+                agentResponseDetail = options.agentResponseDetail;
+                agentResponseDetailId = agentResponseDetail.ID;
+                conversationId = options.conversationId || agentResponseDetail.ConversationID;
+                userMessageDetailId = agentResponseDetail.ParentID || agentResponseDetailId;
+            } else if (options.conversationDetailId) {
+                // A caller-supplied detail ID. It was not created for this run, so it is not marked as server-authored:
+                // the conversation detail gate decides whether the run may write a reply into it.
                 agentResponseDetailId = options.conversationDetailId;
 
                 // LATENCY OPTIMIZATION (Opt #2): When conversationId is pre-resolved by the caller
@@ -325,7 +389,7 @@ export class AgentRunner {
 
                 // Load the entity object for progress updates and final status Save at step 5.
                 // This is needed regardless of whether conversationId was pre-resolved.
-                agentResponseDetail = await md.GetEntityObject<MJConversationDetailEntity>(
+                agentResponseDetail = await md.GetEntityObject<MJConversationDetailEntityExtended>(
                     'MJ: Conversation Details',
                     contextUser
                 );
@@ -415,30 +479,16 @@ export class AgentRunner {
                 userMessageDetailId = userMessageDetail.ID;
                 LogStatus(`Created user message detail ${userMessageDetailId}`);
 
-                // Step 3: Create conversation detail for agent response (like UI does)
+                // Step 3: Create conversation detail for agent response
                 LogStatus('Creating conversation detail for agent response');
-                agentResponseDetail = await md.GetEntityObject<MJConversationDetailEntity>(
-                    'MJ: Conversation Details',
-                    contextUser
-                );
-
-                agentResponseDetail.ConversationID = conversationId;
-                agentResponseDetail.Message = '⏳ Starting...';
-                agentResponseDetail.Role = 'AI';
-                agentResponseDetail.Status = 'In-Progress';
-                agentResponseDetail.HiddenToUser = false;
-                agentResponseDetail.AgentID = params.agent.ID;
-                agentResponseDetail.BranchID = params.ConversationBranchID ?? null;
-
-                // Link to test run if provided (for test execution traceability)
-                if (options.testRunId) {
-                    agentResponseDetail.TestRunID = options.testRunId;
-                }
-
-                if (!(await agentResponseDetail.Save())) {
-                    throw new Error(`Failed to create agent response conversation detail: ${AgentRunner.saveFailureReason(agentResponseDetail)}`);
-                }
-
+                agentResponseDetail = await this.CreateAgentReplyDetail({
+                    conversationId,
+                    branchId: params.ConversationBranchID ?? null,
+                    agentId: params.agent.ID,
+                    contextUser,
+                    testRunId: options.testRunId,
+                    provider: md
+                });
                 agentResponseDetailId = agentResponseDetail.ID;
                 LogStatus(`Created agent response detail ${agentResponseDetailId}`);
             }

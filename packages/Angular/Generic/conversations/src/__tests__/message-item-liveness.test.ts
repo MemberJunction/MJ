@@ -426,3 +426,68 @@ describe('MessageItemComponent elapsed timer shutdown', () => {
     expect(viewUpdatesOver(h, 5_000)).toBe(0);
   });
 });
+
+describe('MessageItemComponent — the reply timer starts when the server created the row', () => {
+  afterEach(() => vi.useRealTimers());
+
+  function itemShowing(message: Record<string, unknown>, loadTime: number): MessageItemComponent {
+    const component = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
+    const open = component as unknown as Record<string, unknown>;
+    open.message = message;
+    open._loadTime = loadTime;
+    return component;
+  }
+
+  it('counts from when it was first shown while the placeholder has no server row yet', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-12T10:00:10.000Z'));
+    const item = itemShowing({ ID: 'local-1', Role: 'AI', Status: 'In-Progress' }, Date.parse('2026-10-12T10:00:07.000Z'));
+
+    expect(item.ElapsedTimeSinceLoad).toBe(3_000);
+  });
+
+  it("switches to the server row's creation time once the acknowledgement brings it", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-12T10:00:10.000Z'));
+    const message: Record<string, unknown> = { ID: 'local-1', Role: 'AI', Status: 'In-Progress' };
+    const item = itemShowing(message, Date.parse('2026-10-12T10:00:07.000Z'));
+
+    message.ID = 'server-reply-1';
+    message.__mj_CreatedAt = new Date('2026-10-12T10:00:06.500Z');
+
+    expect(item.ElapsedTimeSinceLoad).toBe(3_500);
+  });
+
+  it("never goes negative when the server's clock is ahead of the browser's", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-12T10:00:10.000Z'));
+    const item = itemShowing(
+      { ID: 'server-reply-1', Role: 'AI', Status: 'In-Progress', __mj_CreatedAt: new Date('2026-10-12T10:00:12.000Z') },
+      Date.parse('2026-10-12T10:00:07.000Z')
+    );
+
+    expect(item.ElapsedTimeSinceLoad).toBe(0);
+  });
+});
+
+describe('MessageItemComponent — a failed agent reply reads as it always has', () => {
+  function source(message: Record<string, unknown>): string {
+    const component = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
+    const open = component as unknown as Record<string, unknown>;
+    open.message = message;
+    open.AssistantDisplayName = null;
+    return (component as unknown as { displaySourceText(): string }).displaySourceText();
+  }
+
+  it("formats the server's error text with the chat's failure header, without touching the entity", () => {
+    const message = { ID: 'R-1', Role: 'AI', Status: 'Error', Message: 'Rate limit reached', AgentID: null };
+
+    expect(source(message)).toBe('❌ **AI Assistant** failed\n\nRate limit reached');
+    expect(message.Message).toBe('Rate limit reached');
+  });
+
+  it('leaves replies that did not fail, and people\'s messages, as stored', () => {
+    expect(source({ ID: 'R-2', Role: 'AI', Status: 'Complete', Message: 'Done' })).toBe('Done');
+    expect(source({ ID: 'U-1', Role: 'User', Status: 'Error', Message: 'hello' })).toBe('hello');
+  });
+});

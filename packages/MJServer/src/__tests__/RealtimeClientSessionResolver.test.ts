@@ -241,6 +241,7 @@ function makeSessionEntity(overrides: Partial<FakeSession> = {}): FakeSession {
         UserID: 'user-1',
         Config_: JSON.stringify({ targetAgentID: 'target-1' }),
         NewRecord: vi.fn(),
+        MarkServerAuthoredReply: vi.fn(),
         Save: vi.fn(async () => true),
         Load: vi.fn(async () => true),
         LatestResult: { CompleteMessage: '' },
@@ -1009,6 +1010,27 @@ describe('RealtimeClientSessionResolver.RelayRealtimeTranscript', () => {
 
         await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'response', makeCtx());
         expect(detail.Role).toBe('AI');
+        // The agent's side of the transcript is the server's write: unmarked, the reply gate refuses it.
+        expect(detail.MarkServerAuthoredReply).toHaveBeenCalled();
+    });
+
+    /** A19: the agent's words come from the browser here, so they are stored only in the caller's own conversation. */
+    it("does not store the agent's side in a conversation the caller doesn't own, and still stores their own", async () => {
+        const detail = makeSessionEntity({ ID: 'detail-shared' });
+        const session = makeSessionEntity({ ConversationID: 'conv-shared' });
+        const conversation = makeSessionEntity({ ID: 'conv-shared', UserID: 'the-owner' });
+        currentProvider = makeProvider((name) =>
+            name === 'MJ: Conversation Details' ? detail : name === 'MJ: Conversations' ? conversation : session,
+        );
+        const resolver = makeResolver();
+
+        expect(await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'words the agent never said', makeCtx())).toBe(false);
+        expect(await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'a correction', makeCtx(), true)).toBe(false);
+        expect(detail.Save).not.toHaveBeenCalled();
+        expect(conversation.Load).toHaveBeenCalledWith('conv-shared');
+
+        expect(await resolver.RelayRealtimeTranscript('session-1', 'user', 'my own words', makeCtx())).toBe(true);
+        expect(detail.Role).toBe('User');
     });
 
     it("maps role case/whitespace-insensitively (' USER ' → 'User')", async () => {

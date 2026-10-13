@@ -19,6 +19,8 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
+import { FormatAgentFailureForDisplay } from '../../utils/agent-failure-display';
+import { SavePinState } from '../../utils/pin-state';
 import { PlanModePreference } from '../../utils/plan-mode-preference';
 import { MarkdownService } from '@memberjunction/ng-markdown';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
@@ -1218,8 +1220,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return formattedTime;
   }
 
+  /**
+   * Time since the message was created: its server creation time once it has one, else when it was first shown. An
+   * agent's reply first renders as a local placeholder, before the server acknowledges the run; it takes the reply
+   * row's creation time when the acknowledgement arrives, so the timer counts from when the server's row began.
+   */
   public get ElapsedTimeSinceLoad(): number {
-    return Date.now() - this._loadTime;
+    const createdAt = this.message?.__mj_CreatedAt;
+    // Never negative: the server's clock can run ahead of this browser's.
+    return Math.max(0, Date.now() - (createdAt ? new Date(createdAt).getTime() : this._loadTime));
   }
 
   /** @deprecated Use {@link ElapsedTimeSinceLoad}. */
@@ -1387,7 +1396,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * ngDoCheck to snapshot the value; templates read _stableDisplayMessage.
    */
   private computeDisplayMessage(): string {
-    const raw = this.message.Message || '';
+    const raw = this.displaySourceText();
 
     // ngDoCheck calls this every pass; an unchanged Message is the same string object, so this
     // compare is a pointer check and nothing below runs until the text changes.
@@ -1412,6 +1421,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this._cachedDisplayMessage = transformed;
 
     return transformed;
+  }
+
+  /**
+   * The text the bubble renders from: the stored message, with a failed agent reply formatted as the chat has always
+   * shown one (see {@link FormatAgentFailureForDisplay}). Display only: the entity's text is never changed.
+   */
+  private displaySourceText(): string {
+    const raw = this.message.Message || '';
+    if (this.IsAIMessage && this.message.Status === 'Error') {
+      return FormatAgentFailureForDisplay(raw, this.AiAgentInfo?.name ?? 'Agent');
+    }
+    return raw;
   }
 
   /**
@@ -2226,7 +2247,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this.message.IsPinned = !previousValue;
     this.cdRef.detectChanges();
 
-    const saved = await this.message.Save();
+    const saved = await SavePinState(this.ProviderToUse, this.message.ID, !previousValue);
     if (!saved) {
       // Revert on failure
       this.message.IsPinned = previousValue;

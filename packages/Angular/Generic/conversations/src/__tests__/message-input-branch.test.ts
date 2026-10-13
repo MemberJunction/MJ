@@ -190,11 +190,14 @@ describe('MessageInputComponent — the branch of the turn', () => {
         expect(h.routeMessage.mock.calls[1][3]).toBeNull();
     });
 
-    it('createTurnRow makes an AI row in the conversation on the turn branch', async () => {
+    it("shows a reply's placeholder in the conversation on the turn branch, where the server writes the reply", async () => {
         const h = buildHarness();
-        const make = (MessageInputComponent.prototype as unknown as { createTurnRow(c: string, b: string | null): Promise<Row> }).createTurnRow;
-        const row = await make.call(h.component, 'conv-9', 'T4');
-        expect(row).toMatchObject({ ConversationID: 'conv-9', BranchID: 'T4', Role: 'AI', HiddenToUser: false });
+        const make = (MessageInputComponent.prototype as unknown as {
+            createReplyPlaceholder(c: string, b: string | null, p: string, a: string | null): Promise<Row>;
+        }).createReplyPlaceholder;
+        const row = await make.call(h.component, 'conv-9', 'T4', 'u1', 'agent-1');
+        expect(row).toMatchObject({ ConversationID: 'conv-9', BranchID: 'T4', Role: 'AI', HiddenToUser: false, ParentID: 'u1' });
+        expect(row.Save).not.toHaveBeenCalled(); // only the server writes the reply
     });
 
     it('tells a host turn handler the branch of the turn', () => {
@@ -357,7 +360,7 @@ describe('MessageInputComponent — overlapping turns keep their own branch', ()
 describe('message-input.component.ts — every created row is either a user row or a turn row', () => {
     const source = readFileSync(fileURLToPath(new URL('../lib/components/message/message-input.component.ts', import.meta.url)), 'utf8');
 
-    it('creates rows in exactly four places: createTurnRow and the three user-row paths', () => {
+    it('creates rows in exactly four places: the reply placeholder and the three user-row paths', () => {
         expect(source.match(/this\.dataCache\.createConversationDetail\(/g)?.length).toBe(4);
     });
 

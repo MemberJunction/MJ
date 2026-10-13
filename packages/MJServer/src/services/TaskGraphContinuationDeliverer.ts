@@ -13,7 +13,9 @@
  * @module @memberjunction/server
  */
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { MJAIAgentRunEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
@@ -72,8 +74,14 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 return;
             }
 
-            const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.contextUser);
+            // Written as the person who submitted the graph, marked as the server's: the conversation detail gate lets
+            // only a marked server write create an agent's reply, and only in a conversation its user owns or holds an
+            // Edit grant on. Not as the conversation's owner: `TaskGraph.Submit` takes any conversation detail ID, so
+            // writing as the owner would let anyone who can submit a graph post into a conversation they can't reach.
+            const writer = this.resolveSubmitter(params.SubmittedByUserID);
+            const detail = await provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', writer);
             detail.NewRecord();
+            detail.MarkServerAuthoredReply();
             detail.ConversationID = origin.ConversationID;
             detail.BranchID = origin.BranchID;
             detail.Role = 'AI';
@@ -153,6 +161,17 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 LogError(`[TaskGraphContinuationDeliverer] The fallback post for "${params.WorkflowName}" also failed`, undefined, fallbackError);
             }
         }
+    }
+
+    /**
+     * The person who submitted the graph; the deliverer's own user when the graph records no submitter or they are not
+     * in the user cache (the gate then decides, and refuses a conversation that user cannot write to).
+     */
+    private resolveSubmitter(submittedByUserID: string | null): UserInfo {
+        if (!submittedByUserID) {
+            return this.contextUser;
+        }
+        return UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, submittedByUserID)) ?? this.contextUser;
     }
 
     /** The conversation and fork (null is Main) of the detail that started the graph; null when it cannot be loaded. */

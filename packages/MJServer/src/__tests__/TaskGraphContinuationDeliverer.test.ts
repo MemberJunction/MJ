@@ -18,7 +18,14 @@ vi.mock('@memberjunction/core', () => ({
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJConversationDetailEntity: class {},
+    MJConversationDetailEntityExtended: class {},
+    MJConversationEntity: class {},
     MJAIAgentRunEntity: class {},
+}));
+
+const { OWNER, SUBMITTER } = vi.hoisted(() => ({ OWNER: { ID: 'owner-1' }, SUBMITTER: { ID: 'submitter-1' } }));
+vi.mock('@memberjunction/generic-database-provider', () => ({
+    UserCache: { Instance: { Users: [OWNER, SUBMITTER] } },
 }));
 
 vi.mock('@memberjunction/ai-core-plus', () => ({ MJAIAgentEntityExtended: class {} }));
@@ -39,8 +46,10 @@ function detailRow(over: Partial<{ loads: boolean; saves: boolean; conversationI
     return {
         ConversationID: conversationID,
         BranchID: branchID as string | null,
+        UserID: 'owner-1',
         Role: '', Status: '', HiddenToUser: true, Message: '',
         NewRecord: vi.fn(),
+        MarkServerAuthoredReply: vi.fn(),
         Load: vi.fn().mockResolvedValue(loads),
         Save: vi.fn().mockResolvedValue(saves),
         LatestResult: { CompleteMessage: 'FK violation' },
@@ -64,8 +73,8 @@ function harness(over: Parameters<typeof detailRow>[0] = {}) {
         providerFactory as never,
         { ID: 'user-1' } as UserInfo,
     );
-    // First row is the source detail (Load), second is the reply (Save). Every reply row starts on a
-    // 'stale' fork, so a test sees the deliverer set it.
+    // Rows in order: the source detail (Load), the reply (Save). The reply starts on a 'stale' fork, so a test sees
+    // the deliverer set it.
     return { deliverer, providerFactory, provider, rows, reply: () => rows[1] };
 }
 
@@ -74,6 +83,7 @@ const params = (over: Partial<TaskContinuationParams> = {}): TaskContinuationPar
     WorkflowName: 'Weekly digest',
     ConversationDetailID: 'detail-1',
     SubmittedByAgentRunID: 'run-1',
+    SubmittedByUserID: 'submitter-1',
     ReinvokeDepth: 0,
     Tasks: [
         { TaskID: 't1', Name: 'Gather', Status: 'Complete', Summary: '412 rows' },
@@ -96,6 +106,25 @@ describe('posting the outcome', () => {
         expect(reply.Role).toBe('AI');
         expect(reply.Status).toBe('Complete');
         expect(reply.HiddenToUser).toBe(false);
+    });
+
+    it("writes it as the graph's submitter, not the conversation's owner, marked as the server's reply", async () => {
+        // TaskGraph.Submit takes any conversation detail ID. Written as the owner, the gate would pass for a
+        // conversation the submitter cannot reach; written as the submitter, the gate checks their access.
+        const h = harness();
+        await h.deliverer.PostMessage(params());
+
+        expect(h.provider.GetEntityObject.mock.calls[1]).toEqual(['MJ: Conversation Details', SUBMITTER]);
+        expect(h.provider.GetEntityObject.mock.calls.some((call) => call[1] === OWNER)).toBe(false);
+        expect(h.reply().MarkServerAuthoredReply).toHaveBeenCalledOnce();
+    });
+
+    it("falls back to the deliverer's own user when the graph records no submitter it knows", async () => {
+        for (const submitter of [null, 'stranger-1']) {
+            const h = harness();
+            await h.deliverer.PostMessage(params({ SubmittedByUserID: submitter }));
+            expect(h.provider.GetEntityObject.mock.calls[1]).toEqual(['MJ: Conversation Details', { ID: 'user-1' }]);
+        }
     });
 
     it('names the workflow and carries the roll-up', async () => {
