@@ -35,7 +35,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (449 classes)
+// @memberjunction/core-entities (451 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -205,6 +205,8 @@ import {
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -896,6 +898,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -914,12 +918,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardCategoryPermissionEntity,
     MJDashboardEntity,
     MJDashboardEntityExtended,
-    MJDashboardPartTypeEntity,
-    MJDashboardPermissionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardPartTypeEntity,
+    MJDashboardPermissionEntity,
     MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
     MJDashboardUserStateEntity,
@@ -1118,12 +1122,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
     MJStateProvinceEntity,
-    MJTagAuditLogEntity,
-    MJTagCoOccurrenceEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJTagAuditLogEntity,
+    MJTagCoOccurrenceEntity,
     MJTagEntity,
     MJTagScopeEntity,
     MJTagSuggestionEntity,
@@ -1322,12 +1326,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RecordProcessFormComponentExtended,
     RecordProcessFormPolicy,
     RubricAuthorPanel,
-    RubricDiffPanel,
-    RubricEvaluationComparePanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RubricDiffPanel,
+    RubricEvaluationComparePanel,
     RubricEvaluationFormPolicy,
     RubricEvaluationResultPanel,
     RubricFormPolicy,
@@ -1358,7 +1362,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 616;
+export const CLASS_REGISTRATIONS_COUNT = 618;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

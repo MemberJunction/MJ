@@ -182,13 +182,18 @@ export class ApolloGetListContactsAction extends ApolloRESTBaseAction {
  *   - OrganizationIDs     (optional) Apollo organization ids
  *   - Titles              (optional) job titles, e.g. ["VP of Marketing"]
  *   - Seniorities         (optional) owner | founder | c_suite | vp | director | manager
+ *   - Locations           (optional) e.g. ["Boston, Massachusetts, United States"]
+ *   - Keywords            (optional) free text matched against names, titles and employers
  *   - Page / PerPage      (optional)
  *   - CompanyID           (optional)
  *
  * Each list param accepts a real array, a JSON array string, or a
  * comma-separated string.
  *
- * Outputs: People / Pagination / Count / KeySource
+ * Outputs: People / Pagination / Count (people on this page) / TotalEntries (all pages) / KeySource
+ *
+ * Since 2026 Apollo obfuscates these results (`lastNameObfuscated`, no LinkedIn URL): a person's
+ * details need a paid `people/bulk_match` by id, which the enrichment actions do.
  */
 @RegisterClass(BaseAction, 'ApolloSearchPeopleAction')
 export class ApolloSearchPeopleAction extends ApolloRESTBaseAction {
@@ -201,6 +206,9 @@ export class ApolloSearchPeopleAction extends ApolloRESTBaseAction {
         if (titlesParsed.error !== null) return this.Invalid(titlesParsed.error);
         const senioritiesParsed = ParseStringArrayParam(GetParamRaw(params, 'Seniorities'), 'Seniorities');
         if (senioritiesParsed.error !== null) return this.Invalid(senioritiesParsed.error);
+        const locationsParsed = ParseStringArrayParam(GetParamRaw(params, 'Locations'), 'Locations');
+        if (locationsParsed.error !== null) return this.Invalid(locationsParsed.error);
+        const keywords = GetParam(params, 'Keywords');
 
         const { paging, error: pagingError } = parsePaging(params);
         if (pagingError !== null) return this.Invalid(pagingError);
@@ -209,10 +217,12 @@ export class ApolloSearchPeopleAction extends ApolloRESTBaseAction {
             domainsParsed.value === undefined &&
             orgIdsParsed.value === undefined &&
             titlesParsed.value === undefined &&
-            senioritiesParsed.value === undefined
+            senioritiesParsed.value === undefined &&
+            locationsParsed.value === undefined &&
+            keywords === null
         ) {
             return this.Invalid(
-                'Provide at least one of OrganizationDomains, OrganizationIDs, Titles, or Seniorities — ' +
+                'Provide at least one of OrganizationDomains, OrganizationIDs, Titles, Seniorities, Locations, or Keywords — ' +
                 'an unscoped people search returns a rate-limited firehose.',
             );
         }
@@ -226,6 +236,8 @@ export class ApolloSearchPeopleAction extends ApolloRESTBaseAction {
             if (orgIdsParsed.value) filter.organizationIds = orgIdsParsed.value;
             if (titlesParsed.value) filter.titles = titlesParsed.value;
             if (senioritiesParsed.value) filter.seniorities = senioritiesParsed.value;
+            if (locationsParsed.value) filter.locations = locationsParsed.value;
+            if (keywords !== null) filter.keywords = keywords;
 
             const result = await resolved.client.searchPeople(filter, paging);
 
@@ -233,6 +245,7 @@ export class ApolloSearchPeopleAction extends ApolloRESTBaseAction {
                 { Name: 'People', Type: 'Output', Value: result.people },
                 { Name: 'Pagination', Type: 'Output', Value: result.pagination },
                 { Name: 'Count', Type: 'Output', Value: result.people.length },
+                { Name: 'TotalEntries', Type: 'Output', Value: result.pagination.totalEntries },
                 { Name: 'KeySource', Type: 'Output', Value: resolved.key.source },
             );
 

@@ -3,7 +3,7 @@ import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { UserInfoEngine, type MJAIAgentChannelEntity, type MJAIAgentChannelEntity_IChannelUIConfig } from '@memberjunction/core-entities';
 import { AddRealtimeUsageRecord, AIEngineBase, HasRealtimeUsage, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider, GraphQLRealtimeSessionClient } from '@memberjunction/graphql-dataprovider';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, ParseRealtimeAvatarStatus, ParseRealtimeClientTransport, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
 import {
   AppContextSnapshot,
@@ -858,7 +858,11 @@ export class RealtimeSessionRuntime {
    */
   /** Conversation id the SERVER created for this session (null when the host supplied one). */
   private createdConversationId: string | null = null;
-  /** The session's conversation id (supplied or server-created). */
+  /**
+   * The session's conversation id (supplied or server-created). While a start's mint runs, the
+   * conversation the start asked for; null when it asked the server to create one. Null after
+   * teardown.
+   */
   private sessionConversationId: string | null = null;
   /** First final user utterance of the live session (the naming seed). */
   private firstUserTranscript: string | null = null;
@@ -1362,6 +1366,14 @@ export class RealtimeSessionRuntime {
   }
 
   /**
+   * True when a session is open or starting for `conversationId`. Ids are compared without
+   * regard to case.
+   */
+  public IsActiveFor(conversationId: string | null | undefined): boolean {
+    return this.IsActive && conversationId != null && UUIDsEqual(this.sessionConversationId, conversationId);
+  }
+
+  /**
    * Start a client-direct voice session fronting `targetAgentId`.
    *
    * @param targetAgentId The agent the Realtime Co-Agent voices on behalf of.
@@ -1403,7 +1415,8 @@ export class RealtimeSessionRuntime {
    * @param appContext Optional live app-context snapshot injected into the companion prompt at mint.
    * @param options Optional per-start extras — chiefly the channels the HOST brings
    *   ({@link RealtimeSessionStartOptions.HostChannels}), the way a connect-only embed with no
-   *   registry gets channels at all.
+   *   registry gets channels at all, and the fork the session starts on
+   *   ({@link RealtimeSessionStartOptions.ConversationBranchID}; omitted is Main, where its transcript is written).
    */
   public async StartRealtimeSession(
     targetAgentId: string,
@@ -1425,6 +1438,9 @@ export class RealtimeSessionRuntime {
     }
 
     const consent = this.beginSessionStart({ agentName, recordingConsent, applicationId, appContext });
+    this.sessionConversationId = conversationId ?? null;
+    // A teardown while the channels are prepared or the mint runs bumps this; see the checks below.
+    const generation = this.startGeneration;
     // Captured BEFORE the channels are prepared so the mint carries exactly the snapshot the prologue
     // resolved, whatever a channel plugin may push in the meantime.
     const effectiveAppContext = this._appContext$.value;
@@ -1436,9 +1452,22 @@ export class RealtimeSessionRuntime {
       // server needs the candidates to scope them. Nothing is initialized until the policy is known.
       const scope = await this.prepareChannelScope(options?.HostChannels);
       const allClientTools = [...(clientTools ?? []), ...scope.NativeTools];
-      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext, scope.CandidatesJson, scope.ShowsAgentVideo);
+      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext, scope.CandidatesJson, scope.ShowsAgentVideo, options?.ConversationBranchID ?? null);
     } catch (error) {
+      // An ended or replaced start only logs its failure: the error state and the teardown belong
+      // to the session that is current now, which a newer start may own.
+      if (this.startGeneration !== generation) {
+        console.error('[RealtimeSession] A start that was already ended failed:', error);
+        return;
+      }
       await this.failSessionStart(error);
+      return;
+    }
+
+    // The host ended the start while the mint ran. That teardown had no session id to close, so
+    // close the minted row here, and touch no shared state: a newer start may already own it.
+    if (this.startGeneration !== generation) {
+      await this.closeServerSession(session.AgentSessionId);
       return;
     }
 
@@ -4513,6 +4542,7 @@ export class RealtimeSessionRuntime {
    * Mints a session through the installed {@link Launcher} — by default the stock
    * `StartRealtimeClientSession` mutation (see {@link DefaultRealtimeSessionLauncher}). `showsAgentVideo` is whether
    * one of the session's channels could show the agent's video; without one the server asks the model for no avatar.
+   * `conversationBranchId` is the fork the session starts on; `null` is Main.
    */
   private async mintSession(
     targetAgentId: string,
@@ -4528,7 +4558,8 @@ export class RealtimeSessionRuntime {
     applicationId?: string | null,
     appContext?: AppContextSnapshot | null,
     channelCandidatesJson?: string | null,
-    showsAgentVideo?: boolean
+    showsAgentVideo?: boolean,
+    conversationBranchId?: string | null
   ): Promise<StartRealtimeClientSessionResult> {
     const result = await this._launcher.Launch(
       {
@@ -4545,6 +4576,7 @@ export class RealtimeSessionRuntime {
         ApplicationId: applicationId ?? null,
         AppContext: appContext ?? null,
         ChannelCandidatesJson: channelCandidatesJson ?? null,
+        ConversationBranchId: conversationBranchId ?? null,
         ...(showsAgentVideo === undefined ? {} : { ShowsAgentVideo: showsAgentVideo })
       },
       { Provider: this.Provider }
@@ -5174,6 +5206,7 @@ export class RealtimeSessionRuntime {
     // to call without an active session).
     const closedSessionId = this.agentSessionId;
     this.agentSessionId = null;
+    this.sessionConversationId = null;
     this.narrationTemplate = null;
     this.clientToolHandlers.clear();
     this._modelName$.next(null);
