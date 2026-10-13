@@ -318,6 +318,32 @@ describe('RealtimeAudioRecorder — with stubbed Web Audio', () => {
         expect(Math.abs((await recorder.Stop()) - 48000)).toBeLessThanOrEqual(1);
     });
 
+    it('a microphone replaced during setup is the one the device-rate rebuild connects', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        deviceRate = 44100;
+        const first = fakeStream(1);
+        const second = fakeStream(1);
+        const connectedAt: Array<{ Stream: MediaStream; Rate: number }> = [];
+        const Base = g['AudioContext'] as new (o?: AudioContextOptions) => { sampleRate: number; createMediaStreamSource(s: MediaStream): unknown };
+        g['AudioContext'] = class extends Base {
+            public createMediaStreamSource(stream: MediaStream) {
+                if (this.sampleRate === 48000) {
+                    throw new DOMException('different sample-rate', 'NotSupportedError');
+                }
+                connectedAt.push({ Stream: stream, Rate: this.sampleRate });
+                return super.createMediaStreamSource(stream);
+            }
+        };
+        const recorder = new RealtimeAudioRecorder(async () => new SpyEncoder());
+        recorder.Start(first, null);
+        recorder.ReplaceMicrophone(second); // a device switch while the 48 kHz graph is still being built
+        await vi.waitFor(() => expect(connectedAt).toHaveLength(1));
+        expect(contextOptions).toEqual([{ sampleRate: 48000 }, undefined]);
+        expect(connectedAt[0].Rate).toBe(44100);
+        expect(connectedAt[0].Stream).toBe(second);
+        await recorder.Stop();
+    });
+
     it('AttachRemoteStream is idempotent and ignores track-less streams (does not throw)', async () => {
         const recorder = new RealtimeAudioRecorder(async () => new SpyEncoder());
         recorder.Start(fakeStream(1), null);
