@@ -74,9 +74,30 @@ export interface WhiteboardContentAppliedEventArgs {
 
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
+/** Smallest width / height a resize gesture can shrink an item to. */
+const RESIZE_MIN_SIZE = 24;
+
+/** Whether a resize handle moves the top or bottom edge (and so the height). */
+function touchesVerticalEdge(handle: ResizeHandle): boolean {
+  return handle.includes('n') || handle.includes('s');
+}
+
+/**
+ * The computed height of the markdown body inside the card that holds `handleEl`, in the
+ * same box model as its max-height. Zoom is a transform on the viewport, so CSS px are
+ * already board px. Null when the card isn't rendered.
+ */
+function renderedMarkdownBodyHeight(handleEl: EventTarget | null): number | null {
+  const card = (handleEl as Element | null)?.closest?.('.md-card');
+  const body = card?.querySelector<HTMLElement>('.md-card__body');
+  const style = body?.ownerDocument?.defaultView?.getComputedStyle(body);
+  const h = style ? parseFloat(style.height) : NaN;
+  return h > 0 ? h : null;
+}
+
 type BoardInteraction =
   | { Type: 'move'; ItemID: string; StartX: number; StartY: number; OrigBounds: WhiteboardBounds; DX: number; DY: number; Moved: boolean; Group: boolean }
-  | { Type: 'resize'; ItemID: string; Handle: ResizeHandle; StartX: number; StartY: number; OrigBounds: WhiteboardBounds; CurBounds: WhiteboardBounds }
+  | { Type: 'resize'; ItemID: string; Handle: ResizeHandle; StartX: number; StartY: number; OrigBounds: WhiteboardBounds; CurBounds: WhiteboardBounds; MinH: number }
   | { Type: 'pen'; Points: WhiteboardPoint[] }
   | { Type: 'shape'; StartX: number; StartY: number; CurX: number; CurY: number }
   | { Type: 'marquee'; StartX: number; StartY: number; CurX: number; CurY: number; Additive: boolean }
@@ -540,6 +561,12 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   /** A markdown panel's optional max height (its rendered height stays content-driven). */
   public MarkdownMaxHeight(item: WhiteboardMarkdownItem): number | null {
+    // mid-resize from a top/bottom edge the cap follows the handle, so the drag previews live;
+    // a side handle leaves the cap alone (an uncapped panel stays uncapped)
+    const i = this.Interaction;
+    if (i?.Type === 'resize' && i.ItemID === item.ID && touchesVerticalEdge(i.Handle)) {
+      return i.CurBounds.H;
+    }
     return item.H ?? null;
   }
 
@@ -881,8 +908,21 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     }
     event.stopPropagation();
     const p = this.toBoard(event);
+    const bounds = this.resizeStartBounds(item, event);
+    // a markdown panel can't be dragged below its minimum, unless its content is already shorter
+    const minH = item.Kind === 'markdown' ? Math.min(WHITEBOARD_DEFAULTS.MarkdownMinH, bounds.H) : RESIZE_MIN_SIZE;
+    this.Interaction = { Type: 'resize', ItemID: item.ID, Handle: handle, StartX: p.X, StartY: p.Y, OrigBounds: bounds, CurBounds: { ...bounds }, MinH: minH };
+  }
+
+  /**
+   * Where a resize gesture starts. A markdown panel starts from the body height on screen:
+   * an uncapped panel has no H, and ItemBounds' line-count estimate can be far from the
+   * rendered text, so the bottom edge would jump away from the cursor on pointerdown.
+   */
+  private resizeStartBounds(item: WhiteboardItem, event: PointerEvent): WhiteboardBounds {
     const bounds = this.State.ItemBounds(item);
-    this.Interaction = { Type: 'resize', ItemID: item.ID, Handle: handle, StartX: p.X, StartY: p.Y, OrigBounds: bounds, CurBounds: { ...bounds } };
+    const renderedH = item.Kind === 'markdown' ? renderedMarkdownBodyHeight(event.currentTarget) : null;
+    return renderedH ? { ...bounds, H: renderedH } : bounds;
   }
 
   /** Click on a highlight region dismisses it (mockup: "click dismisses"). */
@@ -915,7 +955,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
         break;
       }
       case 'resize':
-        i.CurBounds = this.resizeBounds(i.OrigBounds, i.Handle, p.X - i.StartX, p.Y - i.StartY);
+        i.CurBounds = this.resizeBounds(i.OrigBounds, i.Handle, p.X - i.StartX, p.Y - i.StartY, i.MinH);
         break;
       case 'pen': {
         const last = i.Points[i.Points.length - 1];
@@ -983,9 +1023,13 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
       }
       case 'resize': {
         const item = this.State.GetItem(i.ItemID);
-        // per-kind commit: full-box kinds take X/Y/W/H; content-driven-height kinds
-        // (sticky/text/image/markdown) take X/Y/W only — see BuildResizeCommitPatch.
+        // per-kind commit: full-box kinds and markdown take X/Y/W/H; content-driven-height
+        // kinds (sticky/text/image) take X/Y/W only — see BuildResizeCommitPatch. A markdown
+        // panel's H is its max-height cap, so only a top/bottom handle moves it.
         const patch = item ? BuildResizeCommitPatch(item.Kind, i.CurBounds) : null;
+        if (patch && item?.Kind === 'markdown' && !touchesVerticalEdge(i.Handle)) {
+          delete patch.H;
+        }
         if (patch) {
           this.State.UpdateItem(i.ItemID, patch, 'user');
         }
@@ -1619,7 +1663,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     this.PanY = py - by * next;
   }
 
-  private resizeBounds(orig: WhiteboardBounds, handle: ResizeHandle, dx: number, dy: number): WhiteboardBounds {
+  private resizeBounds(orig: WhiteboardBounds, handle: ResizeHandle, dx: number, dy: number, minH = RESIZE_MIN_SIZE): WhiteboardBounds {
     let { X, Y, W, H } = orig;
     if (handle.includes('w')) {
       X = orig.X + dx;
@@ -1635,18 +1679,17 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     if (handle.includes('s')) {
       H = orig.H + dy;
     }
-    const minSize = 24;
-    if (W < minSize) {
+    if (W < RESIZE_MIN_SIZE) {
       if (handle.includes('w')) {
-        X -= minSize - W;
+        X -= RESIZE_MIN_SIZE - W;
       }
-      W = minSize;
+      W = RESIZE_MIN_SIZE;
     }
-    if (H < minSize) {
+    if (H < minH) {
       if (handle.includes('n')) {
-        Y -= minSize - H;
+        Y -= minH - H;
       }
-      H = minSize;
+      H = minH;
     }
     return { X, Y, W, H };
   }

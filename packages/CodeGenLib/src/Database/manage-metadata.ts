@@ -11,7 +11,7 @@ import { QueryParameterProcessor, type QueryTemplateInput } from '@memberjunctio
 // and the SS code path silently fails.
 import './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, currentWorkingDirectory, DbPlatform, GetSettingValue, MjCoreSchema, OutputDir } from '../Config/config';
-import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExternalDataSourceReadRouter, ExternalSchemaObject, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, RunQuerySQLFilterManager, SeverityType, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, type EntityConfigurableAtCreationAttribute, ExternalDataSourceReadRouter, ExternalSchemaObject, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, RunQuerySQLFilterManager, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity, MJEntityFieldSchema, MJQueryParameterEntity } from "@memberjunction/core-entities";
 import { logError, LogMessage, logStatus, LogWarning, StartSpinner, UpdateSpinner, SucceedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
@@ -1532,7 +1532,7 @@ export class ManageMetadataBase {
     * Processes Entity attribute configurations from the additionalSchemaInfo config.
     * For each entry in the top-level "Entities" array, looks up the entity by
     * BaseTable + SchemaName and applies any declared attribute updates to the Entity table.
-    * Reserved keys (BaseTable, SchemaName) are excluded from the UPDATE statement.
+    * Reserved keys (BaseTable, SchemaName, AutoAddPermissions) are excluded from the UPDATE statement.
     * Must run AFTER entities are created.
     */
    protected async processEntityConfigs(pool: CodeGenConnection): Promise<{ success: boolean; updatedCount: number }> {
@@ -1544,7 +1544,8 @@ export class ManageMetadataBase {
 
       let updatedCount = 0;
       const schema = MjCoreSchema();
-      const reservedKeys = new Set(['BaseTable', 'SchemaName']);
+      // AutoAddPermissions is a creation-time option, not an Entity column (see resolveCreationTimeAutoAddPermissions).
+      const reservedKeys = new Set(['BaseTable', 'SchemaName', 'AutoAddPermissions']);
 
       for (const ec of entityConfigs) {
          try {
@@ -6921,7 +6922,11 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
             }
 
             // next up, we need to check if we're configured to add permissions for new entities, and if so, add them
-            if (configInfo.newEntityDefaults.PermissionDefaults && configInfo.newEntityDefaults.PermissionDefaults.AutoAddPermissionsForNewEntities) {
+            // A per-table `Entities` entry can opt a table out of the default grants (AutoAddPermissions: false),
+            // e.g. a table only server code may touch. Applied here because grants made now would otherwise
+            // have to be removed by a later migration.
+            if (configInfo.newEntityDefaults.PermissionDefaults && configInfo.newEntityDefaults.PermissionDefaults.AutoAddPermissionsForNewEntities
+                && this.resolveCreationTimeAutoAddPermissions(newEntity.SchemaName, newEntity.TableName)) {
                // we are asked to add permissions for new entities, so do that by looping through the permissions and adding them
                const permissions = configInfo.newEntityDefaults.PermissionDefaults.Permissions;
                for (const p of permissions) {
@@ -7635,11 +7640,84 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       )`;
    }
 
+   /**
+    * Returns the creation-time attribute overrides declared for one table in the additionalSchemaInfo
+    * `Entities` array (matched case-insensitively on SchemaName + BaseTable).
+    *
+    * Applying these at creation — not only in the later {@link processEntityConfigs} pass — matters
+    * for flags CodeGen acts on in the same run. The clearest case is `TrackRecordChanges`:
+    * `ensureCreatedAtUpdatedAtFieldsExist` runs before `processEntityConfigs`, so a table declared
+    * `TrackRecordChanges: false` used to receive `__mj_CreatedAt` / `__mj_UpdatedAt` columns on its
+    * first CodeGen run anyway.
+    *
+    * Only the attributes in {@link EntityInfo.ConfigurableAtCreationAttributes} are returned, and only with a value of the right type
+    * (boolean, or number for `UserViewMaxRows`); anything else is left to `processEntityConfigs`.
+    */
+   protected resolveCreationTimeEntityConfig(schemaName: string, tableName: string): Partial<Record<EntityConfigurableAtCreationAttribute, boolean | number>> {
+      const config = ManageMetadataBase.getSoftPKFKConfig();
+      if (!config) return {};
+      const match = this.extractEntitiesFromConfig(config).find(ec =>
+         ec.SchemaName.trim().toLowerCase() === schemaName.trim().toLowerCase() &&
+         ec.BaseTable.trim().toLowerCase() === tableName.trim().toLowerCase());
+      if (!match) return {};
+
+      const overrides: Partial<Record<EntityConfigurableAtCreationAttribute, boolean | number>> = {};
+      for (const attr of EntityInfo.ConfigurableAtCreationAttributes) {
+         const value = match[attr];
+         if (attr === 'UserViewMaxRows' ? typeof value === 'number' : typeof value === 'boolean') {
+            overrides[attr] = value as boolean | number;
+         }
+      }
+      return overrides;
+   }
+
+   /**
+    * Whether CodeGen should grant the default role permissions (`newEntityDefaults.PermissionDefaults`)
+    * when it creates the entity for this table. A per-table `Entities` entry may set
+    * `"AutoAddPermissions": false` for a table that only server code may touch; the entity is then
+    * created with no role permissions at all. Anything other than the boolean `false` keeps the default.
+    */
+   protected resolveCreationTimeAutoAddPermissions(schemaName: string, tableName: string): boolean {
+      const config = ManageMetadataBase.getSoftPKFKConfig();
+      if (!config) return true;
+      const match = this.extractEntitiesFromConfig(config).find(ec =>
+         ec.SchemaName.trim().toLowerCase() === schemaName.trim().toLowerCase() &&
+         ec.BaseTable.trim().toLowerCase() === tableName.trim().toLowerCase());
+      return match?.AutoAddPermissions !== false;
+   }
+
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {
       const newEntityDefaults = configInfo.newEntityDefaults;
+      const overrides = this.resolveCreationTimeEntityConfig(newEntity.SchemaName, newEntity.TableName);
       const newEntityDescriptionEscaped = newEntity.EntityDescription ? `'${newEntity.EntityDescription.replace(/'/g, "''")}'` : null;
-      const allowCaching = this.resolveAllowCachingForSchema(newEntity.SchemaName);
       const q = (name: string) => this.qi(name);
+
+      // Effective value for each optional flag: per-table config first, then the global default.
+      // `undefined` leaves the column out of the INSERT so the table default applies.
+      const flag = (attr: EntityConfigurableAtCreationAttribute, globalDefault: boolean | number | undefined): boolean | number | undefined =>
+         overrides[attr] !== undefined ? overrides[attr] : globalDefault;
+      const literal = (value: boolean | number): string => typeof value === 'boolean' ? this.boolLit(value) : String(value);
+
+      const columns: Array<[string, string]> = [
+         ['IncludeInAPI', literal(flag('IncludeInAPI', true) as boolean)],
+         ['AllowUserSearchAPI', literal(flag('AllowUserSearchAPI', newEntityDefaults.AllowUserSearchAPI ?? true) as boolean)],
+         ['AllowCaching', literal(flag('AllowCaching', this.resolveAllowCachingForSchema(newEntity.SchemaName)) as boolean)],
+      ];
+      const optional: Array<[EntityConfigurableAtCreationAttribute, boolean | number | undefined]> = [
+         ['TrackRecordChanges', newEntityDefaults.TrackRecordChanges],
+         ['AuditRecordAccess', newEntityDefaults.AuditRecordAccess],
+         ['AuditViewRuns', newEntityDefaults.AuditViewRuns],
+         ['AllowAllRowsAPI', newEntityDefaults.AllowAllRowsAPI],
+         ['AllowCreateAPI', newEntityDefaults.AllowCreateAPI],
+         ['AllowUpdateAPI', newEntityDefaults.AllowUpdateAPI],
+         ['AllowDeleteAPI', newEntityDefaults.AllowDeleteAPI],
+         ['UserViewMaxRows', newEntityDefaults.UserViewMaxRows],
+      ];
+      for (const [attr, globalDefault] of optional) {
+         const value = flag(attr, globalDefault);
+         if (value !== undefined) columns.push([attr, literal(value)]);
+      }
+
       const sSQLInsert = `
       INSERT INTO ${this.qs(MjCoreSchema(), 'Entity')} (
          ${q('ID')},
@@ -7650,17 +7728,7 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
          ${q('BaseTable')},
          ${q('BaseView')},
          ${q('SchemaName')},
-         ${q('IncludeInAPI')},
-         ${q('AllowUserSearchAPI')},
-         ${q('AllowCaching')}
-         ${newEntityDefaults.TrackRecordChanges === undefined ? '' : ', ' + q('TrackRecordChanges')}
-         ${newEntityDefaults.AuditRecordAccess === undefined ? '' : ', ' + q('AuditRecordAccess')}
-         ${newEntityDefaults.AuditViewRuns === undefined ? '' : ', ' + q('AuditViewRuns')}
-         ${newEntityDefaults.AllowAllRowsAPI === undefined ? '' : ', ' + q('AllowAllRowsAPI')}
-         ${newEntityDefaults.AllowCreateAPI === undefined ? '' : ', ' + q('AllowCreateAPI')}
-         ${newEntityDefaults.AllowUpdateAPI === undefined ? '' : ', ' + q('AllowUpdateAPI')}
-         ${newEntityDefaults.AllowDeleteAPI === undefined ? '' : ', ' + q('AllowDeleteAPI')}
-         ${newEntityDefaults.UserViewMaxRows === undefined ? '' : ', ' + q('UserViewMaxRows')}
+         ${columns.map(([col]) => q(col)).join(',\n         ')}
          , ${q('__mj_CreatedAt')}
          , ${q('__mj_UpdatedAt')}
       )
@@ -7673,17 +7741,7 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
          '${newEntity.TableName}',
          'vw${generatePluralName(newEntity.TableName, {capitalizeFirstLetterOnly: true}) + (newEntitySuffix && newEntitySuffix.length > 0 ? newEntitySuffix : '')}',
          '${newEntity.SchemaName}',
-         ${this.boolLit(true)},
-         ${newEntityDefaults.AllowUserSearchAPI === undefined ? this.boolLit(true) : this.boolLit(newEntityDefaults.AllowUserSearchAPI)},
-         ${this.boolLit(allowCaching)}
-         ${newEntityDefaults.TrackRecordChanges === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.TrackRecordChanges)}
-         ${newEntityDefaults.AuditRecordAccess === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AuditRecordAccess)}
-         ${newEntityDefaults.AuditViewRuns === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AuditViewRuns)}
-         ${newEntityDefaults.AllowAllRowsAPI === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AllowAllRowsAPI)}
-         ${newEntityDefaults.AllowCreateAPI === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AllowCreateAPI)}
-         ${newEntityDefaults.AllowUpdateAPI === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AllowUpdateAPI)}
-         ${newEntityDefaults.AllowDeleteAPI === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AllowDeleteAPI)}
-         ${newEntityDefaults.UserViewMaxRows === undefined ? '' : ', ' + (newEntityDefaults.UserViewMaxRows)}
+         ${columns.map(([, value]) => value).join(',\n         ')}
          , ${this.utcNow()}
          , ${this.utcNow()}
       )

@@ -358,17 +358,6 @@ export class FormBuilderResourceComponent
     public ChatPendingAttachments: unknown[] | null = null;
 
     /**
-     * Thread state for the embedded chat. Mirrors the workspace shell's
-     * pattern: chat-area emits `threadOpened` with a thread ID when the
-     * user drills into a sub-thread, and `threadClosed` when they leave.
-     * Forwarded back as `[threadId]` so the chat-area knows which thread
-     * to render. Without these handlers, clicking a thread message in
-     * the cockpit's chat appears to do nothing (the chat-area emits but
-     * no one binds back).
-     */
-    public ChatThreadId: string | null = null;
-
-    /**
      * Pending artifact pointer for the chat-area to scroll to / highlight
      * after navigation. Set when an artifact link inside the chat is
      * clicked (the chat-area asks us to surface a specific artifact
@@ -1614,18 +1603,6 @@ export class FormBuilderResourceComponent
         }
     }
 
-    /** Thread drill-down: chat-area opened a sub-thread. Track ID so the chat-area renders it. */
-    public OnChatThreadOpened(threadId: string): void {
-        this.ChatThreadId = threadId;
-        this.cdr.markForCheck();
-    }
-
-    /** Thread drill-down: chat-area closed the sub-thread. Clear ID. */
-    public OnChatThreadClosed(): void {
-        this.ChatThreadId = null;
-        this.cdr.markForCheck();
-    }
-
     /** Pending artifact handed off to the chat-area (e.g. via deep link) has been consumed. */
     public OnChatPendingArtifactConsumed(): void {
         this.ChatPendingArtifactId = null;
@@ -1840,7 +1817,6 @@ export class FormBuilderResourceComponent
             this.ChatConversation = entity;
             this.ChatConversationId = entity.ID;
             this.ChatIsNewConversation = false;
-            this.ChatThreadId = null;
             this.cdr.markForCheck();
         } catch (err) {
             LogError(`PickLineageConversation: ${err instanceof Error ? err.message : String(err)}`);
@@ -1923,7 +1899,6 @@ export class FormBuilderResourceComponent
         this.ChatConversation = null;
         this.ChatConversationId = null;
         this.ChatIsNewConversation = true;
-        this.ChatThreadId = null;
         this.ChatPendingMessage = null;
         this.ChatPendingAttachments = null;
     }
