@@ -24,7 +24,7 @@
  * key. Checks skip loudly when MJAPI is unreachable or the seed is absent.
  */
 import { LogError, RunView } from '@memberjunction/core';
-import type { BaseEntity, IMetadataProvider, RunViewResult, UserViewProperty, ViewPropertyValues } from '@memberjunction/core';
+import type { IMetadataProvider, RunViewResult, UserViewProperty, ViewPropertyValues } from '@memberjunction/core';
 import type { MJAIAgentRunEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { UUIDSet } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry, SEEDED_SCOPED_A_EMAIL, SEEDED_SCOPED_B_EMAIL, SEED_FIXTURES_COMMAND } from '@memberjunction/testing-integration';
@@ -157,7 +157,7 @@ async function setUp(ctx: IntegrationCheckContext, fx: ViewPropertiesFixture): P
 /** Deletes one fixture row; a failed delete is logged so a leaked row is visible, not silent. */
 async function deleteFixture(ctx: IntegrationCheckContext, entityName: string, id: string): Promise<void> {
     try {
-        const row = await ctx.Provider.GetEntityObject<BaseEntity>(entityName, ctx.User);
+        const row = await ctx.Provider.GetEntityObject<MJUserViewEntityExtended | MJAIAgentRunEntity>(entityName, ctx.User);
         if (await row.Load(id) && !(await row.Delete())) {
             LogError(`IT119 teardown: could not delete ${entityName} ${id}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
