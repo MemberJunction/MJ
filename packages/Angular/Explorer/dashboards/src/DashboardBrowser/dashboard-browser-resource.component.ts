@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, inject } from '@angular/core';
 import { skip, takeUntil } from 'rxjs/operators';
 import { LogError } from '@memberjunction/core';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { CountByUUID, GroupByUUID, IndexByUUID, RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, DashboardFavoritesService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
@@ -798,12 +798,13 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         const engine = DashboardEngine.Instance;
         const categories = engine.GetAccessibleCategories(md.CurrentUser.ID);
         const accessible = engine.GetAccessibleDashboards(md.CurrentUser.ID);
+        const dashboardCountByCategory = CountByUUID(accessible.filter(d => d.CategoryID), d => d.CategoryID);
 
         const tree = categories.map(cat => ({
             Name: cat.Name,
             Id: cat.ID,
             ParentId: cat.ParentID ?? null,
-            DashboardCount: accessible.filter(d => d.CategoryID && UUIDsEqual(d.CategoryID, cat.ID)).length,
+            DashboardCount: dashboardCountByCategory.Get(cat.ID) ?? 0,
         }));
 
         // Dashboards with no (accessible) category sit at the root.
@@ -937,6 +938,12 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             const currentUserId = md.CurrentUser.ID;
             const tg = await md.CreateTransactionGroup();
             const sharedDashboardIds: string[] = [];
+            // The user's links, grouped once. Links created below are queued in the transaction group,
+            // not added to the engine's list, so the grouping matches the per-dashboard filter it replaces.
+            const userLinksByDashboard = GroupByUUID(
+                DashboardEngine.Instance.DashboardCategoryLinks.filter(link => UUIDsEqual(link.UserID, currentUserId)),
+                link => link.DashboardID
+            );
 
             for (const dashboard of event.Dashboards) {
                 const permissions = DashboardEngine.Instance.GetDashboardPermissions(dashboard.ID, currentUserId);
@@ -948,9 +955,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                     await dashboard.Save();
                 } else {
                     // Non-owner: create or update a category link instead
-                    const existingLinks = DashboardEngine.Instance.DashboardCategoryLinks.filter(
-                        link => UUIDsEqual(link.DashboardID, dashboard.ID) && UUIDsEqual(link.UserID, currentUserId)
-                    );
+                    const existingLinks = userLinksByDashboard.Get(dashboard.ID) ?? [];
 
                     let link: MJDashboardCategoryLinkEntity;
                     if (existingLinks.length > 0) {
@@ -1371,8 +1376,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.EffectiveCategoryMap = new Map();
 
         // Get category links for current user (from engine's cached data)
-        const userCategoryLinks = engine.DashboardCategoryLinks.filter(
-            link => UUIDsEqual(link.UserID, currentUserId)
+        const userCategoryLinksByDashboard = IndexByUUID(
+            engine.DashboardCategoryLinks.filter(link => UUIDsEqual(link.UserID, currentUserId)),
+            link => link.DashboardID
         );
 
         for (const dashboard of engine.GetAccessibleDashboards(currentUserId)) {
@@ -1382,9 +1388,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             // For shared dashboards (not owned), determine effective category
             if (!perms.IsOwner) {
                 // Look for a category link for this dashboard
-                const categoryLink = userCategoryLinks.find(
-                    link => UUIDsEqual(link.DashboardID, dashboard.ID)
-                );
+                const categoryLink = userCategoryLinksByDashboard.Get(dashboard.ID);
 
                 if (categoryLink) {
                     // User has explicitly organized this shared dashboard

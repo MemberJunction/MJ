@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { IMetadataProvider, Metadata, RoleInfo, RunView } from '@memberjunction/core';
 import { MJAIAgentPermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
@@ -156,11 +156,14 @@ export class AgentPermissionsService {
     }
 
     private buildRows(): PermissionRow[] {
+        // Indexed once: permissions and users both grow with the user base.
+        const usersByID = IndexByUUID(this.users);
+        const rolesByID = IndexByUUID(this.roles);
         return this.permissions.map(p => {
             const grantType: 'user' | 'role' = p.UserID ? 'user' : 'role';
             const grantedToName = p.UserID
-                ? this.users.find(u => UUIDsEqual(u.ID, p.UserID))?.Name || 'Unknown User'
-                : this.roles.find(r => UUIDsEqual(r.ID, p.RoleID))?.Name || 'Unknown Role';
+                ? usersByID.Get(p.UserID)?.Name || 'Unknown User'
+                : rolesByID.Get(p.RoleID)?.Name || 'Unknown Role';
 
             const effectiveCanDelete = p.CanDelete || false;
             const effectiveCanEdit = effectiveCanDelete || (p.CanEdit || false);

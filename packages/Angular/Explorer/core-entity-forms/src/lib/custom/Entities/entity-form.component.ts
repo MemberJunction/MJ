@@ -24,7 +24,7 @@ import {
 } from '@memberjunction/core';
 import { MJEntityEntity } from '@memberjunction/core-entities';
 import { ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, RegisterClass, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
@@ -175,6 +175,22 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     /** @deprecated Use {@link AllEntities}. */
     public set allEntities(value: EntityInfo[]) {
       this.AllEntities = value;
+    }
+
+    private allEntitiesIndexSource: EntityInfo[] | null = null;
+    private allEntitiesIndex = new UUIDMap<EntityInfo>();
+
+    /**
+     * AllEntities keyed by ID. Rebuilt only when AllEntities is replaced (it is never mutated in
+     * place), so per-render callers such as FormChromeCandidates look entities up in O(1) instead
+     * of scanning every entity once per relationship.
+     */
+    private get allEntitiesByID(): UUIDMap<EntityInfo> {
+      if (this.allEntitiesIndexSource !== this.AllEntities) {
+        this.allEntitiesIndex = IndexByUUID(this.AllEntities);
+        this.allEntitiesIndexSource = this.AllEntities;
+      }
+      return this.allEntitiesIndex;
     }
 
     /** All entity fields (flattened from all entities) for ERD details panel */
@@ -855,7 +871,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
                 if (existing) {
                     existing.fields.push(field);
                 } else {
-                    const relatedEntity = this.AllEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
+                    const relatedEntity = this.allEntitiesByID.Get(field.RelatedEntityID);
                     outgoingMap.set(field.RelatedEntityID, {
                         entityId: field.RelatedEntityID,
                         entityName: relatedEntity?.Name || field.RelatedEntity || 'Unknown',
@@ -905,7 +921,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         this.OrganicKeysOutgoing = this.entity.OrganicKeys.map(ok => ({
             OrganicKey: ok,
             RelatedEntities: ok.RelatedEntities.map(re => {
-                const relEntity = this.AllEntities.find(e => UUIDsEqual(e.ID, re.RelatedEntityID));
+                const relEntity = this.allEntitiesByID.Get(re.RelatedEntityID);
                 return {
                     Info: re,
                     EntityName: re.RelatedEntity || relEntity?.Name || 'Unknown',
@@ -991,7 +1007,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
             RelatedEntity: rel.RelatedEntity,
             RelatedEntityID: rel.RelatedEntityID,
             RelatedEntityJoinField: rel.RelatedEntityJoinField,
-            RelatedEntitySchemaName: this.AllEntities.find((e) => UUIDsEqual(e.ID, rel.RelatedEntityID))?.SchemaName ?? '',
+            RelatedEntitySchemaName: this.allEntitiesByID.Get(rel.RelatedEntityID)?.SchemaName ?? '',
             DisplayInForm: rel.DisplayInForm,
             DisplayLocation: rel.DisplayLocation,
             DisplayComponentID: rel.DisplayComponentID,
