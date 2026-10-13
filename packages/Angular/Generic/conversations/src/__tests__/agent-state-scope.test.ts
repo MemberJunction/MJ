@@ -110,4 +110,18 @@ describe('AgentStateService poll filter', () => {
             vi.useRealTimers();
         }
     });
+
+    it('keeps the conversation and scope when the interval changes while polling', async () => {
+        vi.useFakeTimers();
+        try {
+            service.StartPolling(USER, 'CONV-1', BRANCH_SCOPE);
+            // A change while polling restarts the poll; it must restart on the same conversation and fork.
+            service.SetPollInterval(1000);
+            await vi.advanceTimersByTimeAsync(1000);
+
+            expect(lastFilter()).toBe(conversationFilter(BRANCH_SCOPE, 'CONV-1'));
+        } finally {
+            vi.useRealTimers();
+        }
+    });
 });

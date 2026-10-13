@@ -264,3 +264,33 @@ describe('Reinvoke — restarting the submitting agent', () => {
         await expect(h.deliverer.Reinvoke(params())).resolves.toBeUndefined();
     });
 });
+
+describe('Reinvoke — on the fork of the message that started the graph', () => {
+    /** A provider whose agent run and agent load, and whose origin detail sits on `originBranch` (null is Main). */
+    function forkHarness(originBranch: string | null) {
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async (name: string) => {
+                if (name === 'MJ: AI Agent Runs') return { AgentID: 'agent-1', Load: vi.fn().mockResolvedValue(true) };
+                if (name === 'MJ: AI Agents') return { ID: 'agent-1', Load: vi.fn().mockResolvedValue(true) };
+                return detailRow({ branchID: originBranch });
+            }),
+        };
+        return new TaskGraphContinuationDeliverer(
+            { CreateProvider: vi.fn().mockResolvedValue(provider) } as never,
+            { ID: 'user-1' } as UserInfo,
+        );
+    }
+
+    it('runs the reinvoked agent on that fork, as PostMessage posts into it', async () => {
+        await forkHarness('T1').Reinvoke(params());
+
+        expect(runAgent).toHaveBeenCalledTimes(1);
+        expect(runAgent.mock.calls[0][0].ConversationBranchID).toBe('T1');
+    });
+
+    it('leaves the branch unset when that message is in Main', async () => {
+        await forkHarness(null).Reinvoke(params());
+
+        expect(runAgent.mock.calls[0][0].ConversationBranchID).toBeUndefined();
+    });
+});

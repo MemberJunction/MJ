@@ -24,6 +24,9 @@ export class AgentStateService implements OnDestroy {
   private _activeAgents$ = new BehaviorSubject<AgentWithStatus[]>([]);
   private pollSubscription?: Subscription;
   private currentUser?: UserInfo;
+  /** The conversation and scope polling was started with, so a restart (SetPollInterval) keeps them. */
+  private pollConversationId?: string;
+  private pollScope: ConversationScope | null = null;
   private pollInterval: number = 30000; // Poll every 30 seconds (reduced from 3s to minimize DB load)
   private pollCycleCount = 0;
   /** Minimum poll cycles before allowing auto-stop. Prevents premature shutdown
@@ -66,6 +69,8 @@ export class AgentStateService implements OnDestroy {
   StartPolling(currentUser: UserInfo, conversationId?: string, scope: ConversationScope | null = null): void {
     this.currentUser = currentUser;
     this.StopPolling();
+    this.pollConversationId = conversationId;
+    this.pollScope = scope;
     this.pollCycleCount = 0;
 
     // Initial load
@@ -314,9 +319,9 @@ export class AgentStateService implements OnDestroy {
   SetPollInterval(milliseconds: number): void {
     this.pollInterval = milliseconds;
 
-    // Restart polling if currently active
+    // Restart polling if currently active, on the same conversation and scope
     if (this.pollSubscription && this.currentUser) {
-      this.StartPolling(this.currentUser);
+      this.StartPolling(this.currentUser, this.pollConversationId, this.pollScope);
     }
   }
 

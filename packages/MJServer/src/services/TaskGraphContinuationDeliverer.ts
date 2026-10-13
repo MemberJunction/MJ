@@ -127,11 +127,15 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 return;
             }
 
+            // Run on the fork of the message that started the graph, as PostMessage posts into it:
+            // RunAgent derives the conversation from the detail, but not the fork.
+            const origin = params.ConversationDetailID ? await this.resolveOrigin(params.ConversationDetailID, provider) : null;
             await new AgentRunner().RunAgent({
                 agent,
                 conversationMessages: [{ role: ChatMessageRole.user, content: this.renderMessage(params) }],
                 contextUser: this.contextUser,
                 conversationDetailId: params.ConversationDetailID ?? undefined,
+                ConversationBranchID: origin?.BranchID ?? undefined,
                 // The load-bearing value: without it the next graph this run submits restarts the
                 // chain at zero and the cap never fires.
                 continuationDepth: params.ReinvokeDepth + 1,
