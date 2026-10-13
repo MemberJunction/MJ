@@ -7,6 +7,7 @@
 "@memberjunction/realtime-runtime": minor
 "@memberjunction/ng-conversations": minor
 "@memberjunction/ng-core-entity-forms": minor
+"@memberjunction/ng-auth-services": minor
 ---
 
 Client-direct realtime recordings no longer depend on the browser surviving the end of the call (#5294).
