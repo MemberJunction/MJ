@@ -1,6 +1,6 @@
 import { Resolver, Query, Arg, Ctx, ObjectType, Field, Float, Int } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { CompositeKey, EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import { MJEntityDocumentEntity, MJVectorIndexEntity, MJVectorDatabaseEntity } from '@memberjunction/core-entities';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
@@ -41,8 +41,14 @@ export class FetchEntityVectorsResult {
     ErrorMessage?: string;
 }
 
-/** A stored vector row, as `fetchStoredVectors` reads it from `MJ: Entity Record Documents`. */
-type StoredVectorRow = { ID: string; RecordID: string; VectorJSON: string };
+/** A stored vector's listing row, as `fetchStoredVectors` reads it from `MJ: Entity Record Documents`. */
+type StoredVectorRow = { ID: string; RecordID: string };
+
+/** A stored vector chosen for the result, with the labels of the record it belongs to. */
+type LabelledVector = { row: StoredVectorRow; labels: Record<string, string> };
+
+/** Most Entity Record Document IDs named in one `ID IN (...)` filter when fetching VectorJSON. */
+const VECTOR_FETCH_CHUNK_SIZE = 1000;
 
 /* ───── Resolver ───── */
 
@@ -262,18 +268,68 @@ export class FetchEntityVectorsResolver extends ResolverBase {
         const { records, vectors } = await this.loadRecordsAndStoredVectors(entityInfo, entityDoc, nameFields, filter, contextUser);
         const labelsByRecordID = this.mapRecordLabels(entityInfo, nameFields, records);
 
+        // VectorJSON is the heavy column: list without it, then fetch it only for the items returned.
+        const chosen = this.selectLabelledVectors(vectors, labelsByRecordID, limit);
+        const valuesByID = await this.loadVectorValues(chosen.map(c => c.row.ID), contextUser);
+
         const results: EntityVectorItem[] = [];
-        for (const row of vectors) {
-            const labels = labelsByRecordID.get(row.RecordID.toLowerCase());
-            if (!labels) continue; // filtered out, not readable by this user, or the record no longer exists
+        for (const { row, labels } of chosen) {
+            const vectorJSON = valuesByID.get(row.ID);
+            if (!vectorJSON) continue; // removed or cleared since the listing
             results.push({
                 ID: row.ID,
-                Values: JSON.parse(row.VectorJSON) as number[],
+                Values: JSON.parse(vectorJSON) as number[],
                 Metadata: JSON.stringify({ Entity: entityDoc.Entity, RecordID: row.RecordID, ...labels }),
             });
-            if (results.length >= limit) break;
         }
         return results;
+    }
+
+    /** The first `limit` stored vectors whose record was loaded, in listing order. */
+    private selectLabelledVectors(
+        vectors: StoredVectorRow[],
+        labelsByRecordID: Map<string, Record<string, string>>,
+        limit: number
+    ): LabelledVector[] {
+        const chosen: LabelledVector[] = [];
+        for (const row of vectors) {
+            if (chosen.length >= limit) break;
+            const labels = labelsByRecordID.get(row.RecordID.toLowerCase());
+            if (!labels) continue; // filtered out, not readable by this user, or the record no longer exists
+            chosen.push({ row, labels });
+        }
+        return chosen;
+    }
+
+    /**
+     * Fetch `VectorJSON` for the given Entity Record Document IDs, keyed by ID. The ID lists are
+     * capped at {@link VECTOR_FETCH_CHUNK_SIZE} per view and all sent in one `RunViews` batch.
+     */
+    private async loadVectorValues(ids: string[], contextUser: UserInfo): Promise<Map<string, string>> {
+        const valuesByID = new Map<string, string>();
+        if (ids.length === 0) return valuesByID;
+
+        const views: RunViewParams[] = [];
+        for (let i = 0; i < ids.length; i += VECTOR_FETCH_CHUNK_SIZE) {
+            const idList = ids.slice(i, i + VECTOR_FETCH_CHUNK_SIZE).map(id => `'${EscapeSQLString(id)}'`).join(',');
+            views.push({
+                EntityName: 'MJ: Entity Record Documents',
+                ExtraFilter: `ID IN (${idList})`,
+                Fields: ['ID', 'VectorJSON'],
+                IgnoreMaxRows: true,
+                ResultType: 'simple',
+            });
+        }
+        const results = await new RunView().RunViews<{ ID: string; VectorJSON: string | null }>(views, contextUser);
+        for (const result of results) {
+            if (!result.Success) {
+                throw new Error(`Failed to load vector values: ${result.ErrorMessage}`);
+            }
+            for (const row of result.Results) {
+                if (row.VectorJSON) valuesByID.set(row.ID, row.VectorJSON);
+            }
+        }
+        return valuesByID;
     }
 
     /** The fields a stored vector is labelled with: the entity's name fields, else its NameField. */
@@ -286,8 +342,9 @@ export class FetchEntityVectorsResolver extends ResolverBase {
     }
 
     /**
-     * Load the records that pass `filter` (key and name fields only) and the document's stored
-     * vectors. The two views don't depend on each other, so they go in one `RunViews` round trip.
+     * Load the records that pass `filter` (key and name fields only) and the list of the document's
+     * stored vectors (ID and RecordID, no VectorJSON). The two views don't depend on each other, so
+     * they go in one `RunViews` round trip.
      */
     private async loadRecordsAndStoredVectors(
         entityInfo: EntityInfo,
@@ -308,7 +365,7 @@ export class FetchEntityVectorsResolver extends ResolverBase {
             {
                 EntityName: 'MJ: Entity Record Documents',
                 ExtraFilter: `EntityDocumentID='${EscapeSQLString(entityDoc.ID)}' AND VectorJSON IS NOT NULL`,
-                Fields: ['ID', 'RecordID', 'VectorJSON'],
+                Fields: ['ID', 'RecordID'],
                 IgnoreMaxRows: true,
                 ResultType: 'simple',
             },

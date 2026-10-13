@@ -129,6 +129,25 @@ const memberRows = [
     { ID: 'ccc', FirstName: 'Alan', LastName: null },
 ];
 
+/**
+ * A fake `MJ: Entity Record Documents` view over `rows`: returns only the requested `Fields`, and
+ * only the rows named by an `ID IN ('a','b')` filter when one is given.
+ */
+function erdView(rows: Array<Record<string, string>>) {
+    return (params: RunViewParams): ViewResult => {
+        const idList = /^ID IN \((.*)\)$/.exec(params.ExtraFilter ?? '');
+        const ids = idList ? new Set(idList[1].split(',').map((v) => v.trim().replace(/^'|'$/g, ''))) : undefined;
+        const picked = ids ? rows.filter((r) => ids.has(r.ID)) : rows;
+        const fields = params.Fields ?? Object.keys(rows[0] ?? {});
+        return { Success: true, Results: picked.map((r) => Object.fromEntries(fields.map((f) => [f, r[f]]))) };
+    };
+}
+
+/** The VectorJSON fetches: Entity Record Documents views filtered by ID. */
+function vectorFetches() {
+    return callsFor('MJ: Entity Record Documents').filter((c) => c.params.ExtraFilter?.startsWith('ID IN ('));
+}
+
 function callsFor(entityName: string) {
     return runViewCalls.filter((c) => c.params.EntityName === entityName);
 }
@@ -157,7 +176,7 @@ describe('FetchEntityVectorsResolver', () => {
         it('reads VectorJSON for the document with the context user instead of calling QueryIndex', async () => {
             const { queryIndex } = useVectorDB(true);
             routeViews('Members', {
-                'MJ: Entity Record Documents': () => ({ Success: true, Results: storedRows }),
+                'MJ: Entity Record Documents': erdView(storedRows),
                 Members: () => ({ Success: true, Results: memberRows }),
             });
 
@@ -170,18 +189,23 @@ describe('FetchEntityVectorsResolver', () => {
             expect(result.Results.map((r) => r.ID)).toEqual(['ERD-1', 'ERD-2', 'ERD-3']);
             expect(result.Results.map((r) => r.Values)).toEqual([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]);
 
-            const [erdCall] = callsFor('MJ: Entity Record Documents');
-            expect(erdCall.contextUser).toBe(contextUser);
-            expect(erdCall.params.ExtraFilter).toBe(`EntityDocumentID='${DOC_ID}' AND VectorJSON IS NOT NULL`);
-            expect(erdCall.params.Fields).toEqual(['ID', 'RecordID', 'VectorJSON']);
-            expect(erdCall.params.ResultType).toBe('simple');
-            expect(erdCall.params.IgnoreMaxRows).toBe(true);
+            const [listCall, vectorCall] = callsFor('MJ: Entity Record Documents');
+            expect(listCall.contextUser).toBe(contextUser);
+            expect(listCall.params.ExtraFilter).toBe(`EntityDocumentID='${DOC_ID}' AND VectorJSON IS NOT NULL`);
+            expect(listCall.params.Fields).toEqual(['ID', 'RecordID']);
+            expect(listCall.params.ResultType).toBe('simple');
+            expect(listCall.params.IgnoreMaxRows).toBe(true);
+            expect(vectorCall.contextUser).toBe(contextUser);
+            expect(vectorCall.params.ExtraFilter).toBe("ID IN ('ERD-1','ERD-2','ERD-3')");
+            expect(vectorCall.params.Fields).toEqual(['ID', 'VectorJSON']);
+            expect(vectorCall.params.ResultType).toBe('simple');
+            expect(vectorCall.params.IgnoreMaxRows).toBe(true);
         });
 
         it('labels each item with Entity, RecordID and the record name fields (RecordID matched case-insensitively)', async () => {
             useVectorDB(true);
             routeViews('Members', {
-                'MJ: Entity Record Documents': () => ({ Success: true, Results: storedRows }),
+                'MJ: Entity Record Documents': erdView(storedRows),
                 Members: () => ({ Success: true, Results: memberRows }),
             });
 
@@ -203,7 +227,7 @@ describe('FetchEntityVectorsResolver', () => {
             useVectorDB(true);
             const filter = "LastName = 'Hopper'";
             routeViews('Members', {
-                'MJ: Entity Record Documents': () => ({ Success: true, Results: storedRows }),
+                'MJ: Entity Record Documents': erdView(storedRows),
                 Members: (params) => ({
                     Success: true,
                     Results: params.ExtraFilter === filter ? memberRows.filter((r) => r.LastName === 'Hopper') : memberRows,
@@ -222,7 +246,7 @@ describe('FetchEntityVectorsResolver', () => {
         it('stops at maxRecords', async () => {
             useVectorDB(true);
             routeViews('Members', {
-                'MJ: Entity Record Documents': () => ({ Success: true, Results: storedRows }),
+                'MJ: Entity Record Documents': erdView(storedRows),
                 Members: () => ({ Success: true, Results: memberRows }),
             });
 
@@ -230,15 +254,74 @@ describe('FetchEntityVectorsResolver', () => {
 
             expect(result.Results.map((r) => r.ID)).toEqual(['ERD-1', 'ERD-2']);
             expect(result.TotalCount).toBe(2);
+            expect(vectorFetches().map((c) => c.params.ExtraFilter)).toEqual(["ID IN ('ERD-1','ERD-2')"]);
+        });
+
+        it('fetches VectorJSON only for vectors whose record passed the filter', async () => {
+            useVectorDB(true);
+            const filter = "LastName = 'Hopper'";
+            routeViews('Members', {
+                'MJ: Entity Record Documents': erdView(storedRows),
+                Members: () => ({ Success: true, Results: memberRows.filter((r) => r.LastName === 'Hopper') }),
+            });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, undefined, filter, appContext(membersEntity));
+
+            expect(result.Results.map((r) => r.Values)).toEqual([[0.3, 0.4]]);
+            expect(vectorFetches().map((c) => c.params.ExtraFilter)).toEqual(["ID IN ('ERD-2')"]);
+        });
+
+        it('runs no VectorJSON fetch when no stored vector belongs to a readable record', async () => {
+            useVectorDB(true);
+            routeViews('Members', {
+                'MJ: Entity Record Documents': erdView(storedRows),
+                Members: () => ({ Success: true, Results: [] }),
+            });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, undefined, undefined, appContext(membersEntity));
+
+            expect(result.Success).toBe(true);
+            expect(result.Results).toEqual([]);
+            expect(vectorFetches()).toHaveLength(0);
+        });
+
+        it('splits a large VectorJSON fetch into ID lists of at most 1000, sent in one RunViews batch', async () => {
+            useVectorDB(true);
+            const ids = Array.from({ length: 1500 }, (_, i) => `id-${i}`);
+            routeViews('Members', {
+                'MJ: Entity Record Documents': erdView(ids.map((id, i) => ({ ID: `ERD-${i}`, RecordID: id, VectorJSON: `[${i}]` }))),
+                Members: () => ({ Success: true, Results: ids.map((id) => ({ ID: id, FirstName: id, LastName: null })) }),
+            });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 1500, undefined, appContext(membersEntity));
+
+            expect(result.TotalCount).toBe(1500);
+            expect(result.Results[1499]).toMatchObject({ ID: 'ERD-1499', Values: [1499] });
+            const fetchSizes = vectorFetches().map((c) => (c.params.ExtraFilter ?? '').split(',').length);
+            expect(fetchSizes).toEqual([1000, 500]);
+            expect(runViewsBatches[1]).toEqual(['MJ: Entity Record Documents', 'MJ: Entity Record Documents']);
+        });
+
+        it('returns an error result when the VectorJSON fetch fails', async () => {
+            useVectorDB(true);
+            const listing = erdView(storedRows);
+            routeViews('Members', {
+                'MJ: Entity Record Documents': (params) =>
+                    params.ExtraFilter?.startsWith('ID IN (') ? { Success: false, Results: [], ErrorMessage: 'deadlock' } : listing(params),
+                Members: () => ({ Success: true, Results: memberRows }),
+            });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, undefined, undefined, appContext(membersEntity));
+
+            expect(result.Success).toBe(false);
+            expect(result.Results).toEqual([]);
+            expect(result.ErrorMessage).toBe('Failed to load vector values: deadlock');
         });
 
         it('matches composite-key records by the compact RecordID segment and falls back to NameField for labels', async () => {
             useVectorDB(true);
             routeViews('Order Lines', {
-                'MJ: Entity Record Documents': () => ({
-                    Success: true,
-                    Results: [{ ID: 'ERD-9', RecordID: 'OrderID|o-1||LineNo|2', VectorJSON: '[1,0]' }],
-                }),
+                'MJ: Entity Record Documents': erdView([{ ID: 'ERD-9', RecordID: 'OrderID|o-1||LineNo|2', VectorJSON: '[1,0]' }]),
                 'Order Lines': () => ({ Success: true, Results: [{ OrderID: 'o-1', LineNo: 2, Description: 'Brie wheel' }] }),
             });
 
@@ -257,7 +340,7 @@ describe('FetchEntityVectorsResolver', () => {
         it('returns an error result when the entity records cannot be loaded (e.g. an invalid filter)', async () => {
             useVectorDB(true);
             routeViews('Members', {
-                'MJ: Entity Record Documents': () => ({ Success: true, Results: storedRows }),
+                'MJ: Entity Record Documents': erdView(storedRows),
                 Members: () => ({ Success: false, Results: [], ErrorMessage: 'bad filter' }),
             });
 
@@ -286,7 +369,7 @@ describe('FetchEntityVectorsResolver', () => {
         it('returns an error result, and runs neither view, when the document names an entity missing from metadata', async () => {
             const { queryIndex } = useVectorDB(true);
             routeViews('Retired Entity', {
-                'MJ: Entity Record Documents': () => ({ Success: true, Results: storedRows }),
+                'MJ: Entity Record Documents': erdView(storedRows),
             });
 
             const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, undefined, undefined, appContext(membersEntity));
@@ -299,16 +382,16 @@ describe('FetchEntityVectorsResolver', () => {
             expect(runViewsBatches).toHaveLength(0);
         });
 
-        it('loads the entity records and the stored vectors in one RunViews batch', async () => {
+        it('lists the entity records and the stored vectors in one RunViews batch, then fetches the vector values', async () => {
             useVectorDB(true);
             routeViews('Members', {
-                'MJ: Entity Record Documents': () => ({ Success: true, Results: storedRows }),
+                'MJ: Entity Record Documents': erdView(storedRows),
                 Members: () => ({ Success: true, Results: memberRows }),
             });
 
             await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, undefined, undefined, appContext(membersEntity));
 
-            expect(runViewsBatches).toEqual([['Members', 'MJ: Entity Record Documents']]);
+            expect(runViewsBatches).toEqual([['Members', 'MJ: Entity Record Documents'], ['MJ: Entity Record Documents']]);
         });
     });
 
