@@ -48,6 +48,7 @@ import { ViewSecurityChecks } from '../checks/view-security.checks';
 import { AiProvidersChecks } from '../checks/ai-providers.checks';
 import { CloudflareClefChecks } from '../checks/cloudflare-clef.checks';
 import { SystemOneKevChecks } from '../checks/systemone-kev.checks';
+import { PerplexityDeciderChecks } from '../checks/perplexity-decider.checks';
 import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
 import { MaterializedReadChecks } from '../checks/materialized-read.checks';
@@ -141,7 +142,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
         ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
-        ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
+        ['conversation-compaction', ConversationCompactionChecks, 23], // CC1-CC23
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
         ['agent-decisions-switch', AgentDecisionsSwitchChecks, 9], // DS1-DS9 the decisionsEnabled master switch, scripted chat and decision drivers (IT97)
         ['agent-loop-live', AgentLoopLiveChecks, 7],
@@ -161,6 +162,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
         ['cloudflare-clef', CloudflareClefChecks, 6], // CF1-CF6 Clef/Clef-flash metadata, driver registration, runner calls through an HTTP stand-in: envelope failures and failover, a bare response, a JSON credential's account (IT108)
         ['systemone-kev', SystemOneKevChecks, 10], // KV1-KV10 Kev metadata, SystemOneDecision registration, runner calls against loopback System One servers: Default Decision selection, bound credentials, per-row routing, failover and error classification, Kev-4B on OpenRouter, a binding on the serving row of a two-row model (IT109)
+        ['perplexity-decider', PerplexityDeciderChecks, 5], // PX1-PX5 Perplexity Decider metadata, PerplexityDecision registration, runner calls through an HTTP stand-in: the quickstart request and response, a bound credential's token, Default Decision selection and failover (IT110)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
@@ -272,7 +274,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'communication': 5,
         'concurrent': 2,
         'content-vectorization': 10,
-        'conversation-compaction': 18,
+        'conversation-compaction': 23,
         'trailing-runtime-state': 6,
         'dataset-cache': 4,
         'entity-actions': 8,
@@ -290,6 +292,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'form-contributions': 17,
         'layered-base-views': 6,
         'lists': 3,
+        'livekit-room': 1,
         'materialized-entity-read': 2,
         'materialized-read': 3,
         'metadata-consistency': 7,
@@ -298,10 +301,13 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'nested-transactions': 11,
         'open-app-teardown': 2,
         'permission-engine': 15,
+        'perplexity-decider': 5,
         'predictive-studio': 5,
         'prompt-runner': 1,
         'queue': 7,
-        'realtime-deterministic': 12,
+        'realtime-deterministic': 18,
+        'realtime-session-guard': 2,
+        'realtime-session-verification': 6,
         'record-cloning': 13,
         'record-process': 12,
         'record-process-facade': 2,
@@ -366,7 +372,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(109);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(113);
     });
 });
 
@@ -505,6 +511,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'jsontype-live-sync.JL7',
         'jsontype-live-sync.JL8',
         'jsontype-live-sync.JL9',
+        'livekit-room.LKR1',
         'metadata-sync-push.MSP1',
         'metadata-sync-push.MSP10',
         'metadata-sync-push.MSP2',
@@ -529,6 +536,14 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'permission-engine.PE11',
         'permission-engine.PE12',
         'permission-engine.PE13',
+        'realtime-session-guard.RSG1',
+        'realtime-session-guard.RSG2',
+        'realtime-session-verification.RSV1',
+        'realtime-session-verification.RSV2',
+        'realtime-session-verification.RSV3',
+        'realtime-session-verification.RSV4',
+        'realtime-session-verification.RSV5',
+        'realtime-session-verification.RSV6',
         'record-cloning.RC1',
         'record-cloning.RC2',
         'record-cloning.RC4',

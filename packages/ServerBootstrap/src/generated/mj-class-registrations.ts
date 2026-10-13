@@ -167,13 +167,15 @@ import {
     SiliconFlowLLM,
 } from '@memberjunction/ai-siliconflow';
 
-// @memberjunction/ai-systemone (1 classes)
+// @memberjunction/ai-systemone (2 classes)
 import {
+    PerplexityDecision,
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
-// @memberjunction/ai-vertex (1 classes)
+// @memberjunction/ai-vertex (2 classes)
 import {
+    GeminiEnterpriseRealtime,
     VertexLLM,
 } from '@memberjunction/ai-vertex';
 
@@ -238,7 +240,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (447 classes)
+// @memberjunction/core-entities (450 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -407,6 +409,8 @@ import {
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -605,6 +609,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1199,18 +1204,21 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (22 classes)
+// @memberjunction/ai-agents (25 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
+    ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
     FlowAgentType,
     GenericBinaryToolLibrary,
+    IdentityVerificationChannelServer,
+    InteractiveComponentChannelServer,
     JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
@@ -1345,7 +1353,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (59 classes)
+// @memberjunction/core-entities-server (60 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1353,6 +1361,7 @@ import {
     MJAIAgentNoteEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
+    MJAIAgentSessionEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
@@ -1709,7 +1718,9 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenRouterDecision,
     OpenRouterLLM,
     SiliconFlowLLM,
+    PerplexityDecision,
     SystemOneDecision,
+    GeminiEnterpriseRealtime,
     VertexLLM,
     xAILLM,
     xAIRealtime,
@@ -1863,12 +1874,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
-    MJCommunicationProviderEntity,
-    MJCommunicationProviderMessageTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCommunicationProviderEntity,
+    MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
@@ -1903,6 +1914,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -2065,14 +2078,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
-    MJRecommendationProviderEntity,
-    MJRecommendationRunEntity,
-    MJRecordChangeEntity,
-    MJRecordChangeReplayRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecommendationProviderEntity,
+    MJRecommendationRunEntity,
+    MJRecordChangeEntity,
+    MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
     MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
@@ -2105,6 +2118,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -2268,15 +2282,15 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetJotFormSubmissionsAction,
     GetSingleGoogleFormsResponseAction,
     GetSingleJotFormSubmissionAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     GetSingleSurveyMonkeyResponseAction,
     GetSingleTypeformResponseAction,
     GetSurveyMonkeyDetailsAction,
     GetSurveyMonkeyResponsesAction,
     GetSurveyMonkeyStatisticsAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     GetTypeformAction,
     GetTypeformFileContentAction,
     GetTypeformFormsAction,
@@ -2472,17 +2486,20 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
-    ClientContextChannelServer,
-    DataSnapshotToolLibrary,
-    DocxToolLibrary,
-    DuplicateReasoningAgentProvider,
-    ExcelToolLibrary,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    ClientContextChannelServer,
+    ClientOnlyChannelServer,
+    DataSnapshotToolLibrary,
+    DocxToolLibrary,
+    DuplicateReasoningAgentProvider,
+    ExcelToolLibrary,
     FlowAgentType,
     GenericBinaryToolLibrary,
+    IdentityVerificationChannelServer,
+    InteractiveComponentChannelServer,
     JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
@@ -2577,6 +2594,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentNoteEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
+    MJAIAgentSessionEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
@@ -2672,6 +2690,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CheckUserPermissionAction,
     CloneRecordAction,
     CloneRecordsAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     ColorConverterAction,
     ComposeListsAction,
     ConditionalAction,
@@ -2681,10 +2703,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateEmployeeAction,
     CreateFormContributionAction,
     CreateInteractiveFormAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     CreateListAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
@@ -2850,7 +2868,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1149;
+export const CLASS_REGISTRATIONS_COUNT = 1158;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
