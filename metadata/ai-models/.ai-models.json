@@ -573,9 +573,9 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1,
-            "Status": "Inactive",
+            "Status": "Active",
             "DriverClass": "GeminiImageGenerator",
-            "APIName": "gemini-3-pro-image-preview",
+            "APIName": "gemini-3-pro-image",
             "MaxInputTokens": 12000,
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
@@ -588,24 +588,6 @@
           "sync": {
             "lastModified": "2026-10-02T21:42:01.447Z",
             "checksum": "3b2315486739413bf2f433aa2a85efe10933b5aad3880e4a31c2ea07da7a8835"
-          }
-        },
-        {
-          "fields": {
-            "ModelID": "@parent:ID",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 2,
-            "Status": "Active",
-            "DriverClass": "GeminiImageGenerator",
-            "APIName": "gemini-3-pro-image",
-            "MaxInputTokens": 12000,
-            "SupportedResponseFormats": "Any",
-            "SupportsEffortLevel": false,
-            "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
-          },
-          "primaryKey": {
-            "ID": "798D6DA3-A4A3-469A-8F72-77267F8F6A93"
           }
         }
       ],
