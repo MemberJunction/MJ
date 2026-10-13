@@ -445,3 +445,48 @@ describe('Phase support in collect', () => {
         expect(merged[0].Phase).toBe('post-auth');
     });
 });
+
+describe('OwnsCORS support in collect', () => {
+    it('keeps a boolean OwnsCORS through normalize', () => {
+        const normalized = NormalizeServerExtensionConfigs([
+            { DriverClass: 'Ballot', RootPath: '/ballot', OwnsCORS: true },
+            { DriverClass: 'Plain', RootPath: '/plain' },
+        ]);
+        expect(normalized[0].OwnsCORS).toBe(true);
+        expect(normalized[1].OwnsCORS).toBeUndefined();
+    });
+
+    it('ignores a non-boolean OwnsCORS (falls back to global CORS) and reports it', () => {
+        const onInvalid = vi.fn();
+        const normalized = NormalizeServerExtensionConfigs([{ DriverClass: 'Ballot', RootPath: '/ballot', OwnsCORS: 'yes' }], { onInvalid });
+        expect(normalized).toHaveLength(1);
+        expect(normalized[0].OwnsCORS).toBeUndefined();
+        expect(onInvalid).toHaveBeenCalledWith(expect.stringContaining('OwnsCORS must be a boolean'));
+    });
+
+    it('keeps OwnsCORS from the discovered entry when the host overlay does not set it', () => {
+        const merged = MergeServerExtensionConfigs(
+            [{ Enabled: true, DriverClass: 'Ballot', RootPath: '/ballot', OwnsCORS: true, Settings: {} }],
+            [{ Enabled: true, DriverClass: 'Ballot', RootPath: '', Settings: { Key: 'v' } }],
+        );
+        expect(merged[0].OwnsCORS).toBe(true);
+    });
+
+    it('lets the host overlay override OwnsCORS', () => {
+        const merged = MergeServerExtensionConfigs(
+            [{ Enabled: true, DriverClass: 'Ballot', RootPath: '/ballot', OwnsCORS: true, Settings: {} }],
+            [{ Enabled: true, DriverClass: 'Ballot', RootPath: '/ballot', OwnsCORS: false, Settings: {} }],
+        );
+        expect(merged[0].OwnsCORS).toBe(false);
+    });
+
+    it('keeps OwnsCORS through prepare', () => {
+        const prepared = PrepareServerExtensionConfigs([{ Enabled: true, DriverClass: 'Ballot', RootPath: '/ballot/', OwnsCORS: true, Settings: {} }]);
+        expect(prepared[0]).toMatchObject({ RootPath: '/ballot', OwnsCORS: true });
+    });
+
+    it('names CORS ownership in the mount inventory line', () => {
+        expect(DescribeServerExtensionMount({ ...checkout, OwnsCORS: true })).toContain('owns CORS');
+        expect(DescribeServerExtensionMount(checkout)).not.toContain('owns CORS');
+    });
+});

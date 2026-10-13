@@ -29,6 +29,7 @@ import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 import { GraphQLAIClient } from "./graphQLAIClient";
 import { BrowserIndexedDBStorageProvider } from "./storage-providers";
 import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError";
+import { IsGraphQLMutation } from "./graphQLOperationKind";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -2988,6 +2989,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         const url = this._configData.URL;
         const payload = JSON.stringify({ query, variables });
+        const isMutation = IsGraphQLMutation(query);
+        const settle = () => {
+            // see ExecuteGQL — a mutation can write server-side without a local BaseEntity event
+            if (isMutation) {
+                this.InvalidateRunViewDedupCache();
+            }
+        };
 
         return new Promise<T>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
@@ -3047,7 +3055,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             xhr.onabort = () => reject(new Error('Request aborted'));
 
             xhr.send(payload);
-        });
+        }).finally(settle);
     }
 
     /**
@@ -3058,6 +3066,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @returns 
      */
     public async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
+        const isMutation = IsGraphQLMutation(query);
         try {
             const data = await this._client.request(query, variables);
             return data;
@@ -3115,6 +3124,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // for the raw error class yields the full serialised request.
                 LogError(JSON.stringify(safeError));
                 throw safeToThrow; // force the caller to handle the error
+            }
+        }
+        finally {
+            // A mutation can write server-side (Remote Operations, Actions, agent runs, server-side
+            // save hooks) without a BaseEntity event ever reaching this process, so drop the RunView
+            // dedup-linger entries — otherwise an identical RunView in the next DedupLingerMs replays
+            // pre-mutation rows. Runs on failure too: a failed mutation may have written part-way.
+            if (isMutation) {
+                this.InvalidateRunViewDedupCache();
             }
         }
     }

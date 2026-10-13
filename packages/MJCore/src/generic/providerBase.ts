@@ -527,6 +527,35 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Drops this provider's in-flight/lingered RunView dedup entries so the next identical
+     * RunView goes to the server instead of replaying a result from the last
+     * {@link DedupLingerMs}.
+     *
+     * Saves and deletes made through a `BaseEntity` in this process already invalidate the entries
+     * for their entity automatically. Call this after anything that can write on the SERVER
+     * without such an event reaching this process — a Remote Operation, an Action, an agent run,
+     * any other mutation. {@link RouteOperation} and the GraphQL client's mutation transport call
+     * it for you.
+     *
+     * Dropping an in-flight entry never affects the callers already waiting on it; it only stops
+     * later callers from joining (and stops the result from lingering), since that query may have
+     * read pre-write data.
+     *
+     * @param entityNames - entities known to have been written. Only entries touching them are
+     *   dropped. Omit (or pass an empty list) when the writes are unknown: every entry is dropped.
+     */
+    public InvalidateRunViewDedupCache(entityNames?: readonly string[]): void {
+        const names = (entityNames ?? []).map(n => n?.trim().toLowerCase()).filter((n): n is string => !!n);
+        if (names.length === 0) {
+            this._inflightViews.clear();
+            return;
+        }
+        for (const n of names) {
+            this.invalidateInflightViewsForEntity(n);
+        }
+    }
+
+    /**
      * Drops every in-flight/lingered RunView entry whose params touch the given
      * entity (lowercased name). Called on BaseEntity save/delete/remote-invalidate.
      */
@@ -1185,7 +1214,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!key) {
             return { Success: false, ResultCode: 'INVALID_OPERATION_KEY', ErrorMessage: 'operationKey is required' };
         }
-        return this.InternalRouteOperation<TInput, TOutput>(key, input, options ?? {});
+        try {
+            return await this.InternalRouteOperation<TInput, TOutput>(key, input, options ?? {});
+        }
+        finally {
+            // A Remote Operation executes server-side and can write any entity — none of which
+            // raises a BaseEntity event in THIS process. Without this, an identical RunView answered
+            // in the last DedupLingerMs would replay pre-operation rows. Runs on failure too: an
+            // operation that failed part-way may still have written.
+            this.InvalidateRunViewDedupCache();
+        }
     }
 
     /**
@@ -5365,7 +5403,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             if (organicKeys) {
                 e.EntityOrganicKeys = activeOrganicKeysByEntityId.get(entityIdKey) || [];
             }
-            result.push(new EntityInfo(e));
+            result.push(new EntityInfo(e, this));
         }
 
         // Check for schema name collision: if both 'MJ' and 'MJCustom' schemas exist,

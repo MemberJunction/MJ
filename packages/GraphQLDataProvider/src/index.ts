@@ -6,6 +6,7 @@ export type { AuthenticationErrorCallback, SocketConnectionState, TaskGraphFrame
 export * from './graphQLTransactionGroup';
 export { FieldMapper } from './FieldMapper';
 export { SanitizeGraphQLError, ToSafeGraphQLError, SafeGraphQLError } from './sanitizeGraphQLError';
+export { IsGraphQLMutation } from './graphQLOperationKind';
 export type { SanitizedGraphQLError, SanitizedGraphQLErrorDetail, VariableShape } from './sanitizeGraphQLError';
 export * from './rolesAndUsersType';
 export * from './graphQLSystemUserClient';

@@ -30,6 +30,7 @@ function cloneConfig(config: ServerExtensionConfig): ServerExtensionConfig {
         DriverClass: config.DriverClass,
         RootPath: config.RootPath,
         Phase: config.Phase,
+        ...(config.OwnsCORS !== undefined ? { OwnsCORS: config.OwnsCORS } : {}),
         Settings: { ...(config.Settings ?? {}) },
     };
 }
@@ -95,6 +96,15 @@ export function NormalizeServerExtensionConfigs(
                 invalid(options, `serverExtensions[${i}] ('${driverClass}') Phase must be 'pre-auth' or 'post-auth'${source}`);
             }
         }
+        let ownsCORS: boolean | undefined = undefined;
+        if (rec.OwnsCORS !== undefined) {
+            if (typeof rec.OwnsCORS === 'boolean') {
+                ownsCORS = rec.OwnsCORS;
+            } else {
+                // Fail toward MJServer's global CORS: a malformed flag must not strip CORS handling.
+                invalid(options, `serverExtensions[${i}] ('${driverClass}') OwnsCORS must be a boolean; ignoring it${source}`);
+            }
+        }
         const settings =
             rec.Settings != null && typeof rec.Settings === 'object' && !Array.isArray(rec.Settings)
                 ? { ...(rec.Settings as Record<string, unknown>) }
@@ -107,6 +117,7 @@ export function NormalizeServerExtensionConfigs(
             DriverClass: driverClass,
             RootPath: rootPath,
             Phase: phase,
+            ...(ownsCORS !== undefined ? { OwnsCORS: ownsCORS } : {}),
             Settings: settings,
         });
     }
@@ -217,11 +228,13 @@ export function MergeServerExtensionConfigs(
             continue;
         }
         const hostRoot = typeof entry.RootPath === 'string' ? entry.RootPath.trim() : '';
+        const ownsCORS = entry.OwnsCORS ?? existing.OwnsCORS;
         remember(key, {
             Enabled: entry.Enabled ?? existing.Enabled,
             DriverClass: key,
             RootPath: hostRoot || existing.RootPath,
             Phase: entry.Phase ?? existing.Phase,
+            ...(ownsCORS !== undefined ? { OwnsCORS: ownsCORS } : {}),
             Settings: { ...(existing.Settings ?? {}), ...(entry.Settings ?? {}) },
         });
     }
@@ -400,7 +413,8 @@ export function prepareServerExtensionConfigs(
 export function DescribeServerExtensionMount(config: ServerExtensionConfig): string {
     const state = config.Enabled ? 'enabled' : 'disabled';
     const phase = (config.Phase ?? 'pre-auth').toUpperCase();
-    return `${config.DriverClass} at ${config.RootPath} (${state}, ${phase}; host mj.config.cjs serverExtensions[] can set Enabled: false to suppress)`;
+    const cors = config.OwnsCORS === true ? ', owns CORS' : '';
+    return `${config.DriverClass} at ${config.RootPath} (${state}, ${phase}${cors}; host mj.config.cjs serverExtensions[] can set Enabled: false to suppress)`;
 }
 
 /** @deprecated Use {@link DescribeServerExtensionMount}. */

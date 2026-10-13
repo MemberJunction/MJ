@@ -152,7 +152,11 @@ export class ApplicationManager {
     MJGlobal.Instance.GetEventListener(true).subscribe(async (event) => {
       if (event.event === MJEventType.LoggedIn) {
         await StartupManager.Instance.Startup() // make sure this is done
-        this.loadApplications();
+        // Fire-and-forget from an event callback: loadApplications() already logs its failure
+        // and resolves WhenReady() waiters before rethrowing (for callers that await it), so
+        // the rethrow has nobody to land on here — catch it rather than leave an unhandled
+        // rejection on the page.
+        this.loadApplications().catch(() => { /* logged inside loadApplications */ });
         this.subscribeToEngineChanges();
       }
     });
@@ -309,7 +313,13 @@ export class ApplicationManager {
       // Attempt one recovery by force-refreshing UserInfoEngine before giving up.
       const activeApps = this.applications$.value;
       const hasMetadataApps = md.Applications.some(a => a.Status === 'Active');
-      if (activeApps.length === 0 && hasMetadataApps && !ApplicationManager._recoveryAttempted) {
+      // A permission-constrained session (e.g. an external magic-link user holding only
+      // 'Magic Link Baseline' plus a granted role) has zero user apps BY DESIGN — that is
+      // not cache corruption, and a forced engine refresh cannot grant read access. Without
+      // this guard the recovery log below read UserApplications, which throws
+      // PermissionConstrainedError, and loadApplications() rejected unhandled at every boot.
+      if (activeApps.length === 0 && hasMetadataApps && !ApplicationManager._recoveryAttempted
+          && !UserInfoEngine.Instance.IsPermissionConstrained) {
         ApplicationManager._recoveryAttempted = true;
         const activeAppCount = md.Applications.filter(a => a.Status === 'Active').length;
         const engineHealthy = UserInfoEngine.Instance.AllPropertiesLoadedSuccessfully;

@@ -43,6 +43,7 @@ import { AppSwitcherStyle } from './components/header/app-switcher.component';
 import { ApplyShellChromePolicy, BaseShellChromePolicy, ShellChromeFlags } from './shell-chrome-policy';
 import { SetReadinessBeacon } from './readiness-beacon';
 import { FindDashboardTabForUrl, OpenDashboardForUrl, ParseAppDashboardUrl } from './dashboard-tab-for-url';
+import { ApplyDeepLinkToRestoredWorkspace } from './deep-link-workspace';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -884,8 +885,17 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const currentUrl = this.router.url;
     this.urlBasedNavigation = currentUrl.includes('/app/') || currentUrl.includes('/resource/');
 
-    // Wait for workspace initialization to complete before allowing any tab operations
-    await this.workspaceManager.Initialize(user.ID);
+    // Wait for workspace initialization to complete before allowing any tab operations.
+    // On a deep link the URL's query params are written into the matching restored tab
+    // BEFORE the configuration is published, so the URL — not the saved workspace — is what
+    // that tab's component first sees (see ApplyDeepLinkToRestoredWorkspace).
+    const startupUrl = currentUrl;
+    const startupPath = startupUrl.split('?')[0];
+    const startupIsDeepLink = startupPath.length > 1 && startupPath !== '/';
+    await this.workspaceManager.Initialize(
+      user.ID,
+      startupIsDeepLink ? { PrepareConfiguration: config => this.applyStartupDeepLink(config, startupUrl) } : undefined
+    );
 
     // A saved tab of a nav item that moved to another app becomes a tab of that app's nav item: once now, before the
     // shell syncs the URL or the active app from the saved tabs, and again each time the user's app list changes.
@@ -1180,6 +1190,20 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // React runtime in the background now that the user is signed in. ArtifactsModule no longer
     // does this on construction (#4802). Non-blocking; Preload() logs and retries on demand.
     this.reactAdapter.Preload();
+  }
+
+  /**
+   * PrepareConfiguration hook for the startup deep link: when the URL carries query params and
+   * resolves to a tab already in the restored workspace, that tab takes the URL's params and
+   * becomes active. Runs before any tab component mounts.
+   */
+  private async applyStartupDeepLink(config: WorkspaceConfiguration, url: string): Promise<WorkspaceConfiguration> {
+    const urlParams = this.extractQueryParamsFromUrl(url);
+    if (Object.keys(urlParams).length === 0 || !config.tabs?.length) {
+      return config;
+    }
+    const tab = await this.findTabForUrl(url, config.tabs);
+    return tab ? ApplyDeepLinkToRestoredWorkspace(config, tab.id, urlParams, new Date().toISOString()) : config;
   }
 
   /** @deprecated Use {@link InitializeShell}. */
