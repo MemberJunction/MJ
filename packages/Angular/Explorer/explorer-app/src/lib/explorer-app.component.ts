@@ -292,16 +292,18 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   /**
    * Top boundary (in px) the chat overlay bubble cannot be dragged past. The
    * shell-header is 60px tall, but if the server-connectivity banner is showing
-   * it sits above the shell-header and pushes everything down. The banner
-   * component publishes its height to `--mj-connectivity-banner-height` on
-   * `<html>`, so we add it in. Re-evaluated on every change-detection pass —
-   * Angular's animation events fire CD when the banner show/hides finish.
+   * it sits above the shell-header and pushes everything down, so we add its
+   * height in.
+   *
+   * The height is read from the `BannerHeightPx` signal, never from the DOM. The
+   * banner publishes it from an animation-done listener that can fire while
+   * views are refreshing; a DOM read is invisible to change detection, so this
+   * binding went stale and dev mode reported NG0100 on every later pass
+   * (MJ #4377). A signal read registers this view as a consumer, so the write
+   * re-refreshes it.
    */
   public get ChatOverlayTopBoundaryPx(): number {
-    const bannerHeight = parseFloat(
-      getComputedStyle(document.documentElement).getPropertyValue('--mj-connectivity-banner-height')
-    ) || 0;
-    return MJExplorerAppComponent.SHELL_HEADER_PX + bannerHeight;
+    return MJExplorerAppComponent.SHELL_HEADER_PX + this.connectivityService.BannerHeightPx();
   }
 
   private destroy$ = new Subject<void>();

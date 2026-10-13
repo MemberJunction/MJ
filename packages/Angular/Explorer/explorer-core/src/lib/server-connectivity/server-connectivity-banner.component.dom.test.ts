@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { AfterViewInit, Component } from '@angular/core';
+import { describe, it, expect, afterEach } from 'vitest';
+import { AfterViewInit, Component, Injectable, ViewChild, inject } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { AnimationEvent } from '@angular/animations';
 import { BehaviorSubject } from 'rxjs';
 import { query } from '@memberjunction/ng-test-utils';
 import { ServerConnectivityBannerComponent } from './server-connectivity-banner.component';
@@ -15,17 +16,36 @@ import { ServerConnectivityService } from '../services/server-connectivity.servi
  * Because the state is a signal, a write marks the view dirty on its own: these specs use the plain
  * `detectChanges()` (check-no-changes included) with no `markForCheck` nursing. The banner animates
  * with `@slideDown`, so noop animations are provided.
+ *
+ * The service is the real `ServerConnectivityService` with only `IsConnected$` swapped for a
+ * controllable subject, so `BannerHeightPx` / `SetBannerHeightPx` are the shipped implementation.
  */
 
-function render(connected: boolean): { fixture: ComponentFixture<ServerConnectivityBannerComponent>; connected$: BehaviorSubject<boolean> } {
-  const connected$ = new BehaviorSubject<boolean>(connected);
+@Injectable()
+class ControllableConnectivityService extends ServerConnectivityService {
+  public readonly Connected$ = new BehaviorSubject<boolean>(true);
+  public override readonly IsConnected$ = this.Connected$.asObservable();
+}
+
+const BANNER_HEIGHT_VAR = '--mj-connectivity-banner-height';
+
+/** The `@slideDown.done` event the banner receives once its enter animation finishes. */
+function enterDone(offsetHeight: number): AnimationEvent {
+  return { toState: '', element: { offsetHeight } } as Partial<AnimationEvent> as AnimationEvent;
+}
+
+afterEach(() => document.documentElement.style.removeProperty(BANNER_HEIGHT_VAR));
+
+function render(connected: boolean): { fixture: ComponentFixture<ServerConnectivityBannerComponent>; connected$: BehaviorSubject<boolean>; service: ControllableConnectivityService } {
   TestBed.configureTestingModule({
     imports: [ServerConnectivityBannerComponent],
-    providers: [provideNoopAnimations(), { provide: ServerConnectivityService, useValue: { IsConnected$: connected$ } }],
+    providers: [provideNoopAnimations(), { provide: ServerConnectivityService, useClass: ControllableConnectivityService }],
   });
+  const service = TestBed.inject(ServerConnectivityService) as ControllableConnectivityService;
+  service.Connected$.next(connected);
   const fixture = TestBed.createComponent(ServerConnectivityBannerComponent);
   fixture.detectChanges();
-  return { fixture, connected$ };
+  return { fixture, connected$: service.Connected$, service };
 }
 
 describe('ServerConnectivityBannerComponent (DOM)', () => {
@@ -45,6 +65,25 @@ describe('ServerConnectivityBannerComponent (DOM)', () => {
     connected$.next(false);
     fixture.detectChanges();
     expect(query(fixture, '.connectivity-banner')).not.toBeNull();
+  });
+
+  it('publishes its rendered height to the service and to the CSS custom property', () => {
+    const { fixture, service } = render(false);
+    fixture.componentInstance.OnAnimationDone(enterDone(35));
+    expect(service.BannerHeightPx()).toBe(35);
+    expect(document.documentElement.style.getPropertyValue(BANNER_HEIGHT_VAR)).toBe('35px');
+  });
+
+  it('publishes zero when the banner leaves and when it is destroyed', () => {
+    const { fixture, service } = render(false);
+    fixture.componentInstance.OnAnimationDone(enterDone(35));
+    fixture.componentInstance.OnAnimationDone({ toState: 'void' } as Partial<AnimationEvent> as AnimationEvent);
+    expect(service.BannerHeightPx()).toBe(0);
+
+    fixture.componentInstance.OnAnimationDone(enterDone(35));
+    fixture.destroy();
+    expect(service.BannerHeightPx()).toBe(0);
+    expect(document.documentElement.style.getPropertyValue(BANNER_HEIGHT_VAR)).toBe('0px');
   });
 });
 
@@ -69,17 +108,59 @@ class ConnectivityHostComponent implements AfterViewInit {
 
 describe('ServerConnectivityBannerComponent (mid-change-detection drop)', () => {
   it('renders the banner without NG0100 when the drop lands inside the CD pass', () => {
-    const connected$ = new BehaviorSubject<boolean>(true);
     TestBed.configureTestingModule({
       imports: [ConnectivityHostComponent],
-      providers: [provideNoopAnimations(), { provide: ServerConnectivityService, useValue: { IsConnected$: connected$ } }],
+      providers: [provideNoopAnimations(), { provide: ServerConnectivityService, useClass: ControllableConnectivityService }],
     });
+    const service = TestBed.inject(ServerConnectivityService) as ControllableConnectivityService;
     const fixture = TestBed.createComponent(ConnectivityHostComponent);
-    fixture.componentInstance.DropConnection = () => connected$.next(false);
+    fixture.componentInstance.DropConnection = () => service.Connected$.next(false);
 
     // The default `detectChanges()` runs the dev-mode check-no-changes pass. Before the fix this
     // threw NG0100 "Previous value: '-1'" — the `@if` branch index meaning "no branch rendered".
     expect(() => fixture.detectChanges()).not.toThrow();
     expect(query(fixture, '.connectivity-banner')).not.toBeNull();
+  });
+});
+
+/**
+ * MJ #4377. A host shaped like `MJExplorerAppComponent`: a binding derived from the banner's height,
+ * beside the banner, with the height published while views are refreshing. In the running Explorer
+ * the banner's `@slideDown.done` listener is invoked from the animation flush inside the
+ * change-detection pass; here `ngAfterViewInit` calls `OnAnimationDone` at the same point. Read
+ * from the DOM (`getComputedStyle` on the custom property), that binding threw NG0100
+ * "Previous value for 'attr.data-top': '60'. Current value: '95'". Read from the service signal,
+ * the write marks the host view dirty and Angular re-refreshes it within the same pass.
+ */
+@Component({
+  standalone: true,
+  imports: [ServerConnectivityBannerComponent],
+  template: `<mj-server-connectivity-banner></mj-server-connectivity-banner><div class="top-boundary" [attr.data-top]="TopBoundaryPx"></div>`,
+})
+class BannerHeightReaderHostComponent implements AfterViewInit {
+  @ViewChild(ServerConnectivityBannerComponent) public Banner: ServerConnectivityBannerComponent | null = null;
+  private readonly connectivity = inject(ServerConnectivityService);
+
+  /** Same expression as `MJExplorerAppComponent.ChatOverlayTopBoundaryPx`. */
+  public get TopBoundaryPx(): number {
+    return 60 + this.connectivity.BannerHeightPx();
+  }
+
+  ngAfterViewInit(): void {
+    this.Banner?.OnAnimationDone(enterDone(35));
+  }
+}
+
+describe('ServerConnectivityBannerComponent (height published mid-pass, MJ #4377)', () => {
+  it('a binding on BannerHeightPx follows the height without NG0100', () => {
+    TestBed.configureTestingModule({
+      imports: [BannerHeightReaderHostComponent],
+      providers: [provideNoopAnimations(), { provide: ServerConnectivityService, useClass: ControllableConnectivityService }],
+    });
+    (TestBed.inject(ServerConnectivityService) as ControllableConnectivityService).Connected$.next(false);
+    const fixture = TestBed.createComponent(BannerHeightReaderHostComponent);
+
+    expect(() => fixture.detectChanges()).not.toThrow();
+    expect(query(fixture, '.top-boundary')?.getAttribute('data-top')).toBe('95');
   });
 });

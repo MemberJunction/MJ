@@ -6,7 +6,9 @@ import { ServerConnectivityService } from '../services/server-connectivity.servi
 /**
  * When visible, this banner sets --mj-connectivity-banner-height on <html>
  * so that any position:fixed element referencing the shell header offset
- * (e.g. app-switcher mobile dropdown) can account for the banner.
+ * (e.g. app-switcher mobile dropdown) can account for the banner. The same
+ * height goes to `ServerConnectivityService.BannerHeightPx` for template
+ * bindings, which must not read the custom property (MJ #4377).
  */
 @Component({
   selector: 'mj-server-connectivity-banner',
@@ -108,5 +110,6 @@ export class ServerConnectivityBannerComponent implements OnDestroy {
       ServerConnectivityBannerComponent.CSS_VAR,
       `${px}px`
     );
+    this.connectivityService.SetBannerHeightPx(px);
   }
 }
