@@ -23,6 +23,7 @@ import { UniqueFilter } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck } from '@memberjunction/testing-integration';
+import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 const ENTITY = 'MJ: Entities';
 const SMALL_ENTITY = 'MJ: Query Categories';
@@ -798,7 +799,7 @@ export const ServerCacheChecks: NamedCheck[] = [
             query.CategoryID = category.ID;
             query.SQL = 'SELECT 1 AS X';
             query.Status = 'Approved';
-            Assert(await query.Save(), `query fixture save failed: ${query.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            Assert(await query.Save(FixtureQuerySaveOptions()), `query fixture save failed: ${query.LatestResult?.CompleteMessage ?? 'unknown'}`);
 
             const params = () => ({ EntityName: 'MJ: Queries', ExtraFilter: `CategoryID='${category.ID}'`, Fields: ['Name', 'Category'], ResultType: 'simple' as const });
             try {
