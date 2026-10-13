@@ -904,7 +904,7 @@ export class FormBuilderResourceComponent
         this.ExistingForms = representatives.map(r => {
             const norm = NormalizeUUID(r.ID);
             const entityID = overrideEntityIDByComponentID.get(norm) ?? null;
-            const entity = entityID ? provider.Entities?.find(e => UUIDsEqual(e.ID, entityID)) : null;
+            const entity = entityID && provider.Entities ? provider.EntityByID(entityID) : null;
             return {
                 ID: r.ID,
                 Name: r.Name,
@@ -3155,7 +3155,7 @@ export class FormBuilderResourceComponent
             // Resolve RelatedEntity name from the ID. EntityRelationshipInfo
             // doesn't carry the friendly name directly; look it up from
             // the provider's cached entity list.
-            const related = provider.Entities?.find(e => UUIDsEqual(e.ID, r.RelatedEntityID));
+            const related = provider.Entities ? provider.EntityByID(r.RelatedEntityID) : undefined;
             const name = related?.Name ?? '(unknown)';
             const type = (r.Type ?? 'One To Many').trim();
             const display = r.DisplayName && r.DisplayName !== name ? ` — ${r.DisplayName}` : '';

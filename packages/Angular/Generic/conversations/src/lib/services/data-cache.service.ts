@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { ConversationEngine, ConversationScope, MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { Metadata, UserInfo, BaseEntity, RunView, IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDMap, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Global singleton cache for conversation-related entities.
@@ -215,23 +215,35 @@ export class DataCacheService {
       const details = result.Results || [];
       console.log(`[${timestamp}] 💾 DataCacheService - Loaded ${details.length} message(s) for conversation ${conversationId}`);
 
-      // Add all to cache (avoid duplicates by checking ID)
-      for (const detail of details) {
-        const existingIndex = this.conversationDetails.findIndex(d => UUIDsEqual(d.ID, detail.ID));
-        if (existingIndex >= 0) {
-          // Replace existing (ensures we keep the same object reference)
-          this.conversationDetails[existingIndex] = detail;
-        } else {
-          // Add new
-          this.conversationDetails.push(detail);
-        }
-      }
-
+      this.upsertCachedDetails(details);
       return details;
     }
 
     console.log(`[${timestamp}] 💾 DataCacheService - Failed to load messages for conversation ${conversationId}`);
     return [];
+  }
+
+  /**
+   * Adds loaded details to the cache, replacing any cached detail with the same ID in place.
+   * Positions are indexed once up front: the cache spans every loaded conversation, so searching
+   * it for each loaded detail grew with both.
+   */
+  private upsertCachedDetails(details: MJConversationDetailEntity[]): void {
+    const positionByID = new UUIDMap<number>();
+    this.conversationDetails.forEach((d, i) => {
+      if (!positionByID.Has(d.ID)) positionByID.Set(d.ID, i);
+    });
+    for (const detail of details) {
+      const existingIndex = positionByID.Get(detail.ID);
+      if (existingIndex !== undefined) {
+        // Replace existing (ensures we keep the same object reference)
+        this.conversationDetails[existingIndex] = detail;
+      } else {
+        // Add new
+        positionByID.Set(detail.ID, this.conversationDetails.length);
+        this.conversationDetails.push(detail);
+      }
+    }
   }
 
   /** @deprecated Use {@link LoadConversationDetails}. */
