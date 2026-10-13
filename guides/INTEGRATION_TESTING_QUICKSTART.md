@@ -217,6 +217,10 @@ gate is honored identically everywhere. Gating exists at two granularities:
   server-cache bundle). Gated-off checks are recorded as skipped oracle entries (never
   silently dropped). A bundle selector can also opt mutation checks in declaratively via
   `config.runMutationTests: true`, independent of env.
+- **From inside a check**: `throw new CheckSkipped(reason)` (from `@memberjunction/testing-integration`)
+  when the check cannot run on this host for a reason only its package knows, such as an optional
+  sibling app that is not installed. The driver records it as skipped with the reason. Throw it
+  before doing any work, and never `return` early instead: an early return is counted as passed.
 
 Adjacent gates outside the tier enum: the Predictive Studio *flow* rigs
 (`integration-test-suite/rigs/ps-*.ts`) run only under `PS_INTEGRATION=1` (they also need the

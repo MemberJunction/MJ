@@ -28,6 +28,7 @@ vi.mock('../bootstrap', () => ({
 
 import { IntegrationTestDriver } from '../IntegrationTestDriver';
 import { IntegrationCheckRegistry } from '../check-registry';
+import { CheckSkipped } from '../check-skip';
 import type { DriverExecutionContext, IOracle } from '@memberjunction/testing-engine';
 import type { MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
@@ -59,6 +60,10 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         reg.Register({ Id: 'unitmix.B', Name: 'mixB', Fn: async () => { throw new Error('boom'); } });
         reg.Register({ Id: 'unitmut.A', Name: 'mutA', Fn: async () => { /* pass */ } });
         reg.Register({ Id: 'unitmut.M', Name: 'mutM', RequiresMutation: true, Fn: async () => { /* pass */ } });
+        reg.Register({ Id: 'unitskip.A', Name: 'skipA', Fn: async () => { /* pass */ } });
+        reg.Register({ Id: 'unitskip.S', Name: 'skipS', Fn: async () => { throw new CheckSkipped('needs contracts: not installed'); } });
+        reg.Register({ Id: 'unitskip.F', Name: 'skipF', Fn: async () => { throw new Error('boom'); } });
+        reg.Register({ Id: 'unitallskip.S', Name: 'allS', Fn: async () => { throw new CheckSkipped('needs contracts: not installed'); } });
     });
 
     it('expands a bundle and runs its checks in registration order → Passed, score 1', async () => {
@@ -137,6 +142,27 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         const result = await driver.Execute(makeContext({ tier: 'deterministic', checks: [{ type: 'unitpass' }] }));
         expect(result.status).toBe('Passed');
         expect(result.totalChecks).toBe(2);
+    });
+
+    it('a check that throws CheckSkipped is recorded as SKIPPED with its reason, never Passed or Failed', async () => {
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ checks: [{ type: 'unitskip' }] }));
+        expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitskip.A', 'unitskip.S', 'unitskip.F']);
+        const skipped = result.oracleResults.find(o => o.oracleType === 'unitskip.S');
+        expect((skipped?.details as Record<string, unknown>)?.Skipped).toBe(true);
+        expect(skipped?.message).toBe('SKIPPED: needs contracts: not installed');
+        expect(result.skippedChecks).toBe(1);
+        expect(result.totalChecks).toBe(2);       // executed only: A passed, F failed
+        expect(result.passedChecks).toBe(1);
+        expect(result.failedChecks).toBe(1);      // an ordinary throw is still a failure
+    });
+
+    it("a bundle whose every check throws CheckSkipped reports 'Skipped', not 'Passed'", async () => {
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ checks: [{ type: 'unitallskip' }] }));
+        expect(result.status).toBe('Skipped');
+        expect(result.totalChecks).toBe(0);
+        expect(result.skippedChecks).toBe(1);
     });
 
     it('unknown bundle → a single failing OracleResult (never silently dropped)', async () => {
