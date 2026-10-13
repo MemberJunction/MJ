@@ -176,8 +176,9 @@ import {
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
-// @memberjunction/ai-vertex (1 classes)
+// @memberjunction/ai-vertex (2 classes)
 import {
+    GeminiEnterpriseRealtime,
     VertexLLM,
 } from '@memberjunction/ai-vertex';
 
@@ -242,7 +243,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (448 classes)
+// @memberjunction/core-entities (450 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -411,6 +412,8 @@ import {
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -1723,6 +1726,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     PerplexityDecision,
     SubQDecision,
     SystemOneDecision,
+    GeminiEnterpriseRealtime,
     VertexLLM,
     xAILLM,
     xAIRealtime,
@@ -1873,11 +1877,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCollectionArtifactEntity,
     MJCollectionEntity,
     MJCollectionPermissionEntity,
-    MJCollectionPermissionEntityExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
     MJCommunicationProviderEntity,
@@ -1916,6 +1920,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -2075,13 +2081,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
-    MJRSUPendingWorkEntity,
-    MJRecommendationEntity,
-    MJRecommendationItemEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRSUPendingWorkEntity,
+    MJRecommendationEntity,
+    MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
@@ -2279,13 +2285,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetGoogleFormsStatisticsAction,
     GetJotFormAction,
     GetJotFormStatisticsAction,
-    GetJotFormSubmissionsAction,
-    GetSingleGoogleFormsResponseAction,
-    GetSingleJotFormSubmissionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetJotFormSubmissionsAction,
+    GetSingleGoogleFormsResponseAction,
+    GetSingleJotFormSubmissionAction,
     GetSingleSurveyMonkeyResponseAction,
     GetSingleTypeformResponseAction,
     GetSurveyMonkeyDetailsAction,
@@ -2483,13 +2489,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
-    AISkillExportMarkdownServerOperation,
-    AISkillImportMarkdownServerOperation,
-    CSVToolLibrary,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AISkillExportMarkdownServerOperation,
+    AISkillImportMarkdownServerOperation,
+    CSVToolLibrary,
     ClientContextChannelServer,
     ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
@@ -2687,13 +2693,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CSVParserAction,
     CalculateExpressionAction,
     CensusDataLookupAction,
-    CheckUserPermissionAction,
-    CloneRecordAction,
-    CloneRecordsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CheckUserPermissionAction,
+    CloneRecordAction,
+    CloneRecordsAction,
     ColorConverterAction,
     ComposeListsAction,
     ConditionalAction,
@@ -2868,7 +2874,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1158;
+export const CLASS_REGISTRATIONS_COUNT = 1161;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

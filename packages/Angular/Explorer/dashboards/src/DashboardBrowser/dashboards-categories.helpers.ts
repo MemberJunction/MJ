@@ -6,7 +6,7 @@
  * dashboards the Library shows when the category is opened there.
  */
 import type { MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import { CountDashboardsByCategory, EffectiveCategoryId } from './dashboard-library-filter';
 
 /** The longest name the MJ: Dashboard Categories entity stores. */
@@ -35,13 +35,13 @@ export function BuildEffectiveCategoryMap(
   links: MJDashboardCategoryLinkEntity[],
   currentUserId: string
 ): Map<string, string | null> {
-  const userLinks = links.filter(l => UUIDsEqual(l.UserID, currentUserId));
+  const userLinksByDashboard = IndexByUUID(links.filter(l => UUIDsEqual(l.UserID, currentUserId)), l => l.DashboardID);
   const map = new Map<string, string | null>();
   for (const dashboard of dashboards) {
     if (UUIDsEqual(dashboard.UserID, currentUserId)) {
       continue;
     }
-    const filed = userLinks.find(l => UUIDsEqual(l.DashboardID, dashboard.ID));
+    const filed = userLinksByDashboard.Get(dashboard.ID);
     map.set(dashboard.ID, filed ? filed.DashboardCategoryID : null);
   }
   return map;
