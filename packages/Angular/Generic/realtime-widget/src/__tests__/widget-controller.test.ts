@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { WidgetKeyError } from '../lib/auth/widget-key-client';
 import { START_DROPPED_MESSAGE, CONNECTION_LOST_MESSAGE, DescribeStartError } from '../lib/session/widget-controller';
+import { REALTIME_CALL_TIME_LIMIT_END } from '@memberjunction/realtime-runtime';
 import {
   FakeGuestSessions,
   SESSION_ID,
@@ -161,6 +162,14 @@ describe('WidgetController', () => {
       expect(h.controller.Phase).toBe('error');
       expect(h.controller.ErrorMessage).toBe(CONNECTION_LOST_MESSAGE);
       expect(h.events.find((e) => e.name === 'mj-error')?.detail).toMatchObject({ code: 'connection-lost' });
+    });
+
+    it('says the call reached its time limit, with its own code, rather than that the connection dropped', async () => {
+      const h = await liveCall();
+      WidgetFakeClient.Instance!.ReachTimeLimit();
+      expect(h.controller.Phase).toBe('error');
+      expect(h.controller.ErrorMessage).toBe(REALTIME_CALL_TIME_LIMIT_END.Message);
+      expect(h.events.find((e) => e.name === 'mj-error')?.detail).toMatchObject({ code: 'time-limit' });
     });
 
     it('can start again after ending, ignoring the previous session\'s replayed final state', async () => {

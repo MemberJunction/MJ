@@ -47,6 +47,7 @@ export type {
     StartLiveKitAgentRoomSessionInput,
     LiveKitAgentRoomSessionResult,
     LiveKitRecordingResult,
+    LiveKitAgentVisionResult,
     LiveKitRoomTurnState,
     LiveKitRoomTurnStateResult,
     LiveKitRoomTurnAgent,

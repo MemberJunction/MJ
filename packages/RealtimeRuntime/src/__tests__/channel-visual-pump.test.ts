@@ -3,22 +3,36 @@ import { VisualPerceptionPump, type VisualFrameReason, type VisualPerceptionPump
 
 function makeHarness(overrides: Partial<VisualPerceptionPumpHost> = {}) {
     const pushed: string[] = [];
+    /** Frames the sink refused: another source had the model's stream, or the source was off. */
+    const refused: string[] = [];
     const reports: Array<{ frame: string; reason: VisualFrameReason; changeId: number }> = [];
     const notes: number[] = [];
     const errors: string[] = [];
-    const state = { frame: 'f1', videoUp: true, changeId: 1, cadence: 1000, sink: true };
+    const captures = { count: 0 };
+    const state = { frame: 'f1', videoUp: true, changeId: 1, cadence: 1000, sink: true, accepts: true };
     const host: VisualPerceptionPumpHost = {
-        GetSink: () => (state.sink ? { PushFrame: (f: string) => (pushed.push(f), true) } : null),
+        GetSink: () =>
+            state.sink
+                ? {
+                      PushFrame: (f: string) => {
+                          (state.accepts ? pushed : refused).push(f);
+                          return state.accepts;
+                      },
+                  }
+                : null,
         IsInboundVideoEstablished: () => state.videoUp,
         GetCadenceMs: () => state.cadence,
-        CaptureFrame: async () => state.frame,
+        CaptureFrame: async () => {
+            captures.count++;
+            return state.frame;
+        },
         GetChangeId: () => state.changeId,
         OnFramePushed: (frame, reason, changeId) => reports.push({ frame, reason, changeId }),
         SendConfirmationNote: (changeId) => notes.push(changeId),
         OnError: (context) => errors.push(context),
         ...overrides,
     };
-    return { host, state, pushed, reports, notes, errors, pump: new VisualPerceptionPump(host) };
+    return { host, state, pushed, refused, reports, notes, errors, captures, pump: new VisualPerceptionPump(host) };
 }
 
 describe('VisualPerceptionPump', () => {
@@ -104,6 +118,101 @@ describe('VisualPerceptionPump', () => {
         await expect(h.pump.OnChange()).resolves.toBeUndefined();
         await expect(h.pump.Confirm()).resolves.toBeUndefined();
         expect(h.errors).toEqual(['change', 'confirmation']);
+    });
+
+    describe('a frame the sink refuses (another source has the model, or this one is off)', () => {
+        it('is not sent: no frame_pushed, and no confirmation note after an agent edit', async () => {
+            vi.setSystemTime(10_000);
+            const h = makeHarness();
+            h.state.accepts = false;
+            await h.pump.OnChange();
+            vi.setSystemTime(12_000);
+            h.state.frame = 'f2';
+            h.state.changeId = 2;
+            await h.pump.Confirm();
+            expect(h.refused).toEqual(['f1', 'f2']);
+            expect(h.pushed).toEqual([]);
+            expect(h.reports).toEqual([]);
+            expect(h.notes).toEqual([]);
+        });
+
+        it('is not the dedupe frame: the same picture goes out once the sink takes frames again', async () => {
+            vi.setSystemTime(10_000);
+            const h = makeHarness();
+            h.state.accepts = false;
+            await h.pump.OnChange();
+            h.state.accepts = true;
+            vi.setSystemTime(12_000);
+            await h.pump.OnChange();
+            expect(h.pushed).toEqual(['f1']);
+            expect(h.reports).toEqual([{ frame: 'f1', reason: 'change', changeId: 1 }]);
+        });
+
+        it('still paces the captures: changes inside the cadence after a refusal cost one trailing capture', async () => {
+            vi.setSystemTime(10_000);
+            const h = makeHarness();
+            h.state.accepts = false;
+            await h.pump.OnChange();
+            for (let i = 2; i <= 5; i++) {
+                h.state.frame = `f${i}`;
+                await h.pump.OnChange();
+            }
+            expect(h.captures.count).toBe(1);
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(h.captures.count).toBe(2);
+            expect(h.refused).toEqual(['f1', 'f5']);
+        });
+    });
+
+    describe('Refresh (the model can see the channel again)', () => {
+        it('pushes the current picture even though it is the one the model was last sent', async () => {
+            vi.setSystemTime(10_000);
+            const h = makeHarness();
+            await h.pump.OnChange();
+            vi.setSystemTime(12_000);
+            await h.pump.Refresh();
+            expect(h.pushed).toEqual(['f1', 'f1']);
+            expect(h.reports.map((r) => r.reason)).toEqual(['change', 'change']);
+        });
+
+        it('sends the agent edit the model missed while another source had its stream, without a second note', async () => {
+            vi.setSystemTime(10_000);
+            const h = makeHarness();
+            await h.pump.OnChange();
+            h.state.accepts = false;
+            h.state.frame = 'f2';
+            h.state.changeId = 2;
+            vi.setSystemTime(12_000);
+            await h.pump.Confirm();
+            h.state.accepts = true;
+            vi.setSystemTime(14_000);
+            await h.pump.Refresh();
+            expect(h.pushed).toEqual(['f1', 'f2']);
+            expect(h.notes).toEqual([]);
+        });
+
+        it('respects the cadence: inside it, the picture goes out on the trailing settle', async () => {
+            vi.setSystemTime(10_000);
+            const h = makeHarness();
+            await h.pump.OnChange();
+            vi.setSystemTime(10_400);
+            await h.pump.Refresh();
+            expect(h.pushed).toEqual(['f1']);
+            await vi.advanceTimersByTimeAsync(600);
+            expect(h.pushed).toEqual(['f1', 'f1']);
+            expect(h.reports[1].reason).toBe('settle');
+        });
+
+        it('sends nothing while the channel may not show pixels', async () => {
+            let permitted = true;
+            const h = makeHarness({ IsPermitted: () => permitted });
+            vi.setSystemTime(10_000);
+            await h.pump.OnChange();
+            permitted = false;
+            vi.setSystemTime(12_000);
+            await h.pump.Refresh();
+            expect(h.pushed).toEqual(['f1']);
+        });
     });
 
     it('CancelPending cancels the settle but keeps the dedupe frame; Dispose forgets both', async () => {

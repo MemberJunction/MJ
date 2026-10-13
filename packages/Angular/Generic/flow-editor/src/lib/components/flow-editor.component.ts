@@ -17,7 +17,7 @@ import {
 } from '../interfaces/flow-types';
 import { FlowStateService } from '../services/flow-state.service';
 import { FlowLayoutService } from '../services/flow-layout.service';
-import { UUIDsEqual, UUIDMap, UUIDSet, FilterByUUIDs, ExcludeByUUIDs } from '@memberjunction/global';
+import { UUIDsEqual, UUIDMap, UUIDSet, FilterByUUIDs, ExcludeByUUIDs, IndexByUUID } from '@memberjunction/global';
 
 /**
  * Generic, entity-agnostic visual flow editor component.
@@ -574,8 +574,9 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     if (this.ReadOnly || !event.fNodes || event.fNodes.length === 0) return;
     this.pushUndoState();
 
+    const nodesByID = IndexByUUID(this.Nodes);
     for (const moved of event.fNodes) {
-      const node = this.Nodes.find(n => UUIDsEqual(n.ID, moved.id));
+      const node = nodesByID.Get(moved.id);
       if (node) {
         const oldPosition = { ...node.Position };
         node.Position = { X: moved.position.x, Y: moved.position.y };

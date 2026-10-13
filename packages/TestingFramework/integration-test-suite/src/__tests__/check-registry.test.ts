@@ -162,7 +162,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['cache-architecture', CacheArchitectureChecks, 11], // CA1-CA11 engine/cache architecture pins (IT107)
         ['agent-rag-search', AgentRagSearchChecks, 7], // extended-agents suite (live-model, IT53-62)
         ['agent-rag-gate', AgentRagGateChecks, 2], // RG1-RG2 pre-execution RAG permission gate, run directly with no model (IT117)
-        ['agent-run-audience', AgentRunAudienceChecks, 9], // AU1-AU6, AU8 a run's audience; AU7, AU9 its tenant binds the search actions (IT113)
+        ['agent-run-audience', AgentRunAudienceChecks, 9], // AU1-AU6, AU8 a run's audience; AU7, AU9 its tenant binds the search actions (IT119)
         ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
@@ -303,6 +303,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'form-contributions': 17,
         'layered-base-views': 6,
         'lists': 3,
+        'livekit-room': 1,
         'materialized-entity-read': 2,
         'materialized-read': 3,
         'metadata-consistency': 7,
@@ -315,7 +316,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'predictive-studio': 5,
         'prompt-runner': 1,
         'queue': 7,
-        'realtime-deterministic': 12,
+        'realtime-deterministic': 18,
         'realtime-session-guard': 2,
         'realtime-session-verification': 6,
         'record-cloning': 13,
@@ -385,7 +386,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(117);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(118);
     });
 });
 
@@ -524,6 +525,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'jsontype-live-sync.JL7',
         'jsontype-live-sync.JL8',
         'jsontype-live-sync.JL9',
+        'livekit-room.LKR1',
         'metadata-sync-push.MSP1',
         'metadata-sync-push.MSP10',
         'metadata-sync-push.MSP2',

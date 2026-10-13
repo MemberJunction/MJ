@@ -44,7 +44,9 @@
   {
     "_comments": [
       "Cloning configuration for MJ: Users — Onboard a user like Alice with same roles, apps, and settings, inactive, owner-only.",
-      "User Settings are Skip by default (RK review): they hold push-device tokens, drafts and consent. The with-settings preset copies the rest."
+      "User Settings are Skip by default (RK review): they hold push-device tokens, drafts and consent. The with-settings preset copies the rest.",
+      "The 'template' preset copies a template user (IsTemplate) whole: dashboards, conversations and their artifacts included. It is refused for any other user, so one person's private work is never copied to another.",
+      "Dashboards and User Views keep their names: their names are unique per user, and a copy belongs to the new user, so the entities' own '(copy)' rename would only mislabel them."
     ],
     "fields": {
       "Name": "MJ: Users",
@@ -72,7 +74,8 @@
               "LinkedRecordType": "None",
               "EmployeeID": null,
               "UserImageURL": null,
-              "UserImageIconClass": null
+              "UserImageIconClass": null,
+              "IsTemplate": false
             },
             "Rules": {
               "Rules": [
@@ -197,11 +200,42 @@
             }
           },
           "Descendants": {
+            "MJ: Dashboards": {
+              "Naming": {
+                "Strategy": "none"
+              }
+            },
+            "MJ: User Views": {
+              "Naming": {
+                "Strategy": "none"
+              }
+            },
             "MJ: User Applications": {
               "Fields": {
                 "Copy": [
                   "Sequence",
                   "IsActive"
+                ]
+              }
+            },
+            "MJ: User Settings": {
+              "Fields": {
+                "JsonRemap": [
+                  {
+                    "Field": "Value",
+                    "Rules": [
+                      {
+                        "Path": "[*].Configuration.dashboardId",
+                        "Mode": "remap",
+                        "OnMissing": "reuse"
+                      },
+                      {
+                        "Path": "[*].Configuration.recordId",
+                        "Mode": "remap",
+                        "OnMissing": "reuse"
+                      }
+                    ]
+                  }
                 ]
               }
             }
@@ -231,6 +265,54 @@
                   "Policy": "Deep"
                 }
               }
+            },
+            {
+              "Key": "template",
+              "Label": "Copy this template user",
+              "Description": "For template users only: copies roles, pinned apps, saved views and personal settings, plus the template's dashboards, conversations and the artifacts in them, all owned by the new user. Pins that point at a copied dashboard point at the copy.",
+              "TemplateSourceField": "IsTemplate",
+              "Options": {
+                "MaxDepth": 4,
+                "MaxRecords": 5000
+              },
+              "Relationships": {
+                "MJ: User Views": {
+                  "Policy": "Deep"
+                },
+                "MJ: User Settings": {
+                  "Policy": "Deep"
+                },
+                "MJ: Dashboards.UserID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Dashboard Categories.UserID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Dashboard Category Links.UserID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Conversations.UserID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Conversation Details.ConversationID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Conversation Detail Artifacts.ConversationDetailID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Artifacts.UserID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Artifact Versions.ArtifactID": {
+                  "Policy": "Deep"
+                },
+                "MJ: Artifact Versions.ArtifactVersionID": {
+                  "Policy": "Skip"
+                },
+                "MJ: Artifacts.ArtifactID": {
+                  "Policy": "Skip"
+                }
+              }
             }
           ],
           "UI": {
@@ -245,8 +327,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Users"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:42.160Z",
-      "checksum": "e48ea3d7085311b94d636da2618aa28ec769d84d6cb8c5fe6883e989ca3538fc"
+      "lastModified": "2026-10-12T18:09:08.435Z",
+      "checksum": "b9bc2b46c30e537d0ff7a3d66aa38e655884804c5b0cf8e81a03f8b34a4885b2"
     }
   },
   {
@@ -2310,7 +2392,8 @@
   },
   {
     "_comments": [
-      "Negative catalog: MJ: Conversations is interactive user transcripts — not cloneable."
+      "Negative catalog: MJ: Conversations is interactive user transcripts — not cloneable.",
+      "CloneableFromTemplate: copied only under the MJ: Users 'template' preset, from a template user; never from an ordinary user."
     ],
     "fields": {
       "Name": "MJ: Conversations",
@@ -2318,7 +2401,8 @@
         "Clone": {
           "Enabled": false,
           "NotCloneable": true,
-          "NotCloneableReason": "Interactive transcripts"
+          "NotCloneableReason": "Interactive transcripts",
+          "CloneableFromTemplate": true
         }
       }
     },
@@ -2326,13 +2410,14 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Conversations"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:44.350Z",
-      "checksum": "2d26ba6d6fedc86b5e85559f2e2e9c6386c779564e4a42dd433d630c1982222d"
+      "lastModified": "2026-10-12T18:09:08.509Z",
+      "checksum": "47467696d8d5772ffb0f0071e292c04ca62bef8d65db1740d09213febbe35521"
     }
   },
   {
     "_comments": [
-      "Negative catalog: MJ: Conversation Details is interactive user transcripts — not cloneable."
+      "Negative catalog: MJ: Conversation Details is interactive user transcripts — not cloneable.",
+      "CloneableFromTemplate: copied only under the MJ: Users 'template' preset, from a template user; never from an ordinary user."
     ],
     "fields": {
       "Name": "MJ: Conversation Details",
@@ -2340,7 +2425,8 @@
         "Clone": {
           "Enabled": false,
           "NotCloneable": true,
-          "NotCloneableReason": "Interactive transcripts"
+          "NotCloneableReason": "Interactive transcripts",
+          "CloneableFromTemplate": true
         }
       }
     },
@@ -2348,8 +2434,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Conversation Details"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:44.382Z",
-      "checksum": "65a5a9ef92f85a2f3591b4d97bdc299e09f5e5318898f0fd0ff94f48989f8602"
+      "lastModified": "2026-10-12T18:09:08.512Z",
+      "checksum": "af351190496c619a56b728df676238b859e81b61ca8ca7e6104f70a7e404089f"
     }
   }
 ]

@@ -377,10 +377,11 @@ describe('RemoteBrowserChannel — live screencast (pushed frames)', () => {
     log = { Notes: [], Calls: [] };
   });
 
-  /** Minimal surface double recording the frames it was asked to render + its Streaming flag. */
+  /** Minimal surface double recording the frames it was asked to render + its Streaming and Visible flags. */
   function makeSurface(): RemoteBrowserSurfaceComponent & { RenderedFrames: string[] } {
     const surface = {
       Streaming: false,
+      Visible: true,
       Interactive: false,
       AudioAvailable: false,
       AudioMuted: false,
@@ -436,6 +437,25 @@ describe('RemoteBrowserChannel — live screencast (pushed frames)', () => {
     expect(surface.Streaming).toBe(false);
     channel.OnScreencastFrame('AAAA');
     expect(surface.RenderedFrames).toEqual([]); // ignored — channel is not streaming
+  });
+
+  it('pauses the surface poll out of sight and resumes it when shown, leaving the screencast and audio running', async () => {
+    channel.Initialize(makeContext(log, { StartRemoteBrowserScreencast: { Streaming: true } }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+    await flush();
+
+    channel.OnSurfaceVisibilityChange(false);
+    expect(surface.Visible).toBe(false);
+    channel.OnSurfaceVisibilityChange(true);
+    expect(surface.Visible).toBe(true);
+    await flush();
+    expect(log.Calls.filter(c => c.Query.includes('Stop'))).toEqual([]);
+  });
+
+  it('ignores a visibility change with no surface bound', () => {
+    channel.Initialize(makeContext(log, {}));
+    expect(() => channel.OnSurfaceVisibilityChange(false)).not.toThrow();
   });
 
   it('stops the screencast on UnbindSurface when it had started', async () => {

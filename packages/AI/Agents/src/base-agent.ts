@@ -20,12 +20,12 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, AIErrorType, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -50,7 +50,9 @@ import {
     RealtimeCoAgentConfig,
     ResolveEffectiveRealtimeConfig
 } from './realtime/realtime-coagent-config';
-import { SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
+import { ListRealtimeVendorsForModel, RealtimeVendorSelection, SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
+import { ChooseRealtimeVendorForAvatar, RealtimeModelShowsAvatar } from './realtime/realtime-video-output-gate';
+import { RealtimeSessionCanShowAvatar } from './realtime/realtime-avatar-resolution';
 import { RealtimeClientSessionService, PrepareClientSessionInput, WarnOnUnmatchedProviderVoice } from './realtime/realtime-client-session-service';
 import { BuildRealtimeAgentFraming } from './realtime/realtime-tool-broker';
 import { ReadHostTools, ReadTrimmedString } from './realtime/bridge-host-params';
@@ -3012,6 +3014,12 @@ export class BaseAgent {
             UserID: params.contextUser?.ID,
             DisableAutoResponse: meetingMode || undefined,
             SelfNames: selfNames,
+            // The bridge's bot can publish the agent's avatar into the room (set by the room coordinator after it asked).
+            AvatarDelivery: params.data?.realtimeAvatarDelivery === 'room' ? 'room' : undefined,
+            // A server-side session: without room delivery it can't show an avatar, so the model choice prefers none.
+            ServerSide: true,
+            // A phone call (set by the telephony hosts): the caller sees no video, so the session asks for no avatar.
+            PhoneCall: params.data?.realtimePhoneCall === true || undefined,
             // App awareness (Move 1/3/4): the app the session runs in (sources the app cascade layer +
             // RelevantAgents → allowed-agent union) and the live app-context snapshot injected at mint.
             // Both ride params.data, the same conduit async agents use for appContext.
@@ -3028,7 +3036,8 @@ export class BaseAgent {
      * without provider SDKs or DB metadata.
      *
      * Production resolution: pick the highest-power active model of AIModelType `Realtime`; then
-     * pick its highest-priority active vendor whose `DriverClass` has a resolvable API key; then
+     * pick its highest-priority active vendor whose `DriverClass` has a resolvable API key, unless another keyed
+     * vendor matches whether the run will show an avatar better ({@link ChooseRealtimeVendorForAvatar}); then
      * instantiate the driver via the `ClassFactory`. Returns `null` (never throws) if any step
      * can't be satisfied — the caller turns that into a clean FAILED result. (Per-agent realtime
      * model preference can later be wired through the agent's prompt-model config, the same path
@@ -3055,34 +3064,68 @@ export class BaseAgent {
         // brings its own credential for a vendor we hold no platform key for now reaches that
         // vendor — which is the point of bringing your own key, not a side effect of it.
         const resolveAPIKey = MakeAIAPIKeyResolver(params.apiKeys, undefined, params.CredentialScope);
+        // The vendor follows whether the run will show an avatar, by the co-agent session prep's rule: a vendor that
+        // renders avatars (Vertex AI for Gemini 3.8 Live) only when it will, or when it is the only keyed vendor.
+        const showsAvatar = this.realtimeRunShowsAvatar(params);
         const candidates = this.selectRealtimeModelCandidates(params.agent, overrideModelID);
         for (const model of candidates) {
             const vendor = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
-            if (!vendor) {
+            const first = vendor ? this.instantiateRealtimeRunVendor(model.ID, vendor, resolveAPIKey) : null;
+            if (!vendor || !first) {
                 continue;
             }
-            const apiKey = resolveAPIKey(vendor.DriverClass);
-            if (!apiKey) {
-                continue;
-            }
-            const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
-                BaseRealtimeModel,
-                vendor.DriverClass,
-                apiKey
-            );
-            if (!instance) {
-                continue;
-            }
-            return {
-                model: instance,
-                modelID: model.ID,
-                vendorID: vendor.VendorID,
-                modelVendorID: vendor.ModelVendorID,
-                apiName: vendor.APIName,
-                driverClass: vendor.DriverClass
-            };
+            return ChooseRealtimeVendorForAvatar(vendor, first, ListRealtimeVendorsForModel(model.ID), showsAvatar, {
+                Instantiate: (other) => this.instantiateRealtimeRunVendor(model.ID, other, resolveAPIKey),
+                RendersAvatar: (resolution) =>
+                    RealtimeModelShowsAvatar({ ModelID: resolution.modelID, APIName: resolution.apiName, Model: resolution.model }, AIEngine.Instance),
+            });
         }
         return null;
+    }
+
+    /**
+     * Whether a session-driven run will show an avatar: the agent's video setting is on and the run could show one
+     * ({@link RealtimeSessionCanShowAvatar}) — a server-side session, so only when its host publishes the avatar into a
+     * room (`params.data.realtimeAvatarDelivery` `'room'`) and it is not a phone call (`params.data.realtimePhoneCall`).
+     *
+     * @param params The execution parameters.
+     */
+    private realtimeRunShowsAvatar(params: ExecuteAgentParams): boolean {
+        if (this.resolveRealtimeEffectiveConfig(params.agent).realtime?.video?.enabled !== true) {
+            return false;
+        }
+        return RealtimeSessionCanShowAvatar({
+            ServerSide: true,
+            AvatarDelivery: params.data?.realtimeAvatarDelivery === 'room' ? 'room' : undefined,
+            PhoneCall: params.data?.realtimePhoneCall === true,
+        });
+    }
+
+    /**
+     * A vendor's realtime driver on its key, with the model and vendor identifiers a run resolves to; `null` when the
+     * key or the driver is missing.
+     */
+    private instantiateRealtimeRunVendor(
+        modelID: string,
+        vendor: RealtimeVendorSelection,
+        resolveAPIKey: AIAPIKeyResolver
+    ): { model: BaseRealtimeModel; modelID: string; vendorID: string; modelVendorID: string; apiName: string; driverClass: string } | null {
+        const apiKey = resolveAPIKey(vendor.DriverClass);
+        if (!apiKey) {
+            return null;
+        }
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(BaseRealtimeModel, vendor.DriverClass, apiKey);
+        if (!instance) {
+            return null;
+        }
+        return {
+            model: instance,
+            modelID,
+            vendorID: vendor.VendorID,
+            modelVendorID: vendor.ModelVendorID,
+            apiName: vendor.APIName,
+            driverClass: vendor.DriverClass
+        };
     }
 
     /**
@@ -11864,12 +11907,25 @@ The context is now within limits. Please retry your request with the recovered c
     }
  
     /**
+     * Throws unless `lastRunId` is absent or a UUID. The value can come from a client, and the run
+     * initialization places it in `ExtraFilter` clauses (the payload lookup, {@link validateRunChain}
+     * and {@link resolvePlanModeGate}).
+     */
+    private assertLastRunIdIsUUID(lastRunId: string | undefined): void {
+        if (lastRunId && !IsValidUUID(lastRunId)) {
+            throw new Error('Invalid lastRunId: expected the UUID of a prior AI Agent Run.');
+        }
+    }
+
+    /**
      * Initializes the agent run tracking by creating MJAIAgentRunEntityExtended and setting up context.
      * 
      * @private
      * @param {ExecuteAgentParams} params - The execution parameters
      */
     private async initializeAgentRun(params: ExecuteAgentParams): Promise<void> {
+        this.assertLastRunIdIsUUID(params.lastRunId);
+
         // Handle autoPopulateLastRunPayload if requested
         let modifiedParams = params;
         if (params.lastRunId && params.autoPopulateLastRunPayload) {

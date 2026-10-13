@@ -1,4 +1,5 @@
-import { ApplicationInfo, EntitySaveOptions, LogError, LogStatus, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, LogStatus, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
+import { RecordCloneEngine } from "@memberjunction/record-cloning";
 import { RegisterClass } from "@memberjunction/global";
 import { ResolveConfiguredPrincipal } from "./principals.js";
 import { configInfo } from "../config.js";
@@ -22,6 +23,15 @@ export class NewUserBase {
             // the global Metadata.Provider is shared by every concurrent request: a transaction opened
             // there nests into anyone else's and swallows their writes (see CreateIsolatedProvider).
             const provider = await CreateIsolatedProvider();
+
+            // A configured template user is copied whole; a plain user is created only if it can't be.
+            const template = configInfo?.userHandling?.newUserTemplate;
+            if (template?.email) {
+                const fromTemplate = await this.createFromTemplate(provider, contextUser, template.email, template.preset, firstName, lastName, email, linkedRecordType, linkedEntityId, linkedEntityRecordId);
+                if (fromTemplate) return fromTemplate;
+                LogError(`Could not create ${email} from template user ${template.email}; creating a plain user instead`);
+            }
+
             const user = await provider.GetEntityObject<MJUserEntity>('MJ: Users', contextUser) // To-Do - change this to be a different defined user for the user creation process
             user.NewRecord();
             user.Name = email;
@@ -156,5 +166,79 @@ export class NewUserBase {
             LogError(e);
             return undefined;
         }
+    }
+
+    /**
+     * Creates the new user as a copy of the template user `templateEmail`, through the `MJ: Users`
+     * clone `preset`: its roles, apps, views, settings, dashboards and conversations come with it, owned
+     * by the new user. The clone engine creates users inactive for review; a user signing in is active.
+     *
+     * @returns the new user, or null when the template is missing, isn't flagged IsTemplate, or the copy
+     *          fails (the reason is logged and the caller falls back to a plain user).
+     */
+    protected async createFromTemplate(
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        templateEmail: string,
+        preset: string,
+        firstName: string,
+        lastName: string,
+        email: string,
+        linkedRecordType: string,
+        linkedEntityId?: string,
+        linkedEntityRecordId?: string
+    ): Promise<MJUserEntity | null> {
+        const lookup = await RunView.FromMetadataProvider(provider).RunView<{ ID: string; IsTemplate: boolean }>(
+            {
+                EntityName: 'MJ: Users',
+                ExtraFilter: `Email = '${templateEmail.replace(/'/g, "''")}'`,
+                Fields: ['ID', 'IsTemplate'],
+                ResultType: 'simple',
+                MaxRows: 1,
+            },
+            contextUser
+        );
+        const templateUser = lookup.Success ? lookup.Results[0] : undefined;
+        if (!templateUser) {
+            LogError(`userHandling.newUserTemplate: no user has the email ${templateEmail}`);
+            return null;
+        }
+        if (!templateUser.IsTemplate) {
+            LogError(`userHandling.newUserTemplate: ${templateEmail} is not marked as a template user (IsTemplate)`);
+            return null;
+        }
+
+        const result = await new RecordCloneEngine(provider).Clone(
+            {
+                EntityName: 'MJ: Users',
+                SourceRecordKey: CompositeKey.FromID(templateUser.ID),
+                Preset: preset,
+                PromptedValues: { Email: email, FirstName: firstName, LastName: lastName },
+                Options: { Reason: `New user ${email} created at first sign-in from template ${templateEmail}` },
+            },
+            contextUser
+        );
+        const newKey = result.Roots?.[0]?.TargetKey.KeyValuePairs.find((kvp) => kvp.FieldName === 'ID')?.Value;
+        if (!result.Success || !newKey) {
+            const reasons = result.Warnings.filter((w) => w.Severity === 'Error').map((w) => w.Message);
+            LogError(`userHandling.newUserTemplate: copying ${templateEmail} failed: ${result.ErrorMessage || reasons.join('; ') || result.ResultCode}`);
+            return null;
+        }
+
+        const user = await provider.GetEntityObject<MJUserEntity>('MJ: Users', contextUser);
+        if (!(await user.Load(String(newKey)))) {
+            LogError(`userHandling.newUserTemplate: the copy of ${templateEmail} for ${email} could not be loaded`);
+            return null;
+        }
+        user.IsActive = true;
+        user.LinkedRecordType = linkedRecordType;
+        if (linkedEntityId) user.LinkedEntityID = linkedEntityId;
+        if (linkedEntityRecordId) user.LinkedEntityRecordID = linkedEntityRecordId;
+        if (!(await user.Save())) {
+            LogError(`userHandling.newUserTemplate: could not activate ${email}: ${user.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            return null;
+        }
+        LogStatus(`Created user ${email} from template ${templateEmail} (${result.RecordsCloned ?? result.Created?.length ?? 0} records copied)`);
+        return user;
     }
 }

@@ -1,4 +1,4 @@
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import { HighestNonDraftVersion, RubricVersionDiff, SnapshotFromRows, Sha256Hex, type RubricNodeSnapshot, type RubricVersionSnapshot, type VersionBump } from '@memberjunction/rubrics-base';
 
 export class RubricPublishError extends Error {
@@ -42,13 +42,15 @@ export interface PublishResult {
 export function ValidateRubricTree(version: RubricVersionSnapshot): { errors: string[]; warnings: PublishWarning[] } {
     const errors: string[] = [];
     const warnings: PublishWarning[] = [];
-    const byId = new Map(version.nodes.map(node => [NormalizeUUID(node.id), node]));
+    // UUIDMap, so every lookup below is case-insensitive. The advisory-ancestor walk used to look up
+    // a raw parentId in a normalized-key Map and silently stopped on upper-case (SQL Server) IDs.
+    const byId = new UUIDMap<RubricNodeSnapshot>(version.nodes.map((node): [string, RubricNodeSnapshot] => [node.id, node]));
     const keys = new Set<string>();
     const childrenOf = (id: string) => version.nodes.filter(item => UUIDsEqual(item.parentId, id));
     for (const node of version.nodes) {
         if (keys.has(node.key)) errors.push(`Duplicate key ${node.key}.`);
         keys.add(node.key);
-        if (node.parentId && !byId.has(NormalizeUUID(node.parentId))) errors.push(`${node.key} points at a missing parent.`);
+        if (node.parentId && !byId.Has(node.parentId)) errors.push(`${node.key} points at a missing parent.`);
         if (node.nodeType === 'Criterion' && !node.scaleId) errors.push(`${node.key} is a criterion with no scale.`);
         if (node.nodeType === 'Criterion' && childrenOf(node.id).length > 0) {
             errors.push(`${node.key} is a criterion with children, so a child gate is ignored.`);
@@ -71,9 +73,9 @@ export function ValidateRubricTree(version: RubricVersionSnapshot): { errors: st
     for (const leaf of version.nodes.filter(node => node.nodeType === 'Criterion' && !node.isAdvisory)) {
         const seen = new Set<string>();
         let parentId = leaf.parentId;
-        while (parentId && byId.has(parentId) && !seen.has(parentId)) {
+        while (parentId && byId.Has(parentId) && !seen.has(parentId)) {
             seen.add(parentId);
-            const parent = byId.get(parentId)!;
+            const parent = byId.Get(parentId)!;
             if (parent.isAdvisory) {
                 errors.push(`${leaf.key} is a non-advisory leaf under the advisory group ${parent.key}.`);
                 break;

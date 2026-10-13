@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CompositeKey, RunView, LogError } from '@memberjunction/core';
 import { MJActionEntity, MJActionCategoryEntity, MJActionExecutionLogEntity, ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { GroupByUUID, IndexByUUID, RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
@@ -437,11 +437,13 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     categories: MJActionCategoryEntity[], 
     executions: MJActionExecutionLogEntity[]
   ): void {
+    // Group once: scanning every action and every execution per category grew with all three lists.
+    const actionsByCategory = GroupByUUID(actions, a => a.CategoryID);
+    const actionsByID = IndexByUUID(actions);
+    const executionsByCategory = GroupByUUID(executions, e => actionsByID.Get(e.ActionID)?.CategoryID);
     this.CategoryStats = categories.map(category => {
-      const categoryActions = actions.filter(a => UUIDsEqual(a.CategoryID, category.ID));
-      const categoryExecutions = executions.filter(e => 
-        categoryActions.some(a => UUIDsEqual(a.ID, e.ActionID))
-      );
+      const categoryActions = actionsByCategory.Get(category.ID) ?? [];
+      const categoryExecutions = executionsByCategory.Get(category.ID) ?? [];
       
       return {
         categoryId: category.ID,
