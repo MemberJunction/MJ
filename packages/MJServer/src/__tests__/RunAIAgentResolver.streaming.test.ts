@@ -32,9 +32,12 @@ import type { AgentExecutionStreamingCallback } from '@memberjunction/ai-core-pl
 import { AgentRunStatusPublisher } from '../resolvers/AgentRunStatusPublisher.js';
 import type { UserPayload } from '../types.js';
 
+// Like the real entity: the fields are properties, and GetAll() adds the step tree.
 const agentRun = {
     ID: 'run-1',
-    GetAll: () => ({ ID: 'run-1', ConversationDetailID: 'detail-1', Agent: 'Betty' }),
+    ConversationDetailID: 'detail-1',
+    Agent: 'Betty',
+    GetAll: vi.fn(() => ({ ID: 'run-1', ConversationDetailID: 'detail-1', Agent: 'Betty', __runSteps: [{ ID: 'step-1' }] })),
 };
 
 function buildHarness() {
@@ -79,6 +82,19 @@ describe('AgentRunStatusPublisher streaming wire shape', () => {
             stepName: 'prompt',
             kind: 'final-response',
         });
+    });
+
+    it('carries only the run fields a chunk consumer reads, never the step tree (MJ #5510)', () => {
+        // GetAll() on a real run holds every step's full prompt and conversation history.
+        // Serializing it per token stalled the event loop for every user on the process.
+        const { publish, callback } = buildHarness();
+        agentRun.GetAll.mockClear();
+
+        callback({ content: 'Hel', isComplete: false, kind: 'final-response' });
+
+        const data = publishedData(publish);
+        expect(data.agentRun).toEqual({ ID: 'run-1', ConversationDetailID: 'detail-1', Agent: 'Betty' });
+        expect(agentRun.GetAll).not.toHaveBeenCalled();
     });
 
     it('maps isComplete=true to isPartial=false on the final chunk', () => {
