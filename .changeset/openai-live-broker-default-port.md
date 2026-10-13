@@ -1,0 +1,6 @@
+---
+"@memberjunction/ai": patch
+"@memberjunction/ai-openai": patch
+---
+
+OpenAI Live's browser client now reaches MJAPI's WebRTC SDP broker on MJAPI's port when no public URL is set. The driver built the broker URL itself and fell back to port 4103, while MJAPI listens on 4000 by default (`GRAPHQL_PORT`). It now takes MJAPI's origin from the new `ResolveRealtimeProxyBaseHttpUrl` in `@memberjunction/ai`, the http(s) form of `ResolveRealtimeProxyBaseWsUrl` that the relay and proxy drivers use: `Config.proxyBaseUrl` (or the driver's own `Config.brokerBaseUrl`), then `MJAPI_PUBLIC_URL`, then `GRAPHQL_BASE_URL` and `GRAPHQL_PORT`, which default to `http://localhost` and `4000` as in MJAPI's configuration. Only the origin is kept, as for the other realtime drivers: MJAPI serves the broker at its root, so a `MJAPI_PUBLIC_URL` that carries the GraphQL path (`https://host/graphql`) no longer puts the broker under it, and a `brokerBaseUrl` or `proxyBaseUrl` with a path gives its origin. A relative `brokerBaseUrl` (`/`) stays relative. A blank `proxyBaseUrl` no longer hides `brokerBaseUrl`. Both helpers now treat an empty `GRAPHQL_PORT` as unset, as MJAPI does, instead of building a URL with no port.

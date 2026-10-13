@@ -18,12 +18,27 @@
 .input-wrapper {
   position: relative;
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   padding: 5px;
 }
 .input-wrapper mj-mention-editor {
-  flex: 1;
   display: block;
+}
+/* The action buttons get their own row below the editor instead of floating over its bottom-right corner, so
+   text can never run behind them (at any scroll position). The editor gives up the row's height (36px buttons +
+   7px bottom padding = 43px) so the composer's resting and maximum sizes are unchanged, and it no longer needs the
+   right padding that used to keep the first lines clear of the send button. */
+.input-wrapper ::ng-deep .mention-editor {
+  min-height: calc(100px - 43px);
+  max-height: calc(300px - 43px);
+  padding-right: 12px;
+}
+.composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 0 7px 7px;
 }
 
 .message-input-box-textarea {
@@ -59,9 +74,6 @@
 }
 
 .send-button-icon {
-  position: absolute;
-  bottom: 0.75rem;
-  right: 0.75rem;
   width: 36px;
   height: 36px;
   display: flex;
@@ -92,11 +104,60 @@
   opacity: 0.5;
 }
 
+/* The send slot as a stop control. Same element, same place; red says what a click does now. */
+.send-button-icon--stop {
+  background: var(--mj-status-error);
+  color: var(--mj-brand-on-primary);
+}
+.send-button-icon--stop:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mj-status-error) 85%, var(--mj-text-primary));
+}
+/* "Stop all N": the square widens into a labelled button. */
+.send-button-icon--stop-all {
+  width: auto;
+  padding: 0 12px;
+  gap: 8px;
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.send-slot-count {
+  background: color-mix(in srgb, var(--mj-brand-on-primary) 22%, transparent);
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: var(--mj-text-xs);
+}
+/* Stopping: neutral and waiting, not greyed-out like an empty Send. */
+.send-button-icon--stopping:disabled {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-secondary);
+  cursor: default;
+  opacity: 1;
+}
+
+/* Status line: the left side of the action row, shrinking (with an ellipsis) before the buttons do. */
+.send-slot-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-right: auto;
+  padding-left: 5px;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
+}
+.send-slot-status--stopping {
+  color: var(--mj-text-muted);
+}
+.send-slot-status-text,
+.send-slot-status-elapsed {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Attach buttons container */
 .attach-buttons {
-  position: absolute;
-  bottom: 0.75rem;
-  right: 3rem;
   display: flex;
   gap: 2px;
 }
@@ -166,19 +227,26 @@
     font-size: 16px;
     line-height: 1.4;
   }
+  /* 32px buttons + 5px bottom padding = 37px row; the editor's own mobile padding is 5px all round */
+  .input-wrapper ::ng-deep .mention-editor {
+    min-height: calc(100px - 37px);
+    max-height: calc(300px - 37px);
+    padding-right: 5px;
+  }
+  .composer-actions {
+    padding: 0 5px 5px;
+  }
+  /* The status line drops its elapsed time; "Sage is working" is enough at this width. */
+  .send-slot-status-elapsed {
+    display: none;
+  }
   .send-button-icon {
     width: 32px;
     height: 32px;
-    bottom: 0.625rem;
-    right: 0.625rem;
     border-radius: 6px;
   }
   .send-button-icon i {
     font-size: 0.875rem;
-  }
-  .attach-buttons {
-    bottom: 0.625rem;
-    right: 2.75rem;
   }
   .attach-button-icon {
     width: 32px;
@@ -201,19 +269,21 @@
     font-size: 16px;
     line-height: 1.3;
   }
+  /* 36px send button + 3px bottom padding = 39px row */
+  .input-wrapper ::ng-deep .mention-editor {
+    min-height: calc(100px - 39px);
+    max-height: calc(300px - 39px);
+  }
+  .composer-actions {
+    padding: 0 3px 3px;
+  }
   .send-button-icon {
     width: 36px;
     height: 36px;
-    bottom: 0.5rem;
-    right: 0.5rem;
     border-radius: 6px;
   }
   .send-button-icon i {
     font-size: 0.875rem;
-  }
-  .attach-buttons {
-    bottom: 0.5rem;
-    right: 2.75rem;
   }
   .attach-button-icon {
     width: 32px;

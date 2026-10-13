@@ -239,7 +239,7 @@ flowchart LR
 | 2. **Generate the stack** | Run CodeGen to produce entities, views, sprocs, API, forms | [CodeGenLib README](../packages/CodeGenLib/README.md) |
 | 3. **Work with data in code** | Use typed `BaseEntity` classes + `RunView` | [MJCore readme](../packages/MJCore/readme.md) · [MJCoreEntities readme](../packages/MJCoreEntities/readme.md) |
 | 4. **Expose & consume the API** | GraphQL server + typed client provider | [MJServer README](../packages/MJServer/README.md) · [GraphQLDataProvider README](../packages/GraphQLDataProvider/README.md) |
-| 5. **Build the UI** | Explorer shell, generated + custom forms, dashboards | [Angular README](../packages/Angular/README.md) · [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) |
+| 5. **Build the UI** | Explorer shell, generated + custom forms, dashboards | [Building UI on MJ](BUILDING_UI_ON_MJ.md) · [Angular README](../packages/Angular/README.md) · [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) |
 | 6. **Add business logic** | Actions for workflows, validation, integrations | [Actions README](../packages/Actions/README.md) |
 | 7. **Layer in AI** | Agents, prompts, RAG over your now-unified data | [AI README](../packages/AI/README.md) · [Agents README](../packages/AI/Agents/README.md) |
 | 8. **Manage app metadata as code** | Version your config/seed data declaratively | [MetadataSync README](../packages/MetadataSync/README.md) · [metadata/CLAUDE.md](../metadata/CLAUDE.md) |
@@ -451,6 +451,7 @@ MJ ships **MJExplorer** — a complete Angular application — as the **default 
 
 So the UI story is: a great default app (Explorer) + reusable Angular components + a React bridge + a framework-agnostic TypeScript core. Because every surface speaks the same object model, components bind directly to typed entities.
 
+- **[Building UI on MemberJunction](BUILDING_UI_ON_MJ.md)** ([illustrated edition](https://docs.memberjunction.org/v6/building-ui/)) — Start here for UI: the layers, how to choose between Explorer, your own Angular app and an Angular Element, and why.
 - **[Angular README](../packages/Angular/README.md)** — Overview of the 60+ Angular packages: the Explorer app, the generic component library, bootstrap.
 - **[Generic Angular component library](../packages/Angular/Generic/README.md)** — Reusable components usable in any Angular app (grids, viewers, dialogs, chat, filter builder, dashboards, and more).
 - **[React runtime](../packages/React/README.md)** — The React bridge for building MJ UIs in React.

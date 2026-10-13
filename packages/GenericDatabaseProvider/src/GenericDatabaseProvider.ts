@@ -37,6 +37,7 @@ import {
     IsMaterializedDataSource,
     RunViewResult,
     RunViewWithCacheCheckParams,
+    RunViewDatabaseStatus,
     RunViewsWithCacheCheckResponse,
     RunViewWithCacheCheckResult,
     RunQueryParams,
@@ -55,6 +56,7 @@ import {
     DatasetStatusResultType,
     DatasetStatusEntityUpdateDateType,
     IMetadataProvider,
+    ProviderConfigDataBase,
     UserInfo,
     LocalCacheManager,
     CachedRunViewResult,
@@ -84,7 +86,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser, IsReadOnlyQuery } from '@memberjunction/sql-parser';
+import { SQLParser, IsReadOnlyQuery, CheckAggregateExpression } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
@@ -107,8 +109,9 @@ import { QueueManager } from '@memberjunction/queue';
 import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
 import { TransactionFrameTracker } from './TransactionFrameTracker';
+import { TransactionAffinity, type TransactionMembership } from './TransactionAffinity.js';
 import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
-import { EncryptionEngine } from '@memberjunction/encryption';
+import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
 /**
@@ -230,6 +233,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     public SetLocalStorageProvider(provider: ILocalStorageProvider): void {
         this._localStorageProvider = provider;
+    }
+
+    /**
+     * Installs {@link ProviderConfigDataBase.LocalStorageProvider}, when the configuration carries
+     * one, before the base configuration loads metadata. A server fleet passes its shared (Redis)
+     * store this way so the metadata load and the engines loaded at startup use it from the first
+     * read: the first server to start fills the shared cache, and the others read it instead of
+     * each querying the database and broadcasting what they loaded.
+     */
+    public override async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
+        if (data?.LocalStorageProvider) {
+            this.SetLocalStorageProvider(data.LocalStorageProvider);
+        }
+        return super.Config(data, providerToUse);
     }
 
     /**************************************************************************/
@@ -864,6 +881,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         const decryptedValue = await encryptionEngine.Decrypt(fieldValue, user);
                         processedRow[field.Name] = decryptedValue;
                     } catch (decryptError) {
+                        // A key this install wasn't given (an app's own key) is configuration, not a
+                        // fault: one warning per key, and the value stays encrypted.
+                        if (IsEncryptionKeyUnavailable(decryptError)) {
+                            ReportEncryptionKeyUnavailable(decryptError);
+                            continue;
+                        }
                         const message = decryptError instanceof Error ? decryptError.message : String(decryptError);
                         LogError(
                             `Failed to decrypt field "${field.Name}" on entity "${entityInfo.Name}": ${message}. ` +
@@ -1345,6 +1368,32 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Optional replay form of an UPDATE for the SQL log only (never executed). Receives just the
+     * fields this save CHANGED. A recording that carried the whole row would, on replay, overwrite
+     * every column of the target row with the recording database's values — including settings a
+     * deploying application tuned on purpose (an MJ metadata sync that only flipped
+     * `AllowUserSearchAPI` on 'MJ: Content Items' also reset that consumer's
+     * `TrustServerCacheCompletely`). Dialects whose update procs keep unpassed columns override
+     * this. Default: no replay form, the plain save SQL is logged.
+     */
+    protected RenderReplayUpdateSQL(
+        _binding: SaveCallBinding,
+        _entity: BaseEntity,
+        _changedFieldValues: Map<EntityFieldInfo, unknown>,
+    ): string | undefined {
+        return undefined;
+    }
+
+    /** The entries of a save's parameter map whose fields this save actually changed. */
+    private changedFieldValues(entity: BaseEntity, fieldValues: Map<EntityFieldInfo, unknown>): Map<EntityFieldInfo, unknown> {
+        const changed = new Map<EntityFieldInfo, unknown>();
+        for (const [f, value] of fieldValues) {
+            if (entity.GetFieldByName(f.Name)?.Dirty) changed.set(f, value);
+        }
+        return changed;
+    }
+
+    /**
      * Concrete implementation of the abstract save-SQL builder defined on
      * `DatabaseProviderBase`. Iterates fields via the single `IsSPParameter`
      * predicate, applies provider-specific value coercion, encrypts, then
@@ -1418,9 +1467,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const baseSaveSQL = this.WrapSaveCallForResult(binding, entity, spName);
         let saveSQL = baseSaveSQL;
         // A CREATE's logged form is guarded on the primary key so a migration replay of
-        // the recording converges on a database that already holds the row (#4503).
-        // Updates and dialects without a replay form log the plain save SQL.
-        const replaySQL = isNew ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap) : undefined;
+        // the recording converges on a database that already holds the row (#4503). An
+        // UPDATE's logged form carries only the fields this save changed, so a replay never
+        // resets the target's other columns. A forced save (IgnoreDirtyState, e.g. MetadataSync's
+        // `alwaysPush`) asked to re-impose the whole row, so it keeps the full-row form. Dialects
+        // without a replay form log the plain save SQL.
+        const replaySQL = isNew
+            ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
+            : options?.IgnoreDirtyState
+              ? undefined
+              : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap));
         const simpleSQL = replaySQL ?? baseSaveSQL.sql;
 
         // 5. Optionally wrap with record-change emission.
@@ -2336,6 +2392,45 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     /**
+     * Builds the aggregate query without running the caller's text. Each expression must be a single
+     * aggregate function call over this entity's columns: the query runs the SQL that
+     * {@link CheckAggregateExpression} rebuilds from the checked parse tree (with this provider's
+     * dialect), once the keyword validator has also accepted that SQL. A refused expression becomes a
+     * per-aggregate error in request order. The accepted ones are aliased `Agg_0`, `Agg_1`, … in
+     * request order, which is how `RunViewCore` reads their values back.
+     */
+    protected override BuildAggregateSQL(
+        aggregates: { expression: string; alias?: string }[],
+        entityInfo: EntityInfo,
+        schemaName: string,
+        baseView: string,
+        whereSQL: string,
+    ): { aggregateSQL: string | null; validationErrors: AggregateResult[] } {
+        const columns = entityInfo.Fields.map((f) => f.Name);
+        const items: string[] = [];
+        const validationErrors: AggregateResult[] = [];
+        for (const agg of aggregates ?? []) {
+            const screened = this.screenAggregateExpression(agg.expression, columns);
+            if ('SQL' in screened) {
+                items.push(`${screened.SQL} AS ${this.QuoteIdentifier(`Agg_${items.length}`)}`);
+            } else {
+                validationErrors.push({ expression: agg.expression, alias: agg.alias || agg.expression, value: null, error: screened.Error });
+            }
+        }
+        if (items.length === 0) return { aggregateSQL: null, validationErrors };
+        const where = whereSQL ? ` WHERE ${whereSQL}` : '';
+        return { aggregateSQL: `SELECT ${items.join(', ')} FROM ${this.QuoteSchemaAndView(schemaName, baseView)}${where}`, validationErrors };
+    }
+
+    /** The SQL to run for one caller aggregate expression, or why it is refused. */
+    private screenAggregateExpression(expression: string, columns: string[]): { SQL: string } | { Error: string } {
+        const check = CheckAggregateExpression(expression, this.Dialect, columns);
+        if (!check.IsAllowed || check.SQL === null) return { Error: `Invalid aggregate expression: ${check.Reason}` };
+        const keywordCheck = SQLExpressionValidator.Instance.validate(check.SQL, { context: 'aggregate', entityFields: columns });
+        return keywordCheck.valid ? { SQL: check.SQL } : { Error: keywordCheck.error || 'Validation failed' };
+    }
+
+    /**
      * Returns the SELECT list for a single-record load: `*` normally, or an explicit list of
      * the columns this user is allowed to read when field security denies them any.
      *
@@ -2773,6 +2868,55 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     /**
+     * Row count and newest `__mj_UpdatedAt` for each view, read from the database and never from
+     * a cache. Uses the same WHERE clause (filter, user search, row-level security, pre-run hooks)
+     * and the same batched status query as {@link RunViewsWithCacheCheck}. One entry per param,
+     * in order; a failure is reported per entry.
+     */
+    public async GetRunViewsDatabaseStatus(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewDatabaseStatus[]> {
+        const user = contextUser || this.CurrentUser;
+        const statuses: RunViewDatabaseStatus[] = params.map(() => ({ Success: false, ErrorMessage: 'not checked' }));
+        if (!user) {
+            return statuses.map(() => ({ Success: false, ErrorMessage: 'No user context available' }));
+        }
+        const items = await this.buildDatabaseStatusItems(params, user, statuses);
+        const results = await this.getBatchedServerCacheStatus(items, contextUser);
+        for (const { index } of items) {
+            const status = results.get(index);
+            statuses[index] = status?.success
+                ? { Success: true, RowCount: status.rowCount ?? 0, MaxUpdatedAt: status.maxUpdatedAt }
+                : { Success: false, ErrorMessage: status?.errorMessage ?? 'no status returned' };
+        }
+        return statuses;
+    }
+
+    /** Status-query inputs for {@link GetRunViewsDatabaseStatus}; entries that cannot be built record their error. */
+    private async buildDatabaseStatusItems(
+        params: RunViewParams[],
+        user: UserInfo,
+        statuses: RunViewDatabaseStatus[],
+    ): Promise<Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }>> {
+        const items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
+        for (let index = 0; index < params.length; index++) {
+            try {
+                const viewParams: RunViewParams = { ...params[index] };
+                this.ResolvePlatformSQLInParams(viewParams);
+                const hooked = await this.RunPreRunViewHooks(viewParams, user);
+                const entityInfo = hooked.EntityName ? this.EntityByName(hooked.EntityName) : undefined;
+                if (!entityInfo) {
+                    statuses[index] = { Success: false, ErrorMessage: `Entity ${hooked.EntityName ?? '(none)'} not found` };
+                    continue;
+                }
+                const whereSQL = await this.buildWhereClauseForCacheCheck(hooked, entityInfo, user);
+                items.push({ index, item: { params: hooked }, entityInfo, whereSQL });
+            } catch (e) {
+                statuses[index] = { Success: false, ErrorMessage: e instanceof Error ? e.message : String(e) };
+            }
+        }
+        return items;
+    }
+
+    /**
      * Smart cache validation for batch RunViews.
      * For each view request, if cacheStatus is provided, checks if the cache is current
      * by comparing MAX(__mj_UpdatedAt) and COUNT(*) with client's values.
@@ -2977,6 +3121,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
+                // A param carrying BypassCache lands here because it is ineligible for a cache status,
+                // NOT because the caller has nothing cached — and those two must not be treated alike.
+                // Serving it from the server cache is precisely what it asked not to happen: its
+                // documented contract is "the query always hits the database", and it is the only way a
+                // client can escape a server slot that a missed invalidation left stale. The write side
+                // already refuses to store such a result (runViewCacheEligible starts with
+                // !param.BypassCache); this is the matching read-side gate.
+                if (entry.item.params.BypassCache) {
+                    LogStatusEx({ message: `    🚫 [SmartCache BYPASS] "${entry.item.params.EntityName || 'unknown'}" — BypassCache requested, going to the database`, verboseOnly: true });
+                    noCacheStatusNeedsDB.push(entry);
+                    continue;
+                }
                 if (LocalCacheManager.Instance.IsInitialized) {
                     const rlsWhereClause = this.ComputeRunViewRLSWhereClause(entry.item.params, contextUser);
                     const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(entry.item.params);
@@ -3148,6 +3304,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * The freshness probe for one view: a row count, plus the newest `__mj_UpdatedAt` **when the
+     * entity has that column**. Selecting it unconditionally made the probe fail outright for an
+     * entity whose view does not carry it, instead of comparing by count alone the way
+     * `BaseEngine.SweepAgainstDatabase` documents.
+     */
+    protected BuildCacheStatusSQL(entityInfo: EntityInfo, effectiveView: string, whereSQL: string): string {
+        const from = `FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+        const count = `COUNT(*) AS ${this.QuoteIdentifier('TotalRows')}`;
+        // `Fields` absent (a partial EntityInfo) degrades to the count-only probe rather than
+        // throwing: a freshness check must not be the thing that breaks a sweep.
+        if (!entityInfo.Fields?.some(f => f.IsUpdatedAtField)) {
+            return `SELECT ${count} ${from}`;
+        }
+        return `SELECT ${count}, MAX(${this.QuoteIdentifier('__mj_UpdatedAt')}) AS ${this.QuoteIdentifier('MaxUpdatedAt')} ${from}`;
+    }
+
+    /**
      * Executes cache status checks for multiple views.
      * Default: parallel individual queries (works on all platforms).
      * SQL Server overrides to use ExecuteSQLBatch for multi-result-set efficiency.
@@ -3168,7 +3341,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // (Materialized reads are normally kept out of the client cache by runViewCacheEligible; this
                 // matches the SQL Server override and is defense-in-depth on the PG/default path.)
                 const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
-                const statusSQL = `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRows')}, MAX(${this.QuoteIdentifier('__mj_UpdatedAt')}) AS ${this.QuoteIdentifier('MaxUpdatedAt')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+                const statusSQL = this.BuildCacheStatusSQL(entityInfo, effectiveView, whereSQL);
                 const rows = await this.ExecuteSQL<Record<string, unknown>>(statusSQL, undefined, undefined, contextUser);
                 if (rows && rows.length > 0) {
                     const row = rows[0];
@@ -6028,15 +6201,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * release hands them to the enclosing frame.
      */
     private _postCommitTasks: PostCommitEntry[] = [];
-    /**
-     * Tasks whose own transaction already settled, held back because an UNRELATED transaction is
-     * open on this instance. Running them now would enlist their writes in it — on one connection,
-     * that means a rollback of work that has nothing to do with them. Drained when this provider
-     * goes idle, whichever way that transaction ends.
-     */
-    private _idlePostCommitTasks: PostCommitEntry[] = [];
     /** Identity of each open frame and the fate of recent transactions, for {@link PostCommitToken}s. */
     private readonly _frameTracker = new TransactionFrameTracker();
+    /** Which async scope the open transaction belongs to (#4786). See {@link IsCallerInAmbientTransaction}. */
+    private readonly _affinity = new TransactionAffinity();
+    /** Epoch whose foreign join was already reported, so a transaction reports at most one (#4786). */
+    private _foreignJoinReportedEpoch: number | null = null;
 
     protected override get CurrentTransactionDepth(): number {
         return this._transactionDepth;
@@ -6058,12 +6228,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Throw if a statement would run on the pool while frames are still open
-     * after a server abort. Keyed on `_doomed`, not "depth > 0 with no handle"
-     * — outermost begin has depth 1 before the handle is published, and
-     * concurrent reads on SQL Server legitimately use the pool in that window.
-     */
-    /**
      * A debounced metadata refresh is timer-driven, so it can fire at any point of a caller's
      * unit of work — including the microtask window while the ambient transaction is being
      * committed. Joining that transaction puts the metadata batch on the transaction's single
@@ -6072,23 +6236,49 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Metadata reads are not part of anyone's unit of work, so wait for the transaction to end
      * before starting one (#4486).
      *
-     * This narrows the window rather than closing it: the check runs when the timer fires, and
-     * the batch is issued several round trips later, so a transaction that begins in between
-     * is still joined. That case is now harmless to the process — the batch fails, the dataset
-     * reports it, and the loaded metadata stays — but the refresh itself is lost until the next
-     * member write. Running the metadata batch on the pool regardless of the ambient
-     * transaction is #4514 (alongside #4454, the commit-side half of the same window).
+     * Under scope affinity (#4786) the timer inherits the membership of the code that scheduled it
+     * (re-arms included), so the refresh can only ever join the transaction whose scope scheduled
+     * it — and only if that transaction is still open when the batch is issued, several round trips
+     * after this check ran. It never joins a transaction someone else begins later. That remaining
+     * window is harmless to the process — the batch fails, the dataset reports it, and the loaded
+     * metadata stays — but the refresh itself is lost until the next member write. The check is
+     * instance-wide, so an unrelated transaction also defers the refresh. Running the metadata
+     * batch on the pool regardless of the ambient transaction is #4514 (alongside #4454, the
+     * commit-side half of the same window).
      */
     protected override get MetadataMemberRefreshMustWait(): boolean {
         return this.CurrentTransactionDepth > 0 || this.HasPhysicalTransaction;
     }
 
+    /**
+     * Throw if a statement from a member of the ambient transaction would run on the pool while its
+     * frames are still open after a server abort. Keyed on `_doomed`, not "depth > 0 with no handle"
+     * — outermost begin has depth 1 before the handle is published, and concurrent reads on SQL
+     * Server legitimately use the pool in that window. Callers outside the transaction's scope
+     * (see {@link IsCallerInAmbientTransaction}) do not use its handle, so a subclass should apply
+     * this check only to members' statements.
+     */
     protected AssertAmbientTransactionUsable(): void {
         if (this._doomed) {
             throw new DoomedTransactionError(
                 `SQL issued at depth ${this._transactionDepth} while the ambient transaction is doomed would autocommit on the pool`,
             );
         }
+    }
+
+    /**
+     * Whether the calling async scope is part of this provider's ambient transaction (#4786). A shared
+     * provider's open transaction belongs to the scope that began it and its descendants; every other
+     * caller must run on the pool, as if no transaction were open. Subclasses consult this — not merely
+     * "is a handle open" — before routing a statement to the transaction handle.
+     */
+    protected IsCallerInAmbientTransaction(): boolean {
+        return this._affinity.IsCallerMember;
+    }
+
+    /** Members of the open transaction share RunViews only with each other (see {@link ProviderBase.RunViewDedupScope}). */
+    protected override get RunViewDedupScope(): string {
+        return this.IsCallerInAmbientTransaction() ? `tx:${this._affinity.CurrentEpoch}` : '';
     }
 
     /**
@@ -6151,8 +6341,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Queue `task` until the outermost commit of the ambient transaction, or start it now when
-     * there is none. See {@link DatabaseProviderBase.RunAfterCommit} for the contract.
+     * Queue `task` until the outermost commit of the caller's transaction, or start it now when
+     * there is none. See {@link DatabaseProviderBase.RunAfterCommit} for the contract. Work
+     * registered by a caller outside the open transaction's scope (#4786) is not tied to that
+     * transaction: it starts now, detached, on the pool, whether or not that transaction is open.
      *
      * - Queued tasks run once, in registration order, after the outermost commit succeeds and the
      *   transaction lock is released — so a task may begin its own transaction. The committer
@@ -6166,27 +6358,38 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      *   token was captured in, rolled back — including a savepoint rolled back inside a transaction
      *   that went on to commit — or if the token matches nothing this provider knows; otherwise it
      *   is queued at the deepest captured frame that is still open. A token captured outside any
-     *   transaction always runs. "Runs" means immediately when this provider is idle, and otherwise
-     *   once it is: a task must never have its own writes rolled back by an unrelated transaction.
+     *   transaction always runs.
+     * - "Starts now" means fire-and-forget under {@link TransactionAffinity.RunDetached}: the task is
+     *   in no transaction on this provider (its statements run on the pool), the caller never awaits
+     *   it, and a `BeginTransaction` in the task's synchronous prefix stays in the task's own scope.
+     *   If the task begins a transaction while another is open on this instance, it joins that one as
+     *   a savepoint (logged) — a task that needs its own transaction belongs on an independent instance.
      */
     public override RunAfterCommit(task: PostCommitTask, description: string = 'post-commit task', token?: PostCommitToken): void {
         if (token) {
             this.registerPostCommitTaskWithToken(task, description, token);
             return;
         }
-        if (this._transactionDepth === 0 && !this.HasPhysicalTransaction) {
-            super.RunAfterCommit(task, description);
+        if (!this.IsCallerInAmbientTransaction()) {
+            // No transaction open, or not the caller's: either way the task is not tied to one.
+            this.runDetachedTask(task, description);
             return;
         }
         this._postCommitTasks.push({ Task: task, Description: description, Depth: this._transactionDepth });
     }
 
     /**
-     * Snapshot of the open transaction frames. Synchronous, and never `undefined` on this provider:
-     * outside a transaction it returns a token whose epoch is `null`, which says the work is already
-     * durable rather than saying nothing. See {@link DatabaseProviderBase.CapturePostCommitToken}.
+     * Snapshot of the caller's transaction frames. Synchronous, and never `undefined` on this
+     * provider: outside a transaction it returns a token whose epoch is `null`, which says the work
+     * is already durable rather than saying nothing. See
+     * {@link DatabaseProviderBase.CapturePostCommitToken}. Work registered by a caller outside the
+     * open transaction's scope (#4786) is not tied to that transaction, so such a caller gets the
+     * same `null`-epoch token.
      */
     public override CapturePostCommitToken(): PostCommitToken {
+        if (!this.IsCallerInAmbientTransaction()) {
+            return { Epoch: null, FrameIds: [] };
+        }
         return this._frameTracker.Capture();
     }
 
@@ -6216,35 +6419,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         return this._postCommitTasks.length;
     }
 
-    /** Number of tasks waiting only for this provider to go idle. */
+    /**
+     * @deprecated Always 0. Post-commit work not tied to the caller's transaction used to be held
+     * until this provider went idle; with scope affinity (#4786) it starts immediately on the pool, so
+     * there is no idle queue left to count. Kept for one release.
+     */
     public get PendingIdlePostCommitTaskCount(): number {
-        return this._idlePostCommitTasks.length;
+        return 0;
     }
 
     /**
-     * Run work whose own transaction has already settled. Immediate when this provider is idle;
-     * otherwise held until it is, so the task's writes cannot join — and be rolled back with — a
-     * transaction it has nothing to do with.
+     * Start work that is not tied to the caller's transaction now, fire-and-forget; never throws.
+     * Detached so it is in no transaction on this provider — its statements run on the pool, even
+     * while an unrelated transaction is open — and so a begin in its synchronous prefix cannot make
+     * the caller a member (see {@link TransactionAffinity.Claim}).
      */
     private runDetachedTask(task: PostCommitTask, description: string): void {
-        if (this._transactionDepth === 0 && !this.HasPhysicalTransaction) {
-            super.RunAfterCommit(task, description);
-            return;
-        }
-        this._idlePostCommitTasks.push({ Task: task, Description: description, Depth: 0 });
-    }
-
-    /** Run everything that was waiting for this provider to go idle. Never throws. */
-    private async drainIdlePostCommitTasks(): Promise<void> {
-        if (this._idlePostCommitTasks.length === 0 || this._transactionDepth > 0 || this.HasPhysicalTransaction) {
-            return;
-        }
-        const tasks = this._idlePostCommitTasks;
-        this._idlePostCommitTasks = [];
-        LogStatus(`Running ${tasks.length} post-commit task(s) held back by an unrelated transaction`);
-        for (const entry of tasks) {
-            await this.RunPostCommitTaskSafely(entry.Task, entry.Description);
-        }
+        void this._affinity.RunDetached(() => this.RunPostCommitTaskSafely(task, description));
     }
 
     /** Run tasks detached from a committed transaction, one at a time, in order. Never throws. */
@@ -6254,7 +6445,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
         LogStatus(`Running ${tasks.length} post-commit task(s) after transaction commit`);
         for (const entry of tasks) {
-            await this.RunPostCommitTaskSafely(entry.Task, entry.Description);
+            // Detached from the committer's (now stale) membership explicitly, not merely by epoch mismatch.
+            await this._affinity.RunDetached(() => this.RunPostCommitTaskSafely(entry.Task, entry.Description));
         }
     }
 
@@ -6320,33 +6512,94 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     public async ResetTransactionState(): Promise<void> {
         await this.WithTransactionLock(() => this.abandonDoomedTransaction());
-        await this.drainIdlePostCommitTasks();
+        // The frames are gone, so no settle will ever close this instance's batch. Drop it here or
+        // its entities count as pending forever and every cached read of them misses.
+        this._openBatchLevels = 0;
+        await LocalCacheManager.Instance.AbandonEntityEventBatch(this);
     }
 
+    /**
+     * Cache maintenance for the saves inside a transaction waits for the outermost settle: one
+     * rewrite per cached slot on commit instead of one per save, and nothing written for work that
+     * is rolled back.
+     *
+     * The batch is opened HERE, on the raw primitive, not only in
+     * `DatabaseProviderBase.BeginEntityTransaction` — 41 call sites across the repo use
+     * `BeginTransaction()` directly, including new-user creation on first login, the magic-link
+     * service, the roles/users sync resolver, `MergeRecords` and every generated cascade-delete
+     * override. Those saves each published their own cache write, and a rollback left rows in the
+     * shared cache that were never committed. `BeginEntityTransaction` still opens
+     * its own level on top; the levels are depth-counted, so the batch applies once, at the
+     * outermost settle, either way.
+     */
     public async BeginTransaction(): Promise<void> {
-        return this.WithTransactionLock(() => this.beginTransactionCore());
+        // Claimed before the first await (the lock's): see TransactionAffinity.Claim for why.
+        const membership = this._affinity.Claim();
+        try {
+            await this.WithTransactionLock(() => this.beginTransactionCore(membership));
+        } catch (e) {
+            // Every failure path, including a begin refused while doomed. A no-op for a membership
+            // already bound (a member's failed nested begin): see TransactionAffinity.Release.
+            this._affinity.Release(membership);
+            throw e;
+        }
+        LocalCacheManager.Instance.BeginEntityEventBatch(this);
+        this._openBatchLevels++;
+    }
+
+    /**
+     * Batch levels this provider has opened and not yet closed.
+     *
+     * The open happens only after a begin SUCCEEDS, while a commit or rollback closes in a
+     * `finally` — so a rollback issued for a begin that threw would close a level it never opened.
+     * That happens for real: a nested begin whose savepoint creation fails leaves the caller's
+     * catch to roll back, and the seventeen generated cascade-delete overrides are written exactly
+     * that way. Closing an outer unit of work's batch early un-batches the rest of its saves, which
+     * then write to the shared cache one by one — the uncommitted-rows-in-the-fleet failure the
+     * batch exists to prevent.
+     */
+    private _openBatchLevels = 0;
+
+    /** Closes one batch level, but only if this provider opened one. @internal */
+    private async endBatchLevelIfOpen(succeeded: boolean): Promise<void> {
+        if (this._openBatchLevels <= 0) {
+            return;
+        }
+        this._openBatchLevels--;
+        await LocalCacheManager.Instance.EndEntityEventBatch(this, succeeded);
     }
 
     public async CommitTransaction(): Promise<void> {
         // null = not the outermost commit, so nothing drains and the subclass hook does not run.
-        const committedTasks = await this.WithTransactionLock(async (): Promise<PostCommitEntry[] | null> => {
-            const outermost = this._transactionDepth === 1;
-            const tasks = await this.commitTransactionCore();
-            return outermost ? tasks : null;
-        });
+        let committedTasks: PostCommitEntry[] | null;
+        try {
+            committedTasks = await this.WithTransactionLock(async (): Promise<PostCommitEntry[] | null> => {
+                const outermost = this._transactionDepth === 1;
+                const tasks = await this.commitTransactionCore();
+                return outermost ? tasks : null;
+            });
+        } catch (e) {
+            // The commit failed: the rows may not be in the database, so the batch settles as a
+            // failure (its slots are invalidated) rather than being left open.
+            await this.endBatchLevelIfOpen(false);
+            throw e;
+        }
+        await this.endBatchLevelIfOpen(true);
         if (committedTasks) {
             await this.runPostCommitTasks(committedTasks);
             await this.AfterPhysicalCommit();
         }
-        await this.drainIdlePostCommitTasks();
     }
 
     public async RollbackTransaction(): Promise<void> {
-        await this.WithTransactionLock(() => this.rollbackTransactionCore());
-        await this.drainIdlePostCommitTasks();
+        try {
+            await this.WithTransactionLock(() => this.rollbackTransactionCore());
+        } finally {
+            await this.endBatchLevelIfOpen(false);
+        }
     }
 
-    private async beginTransactionCore(): Promise<void> {
+    private async beginTransactionCore(membership: TransactionMembership): Promise<void> {
         if (this._doomed) {
             throw new DoomedTransactionError();
         }
@@ -6356,6 +6609,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (this._transactionDepth === 1) {
                 this._abandonedByFailedCommit = false;
                 await this.BeginPhysicalTransaction();
+                this._affinity.OpenEpoch();
+                this._affinity.Bind(membership);
                 return;
             }
             if (!this.HasPhysicalTransaction) {
@@ -6372,6 +6627,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 this._savepointCounter--;
                 throw savepointError;
             }
+            // Only once the savepoint exists (as the outermost binds only after BEGIN): a begin that
+            // failed to join must not leave its caller's statements routed to the transaction handle.
+            this.bindJoiningMembership(membership);
         } catch (e) {
             if (this._transactionDepth > 0) {
                 this._transactionDepth--;
@@ -6390,14 +6648,40 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
     }
 
+    /**
+     * A nested begin joins the open transaction as a savepoint. When the caller was not already part of
+     * it, that is an unrelated unit of work entangling itself with someone else's transaction on a shared
+     * instance: its savepoint commits only if the owner commits, and settling out of order corrupts both.
+     * Joining keeps pre-#4786 behaviour — waiting for the owner instead can deadlock when the owner is
+     * itself waiting on this work (a coalesced entity-action rerun) — so it is reported, once per
+     * transaction, instead of silently happening. The joiner stays bound to the owner's transaction
+     * after its own savepoint is released: its later plain statements keep running on that
+     * transaction until the owner ends it.
+     */
+    private bindJoiningMembership(membership: TransactionMembership): void {
+        const epoch = this._affinity.CurrentEpoch;
+        if (membership.Epoch !== epoch && this._foreignJoinReportedEpoch !== epoch) {
+            this._foreignJoinReportedEpoch = epoch;
+            LogError(
+                `${this.constructor.name}: a transaction was begun by code outside the async scope of the transaction ` +
+                `already open on this provider instance, so it joins that transaction as a savepoint. Its writes now ` +
+                `commit or roll back with a unit of work it is not part of, and its later statements keep running ` +
+                `in that transaction until its owner ends it. Run independent units of work on ` +
+                `CreateIndependentInstance() or a per-request provider (#4786).`,
+            );
+        }
+        this._affinity.Bind(membership);
+    }
+
+    /** Savepoint SQL is the provider's own bookkeeping: it must reach the handle whichever scope settles the frame. */
+    private async executeTransactionControlSQL(sql: string, description: string): Promise<void> {
+        await this._affinity.RunAsMember(() => this.ExecuteSQL(sql, undefined, { description, ignoreLogging: true }));
+    }
+
     private async createSavepoint(savepointName: string): Promise<void> {
         const sql = this.Dialect.CreateSavepointSQL(savepointName);
-        const options: ExecuteSQLOptions = {
-            description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`,
-            ignoreLogging: true,
-        };
         try {
-            await this.ExecuteSQL(sql, undefined, options);
+            await this.executeTransactionControlSQL(sql, `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`);
         } catch (savepointError) {
             if (this.HasPhysicalTransaction && this.isDoomedPhysicalTransactionError(savepointError)) {
                 await this.AbandonPhysicalTransaction();
@@ -6474,10 +6758,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const releaseSQL = this.Dialect.ReleaseSavepointSQL(savepointName);
         if (releaseSQL) {
             try {
-                await this.ExecuteSQL(releaseSQL, undefined, {
-                    description: `Releasing savepoint ${savepointName}`,
-                    ignoreLogging: true,
-                });
+                await this.executeTransactionControlSQL(releaseSQL, `Releasing savepoint ${savepointName}`);
             } catch (e) {
                 await this.AbandonPhysicalTransaction();
                 this.markDoomed();
@@ -6521,16 +6802,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
         }
         try {
-            await this.ExecuteSQL(this.Dialect.RollbackToSavepointSQL(savepointName), undefined, {
-                description: `Rolling back to savepoint ${savepointName}`,
-                ignoreLogging: true,
-            });
+            await this.executeTransactionControlSQL(
+                this.Dialect.RollbackToSavepointSQL(savepointName),
+                `Rolling back to savepoint ${savepointName}`,
+            );
             const releaseSQL = this.Dialect.ReleaseSavepointSQL(savepointName);
             if (releaseSQL) {
-                await this.ExecuteSQL(releaseSQL, undefined, {
-                    description: `Releasing savepoint ${savepointName} after rollback`,
-                    ignoreLogging: true,
-                });
+                await this.executeTransactionControlSQL(releaseSQL, `Releasing savepoint ${savepointName} after rollback`);
             }
             this.discardPostCommitTasks(this._transactionDepth, `savepoint ${savepointName} was rolled back`);
             this._savepointStack.pop();
@@ -6563,10 +6841,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Back to depth 0. A successful commit detaches the post-commit queue first, so anything still
-     * queued here belongs to a transaction that rolled back, failed, or was abandoned.
+     * Back to depth 0 — every ending of the transaction goes through here, so it is also where the
+     * transaction's memberships go stale. A successful commit detaches the post-commit queue first, so
+     * anything still queued here belongs to a transaction that rolled back, failed, or was abandoned.
      */
     private clearTransactionState(): void {
+        this._affinity.CloseEpoch();
         this._transactionDepth = 0;
         this._doomed = false;
         this.clearSavepointState();

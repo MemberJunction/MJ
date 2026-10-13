@@ -1,5 +1,6 @@
-import { Field, Float, Int, ObjectType, Query, Resolver } from 'type-graphql';
-import { LocalCacheManager, CacheStats, CacheEntryType } from '@memberjunction/core';
+import { Arg, Field, Float, Int, ObjectType, Query, Resolver } from 'type-graphql';
+import { BaseEngine, BaseEngineRegistry, LocalCacheManager, CacheStats, CacheEntryType } from '@memberjunction/core';
+import type { EngineStateCensus } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/index.js';
 
 // ============================================================================
@@ -66,9 +67,82 @@ class CacheStatsDetailGQL extends CacheStatsGQL {
     EntityBreakdown: CacheEntityBreakdownGQL[];
 }
 
+@ObjectType()
+class EnginePropertyCensusGQL {
+    @Field(() => String)
+    PropertyName: string;
+
+    @Field(() => String, { nullable: true })
+    EntityName?: string;
+
+    @Field(() => String, { nullable: true })
+    DatasetName?: string;
+
+    @Field(() => Int)
+    RowCount: number;
+
+    @Field(() => String, { nullable: true })
+    MaxUpdatedAt: string | null;
+
+    @Field(() => String, { nullable: true })
+    IdentityHash: string | null;
+
+    @Field(() => Boolean)
+    LoadedSuccessfully: boolean;
+
+    @Field(() => Boolean)
+    PermissionDenied: boolean;
+}
+
+@ObjectType()
+class EngineDerivedCountGQL {
+    @Field(() => String)
+    Name: string;
+
+    @Field(() => Int)
+    Value: number;
+}
+
+@ObjectType()
+class EngineStateCensusGQL {
+    @Field(() => String)
+    EngineClass: string;
+
+    @Field(() => Boolean)
+    Loaded: boolean;
+
+    @Field(() => Boolean)
+    PermissionConstrained: boolean;
+
+    @Field(() => [EnginePropertyCensusGQL])
+    Properties: EnginePropertyCensusGQL[];
+
+    @Field(() => [EngineDerivedCountGQL])
+    Derived: EngineDerivedCountGQL[];
+}
+
 // ============================================================================
 // Helpers (pure core)
 // ============================================================================
+
+function censusToGQL(census: EngineStateCensus): EngineStateCensusGQL {
+    const gql = new EngineStateCensusGQL();
+    gql.EngineClass = census.EngineClass;
+    gql.Loaded = census.Loaded;
+    gql.PermissionConstrained = census.PermissionConstrained;
+    gql.Properties = census.Properties.map(p => Object.assign(new EnginePropertyCensusGQL(), p));
+    gql.Derived = Object.entries(census.Derived).map(([Name, Value]) => Object.assign(new EngineDerivedCountGQL(), { Name, Value }));
+    return gql;
+}
+
+/** Census of every registered engine in this process, optionally narrowed to one class name. */
+function buildEngineCensus(engineClass?: string): EngineStateCensusGQL[] {
+    return BaseEngineRegistry.Instance.GetAllEngines()
+        .filter((engine): engine is BaseEngine<unknown> => engine instanceof BaseEngine)
+        .filter(engine => !engineClass || engine.constructor.name === engineClass)
+        .map(engine => censusToGQL(engine.GetStateCensus()))
+        .sort((a, b) => a.EngineClass.localeCompare(b.EngineClass));
+}
 
 function toGQL(stats: CacheStats): CacheStatsGQL {
     const gql = new CacheStatsGQL();
@@ -138,5 +212,18 @@ export class CacheStatsResolver {
         Object.assign(result, toGQL(stats));
         result.EntityBreakdown = buildEntityBreakdown();
         return result;
+    }
+
+    /**
+     * What each engine in this server process holds — row counts, newest timestamps, a row-version
+     * hash, and engine-specific derived-state counts. Comparing the hashes across servers shows
+     * whether they converged; a derived count of zero next to a full array shows lost derived state.
+     */
+    @RequireSystemUser()
+    @Query(() => [EngineStateCensusGQL])
+    EngineStateCensus(
+        @Arg('EngineClass', () => String, { nullable: true }) engineClass?: string
+    ): EngineStateCensusGQL[] {
+        return buildEngineCensus(engineClass);
     }
 }

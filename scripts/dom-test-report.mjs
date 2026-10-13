@@ -64,6 +64,12 @@ const DEFERRALS = [
   // a spec written against real layout. Deferred so the ratchet stays honest until the authoring
   // team backfills one (then remove this).
   [/\/hierarchy-tree\.component\.ts$/, "new generic hierarchy-tree UI (d3/SVG); DOM spec pending"],
+  // Two ng-realtime-widget components with no DOM of their own. The stub overlay is a test double
+  // under src/__tests__ that stands in for the real overlay in the widget's specs. The global-styles
+  // component renders an empty template: it only carries the widget's document-level style layer.
+  // The element spec (realtime-widget.element.dom.test.ts) mounts both on every test.
+  [/\/realtime-widget\/src\/__tests__\/stub-overlay\.component\.ts$/, "test double, not shipped"],
+  [/\/widget-global-styles\.component\.ts$/, "renders nothing; carries the global style layer only"],
 ];
 const deferralReason = (rel) => (DEFERRALS.find(([re]) => re.test(rel)) || [])[1] || "";
 

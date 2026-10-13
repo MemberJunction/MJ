@@ -2532,6 +2532,15 @@ export class EntitySettingInfo extends BaseInfo {
  * Catalog of all entities across all schemas.
  * Contains comprehensive metadata about each entity including its database mappings, security settings, and UI preferences.
  */
+/** Backing list for {@link EntityInfo.ConfigurableAtCreationAttributes}. */
+const ENTITY_CONFIGURABLE_AT_CREATION_ATTRIBUTES = [
+    'IncludeInAPI', 'AllowUserSearchAPI', 'AllowCaching', 'TrackRecordChanges', 'AuditRecordAccess',
+    'AuditViewRuns', 'AllowAllRowsAPI', 'AllowCreateAPI', 'AllowUpdateAPI', 'AllowDeleteAPI', 'UserViewMaxRows',
+] as const satisfies readonly (keyof EntityInfo)[];
+
+/** One of the entity flags in {@link EntityInfo.ConfigurableAtCreationAttributes}. */
+export type EntityConfigurableAtCreationAttribute = typeof ENTITY_CONFIGURABLE_AT_CREATION_ATTRIBUTES[number];
+
 export class EntityInfo extends BaseInfo {
     /**
      * Unique identifier for the entity
@@ -2735,11 +2744,21 @@ export class EntityInfo extends BaseInfo {
      */
     AuditViewRuns: boolean = null
     /**
-     * When true (default), the server-side RunView cache will store and return cached results
-     * for this entity, trusting that all mutations flow through BaseEntity.Save() which fires
-     * cache invalidation events. Set to false for entities whose rows are created as side-effects
-     * of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal),
-     * since those inserts bypass BaseEntity and never trigger cache invalidation.
+     * Whether every change to this entity's rows fires a `BaseEntity` event. True (the default)
+     * declares that all mutations flow through `BaseEntity.Save()`/`Delete()`, so a cached copy
+     * kept current by those events can be trusted. False declares that rows can change without an
+     * event: raw SQL, a stored procedure (e.g. Record Changes created by
+     * `spCreateRecordChange_Internal`), or another application writing the same table.
+     *
+     * Each cache layer responds to `false` in the way that suits it:
+     * - **Server RunView cache:** does not cache the entity, since re-validating would cost as
+     *   much as running the query.
+     * - **Client RunView cache:** caches as before; every read is validated against the database.
+     * - **Engine caches (`BaseEngine`):** keep the rows, and the engine sweep re-checks them on its
+     *   interval. The user cache and the metadata sweep do the same for their entities.
+     *
+     * To keep an entity out of caching altogether, set {@link AllowCaching} to false instead.
+     * Setting any `AllowDirectSQL*` flag requires this to be false (a database CHECK enforces it).
      */
     TrustServerCacheCompletely: boolean = true
     /**
@@ -3645,6 +3664,15 @@ export class EntityInfo extends BaseInfo {
      */
     public static get DeletedAtFieldName(): string {
         return EntityInfo.__deletedAtFieldName;
+    }
+
+    /**
+     * Entity flags that a per-table entry in CodeGen's additionalSchemaInfo config may set when CodeGen first
+     * creates the entity, overriding the global `newEntityDefaults`. Typed against `EntityInfo`, so a name that
+     * stops being an entity property fails to compile.
+     */
+    public static get ConfigurableAtCreationAttributes(): readonly EntityConfigurableAtCreationAttribute[] {
+        return ENTITY_CONFIGURABLE_AT_CREATION_ATTRIBUTES;
     }
 
     /**

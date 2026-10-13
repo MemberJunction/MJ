@@ -93,8 +93,10 @@ export async function resolveWidgetGuestRunContext(
  * A scoped anonymous session (`IsMagicLinkAnonymous` + `MagicLinkScope.ResourceID`) holds only the
  * narrow relay grants its invite's role carries — deliberately NOT the AI run entities, whose rows
  * leak the rendered system prompt. Unlike {@link resolveWidgetGuestRunContext} no widget instance is
- * required: on the realtime path the agent authority is already server-side (the session config's
- * `targetAgentID`, `CanRun`-gated at session start), so there is no client-supplied agent id to pin.
+ * required: the realtime target is the session config's `targetAgentID`, which the owner can edit, so
+ * the relay re-checks `CanRun` on it for the CALLER before this elevation. Direct actions are refused
+ * for these callers before elevation, so only the delegated agent run and the run-entity writes
+ * execute as the system user.
  *
  * PUBLIC WEB-WIDGET guests are deliberately EXCLUDED (returned unchanged): their seeded role writes
  * run rows under the guest principal, which the `Widget Guest: Own Agent Runs` RLS read filter
@@ -123,6 +125,36 @@ export function ResolveScopedAnonymousRunUser(contextUser: UserInfo): UserInfo {
 
   // Deliberately silent on success — callers include per-utterance/per-usage-delta relays, so a
   // per-call log line would flood a live session's log. The dispatch path logs the elevation once.
+  return systemUser;
+}
+
+/**
+ * The principal a client-direct call's consolidated RECORDING STORE runs as, once the caller has
+ * already passed the session-ownership and consent gates (#5195).
+ *
+ * The store writes `MJ: Files`, the file↔session link and the session's recording stamp — server
+ * plumbing attributed through the session link, never through the caller. A signed-in user whose only
+ * role is the stock UI role cannot create `MJ: Files`, so running the store as the caller lost every
+ * such user's recording (the object landed in storage, the row never did). It therefore runs as the
+ * system user for signed-in owners, and anonymous sessions keep exactly the
+ * {@link ResolveScopedAnonymousRunUser} behaviour (PUBLIC WEB-WIDGET guests stay on the caller for the
+ * same RLS reason documented there).
+ *
+ * Fails CLOSED: with no system user available the caller is returned, i.e. today's behaviour.
+ * Ownership/consent gates must NEVER use this.
+ */
+export function ResolveRecordingStoreUser(contextUser: UserInfo): UserInfo {
+  if (contextUser?.IsMagicLinkAnonymous || contextUser?.WidgetGuestContext?.WidgetID) {
+    return ResolveScopedAnonymousRunUser(contextUser);
+  }
+  const systemUser = UserCache.Instance.GetSystemUser();
+  if (!systemUser) {
+    LogError(
+      `[Realtime] Cannot elevate the recording store for user ${contextUser?.ID}: no system user available; ` +
+        'storing as the caller.',
+    );
+    return contextUser;
+  }
   return systemUser;
 }
 
