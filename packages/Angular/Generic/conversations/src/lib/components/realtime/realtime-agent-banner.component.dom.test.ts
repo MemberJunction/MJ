@@ -25,6 +25,16 @@ describe('RealtimeAgentBannerComponent (DOM)', () => {
     expect(query(f, '.banner--review')).toBeNull();
   });
 
+  it('says why the call ended in the error state when the host gives a label, else "Connection error"', () => {
+    const f = render({ State: 'error', AgentName: 'Sage', ErrorLabel: 'Time limit reached' });
+    expect(text(f, '.banner__state-label')).toBe('Time limit reached');
+  });
+
+  it('says "Connection error" in the error state without a label', () => {
+    const f = render({ State: 'error', AgentName: 'Sage' });
+    expect(text(f, '.banner__state-label')).toBe('Connection error');
+  });
+
   // One render per test (TestBed is single-use) — the two states are separate specs.
   it('shows the busy spinner (not the waveform) for thinking state', () => {
     const thinking = render({ State: 'thinking', AgentName: 'Sage' });

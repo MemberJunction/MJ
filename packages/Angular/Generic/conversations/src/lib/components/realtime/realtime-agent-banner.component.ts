@@ -47,6 +47,12 @@ export class RealtimeAgentBannerComponent {
   @Input() AgentName = 'the agent';
 
   /**
+   * What the state label says in the `'error'` state when the call said why it ended (`DescribeCallEnd`'s `Label`, such
+   * as "Time limit reached"); `null` keeps "Connection error".
+   */
+  @Input() ErrorLabel: string | null = null;
+
+  /**
    * Display name of the realtime model the live session runs on (e.g. "GPT Realtime 2").
    * Rendered as a subtle suffix in the identity line; hidden when null/empty.
    */
@@ -212,7 +218,7 @@ export class RealtimeAgentBannerComponent {
       case 'listening': return 'Listening';
       case 'speaking': return `${this.AgentName} is speaking…`;
       case 'thinking': return 'Working on it…';
-      case 'error': return 'Connection error';
+      case 'error': return this.ErrorLabel ?? 'Connection error';
       case 'closed': return 'Call ended';
       default: return '';
     }
