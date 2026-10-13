@@ -19,9 +19,10 @@ import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { Session as InspectorSession } from 'node:inspector';
-import { sep } from 'node:path';
+import { join, sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
 import { BuildSchemaOptions, buildSchemaSync, getMetadataStorage, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
@@ -91,7 +92,7 @@ import { IntegrationProgressEmitter } from '@memberjunction/integration-progress
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
-import { SessionJanitor } from './agentSessions/index.js';
+import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
@@ -424,6 +425,12 @@ GetAttachmentService().BlobStore = new MJStorageBlobStore();
 
 export const Serve = async (resolverPaths: Array<string>, app: Application = CreateApp(), options?: MJServerOptions): Promise<void> => {
   const t0 = performance.now();
+  // Name this MJAPI instance by its port before anything stamps a session row with its identity, so the janitor's
+  // startup recovery closes only the sessions an earlier boot of this instance left, never those of another MJAPI on
+  // the same host (#5309).
+  SetHostInstancePort(graphqlPort);
+  // The realtime bridge engine stamps its bridge rows with the same identity and reconciles orphans by it (#5310).
+  BindBridgeEngineHostInstance();
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
   // operator knob). At `standard` (default), per-phase timings are collapsed into
   // the one-line summary; at `verbose`+ each phase prints inline as before.
@@ -1101,7 +1108,7 @@ const setupComplete$ = new ReplaySubject(1);
     const profile = await new Promise<unknown>((res, rej) =>
       profSession!.post('Profiler.stop', (e, r) => (e ? rej(e) : res((r as { profile: unknown }).profile)))
     );
-    const outPath = `/tmp/mjapi_schema_build_${process.pid}.cpuprofile`;
+    const outPath = join(mkdtempSync(join(tmpdir(), 'mjapi-schema-')), `mjapi_schema_build_${process.pid}.cpuprofile`);
     writeFileSync(outPath, JSON.stringify(profile));
     profSession.disconnect();
     // eslint-disable-next-line no-console
@@ -1756,6 +1763,9 @@ const setupComplete$ = new ReplaySubject(1);
   if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
     SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
       .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
+    // The bridge engine's orphan reconcile likewise starts only now that this process holds its port, so it can't
+    // take the live bridges of another MJAPI still serving that port for its own orphans (#5310).
+    StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
   }
 
   // Launch the durable task-graph dispatcher: claim Pending tasks, execute them with a fresh

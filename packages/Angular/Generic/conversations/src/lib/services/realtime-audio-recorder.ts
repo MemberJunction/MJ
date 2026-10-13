@@ -69,6 +69,10 @@ export class RealtimeAudioRecorder implements IRealtimeSessionRecorder {
     private remoteAttached = false;
     /** A remote stream handed to AttachRemoteStream before the audio graph was ready; wired at setup. */
     private pendingRemoteStream: MediaStream | null = null;
+    /** The microphone to record: the latest stream given to Start or ReplaceMicrophone. Setup connects it. */
+    private micStream: MediaStream | null = null;
+    /** The source node reading the microphone, swapped by ReplaceMicrophone. */
+    private micSource: MediaStreamAudioSourceNode | null = null;
 
     /** 48 kHz samples captured (post-resample) — the recording's clock. */
     private capturedSamples = 0;
@@ -122,6 +126,7 @@ export class RealtimeAudioRecorder implements IRealtimeSessionRecorder {
         this.stopping = null;
         this.capturedSamples = 0;
         this.encoderReady = this.prepareEncoder();
+        this.micStream = micStream;
         // Fire-and-forget the async setup (it must `await audioContext.resume()` + worklet load); any
         // failure disables the recorder rather than throwing into the session-start path.
         void this.startMixedRecording(micStream, remoteStream).catch((error) => {
@@ -145,6 +150,24 @@ export class RealtimeAudioRecorder implements IRealtimeSessionRecorder {
         } else {
             // Audio-graph setup still in flight (awaiting resume / worklet load) — connect at setup.
             this.pendingRemoteStream = stream;
+        }
+    }
+
+    /**
+     * Records the microphone stream's current track from now on: call it after the track changes (a
+     * device switch). A source node reads the track it was created with, so the recording would otherwise
+     * carry silence from the old device. Safe before the audio graph is ready (setup connects the latest
+     * stream, and Start replaces it); a stream without an audio track keeps the current one.
+     */
+    public ReplaceMicrophone(micStream: MediaStream): void {
+        this.micStream = micStream;
+        if (!this.audioContext || !this.captureNode()) {
+            return;
+        }
+        const replacement = this.connectStream(this.audioContext, micStream);
+        if (replacement) {
+            this.micSource?.disconnect();
+            this.micSource = replacement;
         }
     }
 
@@ -255,16 +278,19 @@ export class RealtimeAudioRecorder implements IRealtimeSessionRecorder {
         }
 
         try {
-            this.connectStream(audioContext, micStream);
+            // The microphone may have been replaced while the graph was being built.
+            this.micSource = this.connectStream(audioContext, this.micStream ?? micStream);
         } catch (error) {
             if (!forced48k) {
                 throw error;
             }
             console.warn('[RealtimeAudioRecorder] The 48 kHz context rejected the microphone — rebuilding at the device rate with resampling:', error);
-            // releaseGraph() forgets a stashed agent stream; the rebuild still has to connect it.
+            // releaseGraph() forgets a stashed agent stream and a replaced microphone; the rebuild still has to connect both.
             const stashedRemote = this.pendingRemoteStream;
+            const stashedMic = this.micStream;
             this.releaseGraph();
             this.pendingRemoteStream = stashedRemote;
+            this.micStream = stashedMic;
             return 'mic-rejected';
         }
         // Connect the agent's stream if it was passed now, or if AttachRemoteStream() stashed one while
@@ -397,14 +423,15 @@ export class RealtimeAudioRecorder implements IRealtimeSessionRecorder {
         this.capturedSamples += samples.length;
     }
 
-    /** Routes one stream's audio tracks into the capture node (no-op when track-less / no node). */
-    private connectStream(audioContext: AudioContext, stream: MediaStream): void {
+    /** Routes one stream's audio tracks into the capture node; returns the source, or null when track-less / no node. */
+    private connectStream(audioContext: AudioContext, stream: MediaStream): MediaStreamAudioSourceNode | null {
         const node = this.captureNode();
         if (!node || stream.getAudioTracks().length === 0) {
-            return;
+            return null;
         }
         const source = audioContext.createMediaStreamSource(stream);
         source.connect(node);
+        return source;
     }
 
     /**
@@ -421,6 +448,8 @@ export class RealtimeAudioRecorder implements IRealtimeSessionRecorder {
         this.setupGeneration++;
         this.remoteAttached = false;
         this.pendingRemoteStream = null;
+        this.micStream = null;
+        this.micSource = null;
         if (this.workletNode) {
             this.workletNode.port.onmessage = null;
             this.disconnectNode(this.workletNode);

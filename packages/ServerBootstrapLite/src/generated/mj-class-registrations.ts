@@ -168,8 +168,9 @@ import {
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
-// @memberjunction/ai-vertex (1 classes)
+// @memberjunction/ai-vertex (2 classes)
 import {
+    GeminiEnterpriseRealtime,
     VertexLLM,
 } from '@memberjunction/ai-vertex';
 
@@ -1448,6 +1449,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     SiliconFlowLLM,
     PerplexityDecision,
     SystemOneDecision,
+    GeminiEnterpriseRealtime,
     VertexLLM,
     xAILLM,
     xAIRealtime,
@@ -1602,11 +1604,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
-    MJCompanyIntegrationRunDetailEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
@@ -1806,11 +1808,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
     MJRecordProcessCategoryEntity,
-    MJRecordProcessEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordProcessEntity,
     MJRecordProcessWatermarkEntity,
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
@@ -2010,11 +2012,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     DetachTagsAction,
     EnrollUserAction,
     GetBundlesAction,
-    GetCertificatesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetCertificatesAction,
     GetCourseAnalyticsAction,
     GetLearnWorldsBulkDataAction,
     GetLearnWorldsCourseDetailsAction,
@@ -2214,11 +2216,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
-    TaskGraphGetStatusServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TaskGraphGetStatusServerOperation,
     TaskGraphOverrideEdgeServerOperation,
     TaskGraphPauseServerOperation,
     TaskGraphResumeServerOperation,
@@ -2418,11 +2420,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
-    RevertInteractiveFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    RevertInteractiveFormAction,
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
@@ -2502,7 +2504,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1063;
+export const CLASS_REGISTRATIONS_COUNT = 1064;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -50,6 +50,9 @@ export {
     type RecordingTerminalOptions,
 } from './session/RealtimeSessionRuntime';
 
+// Why a connected call shows no avatar its agent asked for (`RealtimeSessionRuntime.AvatarNotice$`).
+export { ResolveAvatarNotice, type RealtimeAvatarNotice } from './session/avatar-notice';
+
 // How a session is minted — the seam an app implements to replace the stock mint.
 export {
     DefaultRealtimeSessionLauncher,
@@ -67,6 +70,19 @@ export {
     type RealtimeSessionVerificationSnapshot,
 } from './session/session-event-hub';
 export { ClientSessionDeadline } from './session/client-session-deadline';
+export { DescribeCallEnd, REALTIME_CALL_TIME_LIMIT_END, type RealtimeCallEndDescription } from './session/call-end';
+export {
+    REALTIME_CAPTURES_OFF,
+    REALTIME_CAPTURE_OFFERS_NONE,
+    REALTIME_CAPTURE_SOURCE_IDS,
+    type RealtimeCaptureOffers,
+    type RealtimeCaptureFailure,
+    type RealtimeCaptureKind,
+    type RealtimeCaptureState,
+    type RealtimeCaptureStates,
+} from './session/realtime-captures';
+// The call's microphone and the ones it can move to (`RealtimeSessionRuntime.Microphone$`, `SwitchMicrophone`).
+export { REALTIME_MICROPHONE_NONE, type RealtimeMicrophoneState } from './session/realtime-microphone';
 
 // Channel scoping inputs a host supplies at session start.
 export {
@@ -93,6 +109,7 @@ export {
 
 // The platform seam.
 export {
+    type IRealtimeFrameSampler,
     type IRealtimeMediaHost,
     type IRealtimeSessionRecorder,
 } from './hosts/IRealtimeMediaHost';
@@ -106,6 +123,12 @@ export {
     type VisualPerceptionOptions,
     type ChannelExposureSettings,
 } from './channels/base-realtime-channel-client';
+// Where a channel's surface shows and may move, from its registry row's `UIConfig`.
+export {
+    DEFAULT_CHANNEL_SURFACE_PLACEMENT,
+    ReadChannelSurfacePlacement,
+    type ChannelSurfacePlacement,
+} from './channels/channel-surface-placement';
 
 // Channel contract v2 — the runtime half (events, outputs, verb results, `ContextTool` addressing).
 // The declarative half (descriptors, scoping, policy) lives in `@memberjunction/ai-core-plus`.

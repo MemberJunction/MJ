@@ -111,5 +111,65 @@
     "primaryKey": {
       "ID": "0341502E-4C87-48D6-AE20-A4B20D8A11DA"
     }
+  },
+  {
+    "fields": {
+      "Name": "Camera",
+      "Description": "The user's camera, which the agent can ask to see. Opening the channel shows the user the agent's request; only the user turns the camera on or off. Its surface is the ask, then the user's self-view.",
+      "ServerPluginClass": "ClientOnlyChannelServer",
+      "ClientPluginClass": "RealtimeCameraChannel",
+      "TransportType": "PubSub",
+      "IsActive": true,
+      "UIConfig": {
+        "DisplayName": "Camera",
+        "GroupName": "Media",
+        "Icon": "fa-solid fa-video",
+        "Color": "--mj-brand-primary",
+        "Placement": "pip"
+      }
+    },
+    "primaryKey": {
+      "ID": "000B8673-25E8-4C8C-B2B2-218DAB33D1B3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ScreenShare",
+      "Description": "A screen, window or browser tab the user shares, which the agent can ask to see. Opening the channel shows the user the agent's request; only the user starts or stops sharing. Its surface is the ask, then a preview of what is shared.",
+      "ServerPluginClass": "ClientOnlyChannelServer",
+      "ClientPluginClass": "RealtimeScreenShareChannel",
+      "TransportType": "PubSub",
+      "IsActive": true,
+      "UIConfig": {
+        "DisplayName": "Screen share",
+        "GroupName": "Media",
+        "Icon": "fa-solid fa-display",
+        "Color": "--mj-brand-primary",
+        "Placement": "pip"
+      }
+    },
+    "primaryKey": {
+      "ID": "150EAB9E-55CB-46D0-A17F-D3A389AE8898"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Avatar",
+      "Description": "The agent's video, when the model sends one (an avatar). It is in every call and inert without video: it gives the agent no tools or instructions, and shows the agent nothing. Its surface is the agent's video, placed on the stage.",
+      "ServerPluginClass": "ClientOnlyChannelServer",
+      "ClientPluginClass": "RealtimeAvatarChannel",
+      "TransportType": "PubSub",
+      "IsActive": true,
+      "UIConfig": {
+        "DisplayName": "Avatar",
+        "GroupName": "Media",
+        "Icon": "fa-solid fa-circle-user",
+        "Color": "--mj-brand-primary",
+        "Placement": "stage"
+      }
+    },
+    "primaryKey": {
+      "ID": "43108281-981C-4467-B2EC-0B9F47CCFA57"
+    }
   }
 ]
