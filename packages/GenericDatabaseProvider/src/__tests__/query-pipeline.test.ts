@@ -1150,8 +1150,8 @@ class TestMatPlanProvider extends TestPipelineProvider {
         return { Success: false, Results: [] as T[], RowCount: 0, TotalRowCount: 0, ErrorMessage: 'unexpected entity' } as unknown as RunViewResult<T>;
     }
 
-    public plan(query: MJQueryEntityExtended, params: RunQueryParams, user?: UserInfo) {
-        return this.tryBuildMaterializedQueryPlan(query, params, user);
+    public plan(query: MJQueryEntityExtended, params: RunQueryParams, user?: UserInfo, contextValues?: Record<string, string>) {
+        return this.tryBuildMaterializedQueryPlan(query, params, user, contextValues);
     }
 }
 
@@ -1215,6 +1215,14 @@ describe('GenericDatabaseProvider.tryBuildMaterializedQueryPlan (plan-level)', (
         const r = await p.plan(q, matParams({ amt: '42' }));
         expect(r).not.toBeNull();
         expect(r!.parameters).toEqual([42]);
+    });
+
+    it('a run whose template read Context is served live: the shared snapshot was not built for this user or day', async () => {
+        const p = new TestMatPlanProvider();
+        p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]));
+        const q = matQuery({ QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
+        expect(await p.plan(q, matParams({ x: 'a' }), undefined, {})).not.toBeNull();
+        expect(await p.plan(q, matParams({ x: 'a' }), undefined, { UserID: 'u-1' })).toBeNull();
     });
 
     it('status gate: a non-Active (DriftHold) materialization → null (serve live)', async () => {

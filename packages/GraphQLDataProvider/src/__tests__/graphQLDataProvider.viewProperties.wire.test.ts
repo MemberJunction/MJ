@@ -72,4 +72,13 @@ describe('GraphQLDataProvider view properties on the wire', () => {
         await expect(provider.CallInternalRunView({ ViewEntity: view, ViewID: 'VIEW-0001', ServerProperties: { Chapter: CHAPTER } })).rejects.toThrow(/set only by server code/);
         expect(GraphQLWire.Requests).toHaveLength(0);
     });
+
+    it('refuses RequireApproved and ServerParameters on a browser query run rather than dropping them', async () => {
+        await expect(provider.CallInternalRunQuery({ QueryID: 'Q-1', RequireApproved: true })).rejects.toThrow(/set only by server code/);
+        await expect(provider.CallInternalRunQuery({ QueryID: 'Q-1', ServerParameters: { ChapterID: 3 } })).rejects.toThrow(/set only by server code/);
+        await expect(provider.CallInternalRunQueries([{ QueryID: 'Q-1' }, { QueryID: 'Q-2', RequireApproved: true }])).rejects.toThrow(/set only by server code/);
+        const checked = await provider.RunQueriesWithCacheCheck([{ params: { QueryID: 'Q-1', ServerParameters: { ChapterID: 3 } } }]);
+        expect(checked.success).toBe(false);
+        expect(GraphQLWire.Requests).toHaveLength(0);
+    });
 });

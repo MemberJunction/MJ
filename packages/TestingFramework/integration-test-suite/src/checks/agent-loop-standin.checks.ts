@@ -643,7 +643,7 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
     },
     {
         Id: 'agent-loop-standin.ALS14',
-        Name: 'ALS14: a run\'s bound parameters are stored on its row, and a run that continues it (lastRunId) applies them when its caller passes none',
+        Name: 'ALS14: a run that continues another (lastRunId) applies the bound parameters stored on that run\'s row when its caller passes none, and the caller\'s own bindings win',
         Fn: async (ctx): Promise<void> => {
             const h = await makeBreakerHarness(ctx, 'ALS14');
             if (!h) { return; }

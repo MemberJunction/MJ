@@ -23,8 +23,8 @@
  * `MJ: User Views`, which is what VP4 needs. Teardown deletes the views, the runs and the minted
  * key. Checks skip loudly when MJAPI is unreachable or the seed is absent.
  */
-import { RunView } from '@memberjunction/core';
-import type { IMetadataProvider, RunViewResult, UserViewProperty, ViewPropertyValues } from '@memberjunction/core';
+import { LogError, RunView } from '@memberjunction/core';
+import type { BaseEntity, IMetadataProvider, RunViewResult, UserViewProperty, ViewPropertyValues } from '@memberjunction/core';
 import type { MJAIAgentRunEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { UUIDSet } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry, SEEDED_SCOPED_A_EMAIL, SEEDED_SCOPED_B_EMAIL, SEED_FIXTURES_COMMAND } from '@memberjunction/testing-integration';
@@ -154,18 +154,22 @@ async function setUp(ctx: IntegrationCheckContext, fx: ViewPropertiesFixture): P
     fx.Usable = true;
 }
 
+/** Deletes one fixture row; a failed delete is logged so a leaked row is visible, not silent. */
+async function deleteFixture(ctx: IntegrationCheckContext, entityName: string, id: string): Promise<void> {
+    try {
+        const row = await ctx.Provider.GetEntityObject<BaseEntity>(entityName, ctx.User);
+        if (await row.Load(id) && !(await row.Delete())) {
+            LogError(`IT119 teardown: could not delete ${entityName} ${id}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+    } catch (err) {
+        LogError(`IT119 teardown: could not delete ${entityName} ${id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+}
+
 async function tearDown(ctx: IntegrationCheckContext, fx: ViewPropertiesFixture): Promise<void> {
-    for (const id of fx.CreatedViewIDs) {
-        await ctx.Provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', ctx.User)
-            .then(async view => { if (await view.Load(id)) { await view.Delete(); } })
-            .catch(() => undefined);
-    }
-    for (const id of fx.CreatedRunIDs) {
-        await ctx.Provider.GetEntityObject<MJAIAgentRunEntity>(RUNS_ENTITY, ctx.User)
-            .then(async run => { if (await run.Load(id)) { await run.Delete(); } })
-            .catch(() => undefined);
-    }
-    await DeleteMintedUserKeys(ctx, fx).catch(() => undefined);
+    for (const id of fx.CreatedViewIDs) await deleteFixture(ctx, 'MJ: User Views', id);
+    for (const id of fx.CreatedRunIDs) await deleteFixture(ctx, RUNS_ENTITY, id);
+    await DeleteMintedUserKeys(ctx, fx).catch(err => LogError(`IT119 teardown: could not delete the minted API keys: ${err instanceof Error ? err.message : String(err)}`));
 }
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {

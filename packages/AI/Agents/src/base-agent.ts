@@ -990,11 +990,11 @@ export class BaseAgent {
 
     /**
      * Gives a run that continues another (`lastRunId`) the earlier run's stored bindings, when its caller
-     * passed none. Fails closed: a prior run that can't be read, or whose stored bindings don't parse,
-     * fails this run rather than starting it unbound.
+     * passed none (an empty object counts as none, as everywhere else). Fails closed: a prior run that
+     * can't be read, or whose stored bindings don't parse, fails this run rather than starting it unbound.
      */
     private async inheritBoundActionParams(params: ExecuteAgentParams): Promise<void> {
-        if (params.boundActionParams || !params.lastRunId) {
+        if (this.hasBoundActionParams(params.boundActionParams) || !params.lastRunId) {
             return;
         }
         const result = await new RunView().RunView<{ BoundActionParams: string | null }>({
@@ -1006,9 +1006,16 @@ export class BaseAgent {
         if (!result.Success) {
             throw new Error(`Could not read the bindings of run ${params.lastRunId}: ${result.ErrorMessage}`);
         }
-        const stored = result.Results[0]?.BoundActionParams;
+        if (result.Results.length === 0) {
+            throw new Error(`Could not read the bindings of run ${params.lastRunId}: no such run is visible to this user`);
+        }
+        const stored = result.Results[0].BoundActionParams;
         if (stored) {
-            params.boundActionParams = JSON.parse(stored) as BoundActionParams;
+            const parsed: unknown = JSON.parse(stored);
+            if (!IsPlainObject(parsed)) {
+                throw new Error(`The stored bindings of run ${params.lastRunId} are not an object of action bindings`);
+            }
+            params.boundActionParams = parsed as BoundActionParams;
         }
     }
 

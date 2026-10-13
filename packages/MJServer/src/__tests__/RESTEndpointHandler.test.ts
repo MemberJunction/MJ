@@ -110,6 +110,7 @@ interface ReqShape {
     query?: Record<string, string>;
     body?: unknown;
     mjUser?: UserInfo;
+    timeZone?: string;
 }
 
 function makeReq(shape: ReqShape = {}): express.Request {
@@ -118,6 +119,7 @@ function makeReq(shape: ReqShape = {}): express.Request {
         query: shape.query ?? {},
         body: shape.body ?? {},
         mjUser: shape.mjUser ?? MJ_USER,
+        userPayload: { TimeZone: shape.timeZone },
     } as unknown as express.Request;
 }
 
@@ -540,15 +542,15 @@ describe('RESTEndpointHandler view routes', () => {
             expect(jsonBody()).toEqual({ Success: true, Results: [{ ID: '1' }] });
         });
 
-        it('drops fields only server code may set, and keeps the route\'s entity over the body\'s', async () => {
+        it('drops fields only server code may set, takes the time zone from the header, and keeps the route\'s entity over the body\'s', async () => {
             mockOpsRunView.mockResolvedValue({ success: true, result: { Success: true, Results: [] } });
             const handler = makeHandler();
-            const req = makeReq({ params: { entityName: 'Users' }, body: { EntityName: 'Secrets', TimeZone: 'Asia/Tokyo', MaxRows: 5 } });
+            const req = makeReq({ params: { entityName: 'Users' }, body: { EntityName: 'Secrets', TimeZone: 'Asia/Tokyo', MaxRows: 5 }, timeZone: 'Europe/Paris' });
             const { res } = makeRes();
 
             await handler.runView(req, res);
 
-            expect(mockOpsRunView).toHaveBeenCalledWith({ EntityName: 'Users', MaxRows: 5 }, MJ_USER);
+            expect(mockOpsRunView).toHaveBeenCalledWith({ EntityName: 'Users', MaxRows: 5, TimeZone: 'Europe/Paris' }, MJ_USER);
         });
 
         it('maps view-layer failures to 400', async () => {
@@ -605,13 +607,13 @@ describe('RESTEndpointHandler view routes', () => {
         it('drops fields only server code may set from every batched view', async () => {
             mockOpsRunViews.mockResolvedValue({ success: true, results: [{ Success: true, Results: [] }] });
             const handler = makeHandler();
-            const req = makeReq({ body: { params: [{ EntityName: 'Users', TimeZone: 'Asia/Tokyo' }] } });
+            const req = makeReq({ body: { params: [{ EntityName: 'Users', TimeZone: 'Asia/Tokyo' }] }, timeZone: 'Europe/Paris' });
             const { res } = makeRes();
 
             await handler.runViews(req, res);
 
             const [sent] = mockOpsRunViews.mock.calls[0] as [RunViewParams[], UserInfo];
-            expect(sent).toEqual([{ EntityName: 'Users' }]);
+            expect(sent).toEqual([{ EntityName: 'Users', TimeZone: 'Europe/Paris' }]);
         });
 
         it('maps view-layer batch failures to 400', async () => {

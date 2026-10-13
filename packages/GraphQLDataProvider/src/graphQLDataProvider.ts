@@ -633,6 +633,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
+        this.refuseServerOnlyQueryParams(params);
         if (params.SQL) {
             return this.RunAdhocQuery(params.SQL, params.MaxRows, params.TimeoutSeconds, params.StartRow);
         }
@@ -644,6 +645,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             throw new Error("No SQL, QueryID, or QueryName provided to RunQuery");
+        }
+    }
+
+    /**
+     * `RequireApproved` and `ServerParameters` are honoured only by server code, and no GraphQL run
+     * input carries them, so a browser run that sets either throws rather than running without it.
+     */
+    private refuseServerOnlyQueryParams(params: RunQueryParams): void {
+        if (params.RequireApproved || params.ServerParameters !== undefined) {
+            throw new Error('RequireApproved and ServerParameters are set only by server code; a run sent from the browser cannot carry them.');
         }
     }
 
@@ -690,6 +701,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     protected async InternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQueries()
         // Make a single batch GraphQL call for efficiency (single network roundtrip)
+        params.forEach(p => this.refuseServerOnlyQueryParams(p));
         const query = gql`
             query RunQueriesBatch($input: [RunQueryInput!]!) {
                 RunQueries(input: $input) {
@@ -846,6 +858,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         contextUser?: UserInfo
     ): Promise<RunQueriesWithCacheCheckResponse<T>> {
         try {
+            params.forEach(item => this.refuseServerOnlyQueryParams(item.params));
             // Build the GraphQL input
             const input = params.map(item => ({
                 params: {

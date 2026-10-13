@@ -484,6 +484,12 @@ describe('a run that continues another (lastRunId)', () => {
         expect(params.boundActionParams).toBe(own);
         expect(priorRun.reads).toHaveLength(0);
     });
+    it('treats an empty bindings object as none and inherits', async () => {
+        priorRun.result.Results = [{ BoundActionParams: JSON.stringify(bindChapter()) }];
+        const params = agentParams({ lastRunId: 'run-1', boundActionParams: {} });
+        await inherit(params);
+        expect(params.boundActionParams).toEqual(bindChapter());
+    });
     it('reads nothing for a run that continues no other', async () => {
         const params = agentParams();
         await inherit(params);
@@ -502,6 +508,14 @@ describe('a run that continues another (lastRunId)', () => {
     });
     it('fails closed when the stored bindings do not parse', async () => {
         priorRun.result.Results = [{ BoundActionParams: '{not json' }];
-        await expect(inherit(agentParams({ lastRunId: 'run-1' }))).rejects.toThrow();
+        await expect(inherit(agentParams({ lastRunId: 'run-1' }))).rejects.toThrow(SyntaxError);
+    });
+    it('fails closed when the earlier run is not found (missing, or hidden from this user)', async () => {
+        priorRun.result.Results = [];
+        await expect(inherit(agentParams({ lastRunId: 'run-1' }))).rejects.toThrow(/no such run is visible/);
+    });
+    it('fails closed when the stored bindings parse to something other than an object', async () => {
+        priorRun.result.Results = [{ BoundActionParams: 'null' }];
+        await expect(inherit(agentParams({ lastRunId: 'run-1' }))).rejects.toThrow(/not an object of action bindings/);
     });
 });

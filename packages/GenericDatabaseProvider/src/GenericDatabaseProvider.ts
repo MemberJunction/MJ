@@ -4389,8 +4389,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         query: MJQueryEntityExtended,
         params: RunQueryParams,
         contextUser?: UserInfo,
+        contextValues?: Record<string, string>,
     ): Promise<{ sql: string; parameters: unknown[] } | null> {
         if (!IsMaterializedDataSource(params.DataSource)) return null; // not opted in → live
+        // A snapshot is shared by every caller and was built without this caller's Context (user, date), so a
+        // run whose template read Context is served live: its rows depend on who runs it and when.
+        if (contextValues && Object.keys(contextValues).length > 0) return null;
         if (query.ExternalDataSourceID) return null;                   // external source → materialized table is local; live
         // The query<->materialization link lives in the MaterializedResultQuery join table — there is no
         // Query.MaterializedResultID column (that direct FK, paired with MaterializedResult.SourceQueryID,
@@ -4515,7 +4519,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // RowFilterBroad materialization, serve from the materialized table with the row-filter params
             // injected as BOUND predicates. On ANY uncertainty tryBuildMaterializedQueryPlan returns null and
             // we fall through to the live execution below — a materialized read can never diverge from live.
-            const matPlan = await this.tryBuildMaterializedQueryPlan(query, params, contextUser);
+            const matPlan = await this.tryBuildMaterializedQueryPlan(query, params, contextUser, resolved.renderResult.ContextValues);
             if (matPlan) {
                 // Use a LOCAL for the materialized SQL — never overwrite `finalSQL` (which stays the
                 // live-rendered SQL), so a fallback below runs the live path unchanged.
