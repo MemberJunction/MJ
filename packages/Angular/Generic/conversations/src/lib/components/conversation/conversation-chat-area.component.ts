@@ -2213,8 +2213,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * stopping off stop nothing; the conversation's owner stops anything; anyone else stops only
    * a run they started. A run whose starter cannot be told (no run row yet, no user on the
    * reply or its request) is treated as the viewer's own, so a reply the viewer just sent is
-   * stoppable before its run is known. The server does not enforce this; it decides what the
-   * controls offer.
+   * stoppable before its run is known. The run entity enforces the same rule on the server when
+   * the stop is saved (`MJAIAgentRunEntityExtended.StopPermitted`); this decides what the controls offer.
    */
   public CanStopDetail(detailId: string): boolean {
     return this.StoppableDetailIds.some((id) => UUIDsEqual(id, detailId));
@@ -2257,10 +2257,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     const byId = IndexByUUID(key.messages ?? []);
     const viewerId = this.CurrentUser.ID;
-    return key.inFlight.filter((id) => {
-      const starter = this.runStarterIdFor(id, byId);
-      return starter == null || UUIDsEqual(starter, viewerId);
-    });
+    // The same rule the run entity enforces on the server when the stop is saved.
+    return key.inFlight.filter((id) => MJAIAgentRunEntityExtended.StopPermitted(viewerId, this.runStarterIdFor(id, byId), false));
   }
 
   /** How many in-flight replies the viewer may stop. */

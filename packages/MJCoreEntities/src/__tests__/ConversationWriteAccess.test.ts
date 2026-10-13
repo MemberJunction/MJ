@@ -11,7 +11,7 @@ vi.mock('../custom/ResourcePermissions/ResourcePermissionEngine', () => ({
 
 let grants: Array<{ ResourceRecordID: string; PermissionLevel: string }> = [];
 
-import { UserMayWriteConversation } from '../custom/ConversationWriteAccess';
+import { UserMayWriteConversation, UserOwnsConversation } from '../custom/ConversationWriteAccess';
 
 function provider(ownerId: string | null, loadOk = true) {
     return {
@@ -47,5 +47,24 @@ describe('UserMayWriteConversation', () => {
         const grantee = await UserMayWriteConversation(provider('other'), user, 'c1');
         expect(grantee.Allowed).toBe(true);
         expect(grantee.IsOwner).toBe(false);
+    });
+});
+
+describe('UserOwnsConversation', () => {
+    it('is true for the owner and for an Owner-level grant, not for Edit or View', async () => {
+        grants = [];
+        expect(await UserOwnsConversation(provider('u1'), user, 'c1')).toBe(true);
+        grants = [{ ResourceRecordID: 'c1', PermissionLevel: 'Owner' }];
+        expect(await UserOwnsConversation(provider('other'), user, 'c1')).toBe(true);
+        grants = [{ ResourceRecordID: 'c1', PermissionLevel: 'Edit' }];
+        expect(await UserOwnsConversation(provider('other'), user, 'c1')).toBe(false);
+        grants = [{ ResourceRecordID: 'c1', PermissionLevel: 'View' }];
+        expect(await UserOwnsConversation(provider('other'), user, 'c1')).toBe(false);
+    });
+    it('is false when nothing can be verified: no user, a client provider, or a conversation that does not load', async () => {
+        grants = [{ ResourceRecordID: 'c1', PermissionLevel: 'Owner' }];
+        expect(await UserOwnsConversation(provider('u1'), null, 'c1')).toBe(false);
+        expect(await UserOwnsConversation({ ProviderType: 'Network', GetEntityObject: vi.fn() } as never, user, 'c1')).toBe(false);
+        expect(await UserOwnsConversation(provider('u1', false), user, 'c1')).toBe(false);
     });
 });
