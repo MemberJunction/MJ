@@ -2217,7 +2217,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * column list here buys the same protection without touching either.
      */
     protected buildFieldSecuritySelectList(entityInfo: EntityInfo, user: UserInfo | undefined): string {
-        if (!user || !entityInfo.EnableFieldLevelSecurity) {
+        if (!user || !entityInfo.FieldLevelSecurityApplies) {
             return '*'; // the overwhelmingly common case — one boolean, unchanged SQL
         }
         const denied = entityInfo.GetDeniedReadFields(user);
@@ -2273,7 +2273,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             const flsUser = contextUser ?? this.CurrentUser;
-            const denied: Set<string> = params.ResultType !== 'entity_object' && flsUser && entityInfo.EnableFieldLevelSecurity
+            const denied: Set<string> = params.ResultType !== 'entity_object' && flsUser && entityInfo.FieldLevelSecurityApplies
                 ? entityInfo.GetDeniedReadFields(flsUser)
                 : new Set<string>();
 
@@ -2337,7 +2337,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // fields are simply excluded from the searched set. Computed once per call, never per
         // field (the per-request precompute contract).
         const user = contextUser ?? this.CurrentUser;
-        const deniedSearchFields: Set<string> = entityInfo.EnableFieldLevelSecurity && user
+        const deniedSearchFields: Set<string> = entityInfo.FieldLevelSecurityApplies && user
             ? entityInfo.GetDeniedReadFields(user)
             : new Set<string>();
 
@@ -2894,8 +2894,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // BOTH projections, in this order — they are siblings, not alternatives, and
             // `PostRunView` calls them as a pair at all four of its projection points. Applying
             // only the first leaves the audit trail leaking: `ApplyFieldSecurityProjection`
-            // short-circuits on the RunView entity's own `EnableFieldLevelSecurity`, and
-            // `MJ: Record Changes` has that flag OFF by design, so it is a no-op on exactly the
+            // short-circuits when field security does not apply to the RunView entity, and
+            // `MJ: Record Changes` has field security OFF by design, so it is a no-op on exactly the
             // rows that matter. The denied values there are INSIDE the `ChangesJSON` /
             // `FullRecordJSON` payload columns, which no amount of column stripping reaches —
             // `ApplyRecordChangeFieldSecurityProjection` is what projects them against the entity

@@ -2951,6 +2951,32 @@ export class EntityInfo extends BaseInfo {
     private _nameFieldCache: EntityFieldInfo | null | undefined = undefined;
 
     /**
+     * Whether field-level security decides anything on this entity: its own
+     * {@link EnableFieldLevelSecurity} flag is on, or an IS-A ancestor's is.
+     *
+     * **Enforcement points gate on this, never on the raw flag.** An IS-A child carries each
+     * ancestor's fields as mirror fields of its own, read from the same row. Gating on the child's
+     * own flag — off on nearly every child, because nobody turns it on there — let a role denied
+     * `Phone` on the parent read it through the child's RunView, load and `GetAll()`. The denied
+     * sets ({@link GetDeniedReadFields} and siblings) carry the ancestor's denials for those mirror
+     * fields; this is the matching gate, so a caller that skips work when it is false never skips
+     * an ancestor's rules.
+     *
+     * The raw flag stays the right question for CONFIGURATION — which entities reconciliation,
+     * CodeGen and the system-user sweeps cover — because the rules themselves live on the entity
+     * that owns the field.
+     */
+    public get FieldLevelSecurityApplies(): boolean {
+        if (this.EnableFieldLevelSecurity) {
+            return true; // checked first: one boolean for every entity that has it on
+        }
+        if (!this.ParentID) {
+            return false; // one boolean for every entity outside an IS-A chain
+        }
+        return this.ParentChain.some(p => p.EnableFieldLevelSecurity);
+    }
+
+    /**
      * The set of field names this user may NOT READ on this entity — the per-request primitive
      * every field-security enforcement point is built on.
      *
@@ -2960,8 +2986,9 @@ export class EntityInfo extends BaseInfo {
      * re-scans `user.UserRoles` and allocates. A Set lookup costs neither.
      *
      * Names are lowercased so callers can match case-insensitively, consistent with
-     * {@link ProjectRowsToFields}. Returns an EMPTY set — never null — both when the entity has
-     * field security switched off and when the user is denied nothing, so callers can treat
+     * {@link ProjectRowsToFields}. Returns an EMPTY set — never null — both when field security
+     * does not apply (see {@link FieldLevelSecurityApplies}) and when the user is denied nothing,
+     * so callers can treat
      * `size === 0` as the single "nothing to do" condition.
      */
     public GetDeniedReadFields(user: UserInfo): Set<string> {
@@ -2982,10 +3009,10 @@ export class EntityInfo extends BaseInfo {
      * The caller still decides what to render in place of the value, which is the part that
      * differs per surface and should not be hidden inside a getter.
      *
-     * **Fails open** on a missing user, a missing field name, or an entity with field security
-     * switched off — matching `BaseEntity`'s own gate and `MjFormFieldComponent`. The server is
-     * the real boundary; a UI that blanked out fields because no user had resolved yet would be
-     * worse than one that shows them.
+     * **Fails open** on a missing user, a missing field name, or an entity where field security
+     * does not apply ({@link FieldLevelSecurityApplies}) — matching `BaseEntity`'s own gate and
+     * `MjFormFieldComponent`. The server is the real boundary; a UI that blanked out fields
+     * because no user had resolved yet would be worse than one that shows them.
      *
      * PERFORMANCE: this delegates to {@link GetDeniedReadFields}, which walks every field on the
      * entity. Fine for the handful of chrome reads it exists for; do NOT call it per row in a
@@ -2995,7 +3022,7 @@ export class EntityInfo extends BaseInfo {
      * @param user the acting user
      */
     public IsFieldReadableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
-        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+        if (!this.FieldLevelSecurityApplies || !fieldName || !user) {
             return true;
         }
         return !this.GetDeniedReadFields(user).has(fieldName.trim().toLowerCase());
@@ -3008,7 +3035,7 @@ export class EntityInfo extends BaseInfo {
      * three conditions.
      */
     public IsFieldUpdatableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
-        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+        if (!this.FieldLevelSecurityApplies || !fieldName || !user) {
             return true;
         }
         return !this.GetDeniedUpdateFields(user).has(fieldName.trim().toLowerCase());
@@ -3023,7 +3050,7 @@ export class EntityInfo extends BaseInfo {
      * the user typed, which is the case this exists to prevent.
      */
     public IsFieldCreatableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
-        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+        if (!this.FieldLevelSecurityApplies || !fieldName || !user) {
             return true;
         }
         return !this.GetDeniedCreateFields(user).has(fieldName.trim().toLowerCase());
@@ -3054,7 +3081,9 @@ export class EntityInfo extends BaseInfo {
 
     /**
      * Shared walk behind {@link GetDeniedReadFields} / {@link GetDeniedUpdateFields} /
-     * {@link GetDeniedCreateFields}, short-circuiting on {@link EnableFieldLevelSecurity}.
+     * {@link GetDeniedCreateFields}. Walks this entity's own fields when its
+     * {@link EnableFieldLevelSecurity} is on, then adds the fields an IS-A parent denies (see
+     * {@link addFieldsDeniedOnParent}).
      *
      * Every field is aggregated, including those carrying no permission records — on an enabled
      * entity those are denied. Unrestrictable fields (primary keys, `__mj_` columns) come back
@@ -3079,16 +3108,53 @@ export class EntityInfo extends BaseInfo {
      */
     private getDeniedFields(user: UserInfo, isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean): Set<string> {
         const denied = new Set<string>();
-        if (!this.EnableFieldLevelSecurity) {
-            return denied;
-        }
-        for (const field of this._Fields) {
-            if (isDenied(field.GetUserFieldPermissions(user, true))) {
-                denied.add(field.Name.trim().toLowerCase());
-                denied.add(field.CodeName.trim().toLowerCase());
+        if (this.EnableFieldLevelSecurity) {
+            for (const field of this._Fields) {
+                if (isDenied(field.GetUserFieldPermissions(user, true))) {
+                    this.addDeniedField(denied, field);
+                }
             }
         }
+        this.addFieldsDeniedOnParent(denied, user, isDenied);
         return denied;
+    }
+
+    /**
+     * IS-A inheritance for the denied sets: a field the immediate parent denies is denied on this
+     * entity's mirror of it, whatever this entity's own flag says. The parent's set already
+     * includes ITS parent's denials (this method runs there too), so one hop covers any depth.
+     *
+     * Mirrors are matched by `Name`: an IS-A child's view exposes each parent column under the
+     * parent's column name, and a child cannot declare a column of its own with that name.
+     *
+     * Additive only. When this entity ALSO has field security on, a mirror with no rows of its own
+     * is already denied by the walk above (no rows on an enabled entity means denied); the parent's
+     * rules cannot re-open it.
+     */
+    private addFieldsDeniedOnParent(
+        denied: Set<string>,
+        user: UserInfo,
+        isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean
+    ): void {
+        const parent = this.ParentEntityInfo;
+        if (!parent?.FieldLevelSecurityApplies) {
+            return;
+        }
+        const parentDenied = parent.getDeniedFields(user, isDenied);
+        if (parentDenied.size === 0) {
+            return;
+        }
+        for (const field of this._Fields) {
+            if (parentDenied.has(field.Name.trim().toLowerCase())) {
+                this.addDeniedField(denied, field);
+            }
+        }
+    }
+
+    /** Adds a field under BOTH key spaces — see {@link getDeniedFields} for why. */
+    private addDeniedField(denied: Set<string>, field: EntityFieldInfo): void {
+        denied.add(field.Name.trim().toLowerCase());
+        denied.add(field.CodeName.trim().toLowerCase());
     }
 
     /**

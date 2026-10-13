@@ -29,6 +29,7 @@ function entityInfo(opts: { fls: boolean; deniedNames?: string[]; nameField?: st
     return {
         Name: 'Clients',
         EnableFieldLevelSecurity: opts.fls,
+        FieldLevelSecurityApplies: opts.fls,
         Fields: [
             { Name: 'ID', IsNameField: false },
             { Name: nameFieldName, IsNameField: true },
