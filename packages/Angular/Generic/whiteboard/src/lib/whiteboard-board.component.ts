@@ -82,6 +82,11 @@ function touchesVerticalEdge(handle: ResizeHandle): boolean {
   return handle.includes('n') || handle.includes('s');
 }
 
+/** Whether two boxes are identical — a resize gesture that ends where it began changed nothing. */
+function sameBounds(a: WhiteboardBounds, b: WhiteboardBounds): boolean {
+  return a.X === b.X && a.Y === b.Y && a.W === b.W && a.H === b.H;
+}
+
 /**
  * The computed height of the markdown body inside the card that holds `handleEl`, in the
  * same box model as its max-height. Zoom is a transform on the viewport, so CSS px are
@@ -1022,6 +1027,11 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
         break;
       }
       case 'resize': {
+        // a press and release with no drag commits nothing: a markdown gesture starts from the
+        // rendered height, so committing it would lower a cap the content doesn't fill
+        if (sameBounds(i.CurBounds, i.OrigBounds)) {
+          break;
+        }
         const item = this.State.GetItem(i.ItemID);
         // per-kind commit: full-box kinds and markdown take X/Y/W/H; content-driven-height
         // kinds (sticky/text/image) take X/Y/W only — see BuildResizeCommitPatch. A markdown

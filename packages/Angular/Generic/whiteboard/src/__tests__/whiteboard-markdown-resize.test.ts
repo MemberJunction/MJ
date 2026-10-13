@@ -171,3 +171,29 @@ describe('markdown panel resize — capped panels', () => {
     expect((state.GetItem(md.ID) as WhiteboardMarkdownItem).H).toBe(240);
   });
 });
+
+describe('markdown panel resize — press and release without dragging', () => {
+  it('a no-move click on the bottom handle keeps a cap taller than the content', () => {
+    const { board, state } = makeBoard();
+    // capped at 400, but the text only fills 80px of it
+    const md = state.AddItem({ Kind: 'markdown', X: 0, Y: 0, W: 280, H: 400, Markdown: 'short answer' }, 'agent');
+    drag(board, state, md.ID, 's', 0, 0, 80);
+    expect((state.GetItem(md.ID) as WhiteboardMarkdownItem).H).toBe(400);
+  });
+
+  it('a no-move click on the top handle leaves an uncapped panel uncapped', () => {
+    const { board, state } = makeBoard();
+    const md = state.AddItem({ Kind: 'markdown', X: 0, Y: 0, W: 280, Markdown: LONG_MD }, 'agent');
+    drag(board, state, md.ID, 'n', 0, 0, 300);
+    expect((state.GetItem(md.ID) as WhiteboardMarkdownItem).H).toBeUndefined();
+  });
+
+  it('a no-move click records no undo step', () => {
+    const { board, state } = makeBoard();
+    const md = state.AddItem({ Kind: 'markdown', X: 0, Y: 0, W: 280, H: 400, Markdown: 'short answer' }, 'agent');
+    drag(board, state, md.ID, 'se', 0, 0, 80);
+    // the only undo step is the add, so undoing removes the panel
+    state.Undo();
+    expect(state.GetItem(md.ID)).toBeUndefined();
+  });
+});
