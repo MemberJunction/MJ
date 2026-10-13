@@ -211,6 +211,7 @@ import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 // mapping strings, so these must be the same functions rather than two copies that agree today.
 import { GetValueFromPath, SetMappedValue } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
+import { PickFallbackStorageAccountID } from './storage-account-fallback';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
 import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE } from './client-tool-results';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
@@ -16191,7 +16192,8 @@ The context is now within limits. Please retry your request with the recovered c
      * 2. Agent-level (`params.agent.DefaultStorageAccountID`)
      * 3. Category hierarchy — walks up the agent's category tree via `ParentID`
      * 4. Agent Type-level (`agentType.DefaultStorageAccountID`)
-     * 5. System fallback — single active storage account, if only one exists
+     * 5. System fallback — the single active storage account; when several are active, the one
+     *    with the most recent `__mj_UpdatedAt` (ties broken by ID), with a once-per-agent warning
      *
      * This method is `protected` so subclasses can override the resolution logic
      * for custom storage routing (e.g., routing by file type or tenant).
@@ -16241,20 +16243,12 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
 
-        // 5. System fallback — use cached metadata (already loaded during engine Config)
+        // 5. System fallback — use cached metadata (already loaded during engine Config).
+        // Several active accounts with no configured default resolve to the most recently
+        // updated one, with a once-per-agent warning, rather than failing the run.
         const activeAccounts = FileStorageEngineBase.Instance.AccountsWithProviders
             .filter(a => a.provider.IsActive);
 
-        if (activeAccounts.length === 0) {
-            // No storage configured — return null, inline base64 fallback handles it downstream
-            return null;
-        }
-
-        if (activeAccounts.length === 1) {
-            return activeAccounts[0].account.ID;
-        }
-
-        // 2+ active accounts but nothing configured at any level
         const agentName = params.agent.Name || params.agent.ID;
         const typeName = params.agent.TypeID
             ? AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID))?.Name || params.agent.TypeID
@@ -16262,16 +16256,13 @@ The context is now within limits. Please retry your request with the recovered c
         const categoryName = params.agent.CategoryID
             ? AIEngine.Instance.AgentCategories.find(c => UUIDsEqual(c.ID, params.agent.CategoryID))?.Name || params.agent.CategoryID
             : 'none';
-        const accountNames = activeAccounts.map(a => `'${a.account.Name}' (${a.provider.Name})`).join(', ');
 
-        throw new Error(
-            `Multiple active file storage accounts detected (${accountNames}) but no DefaultStorageAccountID is configured ` +
-            `for agent '${agentName}', category '${categoryName}', or agent type '${typeName}'.\n` +
-            `To fix: Set DefaultStorageAccountID on one of the following (in order of priority):\n` +
-            `  1. Agent '${agentName}' — for this specific agent\n` +
-            `  2. Agent Category '${categoryName}' — for all agents in this category\n` +
-            `  3. Agent Type '${typeName}' — for all agents of this type`
-        );
+        return PickFallbackStorageAccountID(activeAccounts, {
+            AgentKey: params.agent.ID || agentName,
+            AgentName: agentName,
+            CategoryName: categoryName,
+            AgentTypeName: typeName,
+        });
     }
 
     /**
