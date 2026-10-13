@@ -6,7 +6,7 @@ vi.mock('@memberjunction/core', () => ({ LogError: vi.fn(), LogStatus: vi.fn(), 
 vi.mock('@memberjunction/credentials', () => ({ CredentialEngine: { Instance: { Config: vi.fn(), Credentials: [], GetCredential: vi.fn() } } }));
 
 process.env.PDL_API_KEY = 'env-key';
-const { PDLPersonClient, PDLAuthError, PDLCreditsExhaustedError, PDLRateLimitError, PDLRequestError, NormalizeDate, DomainOf } = await import('../PDLPersonClient.js');
+const { PDLPersonClient, TrimTrailingSlashes, PDLAuthError, PDLCreditsExhaustedError, PDLRateLimitError, PDLRequestError, NormalizeDate, DomainOf } = await import('../PDLPersonClient.js');
 
 interface Fixture { url: string; status: number; headers: Record<string, string>; body: unknown }
 function fixture(name: string): Fixture {
@@ -196,5 +196,13 @@ describe('DomainOf', () => {
         expect(DomainOf('https://www.Acme.com/about')).toBe('acme.com');
         expect(DomainOf('un.org')).toBe('un.org');
         expect(DomainOf(null)).toBeNull();
+    });
+});
+
+describe('TrimTrailingSlashes', () => {
+    it('strips any number of trailing slashes and nothing else', () => {
+        expect(TrimTrailingSlashes('https://api.peopledatalabs.com/v5///')).toBe('https://api.peopledatalabs.com/v5');
+        expect(TrimTrailingSlashes('https://x.test')).toBe('https://x.test');
+        expect(TrimTrailingSlashes('/'.repeat(50000) + 'a')).toBe('/'.repeat(50000) + 'a');
     });
 });

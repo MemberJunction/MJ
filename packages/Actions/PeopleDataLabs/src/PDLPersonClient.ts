@@ -182,7 +182,7 @@ export class PDLPersonClient {
         this.apiKey = apiKey.trim();
         // Bind global fetch so it keeps its expected `this` when not injected.
         this.fetchImpl = options?.FetchImpl ?? fetch.bind(globalThis);
-        this.baseURL = (options?.BaseURL ?? PDLAPIEndpoint).replace(/\/+$/, '');
+        this.baseURL = TrimTrailingSlashes(options?.BaseURL ?? PDLAPIEndpoint);
     }
 
     /** Resolve the key through the credentials path (company credential, then PDL_API_KEY), then construct a client. */
@@ -316,6 +316,13 @@ function MapExperience(raw: PDLExperienceRaw): PDLExperienceEntry | null {
 }
 
 /** `YYYY`, `YYYY-MM` and `YYYY-MM-DD` to the first day of the year or month; anything else to null. */
+/** Strips trailing slashes without a regex: `/\/+$/` is quadratic on a long run of slashes (CodeQL js/polynomial-redos). */
+export function TrimTrailingSlashes(value: string): string {
+    let end = value.length;
+    while (end > 0 && value.charAt(end - 1) === '/') end--;
+    return value.slice(0, end);
+}
+
 export function NormalizeDate(value: string | null | undefined): string | null {
     if (!value) return null;
     const trimmed = value.trim();
