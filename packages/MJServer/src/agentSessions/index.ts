@@ -38,3 +38,4 @@ export * from './HostInstance.js';
 export * from './BridgeHostInstance.js';
 export * from './SessionManager.js';
 export * from './SessionJanitor.js';
+export * from './SessionRunIDVerifier.js';
