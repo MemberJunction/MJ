@@ -92,10 +92,13 @@ vi.mock('@memberjunction/ai-vectors', () => ({
     },
 }));
 
-vi.mock('@memberjunction/ai-vector-sync', () => ({
+// CombineExtraFilters comes from its own module: loading all of ai-vector-sync here would pull in
+// engines this file's mocks don't cover.
+vi.mock('@memberjunction/ai-vector-sync', async () => ({
     EntityDocumentTemplateParser: { CreateInstance: vi.fn() },
     EntityVectorSyncer: class { CurrentUser = null; },
     VectorizeEntityParams: class {},
+    CombineExtraFilters: (await vi.importActual<typeof import('@memberjunction/ai-vector-sync/dist/generic/entityDocumentConfig.js')>('@memberjunction/ai-vector-sync/dist/generic/entityDocumentConfig.js')).CombineExtraFilters,
 }));
 
 vi.mock('@memberjunction/aiengine', () => ({
