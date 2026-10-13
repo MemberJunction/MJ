@@ -44,11 +44,8 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/ai', () => ({}));
 vi.mock('@memberjunction/ai-prompts', () => ({
-  AIEmbeddingRunner: class {
-    async RunEmbedding() {
-      return { Success: true, Vectors: [] };
-    }
-  },
+  // This line's ai-vector-sync and ai-vector-dupe import only AIPromptRunner from ai-prompts.
+  AIPromptRunner: class {},
 }));
 vi.mock('@memberjunction/ai-vectordb', () => ({
   VectorDBBase: class { constructor(_k: string) {} },
