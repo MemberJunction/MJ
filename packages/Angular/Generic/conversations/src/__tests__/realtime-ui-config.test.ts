@@ -149,6 +149,19 @@ describe('resolveRealtimeUi — per-affordance gating (flag AND runtime)', () =>
     expect(ResolveRealtimeUi({ chrome: 'console' }, narrowPeek).showSurfacePanel).toBe(true);
   });
 
+  it('says the surface panel waits for room only while the call is too narrow for a panel that would otherwise show (#5433)', () => {
+    const narrowPeek = signals({ ContainerWidthPx: 400, SurfacePanelEarned: true });
+    expect(ResolveRealtimeUi({ chrome: 'auto' }, narrowPeek).SurfacePanelWaitsForRoom).toBe(true);
+    expect(ResolveRealtimeUi({ chrome: 'orb' }, narrowPeek).SurfacePanelWaitsForRoom).toBe(true);
+    // Shown: the call is wide enough, or a console has room at any width.
+    expect(ResolveRealtimeUi({ chrome: 'auto' }, { ...narrowPeek, ContainerWidthPx: 1000 }).SurfacePanelWaitsForRoom).toBe(false);
+    expect(ResolveRealtimeUi({ chrome: 'console' }, narrowPeek).SurfacePanelWaitsForRoom).toBe(false);
+    // Hidden on purpose: not earned (Details closed), a channel on the stage, or the host's switch.
+    expect(ResolveRealtimeUi({ chrome: 'auto' }, { ...narrowPeek, SurfacePanelEarned: false }).SurfacePanelWaitsForRoom).toBe(false);
+    expect(ResolveRealtimeUi({ chrome: 'auto' }, { ...narrowPeek, channelFocus: true }).SurfacePanelWaitsForRoom).toBe(false);
+    expect(ResolveRealtimeUi({ chrome: 'auto', showSurfacePanel: false }, narrowPeek).SurfacePanelWaitsForRoom).toBe(false);
+  });
+
   it('channel focus hides the surface panel and channel strip', () => {
     const focused = { ...consoleSig, hasChannels: true, channelFocus: true };
     expect(ResolveRealtimeUi(undefined, focused).showSurfacePanel).toBe(false);

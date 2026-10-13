@@ -29,6 +29,51 @@ import { ResolveMaxInboundVideoStreams, type RealtimeIdleSignal, type RealtimeTo
 /** Thinking levels the Live API accepts. `'minimal'` is legal on 3.1 but NOT on 3.8 Extended Thinking. */
 export type GeminiThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
+/**
+ * Which Gemini endpoint serves a Live session: the Gemini Developer API (an API key) or Gemini Enterprise (Vertex AI,
+ * Google Cloud credentials). The protocol is the same; some outputs and values are not. On the Developer API,
+ * `gemini-3.8-live` refuses every avatar field and returns audio for a VIDEO request (probed 2026-10-08); Gemini
+ * Enterprise refuses one turn coverage ({@link GEMINI_LIVE_ENDPOINT_PROFILES}).
+ */
+export type GeminiLiveEndpoint = 'developer' | 'enterprise';
+
+/** What a Live model renders as video output on one endpoint: a live avatar, or nothing. */
+export interface GeminiLiveAvatarFacts {
+    /** Whether the model renders a live avatar on this endpoint. */
+    SupportsAvatarOutput: boolean;
+    /** The avatar stream's media type when it does: fragmented MP4 with its codecs, as Media Source Extensions name it. */
+    AvatarOutputEncoding?: string;
+    /**
+     * Whether the avatar's video stream carries the voice. When it does, separate PCM must not also play, or the voice
+     * doubles. From Google's sample stream (an AAC track inside the MP4); a player still follows the stream itself.
+     */
+    AvatarAudioMuxed?: boolean;
+}
+
+/** What an endpoint accepts whatever the model: facts of the endpoint's API, which every profile resolved for it carries. */
+export interface GeminiLiveEndpointProfile {
+    /**
+     * The turn coverages the endpoint accepts in `realtimeInputConfig.turnCoverage`. A session sends one of these
+     * ({@link ResolveGeminiTurnCoverage}); a configured coverage outside the list is sent as `audioActivityOnly`, which
+     * every endpoint accepts.
+     */
+    AcceptedTurnCoverages: readonly RealtimeTurnCoverage[];
+}
+
+/** A model profile resolved for one endpoint: the model's facts, what it renders there, and what the endpoint accepts. */
+export interface GeminiLiveResolvedProfile extends GeminiLiveModelProfile, GeminiLiveAvatarFacts, GeminiLiveEndpointProfile {
+    /** The endpoint this profile was resolved for. */
+    Endpoint: GeminiLiveEndpoint;
+}
+
+/** Endpoint-specific facts for one model row, matched by that row's exact {@link GeminiLiveModelProfile.MatchPrefix}. */
+export interface GeminiLiveEndpointOverlay extends GeminiLiveAvatarFacts {
+    /** The endpoint these facts hold on. */
+    Endpoint: GeminiLiveEndpoint;
+    /** The model row they belong to: equal to its `MatchPrefix`, so a longer model id never inherits another row's facts. */
+    ModelPrefix: string;
+}
+
 /** What a given Gemini Live model accepts. Every field is a documented fact, not a preference. */
 export interface GeminiLiveModelProfile {
     /** Model id prefix this profile matches (longest match wins). */
@@ -80,7 +125,11 @@ export interface GeminiLiveModelProfile {
      */
     ProactiveAudioAlwaysOn: boolean;
 
-    /** The model's OWN turn-coverage default, i.e. what we get if we say nothing. */
+    /**
+     * The model's OWN turn-coverage default, i.e. what we get if we say nothing, as the Developer API documents it. MJ
+     * never relies on it: every session states its coverage, one its endpoint accepts
+     * ({@link GeminiLiveEndpointProfile.AcceptedTurnCoverages}).
+     */
     ProviderDefaultTurnCoverage: RealtimeTurnCoverage;
 
     /** Whether the model supports inbound video input stream. */
@@ -201,25 +250,168 @@ export const GEMINI_LIVE_FALLBACK_PROFILE: GeminiLiveModelProfile = {
 };
 
 /**
- * Resolves the profile for a model id, longest prefix first.
+ * What each model renders on each endpoint, beyond its row's facts. A model with no overlay for an endpoint renders no
+ * avatar there. Matched by the row's exact `MatchPrefix`, so `gemini-3.8-live-extended-thinking` never inherits
+ * `gemini-3.8-live`'s avatar.
+ */
+export const GEMINI_LIVE_ENDPOINT_OVERLAYS: readonly GeminiLiveEndpointOverlay[] = [
+    {
+        // Live avatars are Gemini Enterprise only, on `gemini-3.8-live` only. Encoding and muxing are from Google's sample
+        // stream (H.264 Constrained Baseline 3.1, 704x1280 at 24 fps, and AAC-LC in fragmented MP4); the spike against a
+        // live Enterprise session confirms them.
+        Endpoint: 'enterprise',
+        ModelPrefix: 'gemini-3.8-live',
+        SupportsAvatarOutput: true,
+        AvatarOutputEncoding: 'video/mp4; codecs="avc1.42c01f, mp4a.40.2"',
+        AvatarAudioMuxed: true,
+    },
+];
+
+/**
+ * What each endpoint accepts whatever the model.
+ *
+ * Turn coverage: the Developer API takes both of MJ's coverages; its `RealtimeInputConfig.TurnCoverage` enum documents
+ * `TURN_INCLUDES_ONLY_ACTIVITY` and `TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO`. Gemini Enterprise does not take the
+ * second: a live Vertex AI session (2026-10-09) closed at setup with 1007 "Invalid value at
+ * 'setup.realtime_input_config.turn_coverage'" on both `v1` and `v1beta1`, and opened with `TURN_INCLUDES_ONLY_ACTIVITY`.
+ */
+export const GEMINI_LIVE_ENDPOINT_PROFILES: Readonly<Record<GeminiLiveEndpoint, GeminiLiveEndpointProfile>> = {
+    developer: { AcceptedTurnCoverages: ['audioActivityOnly', 'audioActivityAndAllVideo'] },
+    enterprise: { AcceptedTurnCoverages: ['audioActivityOnly'] },
+};
+
+/**
+ * The environment variable that gives a model id this table doesn't know the profile of one it does:
+ * `<model id>=<known model id>`, comma-separated (`gemini-live-3.8-preview-1009=gemini-3.8-live`). For when Google names
+ * a model differently from the table: the catalog's `APIName` is still what Google is sent; only what the model accepts
+ * and renders (an avatar on Gemini Enterprise, for `gemini-3.8-live`) comes from the known model's row. An id matches
+ * whole, ignoring case and spaces, and an alias wins over the table. Read on each resolution: a restart applies a change.
+ */
+export const GEMINI_LIVE_MODEL_ALIASES_ENV = 'MJ_GEMINI_LIVE_MODEL_ALIASES';
+
+/** The longest part of a bad alias entry quoted in the log line. */
+const MAX_QUOTED_ALIAS_CHARS = 80;
+
+/** The parsed alias setting, kept while the variable's text stays the same. */
+let aliasCache: { Raw: string; Aliases: ReadonlyMap<string, GeminiLiveModelProfile> } | null = null;
+
+/** Aliases already reported as used (`alias=row`), so each is logged once per process. */
+const reportedAliases = new Set<string>();
+
+/** Resolved profiles by endpoint and model row, so every resolution of one model on one endpoint is the same object. */
+const resolvedProfiles = new Map<string, GeminiLiveResolvedProfile>();
+
+/**
+ * Resolves the profile for a model id on an endpoint: the model's row (an alias from
+ * {@link GEMINI_LIVE_MODEL_ALIASES_ENV}, else the longest prefix), plus what it renders on that endpoint
+ * ({@link GEMINI_LIVE_ENDPOINT_OVERLAYS}) and what the endpoint accepts ({@link GEMINI_LIVE_ENDPOINT_PROFILES}).
  *
  * Case- and whitespace-insensitive because model ids reach us from metadata that humans edit.
  * Never throws and never returns undefined — an unknown model gets
  * {@link GEMINI_LIVE_FALLBACK_PROFILE} so a new model release degrades to "treated conservatively"
  * rather than "cannot connect".
+ *
+ * @param model The model id.
+ * @param endpoint The endpoint serving the session. Default: the Developer API.
  */
-export function ResolveGeminiLiveProfile(model: string | null | undefined): GeminiLiveModelProfile {
-    const id = String(model ?? '').trim().toLowerCase();
+export function ResolveGeminiLiveProfile(model: string | null | undefined, endpoint: GeminiLiveEndpoint = 'developer'): GeminiLiveResolvedProfile {
+    const row = resolveModelRow(model);
+    const key = `${endpoint}|${row.MatchPrefix}`;
+    let resolved = resolvedProfiles.get(key);
+    if (!resolved) {
+        resolved = { ...row, ...avatarFactsFor(row, endpoint), ...GEMINI_LIVE_ENDPOINT_PROFILES[endpoint], Endpoint: endpoint };
+        resolvedProfiles.set(key, resolved);
+    }
+    return resolved;
+}
+
+/** The model's row: its alias's row, else the longest matching prefix, else the fallback. */
+function resolveModelRow(model: string | null | undefined): GeminiLiveModelProfile {
+    const id = normalizeModelId(model);
     if (id.length === 0) {
         return GEMINI_LIVE_FALLBACK_PROFILE;
     }
+    const aliased = liveModelAliases().get(id);
+    if (aliased) {
+        reportAliasUsed(id, aliased);
+        return aliased;
+    }
+    return longestPrefixRow(id) ?? GEMINI_LIVE_FALLBACK_PROFILE;
+}
+
+/** A model id as the table compares it: trimmed and lower case. */
+function normalizeModelId(model: string | null | undefined): string {
+    return String(model ?? '').trim().toLowerCase();
+}
+
+/** The row whose prefix is the longest one the id starts with, if any. */
+function longestPrefixRow(id: string): GeminiLiveModelProfile | undefined {
     let best: GeminiLiveModelProfile | undefined;
     for (const p of GEMINI_LIVE_MODEL_PROFILES) {
         if (id.startsWith(p.MatchPrefix) && (!best || p.MatchPrefix.length > best.MatchPrefix.length)) {
             best = p;
         }
     }
-    return best ?? GEMINI_LIVE_FALLBACK_PROFILE;
+    return best;
+}
+
+/** The deployment's aliases ({@link GEMINI_LIVE_MODEL_ALIASES_ENV}), parsed again only when the variable's text changes. */
+function liveModelAliases(): ReadonlyMap<string, GeminiLiveModelProfile> {
+    const raw = typeof process !== 'undefined' && process.env ? (process.env[GEMINI_LIVE_MODEL_ALIASES_ENV] ?? '') : '';
+    if (aliasCache?.Raw !== raw) {
+        aliasCache = { Raw: raw, Aliases: parseModelAliases(raw) };
+    }
+    return aliasCache.Aliases;
+}
+
+/** The aliases in a setting; entries that are not `<id>=<known id>` are left out and named in one log line. */
+function parseModelAliases(raw: string): ReadonlyMap<string, GeminiLiveModelProfile> {
+    const aliases = new Map<string, GeminiLiveModelProfile>();
+    const bad: string[] = [];
+    for (const entry of raw.split(',').map((text) => text.trim()).filter((text) => text.length > 0)) {
+        const alias = readAliasEntry(entry);
+        if (alias) {
+            aliases.set(alias.Id, alias.Row);
+        } else {
+            bad.push(entry);
+        }
+    }
+    if (bad.length > 0) {
+        const quoted = bad.map((entry) => `"${entry.replace(/[^\x20-\x7E]/g, '?').slice(0, MAX_QUOTED_ALIAS_CHARS)}"`).join(', ');
+        const known = GEMINI_LIVE_MODEL_PROFILES.map((p) => p.MatchPrefix).join(', ');
+        console.warn(`[GeminiLiveProfiles] Ignored ${GEMINI_LIVE_MODEL_ALIASES_ENV} entries ${quoted}: each must be <model id>=<a known model id> (${known}).`);
+    }
+    return aliases;
+}
+
+/** One `<id>=<known id>` entry: the id and the known model's row, or `null` when it is not one. */
+function readAliasEntry(entry: string): { Id: string; Row: GeminiLiveModelProfile } | null {
+    const separator = entry.indexOf('=');
+    if (separator <= 0) {
+        return null;
+    }
+    const id = normalizeModelId(entry.slice(0, separator));
+    const target = normalizeModelId(entry.slice(separator + 1));
+    const row = target.length > 0 ? longestPrefixRow(target) : undefined;
+    return id.length > 0 && row ? { Id: id, Row: row } : null;
+}
+
+/** Says once per process that a model id took an alias's profile, so the log shows the setting took effect. */
+function reportAliasUsed(id: string, row: GeminiLiveModelProfile): void {
+    const key = `${id}=${row.MatchPrefix}`;
+    if (!reportedAliases.has(key)) {
+        reportedAliases.add(key);
+        console.log(`[GeminiLiveProfiles] Model ${id} uses the ${row.MatchPrefix} profile (${GEMINI_LIVE_MODEL_ALIASES_ENV}).`);
+    }
+}
+
+/** The row's overlay on the endpoint, or no avatar. */
+function avatarFactsFor(row: GeminiLiveModelProfile, endpoint: GeminiLiveEndpoint): GeminiLiveAvatarFacts {
+    const overlay = GEMINI_LIVE_ENDPOINT_OVERLAYS.find((o) => o.Endpoint === endpoint && o.ModelPrefix === row.MatchPrefix);
+    if (!overlay) {
+        return { SupportsAvatarOutput: false };
+    }
+    return { SupportsAvatarOutput: overlay.SupportsAvatarOutput, AvatarOutputEncoding: overlay.AvatarOutputEncoding, AvatarAudioMuxed: overlay.AvatarAudioMuxed };
 }
 
 /**
@@ -259,4 +451,35 @@ export function ResolveGeminiThinkingLevel(
         };
     }
     return { Level: want as GeminiThinkingLevel };
+}
+
+/** The coverage a session sends when it asks for none, or for one its endpoint doesn't accept: audio activity only. */
+const FALLBACK_TURN_COVERAGE: RealtimeTurnCoverage = 'audioActivityOnly';
+
+/** The turn coverage a session sends, and the configured one it doesn't send, if any. */
+export interface GeminiTurnCoverageResolution {
+    /** The coverage to send. */
+    Coverage: RealtimeTurnCoverage;
+    /** The configured coverage that is not sent: one the endpoint doesn't accept, or a value that is not a coverage. */
+    Refused?: string;
+}
+
+/**
+ * Picks the turn coverage to send on the profile's endpoint.
+ *
+ * Nothing configured gives audio only: video frames are billed and use context, so the costly coverage is asked for,
+ * never inherited. A configured coverage the endpoint accepts is sent. Any other value (`audioActivityAndAllVideo` on
+ * Gemini Enterprise, or one that is not a coverage) gives audio only as well and comes back as `Refused`, so the caller
+ * can name both in its log line. Never throws: a coverage Google would refuse must not cost the user the session.
+ *
+ * @param requested The configured coverage (`ModelConfiguration.Realtime.TurnDetection.Coverage`), if any.
+ * @param profile A profile resolved for the session's endpoint; its {@link GeminiLiveEndpointProfile.AcceptedTurnCoverages} decide.
+ */
+export function ResolveGeminiTurnCoverage(requested: string | null | undefined, profile: GeminiLiveEndpointProfile): GeminiTurnCoverageResolution {
+    const want = String(requested ?? '').trim();
+    if (want.length === 0) {
+        return { Coverage: FALLBACK_TURN_COVERAGE };
+    }
+    const accepted = profile.AcceptedTurnCoverages.find((coverage) => coverage === want);
+    return accepted ? { Coverage: accepted } : { Coverage: FALLBACK_TURN_COVERAGE, Refused: want };
 }

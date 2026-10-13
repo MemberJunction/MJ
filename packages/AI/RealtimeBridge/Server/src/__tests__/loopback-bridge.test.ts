@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BridgeCapabilityNotSupportedError } from '@memberjunction/ai-bridge-base';
-import type { RealtimeBridgeContext } from '@memberjunction/ai-bridge-base';
+import type { BridgeMediaFrame, RealtimeBridgeContext } from '@memberjunction/ai-bridge-base';
 import { LoopbackBridge } from '../loopback-bridge';
 
 function ctx(features: Record<string, boolean>, address = 'loopback://room'): RealtimeBridgeContext {
@@ -28,6 +28,17 @@ describe('LoopbackBridge', () => {
 
         expect(received).toEqual(['audio-in', 'video-in', 'screen-in']);
         expect(b.Sent.length).toBe(3);
+    });
+
+    it("echoes a video frame's type, size and key frame with it", async () => {
+        const b = new LoopbackBridge();
+        const received: BridgeMediaFrame[] = [];
+        b.OnMedia((f) => received.push(f));
+        await b.Connect(ctx({ AudioIn: true, AudioOut: true }));
+
+        b.SendMedia('video-out', { Track: 'video-out', Base64: 'BBBB', MimeType: 'image/jpeg', Width: 640, Height: 360, KeyFrame: true });
+
+        expect(received).toEqual([{ Track: 'video-in', Base64: 'BBBB', MimeType: 'image/jpeg', Width: 640, Height: 360, KeyFrame: true }]);
     });
 
     it('drops outbound frames when not connected', async () => {
