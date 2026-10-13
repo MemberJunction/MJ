@@ -12,7 +12,7 @@ import {
   RECORDING_FRAME_SAMPLES,
   RECORDING_PACKET_LENGTH_PREFIX_BYTES,
   RECORDING_SHARD_HEADER_BYTES,
-  RECORDING_SHARD_WINDOW_PACKETS,
+  RECORDING_SHARD_MAX_PACKETS,
   RECORDING_TERMINAL_MAX_BYTES,
 } from '@memberjunction/ai-core-plus';
 
@@ -31,10 +31,11 @@ export interface RecordingShard {
 /**
  * Accumulates Opus packets and seals them into shards. Pure: no timers, no I/O.
  *
- * A window seals when it reaches {@link RECORDING_SHARD_WINDOW_PACKETS} packets, or just BEFORE a
- * packet that would push the encoded shard past {@link RECORDING_TERMINAL_MAX_BYTES}. The byte cap
- * guarantees that whatever tail is pending always fits the terminal request body, even after a VBR
- * spike.
+ * A window seals when it reaches {@link RECORDING_SHARD_MAX_PACKETS} packets (two 5 s windows), or
+ * just BEFORE a packet that would push the encoded shard past {@link RECORDING_TERMINAL_MAX_BYTES}.
+ * The runtime's 5 s tick seals whatever is pending, so a live call still cuts one ~5 s shard per tick;
+ * the packet cap only splits a backlog (a throttled tab's batch). The byte cap guarantees that
+ * whatever tail is pending always fits the terminal request body, even after a VBR spike.
  */
 export class RecordingShardWindow {
   private pending: Uint8Array[] = [];
@@ -67,7 +68,7 @@ export class RecordingShardWindow {
       }
       this.pending.push(packet);
       this.pendingBytes += cost;
-      if (this.pending.length >= RECORDING_SHARD_WINDOW_PACKETS) {
+      if (this.pending.length >= RECORDING_SHARD_MAX_PACKETS) {
         sealed.push(this.seal(this.pending.length * RECORDING_FRAME_SAMPLES));
       }
     }

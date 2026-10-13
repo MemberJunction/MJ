@@ -14,23 +14,34 @@ const packets = (count: number, size = 40): Uint8Array[] =>
   Array.from({ length: count }, (_, i) => new Uint8Array(size).fill(i % 251));
 
 describe('RecordingShardWindow', () => {
-  it('seals a shard per 250 packets and keeps the rest pending', () => {
+  it('seals a shard per format maximum (500 packets) and keeps the rest pending', () => {
     const window = new RecordingShardWindow();
-    const sealed = window.Append(packets(600));
+    const sealed = window.Append(packets(1100));
     expect(sealed.map((s) => s.Index)).toEqual([0, 1]);
-    expect(sealed.map((s) => s.StartSample)).toEqual([0, WINDOW_SAMPLES]);
-    expect(sealed.map((s) => s.SampleCount)).toEqual([WINDOW_SAMPLES, WINDOW_SAMPLES]);
+    expect(sealed.map((s) => s.StartSample)).toEqual([0, 2 * WINDOW_SAMPLES]);
+    expect(sealed.map((s) => s.SampleCount)).toEqual([2 * WINDOW_SAMPLES, 2 * WINDOW_SAMPLES]);
     expect(window.LastSealedIndex).toBe(1);
-    expect(window.SealedSamples).toBe(2 * WINDOW_SAMPLES);
-    expect(window.PendingSamples).toBe(2 * WINDOW_SAMPLES + 100 * RECORDING_FRAME_SAMPLES);
+    expect(window.SealedSamples).toBe(4 * WINDOW_SAMPLES);
+    expect(window.PendingSamples).toBe(4 * WINDOW_SAMPLES + 100 * RECORDING_FRAME_SAMPLES);
+  });
+
+  it('a tick that took a few packets more than the window seals ONE shard, not a full window plus a sliver', () => {
+    // Timer jitter hands the 5 s tick 251-255 packets; cutting at 250 then sealing the tick's tail
+    // made a 1-5 packet shard every few ticks (#5294 live smoke: ~100-byte shards after full ones).
+    const window = new RecordingShardWindow();
+    const sealed = window.Append(packets(255));
+    const tail = window.SealTail();
+    const shards = tail ? [...sealed, tail] : sealed;
+    expect(shards).toHaveLength(1);
+    expect(ParseRecordingShard(shards[0].Bytes).PacketCount).toBe(255);
   });
 
   it('encodes sealed shards as parseable MJOPUS1 bytes', () => {
-    const sealed = new RecordingShardWindow().Append(packets(250));
+    const sealed = new RecordingShardWindow().Append(packets(500));
     const parsed = ParseRecordingShard(sealed[0].Bytes);
     expect(parsed.ShardIndex).toBe(0);
-    expect(parsed.PacketCount).toBe(250);
-    expect(parsed.SampleCount).toBe(WINDOW_SAMPLES);
+    expect(parsed.PacketCount).toBe(500);
+    expect(parsed.SampleCount).toBe(2 * WINDOW_SAMPLES);
   });
 
   it('has no sealed shard initially', () => {
@@ -44,7 +55,7 @@ describe('RecordingShardWindow', () => {
     const window = new RecordingShardWindow();
     window.Append(packets(600));
     const tail = window.SealTail(100 * RECORDING_FRAME_SAMPLES - 480);
-    expect(tail?.Index).toBe(2);
+    expect(tail?.Index).toBe(1);
     expect(tail?.StartSample).toBe(2 * WINDOW_SAMPLES);
     expect(tail?.SampleCount).toBe(100 * RECORDING_FRAME_SAMPLES - 480);
     expect(ParseRecordingShard(tail!.Bytes).PacketCount).toBe(100);
@@ -75,7 +86,7 @@ describe('RecordingShardWindow', () => {
     window.Append(packets(10));
     const tail = window.SealTail();
     expect(tail?.Index).toBe(0);
-    const next = window.Append(packets(250));
+    const next = window.Append(packets(500));
     expect(next[0].Index).toBe(1);
     expect(next[0].StartSample).toBe(10 * RECORDING_FRAME_SAMPLES);
   });
@@ -85,7 +96,7 @@ describe('RecordingShardWindow', () => {
     window.Append(packets(10));
     const tail = window.SealTail(10 * RECORDING_FRAME_SAMPLES - 100);
     expect(window.SealedSamples).toBe(tail!.StartSample + tail!.SampleCount);
-    const next = window.Append(packets(250));
+    const next = window.Append(packets(500));
     expect(next[0].StartSample).toBe(tail!.StartSample + tail!.SampleCount);
   });
 

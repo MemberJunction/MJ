@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
 import type { IMetadataProvider } from '@memberjunction/core';
-import { ParseRecordingShard, RECORDING_FRAME_SAMPLES, RECORDING_SHARD_WINDOW_PACKETS } from '@memberjunction/ai-core-plus';
+import { ParseRecordingShard, RECORDING_FRAME_SAMPLES, RECORDING_SHARD_MAX_PACKETS, RECORDING_SHARD_WINDOW_PACKETS } from '@memberjunction/ai-core-plus';
 import {
     MAX_DRAINED_SHARDS_PER_LOAD,
     RECORDER_STOP_TIMEOUT_MS,
@@ -14,6 +14,8 @@ import { FakeRecordingHost, FakeRecordingRuntime, FakeRecordingTransport, FakeSh
 
 const WINDOW = RECORDING_SHARD_WINDOW_PACKETS;
 const WINDOW_SAMPLES = WINDOW * RECORDING_FRAME_SAMPLES;
+/** Packets that make the window seal a shard by count (the format's cap); the rest stays the tail. */
+const FULL_SHARD = RECORDING_SHARD_MAX_PACKETS;
 const FLUSH_MS = 5000;
 
 /** A realtime client that connects to nothing (registered so the runtime's real driver lookup runs). */
@@ -330,7 +332,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
 
     it('SendRecordingTerminal sends the terminal, then a sealed full window with keepalive, synchronously, without stopping the recorder', async () => {
         const { runtime, store, transport, recorder, log } = await startRecorded();
-        recorder.Capture(WINDOW + 7);
+        recorder.Capture(FULL_SHARD + 7);
         const logBefore = log.length;
 
         runtime.SendRecordingTerminal();
@@ -340,7 +342,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         expect(log.slice(logBefore)).toEqual(['terminal:session-1/1', 'upload(keepalive):session-1/0']);
         const { Input } = transport.Terminals[0];
         expect(Input.LastShardIndex).toBe(1);
-        expect(Input.CapturedSamples).toBe((WINDOW + 7) * RECORDING_FRAME_SAMPLES);
+        expect(Input.CapturedSamples).toBe((FULL_SHARD + 7) * RECORDING_FRAME_SAMPLES);
         expect(ParseRecordingShard(Input.Tail!).PacketCount).toBe(7);
         expect(recorder.StopCalls).toBe(0);
         // No IndexedDB work ran inside the handler.
@@ -351,7 +353,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
     it('SendRecordingTerminal stores the shards it sealed only after the handler returns, and keeps them while nothing acknowledges them', async () => {
         // The tail's terminal is refused and its queue retry refused too, so the tail must stay stored.
         const { runtime, store, transport, recorder, log } = await startRecorded(['refused']);
-        recorder.Capture(WINDOW + 7);
+        recorder.Capture(FULL_SHARD + 7);
         transport.TerminalAck = false;
         transport.HoldNextUpload = new Promise(() => undefined); // the keepalive window never answers
         const logBefore = log.length;
@@ -369,7 +371,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
 
     it('a keepalive window that is refused falls back to the queue under the same index', async () => {
         const { runtime, store, transport, recorder } = await startRecorded(['refused']);
-        recorder.Capture(WINDOW + 7);
+        recorder.Capture(FULL_SHARD + 7);
         runtime.SendRecordingTerminal();
         await vi.advanceTimersByTimeAsync(0);
         expect(transport.Uploads.map((u) => u.Index)).toEqual([0, 0]);
