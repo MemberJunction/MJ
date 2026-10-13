@@ -101,7 +101,7 @@ import {
   type MessageForkChip
 } from '../../utils/conversation-forks';
 import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual, UUIDSet, IndexByUUID } from '@memberjunction/global';
 
 // PR 2c — Widget extension surface
 import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
@@ -2237,8 +2237,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (this.SendSlotMode !== 'stop') {
       return;
     }
+    const byId = IndexByUUID(this.messages);
     for (const id of [...this.InProgressMessageIds]) {
-      const detail = this.messages.find((m) => UUIDsEqual(m.ID, id));
+      const detail = byId.Get(id);
       if (!detail) {
         continue;
       }
@@ -2250,7 +2251,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.markStopping(detail.ID);
       await this.OnStopMessage(detail);
     }
-    this.cdr?.markForCheck();
+    this.cdr?.markForCheck?.();
   }
 
   /** The agent name of an in-flight reply: its run's agent, else the reply's, else the assistant name. */
@@ -2266,8 +2267,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   private isAnyStopping(): boolean {
+    const inFlight = new UUIDSet(this.InProgressMessageIds);
     for (const id of this.StoppingDetailIds ?? []) {
-      if (this.InProgressMessageIds.some((x) => UUIDsEqual(x, id))) {
+      if (inFlight.Has(id)) {
         return true;
       }
     }
@@ -2287,7 +2289,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (this.InProgressMessageIds.some((x) => UUIDsEqual(x, detailId))) {
         MJNotificationService.Instance.CreateSimpleNotification(`${this.agentNameFor(detailId) ?? 'The run'} did not stop. Try again.`, 'warning', 4000);
       }
-      this.cdr?.markForCheck();
+      this.cdr?.markForCheck?.();
     }, STOP_RETRY_AFTER_MS));
   }
 
@@ -2307,8 +2309,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Specs build this component off its prototype, where field initializers never ran.
     this.StoppingDetailIds ??= new Set<string>();
     this._stopFallbackTimers ??= new Map();
+    const inFlightIds = new UUIDSet(this.InProgressMessageIds);
     for (const id of [...this.StoppingDetailIds]) {
-      if (!this.InProgressMessageIds.some((x) => UUIDsEqual(x, id))) {
+      if (!inFlightIds.Has(id)) {
         this.StoppingDetailIds.delete(id);
         this.clearStopFallbackTimer(id);
       }
@@ -2318,7 +2321,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.updateSendSlotElapsed();
       this._sendSlotTicker = setInterval(() => {
         this.updateSendSlotElapsed();
-        this.cdr?.markForCheck();
+        this.cdr?.markForCheck?.();
       }, 1000);
     } else if (!inFlight && this._sendSlotTicker) {
       this.stopSendSlotTicker();
