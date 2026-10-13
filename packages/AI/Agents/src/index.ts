@@ -78,6 +78,7 @@ export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall, Delegated
 export * from './realtime/realtime-client-session-service';
 export * from './realtime/realtime-coagent-config';
 export * from './realtime/realtime-vendor-resolution';
+export * from './realtime/realtime-video-output-gate';
 export * from './realtime/realtime-narration';
 export * from './realtime/realtime-delegation-narrator';
 export * from './realtime/realtime-coagent-resolution';

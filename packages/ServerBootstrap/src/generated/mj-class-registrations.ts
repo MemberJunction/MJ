@@ -173,8 +173,9 @@ import {
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
-// @memberjunction/ai-vertex (1 classes)
+// @memberjunction/ai-vertex (2 classes)
 import {
+    GeminiEnterpriseRealtime,
     VertexLLM,
 } from '@memberjunction/ai-vertex';
 
@@ -1722,6 +1723,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     SiliconFlowLLM,
     PerplexityDecision,
     SystemOneDecision,
+    GeminiEnterpriseRealtime,
     VertexLLM,
     xAILLM,
     xAIRealtime,
@@ -1875,11 +1877,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
-    MJCommunicationProviderEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCommunicationProviderEntity,
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
     MJCompanyEntity,
@@ -2079,11 +2081,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
     MJRecommendationRunEntity,
-    MJRecordChangeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
     MJRecordCloneLogItemEntity,
@@ -2283,11 +2285,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetSingleJotFormSubmissionAction,
     GetSingleSurveyMonkeyResponseAction,
     GetSingleTypeformResponseAction,
-    GetSurveyMonkeyDetailsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetSurveyMonkeyDetailsAction,
     GetSurveyMonkeyResponsesAction,
     GetSurveyMonkeyStatisticsAction,
     GetTypeformAction,

@@ -16,6 +16,7 @@ import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import type { JSONObject } from '@memberjunction/ai';
 import { IsIdentityVerifiedEventPayload, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
 import {
+  DescribeCallEnd,
   type BaseRealtimeChannelClient,
   type RealtimeConnectionState,
   type RealtimeContextActionResult,
@@ -736,13 +737,20 @@ export class WidgetController {
         this.sawLive = true;
         this.setPhase('live');
         break;
-      case 'error':
+      case 'error': {
+        // A live call that reached its time limit says so, with its own code, rather than that the connection dropped.
+        const ended = this.sawLive ? DescribeCallEnd(this.deps.runtime.LastSessionError) : null;
+        if (ended) {
+          this.fail('time-limit', ended.Message);
+          break;
+        }
         // The runtime swallows a launcher throw into this state, so a custom launcher is named here.
         this.fail(
           this.sawLive ? 'connection-lost' : this.config.launcher ? 'launcher-failed' : 'start-failed',
           this.sawLive ? CONNECTION_LOST_MESSAGE : DescribeStartError(this.deps.runtime.LastStartError)
         );
         break;
+      }
       case 'closed':
         if (this.sawLive) {
           this.setPhase('ended');

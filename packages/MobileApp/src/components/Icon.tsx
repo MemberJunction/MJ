@@ -79,6 +79,7 @@ export const Icons = {
     Sliders: (p: IconProps) => (<D {...p}><Path d="M3 6h18M6 12h12M10 18h4" /></D>),
     Paperclip: (p: IconProps) => (<D {...p}><Path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></D>),
     Camera: (p: IconProps) => (<D {...p}><Path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" /><Circle cx={12} cy={13} r={4} /></D>),
+    VideoOff: (p: IconProps) => (<D {...p}><Path d="M16 16v1a2 2 0 01-2 2H3a2 2 0 01-2-2V7a2 2 0 012-2h2m5.66 0H14a2 2 0 012 2v3.34l1 1L23 7v10" /><Path d="M1 1l22 22" /></D>),
     Image: (p: IconProps) => (<D {...p}><Rect x={3} y={3} width={18} height={18} rx={2} /><Circle cx={8.5} cy={8.5} r={1.5} /><Path d="M21 15l-5-5L5 21" /></D>),
     FileText: (p: IconProps) => (<D {...p}><Path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><Path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" /></D>),
     X: (p: IconProps) => (<D {...p}><Path d="M18 6L6 18M6 6l12 12" /></D>),
