@@ -97,6 +97,73 @@ export function IsPlainObject(value: unknown): value is Record<string, unknown> 
     return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+/**
+ * Keys a deep merge must never write: assigning through them reaches `Object.prototype` (or a
+ * constructor's prototype) instead of creating an own property. `JSON.parse('{"__proto__":{}}')`
+ * produces an own `__proto__` key, so parsed input can carry them.
+ */
+const UNSAFE_MERGE_KEYS: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Deep-merges plain-object layers, EARLIEST first — later layers win per key — into a fresh object,
+ * without prototype pollution.
+ *
+ * Merge rules (per key):
+ * - plain object vs plain object → recursive per-key merge;
+ * - a plain object over anything else → a deep copy of the incoming object REPLACES;
+ * - arrays → a shallow copy (`slice()`) of the incoming array REPLACES;
+ * - anything else (strings, numbers, booleans, `null`) → the incoming value REPLACES;
+ * - `undefined` incoming values are skipped;
+ * - `__proto__`, `constructor` and `prototype` keys are skipped at every depth, so untrusted JSON
+ *   (e.g. a client-supplied override layer) cannot write into `Object.prototype`.
+ *
+ * Layers that are not plain objects (`null`, `undefined`, arrays, scalars) are skipped. Inputs are
+ * never mutated.
+ *
+ * @param layers - The layers to merge, base first, most specific last
+ * @returns The merged object (an empty object when no layer contributes)
+ *
+ * @example
+ * ```typescript
+ * SafeDeepMerge({ a: { x: 1, y: 2 } }, { a: { y: 3 } });   // { a: { x: 1, y: 3 } }
+ * SafeDeepMerge({}, JSON.parse('{"__proto__":{"p":1}}'));   // {} — Object.prototype untouched
+ * ```
+ */
+export function SafeDeepMerge(...layers: ReadonlyArray<unknown>): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const layer of layers) {
+        if (IsPlainObject(layer)) {
+            safeMergeInto(result, layer);
+        }
+    }
+    return result;
+}
+
+/** Recursive worker for {@link SafeDeepMerge} — merges `source` into `target` in place. */
+function safeMergeInto(target: Record<string, unknown>, source: Record<string, unknown>): void {
+    for (const key of Object.keys(source)) {
+        if (UNSAFE_MERGE_KEYS.has(key)) {
+            continue;
+        }
+        const incoming = source[key];
+        if (incoming === undefined) {
+            continue;
+        }
+        const existing = target[key];
+        if (IsPlainObject(existing) && IsPlainObject(incoming)) {
+            safeMergeInto(existing, incoming);
+        } else if (IsPlainObject(incoming)) {
+            const copy: Record<string, unknown> = {};
+            safeMergeInto(copy, incoming);
+            target[key] = copy;
+        } else if (Array.isArray(incoming)) {
+            target[key] = incoming.slice();
+        } else {
+            target[key] = incoming;
+        }
+    }
+}
+
 export function CopyScalarsAndArrays<T extends object>(
     input: T,
     resolveCircularReferences: boolean = false,

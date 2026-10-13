@@ -50,6 +50,7 @@ import {
     type RealtimeChannelDisplayPolicy,
     type RealtimeChannelsConfig,
 } from '@memberjunction/ai-core-plus';
+import { SafeDeepMerge } from '@memberjunction/global';
 
 /**
  * The MJ Authorization name that gates RUNTIME overrides on realtime session start:
@@ -527,45 +528,18 @@ function idsEqual(a: string | null | undefined, b: string | null | undefined): b
  * - plain object vs plain object → recursive deep merge;
  * - anything else (arrays, strings, numbers, booleans, `null`) → the later value REPLACES;
  * - `null` is a real JSON value and replaces like any primitive;
- * - `undefined` values in a later layer are skipped (they cannot exist in parsed JSON anyway).
+ * - `undefined` values in a later layer are skipped (they cannot exist in parsed JSON anyway);
+ * - `__proto__`, `constructor` and `prototype` keys are skipped at every depth (the runtime-override
+ *   layer is client-supplied JSON, so it must not reach `Object.prototype`).
  *
  * `null`/`undefined` LAYERS are skipped entirely. The inputs are never mutated; the result is a
- * fresh object graph.
+ * fresh object graph. Delegates to `SafeDeepMerge` in `@memberjunction/global`.
  *
  * @param layers The configuration layers, base first, most-specific last.
  * @returns The merged configuration object (empty object when every layer is absent).
  */
 export function DeepMergeConfigs(...layers: Array<JSONObjectLike | null | undefined>): JSONObjectLike {
-    const result: JSONObjectLike = {};
-    for (const layer of layers) {
-        if (!isPlainObject(layer)) {
-            continue;
-        }
-        mergeInto(result, layer);
-    }
-    return result;
-}
-
-/** Recursive worker for {@link DeepMergeConfigs} — merges `source` into `target` in place. */
-function mergeInto(target: JSONObjectLike, source: JSONObjectLike): void {
-    for (const key of Object.keys(source)) {
-        const incoming = source[key];
-        if (incoming === undefined) {
-            continue;
-        }
-        const existing = target[key];
-        if (isPlainObject(existing) && isPlainObject(incoming)) {
-            mergeInto(existing, incoming);
-        } else if (isPlainObject(incoming)) {
-            const copy: JSONObjectLike = {};
-            mergeInto(copy, incoming);
-            target[key] = copy;
-        } else if (Array.isArray(incoming)) {
-            target[key] = incoming.slice();
-        } else {
-            target[key] = incoming;
-        }
-    }
+    return SafeDeepMerge(...layers);
 }
 
 /**
