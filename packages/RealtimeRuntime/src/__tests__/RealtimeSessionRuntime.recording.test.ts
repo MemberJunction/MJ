@@ -10,7 +10,7 @@ import {
     RealtimeSessionRuntime,
     type StartRealtimeClientSessionResult,
 } from '../index';
-import { FakeRecordingHost, FakeRecordingRuntime, FakeRecordingTransport, FakeShardStore } from './recording-test-helpers';
+import { FakeRecordingHost, FakeRecordingRuntime, FakeRecordingTransport, FakeShardStore, type FakeUploadOutcome } from './recording-test-helpers';
 
 const WINDOW = RECORDING_SHARD_WINDOW_PACKETS;
 const WINDOW_SAMPLES = WINDOW * RECORDING_FRAME_SAMPLES;
@@ -69,7 +69,7 @@ function mintedSession(agentSessionId = 'session-1'): StartRealtimeClientSession
 }
 
 /** A runtime with fake store + transport sharing one ordered call log, and a recorded session started. */
-async function startRecorded(script: ('stored' | 'refused' | 'network-error')[] = []) {
+async function startRecorded(script: ('stored' | 'unavailable' | 'network-error')[] = []) {
     expect(FakeRealtimeClient).toBeDefined();
     const log: string[] = [];
     const store = new FakeShardStore(log);
@@ -172,7 +172,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
     });
 
     it('keeps a refused shard in the store and resends it under the same index', async () => {
-        const { runtime, store, transport, recorder } = await startRecorded(['refused']);
+        const { runtime, store, transport, recorder } = await startRecorded(['unavailable']);
         recorder.Capture(WINDOW);
         await vi.advanceTimersByTimeAsync(FLUSH_MS);
         expect(store.Keys).toEqual(['session-1/0']);
@@ -209,9 +209,27 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         await expect(runtime.DrainPendingRecordingShards()).resolves.toBe(0);
         expect(store.Keys).toEqual(['old/0']);
 
-        runtime.Transport = new FakeRecordingTransport([], ['refused']);
+        runtime.Transport = new FakeRecordingTransport([], ['unavailable']);
         await expect(runtime.DrainPendingRecordingShards()).resolves.toBe(0);
         expect(store.Keys).toEqual(['old/0']);
+    });
+
+    it('deletes a stored shard the server refuses for good, and still drains the shards behind it in the same load', async () => {
+        // Live smoke B1: user A's unsent shards (now refused 403: not this caller's session) filled the
+        // 50-shard drain page on every load, so user B's own stored shards were never sent.
+        const store = new FakeShardStore();
+        for (let i = 0; i < MAX_DRAINED_SHARDS_PER_LOAD; i++) {
+            await store.Put({ SessionID: 'someone-else', Index: i, Bytes: new Uint8Array([1]), SavedAt: i });
+        }
+        await store.Put({ SessionID: 'mine', Index: 0, Bytes: new Uint8Array([2]), SavedAt: 1000 });
+        const refusals: FakeUploadOutcome[] = Array.from({ length: MAX_DRAINED_SHARDS_PER_LOAD }, () => 'refused');
+        const transport = new FakeRecordingTransport([], refusals);
+        const runtime = new FakeRecordingRuntime(new FakeRecordingHost(), store, transport);
+
+        await expect(runtime.DrainPendingRecordingShards()).resolves.toBe(1);
+
+        expect(store.Keys).toEqual([]);
+        expect(transport.Uploads.filter((u) => u.SessionID === 'mine')).toHaveLength(1);
     });
 
     it('a drain that could not deliver everything stays armed, so a later call tries again', async () => {
@@ -352,7 +370,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
 
     it('SendRecordingTerminal stores the shards it sealed only after the handler returns, and keeps them while nothing acknowledges them', async () => {
         // The tail's terminal is refused and its queue retry refused too, so the tail must stay stored.
-        const { runtime, store, transport, recorder, log } = await startRecorded(['refused']);
+        const { runtime, store, transport, recorder, log } = await startRecorded(['unavailable']);
         recorder.Capture(FULL_SHARD + 7);
         transport.TerminalAck = false;
         transport.HoldNextUpload = new Promise(() => undefined); // the keepalive window never answers
@@ -370,7 +388,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
     });
 
     it('a keepalive window that is refused falls back to the queue under the same index', async () => {
-        const { runtime, store, transport, recorder } = await startRecorded(['refused']);
+        const { runtime, store, transport, recorder } = await startRecorded(['unavailable']);
         recorder.Capture(FULL_SHARD + 7);
         runtime.SendRecordingTerminal();
         await vi.advanceTimersByTimeAsync(0);
@@ -522,7 +540,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
 
     it('drains at the next session start what the previous teardown left in the store', async () => {
         // The terminal is refused and so is the tail's retry as an ordinary shard: it stays stored.
-        const { runtime, store, transport, recorder } = await startRecorded(['refused']);
+        const { runtime, store, transport, recorder } = await startRecorded(['unavailable']);
         recorder.Capture(5);
         transport.TerminalAck = false;
         await runtime.EndRealtimeSession();

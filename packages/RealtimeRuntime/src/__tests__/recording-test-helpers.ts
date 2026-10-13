@@ -2,7 +2,7 @@ import { vi, type Mock } from 'vitest';
 import { RECORDING_FRAME_SAMPLES } from '@memberjunction/ai-core-plus';
 import type { IRealtimeMediaHost, IRealtimeSessionRecorder } from '../hosts/IRealtimeMediaHost';
 import type { IRecordingShardStore, PendingRecordingShard } from '../session/RecordingShardStore';
-import type { IRecordingTransport, RecordingTerminalInput, RecordingUploadOptions } from '../session/RecordingTransport';
+import type { IRecordingTransport, RecordingTerminalInput, RecordingUploadOptions, RecordingUploadOutcome } from '../session/RecordingTransport';
 import type { RecordingShard } from '../session/RecordingShardWindow';
 import { RealtimeSessionRuntime } from '../session/RealtimeSessionRuntime';
 
@@ -99,7 +99,11 @@ export class FakeShardStore implements IRecordingShardStore {
 }
 
 /** What one shard upload does on the server: store it, refuse it, or throw on the wire. */
-export type FakeUploadOutcome = 'stored' | 'refused' | 'network-error';
+/**
+ * What one fake upload does: `stored` (acked), `refused` (the server will never take it, e.g. 403),
+ * `unavailable` (may succeed later, e.g. 503), or `network-error` (throws on the wire).
+ */
+export type FakeUploadOutcome = 'stored' | 'refused' | 'unavailable' | 'network-error';
 
 export interface FakeUpload {
     SessionID: string;
@@ -139,7 +143,7 @@ export class FakeRecordingTransport implements IRecordingTransport {
         sessionID: string,
         shard: RecordingShard | PendingRecordingShard,
         options?: RecordingUploadOptions,
-    ): Promise<boolean> {
+    ): Promise<RecordingUploadOutcome> {
         this.Log.push(`upload${options?.Keepalive ? '(keepalive)' : ''}:${sessionID}/${shard.Index}`);
         this.Uploads.push({ SessionID: sessionID, Index: shard.Index, Bytes: shard.Bytes, Keepalive: options?.Keepalive === true });
         if (this.Offline) {
@@ -151,7 +155,7 @@ export class FakeRecordingTransport implements IRecordingTransport {
         if (outcome === 'network-error') {
             throw new Error('network blip');
         }
-        return outcome === 'stored';
+        return outcome === 'stored' ? 'Acked' : outcome === 'refused' ? 'Refused' : 'Retry';
     }
 
     public SendTerminal(sessionID: string, input: RecordingTerminalInput): Promise<boolean> {

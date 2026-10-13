@@ -32,10 +32,24 @@ export interface RecordingUploadOptions {
     Keepalive?: boolean;
 }
 
-/** Sends recording bytes to the server. Both methods resolve true only on a server ack. */
+/**
+ * What became of one shard upload. `Acked`: the server has it. `Refused`: the server answered that it
+ * will never take this shard (bad shard, not this caller's session, conflicting bytes, too late, too
+ * big), so re-sending it is pointless. `Retry`: anything that may succeed later (no network, an expired
+ * token, a busy or failing server).
+ */
+export type RecordingUploadOutcome = 'Acked' | 'Refused' | 'Retry';
+
+/**
+ * Statuses that mean the server will never accept this shard, whoever sends it and however often.
+ * 401 is not here: a refreshed token can still send it.
+ */
+const PERMANENT_REFUSAL_STATUSES: ReadonlySet<number> = new Set([400, 403, 404, 409, 410, 413]);
+
+/** Sends recording bytes to the server. */
 export interface IRecordingTransport {
-    UploadShard(sessionID: string, shard: RecordingShard | PendingRecordingShard, options?: RecordingUploadOptions): Promise<boolean>;
-    /** Sent with `keepalive` so it survives page unload. */
+    UploadShard(sessionID: string, shard: RecordingShard | PendingRecordingShard, options?: RecordingUploadOptions): Promise<RecordingUploadOutcome>;
+    /** Sent with `keepalive` so it survives page unload. Resolves true only on a server ack. */
     SendTerminal(sessionID: string, input: RecordingTerminalInput): Promise<boolean>;
 }
 
@@ -71,19 +85,19 @@ export function RecordingBaseURLFromGraphQLURL(url: string): string {
 export class FetchRecordingTransport implements IRecordingTransport {
     constructor(private readonly config: FetchRecordingTransportConfig) {}
 
-    public UploadShard(sessionID: string, shard: RecordingShard | PendingRecordingShard, options?: RecordingUploadOptions): Promise<boolean> {
+    public UploadShard(sessionID: string, shard: RecordingShard | PendingRecordingShard, options?: RecordingUploadOptions): Promise<RecordingUploadOutcome> {
         const url = `${this.config.BaseURL}/realtime/recording/${encodeURIComponent(sessionID)}/shard/${shard.Index}`;
         return this.post(url, shard.Bytes, options?.Keepalive === true, `shard ${sessionID}/${shard.Index}`);
     }
 
-    public SendTerminal(sessionID: string, input: RecordingTerminalInput): Promise<boolean> {
+    public async SendTerminal(sessionID: string, input: RecordingTerminalInput): Promise<boolean> {
         const final = input.Final === false ? '&final=false' : '';
         const query = `lastShardIndex=${input.LastShardIndex}&capturedSamples=${input.CapturedSamples}${final}`;
         const url = `${this.config.BaseURL}/realtime/recording/${encodeURIComponent(sessionID)}/end?${query}`;
-        return this.post(url, input.Tail ?? new Uint8Array(0), true, `terminal ${sessionID}/${input.LastShardIndex}`);
+        return (await this.post(url, input.Tail ?? new Uint8Array(0), true, `terminal ${sessionID}/${input.LastShardIndex}`)) === 'Acked';
     }
 
-    private async post(url: string, body: Uint8Array, keepalive: boolean, context: string): Promise<boolean> {
+    private async post(url: string, body: Uint8Array, keepalive: boolean, context: string): Promise<RecordingUploadOutcome> {
         const doFetch = this.config.Fetch ?? globalThis.fetch;
         try {
             const response = await doFetch(url, {
@@ -94,13 +108,14 @@ export class FetchRecordingTransport implements IRecordingTransport {
                 ...(keepalive ? { keepalive: true } : {}),
             });
             if (!response.ok) {
-                console.warn(`[RealtimeSession] Recording ${context} rejected by server with status ${response.status}`);
-                return false;
+                const outcome: RecordingUploadOutcome = PERMANENT_REFUSAL_STATUSES.has(response.status) ? 'Refused' : 'Retry';
+                console.warn(`[RealtimeSession] Recording ${context} rejected by server with status ${response.status} (${outcome === 'Refused' ? 'will not be re-sent' : 'will be retried'})`);
+                return outcome;
             }
-            return true;
+            return 'Acked';
         } catch (failure) {
             console.warn(`[RealtimeSession] Recording ${context} request failed: ${describeFailure(failure)}`, failure);
-            return false;
+            return 'Retry';
         }
     }
 }

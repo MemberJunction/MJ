@@ -118,7 +118,7 @@ describe('RealtimeSessionService — recording terminal on pagehide / visibility
         (recorder as unknown as { encoder: IOpusPacketEncoder }).encoder = encoder;
         const terminals: RecordingTerminalInput[] = [];
         const transport: IRecordingTransport = {
-            UploadShard: vi.fn(async () => true),
+            UploadShard: vi.fn(async () => 'Acked' as const),
             SendTerminal: vi.fn(async (_id: string, input: RecordingTerminalInput) => {
                 terminals.push(input);
                 return true;

@@ -947,7 +947,7 @@ describe('session lifecycle, driven end to end with fakes', () => {
         const indexes = (transport: FakeRecordingTransport) => transport.Uploads.map((u) => u.Index);
 
         it('resends a shard the server refused, under its own index and with the same bytes', async () => {
-            const { runtime, transport, flush } = await startRecorded(['stored', 'refused']);
+            const { runtime, transport, flush } = await startRecorded(['stored', 'unavailable']);
             for (let i = 0; i < 3; i++) {
                 await flush();
             }
@@ -973,7 +973,7 @@ describe('session lifecycle, driven end to end with fakes', () => {
         });
 
         it('releases the shard pipeline, and the audio its queue retained, when the recording ends', async () => {
-            const { runtime, flush } = await startRecorded(['refused', 'refused', 'refused']);
+            const { runtime, flush } = await startRecorded(['unavailable', 'unavailable', 'unavailable']);
             await flush();
             await flush();
             expect(runtime['recordingShards']?.Queue.RetainedCount).toBe(2);
@@ -982,7 +982,7 @@ describe('session lifecycle, driven end to end with fakes', () => {
         });
 
         it('a flush in flight at hang-up sends nothing more once the recording has ended; End re-sends both with keepalive instead', async () => {
-            const { runtime, transport, flush } = await startRecorded(['refused']);
+            const { runtime, transport, flush } = await startRecorded(['unavailable']);
             await flush(); // shard 0 refused and retained
             let release!: (outcome: FakeUploadOutcome) => void;
             transport.HoldNextUpload = new Promise<FakeUploadOutcome>((resolve) => {
@@ -990,7 +990,7 @@ describe('session lifecycle, driven end to end with fakes', () => {
             });
             const inFlight = flush(); // shard 0's resend is held on the wire; shard 1 waits behind it
             await runtime.EndRealtimeSession();
-            release('refused');
+            release('unavailable');
             await inFlight;
             const ordinary = transport.Uploads.filter((u) => !u.Keepalive).map((u) => u.Index);
             const keepalive = transport.Uploads.filter((u) => u.Keepalive).map((u) => u.Index);
@@ -1011,7 +1011,7 @@ describe('session lifecycle, driven end to end with fakes', () => {
                 { ...mintedSession('fake-provider'), AgentSessionId: 'session-B' },
                 { recordingConsent: true },
             );
-            release('refused');
+            release('unavailable');
             await sessionAFlush;
             const hostB = runtime['recorder'] as FakeRecorder;
             hostB.Capture(WINDOW_PACKETS);

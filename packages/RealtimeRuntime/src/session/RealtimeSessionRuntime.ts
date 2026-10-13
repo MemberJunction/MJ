@@ -88,7 +88,7 @@ import {
 import { RecordingShardQueue } from './RecordingShardQueue';
 import { RecordingShardWindow, type RecordingShard } from './RecordingShardWindow';
 import { CreateRecordingShardStore, type IRecordingShardStore } from './RecordingShardStore';
-import { FetchRecordingTransport, RecordingBaseURLFromGraphQLURL, type IRecordingTransport } from './RecordingTransport';
+import { FetchRecordingTransport, RecordingBaseURLFromGraphQLURL, type IRecordingTransport, type RecordingUploadOutcome } from './RecordingTransport';
 
 /**
  * How long teardown waits for the server to acknowledge the recording's terminal request, measured
@@ -997,7 +997,11 @@ export class RealtimeSessionRuntime {
   private keepaliveBytesInFlight = 0;
   /** `sessionId/index` of shards whose `keepalive` copy is still in flight; never sent twice at once. */
   private readonly keepaliveShardsInFlight = new Set<string>();
-  /** Most runs one drain call makes when it is re-armed while running (each run is itself bounded). */
+  /**
+   * Most runs one drain call makes (each run is itself bounded): it runs again when it was re-armed while
+   * running, or when a run deleted shards the server refused for good, which frees the page for the
+   * shards behind them.
+   */
   private static readonly maxDrainRunsPerCall = 3;
   /** The durable local shard store, created on first use and shared by every recording of this runtime. */
   private shardStore: IRecordingShardStore | null = null;
@@ -2386,9 +2390,10 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * The body of {@link DrainPendingRecordingShards}. A re-arm while a run is in flight (a recovery after
-   * an outage gave up on more shards) runs it again, up to {@link maxDrainRunsPerCall} runs, because the
-   * running pass listed the store before those shards were there.
+   * The body of {@link DrainPendingRecordingShards}, up to {@link maxDrainRunsPerCall} runs. It runs
+   * again after a re-arm while a run is in flight (a recovery after an outage gave up on more shards),
+   * because the running pass listed the store before those shards were there; and after a run deleted
+   * refused shards, because those filled the page that the shards behind them now get.
    */
   private async drainPendingShards(): Promise<number> {
     try {
@@ -2402,10 +2407,10 @@ export class RealtimeSessionRuntime {
         const generation = this.drainGeneration;
         const outcome = await this.drainStoredShardsOnce(transport);
         delivered += outcome.Delivered;
-        // Done only when everything listed was delivered: a drain during an outage (or with a shard the
-        // server refuses) must not stop the next session start or recovery from trying again.
-        this.pendingShardsDrained = generation === this.drainGeneration && outcome.Delivered === outcome.Listed;
-        if (generation === this.drainGeneration) {
+        // Done only when every listed shard was delivered or refused for good: a drain during an outage
+        // must not stop the next session start or recovery from trying again.
+        this.pendingShardsDrained = generation === this.drainGeneration && outcome.Delivered + outcome.Refused === outcome.Listed;
+        if (generation === this.drainGeneration && outcome.Refused === 0) {
           break;
         }
       }
@@ -2416,26 +2421,35 @@ export class RealtimeSessionRuntime {
     }
   }
 
-  /** One drain pass: re-uploads up to {@link MAX_DRAINED_SHARDS_PER_LOAD} stored shards, oldest first. */
-  private async drainStoredShardsOnce(transport: IRecordingTransport): Promise<{ Listed: number; Delivered: number }> {
+  /**
+   * One drain pass: re-uploads up to {@link MAX_DRAINED_SHARDS_PER_LOAD} stored shards, oldest first. A
+   * shard the server acknowledges or refuses for good (see {@link RecordingUploadOutcome}) leaves the
+   * store; one that may still succeed stays for the next load.
+   */
+  private async drainStoredShardsOnce(transport: IRecordingTransport): Promise<{ Listed: number; Delivered: number; Refused: number }> {
     const pending = await this.ensureShardStore().ListOldest(MAX_DRAINED_SHARDS_PER_LOAD);
     let delivered = 0;
+    let refused = 0;
     for (const shard of pending) {
-      let acked = false;
+      let outcome: RecordingUploadOutcome = 'Retry';
       try {
-        acked = await transport.UploadShard(shard.SessionID, shard);
+        outcome = await transport.UploadShard(shard.SessionID, shard);
       } catch (error) {
         console.warn(`[RealtimeSession] Re-uploading stored recording shard ${shard.SessionID}/${shard.Index} failed: ${describeRecordingFailure(error)}; it stays stored for the next load.`, error);
       }
-      if (acked) {
+      if (outcome === 'Acked') {
         await this.deleteStoredShard(shard.SessionID, shard.Index);
         delivered++;
+      } else if (outcome === 'Refused') {
+        console.warn(`[RealtimeSession] The server refused stored recording shard ${shard.SessionID}/${shard.Index} for good; deleting it so it no longer holds back the shards behind it.`);
+        await this.deleteStoredShard(shard.SessionID, shard.Index);
+        refused++;
       }
     }
     if (pending.length > 0) {
-      console.log(`[RealtimeSession] Re-uploaded ${delivered}/${pending.length} stored recording shard(s).`);
+      console.log(`[RealtimeSession] Re-uploaded ${delivered}/${pending.length} stored recording shard(s); ${refused} refused and deleted.`);
     }
-    return { Listed: pending.length, Delivered: delivered };
+    return { Listed: pending.length, Delivered: delivered, Refused: refused };
   }
 
   /** Builds this recording's shard pipeline and starts the 5 s flush. */
@@ -2463,7 +2477,7 @@ export class RealtimeSessionRuntime {
         if (!transport) {
           return false;
         }
-        const acked = await transport.UploadShard(sessionId, shard);
+        const acked = (await transport.UploadShard(sessionId, shard)) === 'Acked';
         if (acked) {
           await this.deleteStoredShard(sessionId, shard.Index);
           if (shardsGivenUp) {
@@ -2738,7 +2752,7 @@ export class RealtimeSessionRuntime {
         continue;
       }
       this.keepaliveShardsInFlight.add(key);
-      void this.trackKeepalive(shard.Bytes.length, transport.UploadShard(sessionId, shard, { Keepalive: true }))
+      void this.trackKeepalive(shard.Bytes.length, transport.UploadShard(sessionId, shard, { Keepalive: true }).then((outcome) => outcome === 'Acked'))
         .finally(() => this.keepaliveShardsInFlight.delete(key))
         .catch((error: unknown) => {
           console.warn(`[RealtimeSession] Keepalive upload of recording shard ${sessionId}/${shard.Index} failed: ${describeRecordingFailure(error)}`, error);

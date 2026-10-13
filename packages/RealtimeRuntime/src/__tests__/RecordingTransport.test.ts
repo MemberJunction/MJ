@@ -15,8 +15,8 @@ describe('FetchRecordingTransport', () => {
     it('posts a shard as raw bytes without keepalive', async () => {
         const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
         const bytes = new Uint8Array([1, 2]);
-        const ok = await make(fetchMock).UploadShard('a/b', { Index: 4, StartSample: 0, SampleCount: 1, Bytes: bytes });
-        expect(ok).toBe(true);
+        const outcome = await make(fetchMock).UploadShard('a/b', { Index: 4, StartSample: 0, SampleCount: 1, Bytes: bytes });
+        expect(outcome).toBe('Acked');
         const [url, init] = fetchMock.mock.calls[0];
         expect(url).toBe('http://h:4000/realtime/recording/a%2Fb/shard/4');
         expect(init.method).toBe('POST');
@@ -31,11 +31,11 @@ describe('FetchRecordingTransport', () => {
         expect(fetchMock.mock.calls[0][1].keepalive).toBe(true);
     });
 
-    it('returns false and logs when the browser refuses a keepalive request over its budget', async () => {
+    it('reports Retry and logs when the browser refuses a keepalive request over its budget', async () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         const fetchMock = vi.fn().mockRejectedValue(new TypeError('keepalive budget exceeded'));
-        const ok = await make(fetchMock).UploadShard('s', { Index: 3, StartSample: 0, SampleCount: 1, Bytes: new Uint8Array(1) }, { Keepalive: true });
-        expect(ok).toBe(false);
+        const outcome = await make(fetchMock).UploadShard('s', { Index: 3, StartSample: 0, SampleCount: 1, Bytes: new Uint8Array(1) }, { Keepalive: true });
+        expect(outcome).toBe('Retry');
         expect(String(warn.mock.calls[0][0])).toContain('s/3');
     });
 
@@ -70,15 +70,29 @@ describe('FetchRecordingTransport', () => {
         expect((fetchMock.mock.calls[0][1].body as Uint8Array).byteLength).toBe(0);
     });
 
-    it('returns false and warns with status and index on a non-ok response', async () => {
+    it('reports Retry and warns with status and index on a server that may recover', async () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 503 });
-        const ok = await make(fetchMock).UploadShard('s9', { Index: 6, StartSample: 0, SampleCount: 1, Bytes: new Uint8Array(1) });
-        expect(ok).toBe(false);
+        const outcome = await make(fetchMock).UploadShard('s9', { Index: 6, StartSample: 0, SampleCount: 1, Bytes: new Uint8Array(1) });
+        expect(outcome).toBe('Retry');
         const msg = String(warn.mock.calls[0][0]);
         expect(msg).toContain('503');
         expect(msg).toContain('s9');
         expect(msg).toContain('6');
+    });
+
+    it.each([400, 403, 404, 409, 410, 413])('reports Refused on %i: the server will never take that shard', async (status) => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const fetchMock = vi.fn().mockResolvedValue({ ok: false, status });
+        const outcome = await make(fetchMock).UploadShard('s', { Index: 1, StartSample: 0, SampleCount: 1, Bytes: new Uint8Array(1) });
+        expect(outcome).toBe('Refused');
+    });
+
+    it.each([401, 408, 429, 500, 502])('reports Retry on %i: a refreshed token or a recovered server can still take it', async (status) => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const fetchMock = vi.fn().mockResolvedValue({ ok: false, status });
+        const outcome = await make(fetchMock).UploadShard('s', { Index: 1, StartSample: 0, SampleCount: 1, Bytes: new Uint8Array(1) });
+        expect(outcome).toBe('Retry');
     });
 
     it('returns false and logs when fetch throws', async () => {

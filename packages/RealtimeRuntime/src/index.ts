@@ -189,4 +189,5 @@ export {
     type IRecordingTransport,
     type RecordingTerminalInput,
     type RecordingUploadOptions,
+    type RecordingUploadOutcome,
 } from './session/RecordingTransport';
