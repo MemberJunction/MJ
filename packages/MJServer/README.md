@@ -735,8 +735,6 @@ scheduledJobs: {
 
 The service starts automatically during server initialization and shuts down gracefully on SIGTERM/SIGINT.
 
-Scheduled jobs share the event loop that serves every HTTP request and WebSocket on the process, so a long synchronous job step stalls interactive users (MJ #5510). To run them elsewhere, set `scheduledJobs.enabled: false` on the processes behind the load balancer and `true` on a worker process outside it, all sharing one `REDIS_URL`. See [API Processes Plus a Background Worker](../../guides/CACHING_AND_PUBSUB_GUIDE.md#api-processes-plus-a-background-worker).
-
 ### Event-loop stall monitor
 
 MJAPI samples its event-loop delay. A sampling window whose worst delay reaches `warnThresholdMs` logs one warning naming the lag, the heap, and the agent runs and scheduled jobs running in the process, and `/healthcheck` returns the latest window's `eventLoopLagMs`:
