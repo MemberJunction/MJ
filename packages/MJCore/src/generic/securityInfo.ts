@@ -180,6 +180,12 @@ export class UserInfo extends BaseInfo {
      * Whether this user account is currently active and can log in
      */
     IsActive: boolean = null
+
+    /**
+     * Whether this user is a template: an account set up to be copied to new users (its pinned apps,
+     * views, settings, dashboards and conversations). Explorer warns while a template user is signed in.
+     */
+    IsTemplate: boolean = null
     
     /**
      * Type of record this user is linked to (None, Employee, Contact, etc.)

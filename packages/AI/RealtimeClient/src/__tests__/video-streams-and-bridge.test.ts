@@ -7,7 +7,7 @@ import {
 } from '@memberjunction/ai';
 import { FakeMediaStream, FakeTrack, GeminiTestClient } from './helpers/realtime-fakes';
 import { ChannelInboundVideoBridge, type IChannelFrameProvider } from '../media/channelVideoSource';
-import { VideoSourceArbiter } from '../media/videoSourceArbiter';
+import { VideoSourceArbiter, type IVideoFrameSink } from '../media/videoSourceArbiter';
 
 /** A video-model session config with the given per-model stream/rate declarations and requested tracks. */
 function videoConfig(extra: JSONObject = {}, requested: JSONObject[] = [{ ...CHANNEL_INBOUND_VIDEO_TRACK } as JSONObject]): ClientRealtimeSessionConfig {
@@ -158,7 +158,7 @@ describe('ChannelInboundVideoBridge registers with the arbiter', () => {
         expect(wb.PushFrame('w2')).toBe(false);
         // The switch was announced as a context note on the model connection.
         const notes = client.Fake.ClientContents.flatMap((c) => c.turns ?? []).flatMap((t) => t.parts ?? []).map((p) => p.text);
-        expect(notes).toContain('[The agent is now viewing: Camera]');
+        expect(notes).toContain('[You can now see: Camera]');
         wb.Stop();
         cam.Stop();
     });
@@ -218,5 +218,104 @@ describe('ChannelInboundVideoBridge registers with the arbiter', () => {
         const bridge = new ChannelInboundVideoBridge(idle, FRAME_PROVIDER, { SourceID: 'wb' });
         expect(bridge.Start()).toBe(false);
         expect(bridge.PushFrame('f')).toBe(false);
+    });
+});
+
+describe('ChannelInboundVideoBridge.OnSourceActivated', () => {
+    /** A one-stream model connection that takes every frame it is offered. */
+    const oneStreamSink = (): IVideoFrameSink & { Frames: string[]; Notes: string[] } => {
+        const frames: string[] = [];
+        const notes: string[] = [];
+        return {
+            MaxInboundVideoStreams: 1,
+            InboundVideoRate: 1,
+            IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+            SendVideoFrame: (base64Image: string) => {
+                frames.push(base64Image);
+                return true;
+            },
+            SendContextNote: (text: string) => {
+                notes.push(text);
+            },
+            Frames: frames,
+            Notes: notes,
+        };
+    };
+
+    it('is called when the arbiter sends the source again after a capture held the only stream, not on registration', () => {
+        const sink = oneStreamSink();
+        const arbiter = VideoSourceArbiter.ForSink(sink);
+        const bridge = new ChannelInboundVideoBridge(sink, FRAME_PROVIDER, { SourceID: 'Whiteboard#1', Label: 'Whiteboard' });
+        let activations = 0;
+        bridge.OnSourceActivated(() => activations++);
+        expect(bridge.Register()).toBe(true);
+        expect(activations).toBe(0);
+
+        arbiter.RegisterSource({ SourceID: 'capture:camera', Label: 'Camera', Kind: 'camera' });
+        expect(bridge.PushFrame('w1')).toBe(false);
+        expect(activations).toBe(0);
+
+        arbiter.UnregisterSource('capture:camera');
+        expect(sink.Notes).toContain('[You can now see: Whiteboard]');
+        expect(activations).toBe(1);
+        expect(bridge.PushFrame('w1')).toBe(true);
+        expect(sink.Frames).toEqual(['w1']);
+        bridge.Stop();
+    });
+
+    it('is called when the source is switched back on, and when the user picks it over a capture', () => {
+        const sink = oneStreamSink();
+        const arbiter = VideoSourceArbiter.ForSink(sink);
+        const bridge = new ChannelInboundVideoBridge(sink, FRAME_PROVIDER, { SourceID: 'Whiteboard#1', Label: 'Whiteboard' });
+        let activations = 0;
+        bridge.Register();
+        bridge.OnSourceActivated(() => activations++);
+        bridge.SetSourceEnabled(false, false);
+        bridge.SetSourceEnabled(true, false);
+        expect(activations).toBe(1);
+
+        arbiter.RegisterSource({ SourceID: 'capture:camera', Label: 'Camera', Kind: 'camera' });
+        arbiter.SelectSource('Whiteboard#1');
+        expect(activations).toBe(2);
+        bridge.Stop();
+    });
+
+    it('stops calling a removed handler, and follows nothing once stopped', () => {
+        const sink = oneStreamSink();
+        const arbiter = VideoSourceArbiter.ForSink(sink);
+        const bridge = new ChannelInboundVideoBridge(sink, FRAME_PROVIDER, { SourceID: 'Whiteboard#1', Label: 'Whiteboard' });
+        let removed = 0;
+        let kept = 0;
+        bridge.Register();
+        const remove = bridge.OnSourceActivated(() => removed++);
+        bridge.OnSourceActivated(() => kept++);
+        remove();
+        arbiter.RegisterSource({ SourceID: 'capture:camera', Label: 'Camera', Kind: 'camera' });
+        arbiter.UnregisterSource('capture:camera');
+        expect([removed, kept]).toEqual([0, 1]);
+
+        bridge.Stop();
+        arbiter.RegisterSource({ SourceID: 'capture:screen', Label: 'Shared screen', Kind: 'screen' });
+        arbiter.UnregisterSource('capture:screen');
+        expect(kept).toBe(1);
+    });
+
+    it('a throwing handler does not stop the others', () => {
+        const sink = oneStreamSink();
+        const arbiter = VideoSourceArbiter.ForSink(sink);
+        const bridge = new ChannelInboundVideoBridge(sink, FRAME_PROVIDER, { SourceID: 'Whiteboard#1', Label: 'Whiteboard' });
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        let called = 0;
+        bridge.Register();
+        bridge.OnSourceActivated(() => {
+            throw new Error('handler failed');
+        });
+        bridge.OnSourceActivated(() => called++);
+        arbiter.RegisterSource({ SourceID: 'capture:camera', Label: 'Camera', Kind: 'camera' });
+        arbiter.UnregisterSource('capture:camera');
+        expect(called).toBe(1);
+        expect(errors).toHaveBeenCalled();
+        errors.mockRestore();
+        bridge.Stop();
     });
 });

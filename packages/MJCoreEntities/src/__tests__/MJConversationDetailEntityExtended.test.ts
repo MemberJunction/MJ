@@ -92,6 +92,7 @@ type Harness = {
     ConversationID: string;
     IsSaved: boolean;
     ContextCurrentUser: { ID: string } | null;
+    CloneContext?: { CloneLogID: string; SourceRecordID: string; RootEntityName: string } | null;
     Fields: { Name: string; Dirty: boolean }[];
     ResultHistory: MockResultEntry[];
     LatestResult: MockResultEntry | null;
@@ -139,6 +140,29 @@ describe('MJConversationDetailEntityExtended owner gate', () => {
 
         expect(result).toBe(true);
         expect(entity.ResultHistory).toHaveLength(0);
+    });
+
+    it('lets the clone engine create a message in a conversation it copied for another user', async () => {
+        const entity = await makeEntity();
+        entity.CloneContext = { CloneLogID: 'log-1', SourceRecordID: 'source-detail', RootEntityName: 'MJ: Users' };
+
+        const result = await entity.Save();
+
+        expect(result).toBe(true);
+        expect(mocks.superSave).toHaveBeenCalled();
+        expect(mocks.getUserAvailableResources).not.toHaveBeenCalled();
+    });
+
+    it('does not let a clone context bypass the check on an update or delete', async () => {
+        const updated = await makeEntity();
+        updated.CloneContext = { CloneLogID: 'log-1', SourceRecordID: 'source-detail', RootEntityName: 'MJ: Users' };
+        updated.IsSaved = true;
+        expect(await updated.Save()).toBe(false);
+        expect(updated.LatestResult?.CompleteMessage).toBe('You do not have access to this conversation.');
+
+        const deleted = await makeEntity();
+        deleted.CloneContext = { CloneLogID: 'log-1', SourceRecordID: 'source-detail', RootEntityName: 'MJ: Users' };
+        expect(await deleted.Delete()).toBe(false);
     });
 
     it('records the denial on Delete too', async () => {
@@ -195,5 +219,20 @@ describe('MJConversationDetailEntityExtended owner gate', () => {
         expect(entity.LatestResult?.CompleteMessage).toBe(
             'Only the conversation owner can set or change the rating and feedback on this message.'
         );
+    });
+
+    it('denies a rating change by a non-owner even when they hold an Edit grant', async () => {
+        mocks.getUserAvailableResources.mockReturnValue([{ ResourceRecordID: 'conv-1', PermissionLevel: 'Edit' }]);
+        const entity = await makeEntity();
+        entity.Fields = [{ Name: 'UserFeedback', Dirty: true }];
+
+        expect(await entity.Save()).toBe(false);
+        expect(entity.LatestResult?.CompleteMessage).toBe(
+            'Only the conversation owner can set or change the rating and feedback on this message.'
+        );
+        expect(mocks.superSave).not.toHaveBeenCalled();
+
+        entity.Fields = [{ Name: 'UserFeedback', Dirty: false }];
+        expect(await entity.Save()).toBe(true);
     });
 });

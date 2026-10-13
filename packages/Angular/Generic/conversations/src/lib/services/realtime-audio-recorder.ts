@@ -69,6 +69,10 @@ export class RealtimeAudioRecorder {
     private remoteAttached = false;
     /** A remote stream handed to AttachRemoteStream before the audio graph was ready; wired at setup. */
     private pendingRemoteStream: MediaStream | null = null;
+    /** The microphone to record: the latest stream given to Start or ReplaceMicrophone. Setup connects it. */
+    private micStream: MediaStream | null = null;
+    /** The source node reading the microphone, swapped by ReplaceMicrophone. */
+    private micSource: MediaStreamAudioSourceNode | null = null;
 
     /** Sample index up to which crash-recovery shards have already been emitted (the segment cursor). */
     private flushedSampleCount = 0;
@@ -136,6 +140,7 @@ export class RealtimeAudioRecorder {
         this.startedAtMs = Date.now();
         this.finalPeaks = [];
         this.recording = true;
+        this.micStream = micStream;
         // Fire-and-forget the async setup (it must `await audioContext.resume()` + worklet load); any
         // failure disables the recorder rather than throwing into the session-start path.
         void this.startMixedRecording(micStream, remoteStream).catch((error) => {
@@ -159,6 +164,24 @@ export class RealtimeAudioRecorder {
         } else {
             // Audio-graph setup still in flight (awaiting resume / worklet load) — connect at setup.
             this.pendingRemoteStream = stream;
+        }
+    }
+
+    /**
+     * Records the microphone stream's current track from now on: call it after the track changes (a
+     * device switch). A source node reads the track it was created with, so the recording would otherwise
+     * carry silence from the old device. Safe before the audio graph is ready (setup connects the latest
+     * stream, and Start replaces it); a stream without an audio track keeps the current one.
+     */
+    public ReplaceMicrophone(micStream: MediaStream): void {
+        this.micStream = micStream;
+        if (!this.audioContext || !this.captureNode()) {
+            return;
+        }
+        const replacement = this.connectStream(this.audioContext, micStream);
+        if (replacement) {
+            this.micSource?.disconnect();
+            this.micSource = replacement;
         }
     }
 
@@ -248,7 +271,8 @@ export class RealtimeAudioRecorder {
             return; // Stopped while the capture node loaded: cleanup() already closed the published context.
         }
 
-        this.connectStream(audioContext, micStream);
+        // The microphone may have been replaced while the graph was being built.
+        this.micSource = this.connectStream(audioContext, this.micStream ?? micStream);
         // Connect the agent's stream if it was passed now, or if AttachRemoteStream() stashed one while
         // we were setting up. Either way, capture the agent voice — not just the mic.
         const remote = remoteStream ?? this.pendingRemoteStream;
@@ -344,14 +368,15 @@ export class RealtimeAudioRecorder {
         this.peaks.Push(copy);
     }
 
-    /** Routes one stream's audio tracks into the capture node (no-op when track-less / no node). */
-    private connectStream(audioContext: AudioContext, stream: MediaStream): void {
+    /** Routes one stream's audio tracks into the capture node; returns the source, or null when track-less / no node. */
+    private connectStream(audioContext: AudioContext, stream: MediaStream): MediaStreamAudioSourceNode | null {
         const node = this.captureNode();
         if (!node || stream.getAudioTracks().length === 0) {
-            return;
+            return null;
         }
         const source = audioContext.createMediaStreamSource(stream);
         source.connect(node);
+        return source;
     }
 
     /** Concatenates a half-open sample range [from, to) across the captured frames into one Float32Array. */
@@ -416,6 +441,8 @@ export class RealtimeAudioRecorder {
         this.peaks = new PeakAccumulator(RealtimeAudioRecorder.peakBuckets);
         this.remoteAttached = false;
         this.pendingRemoteStream = null;
+        this.micStream = null;
+        this.micSource = null;
         if (this.workletNode) {
             this.workletNode.port.onmessage = null;
             try { this.workletNode.disconnect(); } catch { /* already disconnected */ }
