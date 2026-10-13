@@ -168,8 +168,9 @@ import {
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
-// @memberjunction/ai-vertex (1 classes)
+// @memberjunction/ai-vertex (2 classes)
 import {
+    GeminiEnterpriseRealtime,
     VertexLLM,
 } from '@memberjunction/ai-vertex';
 
@@ -1007,18 +1008,21 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (22 classes)
+// @memberjunction/ai-agents (25 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
+    ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
     FlowAgentType,
     GenericBinaryToolLibrary,
+    IdentityVerificationChannelServer,
+    InteractiveComponentChannelServer,
     JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
@@ -1125,7 +1129,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (59 classes)
+// @memberjunction/core-entities-server (60 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1133,6 +1137,7 @@ import {
     MJAIAgentNoteEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
+    MJAIAgentSessionEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
@@ -1443,6 +1448,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     SiliconFlowLLM,
     PerplexityDecision,
     SystemOneDecision,
+    GeminiEnterpriseRealtime,
     VertexLLM,
     xAILLM,
     xAIRealtime,
@@ -1597,11 +1603,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
-    MJCompanyIntegrationRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
@@ -1801,11 +1807,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordMergeLogEntity,
     MJRecordProcessCategoryEntity,
     MJRecordProcessEntity,
-    MJRecordProcessWatermarkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordProcessWatermarkEntity,
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
     MJResourceLinkEntity,
@@ -2005,11 +2011,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     EnrollUserAction,
     GetBundlesAction,
     GetCertificatesAction,
-    GetCourseAnalyticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetCourseAnalyticsAction,
     GetLearnWorldsBulkDataAction,
     GetLearnWorldsCourseDetailsAction,
     GetLearnWorldsCoursesAction,
@@ -2146,12 +2152,15 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
+    ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
     FlowAgentType,
     GenericBinaryToolLibrary,
+    IdentityVerificationChannelServer,
+    InteractiveComponentChannelServer,
     JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
@@ -2206,14 +2215,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TaskGraphCancelServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
-    TaskGraphOverrideEdgeServerOperation,
-    TaskGraphPauseServerOperation,
-    TaskGraphResumeServerOperation,
-    TaskGraphRetryTaskServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TaskGraphOverrideEdgeServerOperation,
+    TaskGraphPauseServerOperation,
+    TaskGraphResumeServerOperation,
+    TaskGraphRetryTaskServerOperation,
     TaskGraphSetBreakpointsServerOperation,
     TaskGraphSkipTaskServerOperation,
     TaskGraphStepServerOperation,
@@ -2238,6 +2247,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentNoteEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
+    MJAIAgentSessionEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
@@ -2409,15 +2419,15 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RetryAction,
     ReverseGeocodeAction,
     RevertInteractiveFormAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
     RunDecisionAction,
     RunRecordProcessAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     RunStoredQueryAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
@@ -2492,7 +2502,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1058;
+export const CLASS_REGISTRATIONS_COUNT = 1063;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

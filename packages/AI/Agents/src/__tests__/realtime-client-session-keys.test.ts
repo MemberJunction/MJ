@@ -20,6 +20,8 @@ vi.mock('../realtime/realtime-vendor-resolution', () => ({
         // Resolves only when the caller's resolver can key this driver — the real selector's rule.
         return resolve?.('VoiceDriver') ? { VendorID: 'v1', ModelVendorID: 'mv1', DriverClass: 'VoiceDriver', APIName: 'voice-api' } : null;
     },
+    // One vendor, so the avatar-aware vendor choice has nothing to swap.
+    ListRealtimeVendorsForModel: () => [{ VendorID: 'v1', ModelVendorID: 'mv1', DriverClass: 'VoiceDriver', APIName: 'voice-api' }],
 }));
 
 import { RealtimeClientSessionService } from '../realtime/realtime-client-session-service';

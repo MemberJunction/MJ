@@ -2,7 +2,8 @@ import type { Type } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
-import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
+import { REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
+import { BaseRealtimeChannelClient, BuildToolBackedVerbs } from '@memberjunction/realtime-runtime';
 import { ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import { MEDIA_TOOL_DEFINITIONS, MEDIA_TOOL_NAMES, MEDIA_TOOL_PREFIX } from './media-channel-tools';
 import { MediaChannelState, MediaHighlight, MediaItemType } from './media-channel-state';
@@ -70,6 +71,34 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
 
   public GetToolDefinitions(): RealtimeToolDefinition[] {
     return MEDIA_TOOL_DEFINITIONS;
+  }
+
+  /**
+   * The media surface's self-description: what it holds, and every `Media_*` tool as a verb (so a tool a
+   * subclass adds shows up here too). The model reads its state (what is on screen) but is never shown
+   * pixels of it, so its exposure ceiling is `state`.
+   */
+  public override GetDescriptor(): RealtimeChannelDescriptor {
+    return {
+      Key: this.ChannelName,
+      Version: REALTIME_CHANNEL_CONTRACT_VERSION,
+      DisplayName: this.TabTitle,
+      OwningPackage: '@memberjunction/ng-conversations',
+      Instructions:
+        'A shared surface where you can show the user images, videos, audio clips, PDFs and web pages. ' +
+        'Each item opens in its own tab; you can switch between them and highlight a region to point at it.',
+      Nouns: [
+        {
+          Name: 'items',
+          Description: 'The media items currently shared, each with its type, title and source.',
+          Schema: { type: 'array', items: { type: 'object' } }
+        }
+      ],
+      Verbs: BuildToolBackedVerbs(this.GetToolDefinitions(), this.ToolNamePrefix),
+      DisplayPolicy: 'open-on-start',
+      DefaultAvailability: 'all-sessions',
+      MaxExposure: 'state'
+    };
   }
 
   public override GetSurfaceComponent(): Type<RealtimeMediaSurfaceComponent> {

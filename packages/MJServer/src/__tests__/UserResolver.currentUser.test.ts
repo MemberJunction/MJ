@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { LogError } from '@memberjunction/core';
+import { LogError, UserInfo } from '@memberjunction/core';
 import {
   AssertRoleLoadSucceeded,
   RequireContextUser,
   RequireLoadedUser,
   RequireRoleProvider,
+  SessionUserFields,
   UserIdExtraFilter,
 } from '../resolvers/currentUserRoles.js';
 
@@ -83,5 +84,19 @@ describe('CurrentUser role-load guards', () => {
       expect(() => AssertRoleLoadSucceeded({ Success: false }, 'u-1'))
         .toThrow('CurrentUser: failed to load roles: unknown error');
     });
+  });
+});
+
+describe('SessionUserFields', () => {
+  it('returns every UserInfo field the client asks CurrentUser for', () => {
+    // GraphQLDataProvider requests each UserInfo key that doesn't start with a single underscore.
+    const requested = Object.keys(new UserInfo(null, null)).filter((k) => k.startsWith('__mj_') || !k.startsWith('_'));
+    const returned = Object.keys(SessionUserFields(new UserInfo(null, { ID: 'u-1' })));
+    expect(requested.filter((k) => !returned.includes(k))).toEqual([]);
+  });
+
+  it('carries IsTemplate, which the template-user banner reads', () => {
+    const user = new UserInfo(null, { ID: 'u-1', Email: 'demo@example.org', IsTemplate: true });
+    expect(SessionUserFields(user)).toMatchObject({ ID: 'u-1', Email: 'demo@example.org', IsTemplate: true });
   });
 });

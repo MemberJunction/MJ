@@ -79,6 +79,15 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
             return true;
         }
 
+        // A message created by the record-cloning engine, as part of copying a conversation into a
+        // new user's account. The engine has already authorized that copy (Owner-only, the clone
+        // authorization, and conversations are copyable only from a template user), and the
+        // conversation it lands in belongs to the new user, not to whoever runs the clone. Only
+        // creates qualify: updating or deleting an existing message keeps the checks below.
+        if (resultType === 'create' && this.CloneContext) {
+            return true;
+        }
+
         try {
             const conversation = await provider.GetEntityObject<MJConversationEntity>(
                 'MJ: Conversations',

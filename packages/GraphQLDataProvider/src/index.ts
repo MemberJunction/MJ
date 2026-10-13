@@ -47,6 +47,7 @@ export type {
     StartLiveKitAgentRoomSessionInput,
     LiveKitAgentRoomSessionResult,
     LiveKitRecordingResult,
+    LiveKitAgentVisionResult,
     LiveKitRoomTurnState,
     LiveKitRoomTurnStateResult,
     LiveKitRoomTurnAgent,
@@ -131,6 +132,15 @@ export type {
 } from './graphQLIntegrationClient';
 export { GraphQLConversationClient } from './graphQLConversationClient';
 export type { ConversationRunEvent, ConversationTailResult } from './graphQLConversationClient';
+export { GraphQLRealtimeSessionClient, IsKnownRealtimeSessionVerificationErrorCode } from './graphQLRealtimeSessionClient';
+export type {
+    RealtimeSessionVerificationState,
+    RealtimeSessionVerificationErrorCode,
+    RealtimeSessionVerificationResult,
+    RealtimeSessionClientEvent,
+    RequestRealtimeSessionVerificationInput,
+    SubmitRealtimeSessionVerificationCodeInput,
+} from './graphQLRealtimeSessionClient';
 
 export { GraphQLMeetingClient } from './graphQLMeetingClient';
 export type {

@@ -292,6 +292,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'form-contributions': 17,
         'layered-base-views': 6,
         'lists': 3,
+        'livekit-room': 1,
         'materialized-entity-read': 2,
         'materialized-read': 3,
         'metadata-consistency': 7,
@@ -304,7 +305,9 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'predictive-studio': 5,
         'prompt-runner': 1,
         'queue': 7,
-        'realtime-deterministic': 12,
+        'realtime-deterministic': 18,
+        'realtime-session-guard': 2,
+        'realtime-session-verification': 6,
         'record-cloning': 13,
         'record-process': 12,
         'record-process-facade': 2,
@@ -369,7 +372,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(110);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(113);
     });
 });
 
@@ -508,6 +511,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'jsontype-live-sync.JL7',
         'jsontype-live-sync.JL8',
         'jsontype-live-sync.JL9',
+        'livekit-room.LKR1',
         'metadata-sync-push.MSP1',
         'metadata-sync-push.MSP10',
         'metadata-sync-push.MSP2',
@@ -532,6 +536,14 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'permission-engine.PE11',
         'permission-engine.PE12',
         'permission-engine.PE13',
+        'realtime-session-guard.RSG1',
+        'realtime-session-guard.RSG2',
+        'realtime-session-verification.RSV1',
+        'realtime-session-verification.RSV2',
+        'realtime-session-verification.RSV3',
+        'realtime-session-verification.RSV4',
+        'realtime-session-verification.RSV5',
+        'realtime-session-verification.RSV6',
         'record-cloning.RC1',
         'record-cloning.RC2',
         'record-cloning.RC4',
