@@ -1,6 +1,6 @@
 /**
  * Workflow actions (Loop, Parallel Execute, Conditional, Retry) run model-written action configurations that cannot
- * carry the calling run's scope, so inside a tenant-scoped agent run they refuse without running anything.
+ * carry the calling run's scope, so inside any agent run, scoped or not, they refuse without running anything.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RunActionParams, ActionResultSimple, ActionRunScope } from '@memberjunction/actions-base';
@@ -22,7 +22,7 @@ vi.mock('@memberjunction/actions', () => ({
     ActionEngineServer: { Instance: { RunAction: runActionSpy } },
 }));
 
-import { RefuseWorkflowInScopedRun, WORKFLOW_RUN_SCOPE_UNSUPPORTED } from '../custom/workflow/workflow-run-scope';
+import { RefuseWorkflowInAgentRun, WORKFLOW_RUN_SCOPE_UNSUPPORTED } from '../custom/workflow/workflow-run-scope';
 import { LoopAction } from '../custom/workflow/loop.action';
 import { ParallelExecuteAction } from '../custom/workflow/parallel-execute.action';
 import { ConditionalAction } from '../custom/workflow/conditional.action';
@@ -42,18 +42,22 @@ function paramsWith(runScope?: ActionRunScope | null): RunActionParams {
 
 type Runnable = { InternalRunAction: (p: RunActionParams) => Promise<ActionResultSimple> };
 
-describe('RefuseWorkflowInScopedRun', () => {
-    it('allows a workflow outside an agent run and in an unscoped run', () => {
-        expect(RefuseWorkflowInScopedRun(paramsWith(undefined), 'Loop')).toBeNull();
-        expect(RefuseWorkflowInScopedRun(paramsWith({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null }), 'Loop')).toBeNull();
+describe('RefuseWorkflowInAgentRun', () => {
+    it('allows a workflow outside an agent run', () => {
+        expect(RefuseWorkflowInAgentRun(paramsWith(undefined), 'Loop')).toBeNull();
+    });
+
+    it('refuses inside an unscoped agent run, where a nested Scoped Search would take the model\'s tenant', () => {
+        const unscoped: ActionRunScope = { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null };
+        expect(RefuseWorkflowInAgentRun(paramsWith(unscoped), 'Loop')?.ResultCode).toBe(WORKFLOW_RUN_SCOPE_UNSUPPORTED);
     });
 
     it('refuses inside a run bounded by a tenant or a secondary dimension', () => {
-        expect(RefuseWorkflowInScopedRun(paramsWith(TENANT_SCOPE), 'Loop')?.ResultCode).toBe(WORKFLOW_RUN_SCOPE_UNSUPPORTED);
+        expect(RefuseWorkflowInAgentRun(paramsWith(TENANT_SCOPE), 'Loop')?.ResultCode).toBe(WORKFLOW_RUN_SCOPE_UNSUPPORTED);
         const secondaryOnly: ActionRunScope = { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: { SpaceID: 'space-1' } };
-        const refusal = RefuseWorkflowInScopedRun(paramsWith(secondaryOnly), 'Retry');
+        const refusal = RefuseWorkflowInAgentRun(paramsWith(secondaryOnly), 'Retry');
         expect(refusal?.Success).toBe(false);
-        expect(refusal?.Message).toMatch(/Retry is not available in this agent run/);
+        expect(refusal?.Message).toMatch(/Retry is not available in an agent run/);
     });
 });
 
@@ -62,11 +66,14 @@ describe.each<[string, () => Runnable]>([
     ['Parallel Execute', () => new ParallelExecuteAction() as unknown as Runnable],
     ['Conditional', () => new ConditionalAction() as unknown as Runnable],
     ['Retry', () => new RetryAction() as unknown as Runnable],
-])('%s inside a tenant-scoped run', (name, make) => {
+])('%s inside an agent run', (name, make) => {
     beforeEach(() => runActionSpy.mockReset());
 
-    it('refuses without dispatching any action', async () => {
-        const result = await make().InternalRunAction(paramsWith(TENANT_SCOPE));
+    it.each<[string, ActionRunScope]>([
+        ['a tenant-scoped', TENANT_SCOPE],
+        ['an unscoped', { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null }],
+    ])('refuses in %s run without dispatching any action', async (_kind, scope) => {
+        const result = await make().InternalRunAction(paramsWith(scope));
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe(WORKFLOW_RUN_SCOPE_UNSUPPORTED);
         expect(result.Message).toContain(name);

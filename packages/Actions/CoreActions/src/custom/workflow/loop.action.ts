@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { ActionEngineServer } from "@memberjunction/actions";
-import { RefuseWorkflowInScopedRun } from "./workflow-run-scope";
+import { RefuseWorkflowInAgentRun } from "./workflow-run-scope";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
@@ -75,9 +75,9 @@ export class LoopAction extends BaseAction {
      * @returns Array of results from each iteration
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const scopedRunRefusal = RefuseWorkflowInScopedRun(params, "Loop");
-        if (scopedRunRefusal) {
-            return scopedRunRefusal;
+        const agentRunRefusal = RefuseWorkflowInAgentRun(params, "Loop");
+        if (agentRunRefusal) {
+            return agentRunRefusal;
         }
         try {
             const items = JSONParamHelper.getJSONParam(params, 'items');

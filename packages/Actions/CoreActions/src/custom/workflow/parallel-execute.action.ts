@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { ActionEngineServer } from "@memberjunction/actions";
-import { RefuseWorkflowInScopedRun } from "./workflow-run-scope";
+import { RefuseWorkflowInAgentRun } from "./workflow-run-scope";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
@@ -80,9 +80,9 @@ export class ParallelExecuteAction extends BaseAction {
      * @returns Array of results or first result based on WaitForAll
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const scopedRunRefusal = RefuseWorkflowInScopedRun(params, "Parallel Execute");
-        if (scopedRunRefusal) {
-            return scopedRunRefusal;
+        const agentRunRefusal = RefuseWorkflowInAgentRun(params, "Parallel Execute");
+        if (agentRunRefusal) {
+            return agentRunRefusal;
         }
         try {
             const actions = JSONParamHelper.getJSONParam(params, 'actions');
