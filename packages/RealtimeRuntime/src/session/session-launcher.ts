@@ -46,6 +46,8 @@ export interface RealtimeSessionLaunchRequest {
    * configuration and answers with the resolved policy. `null` when the host brings none.
    */
   ChannelCandidatesJson: string | null;
+  /** The fork (`MJ: Conversation Branches.ID`) the session starts on; `null` is Main. */
+  ConversationBranchId: string | null;
   /**
    * Whether this host can show the agent's video: one of its channels shows it (the Avatar channel). `false` for a host
    * with none (the embeddable widget, the mobile app): the server then asks the model for no avatar, so a video model is
@@ -197,7 +199,8 @@ export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher 
       recordingStartedAt: request.RecordingStartedAt,
       mediaCollectionId: request.MediaCollectionId,
       applicationId: request.ApplicationId,
-      appContextJson: request.AppContext ? JSON.stringify(request.AppContext) : null
+      appContextJson: request.AppContext ? JSON.stringify(request.AppContext) : null,
+      conversationBranchId: request.ConversationBranchId
     };
   }
 
@@ -257,8 +260,8 @@ export class DefaultRealtimeSessionLauncher implements IRealtimeSessionLauncher 
       .map((field) => `\n          ${field}`)
       .join('');
     return `
-      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String, $mediaCollectionId: String, $applicationId: String, $appContextJson: String${extraVariable}) {
-        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt, mediaCollectionId: $mediaCollectionId, applicationId: $applicationId, appContextJson: $appContextJson${extraArgument}) {
+      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String, $mediaCollectionId: String, $applicationId: String, $appContextJson: String, $conversationBranchId: String${extraVariable}) {
+        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt, mediaCollectionId: $mediaCollectionId, applicationId: $applicationId, appContextJson: $appContextJson, conversationBranchId: $conversationBranchId${extraArgument}) {
           AgentSessionId
           ConversationId
           Provider
