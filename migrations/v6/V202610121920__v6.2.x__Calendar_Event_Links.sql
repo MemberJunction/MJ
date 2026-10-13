@@ -42,7 +42,9 @@ CREATE TABLE [${flyway:defaultSchema}].[CalendarSyncState] (
     [SyncToken] NVARCHAR(MAX) NULL,
     [LastSyncedAt] DATETIMEOFFSET NULL,
     CONSTRAINT [PK_CalendarSyncState] PRIMARY KEY ([ID]),
-    CONSTRAINT [FK_CalendarSyncState_CommunicationProvider] FOREIGN KEY ([CommunicationProviderID]) REFERENCES [${flyway:defaultSchema}].[CommunicationProvider]([ID])
+    CONSTRAINT [FK_CalendarSyncState_CommunicationProvider] FOREIGN KEY ([CommunicationProviderID]) REFERENCES [${flyway:defaultSchema}].[CommunicationProvider]([ID]),
+    -- One cursor per calendar: two syncs of the same calendar racing must not create two rows.
+    CONSTRAINT [UQ_CalendarSyncState_Calendar] UNIQUE ([CommunicationProviderID], [AccountIdentifier], [CalendarID])
 );
 GO
 
