@@ -218,7 +218,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (449 classes)
+// @memberjunction/core-entities (451 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -387,6 +387,8 @@ import {
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -1634,6 +1636,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -1806,12 +1810,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
-    MJRecordProcessCategoryEntity,
-    MJRecordProcessEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordProcessCategoryEntity,
+    MJRecordProcessEntity,
     MJRecordProcessWatermarkEntity,
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
@@ -2010,13 +2014,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AttachTagsAction,
     CreateUserAction_actions_bizapps_lms,
     DetachTagsAction,
-    EnrollUserAction,
-    GetBundlesAction,
-    GetCertificatesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    EnrollUserAction,
+    GetBundlesAction,
+    GetCertificatesAction,
     GetCourseAnalyticsAction,
     GetLearnWorldsBulkDataAction,
     GetLearnWorldsCourseDetailsAction,
@@ -2214,13 +2218,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
-    TaskGraphCancelServerOperation,
-    TaskGraphForceCompleteTaskServerOperation,
-    TaskGraphGetStatusServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TaskGraphCancelServerOperation,
+    TaskGraphForceCompleteTaskServerOperation,
+    TaskGraphGetStatusServerOperation,
     TaskGraphOverrideEdgeServerOperation,
     TaskGraphPauseServerOperation,
     TaskGraphResumeServerOperation,
@@ -2418,13 +2422,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
-    RetryAction,
-    ReverseGeocodeAction,
-    RevertInteractiveFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    RetryAction,
+    ReverseGeocodeAction,
+    RevertInteractiveFormAction,
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
@@ -2504,7 +2508,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1064;
+export const CLASS_REGISTRATIONS_COUNT = 1066;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
