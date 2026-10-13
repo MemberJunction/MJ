@@ -9,6 +9,7 @@ import {
 } from '@memberjunction/ng-ui-components';
 import type { DisplayCaptureSurface, MediaDevice, MediaDeviceSelection } from '@memberjunction/ai-realtime-client/media';
 import { MediaDeviceMenuComponent } from './media-device-menu.component';
+import { AgentVisionText, type AgentVisionWords } from '../agent-vision-text';
 
 /** What the user asked to share from `mj-media-controls`. */
 export type MediaShareRequest =
@@ -187,7 +188,7 @@ const SHARE_SURFACES: readonly ShareSurfaceOption[] = [
           <i class="fa-solid" [class.fa-eye]="AgentVisionOn" [class.fa-eye-slash]="!AgentVisionOn" aria-hidden="true"></i>
         </button>
         @if (ShowLabels) {
-          <span class="control__label" aria-hidden="true">{{ AgentVisionOn ? 'Hide from agents' : 'Let agents see me' }}</span>
+          <span class="control__label" aria-hidden="true">{{ AgentVisionOn ? AgentVisionWords.Hide : AgentVisionWords.Let }}</span>
         }
       </span>
     }
@@ -263,6 +264,11 @@ export class MediaControlsComponent implements OnChanges {
   @Input() public ShowAgentVision = false;
   /** Whether the user lets an agent see their camera and shared screen. */
   @Input() public AgentVisionOn = false;
+  /**
+   * The number of agents in the room: the agent-vision button says "Let agents see me" when there is more than one, "Let
+   * the agent see me" otherwise.
+   */
+  @Input() public AgentCount = 1;
   /**
    * Show the device chevron beside the microphone, which opens the device menu. Off by default. It shows only while
    * {@link Devices} lists something to pick.
@@ -377,7 +383,12 @@ export class MediaControlsComponent implements OnChanges {
 
   /** The agent-vision button's name. */
   public get AgentVisionLabel(): string {
-    return this.AgentVisionOn ? 'Stop letting agents in this room see your camera and screen' : 'Let agents in this room see your camera and screen';
+    return this.AgentVisionOn ? this.AgentVisionWords.StopName : this.AgentVisionWords.LetName;
+  }
+
+  /** The agent-vision words for {@link AgentCount} agents. */
+  public get AgentVisionWords(): AgentVisionWords {
+    return AgentVisionText(this.AgentCount);
   }
 
   /** The Share button's name. */

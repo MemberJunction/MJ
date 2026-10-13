@@ -39,12 +39,22 @@ describe('SelfViewComponent (DOM)', () => {
     expect(mirrored(f)).toBe(false);
   });
 
-  it('says "Agents can see this" only when the host says so', () => {
+  it('says "Agent can see this" only when the host says so, in a call with one agent', () => {
     const f = render();
     expect(query(f, '.self__badge')).toBeNull();
     f.componentRef.setInput('AgentCanSee', true);
     f.detectChanges();
+    expect(query(f, '.self__badge')?.textContent?.trim()).toBe('Agent can see this');
+  });
+
+  it('says "Agents can see this", and its tile "Agents can see", in a room with more than one agent', () => {
+    const f = render({ AgentCanSee: true, AgentCount: 2, Participant: me({ AgentCanSee: true }) });
     expect(query(f, '.self__badge')?.textContent?.trim()).toBe('Agents can see this');
+    expect(query(f, '.tile__chip')?.textContent?.trim()).toBe('Agents can see');
+    f.componentRef.setInput('AgentCount', 1);
+    f.detectChanges();
+    expect(query(f, '.self__badge')?.textContent?.trim()).toBe('Agent can see this');
+    expect(query(f, '.tile__chip')?.textContent?.trim()).toBe('Agent can see');
   });
 
   it('asks the host to hide it from a named Hide button', () => {

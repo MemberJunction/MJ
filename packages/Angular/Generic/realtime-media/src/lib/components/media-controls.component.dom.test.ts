@@ -156,8 +156,8 @@ describe('MediaControlsComponent (DOM)', () => {
   });
 
   describe('the agent-vision button', () => {
-    const LET = 'Let agents in this room see your camera and screen';
-    const STOP = 'Stop letting agents in this room see your camera and screen';
+    const LET = 'Let the agent see your camera and screen';
+    const STOP = 'Stop letting the agent see your camera and screen';
 
     it('is there only when the host shows it', () => {
       expect(button(render(), LET)).toBeNull();
@@ -189,10 +189,24 @@ describe('MediaControlsComponent (DOM)', () => {
 
     it('is labelled after Share when labels are on', () => {
       const f = render({ ShowLabels: true, ShowAgentVision: true });
-      expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim())).toEqual(['Unmute', 'Video', 'Share', 'Let agents see me']);
+      expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim())).toEqual(['Unmute', 'Video', 'Share', 'Let the agent see me']);
       f.componentRef.setInput('AgentVisionOn', true);
       f.detectChanges();
+      expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim()).at(-1)).toBe('Hide from the agent');
+    });
+
+    it('speaks of every agent in the room when there is more than one', () => {
+      const f = render({ ShowLabels: true, ShowAgentVision: true, AgentCount: 2 });
+      expect(button(f, 'Let agents in this room see your camera and screen')).not.toBeNull();
+      expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim()).at(-1)).toBe('Let agents see me');
+      f.componentRef.setInput('AgentVisionOn', true);
+      f.detectChanges();
+      expect(button(f, 'Stop letting agents in this room see your camera and screen')).not.toBeNull();
       expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim()).at(-1)).toBe('Hide from agents');
+      f.componentRef.setInput('AgentCount', 1);
+      f.detectChanges();
+      expect(button(f, STOP)).not.toBeNull();
+      expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim()).at(-1)).toBe('Hide from the agent');
     });
 
     it('has no axe violations', async () => {

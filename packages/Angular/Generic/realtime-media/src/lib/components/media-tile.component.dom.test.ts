@@ -96,12 +96,20 @@ describe('MediaTileComponent (DOM)', () => {
       expect(query(render(participant()), '.tile__chip')).toBeNull();
     });
 
-    it('says "Agents can see" when the host reports that an agent can see the participant', () => {
+    it('says "Agent can see" when the host reports that the agent can see the participant, in a call with one agent', () => {
       const chips = (value: MediaParticipant) => queryAll(render(value), '.tile__chip').map((c) => c.textContent?.trim());
-      expect(chips(participant({ AgentCanSee: true }))).toEqual(['Agents can see']);
-      expect(chips(participant({ AgentCanSee: true, Video: { screen: elementSource() } }))).toEqual(['Sharing', 'Agents can see']);
+      expect(chips(participant({ AgentCanSee: true }))).toEqual(['Agent can see']);
+      expect(chips(participant({ AgentCanSee: true, Video: { screen: elementSource() } }))).toEqual(['Sharing', 'Agent can see']);
       expect(chips(participant({ AgentCanSee: false }))).toEqual([]);
       expect(chips(participant())).toEqual([]);
+      expect(queryAll(render(participant({ AgentCanSee: true }), { AgentCount: 1 }), '.tile__chip').map((c) => c.textContent?.trim())).toEqual(['Agent can see']);
+    });
+
+    it('says "Agents can see" in a room with more than one agent', () => {
+      const chips = (agentCount: number) =>
+        queryAll(render(participant({ AgentCanSee: true }), { AgentCount: agentCount }), '.tile__chip').map((c) => c.textContent?.trim());
+      expect(chips(2)).toEqual(['Agents can see']);
+      expect(chips(3)).toEqual(['Agents can see']);
     });
 
     it("shows the host's status as a chip after its own labels, with or without video", () => {

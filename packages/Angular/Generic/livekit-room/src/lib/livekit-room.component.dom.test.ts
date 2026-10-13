@@ -1115,9 +1115,10 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
   });
 
   describe('what the agent sees', () => {
-    const LET = 'button[title="Let agents in this room see your camera and screen"]';
-    const STOP = 'button[title="Stop letting agents in this room see your camera and screen"]';
+    const LET = 'button[title="Let the agent see your camera and screen"]';
+    const STOP = 'button[title="Stop letting the agent see your camera and screen"]';
     const sage = () => person('sage', { Agent: true });
+    const scout = () => person('scout', { Agent: true });
 
     it('offers no switch while no agent in the room watches', () => {
       expect(query(render(room([sage()]).controller), LET)).toBeNull();
@@ -1150,12 +1151,23 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       expect(f.componentInstance.State.LocalMedia.AgentVisionOn).toBeUndefined();
     });
 
-    it('says "Agents can see" on the tiles of the people an agent can see, the user\'s own included', () => {
+    it('says "Agent can see" on the tiles of the people the agent can see, the user\'s own included', () => {
       const ada = { ...person('ada'), AgentCanSee: true };
       const you = { ...person('you', { Local: true }), AgentCanSee: true };
       const f = render(makeFakeController(makeState({ Status: 'connected', Local: you, Remote: [ada, person('bo'), sage()], AgentWatching: true })).controller, { Layout: 'grid' });
       const chip = (name: string) => tileOf(f, name)?.querySelector('.tile__chip')?.textContent?.trim() ?? null;
+      expect([chip('you'), chip('ada'), chip('bo')]).toEqual(['Agent can see', 'Agent can see', null]);
+    });
+
+    it('speaks of "agents" on the tiles and the switch in a room with more than one agent', () => {
+      const ada = { ...person('ada'), AgentCanSee: true };
+      const you = { ...person('you', { Local: true }), AgentCanSee: true };
+      const f = render(makeFakeController(makeState({ Status: 'connected', Local: you, Remote: [ada, person('bo'), sage(), scout()], AgentWatching: true })).controller, { Layout: 'grid' });
+      const chip = (name: string) => tileOf(f, name)?.querySelector('.tile__chip')?.textContent?.trim() ?? null;
+      expect(f.componentInstance.AgentCount).toBe(2);
       expect([chip('you'), chip('ada'), chip('bo')]).toEqual(['Agents can see', 'Agents can see', null]);
+      expect(query(f, 'button[title="Let agents in this room see your camera and screen"]')).not.toBeNull();
+      expect(query(f, LET)).toBeNull();
     });
   });
 
@@ -1335,11 +1347,11 @@ describe('LiveKitRoomComponent (DOM, fake controller)', () => {
       const { f, controller } = await renderPreview();
       f.componentInstance.AgentVisionChange.subscribe((on: boolean) => controller.SetAgentVision(on));
       expect(tileOf(f, 'Grace')?.querySelector('.tile__chip')).toBeNull();
-      (query(f, 'button[title="Let agents in this room see your camera and screen"]') as HTMLButtonElement).click();
+      (query(f, 'button[title="Let the agent see your camera and screen"]') as HTMLButtonElement).click();
       await settle(f);
-      expect(tileOf(f, 'Grace')?.querySelector('.tile__chip')?.textContent?.trim()).toBe('Agents can see');
-      expect(tileOf(f, 'Ada')?.querySelector('.tile__chip')?.textContent?.trim()).toBe('Agents can see');
-      expect(query(f, 'button[title="Stop letting agents in this room see your camera and screen"]')).not.toBeNull();
+      expect(tileOf(f, 'Grace')?.querySelector('.tile__chip')?.textContent?.trim()).toBe('Agent can see');
+      expect(tileOf(f, 'Ada')?.querySelector('.tile__chip')?.textContent?.trim()).toBe('Agent can see');
+      expect(query(f, 'button[title="Stop letting the agent see your camera and screen"]')).not.toBeNull();
     });
   });
 });

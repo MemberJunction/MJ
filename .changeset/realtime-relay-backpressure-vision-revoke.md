@@ -13,4 +13,4 @@ Withdrawing agent vision (`SetLiveKitAgentVision` with `Allow: false`) no longer
 
 The mint fallback for a server without the relay fields matches `field "RelayUrl"`, not any message that names RelayUrl.
 
-The agent-vision button says what the consent covers: every agent in the room. Its label reads "Let agents see me" / "Hide from agents", its name "Let agents in this room see your camera and screen", and a failure "Couldn't change what agents see" (#5502).
+The agent-vision button says what the consent covers: in a room with more than one agent, every agent in the room. Its label there reads "Let agents see me" / "Hide from agents" and its name "Let agents in this room see your camera and screen"; with one agent, "Let the agent see me" / "Hide from the agent" and "Let the agent see your camera and screen". A failure says "Couldn't change what agents see" (#5502).

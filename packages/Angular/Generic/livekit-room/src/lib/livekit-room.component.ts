@@ -263,7 +263,8 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   /** Allow leaving the room from the control bar. */
   @Input() public EnableLeaveControl = true;
   /**
-   * Offer the "Let agents see" switch while an agent in the room watches ({@link LiveKitRoomState.AgentWatching}).
+   * Offer the "Let the agent see me" switch ("Let agents see me" with more than one agent) while an agent in the room
+   * watches ({@link LiveKitRoomState.AgentWatching}).
    * The switch only asks: see {@link AgentVisionChange}.
    */
   @Input() public EnableAgentVisionControl = true;
@@ -1046,8 +1047,21 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
    * agent merely joined first), falling back to the first agent when none is speaking.
    */
   public get AgentParticipant(): LiveKitParticipantView | null {
-    const agents = this.State.Remote.filter((p) => p.Role === 'agent');
+    const agents = this.agents;
     return agents.find((p) => p.IsSpeaking) ?? agents[0] ?? null;
+  }
+
+  /**
+   * The number of agents in the room. The agent-vision words (the tiles' chips, the self-view and the "Let the agent see
+   * me" control) are plural only when there is more than one.
+   */
+  public get AgentCount(): number {
+    return this.agents.length;
+  }
+
+  /** The room's agents (participants whose role is `'agent'`). */
+  private get agents(): LiveKitParticipantView[] {
+    return this.State.Remote.filter((p) => p.Role === 'agent');
   }
 
   /** The participant currently sharing their screen (for split view), if any. */
@@ -1107,7 +1121,7 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     return this.State.Status === 'connected';
   }
 
-  /** Whether the bar offers the "Let agents see" switch: the host allows it, and an agent in the room watches. */
+  /** Whether the bar offers the "Let the agent see me" switch: the host allows it, and an agent in the room watches. */
   public get ShowAgentVisionControl(): boolean {
     return this.EnableAgentVisionControl && this.State.AgentWatching === true;
   }

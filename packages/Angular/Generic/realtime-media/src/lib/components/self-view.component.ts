@@ -2,10 +2,12 @@ import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from 
 import type { MediaParticipant } from '@memberjunction/ai-realtime-client/media';
 import { MediaTileComponent } from './media-tile.component';
 import type { MediaAudioMeterSettings } from './audio-meter.component';
+import { AgentVisionText, type AgentVisionWords } from '../agent-vision-text';
 
 /**
  * `mj-self-view`: the user's own tile, as `mj-media-tile` draws it, with the camera mirrored as in a mirror (a
- * shared screen is not mirrored). "Agents can see this" shows while the host says the user's frames reach an agent.
+ * shared screen is not mirrored). "Agent can see this" shows while the host says the user's frames reach an agent ("Agents
+ * can see this" in a room with more than one agent; see {@link AgentCount}).
  * The Hide button asks the host to take the tile away; the camera stays on, so others still see the user. Content
  * marked `mjMediaTileActions` goes to the tile's top corner, before the Hide button.
  */
@@ -24,6 +26,7 @@ import type { MediaAudioMeterSettings } from './audio-meter.component';
       [ShowConnectionQuality]="ShowConnectionQuality"
       [AvatarUrl]="AvatarUrl"
       [MeterSettings]="MeterSettings"
+      [AgentCount]="AgentCount"
     >
       <ng-container ngProjectAs="[mjMediaTileActions]">
         <ng-content select="[mjMediaTileActions]"></ng-content>
@@ -35,7 +38,7 @@ import type { MediaAudioMeterSettings } from './audio-meter.component';
       </ng-container>
     </mj-media-tile>
     @if (AgentCanSee) {
-      <span class="self__badge"><i class="fa-solid fa-eye" aria-hidden="true"></i> Agents can see this</span>
+      <span class="self__badge"><i class="fa-solid fa-eye" aria-hidden="true"></i> {{ AgentVisionWords.CanSeeThis }}</span>
     }
   `,
   styleUrls: ['./self-view.component.css'],
@@ -43,8 +46,10 @@ import type { MediaAudioMeterSettings } from './audio-meter.component';
 export class SelfViewComponent {
   /** The user, as a `/media` participant: their camera, or their picture or initials while it is off. */
   @Input() public Participant: MediaParticipant | null = null;
-  /** Show "Agents can see this": the host knows the user's frames reach an agent. */
+  /** Show "Agent can see this": the host knows the user's frames reach an agent. */
   @Input() public AgentCanSee = false;
+  /** The number of agents in the room: the badge and the tile's chip are plural when there is more than one. */
+  @Input() public AgentCount = 1;
   /** Show the Hide button. */
   @Input() public ShowHide = true;
   /** Show the active-speaker ring. */
@@ -62,4 +67,9 @@ export class SelfViewComponent {
 
   /** The user asked to hide their self-view. */
   @Output() public HideRequested = new EventEmitter<void>();
+
+  /** The agent-vision words for {@link AgentCount} agents. */
+  public get AgentVisionWords(): AgentVisionWords {
+    return AgentVisionText(this.AgentCount);
+  }
 }

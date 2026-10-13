@@ -28,6 +28,7 @@ import { MediaControlsComponent, type MediaSharePanel, type MediaShareRequest } 
           [SharePanels]="SharePanels"
           [ShowAgentVision]="ShowAgentVision"
           [AgentVisionOn]="AgentVisionOn"
+          [AgentCount]="AgentCount"
           (MicrophoneToggled)="ToggleMicrophone.emit()"
           (CameraToggled)="ToggleCamera.emit()"
           (ShareRequested)="OnShareRequested($event)"
@@ -286,10 +287,12 @@ export class LiveKitControlBarComponent {
   @Input() public EnableWhiteboard = false;
   /** Whether the whiteboard surface is currently active. */
   @Input() public WhiteboardActive = false;
-  /** Show the "Let agents see" button: an agent in the room watches. */
+  /** Show the "Let the agent see me" button: an agent in the room watches. */
   @Input() public ShowAgentVision = false;
   /** Whether the user lets agents see their camera and shared screen. */
   @Input() public AgentVisionOn = false;
+  /** The number of agents in the room: the agent-vision button speaks of "agents" when there is more than one. */
+  @Input() public AgentCount = 1;
 
   // ── Intent outputs ─────────────────────────────────────────────────────────────────
   /** The user clicked the microphone toggle. */

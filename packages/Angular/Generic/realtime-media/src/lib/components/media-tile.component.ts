@@ -18,6 +18,7 @@ import type { MediaParticipant, MediaVideoSource } from '@memberjunction/ai-real
 import { MediaAudioMeterComponent, type MediaAudioMeterSettings } from './audio-meter.component';
 import { MediaVideoBinding } from '../media-video-binding';
 import { VideoFrameWatch } from '../video-frame-watch';
+import { AgentVisionText, type AgentVisionWords } from '../agent-vision-text';
 
 /**
  * Marks the content an `mj-media-tile` shows instead of the participant's picture or initials, while it has no video to
@@ -87,7 +88,7 @@ export type MediaTileVideoFit = 'cover' | 'contain';
             <span class="tile__chip"><i class="fa-solid fa-display" aria-hidden="true"></i> Sharing</span>
           }
           @if (AgentCanSee) {
-            <span class="tile__chip"><i class="fa-solid fa-eye" aria-hidden="true"></i> Agents can see</span>
+            <span class="tile__chip"><i class="fa-solid fa-eye" aria-hidden="true"></i> {{ AgentVisionWords.CanSee }}</span>
           }
           @if (Status) {
             <span class="tile__chip tile__chip--status">{{ Status }}</span>
@@ -177,6 +178,8 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
   @Input() public Mirror = false;
   /** A short status the tile shows as a chip after its own labels, such as what an agent is doing; `null` for none. */
   @Input() public Status: string | null = null;
+  /** The number of agents in the room: the chip says "Agents can see" when there is more than one, "Agent can see" otherwise. */
+  @Input() public AgentCount = 1;
   /**
    * After this many milliseconds without a new frame, the video cross-fades to the picture or initials until its frames
    * come back; until its first frame, too. `null` (the default): the video always shows. Read when a video is attached.
@@ -264,6 +267,11 @@ export class MediaTileComponent implements AfterViewInit, OnDestroy {
   /** Whether an agent can see this participant's camera and shared screen, as the host reports it. */
   public get AgentCanSee(): boolean {
     return this.Participant?.AgentCanSee === true;
+  }
+
+  /** The agent-vision words for {@link AgentCount} agents. */
+  public get AgentVisionWords(): AgentVisionWords {
+    return AgentVisionText(this.AgentCount);
   }
 
   /**

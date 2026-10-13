@@ -47,8 +47,8 @@ Chips sit in a row in the top-left corner, in this order:
 - "AI-generated video" while the tile shows an avatar's video. An avatar is generated, and a watermark the model adds
   can't be seen, so the tile says so for as long as it shows one.
 - "Sharing" while the participant shares a screen.
-- "Agents can see" while `Participant.AgentCanSee` is true: the host reports that an agent can see this participant's
-  camera and shared screen.
+- "Agent can see" while `Participant.AgentCanSee` is true: the host reports that an agent can see this participant's
+  camera and shared screen. With `AgentCount` above 1 (a room with more than one agent) it says "Agents can see".
 - `Status`, a short text from the host such as what an agent is doing, marked with a dot.
 
 | Input | Default | What it does |
@@ -188,8 +188,9 @@ for the user's camera and share.
 
 An `mj-media-tile` with `Mirror` on, so the camera shows as in a mirror (a shared screen does not), and no pin.
 
-- `AgentCanSee` shows "Agents can see this" while the host knows the user's frames reach an agent. The tile's own
-  "Agents can see" chip still follows `Participant.AgentCanSee`, in the same corner.
+- `AgentCanSee` shows "Agent can see this" while the host knows the user's frames reach an agent ("Agents can see this"
+  with `AgentCount` above 1). The tile's own "Agent can see" chip still follows `Participant.AgentCanSee`, in the same
+  corner.
 - `ShowHide` (on by default) shows a Hide button that emits `HideRequested`. The host takes the tile away; the camera
   stays on, so others still see the user.
 - `Participant`, `AvatarUrl`, `MeterSettings`, `ShowName`, `ShowMeter`, `ShowConnectionQuality` and
@@ -223,9 +224,10 @@ Each button is a circle named by what a click does, such as "Mute microphone" or
 | `ShowShareMenu` | `true` | Show the Share button's arrow and its menu. |
 | `SharePanels` | `[]` | Panels the user can share on their own (`MediaSharePanel`: `Key`, `Label`, optional `Icon`), offered under "This panel". |
 | `Size` | `'md'` | The circles' size: `'sm'`, `'md'` or `'lg'` (32, 44 or 52 px). The Share arrow stays small. |
-| `ShowLabels` | `false` | A label under each button: Mute or Unmute, Video or Stop video, Share or Stop sharing, Let agents see me or Hide from agents. |
+| `ShowLabels` | `false` | A label under each button: Mute or Unmute, Video or Stop video, Share or Stop sharing, Let the agent see me or Hide from the agent (Let agents see me or Hide from agents with `AgentCount` above 1). |
 | `CameraOptional` | `false` | For a call where the camera usually stays off, such as one with an agent: the camera button is neutral while off and filled while on, instead of red while off. |
 | `ShowAgentVision`, `AgentVisionOn` | `false` | Show the agent-vision button, and whether it is on (filled). |
+| `AgentCount` | `1` | The number of agents in the room. The agent-vision button speaks of "the agent" ("Let the agent see your camera and screen") with one, and of "agents in this room" with more. `mj-media-tile` and `mj-self-view` take it too; `AgentVisionText(agentCount)` returns the words. |
 
 Outputs: `MicrophoneToggled(boolean)` and `CameraToggled(boolean)`, each with the state asked for;
 `ShareRequested(MediaShareRequest)`; `StopShareRequested`; and `AgentVisionToggled(boolean)`. The agent-vision button

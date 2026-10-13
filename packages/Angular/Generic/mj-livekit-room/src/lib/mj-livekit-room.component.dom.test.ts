@@ -444,19 +444,19 @@ describe('MJLiveKitRoomComponent: the preview room (DOM)', () => {
     const f = await render();
     f.componentInstance.ResolvedRoomName = 'preview-room';
     const button = (title: string) => f.nativeElement.querySelector(`button[title="${title}"]`) as HTMLButtonElement | null;
-    button('Let agents in this room see your camera and screen')?.click();
+    button('Let the agent see your camera and screen')?.click();
     f.detectChanges();
     expect(roomOf(f).State.LocalMedia.AgentVisionOn).toBe(true);
-    button('Stop letting agents in this room see your camera and screen')?.click();
+    button('Stop letting the agent see your camera and screen')?.click();
     f.detectChanges();
     expect(roomOf(f).State.LocalMedia.AgentVisionOn).toBe(false);
-    expect(button('Let agents in this room see your camera and screen')).not.toBeNull();
+    expect(button('Let the agent see your camera and screen')).not.toBeNull();
     expect(set).not.toHaveBeenCalled();
   });
 
   it('offers no switch when the host turns it off', async () => {
     const f = await render({ EnableAgentVisionControl: false });
-    expect(f.nativeElement.querySelector('button[title="Let agents in this room see your camera and screen"]')).toBeNull();
+    expect(f.nativeElement.querySelector('button[title="Let the agent see your camera and screen"]')).toBeNull();
   });
 });
 
@@ -466,7 +466,7 @@ describe('MJLiveKitRoomComponent: the preview room (DOM)', () => {
  * controller whose agent watches; MJAPI is a stand-in for `GraphQLLiveKitClient.SetAgentVision`.
  */
 describe('MJLiveKitRoomComponent: what the agent sees, in a meeting (DOM)', () => {
-  const LET = 'button[title="Let agents in this room see your camera and screen"]';
+  const LET = 'button[title="Let the agent see your camera and screen"]';
 
   beforeEach(() => {
     vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
@@ -511,7 +511,7 @@ describe('MJLiveKitRoomComponent: what the agent sees, in a meeting (DOM)', () =
   it('asks MJAPI to withdraw it when the user turns the switch off', async () => {
     const set = vi.spyOn(GraphQLLiveKitClient.prototype, 'SetAgentVision').mockResolvedValue({ Success: true });
     const f = render({ LocalMedia: { MicrophoneEnabled: false, CameraEnabled: false, ScreenShareEnabled: false, AgentVisionOn: true } });
-    await flip(f, 'button[title="Stop letting agents in this room see your camera and screen"]');
+    await flip(f, 'button[title="Stop letting the agent see your camera and screen"]');
     expect(set).toHaveBeenCalledWith('room-1', false);
   });
 
