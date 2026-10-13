@@ -6,6 +6,7 @@ import {
     FunctionResponseScheduling,
     type AuthToken,
     type CreateAuthTokenParameters,
+    type LiveCallbacks,
     type LiveServerMessage,
     type LiveServerContent,
     type LiveConnectConfig,
@@ -453,18 +454,37 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * boundary is the *only* thing tests need to replace.
      *
      * @param args Resolved model, connect config, and the server-message callback.
-     * @returns A promise resolving to the live session handle.
+     * @returns A promise resolving to the live session handle; it rejects if the socket errors or
+     *          closes before Gemini acknowledges the setup.
      */
     protected async connectLiveSession(args: GeminiConnectArgs): Promise<GeminiLiveSession> {
         const client = this.ensureClient();
-        return client.live.connect({
-            model: args.Model,
-            config: args.Config,
-            callbacks: {
+        return this.connectUntilSetup(args, (callbacks) => client.live.connect({ model: args.Model, config: args.Config, callbacks }));
+    }
+
+    /**
+     * Opens a Live connection with `connect`, which passes the given callbacks to `live.connect`, and rejects if the
+     * socket errors or closes before Gemini acknowledges the setup. `live.connect` (@google/genai 2.11+) resolves only on
+     * the server's setupComplete frame and never rejects when the socket errors or closes first (a rejected key, model or
+     * setup field), so without this the connect waits forever. A promise settles once, so callbacks after a successful
+     * connect only reach the handlers. Every {@link connectLiveSession} override should open through this.
+     */
+    protected connectUntilSetup(
+        args: GeminiConnectArgs,
+        connect: (callbacks: LiveCallbacks) => Promise<GeminiLiveSession>
+    ): Promise<GeminiLiveSession> {
+        return new Promise<GeminiLiveSession>((resolve, reject) => {
+            connect({
                 onmessage: args.OnMessage,
-                onerror: args.OnError,
-                onclose: args.OnClose,
-            },
+                onerror: (event) => {
+                    reject(new Error(`Gemini Live connection failed: ${event?.message ?? 'websocket error'}`));
+                    args.OnError?.(event);
+                },
+                onclose: (event) => {
+                    reject(new Error(`Gemini Live closed during setup (code ${event?.code ?? 'unknown'}${event?.reason ? `: ${event.reason}` : ''})`));
+                    args.OnClose?.(event);
+                },
+            }).then(resolve, reject);
         });
     }
 
@@ -570,6 +590,31 @@ export class GeminiRealtime extends BaseRealtimeModel {
             },
             MalformedExisting: malformedExisting,
         };
+    }
+
+    /**
+     * Consumes the driver-NEUTRAL `transcriptionLanguages` bag key (BCP-47 codes) into `languageCodes`
+     * hints on both caption streams. Without a hint Gemini auto-detects each utterance's language for
+     * the captions, and can caption English speech in another script.
+     *
+     * @param cfg The open config bag; the key is always deleted from it.
+     * @param config The connect config receiving the hints.
+     */
+    private static applyTranscriptionLanguages(cfg: Record<string, unknown>, config: LiveConnectConfig): void {
+        const raw = cfg.transcriptionLanguages;
+        delete cfg.transcriptionLanguages;
+        const languageCodes = Array.isArray(raw)
+            ? raw.filter((c): c is string => typeof c === 'string' && c.trim().length > 0).map((c) => c.trim())
+            : [];
+        if (languageCodes.length > 0) {
+            config.inputAudioTranscription = { languageCodes };
+            config.outputAudioTranscription = { languageCodes };
+        } else if (raw !== undefined) {
+            console.warn(
+                '[GeminiRealtime] Ignored the session config bag\'s `transcriptionLanguages` because it holds no language codes '
+                + '— expected an array of BCP-47 codes such as ["en-US"].'
+            );
+        }
     }
 
     /**
@@ -709,6 +754,8 @@ export class GeminiRealtime extends BaseRealtimeModel {
                 const reason = typeof rawVoice === 'string' ? 'blank' : `not a string (got ${typeof rawVoice})`;
                 console.warn(`[GeminiRealtime] Ignored the session config bag's \`voice\` because it is ${reason} — expected a Gemini prebuilt voice name.`);
             }
+            // Consumed before the merge below, so a provider-native transcription config in the bag still wins.
+            GeminiRealtime.applyTranscriptionLanguages(cfg, config);
             // Scrub the MJ-side keys shared across the realtime driver family. None is a Live config
             // field — a co-agent config carrying e.g. `effortLevel` or `mcpTools` must not break a
             // Gemini session by being spread raw into the Live SDK, where strictness varies by version.
@@ -716,8 +763,8 @@ export class GeminiRealtime extends BaseRealtimeModel {
             // `effortLevel`, `reasoningEffort`) are read from params.Config by applyModelLegality, so
             // the scrub reports one only when its value is of a type the driver cannot read; the
             // rest are diag-logged so config typos and cross-provider keys stop being silent. The
-            // keys consumed above (`disableAutoResponse`, `voice`, `tooling`, `toolBehavior`) never
-            // reach it.
+            // keys consumed above (`disableAutoResponse`, `voice`, `tooling`, `toolBehavior`,
+            // `transcriptionLanguages`) never reach it.
             //
             // This scrub NARROWS the silent-drop class of #3721; it does not close it. The list is an
             // allowlist of MJ-SHARED keys, not of non-Gemini keys, so anything outside it still rides

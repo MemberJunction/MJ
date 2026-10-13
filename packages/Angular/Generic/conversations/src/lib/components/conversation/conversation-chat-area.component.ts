@@ -14,7 +14,7 @@ import {
   ConversationDetailWindowSnapshot
 } from '../../services/conversation-detail-window.store';
 import { ActiveTasksService } from '../../services/active-tasks.service';
-import { PendingAttachment } from '@memberjunction/ng-composer';
+import { PendingAttachment, SendSlotMode } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
@@ -22,7 +22,7 @@ import { MJResourcePermissionShareAdapter, ResourceShareContext } from '@memberj
 
 /** `MJ: Resource Types.ID` for Conversations. */
 const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
-import { MessageAttachment } from '../message/message-item.component';
+import { STOP_RETRY_AFTER_MS, MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
 import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
@@ -101,7 +101,7 @@ import {
   type MessageForkChip
 } from '../../utils/conversation-forks';
 import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual, UUIDSet, IndexByUUID } from '@memberjunction/global';
 
 // PR 2c — Widget extension surface
 import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
@@ -118,6 +118,8 @@ import {
   AfterToolInvokedEventArgs,
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
+  BeforeStopClickedEventArgs,
+  AfterStopClickedEventArgs,
   SessionStartedEventArgs,
   SessionChannelStateChangedEventArgs,
   SessionEndedEventArgs,
@@ -1277,6 +1279,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Output() afterToolInvoked = this.AfterToolInvoked;
 
   /** Cancelable — fired BEFORE a response form's submitted values are sent. */
+  /**
+   * Whether people may stop an in-progress agent run from its reply. Default true. A host can
+   * turn it off for a surface (a view-only review, a space whose runs are managed elsewhere)
+   * without making the conversation read-only.
+   */
+  @Input() public AllowStopRun = true;
+
   @Output() BeforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
 
   /**
@@ -1298,6 +1307,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
+
+  /**
+   * Fired BEFORE an in-progress agent run is stopped from its reply. Cancelable: set
+   * `event.Cancel = true` to keep the run going; `AfterStopClicked` then does not fire.
+   */
+  @Output() BeforeStopClicked = new EventEmitter<BeforeStopClickedEventArgs>();
+
+  /**
+   * Fired AFTER a stop was attempted, with whether the run's row was marked Cancelled.
+   * Not fired when `BeforeStopClicked` was canceled.
+   */
+  @Output() AfterStopClicked = new EventEmitter<AfterStopClickedEventArgs>();
 
   /** Informational. */
   @Output() SessionStarted = new EventEmitter<SessionStartedEventArgs>();
@@ -2136,7 +2157,201 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * In-progress message IDs for streaming reconnection
    * Passed to message-input component to reconnect PubSub updates
    */
-  public InProgressMessageIds: string[] = [];
+  public get InProgressMessageIds(): string[] {
+    return this._inProgressMessageIds ?? [];
+  }
+  public set InProgressMessageIds(value: string[]) {
+    this._inProgressMessageIds = value;
+    this.syncSendSlot();
+  }
+  private _inProgressMessageIds: string[] = [];
+
+  // ── The composer's send slot as the stop control ──────────────────────────────────────
+  // While replies are in flight the composer's send slot is the stop control (one run: "Stop
+  // {agent}"; several: "Stop all N", and each reply shows its own pill as well). The slot's mode,
+  // label and status line are derived here from the in-flight replies; the generic composer box
+  // knows nothing about runs. A stop goes through the same cancelable path as the per-reply pill.
+
+  /** Replies the person asked to stop that have not left In-Progress yet. */
+  public StoppingDetailIds = new Set<string>();
+  private _stopFallbackTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private _sendSlotTicker: ReturnType<typeof setInterval> | null = null;
+  /** The elapsed time of the in-flight reply, ticked once a second while one is in flight. */
+  public SendSlotElapsed: string | null = null;
+
+  /** How many agent replies are in flight in the open view. */
+  public get InFlightCount(): number {
+    return this.InProgressMessageIds.length;
+  }
+
+  /** What the composer's send slot is: Stop while replies are in flight and the viewer may stop them. */
+  public get SendSlotMode(): SendSlotMode {
+    if (this.InFlightCount === 0 || this.EffectiveReadOnly || !this.AllowStopRun) {
+      return 'send';
+    }
+    return this.isAnyStopping() ? 'stopping' : 'stop';
+  }
+
+  /** The count the slot shows: the in-flight replies, or none when the slot is Send. */
+  public get StopCount(): number {
+    return this.SendSlotMode === 'send' ? 0 : this.InFlightCount;
+  }
+
+  /** The slot's tooltip and accessible name: "Stop {agent}", or "Stop all N runs". */
+  public get StopLabel(): string {
+    const count = this.InFlightCount;
+    if (count > 1) {
+      return `Stop all ${count} runs`;
+    }
+    const agent = this.inFlightAgentName();
+    return agent ? `Stop ${agent}` : 'Stop';
+  }
+
+  /** The composer's status line: who is working, or what is being stopped. Null when the slot is Send. */
+  public get StatusText(): string | null {
+    const mode = this.SendSlotMode;
+    if (mode === 'send') {
+      return null;
+    }
+    const count = this.InFlightCount;
+    const agent = this.inFlightAgentName();
+    if (mode === 'stopping') {
+      return count > 1 ? `Stopping ${count} runs…` : `Stopping ${agent ?? 'the run'}…`;
+    }
+    return count > 1 ? `${count} agents working` : `${agent ?? 'The agent'} is working`;
+  }
+
+  /** The elapsed time after the status line, for a single run that is working. */
+  public get StatusElapsed(): string | null {
+    return this.SendSlotMode === 'stop' && this.InFlightCount === 1 ? this.SendSlotElapsed : null;
+  }
+
+  /**
+   * The composer's stop control. Every in-flight reply is stopped through the same path as the
+   * per-reply pill: `BeforeStopClicked` first (a listener that cancels keeps that run going),
+   * then {@link OnStopMessage}, which fires `AfterStopClicked` with the outcome. Each reply asked
+   * to stop reads as stopping until it leaves In-Progress, or until the retry window passes,
+   * when the slot offers Stop again and a toast says the stop did not take.
+   */
+  public async OnComposerStopClicked(): Promise<void> {
+    if (this.SendSlotMode !== 'stop') {
+      return;
+    }
+    const byId = IndexByUUID(this.messages);
+    for (const id of [...this.InProgressMessageIds]) {
+      const detail = byId.Get(id);
+      if (!detail) {
+        continue;
+      }
+      const before = new BeforeStopClickedEventArgs(detail.ID, this.AgentRunsByDetailId.get(detail.ID)?.ID ?? null);
+      this.BeforeStopClicked.emit(before);
+      if (before.Cancel) {
+        continue;
+      }
+      this.markStopping(detail.ID);
+      await this.OnStopMessage(detail);
+    }
+    this.cdr?.markForCheck?.();
+  }
+
+  /** The agent name of an in-flight reply: its run's agent, else the reply's, else the assistant name. */
+  private agentNameFor(detailId: string): string | null {
+    const run = this.AgentRunsByDetailId?.get(detailId);
+    const detail = this.messages?.find((m) => UUIDsEqual(m.ID, detailId));
+    return run?.Agent ?? detail?.Agent ?? this.assistantDisplayName ?? null;
+  }
+
+  private inFlightAgentName(): string | null {
+    const id = this.InProgressMessageIds[0];
+    return id ? this.agentNameFor(id) : null;
+  }
+
+  private isAnyStopping(): boolean {
+    const inFlight = new UUIDSet(this.InProgressMessageIds);
+    for (const id of this.StoppingDetailIds ?? []) {
+      if (inFlight.Has(id)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private markStopping(detailId: string): void {
+    this.StoppingDetailIds ??= new Set<string>();
+    this._stopFallbackTimers ??= new Map();
+    this.StoppingDetailIds.add(detailId);
+    this.clearStopFallbackTimer(detailId);
+    this._stopFallbackTimers.set(detailId, setTimeout(() => {
+      this._stopFallbackTimers.delete(detailId);
+      if (!this.StoppingDetailIds.delete(detailId)) {
+        return;
+      }
+      if (this.InProgressMessageIds.some((x) => UUIDsEqual(x, detailId))) {
+        MJNotificationService.Instance.CreateSimpleNotification(`${this.agentNameFor(detailId) ?? 'The run'} did not stop. Try again.`, 'warning', 4000);
+      }
+      this.cdr?.markForCheck?.();
+    }, STOP_RETRY_AFTER_MS));
+  }
+
+  private clearStopFallbackTimer(detailId: string): void {
+    const timer = this._stopFallbackTimers?.get(detailId);
+    if (timer) {
+      clearTimeout(timer);
+      this._stopFallbackTimers.delete(detailId);
+    }
+  }
+
+  /**
+   * Follows a change in the in-flight replies: a reply that left In-Progress is no longer
+   * stopping, and the one-second elapsed ticker runs only while something is in flight.
+   */
+  private syncSendSlot(): void {
+    // Specs build this component off its prototype, where field initializers never ran.
+    this.StoppingDetailIds ??= new Set<string>();
+    this._stopFallbackTimers ??= new Map();
+    const inFlightIds = new UUIDSet(this.InProgressMessageIds);
+    for (const id of [...this.StoppingDetailIds]) {
+      if (!inFlightIds.Has(id)) {
+        this.StoppingDetailIds.delete(id);
+        this.clearStopFallbackTimer(id);
+      }
+    }
+    const inFlight = this.InProgressMessageIds.length > 0;
+    if (inFlight && !this._sendSlotTicker) {
+      this.updateSendSlotElapsed();
+      this._sendSlotTicker = setInterval(() => {
+        this.updateSendSlotElapsed();
+        this.cdr?.markForCheck?.();
+      }, 1000);
+    } else if (!inFlight && this._sendSlotTicker) {
+      this.stopSendSlotTicker();
+    }
+  }
+
+  private updateSendSlotElapsed(): void {
+    const id = this.InProgressMessageIds[0];
+    const detail = id ? this.messages.find((m) => UUIDsEqual(m.ID, id)) : undefined;
+    const started = detail?.__mj_CreatedAt ? new Date(detail.__mj_CreatedAt).getTime() : NaN;
+    this.SendSlotElapsed = Number.isFinite(started) ? ConversationChatAreaComponent.FormatElapsed(Date.now() - started) : null;
+  }
+
+  private stopSendSlotTicker(): void {
+    if (this._sendSlotTicker) {
+      clearInterval(this._sendSlotTicker);
+      this._sendSlotTicker = null;
+    }
+    this.SendSlotElapsed = null;
+  }
+
+  /** `m:ss` (or `h:mm:ss`), the same shape as the reply's time pill. */
+  public static FormatElapsed(ms: number): string {
+    let seconds = Math.floor(Math.max(0, ms) / 1000);
+    let minutes = Math.floor(seconds / 60);
+    seconds = seconds % 60;
+    const hours = Math.floor(minutes / 60);
+    minutes = minutes % 60;
+    return (hours > 0 ? `${hours}:` : '') + (hours > 0 && minutes < 10 ? '0' : '') + `${minutes}:` + (seconds < 10 ? '0' : '') + `${seconds}`;
+  }
 
   /** @deprecated Use {@link InProgressMessageIds}. */
   public get inProgressMessageIds(): string[] {
@@ -3245,6 +3460,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.destroy$.complete();
 
     this.clearTurnTracking();
+    this.stopSendSlotTicker();
+    for (const id of [...(this._stopFallbackTimers?.keys() ?? [])]) {
+      this.clearStopFallbackTimer(id);
+    }
 
     // Remove resize listeners
     window.removeEventListener('mousemove', this.boundOnResizeMove);
@@ -5425,7 +5644,34 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** The composer placeholder of a conversation's composer: "Message this fork" in a fork or draft of the active conversation. */
   public ComposerPlaceholderFor(conversationId: string | null | undefined): string {
     const active = !!conversationId && UUIDsEqual(conversationId, this.ConversationId);
-    return active && this.OpenView.Kind !== 'Main' ? FORK_COMPOSER_PLACEHOLDER : MAIN_COMPOSER_PLACEHOLDER;
+    if (active && this.OpenView.Kind !== 'Main') {
+      return FORK_COMPOSER_PLACEHOLDER;
+    }
+    if (active && this.SendSlotMode === 'send') {
+      const stoppedAgent = this.stoppedLastReplyAgent();
+      if (stoppedAgent !== undefined) {
+        return `Continue, or tell ${stoppedAgent ?? 'the agent'} what to do differently`;
+      }
+    }
+    return MAIN_COMPOSER_PLACEHOLDER;
+  }
+
+  /**
+   * The agent of the last shown message when it is a reply the user stopped (null when its name
+   * is unknown); undefined when the last message is anything else. Any message sent now resumes
+   * that run, so the placeholder says so.
+   */
+  private stoppedLastReplyAgent(): string | null | undefined {
+    const rows = this.DisplayMessages;
+    const last = rows[rows.length - 1];
+    if (!last) {
+      return undefined;
+    }
+    const run = this.AgentRunsByDetailId?.get(last.ID);
+    if (!run?.WasStoppedByUser) {
+      return undefined;
+    }
+    return run.Agent ?? last.Agent ?? this.assistantDisplayName ?? null;
   }
 
   /** The hint under the composer while a fork or draft window is shown; null in Main. */
@@ -6806,6 +7052,27 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** @deprecated Use {@link OnRegenerateRequested}. */
   onRetryMessage(message: MJConversationDetailEntity): void {
     return this.OnRetryMessage(message);
+  }
+
+  /**
+   * Stop the agent run behind an in-progress AI reply. Uses the run already mapped to the
+   * reply when there is one; otherwise looks it up by the reply's detail id, since the run row
+   * appears a moment after the placeholder. The run's own completion event then flows through
+   * the normal path and the message leaves In-Progress on its own.
+   */
+  async OnStopMessage(message: MJConversationDetailEntity): Promise<void> {
+    const mappedRun = this.AgentRunsByDetailId.get(message.ID);
+    const stopped = mappedRun
+      ? await this.agentStateService.CancelAgent(mappedRun.ID)
+      : await this.agentStateService.CancelAgentForDetail(message.ID);
+    if (!stopped) {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Could not stop the run. It may have already finished.',
+        'warning',
+        3000
+      );
+    }
+    this.AfterStopClicked.emit(new AfterStopClickedEventArgs(message.ID, mappedRun?.ID ?? null, stopped));
   }
 
   /**
