@@ -36,6 +36,30 @@ vi.mock('@memberjunction/ai', () => {
   };
 });
 
+const host = vi.hoisted(() => ({ available: true, run: vi.fn() }));
+vi.mock('../worker/EmbeddingWorkerHost', () => ({
+  EmbeddingWorkerHost: {
+    get Instance() {
+      return { get IsAvailable() { return host.available; }, Run: host.run };
+    },
+  },
+}));
+
+const runtime = vi.hoisted(() => ({
+  embed: vi.fn(),
+  preload: vi.fn(),
+  clear: vi.fn(),
+  apply: vi.fn(),
+  current: vi.fn(() => ({ CacheDir: '/models' })),
+}));
+vi.mock('../models/embeddingRuntime', () => ({
+  EmbedTextsWithModel: runtime.embed,
+  PreloadEmbeddingModel: runtime.preload,
+  ClearEmbeddingPipelines: runtime.clear,
+  ApplyEmbeddingSettings: runtime.apply,
+  CurrentEmbeddingSettings: runtime.current,
+}));
+
 import { LocalEmbedding } from '../models/localEmbedding';
 
 /* ------------------------------------------------------------------ */
@@ -46,6 +70,8 @@ describe('LocalEmbedding', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    host.available = true;
+    host.run.mockResolvedValue([]);
     // Clear static caches between tests
     LocalEmbedding.clearSharedCache();
     embedding = new LocalEmbedding();
@@ -119,6 +145,51 @@ describe('LocalEmbedding', () => {
     it('should store useQuantized setting', () => {
       embedding.SetAdditionalSettings({ useQuantized: false });
       expect((embedding as unknown as Record<string, unknown>)['_additionalSettings']).toHaveProperty('useQuantized', false);
+    });
+  });
+
+  /* ---- Where inference runs (MJ #5510) ---- */
+  describe('inference thread', () => {
+    it('sends EmbedTexts to the worker thread when it is available, with the current settings', async () => {
+      host.run.mockResolvedValue([new Float32Array([0.5, 0.25]), new Float32Array([1, 0])]);
+      const result = await embedding.EmbedTexts({ model: 'Xenova/gte-small', texts: ['ab', 'cd'] } as never);
+      expect(host.run).toHaveBeenCalledWith({ Kind: 'embed', Model: 'Xenova/gte-small', Texts: ['ab', 'cd'], Settings: { CacheDir: '/models' } });
+      expect(runtime.embed).not.toHaveBeenCalled();
+      expect(result.vectors).toEqual([[0.5, 0.25], [1, 0]]);
+      expect(result.ModelUsage).toEqual(expect.objectContaining({ promptTokens: 2 }));
+    });
+
+    it('sends EmbedText to the worker thread and returns its single vector', async () => {
+      host.run.mockResolvedValue([new Float32Array([0.5])]);
+      const result = await embedding.EmbedText({ model: 'm', text: 'hello' } as never);
+      expect(host.run).toHaveBeenCalledWith(expect.objectContaining({ Kind: 'embed', Texts: ['hello'] }));
+      expect(result.vector).toEqual([0.5]);
+    });
+
+    it('embeds in-process when the worker is unavailable', async () => {
+      host.available = false;
+      runtime.embed.mockResolvedValue([new Float32Array([0.75])]);
+      const result = await embedding.EmbedTexts({ model: 'm', texts: ['x'] } as never);
+      expect(runtime.embed).toHaveBeenCalledWith('m', ['x']);
+      expect(host.run).not.toHaveBeenCalledWith(expect.objectContaining({ Kind: 'embed' }));
+      expect(result.vectors).toEqual([[0.75]]);
+    });
+
+    it('keeps the existing error contract: a worker failure returns no vectors instead of throwing', async () => {
+      host.run.mockRejectedValue(new Error('Embedding worker stopped (exited with code 1)'));
+      const result = await embedding.EmbedTexts({ model: 'm', texts: ['x'] } as never);
+      expect(result.vectors).toEqual([]);
+    });
+
+    it('preloads on the worker thread when it is available', async () => {
+      await embedding.PreloadModel('m');
+      expect(host.run).toHaveBeenCalledWith({ Kind: 'preload', Model: 'm', Settings: { CacheDir: '/models' } });
+      expect(runtime.preload).not.toHaveBeenCalled();
+    });
+
+    it('records cacheDir/localURL for transformers.js', () => {
+      embedding.SetAdditionalSettings({ cacheDir: '/tmp/models', localURL: 'http://models' });
+      expect(runtime.apply).toHaveBeenCalledWith({ CacheDir: '/tmp/models', LocalURL: 'http://models' });
     });
   });
 });
