@@ -1390,6 +1390,14 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT119 - View Properties over GraphQL",
+            "Sequence": 75,
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT107 - Cache Architecture Invariants",
             "Sequence": 48,
             "Status": "Active"

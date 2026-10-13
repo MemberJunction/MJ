@@ -1301,7 +1301,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         // ── Coalescing: merge concurrent RunViews into one mega-batch ──
-        if (ProviderBase.CoalesceWindowMs > 0 && !this.TrustLocalCacheCompletely) {
+        // A run carrying view properties is never merged: a merged batch with any CacheLocal member
+        // goes through the cache-check transport, which carries dynamic runs only and would drop the
+        // view and its properties.
+        if (ProviderBase.CoalesceWindowMs > 0 && !this.TrustLocalCacheCompletely && !params.some(ProviderBase.carriesViewProperties)) {
             // Only coalesce on the client side where cache validation round-trips are expensive.
             // Server-side trusts its cache (no network calls), so coalescing adds no benefit.
             return this.enqueueCoalescedRunViews<T>(params, contextUser);
@@ -1756,6 +1759,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * - entities where server caching is disallowed
      */
     protected runViewCacheEligible(param: RunViewParams): boolean {
+        // In the browser a run carrying view properties is never cached: the server works out values
+        // the browser cannot see (token defaults, server-set values), so a browser slot could go stale
+        // without any row changing. The server caches it, keyed on the resolved values.
+        if (!this.TrustLocalCacheCompletely && ProviderBase.carriesViewProperties(param)) {
+            return false;
+        }
         return !param.BypassCache &&
             !param.AfterKey &&
             !IsMaterializedDataSource(param.DataSource) &&
@@ -1764,6 +1773,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             this.IsServerCacheAllowedForEntity(param);
         // Deliberately not user-dependent: server slots are full-width and shared, so field
         // security never changes whether a query is cacheable, only what is projected out of it.
+    }
+
+    /** True when a run carries view properties (even an empty map): the browser sends it to the server as it is. */
+    private static carriesViewProperties(param: RunViewParams): boolean {
+        return param.Properties !== undefined || param.ServerProperties !== undefined;
     }
 
     /** True when the entity is a CodeGen materialized-query wrapper (materialized_vw*) whose snapshot is
@@ -3159,6 +3173,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // and before cache fingerprinting so injected filters affect the cache key.
         params = await this.RunPreRunViewHooks(params, contextUser);
 
+        // A stored view's property values are worked out before the cache lookup, so the
+        // fingerprint keys on them. After hooks, so a hook can set ServerProperties.
+        await this.PrepareRunViewProperties(params, contextUser);
+
         // Field-level security: reject predicates referencing unreadable fields. Runs AFTER
         // hooks so injected filters are scanned too, and BEFORE the cache lookup so a rejected
         // request never consults (or warms) a cache slot.
@@ -3331,6 +3349,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Run registered PreRunView hooks on each param in the batch
         for (let i = 0; i < params.length; i++) {
             params[i] = await this.RunPreRunViewHooks(params[i], contextUser);
+            await this.PrepareRunViewProperties(params[i], contextUser);
             // Field-level security predicate gate, same contract as the single-view path.
             // One bad view rejects the whole batch — a batch is one caller request, and
             // silently returning partial results would hide the denial.
@@ -3383,7 +3402,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Server-side providers trust the cache completely and fall through to the
         // traditional flow which returns cached data immediately on hit.
         if (!this.TrustLocalCacheCompletely) {
-            const useSmartCacheCheck = params.some(p => p.CacheLocal);
+            // The cache-check transport carries dynamic runs only, so a batch holding a run with view
+            // properties takes the ordinary path, where the view and its properties reach the server.
+            const useSmartCacheCheck = params.some(p => p.CacheLocal) && !params.some(ProviderBase.carriesViewProperties);
             if (useSmartCacheCheck && LocalCacheManager.Instance.IsInitialized) {
                 return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
             }
@@ -4175,6 +4196,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 totalResultCount: totalResults
             });
         }
+    }
+
+    /**
+     * Works out a stored view's property values ({@link RunViewParams.Properties},
+     * {@link RunViewParams.ServerProperties}, and each property's default) before the run's cache
+     * lookup, so the result-cache fingerprint keys on the values the run will actually use. Called
+     * on the run's own params copy, after the PreRunView hooks. Must never throw: a run whose
+     * properties would be refused is left for the provider's run path to refuse with its message.
+     *
+     * Does nothing here. A database provider, which resolves token defaults on the server, overrides it.
+     */
+    protected async PrepareRunViewProperties(_params: RunViewParams, _contextUser?: UserInfo): Promise<void> {
+        // The client sends Properties as they are; the server resolves them.
     }
 
     /**

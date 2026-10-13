@@ -14,6 +14,7 @@ export * from './lib/types';
 // Components
 export * from './lib/entity-cards/entity-cards.component';
 export * from './lib/entity-viewer/entity-viewer.component';
+export * from './lib/entity-viewer/view-property-chips';
 export * from './lib/entity-record-detail-panel/entity-record-detail-panel.component';
 export * from './lib/pill/pill.component';
 
@@ -24,6 +25,7 @@ export * from './lib/entity-data-grid/events/grid-events';
 
 // View Config Panel (sliding panel for view configuration)
 export * from './lib/view-config-panel/view-config-panel.component';
+export * from './lib/view-properties-editor/view-properties-editor.component';
 
 // Aggregate Panel (card-based aggregate display)
 export * from './lib/aggregate-panel/aggregate-panel.component';

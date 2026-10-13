@@ -78,6 +78,12 @@ import {
     QueryInfo,
     FindQueryContextTokens,
     ContextToken,
+    FieldSecurityError,
+    UserViewProperty,
+    ViewPropertyValues,
+    ValidateUserViewProperties,
+    ResolveViewPropertyValues,
+    BuildViewPropertyFilter,
 } from '@memberjunction/core';
 
 import { BytesToBase64, IsByteArray, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDSet, UUIDsEqual } from '@memberjunction/global';
@@ -1940,9 +1946,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             let viewEntity: MJUserViewEntityExtended | null = null;
             let entityInfo: EntityInfo | null = null;
 
-            if (params.ViewEntity) viewEntity = params.ViewEntity as MJUserViewEntityExtended;
-            else if (params.ViewID && params.ViewID.length > 0) viewEntity = await ViewInfo.GetViewEntity(params.ViewID, contextUser) ?? null;
-            else if (params.ViewName && params.ViewName.length > 0) viewEntity = await ViewInfo.GetViewEntityByName(params.ViewName, contextUser) ?? null;
+            viewEntity = await this.LoadRunViewEntity(params, contextUser);
 
             if (!viewEntity) {
                 if (!params.EntityName || params.EntityName.length === 0) throw new Error('EntityName is required when ViewID or ViewName is not provided');
@@ -1955,6 +1959,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             this.CheckUserReadPermissions(entityInfo.Name, user);
 
+            // A stored view's properties: refused here (Success:false, naming the property) before any SQL runs.
+            const propertyFilter = this.BuildViewPropertyFilter(viewEntity, entityInfo, params, user);
+
             // ── External data source dispatch ──
             // Entities backed by an external data source are proxied live through a
             // driver and have no view/sproc in the MJ DB, so delegate before any SQL
@@ -1966,6 +1973,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // Refuse params we can't honor remotely rather than silently dropping them — most
                 // importantly AfterKey, which would otherwise return the same page on every call.
                 this.assertExternalRunViewParamsSupported(params, entityInfo.Name);
+                if (propertyFilter) {
+                    throw new Error(`View properties are not supported for external-data-source entity '${entityInfo.Name}'.`);
+                }
                 // A saved view's stored WhereClause/OrderBy live on viewEntity, not params, and the
                 // normal SQL path that applies them runs below this early return — so fold them in
                 // here, else a UserView over an external entity silently returns unfiltered rows.
@@ -2072,6 +2082,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (!this.ValidateUserProvidedSQLClause(extraFilter))
                     throw new Error(`Invalid Extra Filter: ${extraFilter}, contains one more for forbidden keywords`);
                 whereSQL = bHasWhere ? `${whereSQL} AND (${extraFilter})` : `(${extraFilter})`;
+                bHasWhere = true;
+            }
+
+            // 2b. View properties: one typed predicate per property with a value, after the view's
+            //     own clause and ExtraFilter. Row-level security is still ANDed on below.
+            if (propertyFilter.length > 0) {
+                whereSQL = bHasWhere ? `${whereSQL} AND (${propertyFilter})` : `(${propertyFilter})`;
                 bHasWhere = true;
             }
 
@@ -2358,6 +2375,107 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Success: false,
                 ErrorMessage: e instanceof Error ? e.message : String(e),
             } as RunViewResult<T>;
+        }
+    }
+
+    /** The stored view a run names (ViewEntity, else ViewID, else ViewName), or null for an entity run. */
+    protected async LoadRunViewEntity(params: RunViewParams, contextUser?: UserInfo): Promise<MJUserViewEntityExtended | null> {
+        if (params.ViewEntity) return params.ViewEntity as MJUserViewEntityExtended;
+        if (params.ViewID && params.ViewID.length > 0) return await ViewInfo.GetViewEntity(params.ViewID, contextUser) ?? null;
+        if (params.ViewName && params.ViewName.length > 0) return await ViewInfo.GetViewEntityByName(params.ViewName, contextUser) ?? null;
+        return null;
+    }
+
+    /**
+     * Works out a stored view's property values before the cache lookup (see
+     * {@link ProviderBase.PrepareRunViewProperties}). The resolved values, token defaults included,
+     * replace `Properties` and `ServerProperties`, so the fingerprint keys on what the run will use,
+     * and RunViewCore resolving them again yields the same predicates. A run that would be refused
+     * is left as it is and kept out of the cache; RunViewCore refuses it with its message. A view
+     * that cannot be loaded is left to RunViewCore too, which reports it as it always has.
+     */
+    protected override async PrepareRunViewProperties(params: RunViewParams, contextUser?: UserInfo): Promise<void> {
+        if (!params.ViewEntity && !params.ViewID && !params.ViewName) {
+            return; // an entity run: RunViewCore refuses any properties it carries
+        }
+        let viewEntity: MJUserViewEntityExtended | null;
+        try {
+            viewEntity = await this.LoadRunViewEntity(params, contextUser);
+        } catch {
+            return;
+        }
+        const entityInfo = viewEntity ? this.EntityByID(viewEntity.EntityID) : undefined;
+        const user = contextUser ?? this.CurrentUser;
+        if (!viewEntity || !entityInfo || !user) {
+            return;
+        }
+        try {
+            const resolved = this.ResolveRunViewPropertyValues(viewEntity, entityInfo, params, user);
+            if (resolved) {
+                params.ServerProperties = resolved.Values;
+                delete params.Properties;
+            }
+        } catch {
+            params.BypassCache = true;
+        }
+    }
+
+    /**
+     * Checks a stored view's declared properties and works out each one's value for this run.
+     * @returns null when the view declares none and the run sends none
+     * @throws on a malformed definition, any refusal {@link ResolveViewPropertyValues} makes, or a
+     *   property with a value whose target field the user cannot read
+     */
+    protected ResolveRunViewPropertyValues(
+        viewEntity: MJUserViewEntityExtended | null,
+        entityInfo: EntityInfo,
+        params: RunViewParams,
+        user: UserInfo,
+    ): { Declared: UserViewProperty[]; Values: ViewPropertyValues } | null {
+        const declared: UserViewProperty[] = viewEntity?.PropertiesObject ?? [];
+        const sent = params.Properties !== undefined || params.ServerProperties !== undefined;
+        if (!viewEntity) {
+            if (sent) throw new Error('Properties apply only to a stored view: run it by ViewID, ViewName or ViewEntity.');
+            return null;
+        }
+        if (declared.length === 0 && !sent) {
+            return null;
+        }
+        const definitionErrors = ValidateUserViewProperties(declared, entityInfo.Fields.map(f => f.Name));
+        if (definitionErrors.length > 0) {
+            throw new Error(`View '${viewEntity.Name ?? viewEntity.ID}' has invalid properties: ${definitionErrors.join(' ')}`);
+        }
+        const values = ResolveViewPropertyValues(declared, params.Properties, params.ServerProperties, { User: user, TimeZone: params.TimeZone });
+        this.assertViewPropertyFieldsReadable(declared, values, entityInfo, user);
+        return { Declared: declared, Values: values };
+    }
+
+    /**
+     * The WHERE clause a stored view's properties add to this run: '' when there are none.
+     * Screened like any caller clause, though it is built only from typed literals.
+     */
+    protected BuildViewPropertyFilter(viewEntity: MJUserViewEntityExtended | null, entityInfo: EntityInfo, params: RunViewParams, user: UserInfo): string {
+        const resolved = this.ResolveRunViewPropertyValues(viewEntity, entityInfo, params, user);
+        if (!resolved) {
+            return '';
+        }
+        const filter = BuildViewPropertyFilter(resolved.Declared, resolved.Values, entityInfo.Fields.map(f => f.Name), this.Dialect);
+        if (filter.length > 0 && !this.ValidateUserProvidedSQLClause(filter)) {
+            throw new Error(`Invalid view property filter: contains one or more forbidden keywords`);
+        }
+        return filter;
+    }
+
+    /** The field-security check other predicates get: a property with a value may not filter a field the user cannot read. */
+    private assertViewPropertyFieldsReadable(declared: UserViewProperty[], values: ViewPropertyValues, entityInfo: EntityInfo, user: UserInfo): void {
+        if (!entityInfo.EnableFieldLevelSecurity) {
+            return;
+        }
+        const denied = entityInfo.GetDeniedReadFields(user);
+        for (const property of declared) {
+            if (values[property.Name] !== null && denied.has(property.Target.Field.trim().toLowerCase())) {
+                throw new FieldSecurityError(property.Target.Field, entityInfo.Name);
+            }
         }
     }
 

@@ -246,7 +246,7 @@ export function ValidatePropertyDefault(def: PropertyDefault, type: PropertyValu
     if (def.Token !== undefined) {
         return TOKEN_VALUE_TYPES[def.Token].includes(type) ? [] : [`${def.Token} cannot default a ${type} property.`];
     }
-    return isValueOfType(def.Value ?? null, type) ? [] : [`Value ${JSON.stringify(def.Value)} is not a valid ${type}.`];
+    return IsPropertyValueOfType(def.Value ?? null, type) ? [] : [`Value ${JSON.stringify(def.Value)} is not a valid ${type}.`];
 }
 
 /** Problems with a default's shape that need no property type: Value vs Token, the token, the offset. */
@@ -304,8 +304,8 @@ function resolveUserToken(token: ContextToken, ctx: PropertyResolutionContext): 
     return value;
 }
 
-/** True when a fixed value fits the property type. Null fits every type. */
-function isValueOfType(value: PropertyValue, type: PropertyValueType): boolean {
+/** True when a value fits the property type: a finite number, a boolean, a valid UUID or ISO date, or a string. Null fits every type. */
+export function IsPropertyValueOfType(value: PropertyValue, type: PropertyValueType): boolean {
     if (value === null) {
         return true;
     }

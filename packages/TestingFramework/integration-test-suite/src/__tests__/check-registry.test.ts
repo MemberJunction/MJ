@@ -60,6 +60,7 @@ import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 import { JSONTypeLiveSyncChecks, JSONTypeLiveSyncClientChecks } from '../checks/jsontype-live-sync.checks';
 import { SelfAvatarClientChecks } from '../checks/self-avatar-client.checks';
+import { ViewPropertiesClientChecks } from '../checks/view-properties-client.checks';
 import { RecordCloningChecks } from '../checks/record-cloning.checks';
 import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
@@ -186,6 +187,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
+        ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT119)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
@@ -346,6 +348,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'user-elevation': 4,
         'user-routines': 16,
         'view-execution': 12,
+        'view-properties-client': 5,
         'view-security': 4,
         'work-queue-runtime': 19,
         'workflow-demo-agents': 5,

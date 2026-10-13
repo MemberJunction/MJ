@@ -54,6 +54,26 @@
     </div>
   }
 
+  <!-- View properties: read-only, one chip per property; a server-set one never shows its value -->
+  @if (PropertyChips.length > 0) {
+    <div class="view-properties-row" role="list" aria-label="View properties">
+      @for (chip of PropertyChips; track chip.Name) {
+        <span class="view-property-chip" role="listitem" [class.server-set]="chip.ServerSet" [attr.title]="chip.Description">
+          @if (chip.ServerSet) {
+            <i class="fa-solid fa-lock" aria-hidden="true"></i>
+          }
+          <span class="view-property-name">{{ chip.Name }}</span>
+          <span class="view-property-value">{{ chip.Value }}</span>
+        </span>
+      }
+      @if (ViewRunError) {
+        <span class="view-properties-error" role="alert">
+          <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> {{ ViewRunError }}
+        </span>
+      }
+    </div>
+  }
+
   <!-- Content -->
   <div class="viewer-content">
     <!-- Loading container - full page when no data exists -->

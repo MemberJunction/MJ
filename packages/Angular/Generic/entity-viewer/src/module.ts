@@ -19,6 +19,7 @@ import { EntityRecordDetailPanelComponent } from './lib/entity-record-detail-pan
 import { PillComponent } from './lib/pill/pill.component';
 import { EntityDataGridComponent } from './lib/entity-data-grid/entity-data-grid.component';
 import { ViewConfigPanelComponent } from './lib/view-config-panel/view-config-panel.component';
+import { ViewPropertiesEditorComponent } from './lib/view-properties-editor/view-properties-editor.component';
 import { AggregatePanelComponent } from './lib/aggregate-panel/aggregate-panel.component';
 import { AggregateSetupDialogComponent } from './lib/aggregate-setup-dialog/aggregate-setup-dialog.component';
 import { ConfirmDialogComponent } from './lib/confirm-dialog/confirm-dialog.component';
@@ -78,6 +79,7 @@ LoadEntityActionUX();
     PillComponent,
     EntityDataGridComponent,
     ViewConfigPanelComponent,
+    ViewPropertiesEditorComponent,
     AggregatePanelComponent,
     AggregateSetupDialogComponent,
     ConfirmDialogComponent,
@@ -126,6 +128,7 @@ LoadEntityActionUX();
     PillComponent,
     EntityDataGridComponent,
     ViewConfigPanelComponent,
+    ViewPropertiesEditorComponent,
     AggregatePanelComponent,
     AggregateSetupDialogComponent,
     ConfirmDialogComponent,

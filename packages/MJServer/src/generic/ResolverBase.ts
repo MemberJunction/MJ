@@ -23,6 +23,7 @@ import {
   RunViewParams,
   RunViewResult,
   UserInfo,
+  ViewPropertyValues,
 } from '@memberjunction/core';
 import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
@@ -574,7 +575,8 @@ export class ResolverBase {
             : undefined,
           viewInput.BypassCache,
           viewInput.DataSource,
-          viewInput.IncludeBinaryFields
+          viewInput.IncludeBinaryFields,
+          viewInput.Properties
         );
       }
       else {
@@ -619,7 +621,8 @@ export class ResolverBase {
         undefined,
         viewInput.BypassCache,
         viewInput.DataSource,
-        viewInput.IncludeBinaryFields
+        viewInput.IncludeBinaryFields,
+        viewInput.Properties
       );
     } catch (err) {
       console.log(err);
@@ -743,6 +746,7 @@ export class ResolverBase {
           bypassCache: viewInput.BypassCache,
           dataSource: viewInput.DataSource,
           includeBinaryFields: viewInput.IncludeBinaryFields,
+          properties: viewInput.Properties,
         });
       } catch (err) {
         LogError(err);
@@ -1210,7 +1214,8 @@ export class ResolverBase {
     afterKey?: CompositeKey,
     bypassCache?: boolean,
     dataSource?: 'Live' | 'Materialized',
-    includeBinaryFields?: boolean
+    includeBinaryFields?: boolean,
+    properties?: ViewPropertyValues
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -1292,6 +1297,7 @@ export class ResolverBase {
           BypassCache: bypassCache,
           DataSource: dataSource,
           IncludeBinaryFields: includeBinaryFields,
+          Properties: properties,
           TimeZone: userPayload?.TimeZone,
         },
         user
@@ -1442,6 +1448,7 @@ export class ResolverBase {
           BypassCache: param.bypassCache,
           DataSource: param.dataSource,
           IncludeBinaryFields: param.includeBinaryFields,
+          Properties: param.properties,
           TimeZone: param.userPayload?.TimeZone,
         });
       }

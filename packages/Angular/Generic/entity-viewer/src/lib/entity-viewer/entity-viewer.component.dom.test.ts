@@ -23,7 +23,8 @@ const CHILDREN = [SwitcherStub, RecycleChipStub, StubEmptyStateComponent, StubLo
 const ENTITY = { Name: 'Accounts' } as unknown as EntityInfo;
 type OnInitProto = { ngOnInit: () => void };
 
-interface State { entity?: EntityInfo | null; IsLoading?: boolean; ShowRecycleBin?: boolean; records?: Record<string, unknown>[]; filteredCount?: number; totalCount?: number; config?: Record<string, unknown> }
+interface State { entity?: EntityInfo | null; IsLoading?: boolean; ShowRecycleBin?: boolean; records?: Record<string, unknown>[]; filteredCount?: number; totalCount?: number; config?: Record<string, unknown>;
+  view?: { PropertiesObject: unknown[] | null }; properties?: Record<string, unknown> | null; runError?: string | null }
 function render(state: State = {}) {
   vi.spyOn(EntityViewerComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockImplementation(() => undefined);
   return renderComponentFixture(EntityViewerComponent, {
@@ -40,6 +41,10 @@ function render(state: State = {}) {
       if (state.config) {
         priv.Config = state.config;
       }
+      const viewPriv = c as unknown as { _viewEntity: unknown; _properties: unknown; ViewRunError: string | null };
+      viewPriv._viewEntity = state.view ?? null;
+      viewPriv._properties = state.properties ?? null;
+      viewPriv.ViewRunError = state.runError ?? null;
     },
   });
 }
@@ -96,6 +101,35 @@ describe('EntityViewerComponent (DOM)', () => {
 
     c.RefreshInPlace();
     expect(c._pendingReloadKeepsPage).toBe(false);
+  });
+});
+
+describe('EntityViewerComponent (DOM) — view property chips', () => {
+  const view = { PropertiesObject: [
+    { Name: 'Chapter', Type: 'uuid', AllowOverride: false, Target: { Field: 'ChapterID', Operator: '=' } },
+    { Name: 'Region', Type: 'string', Target: { Field: 'Region', Operator: '=' } },
+  ] };
+
+  it('lists each property read-only above the content; a server-set one reads "set by server"', () => {
+    const f = render({ entity: ENTITY, view, properties: { Region: 'East' } });
+    const chips = f.nativeElement.querySelectorAll('.view-property-chip');
+    expect(chips.length).toBe(2);
+    expect(text(f, '.view-property-chip.server-set')).toContain('set by server');
+    expect(chips[1].textContent).toContain('East');
+    expect(f.nativeElement.querySelector('.view-properties-row input, .view-properties-row button')).toBeNull();
+  });
+
+  it('shows the server refusal in the row', () => {
+    const f = render({ entity: ENTITY, view, runError: 'View property "Chapter" is set by the server' });
+    expect(text(f, '.view-properties-error')).toContain('is set by the server');
+  });
+
+  it('renders no row for a view without properties', () => {
+    expect(query(render({ entity: ENTITY, view: { PropertiesObject: null } }), '.view-properties-row')).toBeNull();
+  });
+
+  it('renders no row without a view', () => {
+    expect(query(render({ entity: ENTITY }), '.view-properties-row')).toBeNull();
   });
 });
 
