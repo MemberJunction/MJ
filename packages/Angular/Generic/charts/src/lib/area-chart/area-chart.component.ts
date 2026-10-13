@@ -95,6 +95,7 @@ export class MJAreaChartComponent extends MJBaseChartComponent<AreaGeometry> {
         Layout: (surface) => ComputeAreaLayout({
             Categories: this.categories, Series: this.series, Fills: this.fills, StackMode: this.stackMode,
             Curve: this.curve, Size: surface.Size, Measure: surface.Measure, Type: TypeMetrics(surface.FontSize), Formatter: this.formatter,
+            Shares: this.shares,
         }),
         Points: (g) => AreaPoints(g),
         HitTest: (g, x, y) => HitTestArea(g, x, y),

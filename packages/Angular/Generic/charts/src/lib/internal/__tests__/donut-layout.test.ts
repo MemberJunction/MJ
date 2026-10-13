@@ -123,3 +123,21 @@ describe('ComputeDonutLayout - type metrics', () => {
         expect(small.OuterRadius - big.OuterRadius).toBeCloseTo(8);
     });
 });
+
+describe('finite slices whose sum overflows (PR #5368 thread)', () => {
+    const huge = [{ Label: 'a', Value: 1e308 }, { Label: 'b', Value: 1e308 }];
+
+    it('two equal 1e308 slices are 50% each, not 0%', () => {
+        expect(ComputeSlicePercents(huge)).toEqual([50, 50]);
+    });
+
+    it('two equal 1e308 slices each draw half the ring', () => {
+        const g = ComputeDonutLayout(base({ Slices: huge }));
+        expect(g.Arcs).toHaveLength(2);
+        for (const a of g.Arcs) {
+            expect(Number.isFinite(a.StartAngle) && Number.isFinite(a.EndAngle)).toBe(true);
+            expect(a.EndAngle - a.StartAngle).toBeCloseTo(Math.PI, 1);
+            expect(a.Path).not.toContain('NaN');
+        }
+    });
+});

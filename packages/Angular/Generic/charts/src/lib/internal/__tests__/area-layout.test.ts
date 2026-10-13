@@ -4,18 +4,23 @@ import { AreaLayoutInput, ComputeAreaLayout, ComputePercentShares } from '../are
 import { TypeMetrics } from '../scales';
 
 const measure = (t: string): number => t.length * 7;
-const base = (over: Partial<AreaLayoutInput>): AreaLayoutInput => ({
-    Categories: ['Jan', 'Feb', 'Mar', 'Apr'],
-    Series: [{ Name: 'a', Values: [1, 2, 3, 4] }, { Name: 'b', Values: [4, 3, 2, 1] }],
-    Fills: ['var(--mj-viz-1)', 'var(--mj-viz-2)'],
-    StackMode: 'none',
-    Curve: 'smooth',
-    Size: { Width: 400, Height: 200 },
-    Measure: measure,
-    Type: TypeMetrics(12),
-    Formatter: (v) => String(v),
-    ...over,
-});
+/** Percent mode gets the shares the component would hand it, unless a case passes its own. */
+const base = (over: Partial<AreaLayoutInput>): AreaLayoutInput => {
+    const input: AreaLayoutInput = {
+        Categories: ['Jan', 'Feb', 'Mar', 'Apr'],
+        Series: [{ Name: 'a', Values: [1, 2, 3, 4] }, { Name: 'b', Values: [4, 3, 2, 1] }],
+        Fills: ['var(--mj-viz-1)', 'var(--mj-viz-2)'],
+        StackMode: 'none',
+        Curve: 'smooth',
+        Size: { Width: 400, Height: 200 },
+        Measure: measure,
+        Type: TypeMetrics(12),
+        Formatter: (v) => String(v),
+        Shares: null,
+        ...over,
+    };
+    return 'Shares' in over || input.StackMode !== 'percent' ? input : { ...input, Shares: ComputePercentShares(input.Series, input.Categories.length) };
+};
 const subpaths = (d: string): number => (d.match(/M/g) ?? []).length;
 const pathYs = (d: string): number[] => [...d.matchAll(/(-?\d+(?:\.\d+)?(?:e-?\d+)?),(-?\d+(?:\.\d+)?(?:e-?\d+)?)/g)].map((m) => Number(m[2]));
 
@@ -224,5 +229,28 @@ describe('ComputeAreaLayout — lone points (PR #5368 review)', () => {
     it('marks nothing where a run has two or more points (the line already draws it)', () => {
         const g = ComputeAreaLayout(base({ Series: [{ Name: 'a', Values: [1, 2, null, 4, 5] }], Categories: ['a', 'b', 'c', 'd', 'e'], Fills: ['f'] }));
         expect(g.Layers[0].LonePoints).toEqual([]);
+    });
+});
+
+describe('percent shares — finite inputs whose sum overflows (PR #5368 thread)', () => {
+    it('two equal 1e308 series split 50/50 instead of collapsing to 0/0', () => {
+        expect(ComputePercentShares([{ Name: 'a', Values: [1e308] }, { Name: 'b', Values: [1e308] }], 1)).toEqual([[0.5], [0.5]]);
+    });
+
+    it('keeps exact shares for ordinary values', () => {
+        expect(ComputePercentShares([{ Name: 'a', Values: [1, 0] }, { Name: 'b', Values: [3, 0] }], 2)).toEqual([[0.25, 0], [0.75, 0]]);
+    });
+});
+
+describe('ComputeAreaLayout — precomputed shares (PR #5368 review)', () => {
+    it('percent mode stacks the Shares it is given rather than recomputing them', () => {
+        const series = [{ Name: 'a', Values: [1, 1] }, { Name: 'b', Values: [1, 1] }];
+        const g = ComputeAreaLayout(base({ StackMode: 'percent', Categories: ['x', 'y'], Series: series, Shares: [[0.25, 0.25], [0.75, 0.75]] }));
+        const bottom = g.Box.Y + g.Box.Height;
+        expect(g.Layers[0].Y1[0]).toBeCloseTo(bottom - g.Box.Height * 0.25);
+    });
+
+    it('percent mode without Shares fails fast', () => {
+        expect(() => ComputeAreaLayout(base({ StackMode: 'percent', Shares: null }))).toThrow(/Shares/);
     });
 });

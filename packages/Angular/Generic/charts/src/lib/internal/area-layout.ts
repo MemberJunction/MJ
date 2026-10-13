@@ -2,7 +2,7 @@ import { area, curveLinear, curveMonotoneX, line } from 'd3';
 import { AreaCurve, AreaStackMode, ChartSeries, ChartValueFormatter } from '../chart.types';
 import { AreaGeometry, AreaLayer, AxisTick, ChartAnchor, ChartTypeMetrics, PlotBox, PlotSize, TextMeasure } from './geometry.types';
 import { IsFiniteValue } from './validate';
-import { BuildValueTicks, CreateValueScale, CullKeepingEnds, FormatPercent, MaxOf, MaxTickLabels, MinOf, PercentDomain, Round2, TruncateLabel, ValueDomain } from './scales';
+import { BuildValueTicks, CreateValueScale, CullKeepingEnds, FormatPercent, MaxOf, MaxTickLabels, MinOf, PercentDomain, Round2, SummableValues, TruncateLabel, ValueDomain } from './scales';
 
 export interface AreaLayoutInput {
     Categories: ReadonlyArray<string>;
@@ -14,22 +14,28 @@ export interface AreaLayoutInput {
     Measure: TextMeasure;
     Type: ChartTypeMetrics;
     Formatter: ChartValueFormatter;
+    /**
+     * ComputePercentShares(Series, Categories.length), required when StackMode is 'percent' and ignored
+     * otherwise. The chart computes it once per data change and hands the same numbers to the layout and
+     * to its tooltip/table, so a resize does not recompute them and the two cannot disagree.
+     */
+    Shares: ReadonlyArray<ReadonlyArray<number>> | null;
 }
 
 /** Share of each category's non-negative total, as fractions: [seriesIndex][categoryIndex]. */
 export function ComputePercentShares(series: ReadonlyArray<ChartSeries>, categoryCount: number): number[][] {
-    const totals = Array.from({ length: categoryCount }, (_, c) =>
-        series.reduce((sum, s) => {
+    const out: number[][] = series.map(() => new Array<number>(categoryCount).fill(0));
+    for (let c = 0; c < categoryCount; c++) {
+        const values = SummableValues(series.map((s) => {
             const v = s.Values[c];
-            return sum + (IsFiniteValue(v) ? Math.max(0, v) : 0);
-        }, 0),
-    );
-    return series.map((s) =>
-        totals.map((total, c) => {
-            const v = s.Values[c];
-            return total > 0 && IsFiniteValue(v) ? Math.max(0, v) / total : 0;
-        }),
-    );
+            return IsFiniteValue(v) ? Math.max(0, v) : 0;
+        }));
+        const total = values.reduce((a, b) => a + b, 0);
+        if (total > 0) {
+            values.forEach((v, si) => (out[si][c] = v / total));
+        }
+    }
+    return out;
 }
 
 /** Lazily yields each finite cell, so the extent helpers never copy the whole matrix. */
@@ -43,31 +49,38 @@ function* finiteCells(raw: ReadonlyArray<ReadonlyArray<number | null>>): Generat
     }
 }
 
+interface StackEdges { Lower: number[][]; Upper: number[][]; Max: number; }
+
+/**
+ * Each series' lower and upper edge per category in data space, stacked bottom-up in series order.
+ * Missing counts as 0 so layers stay continuous (a gap would tear every layer above it). In percent
+ * mode the stacked quantity is each cell's share, so the top edge reaches 1 wherever a category has data.
+ */
+function stackEdges(raw: ReadonlyArray<ReadonlyArray<number | null>>, shares: ReadonlyArray<ReadonlyArray<number>> | null, count: number): StackEdges {
+    const lower: number[][] = [];
+    const upper: number[][] = [];
+    const acc = new Array<number>(count).fill(0);
+    raw.forEach((row, si) => {
+        lower.push(acc.slice());
+        const hi = acc.map((a, c) => a + (shares ? shares[si][c] : row[c] ?? 0));
+        upper.push(hi);
+        hi.forEach((v, c) => (acc[c] = v));
+    });
+    return { Lower: lower, Upper: upper, Max: MaxOf(acc, 0) };
+}
+
 export function ComputeAreaLayout(input: AreaLayoutInput): AreaGeometry {
     const count = input.Categories.length;
     const indices = input.Categories.map((_, i) => i);
     const stacked = input.StackMode !== 'none';
     const percent = input.StackMode === 'percent';
-    const raw: Array<Array<number | null>> = input.Series.map((s) => indices.map((c) => (IsFiniteValue(s.Values[c]) ? (s.Values[c] as number) : null)));
-
-    // Stacked data space: missing counts as 0 so layers stay continuous (a gap would tear every layer above it).
-    const lower: number[][] = [];
-    const upper: number[][] = [];
-    let stackMax = 0;
-    if (stacked) {
-        const shares = percent ? ComputePercentShares(input.Series, count) : null;
-        const acc = new Array<number>(count).fill(0);
-        input.Series.forEach((_, si) => {
-            const lo = acc.slice();
-            const hi = acc.map((a, c) => a + (shares ? shares[si][c] : raw[si][c] ?? 0));
-            lower.push(lo);
-            upper.push(hi);
-            hi.forEach((v, c) => (acc[c] = v));
-        });
-        stackMax = MaxOf(acc, 0);
+    if (percent && (input.Shares === null || input.Shares.length !== input.Series.length)) {
+        throw new Error(`ComputeAreaLayout: StackMode 'percent' needs Shares for all ${input.Series.length} series (ComputePercentShares); got ${input.Shares?.length ?? 'null'}.`);
     }
+    const raw: Array<Array<number | null>> = input.Series.map((s) => indices.map((c) => (IsFiniteValue(s.Values[c]) ? (s.Values[c] as number) : null)));
+    const edges = stacked ? stackEdges(raw, percent ? input.Shares : null, count) : null;
 
-    const domain = percent ? PercentDomain : stacked ? ValueDomain(0, stackMax) : ValueDomain(MinOf(finiteCells(raw), 0), MaxOf(finiteCells(raw), 0));
+    const domain = percent ? PercentDomain : edges ? ValueDomain(0, edges.Max) : ValueDomain(MinOf(finiteCells(raw), 0), MaxOf(finiteCells(raw), 0));
     const tickWidth = percent
         ? input.Measure(FormatPercent(1))
         : MaxOf(CreateValueScale(domain, 0, 1, false).ticks(MaxTickLabels).map((t) => input.Measure(input.Formatter(t))), 0);
@@ -83,8 +96,8 @@ export function ComputeAreaLayout(input: AreaLayoutInput): AreaGeometry {
     const curve = input.Curve === 'smooth' ? curveMonotoneX : curveLinear;
 
     const layers: AreaLayer[] = input.Series.map((_, si) => {
-        const y0 = indices.map((c) => (stacked ? Round2(y(lower[si][c])) : raw[si][c] === null ? null : Round2(y(0))));
-        const y1 = indices.map((c) => (stacked ? Round2(y(upper[si][c])) : raw[si][c] === null ? null : Round2(y(raw[si][c] as number))));
+        const y0 = indices.map((c) => (edges ? Round2(y(edges.Lower[si][c])) : raw[si][c] === null ? null : Round2(y(0))));
+        const y1 = indices.map((c) => (edges ? Round2(y(edges.Upper[si][c])) : raw[si][c] === null ? null : Round2(y(raw[si][c] as number))));
         const defined = (c: number): boolean => y1[c] !== null;
         const fill = area<number>().x((c) => xs[c]).y0((c) => y0[c] ?? 0).y1((c) => y1[c] ?? 0).defined(defined).curve(curve);
         const top = line<number>().x((c) => xs[c]).y((c) => y1[c] ?? 0).defined(defined).curve(curve);

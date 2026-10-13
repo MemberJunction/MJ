@@ -57,6 +57,21 @@ export function MaxOf(values: Iterable<number>, floor: number): number {
     return best;
 }
 
+/**
+ * Non-negative finite values rescaled, only if needed, so their sum is finite. Each value is finite on
+ * its own, but two near Number.MAX_VALUE add up to Infinity, and every share v / Infinity is 0. When
+ * the plain sum overflows, every value is divided by the largest: the ratios, which are all a share or
+ * an arc angle needs, are unchanged. Ordinary data comes back untouched, so its shares stay exact.
+ */
+export function SummableValues(values: ReadonlyArray<number>): number[] {
+    const total = values.reduce((a, b) => a + b, 0);
+    if (Number.isFinite(total)) {
+        return [...values];
+    }
+    const largest = MaxOf(values, 0);
+    return values.map((v) => v / largest);
+}
+
 /** Smallest value, or `ceiling` when none is below it. Loops for the same reason as MaxOf. */
 export function MinOf(values: Iterable<number>, ceiling: number): number {
     let best = ceiling;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ComputeBarLayout } from '../bar-layout';
-import { ComputeAreaLayout } from '../area-layout';
+import { ComputeAreaLayout, ComputePercentShares } from '../area-layout';
 import { ComputeDonutLayout } from '../donut-layout';
 import { TypeMetrics } from '../scales';
 import {
@@ -16,8 +16,9 @@ const bar = ComputeBarLayout({
     Categories: ['A', 'B'], Series: [{ Name: 's0', Values: [2, 3] }, { Name: 's1', Values: [1, 0] }],
     Fills: ['f0', 'f1'], Orientation: 'vertical', Stacked: true, Size: { Width: 400, Height: 200 }, Measure: measure, Type: TypeMetrics(12), Formatter: fmt,
 });
+const areaSeries = [{ Name: 'a', Values: [1, 1, 1] }, { Name: 'b', Values: [1, 1, 1] }];
 const areaG = ComputeAreaLayout({
-    Categories: ['Jan', 'Feb', 'Mar'], Series: [{ Name: 'a', Values: [1, 1, 1] }, { Name: 'b', Values: [1, 1, 1] }],
+    Categories: ['Jan', 'Feb', 'Mar'], Series: areaSeries, Shares: ComputePercentShares(areaSeries, 3),
     Fills: ['f0', 'f1'], StackMode: 'percent', Curve: 'linear', Size: { Width: 400, Height: 200 }, Measure: measure, Type: TypeMetrics(12), Formatter: fmt,
 });
 const donut = ComputeDonutLayout({

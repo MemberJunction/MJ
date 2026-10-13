@@ -2,7 +2,7 @@ import { arc, pie, PieArcDatum } from 'd3';
 import { DonutSlice } from '../chart.types';
 import { ChartTypeMetrics, DonutArc, DonutGeometry, PlotSize, TextMeasure } from './geometry.types';
 import { IsFiniteValue } from './validate';
-import { FormatPercent, Round2 } from './scales';
+import { FormatPercent, Round2, SummableValues } from './scales';
 
 export interface DonutLayoutInput {
     Slices: ReadonlyArray<DonutSlice>;
@@ -35,14 +35,15 @@ export function SliceValue(value: number | null): number {
  * the component's tooltip / table / announcement all read it, so they cannot drift apart.
  */
 export function ComputeSlicePercents(slices: ReadonlyArray<DonutSlice>): Array<number | null> {
-    const values = slices.map((s) => SliceValue(s.Value));
+    const values = SummableValues(slices.map((s) => SliceValue(s.Value)));
     const total = values.reduce((a, b) => a + b, 0);
     return values.map((v) => (v > 0 && total > 0 ? (v / total) * 100 : null));
 }
 
 export function ComputeDonutLayout(input: DonutLayoutInput): DonutGeometry {
     const C = DonutLayoutConstants;
-    const values = input.Slices.map((s) => SliceValue(s.Value));
+    // Summable: d3's pie sums the values, and an overflowing sum would give every arc a NaN angle.
+    const values = SummableValues(input.Slices.map((s) => SliceValue(s.Value)));
     const percents = ComputeSlicePercents(input.Slices);
     const { Width: width, Height: height } = input.Size;
     const centerX = width / 2;
