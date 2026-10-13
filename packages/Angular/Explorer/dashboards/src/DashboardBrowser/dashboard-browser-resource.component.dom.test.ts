@@ -1153,6 +1153,33 @@ describe('DashboardBrowserResourceComponent (DOM)', () => {
       expect(navigation.params$.value).toEqual({ lib: 'mine' });
     });
 
+    it("moves shared dashboards by updating the user's existing link, matched in any ID case, or queuing a new one", async () => {
+      const created: Array<{ DashboardID: string; UserID: string; DashboardCategoryID: string | null }> = [];
+      const provider = {
+        ...providerWithDashboardsEntity(),
+        CreateTransactionGroup: vi.fn(async () => ({ Submit: vi.fn(async () => true) })),
+        GetEntityObject: vi.fn(async () => {
+          const row = { DashboardID: '', UserID: '', DashboardCategoryID: null as string | null, TransactionGroup: null as unknown, Save: vi.fn(async () => { created.push({ DashboardID: row.DashboardID, UserID: row.UserID, DashboardCategoryID: row.DashboardCategoryID }); return true; }) };
+          return row;
+        }),
+      } as unknown as IMetadataProvider;
+      const fixtureLibrary = library();
+      const existing = fixtureLibrary.links[0] as unknown as { DashboardID: string; DashboardCategoryID: string | null; Save: () => Promise<boolean> };
+      existing.DashboardID = existing.DashboardID.toUpperCase();
+      existing.Save = vi.fn(async () => true);
+      const { fixture } = renderPage({}, provider, fixtureLibrary);
+      await settle();
+
+      await fixture.componentInstance.OnDashboardMove({
+        Dashboards: [fixtureLibrary.byName('Partner KPIs'), fixtureLibrary.byName('Board Pack')],
+        TargetCategoryId: PIPELINE_ID,
+      });
+
+      expect(existing.DashboardCategoryID).toBe(PIPELINE_ID);
+      expect(existing.Save).toHaveBeenCalledTimes(1);
+      expect(created).toEqual([{ DashboardID: fixtureLibrary.byName('Board Pack').ID, UserID: USER_ID, DashboardCategoryID: PIPELINE_ID }]);
+    });
+
     it('the deprecated CreateDashboard asks for the name, then files the dashboard in the open category folder', async () => {
       const { created, provider, getEntityObject } = providerCreatingDashboards();
       const { fixture } = await renderLibrary({ category: SALES_ID }, {}, provider);
