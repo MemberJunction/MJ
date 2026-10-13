@@ -514,17 +514,17 @@ export class PushService {
         }
       }
       
-      // Close SQL logging session if it was created. dispose() deletes the file when
+      // Close SQL logging session if it was created. Dispose() deletes the file when
       // it's empty (no statements emitted), so only surface a saved path when the log
       // actually has content — otherwise the "SQL log saved to…" line would point at a
-      // file dispose() just unlinked.
+      // file Dispose() just unlinked.
       let sqlLogPath: string | undefined;
       let sqlLogPaths: string[] | undefined;
       if (sqlLoggingSession) {
         // Capture the (final) part list before dispose — it's stable once logging is done.
         const paths = [...sqlLoggingSession.FilePaths];
-        const hadStatements = sqlLoggingSession.statementCount > 0;
-        await sqlLoggingSession.dispose();
+        const hadStatements = sqlLoggingSession.StatementCount > 0;
+        await sqlLoggingSession.Dispose();
         if (hadStatements) {
           sqlLogPaths = paths;
           sqlLogPath = paths[0];
@@ -565,7 +565,7 @@ export class PushService {
       // Close SQL logging session on error
       if (sqlLoggingSession) {
         try {
-          await sqlLoggingSession.dispose();
+          await sqlLoggingSession.Dispose();
         } catch (disposeError) {
           callbacks?.onWarn?.(`Failed to close SQL logging session: ${disposeError}`);
         }
@@ -686,9 +686,9 @@ export class PushService {
 
         // Clean up SQL logging session and file if it was created
         if (sqlLoggingSession) {
-          const sqlLogPath = sqlLoggingSession.filePath;
+          const sqlLogPath = sqlLoggingSession.FilePath;
           try {
-            await sqlLoggingSession.dispose();
+            await sqlLoggingSession.Dispose();
             // Delete the empty SQL log file since no operations occurred
             if (await fs.pathExists(sqlLogPath)) {
               await fs.remove(sqlLogPath);
@@ -897,7 +897,7 @@ export class PushService {
       rolledBack,
       committedWrites: [...this.committedWrites],
       totals: { ...this.runningTotals },
-      sqlLogPath: this.sqlLogSession?.filePath,
+      sqlLogPath: this.sqlLogSession?.FilePath,
       cause: error,
     });
   }

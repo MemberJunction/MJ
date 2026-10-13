@@ -84,14 +84,14 @@ export interface SqlLoggingOptions {
    *
    * Behavior:
    * - Splitting occurs ONLY when the content actually exceeds the limit. A session whose
-   *   output fits under the limit produces exactly one file at the original `filePath`
+   *   output fits under the limit produces exactly one file at the original path
    *   (fully backward compatible — no part suffix).
    * - Rotation happens strictly BETWEEN complete statements — a statement is never torn
    *   across files — and each part is a self-contained, individually-runnable migration
    *   (its own header/footer, and per-part batch-separator counting reset so a `GO` batch
    *   never spans a file boundary).
    * - When splitting triggers, every part (including the first) is named by inserting
-   *   `.partNNN` before the extension of `filePath` (e.g. `push.sql` → `push.part001.sql`,
+   *   `.partNNN` before the extension of the original path (e.g. `push.sql` → `push.part001.sql`,
    *   `push.part002.sql`, ...). Enumerate all produced files via {@link SqlLoggingSession.FilePaths}.
    * - A single statement larger than `maxFileSize` cannot be split; it is written whole to
    *   its own part (which then exceeds the limit). This is unavoidable and does not loop.
@@ -116,26 +116,26 @@ export interface SqlLoggingOptions {
  */
 export interface SqlLoggingSession {
   /** Unique session ID */
-  readonly id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  readonly Id: string;
   /**
    * File path where SQL is being logged. Once {@link SqlLoggingOptions.maxFileSize} splitting
    * triggers, this is the FIRST part (`*.part001.sql`): the original path no longer exists then.
    * Use {@link FilePaths} to get every part.
    */
-  readonly filePath: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  readonly FilePath: string;
   /**
    * Every file path produced by this session, in order. When size-based splitting did not
-   * trigger this is a single-element array (`[filePath]`); when the session rotated across
+   * trigger this is a single-element array (`[FilePath]`); when the session rotated across
    * multiple parts it lists each part file. Read after logging completes (before or after
-   * `dispose()` — the list is final once the last statement is written).
+   * `Dispose()` — the list is final once the last statement is written).
    */
   readonly FilePaths: string[];
   /** Session start time */
-  readonly startTime: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  readonly StartTime: Date;
   /** Number of statements logged so far */
-  readonly statementCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  readonly StatementCount: number;
   /** Configuration options for this session */
-  readonly options: SqlLoggingOptions;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  readonly Options: SqlLoggingOptions;
   /** Dispose method to stop logging and clean up resources */
-  dispose(): Promise<void>;
+  Dispose(): Promise<void>;
 }

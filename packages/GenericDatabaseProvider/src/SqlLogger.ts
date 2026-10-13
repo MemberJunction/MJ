@@ -29,11 +29,11 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    */
   private static readonly FOOTER_RESERVE_BYTES = 1024;
 
-  public readonly id: string;
+  public readonly Id: string;
   /** The path the caller asked for; parts are named from it, and it stops existing after the first rotation. */
   private readonly _basePath: string;
-  public readonly startTime: Date;
-  public readonly options: SqlLoggingOptions;
+  public readonly StartTime: Date;
+  public readonly Options: SqlLoggingOptions;
   private _statementCount: number = 0;
   private _emittedStatementCount: number = 0; // Track actually emitted statements
   private _currentBatchVariableCount: number = 0; // Running count of DECLARE @var declarations in current batch
@@ -54,7 +54,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   private _partIndex: number = 1;
   /** True once at least one rotation has occurred (the base file was renamed to part001). */
   private _rotated: boolean = false;
-  /** Ordered list of every part path produced (starts with the base filePath). */
+  /** Ordered list of every part path produced (starts with the base path). */
   private _partPaths: string[] = [];
 
   /**
@@ -64,10 +64,10 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    *   without immediately threading a dialect through every call site.
    */
   constructor(id: string, filePath: string, options: SqlLoggingOptions = {}, dialect: SQLDialect = new SQLServerDialect()) {
-    this.id = id;
+    this.Id = id;
     this._basePath = filePath;
-    this.startTime = new Date();
-    this.options = options;
+    this.StartTime = new Date();
+    this.Options = options;
     this._dialect = dialect;
     this._maxFileSize = options.maxFileSize && options.maxFileSize > 0 ? options.maxFileSize : 0;
     this._partPaths = [filePath];
@@ -82,7 +82,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * Gets the count of SQL statements actually written to the log file
    * @returns The number of emitted statements (after filtering)
    */
-  public get statementCount(): number {
+  public get StatementCount(): number {
     return this._emittedStatementCount; // Return actually emitted statements
   }
 
@@ -90,12 +90,12 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * File where SQL is being logged: the path given to the constructor, or the first part
    * (`*.part001.sql`) once size-based splitting has renamed that file.
    */
-  public get filePath(): string {
+  public get FilePath(): string {
     return this._partPaths[0];
   }
 
   /**
-   * Every part file produced by this session, in order. Single-element (`[filePath]`)
+   * Every part file produced by this session, in order. Single-element (`[FilePath]`)
    * unless size-based splitting rotated across multiple parts.
    */
   public get FilePaths(): string[] {
@@ -117,7 +117,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * Initializes the logging session by creating the log file and writing the header
    * @throws Error if file creation fails
    */
-  public async initialize(): Promise<void> {
+  public async Initialize(): Promise<void> {
     // Ensure directory exists
     const dir = path.dirname(this._basePath);
     await fs.promises.mkdir(dir, { recursive: true });
@@ -188,44 +188,44 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * @param simpleSQLFallback - Optional simple SQL to use if logRecordChangeMetadata=false
    */
   public async LogSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
-    const verbose = this.options.verboseOutput === true;
+    const verbose = this.Options.verboseOutput === true;
 
     if (verbose) {
-      console.log(`=== SESSION ${this.id} LOG ATTEMPT ===`);
+      console.log(`=== SESSION ${this.Id} LOG ATTEMPT ===`);
       console.log(`Session disposed: ${this._disposed}, File handle exists: ${!!this._fileHandle}`);
       console.log(`Query (first 100 chars): ${query.substring(0, 100)}...`);
       console.log(`isMutation: ${isMutation}, description: ${description || 'none'}`);
-      console.log(`Options:`, this.options);
+      console.log(`Options:`, this.Options);
     }
 
     if (this._disposed || !this._fileHandle) {
       if (verbose) {
-        console.log(`Session ${this.id}: Skipping - disposed or no file handle`);
+        console.log(`Session ${this.Id}: Skipping - disposed or no file handle`);
       }
       return;
     }
 
     // Filter statements based on statementTypes option
-    const statementTypes = this.options.statementTypes || 'both';
+    const statementTypes = this.Options.statementTypes || 'both';
     if (verbose) {
-      console.log(`Session ${this.id}: Statement filter check - statementTypes: ${statementTypes}, isMutation: ${isMutation}`);
+      console.log(`Session ${this.Id}: Statement filter check - statementTypes: ${statementTypes}, isMutation: ${isMutation}`);
     }
 
     if (statementTypes === 'mutations' && !isMutation) {
       if (verbose) {
-        console.log(`Session ${this.id}: Skipping - mutations only but this is not a mutation`);
+        console.log(`Session ${this.Id}: Skipping - mutations only but this is not a mutation`);
       }
       return; // Skip logging non-mutation statements
     }
     if (statementTypes === 'queries' && isMutation) {
       if (verbose) {
-        console.log(`Session ${this.id}: Skipping - queries only but this is a mutation`);
+        console.log(`Session ${this.Id}: Skipping - queries only but this is a mutation`);
       }
       return; // Skip logging mutation statements
     }
 
     if (verbose) {
-      console.log(`Session ${this.id}: Statement passed type filters, proceeding to process`);
+      console.log(`Session ${this.Id}: Statement passed type filters, proceeding to process`);
     }
 
     let logEntry = '';
@@ -239,7 +239,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     let processedQuery = query;
 
     // Use simple SQL fallback if this session has logRecordChangeMetadata=false (default) and fallback is provided
-    if (this.options.logRecordChangeMetadata !== true && simpleSQLFallback) {
+    if (this.Options.logRecordChangeMetadata !== true && simpleSQLFallback) {
       processedQuery = simpleSQLFallback;
       // Tag the description only when the logged text actually differs from what ran.
       // A save on an entity without record-change tracking can hand over a fallback that is
@@ -251,36 +251,36 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
 
     // Apply pattern filtering on the processed query
     if (this._compiledPatterns && this._compiledPatterns.length > 0) {
-      const filterType = this.options.filterType || 'exclude'; // Default to exclude
+      const filterType = this.Options.filterType || 'exclude'; // Default to exclude
       const anyPatternMatches = this._compiledPatterns.some(pattern => pattern.test(processedQuery));
 
       if (verbose) {
-        console.log(`Session ${this.id}: Pattern filter check - filterType: ${filterType}, patterns: ${this._compiledPatterns.length}, anyMatch: ${anyPatternMatches}`);
-        console.log(`Session ${this.id}: Testing against processedQuery: ${processedQuery.substring(0, 100)}...`);
+        console.log(`Session ${this.Id}: Pattern filter check - filterType: ${filterType}, patterns: ${this._compiledPatterns.length}, anyMatch: ${anyPatternMatches}`);
+        console.log(`Session ${this.Id}: Testing against processedQuery: ${processedQuery.substring(0, 100)}...`);
       }
 
       if (filterType === 'exclude' && anyPatternMatches) {
         if (verbose) {
-          console.log(`Session ${this.id}: Skipping - exclude pattern matched`);
+          console.log(`Session ${this.Id}: Skipping - exclude pattern matched`);
         }
         return; // Skip logging if any exclude pattern matches
       }
 
       if (filterType === 'include' && !anyPatternMatches) {
         if (verbose) {
-          console.log(`Session ${this.id}: Skipping - no include pattern matched`);
+          console.log(`Session ${this.Id}: Skipping - no include pattern matched`);
         }
         return; // Skip logging if no include pattern matches
       }
     }
 
     // Replace schema names with Flyway placeholders if migration format
-    if (this.options.formatAsMigration) {
+    if (this.Options.formatAsMigration) {
       // Step 1: Escape ${...} patterns within SQL string literals to prevent Flyway from treating them as placeholders
       processedQuery = this._escapeFlywaySyntaxInStrings(processedQuery);
 
       // Step 2: Replace schema names with Flyway placeholders
-      const schemaName = this.options.defaultSchemaName;
+      const schemaName = this.Options.defaultSchemaName;
       if (schemaName && schemaName.length > 0) {
         // Create a regex that matches the schema name with optional brackets.
         // Capture groups preserve whether the original used brackets or not,
@@ -293,13 +293,13 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       else {
         // no default schema name provided
         if (verbose) {
-          console.warn(`Session ${this.id}: No default schema name provided for Flyway migration format, using [\${flyway:defaultSchema}] placeholder`);
+          console.warn(`Session ${this.Id}: No default schema name provided for Flyway migration format, using [\${flyway:defaultSchema}] placeholder`);
         }
       }
     }
 
     // Apply pretty printing if enabled
-    if (this.options.prettyPrint) {
+    if (this.Options.prettyPrint) {
       processedQuery = this._prettyPrintSql(processedQuery);
     }
 
@@ -345,14 +345,14 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     //   The separator is prepended BEFORE the current statement (ending the previous batch).
     // - Legacy mode (no threshold): emit separator after every statement.
     // A freshly rotated part has _currentBatchVariableCount === 0, so no leading separator is added.
-    const threshold = this.options.variableBatchThreshold;
-    if (this.options.batchSeparator && threshold && threshold > 0) {
+    const threshold = this.Options.variableBatchThreshold;
+    if (this.Options.batchSeparator && threshold && threshold > 0) {
       const declaredNames = this._collectVariableDeclarations(processedQuery);
       if (declaredNames.length > 0) {
         const redeclaresName = declaredNames.some((name) => this._currentBatchDeclaredNames.has(name));
         if (this._currentBatchVariableCount > 0 && (redeclaresName || this._currentBatchVariableCount + declaredNames.length >= threshold)) {
           // End the previous batch before this statement
-          logEntry = `${this.options.batchSeparator}\n\n` + logEntry;
+          logEntry = `${this.Options.batchSeparator}\n\n` + logEntry;
           this._currentBatchVariableCount = declaredNames.length;
           this._currentBatchDeclaredNames = new Set(declaredNames);
         } else {
@@ -362,15 +362,15 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
           }
         }
       }
-    } else if (this.options.batchSeparator) {
-      logEntry += `\n${this.options.batchSeparator}\n`;
+    } else if (this.Options.batchSeparator) {
+      logEntry += `\n${this.Options.batchSeparator}\n`;
     }
 
     logEntry += '\n'; // Add blank line between statements
 
     if (verbose) {
-      console.log(`Session ${this.id}: About to write log entry (${logEntry.length} chars)`);
-      console.log(`Session ${this.id}: Log entry preview: ${logEntry.substring(0, 200)}...`);
+      console.log(`Session ${this.Id}: About to write log entry (${logEntry.length} chars)`);
+      console.log(`Session ${this.Id}: Log entry preview: ${logEntry.substring(0, 200)}...`);
     }
 
     try {
@@ -380,10 +380,10 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       this._currentPartStatements++;
       this._currentFileBytes += Buffer.byteLength(logEntry);
       if (verbose) {
-        console.log(`Session ${this.id}: Successfully wrote to file. New counts - total: ${this._statementCount}, emitted: ${this._emittedStatementCount}`);
+        console.log(`Session ${this.Id}: Successfully wrote to file. New counts - total: ${this._statementCount}, emitted: ${this._emittedStatementCount}`);
       }
     } catch (error) {
-      console.error(`Session ${this.id}: Error writing to file:`, error);
+      console.error(`Session ${this.Id}: Error writing to file:`, error);
       throw error;
     }
   }
@@ -396,7 +396,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   /**
    * Disposes of the logging session, writes the footer, closes the file, and optionally deletes empty files
    */
-  public async dispose(): Promise<void> {
+  public async Dispose(): Promise<void> {
     if (this._disposed) {
       return;
     }
@@ -412,15 +412,15 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       this._fileHandle = null;
 
       // Check if we should delete empty log files. We delete silently — callers
-      // inspect `statementCount` to decide what (if anything) to report to the user.
+      // inspect `StatementCount` to decide what (if anything) to report to the user.
       // (Previously this emitted a raw console.log with an absolute path, bypassing
       // the caller's logging callbacks and contradicting any later "log saved" line.)
-      if (this._emittedStatementCount === 0 && !this.options.retainEmptyLogFiles) {
+      if (this._emittedStatementCount === 0 && !this.Options.retainEmptyLogFiles) {
         try {
-          await fs.promises.unlink(this.filePath);
+          await fs.promises.unlink(this.FilePath);
         } catch (error) {
           // Ignore errors during deletion (file might already be deleted, etc.)
-          console.error(`Failed to delete empty SQL log file: ${this.filePath}`, error);
+          console.error(`Failed to delete empty SQL log file: ${this.FilePath}`, error);
         }
       }
     }
@@ -432,18 +432,18 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    */
   private _generateHeader(partIndex?: number): string {
     let header = `-- SQL Logging Session\n`;
-    header += `-- Session ID: ${this.id}\n`;
-    header += `-- Started: ${this.startTime.toISOString()}\n`;
+    header += `-- Session ID: ${this.Id}\n`;
+    header += `-- Started: ${this.StartTime.toISOString()}\n`;
 
     if (partIndex !== undefined) {
       header += `-- Part: ${partIndex} (size-split; each part is an independent, runnable migration)\n`;
     }
 
-    if (this.options.description) {
-      header += `-- Description: ${this.options.description}\n`;
+    if (this.Options.description) {
+      header += `-- Description: ${this.Options.description}\n`;
     }
 
-    if (this.options.formatAsMigration) {
+    if (this.Options.formatAsMigration) {
       header += `-- Format: Migration-ready with Flyway schema placeholders\n`;
     }
 
@@ -460,10 +460,10 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    */
   private _generateFooter(partIndex?: number): string {
     const endTime = new Date();
-    const duration = endTime.getTime() - this.startTime.getTime();
+    const duration = endTime.getTime() - this.StartTime.getTime();
 
     let footer = `\n-- End of SQL Logging Session\n`;
-    footer += `-- Session ID: ${this.id}\n`;
+    footer += `-- Session ID: ${this.Id}\n`;
     if (partIndex !== undefined) {
       footer += `-- Part: ${partIndex}\n`;
     }

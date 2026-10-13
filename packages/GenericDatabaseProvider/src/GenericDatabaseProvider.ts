@@ -281,7 +281,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      *   // Perform operations that will be logged
      *   await provider.ExecuteSQL('INSERT INTO ...');
      * } finally {
-     *   await session.dispose(); // Stop logging
+     *   await session.Dispose(); // Stop logging
      * }
      *
      * // With migration formatting
@@ -309,28 +309,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             dialect ?? undefined);
 
         // Initialize the session (create file, write header)
-        await session.initialize();
+        await session.Initialize();
 
         // Store in active sessions map
         this._sqlLoggingSessions.set(sessionId, session);
 
         // Return a proxy that handles cleanup on dispose
         return {
-            id: session.id,
+            Id: session.Id,
             // A getter, not a copy: after a size-based split the first part is a different file.
-            get filePath() {
-                return session.filePath;
+            get FilePath() {
+                return session.FilePath;
             },
             get FilePaths() {
                 return session.FilePaths;
             },
-            startTime: session.startTime,
-            get statementCount() {
-                return session.statementCount;
+            StartTime: session.StartTime,
+            get StatementCount() {
+                return session.StatementCount;
             },
-            options: session.options,
-            dispose: async () => {
-                await session.dispose();
+            Options: session.Options,
+            Dispose: async () => {
+                await session.Dispose();
                 this._sqlLoggingSessions.delete(sessionId);
             },
         };
@@ -350,11 +350,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         options: SqlLoggingOptions;
     }> {
         return Array.from(this._sqlLoggingSessions.values()).map((session) => ({
-            id: session.id,
-            filePath: session.filePath,
-            startTime: session.startTime,
-            statementCount: session.statementCount,
-            options: session.options,
+            id: session.Id,
+            filePath: session.FilePath,
+            startTime: session.StartTime,
+            statementCount: session.StatementCount,
+            options: session.Options,
         }));
     }
 
@@ -374,7 +374,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Useful for cleanup on provider shutdown.
      */
     public async DisposeAllSqlLoggingSessions(): Promise<void> {
-        const disposePromises = Array.from(this._sqlLoggingSessions.values()).map((session) => session.dispose());
+        const disposePromises = Array.from(this._sqlLoggingSessions.values()).map((session) => session.Dispose());
         await Promise.all(disposePromises);
         this._sqlLoggingSessions.clear();
     }
@@ -407,7 +407,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         // Check if any session has verbose output enabled for debug logging
         const allSessions = Array.from(this._sqlLoggingSessions.values());
-        const hasVerboseSession = allSessions.some(s => s.options.verboseOutput === true);
+        const hasVerboseSession = allSessions.some(s => s.Options.verboseOutput === true);
 
         if (hasVerboseSession) {
             console.log('=== SQL LOGGING DEBUG ===');
@@ -416,25 +416,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             console.log(`Active sessions count: ${this._sqlLoggingSessions.size}`);
 
             console.log(`All sessions:`, allSessions.map(s => ({
-                id: s.id,
-                filterByUserId: s.options.filterByUserId,
-                sessionName: s.options.sessionName
+                id: s.Id,
+                filterByUserId: s.Options.filterByUserId,
+                sessionName: s.Options.sessionName
             })));
         }
 
         const filteredSessions = allSessions.filter((session) => {
             // If session has user filter, only log if contextUser matches AND contextUser is provided
-            if (session.options.filterByUserId) {
+            if (session.Options.filterByUserId) {
                 if (!contextUser?.Email) {
                     if (hasVerboseSession) {
-                        console.log(`Session ${session.id}: Has user filter but no contextUser provided - SKIPPING`);
+                        console.log(`Session ${session.Id}: Has user filter but no contextUser provided - SKIPPING`);
                     }
                     return false; // Don't log if filtering requested but no user context provided
                 }
-                const matches = UUIDsEqual(session.options.filterByUserId, contextUser.ID);
+                const matches = UUIDsEqual(session.Options.filterByUserId, contextUser.ID);
                 if (hasVerboseSession) {
-                    console.log(`Session ${session.id} filter check:`, {
-                        filterByUserId: session.options.filterByUserId,
+                    console.log(`Session ${session.Id} filter check:`, {
+                        filterByUserId: session.Options.filterByUserId,
                         contextUserEmail: contextUser.Email,
                         matches: matches
                     });
@@ -443,7 +443,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
             // No filter means log for all users (regardless of contextUser)
             if (hasVerboseSession) {
-                console.log(`Session ${session.id} has no filter - including`);
+                console.log(`Session ${session.Id} has no filter - including`);
             }
             return true;
         });
@@ -453,7 +453,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
 
         const logPromises = filteredSessions.map((session) =>
-            session.logSqlStatement(query, parameters, description, isMutation, simpleSQLFallback)
+            session.LogSqlStatement(query, parameters, description, isMutation, simpleSQLFallback)
         );
 
         await Promise.all(logPromises);

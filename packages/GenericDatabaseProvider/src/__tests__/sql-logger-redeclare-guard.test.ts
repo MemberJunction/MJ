@@ -49,11 +49,11 @@ describe('SqlLoggingSessionImpl threshold mode — redeclaration guard', () => {
   async function capture(statements: string[], options: SqlLoggingOptions): Promise<string> {
     const file = path.join(dir, 'capture.sql');
     const session = new SqlLoggingSessionImpl('redeclare-guard', file, options);
-    await session.initialize();
+    await session.Initialize();
     for (const sql of statements) {
-      await session.logSqlStatement(sql, undefined, 'Save Widgets', true);
+      await session.LogSqlStatement(sql, undefined, 'Save Widgets', true);
     }
-    await session.dispose();
+    await session.Dispose();
     return fs.readFileSync(file, 'utf8');
   }
 

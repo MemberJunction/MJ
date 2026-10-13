@@ -122,8 +122,8 @@ export class WatchService {
         // Dispose SQL logging session
         if (this.sqlLoggingSession) {
           try {
-            callbacks?.onLog?.(`📝 SQL log written to: ${this.sqlLoggingSession.filePath}`);
-            await this.sqlLoggingSession.dispose();
+            callbacks?.onLog?.(`📝 SQL log written to: ${this.sqlLoggingSession.FilePath}`);
+            await this.sqlLoggingSession.Dispose();
             this.sqlLoggingSession = null;
           } catch (error) {
             callbacks?.onWarn?.(`Failed to close SQL logging session: ${error}`);

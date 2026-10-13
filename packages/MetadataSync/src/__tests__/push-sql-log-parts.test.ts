@@ -16,18 +16,18 @@ import type { RecordData, BatchContext, SyncEngine } from '../lib/sync-engine';
 import type { EntityConfig } from '../config';
 import type { PushCallbacks, PushOptions } from '../services/PushService';
 
-/** Stands in for SqlLoggingSessionImpl: after a split, filePath is the first part, as in the real one. */
+/** Stands in for SqlLoggingSessionImpl: after a split, FilePath is the first part, as in the real one. */
 class FakeSession {
-    readonly id = 'fake-session';
-    readonly startTime = new Date();
-    statementCount = 0;
+    readonly Id = 'fake-session';
+    readonly StartTime = new Date();
+    StatementCount = 0;
     private parts: string[];
 
-    constructor(private readonly basePath: string, readonly options: SqlLoggingOptions) {
+    constructor(private readonly basePath: string, readonly Options: SqlLoggingOptions) {
         this.parts = [basePath];
     }
 
-    get filePath(): string {
+    get FilePath(): string {
         return this.parts[0];
     }
 
@@ -43,7 +43,7 @@ class FakeSession {
         );
     }
 
-    async dispose(): Promise<void> {}
+    async Dispose(): Promise<void> {}
 }
 
 class Host {
@@ -166,7 +166,7 @@ class LoggingProbe extends PushService {
         const fields = flattenedRecord.record.fields ?? {};
         const session = host.session;
         if (session) {
-            session.statementCount++;
+            session.StatementCount++;
             if (typeof fields.SplitInto === 'number') {
                 session.SplitInto(fields.SplitInto);
             }
@@ -224,21 +224,21 @@ describe('PushService size-splits its SQL log capture (PR #3369)', () => {
         await service.push({ dir: root }, callbacks());
 
         expect(DEFAULT_SQL_LOG_MAX_FILE_SIZE).toBe(94371840);
-        expect(host.session?.options.maxFileSize).toBe(94371840);
+        expect(host.session?.Options.maxFileSize).toBe(94371840);
     });
 
     it('passes a configured maxFileSize of 0 through, which turns splitting off', async () => {
         await writeFixture(root, [{ Name: 'r1' }], { maxFileSize: 0 });
         await service.push({ dir: root }, callbacks());
 
-        expect(host.session?.options.maxFileSize).toBe(0);
+        expect(host.session?.Options.maxFileSize).toBe(0);
     });
 
     it('reports one path and prints no split notice when the capture fit in one file', async () => {
         await writeFixture(root, [{ Name: 'r1' }], {});
         const result = await service.push({ dir: root }, callbacks());
 
-        const only = host.session!.filePath;
+        const only = host.session!.FilePath;
         expect(result.sqlLogPaths).toEqual([only]);
         expect(result.sqlLogPath).toBe(only);
         expect(logs.some((line) => line.includes('SQL log split into'))).toBe(false);

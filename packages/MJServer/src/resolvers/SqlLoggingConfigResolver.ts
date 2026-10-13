@@ -471,26 +471,26 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     if (config.sqlLogging.sessionTimeout > 0) {
       const timeoutId = setTimeout(async () => {
         try {
-          await session.dispose();
-          SqlLoggingConfigResolver.sessionTimeouts.delete(session.id);
+          await session.Dispose();
+          SqlLoggingConfigResolver.sessionTimeouts.delete(session.Id);
         } catch (e) {
           // Session might already be disposed - log for debugging
-          console.warn(`Auto-cleanup failed for SQL logging session ${session.id}:`, e);
+          console.warn(`Auto-cleanup failed for SQL logging session ${session.Id}:`, e);
         }
       }, config.sqlLogging.sessionTimeout);
 
       // Track the timeout so we can cancel it if session is manually stopped
-      SqlLoggingConfigResolver.sessionTimeouts.set(session.id, timeoutId);
+      SqlLoggingConfigResolver.sessionTimeouts.set(session.Id, timeoutId);
     }
 
     return {
-      id: session.id,
-      filePath: session.filePath,
-      startTime: session.startTime,
-      statementCount: session.statementCount,
-      options: this.convertOptionsToGraphQL(session.options),
-      sessionName: session.options.sessionName,
-      filterByUserId: session.options.filterByUserId,
+      id: session.Id,
+      filePath: session.FilePath,
+      startTime: session.StartTime,
+      statementCount: session.StatementCount,
+      options: this.convertOptionsToGraphQL(session.Options),
+      sessionName: session.Options.sessionName,
+      filterByUserId: session.Options.filterByUserId,
     };
   }
 
@@ -537,7 +537,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
       SqlLoggingConfigResolver.sessionTimeouts.delete(sessionId);
     }
 
-    await session.dispose();
+    await session.Dispose();
     return true;
   }
 

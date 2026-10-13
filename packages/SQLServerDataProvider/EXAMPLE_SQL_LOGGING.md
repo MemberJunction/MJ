@@ -16,10 +16,10 @@ try {
   await provider.ExecuteSQL('INSERT INTO Entity (Name) VALUES (?)', ['Test Entity']);
   await provider.ExecuteSQL('UPDATE Entity SET Status = ? WHERE ID = ?', ['Active', '123']);
   
-  console.log(`Logged ${session.statementCount} SQL statements`);
+  console.log(`Logged ${session.StatementCount} SQL statements`);
 } finally {
   // Always dispose the session to stop logging and close the file
-  await session.dispose();
+  await session.Dispose();
 }
 ```
 
@@ -37,7 +37,7 @@ try {
   await provider.ExecuteSQL('INSERT INTO [myschema].[Entity] (Name) VALUES (?)', ['New Entity']);
   // Becomes: INSERT INTO [${flyway:defaultSchema}].[Entity] (Name) VALUES ('New Entity');
 } finally {
-  await session.dispose();
+  await session.Dispose();
 }
 ```
 
@@ -66,14 +66,14 @@ export class MetadataSync {
         await this.pushEntity(entity);
       }
       
-      console.log(`✅ MetadataSync completed. ${session.statementCount} SQL statements logged.`);
+      console.log(`✅ MetadataSync completed. ${session.StatementCount} SQL statements logged.`);
       console.log(`📄 Migration file ready: ${logPath}`);
       
     } catch (error) {
-      console.error(`❌ MetadataSync failed after ${session.statementCount} statements`);
+      console.error(`❌ MetadataSync failed after ${session.StatementCount} statements`);
       throw error;
     } finally {
-      await session.dispose();
+      await session.Dispose();
     }
   }
   
@@ -123,8 +123,8 @@ try {
   // session logs: EXEC [myschema].[spDeleteCustomer] @ID='123'
   // fullSession logs: Full SQL with record change tracking
 } finally {
-  await session.dispose();
-  await fullSession.dispose();
+  await session.Dispose();
+  await fullSession.Dispose();
 }
 ```
 
@@ -137,7 +137,7 @@ const session = await provider.createSqlLogger('./logs/operations.sql', {
 });
 
 // If no mutations occur, the file will be deleted on dispose
-await session.dispose(); // File deleted if no statements were logged
+await session.Dispose(); // File deleted if no statements were logged
 
 // To retain empty log files, set retainEmptyLogFiles to true
 const persistentSession = await provider.createSqlLogger('./logs/audit.sql', {
@@ -313,7 +313,7 @@ The filtering is handled transparently per logger:
 - **Memory Efficient**: Uses file streams, not in-memory buffering
 - **Multiple Sessions**: Supports multiple concurrent logging sessions without interference
 - **Automatic Cleanup**: Session disposal automatically closes files and cleans up resources
-- **Accurate Counts**: `session.statementCount` reflects actual emitted statements after filtering
+- **Accurate Counts**: `session.StatementCount` reflects actual emitted statements after filtering
 - **Empty File Cleanup**: Empty log files are automatically deleted unless `retainEmptyLogFiles: true`
 - **Transaction Group Support**: SQL executed within transaction groups is automatically logged
 
@@ -327,10 +327,10 @@ try {
   await provider.ExecuteSQL('INVALID SQL SYNTAX');
 } catch (error) {
   // Session still contains the failed statement for debugging
-  console.log(`Error after ${session.statementCount} statements: ${error.message}`);
+  console.log(`Error after ${session.StatementCount} statements: ${error.message}`);
 } finally {
   // Always dispose, even on errors
-  await session.dispose();
+  await session.Dispose();
 }
 ```
 
