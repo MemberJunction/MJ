@@ -262,8 +262,12 @@ export class PushService {
   private graphBatchSize = 1;
   /** Counts so far, so a failed push can still report what it did. */
   private runningTotals: EntityPushResult = emptyPushTotals();
-  /** The SQL log for this run, when one is being written. */
-  private sqlLogFilePath: string | undefined;
+  /**
+   * The SQL log session for this run, when one is being written. Kept rather than its path: a
+   * size-based split renames the original file to `.part001`, so only the session knows where
+   * the log is now.
+   */
+  private sqlLogSession: SqlLoggingSession | undefined;
   /** Non-atomic mode: creates and updates that were committed outside the push transaction. */
   private committedWrites: CommittedWrite[] = [];
   /** Incremental state, applied only after the push commits. Keyed by path relative to the sync root. */
@@ -393,7 +397,7 @@ export class PushService {
     this.pushedEntityDirs = [];
     this.directoryModes.clear();
     this.runningTotals = emptyPushTotals();
-    this.sqlLogFilePath = undefined;
+    this.sqlLogSession = undefined;
     
     const fileBackupManager = new FileBackupManager();
     
@@ -518,7 +522,7 @@ export class PushService {
       let sqlLogPaths: string[] | undefined;
       if (sqlLoggingSession) {
         // Capture the (final) part list before dispose — it's stable once logging is done.
-        const paths = [...sqlLoggingSession.filePaths];
+        const paths = [...sqlLoggingSession.FilePaths];
         const hadStatements = sqlLoggingSession.statementCount > 0;
         await sqlLoggingSession.dispose();
         if (hadStatements) {
@@ -608,7 +612,6 @@ export class PushService {
         await fs.ensureDir(path.dirname(filepath));
 
         // Create the SQL logging session
-        this.sqlLogFilePath = filepath;
         sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
           formatAsMigration: this.syncConfig?.sqlLogging?.formatAsMigration || false,
           description: 'MetadataSync push operation',
@@ -624,6 +627,7 @@ export class PushService {
           // to 90 MiB; a `.mj-sync.json` `sqlLogging.maxFileSize` of 0 disables splitting.
           maxFileSize: this.syncConfig?.sqlLogging?.maxFileSize ?? DEFAULT_SQL_LOG_MAX_FILE_SIZE,
         });
+        this.sqlLogSession = sqlLoggingSession;
         
         if (options.verbose) {
           callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);
@@ -893,7 +897,7 @@ export class PushService {
       rolledBack,
       committedWrites: [...this.committedWrites],
       totals: { ...this.runningTotals },
-      sqlLogPath: this.sqlLogFilePath,
+      sqlLogPath: this.sqlLogSession?.filePath,
       cause: error,
     });
   }

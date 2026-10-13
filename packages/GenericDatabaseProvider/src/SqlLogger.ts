@@ -30,7 +30,8 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   private static readonly FOOTER_RESERVE_BYTES = 1024;
 
   public readonly id: string;
-  public readonly filePath: string;
+  /** The path the caller asked for; parts are named from it, and it stops existing after the first rotation. */
+  private readonly _basePath: string;
   public readonly startTime: Date;
   public readonly options: SqlLoggingOptions;
   private _statementCount: number = 0;
@@ -64,7 +65,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    */
   constructor(id: string, filePath: string, options: SqlLoggingOptions = {}, dialect: SQLDialect = new SQLServerDialect()) {
     this.id = id;
-    this.filePath = filePath;
+    this._basePath = filePath;
     this.startTime = new Date();
     this.options = options;
     this._dialect = dialect;
@@ -86,10 +87,18 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   }
 
   /**
+   * File where SQL is being logged: the path given to the constructor, or the first part
+   * (`*.part001.sql`) once size-based splitting has renamed that file.
+   */
+  public get filePath(): string {
+    return this._partPaths[0];
+  }
+
+  /**
    * Every part file produced by this session, in order. Single-element (`[filePath]`)
    * unless size-based splitting rotated across multiple parts.
    */
-  public get filePaths(): string[] {
+  public get FilePaths(): string[] {
     return [...this._partPaths];
   }
 
@@ -99,7 +108,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * filename order equal to part order up to 999 parts (two digits break at `part100` < `part11`).
    */
   private _partFilePath(index: number): string {
-    const parsed = path.parse(this.filePath);
+    const parsed = path.parse(this._basePath);
     const suffix = `.part${String(index).padStart(3, '0')}`;
     return path.join(parsed.dir, `${parsed.name}${suffix}${parsed.ext}`);
   }
@@ -110,11 +119,11 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    */
   public async initialize(): Promise<void> {
     // Ensure directory exists
-    const dir = path.dirname(this.filePath);
+    const dir = path.dirname(this._basePath);
     await fs.promises.mkdir(dir, { recursive: true });
 
     // Open file for writing
-    this._fileHandle = await fs.promises.open(this.filePath, 'w');
+    this._fileHandle = await fs.promises.open(this._basePath, 'w');
 
     // Write header comment. Part 1's header is intentionally NOT labeled with a part number:
     // at open time we don't yet know whether splitting will trigger, and a lone (unsplit) file
@@ -149,7 +158,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     // renaming a file with an open handle (EPERM/EBUSY), while POSIX doesn't care either way.
     if (!this._rotated) {
       const part1 = this._partFilePath(1);
-      await fs.promises.rename(this.filePath, part1);
+      await fs.promises.rename(this._basePath, part1);
       this._partPaths[0] = part1;
       this._rotated = true;
     }
@@ -166,6 +175,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     this._currentFileBytes = Buffer.byteLength(header);
     this._currentPartStatements = 0;
     this._currentBatchVariableCount = 0;
+    this._currentBatchDeclaredNames.clear();
   }
 
   /**

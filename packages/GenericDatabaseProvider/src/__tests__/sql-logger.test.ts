@@ -42,7 +42,7 @@ async function runSession(filePath: string, options: SqlLoggingOptions, count: n
   const session = new SqlLoggingSessionImpl('test-session', filePath, options);
   await session.initialize();
   for (let i = 0; i < count; i++) {
-    await session.logSqlStatement(stmt(i, padTo), undefined, undefined, true);
+    await session.LogSqlStatement(stmt(i, padTo), undefined, undefined, true);
   }
   await session.dispose();
   return session;
@@ -53,7 +53,7 @@ describe('SqlLoggingSessionImpl — maxFileSize splitting', () => {
     const filePath = makeTmpFile();
     const session = await runSession(filePath, { maxFileSize: 10 * 1024 * 1024 }, 5);
 
-    expect(session.filePaths).toEqual([filePath]);
+    expect(session.FilePaths).toEqual([filePath]);
     expect(fs.existsSync(filePath)).toBe(true);
     expect(fs.existsSync(filePath.replace(/\.sql$/, '.part001.sql'))).toBe(false);
 
@@ -71,7 +71,7 @@ describe('SqlLoggingSessionImpl — maxFileSize splitting', () => {
     const count = 60;
     const session = await runSession(filePath, { maxFileSize: limit }, count, 100);
 
-    const paths = session.filePaths;
+    const paths = session.FilePaths;
     expect(paths.length).toBeGreaterThan(1);
 
     // Base path renamed away; every part is a `.partNNN.sql`, in order, and exists.
@@ -103,7 +103,7 @@ describe('SqlLoggingSessionImpl — maxFileSize splitting', () => {
     const count = 400;
     const session = await runSession(filePath, { maxFileSize: 2000 }, count, 300);
 
-    const paths = session.filePaths;
+    const paths = session.FilePaths;
     expect(paths.length).toBeGreaterThan(99);
     expect([...paths].sort()).toEqual(paths);
 
@@ -117,7 +117,7 @@ describe('SqlLoggingSessionImpl — maxFileSize splitting', () => {
     const session = await runSession(filePath, { maxFileSize: 50 }, 1, 300);
 
     // First statement is always forced into part 1 regardless of size → never rotated → base name kept.
-    expect(session.filePaths).toEqual([filePath]);
+    expect(session.FilePaths).toEqual([filePath]);
     expect(fs.existsSync(filePath.replace(/\.sql$/, '.part001.sql'))).toBe(false);
     const content = fs.readFileSync(filePath, 'utf8');
     expect(markers(content)).toEqual([0]);
@@ -128,14 +128,14 @@ describe('SqlLoggingSessionImpl — maxFileSize splitting', () => {
     const filePath = makeTmpFile();
     const session = await runSession(filePath, { maxFileSize: 0 }, 30, 100);
 
-    expect(session.filePaths).toEqual([filePath]);
+    expect(session.FilePaths).toEqual([filePath]);
     expect(markers(fs.readFileSync(filePath, 'utf8'))).toEqual(Array.from({ length: 30 }, (_, i) => i));
   });
 
   it('undefined maxFileSize disables splitting', async () => {
     const filePath = makeTmpFile();
     const session = await runSession(filePath, {}, 30, 100);
-    expect(session.filePaths).toEqual([filePath]);
+    expect(session.FilePaths).toEqual([filePath]);
     expect(fs.statSync(filePath).size).toBeGreaterThan(0);
   });
 
@@ -145,7 +145,7 @@ describe('SqlLoggingSessionImpl — maxFileSize splitting', () => {
     await session.initialize();
     await session.dispose();
 
-    expect(session.filePaths).toEqual([filePath]);
+    expect(session.FilePaths).toEqual([filePath]);
     expect(fs.existsSync(filePath)).toBe(false); // retainEmptyLogFiles defaults false
     expect(session.statementCount).toBe(0);
   });
@@ -153,7 +153,7 @@ describe('SqlLoggingSessionImpl — maxFileSize splitting', () => {
   it('with a GO batch separator, no rotated part begins with a stray leading GO', async () => {
     const filePath = makeTmpFile();
     const session = await runSession(filePath, { maxFileSize: 3000, batchSeparator: 'GO' }, 40, 100);
-    const paths = session.filePaths;
+    const paths = session.FilePaths;
     expect(paths.length).toBeGreaterThan(1);
 
     for (const p of paths) {
@@ -176,11 +176,11 @@ describe('SqlLoggingSessionImpl — maxFileSize splitting', () => {
     const session = new SqlLoggingSessionImpl('big', filePath, { maxFileSize: limit });
     await session.initialize();
     for (let i = 0; i < count; i++) {
-      await session.logSqlStatement(stmt(i, 100 * 1024), undefined, undefined, true);
+      await session.LogSqlStatement(stmt(i, 100 * 1024), undefined, undefined, true);
     }
     await session.dispose();
 
-    const paths = session.filePaths;
+    const paths = session.FilePaths;
     expect(paths.length).toBeGreaterThan(1); // genuinely split at the 90 MiB limit
     for (const p of paths) {
       // Every part is strictly under the limit (no lone statement exceeds it here).
@@ -191,4 +191,59 @@ describe('SqlLoggingSessionImpl — maxFileSize splitting', () => {
     expect(markers(combined)).toEqual(Array.from({ length: count }, (_, i) => i));
     expect(session.statementCount).toBe(count);
   }, 30000);
+});
+
+/** The ordered statement indices and GO separators in a capture — what a replay would run. */
+function batchShape(text: string): string[] {
+  return text
+    .split('\n')
+    .map(line => line.trim())
+    .flatMap(line => {
+      if (line === 'GO') return ['GO'];
+      const m = line.match(/VALUES \((\d+),/);
+      return m ? [m[1]] : [];
+    });
+}
+
+describe('SqlLoggingSessionImpl — state after a rotation', () => {
+  it('filePath names the first part once the base file has been renamed to part001', async () => {
+    const filePath = makeTmpFile();
+    const session = await runSession(filePath, { maxFileSize: 2000 }, 30);
+    const paths = session.FilePaths;
+
+    expect(paths.length).toBeGreaterThan(1);
+    expect(fs.existsSync(filePath)).toBe(false);
+    expect(session.filePath).toBe(paths[0]);
+    expect(fs.existsSync(session.filePath)).toBe(true);
+  });
+
+  it('starts every part with a fresh batch, so each part separates its batches exactly as a file of its own would', async () => {
+    // Three variable names in rotation: the redeclare guard ends a batch every third statement.
+    const statements = Array.from({ length: 40 }, (_, i) =>
+      `DECLARE @v${i % 3} INT = ${i}; INSERT INTO T VALUES (${i}, '${'x'.repeat(100)}')`
+    );
+    const options: SqlLoggingOptions = { batchSeparator: 'GO', variableBatchThreshold: 1000 };
+
+    const filePath = makeTmpFile();
+    const split = new SqlLoggingSessionImpl('split', filePath, { ...options, maxFileSize: 2500 });
+    await split.initialize();
+    for (const s of statements) {
+      await split.LogSqlStatement(s, undefined, undefined, true);
+    }
+    await split.dispose();
+
+    const paths = split.FilePaths;
+    expect(paths.length).toBeGreaterThan(2);
+    for (const p of paths) {
+      const shape = batchShape(fs.readFileSync(p, 'utf8'));
+      // The oracle: the same statements logged into an unsplit file of their own.
+      const alone = new SqlLoggingSessionImpl('alone', makeTmpFile(), options);
+      await alone.initialize();
+      for (const index of shape.filter(t => t !== 'GO')) {
+        await alone.LogSqlStatement(statements[Number(index)], undefined, undefined, true);
+      }
+      await alone.dispose();
+      expect(shape).toEqual(batchShape(fs.readFileSync(alone.filePath, 'utf8')));
+    }
+  });
 });

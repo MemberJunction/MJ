@@ -92,9 +92,19 @@ export interface SqlLoggingOptions {
    *   never spans a file boundary).
    * - When splitting triggers, every part (including the first) is named by inserting
    *   `.partNNN` before the extension of `filePath` (e.g. `push.sql` → `push.part001.sql`,
-   *   `push.part02.sql`, ...). Enumerate all produced files via {@link SqlLoggingSession.filePaths}.
+   *   `push.part002.sql`, ...). Enumerate all produced files via {@link SqlLoggingSession.FilePaths}.
    * - A single statement larger than `maxFileSize` cannot be split; it is written whole to
    *   its own part (which then exceeds the limit). This is unavoidable and does not loop.
+   * - The splitting unit is one logged statement block. A block that uses a variable DECLAREd
+   *   by an EARLIER block would break if a rotation fell between them, so a caller that enables
+   *   splitting must log self-contained blocks. Every MetadataSync save is one: the save
+   *   preamble and its `EXEC` are built into one string and logged in one call.
+   * - To commit the parts as versioned migrations, give each part its OWN version token (e.g.
+   *   distinct timestamps). Parts that share one — `V<ts>__Name.part001.sql`,
+   *   `V<ts>__Name.part002.sql` — are rejected by the migration runner as duplicate versions.
+   * - The logger does not delete part files an earlier session left at the same base path, so
+   *   reusing a path can leave stale higher-numbered parts on disk. MetadataSync timestamps every
+   *   capture's filename for that reason; a direct caller should do the same.
    *
    * Undefined or 0 disables splitting (default).
    */
@@ -108,8 +118,9 @@ export interface SqlLoggingSession {
   /** Unique session ID */
   readonly id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
-   * File path where SQL is being logged. When {@link SqlLoggingOptions.maxFileSize} splitting
-   * triggers, this is the FIRST part (`*.part001.sql`); use {@link filePaths} to get every part.
+   * File path where SQL is being logged. Once {@link SqlLoggingOptions.maxFileSize} splitting
+   * triggers, this is the FIRST part (`*.part001.sql`): the original path no longer exists then.
+   * Use {@link FilePaths} to get every part.
    */
   readonly filePath: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
@@ -118,7 +129,7 @@ export interface SqlLoggingSession {
    * multiple parts it lists each part file. Read after logging completes (before or after
    * `dispose()` — the list is final once the last statement is written).
    */
-  readonly filePaths: string[];
+  readonly FilePaths: string[];
   /** Session start time */
   readonly startTime: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Number of statements logged so far */

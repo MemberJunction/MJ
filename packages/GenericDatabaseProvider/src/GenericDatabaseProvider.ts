@@ -317,9 +317,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // Return a proxy that handles cleanup on dispose
         return {
             id: session.id,
-            filePath: session.filePath,
-            get filePaths() {
-                return session.filePaths;
+            // A getter, not a copy: after a size-based split the first part is a different file.
+            get filePath() {
+                return session.filePath;
+            },
+            get FilePaths() {
+                return session.FilePaths;
             },
             startTime: session.startTime,
             get statementCount() {

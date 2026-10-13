@@ -2712,3 +2712,33 @@ describe('TransactionFrameTracker', () => {
         expect(t.Resolve(first, false).Kind).toBe('drop');
     });
 });
+
+describe('GenericDatabaseProvider CreateSqlLogger after a size-based split', () => {
+    it('the returned session names the first part, which exists, and lists every part', async () => {
+        const fsMod = await import('fs');
+        const osMod = await import('os');
+        const pathMod = await import('path');
+        const dir = fsMod.mkdtempSync(pathMod.join(osMod.tmpdir(), 'mj-create-sqllog-'));
+        const provider = new TestGenericProvider();
+        Object.defineProperty(provider, 'ConfigData', { get: () => ({ MJCoreSchemaName: '__mj' }) });
+        const basePath = pathMod.join(dir, 'push.sql');
+        try {
+            const session = await provider.CreateSqlLogger(basePath, { maxFileSize: 2000 });
+            const log = (provider as unknown as {
+                _logSqlStatement(q: string, p?: unknown, d?: string, ignore?: boolean, isMutation?: boolean): Promise<void>;
+            })._logSqlStatement.bind(provider);
+            for (let i = 0; i < 30; i++) {
+                await log(`INSERT INTO T VALUES (${i}, '${'x'.repeat(100)}')`, undefined, undefined, false, true);
+            }
+
+            expect(session.FilePaths.length).toBeGreaterThan(1);
+            expect(fsMod.existsSync(basePath)).toBe(false);
+            expect(session.filePath).toBe(session.FilePaths[0]);
+            expect(fsMod.existsSync(session.filePath)).toBe(true);
+            await session.dispose();
+        } finally {
+            await provider.DisposeAllSqlLoggingSessions();
+            fsMod.rmSync(dir, { recursive: true, force: true });
+        }
+    });
+});
