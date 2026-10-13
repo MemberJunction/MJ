@@ -554,6 +554,16 @@ describe('RealtimeSessionService — per-turn recording timing across a tool-cal
     expect(lastTiming()).toEqual({ utteranceStartMs: null, utteranceEndMs: 9000 });
   });
 
+  it('relays whole milliseconds when the recorder clock lands between them (GraphQL Int)', async () => {
+    // The recorder counts 48 kHz samples, so an offset is rarely a whole millisecond: 229,376 samples
+    // is 4778.67 ms. RelayRealtimeTranscript types both offsets as Int, and GraphQL refuses a
+    // fraction, so the whole transcript line was lost (#5294 live smoke: 16 of 16 lines on an iPhone).
+    const t = timing(service);
+    now = (229_376 * 1000) / 48_000; await t.onClientTranscript({ Role: 'Assistant', Text: 'hello', IsFinal: false, Kind: 'normal' });
+    now = (487_936 * 1000) / 48_000; await t.onClientTranscript({ Role: 'Assistant', Text: 'hello there', IsFinal: true, Kind: 'normal' });
+    expect(lastTiming()).toEqual({ utteranceStartMs: 4779, utteranceEndMs: 10165 });
+  });
+
   // ── #3832: the session clock — timings without a recording ────────────────────────────────────
 
   it('falls back to the SESSION clock when there is no recorder (#3832)', async () => {

@@ -4238,11 +4238,12 @@ export class RealtimeSessionRuntime {
    * The current per-turn offset in ms — the RECORDER's clock when one runs (an offset into a
    * seekable file), else the SESSION clock (#3832: orderable and displayable, not seekable),
    * else `null` before any call is live. One function so the two stamp sites cannot disagree
-   * about which clock a session is on.
+   * about which clock a session is on. Always whole milliseconds: the offsets travel as GraphQL
+   * `Int`, which refuses a fraction, and a 48 kHz sample clock rarely lands on a whole millisecond.
    */
   private nowTurnOffsetMs(): number | null {
     if (this.recorder) {
-      return this.recorder.NowOffsetMs();
+      return Math.round(this.recorder.NowOffsetMs());
     }
     if (this.sessionClockStartMs !== null) {
       return Math.max(0, Math.round(performance.now() - this.sessionClockStartMs));
