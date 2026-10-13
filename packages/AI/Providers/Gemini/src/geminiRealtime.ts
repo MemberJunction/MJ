@@ -6,6 +6,7 @@ import {
     FunctionResponseScheduling,
     type AuthToken,
     type CreateAuthTokenParameters,
+    type LiveCallbacks,
     type LiveServerMessage,
     type LiveServerContent,
     type LiveConnectConfig,
@@ -458,24 +459,30 @@ export class GeminiRealtime extends BaseRealtimeModel {
      */
     protected async connectLiveSession(args: GeminiConnectArgs): Promise<GeminiLiveSession> {
         const client = this.ensureClient();
-        // `live.connect` (@google/genai 2.11+) resolves only on the server's setupComplete frame and never
-        // rejects when the socket errors or closes first (a rejected key, model or setup field), so fail
-        // the connect on an early error/close instead of waiting forever. A promise settles once, so
-        // callbacks after a successful connect only reach the handlers.
+        return this.connectUntilSetup(args, (callbacks) => client.live.connect({ model: args.Model, config: args.Config, callbacks }));
+    }
+
+    /**
+     * Opens a Live connection with `connect`, which passes the given callbacks to `live.connect`, and rejects if the
+     * socket errors or closes before Gemini acknowledges the setup. `live.connect` (@google/genai 2.11+) resolves only on
+     * the server's setupComplete frame and never rejects when the socket errors or closes first (a rejected key, model or
+     * setup field), so without this the connect waits forever. A promise settles once, so callbacks after a successful
+     * connect only reach the handlers. Every {@link connectLiveSession} override should open through this.
+     */
+    protected connectUntilSetup(
+        args: GeminiConnectArgs,
+        connect: (callbacks: LiveCallbacks) => Promise<GeminiLiveSession>
+    ): Promise<GeminiLiveSession> {
         return new Promise<GeminiLiveSession>((resolve, reject) => {
-            client.live.connect({
-                model: args.Model,
-                config: args.Config,
-                callbacks: {
-                    onmessage: args.OnMessage,
-                    onerror: (event) => {
-                        reject(new Error(`Gemini Live connection failed: ${event?.message ?? 'websocket error'}`));
-                        args.OnError?.(event);
-                    },
-                    onclose: (event) => {
-                        reject(new Error(`Gemini Live closed during setup (code ${event?.code ?? 'unknown'}${event?.reason ? `: ${event.reason}` : ''})`));
-                        args.OnClose?.(event);
-                    },
+            connect({
+                onmessage: args.OnMessage,
+                onerror: (event) => {
+                    reject(new Error(`Gemini Live connection failed: ${event?.message ?? 'websocket error'}`));
+                    args.OnError?.(event);
+                },
+                onclose: (event) => {
+                    reject(new Error(`Gemini Live closed during setup (code ${event?.code ?? 'unknown'}${event?.reason ? `: ${event.reason}` : ''})`));
+                    args.OnClose?.(event);
                 },
             }).then(resolve, reject);
         });

@@ -1264,7 +1264,11 @@ describe('C8: transcriptionLanguages → caption language hints', () => {
  * rejects when the socket closes first. These drive the REAL connect seam with a fake SDK client.
  */
 describe('C9: connect fails fast when the socket closes during setup', () => {
-    type FakeCallbacks = { onclose: (e: { code: number; reason: string }) => void; onerror: (e: { message: string }) => void };
+    type FakeCallbacks = {
+        onmessage: (m: LiveServerMessage) => void;
+        onclose: (e: { code: number; reason: string }) => void;
+        onerror: (e: { message: string }) => void;
+    };
     const withClient = (connect: (p: { callbacks: FakeCallbacks }) => Promise<unknown>): GeminiRealtime =>
         Object.assign(new GeminiRealtime('k'), { geminiClient: { live: { connect } } });
 
@@ -1288,6 +1292,7 @@ describe('C9: connect fails fast when the socket closes during setup', () => {
         let callbacks: FakeCallbacks | null = null;
         const driver = withClient((p) => {
             callbacks = p.callbacks;
+            ConfirmGeminiSetup({ OnMessage: p.callbacks.onmessage });
             return Promise.resolve(new FakeLiveSession());
         });
         const session = await driver.StartSession(makeParams());
