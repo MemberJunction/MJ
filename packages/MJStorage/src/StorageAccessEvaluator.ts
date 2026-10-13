@@ -29,7 +29,7 @@
 import { IMetadataProvider, LogError, Metadata, RunView, RunViewResult, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, IsValidUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type { MJFileEntity, MJFileStorageAccountEntity, MJFileStorageAccountPermissionEntity } from '@memberjunction/core-entities';
-import { DEFAULT_OBJECT_KEY_NORMALIZER, IsSafeStorageObjectKey, StorageObjectKeyNormalizer } from './generic/ObjectKeys';
+import { DEFAULT_OBJECT_KEY_NORMALIZER, IsSafeStorageObjectKey, StorageObjectKeyNormalizer, StorageObjectKeyOf } from './generic/ObjectKeys';
 
 /** What a caller wants to do with a storage account: list/download/search (`Read`) or upload/delete/move/copy into it (`Write`). */
 export type StorageAccountAccess = 'Read' | 'Write';
@@ -325,7 +325,7 @@ export class StorageAccessEvaluator extends BaseSingleton<StorageAccessEvaluator
 
     /**
      * Reads, with the elevated reader, the `MJ: Files` rows on `fileStorageProviderID` whose stored object key
-     * (`ProviderKey`, else `Name`), lower-cased, is one of `lookupValues` (already lower-cased). Batched, never truncated.
+     * ({@link StorageObjectKeyOf}: `ProviderKey`, else `Name`), lower-cased, is one of `lookupValues` (already lower-cased). Batched, never truncated.
      * Returns `null` when the read could not be made. Protected so a host can change the mapping.
      */
     protected async FindTrackedFiles(
@@ -346,7 +346,7 @@ export class StorageAccessEvaluator extends BaseSingleton<StorageAccessEvaluator
             const inList = batch.map(v => `'${EscapeSQLString(v)}'`).join(', ');
             return {
                 EntityName: 'MJ: Files',
-                ExtraFilter: `${providerFilter} AND (LOWER(ProviderKey) IN (${inList}) OR (ProviderKey IS NULL AND LOWER(Name) IN (${inList})))`,
+                ExtraFilter: `${providerFilter} AND (LOWER(ProviderKey) IN (${inList}) OR ((ProviderKey IS NULL OR ProviderKey = '') AND LOWER(Name) IN (${inList})))`,
                 Fields: ['ID', 'Name', 'ProviderKey'],
                 ResultType: 'simple' as const,
                 IgnoreMaxRows: true
@@ -501,9 +501,9 @@ export class StorageAccessEvaluator extends BaseSingleton<StorageAccessEvaluator
         return unreadable;
     }
 
-    /** The canonical, lower-cased object key the server resolves an `MJ: Files` row to (`ProviderKey`, else `Name`). */
+    /** The canonical, lower-cased object key the server resolves an `MJ: Files` row to ({@link StorageObjectKeyOf}). */
     private trackedKeyOf(file: TrackedFileRow, keyNormalizer: StorageObjectKeyNormalizer): string {
-        return keyNormalizer.NormalizeObjectKey(file.ProviderKey ?? file.Name ?? '').toLowerCase();
+        return keyNormalizer.NormalizeObjectKey(StorageObjectKeyOf(file)).toLowerCase();
     }
 
     /** Which of `fileIDs` `user` may read, asked as the user (batched, never truncated); `null` when a read fails. */

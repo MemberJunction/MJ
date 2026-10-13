@@ -8,6 +8,7 @@ import {
     MJFileStorageProviderEntity
 } from '@memberjunction/core-entities';
 import { FileStorageBase } from './generic/FileStorageBase';
+import { StorageObjectKeyOf } from './generic/ObjectKeys';
 import { InitializeDriverWithAccountCredentials } from './util';
 import { StorageAccessEvaluator, StorageAccountAccess } from './StorageAccessEvaluator';
 
@@ -75,7 +76,7 @@ export interface ResolvedFileObject {
     Account: MJFileStorageAccountEntity;
     /** An initialized driver for that account. */
     Driver: FileStorageBase;
-    /** The object key the row resolves to: `ProviderKey`, else `Name`. */
+    /** The object key the row resolves to ({@link StorageObjectKeyOf}): `ProviderKey`, else `Name`. */
     ObjectKey: string;
 }
 
@@ -409,7 +410,7 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         const evaluator = StorageAccessEvaluator.Instance;
         await evaluator.AssertAccountAccess(account.ID, contextUser, access, provider);
         const driver = await this.GetDriver(account.ID, contextUser);
-        const objectKey = file.ProviderKey ?? file.Name;
+        const objectKey = StorageObjectKeyOf(file);
         await evaluator.AssertTrackedObjectsReadable(file.ProviderID, [objectKey], contextUser, provider, driver);
         return { Account: account, Driver: driver, ObjectKey: objectKey };
     }

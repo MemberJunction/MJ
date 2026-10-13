@@ -1,7 +1,7 @@
 import { LogError, UserInfo, IMetadataProvider, Metadata } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import type { MJFileEntity, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
-import { FileStorageBase, FileStorageEngine, StorageAccessEvaluator, StorageAccountAccess } from '@memberjunction/storage';
+import { FileStorageBase, FileStorageEngine, StorageAccessEvaluator, StorageAccountAccess, StorageObjectKeyOf } from '@memberjunction/storage';
 import type {
     AttachmentBlobUploadInput,
     AttachmentBlobUploadResult,
@@ -202,7 +202,7 @@ export class MJStorageBlobStore implements IAttachmentBlobStore {
     ): Promise<{ file: MJFileEntity; driver: FileStorageBase; objectKey: string } | null> {
         const storageProvider = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
         if (!(await storageProvider.Load(file.ProviderID))) return null;
-        const objectKey = file.ProviderKey || file.Name;
+        const objectKey = StorageObjectKeyOf(file);
         await StorageAccessEvaluator.Instance.AssertTrackedObjectsReadable(file.ProviderID, [objectKey], contextUser, md);
         const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, storageProvider.ServerDriverKey);
         return { file, driver, objectKey };

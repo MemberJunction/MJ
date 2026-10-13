@@ -14,6 +14,15 @@
  * @module @memberjunction/storage
  */
 
+/**
+ * The object key an `MJ: Files` row resolves to: its `ProviderKey`, or its `Name` when `ProviderKey` is null or empty.
+ * The one rule every route from a row to its bytes and the tracked-file lookup use, so a row cannot be served under one
+ * key and checked under another.
+ */
+export function StorageObjectKeyOf(file: { ProviderKey?: string | null; Name?: string | null }): string {
+    return file.ProviderKey || file.Name || '';
+}
+
 /** Turns an object key into the canonical form the storage access checks compare. */
 export interface StorageObjectKeyNormalizer {
     /**

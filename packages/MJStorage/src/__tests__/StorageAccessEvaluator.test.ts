@@ -99,8 +99,8 @@ function runFakeFilesView(
 ): RunViewResult<object> {
     if (db.FailFileRead) return fail;
     if (user && user.ID === systemUser.ID) {
-        // The tracked-file mapping: rows on the provider whose key (ProviderKey ?? Name) is named in the filter.
-        return ok(db.Files.filter(f => filterNames(params, f.ProviderID) && filterNames(params, `'${f.ProviderKey ?? f.Name}'`)));
+        // The tracked-file mapping: rows on the provider whose key (ProviderKey, else Name) is named in the filter.
+        return ok(db.Files.filter(f => filterNames(params, f.ProviderID) && filterNames(params, `'${f.ProviderKey || f.Name}'`)));
     }
     const readable = new Set(db.ReadableFiles[user?.ID ?? ''] ?? []);
     return ok(db.Files.filter(f => filterNames(params, f.ID) && readable.has(f.ID)).map(f => ({ ID: f.ID })));
@@ -365,6 +365,14 @@ describe('StorageAccessEvaluator', () => {
         it('lets an ordinary literal percent sign through as an untracked key', async () => {
             const unreadable = await evaluator.UnreadableTrackedObjectKeys(PROVIDER_S3, ['offers/50% off.pdf', 'a%20b.txt'], bob, provider);
             expect(unreadable.size).toBe(0);
+        });
+
+        it('tracks a row stored with an empty ProviderKey under its Name, as the server serves it', async () => {
+            db.Files.push({ ID: 'F0000000-0000-4000-8000-000000000005', Name: 'payroll.csv', ProviderKey: '', ProviderID: PROVIDER_S3 });
+            const unreadable = await evaluator.UnreadableTrackedObjectKeys(PROVIDER_S3, ['payroll.csv'], bob, provider);
+            expect([...unreadable]).toEqual(['payroll.csv']);
+            const mapping = calls.find(c => c.Params.EntityName === 'MJ: Files' && c.User === systemUser);
+            expect(mapping?.Params.ExtraFilter).toContain("(ProviderKey IS NULL OR ProviderKey = '') AND LOWER(Name) IN");
         });
 
         it('AssertTrackedObjectsReadable throws the tracked-file refusal, and resolves for readable or untracked keys', async () => {

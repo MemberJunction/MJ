@@ -41,6 +41,7 @@ import {
   StorageAccountAccess,
   StorageAccountAccessDeniedError,
   StorageFileLocation,
+  StorageObjectKeyOf,
   StorageObjectMetadata as StoredObjectMetadata,
 } from '@memberjunction/storage';
 import { CreateMJFileInput, MJFileResolver as FileResolverBase, MJFile_, UpdateMJFileInput } from '../generated/generated.js';
@@ -603,7 +604,7 @@ export class FileResolver extends FileResolverBase {
   ): Promise<ResolvedFileObject | null> {
     const location: StorageFileLocation = { ProviderID: file.ProviderID, ProviderKey: file.ProviderKey ?? null, Name: file.Name };
     const resolved = await FileStorageEngine.Instance.ResolveFileObject(location, user, access, md);
-    const keys = resolved ? extraKeys : [location.ProviderKey ?? location.Name, ...extraKeys];
+    const keys = resolved ? extraKeys : [StorageObjectKeyOf(location), ...extraKeys];
     if (keys.length > 0) {
       await StorageAccessEvaluator.Instance.AssertTrackedObjectsReadable(file.ProviderID, keys, user, md, resolved?.Driver);
     }
@@ -819,7 +820,7 @@ export class FileResolver extends FileResolverBase {
     await providerEntity.Load(file.ProviderID);
 
     const userContext = this.buildUserContext(context);
-    const url = await createDownloadUrl(providerEntity, file.ProviderKey ?? file.Name, userContext);
+    const url = await createDownloadUrl(providerEntity, StorageObjectKeyOf(file), userContext);
 
     return url;
   }
@@ -919,7 +920,7 @@ export class FileResolver extends FileResolverBase {
       const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', userInfo);
       await providerEntity.Load(fileEntity.ProviderID);
       const userContext = this.buildUserContext(context);
-      await deleteObject(providerEntity, fileEntity.ProviderKey ?? fileEntity.Name, userContext);
+      await deleteObject(providerEntity, StorageObjectKeyOf(fileEntity), userContext);
     }
 
     return super.DeleteMJFile(ID, options, context, pubSub);
