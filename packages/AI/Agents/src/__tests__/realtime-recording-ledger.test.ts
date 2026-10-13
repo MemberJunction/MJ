@@ -192,6 +192,19 @@ describe('SqlRealtimeRecordingLedger reads', () => {
         expect(call.ExtraFilter).toBe(`AgentSessionID='${SESSION}' AND [Index] < 6`);
     });
 
+    it('every read bypasses the RunView cache: the ledger procs change the rows without entity events', async () => {
+        // A server provider trusts its cache, and nothing invalidates it for rows the stored procedures
+        // write; a cached LoadShards made a re-assembly miss a late shard (#5294 gauntlet, row S11).
+        provider.NextViewResult = { Success: true, TotalRowCount: 0, Results: [] };
+        await ledger.LoadShards(SESSION);
+        provider.NextViewResult = { Success: true, TotalRowCount: 0, Results: [] };
+        await ledger.LoadShardMetadata(SESSION);
+        provider.NextViewResult = { Success: true, TotalRowCount: 0, Results: [] };
+        await ledger.CountShardsBelow(SESSION, 3);
+        expect(provider.ViewCalls).toHaveLength(3);
+        expect(provider.ViewCalls.map(call => call.BypassCache)).toEqual([true, true, true]);
+    });
+
     it('CountShardsBelow refuses a non-integer bound (it is interpolated into the filter)', async () => {
         await expect(ledger.CountShardsBelow(SESSION, 1.5)).rejects.toThrow(/index/i);
         expect(provider.ViewCalls).toHaveLength(0);

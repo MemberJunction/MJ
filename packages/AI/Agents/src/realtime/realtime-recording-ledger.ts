@@ -6,7 +6,9 @@
  * Every write goes through a guarded stored procedure (migration
  * `V202610122000__v6.2.x__Realtime_Recording_Shard_Ledger.sql`): each needs one conditional statement
  * whose outcome is the arbitration signal (insert-if-absent, monotonic terminal stamp, atomic claim,
- * version-fenced finish), which `BaseEntity.Save` cannot express. Reads use plain `RunView`.
+ * version-fenced finish), which `BaseEntity.Save` cannot express. Reads use `RunView` with `BypassCache`:
+ * the procs change the rows without raising entity events, so a cached read would never be invalidated
+ * (a re-assembly in the same process would see the first assembly's rows and miss a late shard).
  *
  * {@link IRealtimeRecordingLedger} is the seam the assembly and the REST routes depend on, so they can be
  * tested against an in-memory ledger.
@@ -226,6 +228,7 @@ export class SqlRealtimeRecordingLedger implements IRealtimeRecordingLedger {
             OrderBy: this.provider.Dialect.QuoteIdentifier('Index'),
             Fields: fields,
             ResultType: 'simple',
+            BypassCache: true,
         }, this.contextUser);
         if (!result.Success) {
             throw new Error(`${operation} failed for session ${sessionID}: ${result.ErrorMessage ?? 'unknown error'}`);
@@ -242,6 +245,7 @@ export class SqlRealtimeRecordingLedger implements IRealtimeRecordingLedger {
             EntityName: SHARD_ENTITY,
             ExtraFilter: `AgentSessionID='${sessionID}' AND ${quotedIndex} < ${indexBelow}`,
             ResultType: 'count_only',
+            BypassCache: true,
         }, this.contextUser);
         if (!result.Success) {
             throw new Error(`CountShardsBelow failed for session ${sessionID}: ${result.ErrorMessage ?? 'unknown error'}`);
