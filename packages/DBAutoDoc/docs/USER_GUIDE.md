@@ -245,7 +245,7 @@ The `config.json` file controls all aspects of DBAutoDoc:
 {
   "ai": {
     "provider": "openai",
-    "model": "gemini-3-flash-preview",
+    "model": "gemini-3.8-flash",
     "apiKey": "sk-...",
     "temperature": 0.1,
     "maxTokens": 4000,
@@ -260,7 +260,7 @@ The `config.json` file controls all aspects of DBAutoDoc:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `provider` | string | Required | `openai`, `anthropic`, `groq`, `mistral`, `gemini` |
-| `model` | string | Required | Model identifier (e.g., `gemini-3-flash-preview`) |
+| `model` | string | Required | Model identifier (e.g., `gemini-3.8-flash`) |
 | `apiKey` | string | Required | API key for provider |
 | `temperature` | number | 0.1 | Randomness (0=deterministic, 1=creative). Use 0.1 for documentation |
 | `maxTokens` | number | 4000 | Max tokens per API call |
