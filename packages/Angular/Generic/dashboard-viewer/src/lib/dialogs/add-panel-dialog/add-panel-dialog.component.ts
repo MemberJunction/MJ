@@ -12,18 +12,11 @@ import {
 } from '@angular/core';
 import { MJGlobal } from '@memberjunction/global';
 import { MJDashboardPartTypeEntity } from '@memberjunction/core-entities';
-import { PanelConfig } from '../../models/dashboard-types';
 import { BaseConfigPanel, ConfigPanelResult } from '../../config-panels/base-config-panel';
+import type { DashboardPartDialogResult } from '../part-dialog/dashboard-part-dialog.component';
 
-/**
- * Result when a panel is added
- */
-export interface AddPanelResult {
-    PartType: MJDashboardPartTypeEntity;
-    Config: PanelConfig;
-    Title: string;
-    Icon?: string;
-}
+/** @deprecated Use {@link DashboardPartDialogResult}. */
+export type AddPanelResult = DashboardPartDialogResult;
 
 /**
  * Dialog step type
@@ -36,6 +29,8 @@ type DialogStep = 'select-type' | 'configure';
  *
  * Config panels are loaded via ClassFactory using DashboardPartType.ConfigDialogClass,
  * allowing new part types to be added without modifying this component.
+ *
+ * @deprecated Use `DashboardPartDialogComponent` (`<mj-dashboard-part-dialog Mode="add">`), which adds and edits parts on `mj-dialog`.
  */
 @Component({
   standalone: false,

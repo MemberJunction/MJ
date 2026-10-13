@@ -1,0 +1,37 @@
+{
+  "url": "https://api.apollo.io/api/v1/mixed_people/api_search",
+  "status": 200,
+  "headers": {
+    "x-rate-limit-24-hour": "50000",
+    "x-rate-limit-hourly": "6000",
+    "x-rate-limit-minute": "200"
+  },
+  "body": {
+    "total_entries": 8,
+    "people": [
+      {
+        "id": "pdl-fixture-9",
+        "first_name": "[first_name]",
+        "last_name_obfuscated": "De***n",
+        "title": "Policy Analyst",
+        "last_refreshed_at": "2026-10-02T03:40:17.168+00:00",
+        "has_email": true,
+        "has_city": true,
+        "has_state": true,
+        "has_country": true,
+        "has_direct_phone": "Maybe: please request direct dial via people/bulk_match",
+        "organization": {
+          "name": "Leonine Public Affairs",
+          "has_industry": true,
+          "has_phone": true,
+          "has_city": true,
+          "has_state": true,
+          "has_country": true,
+          "has_zip_code": true,
+          "has_revenue": false,
+          "has_employee_count": true
+        }
+      }
+    ]
+  }
+}

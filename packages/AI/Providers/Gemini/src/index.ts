@@ -6,6 +6,7 @@ import { GoogleGenAI, Content, Part, Blob, FileData, FunctionDeclaration, Functi
 // MJ stuff
 import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
+import { AcceptsCustomSampling } from "./geminiSampling";
 
 /**
  * Snapshot of a request's cacheable-prefix info, captured so the GEMINI_CACHE_DEBUG diagnostics
@@ -48,6 +49,14 @@ function isGeminiCancellationError(error: unknown): boolean {
  * placeholder, which tells Gemini to skip signature validation for that part.
  */
 const GEMINI_INJECTED_CALL_THOUGHT_SIGNATURE = 'skip_thought_signature_validator';
+
+/**
+ * Where a thought signature was minted: serving endpoint plus model. A signature only validates where
+ * it came from — after a failover from Google AI Studio to Vertex AI (or the reverse), or onto another
+ * Gemini model, replaying it is a hard 400 "Corrupted thought signature." Recorded beside the signature
+ * on capture, compared on replay, and a foreign signature is replaced with the placeholder.
+ */
+const THOUGHT_SIGNATURE_ORIGIN_KEY = 'thoughtSignatureOrigin';
 
 /**
  * The user turn Gemini is given when a conversation would otherwise open with a model turn.
@@ -152,75 +161,6 @@ export class GeminiLLM extends BaseLLM {
     }
 
     /**
-     * Convert MJ effort level (1-100) to Gemini thinkingBudget (0-24576)
-     *
-     * Mapping strategy:
-     * - 1 (minimal): 0 (disabled) on Flash; clamped to ~1024 on Pro
-     * - 2-33 (low): 1024-4096 tokens
-     * - 34-66 (medium): 4097-12288 tokens
-     * - 67-100 (high): 12289-24576 tokens
-     * - undefined: No thinkingConfig (Gemini default ~8192)
-     *
-     * Model-specific behavior:
-     * - Gemini 2.5 Flash/Flash-Lite: Can disable thinking with budget=0
-     * - Gemini 2.5 Pro: Cannot disable thinking, minimum ~1024
-     * - Gemini 3 models: Use thinkingLevel instead (future consideration)
-     *
-     * @param effortLevel - MJ normalized effort level (1-100) as string or number
-     * @param modelName - The Gemini model name to check capabilities
-     * @returns thinkingBudget value or undefined for default behavior
-     */
-    private getThinkingBudget(effortLevel: string | number | undefined, modelName: string): number | undefined {
-        if (effortLevel === undefined || effortLevel === null || effortLevel === '') {
-            return undefined; // Use Gemini's default behavior (auto, up to ~8192)
-        }
-
-        // Parse string to number if needed
-        const numericLevel = typeof effortLevel === 'string' ? parseInt(effortLevel, 10) : effortLevel;
-        if (isNaN(numericLevel)) {
-            return undefined; // Invalid effort level, use default
-        }
-
-        // Clamp to valid range
-        const level = Math.max(1, Math.min(100, numericLevel));
-
-        // Check model capabilities for thinking
-        const lowerModel = modelName.toLowerCase();
-        const isFlashModel = lowerModel.includes('flash');
-        const isProModel = lowerModel.includes('pro') && !isFlashModel;
-
-        // Minimal effort (1) - disable thinking on Flash models
-        if (level === 1 && isFlashModel) {
-            return 0; // Disable thinking (only works on Flash/Flash-Lite)
-        }
-
-        // For Pro models, minimum effective budget is ~1024
-        // For Flash models with effort >= 2, use normal scaling
-        if (level <= 33) {
-            // Low (2-33): linear scale from 1024 to 4096
-            return Math.round(1024 + ((level - 2) / 31) * (4096 - 1024));
-        } else if (level <= 66) {
-            // Medium: linear scale from 4097 to 12288
-            return Math.round(4097 + ((level - 34) / 32) * (12288 - 4097));
-        } else {
-            // High: linear scale from 12289 to 24576
-            return Math.round(12289 + ((level - 67) / 33) * (24576 - 12289));
-        }
-    }
-
-    /**
-     * Check if a model supports thinking configuration
-     * Thinking is supported on Gemini 2.5+ models
-     */
-    private supportsThinking(modelName: string): boolean {
-        const lowerModel = modelName.toLowerCase();
-        // Gemini 2.5 and later support thinking
-        return lowerModel.includes('2.5') ||
-               lowerModel.includes('gemini-3') ||
-               lowerModel.includes('gemini-exp');
-    }
-    
-    /**
      * Gemini supports streaming
      */
     public override get SupportsStreaming(): boolean {
@@ -292,7 +232,8 @@ export class GeminiLLM extends BaseLLM {
                 : '';
 
             // Convert all non-system messages and apply role alternation
-            const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
+            const signatureOrigin = this.thoughtSignatureOrigin(modelName);
+            const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m, signatureOrigin));
             const tempMessages = this.geminiMessageSpacing(convertedMessages);
 
             // Split: all but last message go in history, last message gets system instructions prepended
@@ -311,54 +252,8 @@ export class GeminiLLM extends BaseLLM {
                 finalMessageParts = [{ text: '' }];
             }
 
-            // Create the model and then chat
-            const modelOptions: Record<string, any> = {
-                temperature: params.temperature || 0.5,
-            };
-
-            switch (params.responseFormat) {
-                case 'JSON':
-                    modelOptions.responseMimeType = 'application/json';
-                    break;
-                case 'ModelSpecific':
-                    if (params.modelSpecificResponseFormat) {
-                        Object.assign(modelOptions, params.modelSpecificResponseFormat);
-                    }
-                    break;
-            }
-
-            // Add supported parameters
-            if (params.topP != null) {
-                modelOptions.top_p = params.topP;
-            }
-            if (params.topK != null) {
-                modelOptions.top_k = params.topK;
-            }
-            if (params.stopSequences != null && params.stopSequences.length > 0) {
-                modelOptions.stopSequences = params.stopSequences;
-            }
-            if (params.seed != null) {
-                modelOptions.seed = params.seed;
-            }
-
-            // Gemini doesn't support these parameters - warn if provided
-            if (params.frequencyPenalty != null) {
-                console.warn('Gemini provider does not support frequencyPenalty parameter, ignoring');
-            }
-            if (params.presencePenalty != null) {
-                console.warn('Gemini provider does not support presencePenalty parameter, ignoring');
-            }
-            if (params.minP != null) {
-                console.warn('Gemini provider does not support minP parameter, ignoring');
-            }
-
-            // Build thinking configuration based on effort level and model capabilities
-            const thinkingBudget = this.getThinkingBudget(params.effortLevel, modelName);
-            const useThinking = this.supportsThinking(modelName) && thinkingBudget !== undefined;
-
-            // Create chat config - only include thinkingConfig if model supports it and effortLevel is specified
-            const chatConfig: Record<string, unknown> = {};
-            this.setThinkingConfig(chatConfig, useThinking, params.effortLevel, modelName, thinkingBudget);
+            // Sampling + response-format options, shaped for the model's version (see buildGenerationOptions)
+            const modelOptions = this.buildGenerationOptions(params, modelName);
 
             // Ensure Gemini client is initialized
             const client = await this.ensureGeminiClient();
@@ -368,9 +263,8 @@ export class GeminiLLM extends BaseLLM {
             // cacheable prefix so Gemini's implicit cache can engage across turns.
             // NOTE: @google/genai's sendMessage `config` REPLACES (not merges) the session config, so
             // systemInstruction must ride in the per-request config (modelOptions) — that's the one
-            // that applies. We intentionally do NOT fold chatConfig (thinkingConfig) in here: that
-            // preserves the prior thinking behavior exactly (it stays on the session config) and avoids
-            // sending a thinking level some models reject.
+            // that applies, and the session config is never sent. No thinkingConfig is sent: Gemini
+            // runs at each model's default thinking, and params.effortLevel is not mapped.
             const requestConfig: Record<string, unknown> = { ...modelOptions };
             if (systemInstructionText) {
                 requestConfig.systemInstruction = systemInstructionText;
@@ -379,7 +273,6 @@ export class GeminiLLM extends BaseLLM {
             this.applyCancellationToken(requestConfig, params.cancellationToken);
 
             const chat = client.chats.create({
-                config: Object.keys(chatConfig).length > 0 ? chatConfig : undefined,
                 model: modelName,
                 history: history
             });
@@ -431,7 +324,7 @@ export class GeminiLLM extends BaseLLM {
 
             const rawContent = candidate.content?.parts?.find(part => part.text && !part.thought)?.text || '';
             const thinking = candidate.content?.parts?.find(part => part.thought)?.text || '';
-            const toolCalls = this.extractToolCalls(candidate.content?.parts);
+            const toolCalls = this.extractToolCalls(candidate.content?.parts, this.thoughtSignatureOrigin(modelName));
 
             // Check if we got empty content despite no blocking. A native tool call IS output, and a
             // forced/clean tool-call turn legitimately carries no text at all — so tool calls
@@ -600,6 +493,18 @@ export class GeminiLLM extends BaseLLM {
     }
 
     /**
+     * The serving endpoint a thought signature from this driver is valid on. Vertex overrides it.
+     */
+    protected get ThoughtSignatureEndpoint(): string {
+        return 'gemini-api';
+    }
+
+    /** Endpoint plus model — the scope a thought signature validates in. */
+    protected thoughtSignatureOrigin(modelName: string): string {
+        return `${this.ThoughtSignatureEndpoint}:${modelName}`;
+    }
+
+    /**
      * Pulls `functionCall` parts out of a Gemini candidate and normalizes them.
      *
      * Gemini does not always populate a call `id`, so one is synthesized from the tool name and the
@@ -607,9 +512,10 @@ export class GeminiLLM extends BaseLLM {
      * `functionResponse` echoes back.
      *
      * @param parts The candidate's content parts
+     * @param signatureOrigin Where this response's thought signatures validate (see {@link thoughtSignatureOrigin})
      * @returns The normalized calls, or undefined when the model called nothing
      */
-    private extractToolCalls(parts: Part[] | undefined): ChatToolCall[] | undefined {
+    private extractToolCalls(parts: Part[] | undefined, signatureOrigin: string): ChatToolCall[] | undefined {
         const calls: ChatToolCall[] = [];
         for (const part of parts ?? []) {
             const call = part.functionCall;
@@ -622,7 +528,9 @@ export class GeminiLLM extends BaseLLM {
                 arguments: call.args ?? {},
                 // Gemini 3 signs each function-call part; a replayed call without its signature is
                 // rejected (HTTP 400). Keep it so history round-trips.
-                ...(part.thoughtSignature ? { providerMetadata: { thoughtSignature: part.thoughtSignature } } : {})
+                ...(part.thoughtSignature
+                    ? { providerMetadata: { thoughtSignature: part.thoughtSignature, [THOUGHT_SIGNATURE_ORIGIN_KEY]: signatureOrigin } }
+                    : {})
             });
         }
         return calls.length > 0 ? calls : undefined;
@@ -683,57 +591,84 @@ export class GeminiLLM extends BaseLLM {
         return result;
     }
 
-    private setThinkingConfig(chatConfig: any, useThinking: boolean, effortLevel: string | undefined, modelName: string, thinkingBudget: number) {
-        // this is a hack, need a cleaner way of doing this
-        const gemini3AndAbove: boolean = modelName?.toLowerCase().includes("-3") ||
-                                         modelName?.toLowerCase().includes("-4") ||
-                                         modelName?.toLowerCase().includes("-5") ||
-                                         modelName?.toLowerCase().includes("-6") ||
-                                         modelName?.toLowerCase().includes("-7");
-                                         
-        if (useThinking) {
-            if (gemini3AndAbove) {
-                // no budget used, we map the effortLevel to 4 buckets
-                let geminiLevel = undefined;
-                // Parse string to number if needed
-                let numericLevel = typeof effortLevel === 'string' ? parseInt(effortLevel, 10) : effortLevel;
-                if (isNaN(numericLevel)) {
-                    numericLevel = 0;
-                }
+    /**
+     * Model + field pairs already warned about, so a prompt that sets `temperature` on every call
+     * logs once per process instead of once per request.
+     */
+    private static readonly _warnedUnsupportedSampling = new Set<string>();
 
-                if (numericLevel === 1) {
-                    geminiLevel = "MINIMAL" // effort 1 is the minimum valid value and maps to minimal thinking on Gemini 3+ models
-                }
-                else if (numericLevel >= 2 && numericLevel <= 33) {
-                    geminiLevel = "LOW"
-                }
-                else if (numericLevel <= 66) {
-                    geminiLevel = "MEDIUM" 
-                }
-                else {
-                    geminiLevel = "HIGH" 
-                }
+    /**
+     * Builds the per-request generation options: sampling, stop sequences, seed, response format.
+     *
+     * Sampling fields depend on the model's version. Models before Gemini 3.6 keep the original
+     * shape (`temperature` defaulting to 0.5, `topP`, `topK`) because they still honor it. Every
+     * other model gets none of the three: Google ignores them since Gemini 3.6 Flash and upcoming
+     * models reject them with a 400, so a caller-supplied value is dropped with a one-time warning.
+     *
+     * A `ModelSpecific` response format is merged in after this gate, so it can still set these
+     * fields explicitly; that is the caller's deliberate override.
+     */
+    private buildGenerationOptions(params: ChatParams, modelName: string): Record<string, unknown> {
+        const modelOptions: Record<string, unknown> = {};
 
-                chatConfig.thinkingConfig = {
-                    thinkingLevel: geminiLevel
-                }
+        if (AcceptsCustomSampling(modelName)) {
+            modelOptions.temperature = params.temperature ?? 0.5;
+            if (params.topP != null) {
+                modelOptions.topP = params.topP;
             }
-            else {
-                chatConfig.thinkingConfig = {
-                    includeThoughts: true,
-                    thinkingBudget: thinkingBudget
-                };
+            if (params.topK != null) {
+                modelOptions.topK = params.topK;
             }
+        } else {
+            this.warnUnsupportedSampling(modelName, 'temperature', params.temperature);
+            this.warnUnsupportedSampling(modelName, 'topP', params.topP);
+            this.warnUnsupportedSampling(modelName, 'topK', params.topK);
         }
-        else {
-            if (gemini3AndAbove) {
-                chatConfig.thinkingConfig = {
-                    thinkingLevel: "MINIMAL" // if we don't have thinking setup and we're dealing with Gemini 3 series models, set thinking level to minimal
+
+        switch (params.responseFormat) {
+            case 'JSON':
+                modelOptions.responseMimeType = 'application/json';
+                break;
+            case 'ModelSpecific':
+                if (params.modelSpecificResponseFormat) {
+                    Object.assign(modelOptions, params.modelSpecificResponseFormat);
                 }
-            }
+                break;
         }
+
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+            modelOptions.stopSequences = params.stopSequences;
+        }
+        if (params.seed != null) {
+            modelOptions.seed = params.seed;
+        }
+
+        // Gemini doesn't support these parameters - warn if provided
+        if (params.frequencyPenalty != null) {
+            console.warn('Gemini provider does not support frequencyPenalty parameter, ignoring');
+        }
+        if (params.presencePenalty != null) {
+            console.warn('Gemini provider does not support presencePenalty parameter, ignoring');
+        }
+        if (params.minP != null) {
+            console.warn('Gemini provider does not support minP parameter, ignoring');
+        }
+
+        return modelOptions;
     }
-    
+
+    private warnUnsupportedSampling(modelName: string, field: 'temperature' | 'topP' | 'topK', value: number | undefined): void {
+        if (value == null) {
+            return;
+        }
+        const key = `${modelName}:${field}`;
+        if (GeminiLLM._warnedUnsupportedSampling.has(key)) {
+            return;
+        }
+        GeminiLLM._warnedUnsupportedSampling.add(key);
+        console.warn(`Gemini model ${modelName} does not accept a custom ${field}; omitting it so the model uses its default sampling.`);
+    }
+
     /**
      * Reset streaming state for a new request
      */
@@ -765,7 +700,8 @@ export class GeminiLLM extends BaseLLM {
             : '';
 
         // Convert all non-system messages and apply role alternation
-        const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
+        const signatureOrigin = this.thoughtSignatureOrigin(modelName);
+        const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m, signatureOrigin));
         const tempMessages = this.geminiMessageSpacing(convertedMessages);
 
         // Split: all but last message go in history, last message gets system instructions prepended
@@ -790,62 +726,15 @@ export class GeminiLLM extends BaseLLM {
             finalMessageParts = [{ text: '' }];
         }
 
-        // Create the model and then chat
-        const modelOptions: Record<string, any> = {
-            temperature: params.temperature || 0.5,
-        };
-
-        switch (params.responseFormat) {
-            case 'JSON':
-                modelOptions.responseMimeType = 'application/json';
-                break;
-            case 'ModelSpecific':
-                if (params.modelSpecificResponseFormat) {
-                    Object.assign(modelOptions, params.modelSpecificResponseFormat);
-                }
-                break;
-        }
-
-        // Add supported parameters
-        if (params.topP != null) {
-            modelOptions.top_p = params.topP;
-        }
-        if (params.topK != null) {
-            modelOptions.top_k = params.topK;
-        }
-        if (params.stopSequences != null && params.stopSequences.length > 0) {
-            modelOptions.stopSequences = params.stopSequences;
-        }
-        if (params.seed != null) {
-            modelOptions.seed = params.seed;
-        }
-
-        // Gemini doesn't support these parameters - warn if provided
-        if (params.frequencyPenalty != null) {
-            console.warn('Gemini provider does not support frequencyPenalty parameter, ignoring');
-        }
-        if (params.presencePenalty != null) {
-            console.warn('Gemini provider does not support presencePenalty parameter, ignoring');
-        }
-        if (params.minP != null) {
-            console.warn('Gemini provider does not support minP parameter, ignoring');
-        }
-
-        // Build thinking configuration based on effort level and model capabilities
-        const thinkingBudget = this.getThinkingBudget(params.effortLevel, modelName);
-        const useThinking = this.supportsThinking(modelName) && thinkingBudget !== undefined;
-
-        // Create chat config - only include thinkingConfig if model supports it and effortLevel is specified
-        const chatConfig: Record<string, unknown> = {};
-        this.setThinkingConfig(chatConfig, useThinking, params.effortLevel, modelName, thinkingBudget);
+        // Sampling + response-format options, shaped for the model's version (see buildGenerationOptions)
+        const modelOptions = this.buildGenerationOptions(params, modelName);
 
         // Ensure Gemini client is initialized
         const client = await this.ensureGeminiClient();
 
         // systemInstruction (a plain string) is the stable, cacheable prefix. It must ride in the
         // per-request config since @google/genai's sendMessage config REPLACES the session config.
-        // We do NOT fold chatConfig (thinkingConfig) in — that preserves prior thinking behavior and
-        // avoids sending a thinking level some models reject (see nonStreamingChatCompletion).
+        // No thinkingConfig is sent (see nonStreamingChatCompletion).
         const requestConfig: Record<string, unknown> = { ...modelOptions };
         if (systemInstructionText) {
             requestConfig.systemInstruction = systemInstructionText;
@@ -853,7 +742,6 @@ export class GeminiLLM extends BaseLLM {
         this.applyCancellationToken(requestConfig, params.cancellationToken);
 
         const chat = client.chats.create({
-            config: Object.keys(chatConfig).length > 0 ? chatConfig : undefined,
             model: modelName,
             history: history
         });
@@ -1272,19 +1160,38 @@ export class GeminiLLM extends BaseLLM {
         return [{ text: content }];
     }
 
-    public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage): Content {
+    /**
+     * The signature to replay on a call: its own when it was minted where this request is going,
+     * otherwise the documented placeholder. A signature with no recorded origin is replayed as-is.
+     */
+    private static signatureForReplay(call: NonNullable<ChatMessage['toolCalls']>[number], signatureOrigin: string | undefined): string {
+        const metadata = call.providerMetadata;
+        const signature = metadata?.thoughtSignature;
+        if (typeof signature !== 'string') {
+            return GEMINI_INJECTED_CALL_THOUGHT_SIGNATURE;
+        }
+        const origin = metadata?.[THOUGHT_SIGNATURE_ORIGIN_KEY];
+        const foreign = signatureOrigin !== undefined && typeof origin === 'string' && origin !== signatureOrigin;
+        return foreign ? GEMINI_INJECTED_CALL_THOUGHT_SIGNATURE : signature;
+    }
+
+    /**
+     * Maps one MJ message to a Gemini history entry.
+     *
+     * @param message The message to map
+     * @param signatureOrigin Where this request is going (endpoint + model). When given, a replayed
+     *   call's thought signature from anywhere else is swapped for the placeholder.
+     */
+    public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage, signatureOrigin?: string): Content {
         const parts = GeminiLLM.MapMJContentToGeminiParts(message.content);
 
         // An assistant turn that called tools must replay those calls as `functionCall` parts so the
         // `functionResponse` parts that follow have something to pair with.
         if (message.toolCalls?.length) {
             for (const call of message.toolCalls) {
-                // Replay the signature the model gave us; a call this process synthesized (a corpus
-                // history, a transferred conversation) has none, and Gemini documents a placeholder
-                // that skips the check for exactly that case.
-                const signature = typeof call.providerMetadata?.thoughtSignature === 'string'
-                    ? call.providerMetadata.thoughtSignature
-                    : GEMINI_INJECTED_CALL_THOUGHT_SIGNATURE;
+                // Replay the signature the model gave us when it is valid here; a call this process
+                // synthesized, or one signed by another endpoint or model, gets the placeholder.
+                const signature = GeminiLLM.signatureForReplay(call, signatureOrigin);
                 parts.push({ functionCall: { id: call.id, name: call.name, args: call.arguments ?? {} }, thoughtSignature: signature });
             }
         }
@@ -1322,6 +1229,14 @@ export * from './geminiImage';
 
 // Export realtime (Gemini Live) driver
 export * from './geminiRealtime';
+export { GEMINI_LIVE_MODEL_ALIASES_ENV, type GeminiLiveEndpoint } from './geminiLiveProfiles';
+
+// Export the avatar video bitrate setting (MJ_GEMINI_AVATAR_VIDEO_BITRATE_BPS)
+export { GEMINI_AVATAR_VIDEO_BITRATE_ENV, GEMINI_AVATAR_VIDEO_BITRATE_BPS_DEFAULT, ResolveGeminiAvatarVideoBitrateBps } from './geminiAvatarVideoBitrate';
+
+// Export the Gemini Live setup writer and the relay policy (MJAPI's realtime relay)
+export { BuildGeminiLiveSetup, BuildGeminiLiveModelPath, type GeminiLiveSetupTarget } from './geminiLiveSetup';
+export { GeminiLiveRelayPolicy, type GeminiLiveRelayPolicyOptions } from './geminiLiveRelayPolicy';
 
 // Export multimodal embeddings
 export * from './geminiEmbedding';

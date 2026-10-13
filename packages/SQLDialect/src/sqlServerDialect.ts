@@ -119,6 +119,15 @@ function formatTypeString(mapped: MappedType, length?: number, precision?: numbe
 }
 
 /**
+ * SQL Server functions caller-supplied SQL may not call: the rowset functions that reach other
+ * servers, databases or files, and the functions that read trace, audit and extended-event files.
+ */
+const SQL_SERVER_CALLER_SQL_FORBIDDEN_FUNCTIONS: readonly string[] = [
+    'openrowset', 'openquery', 'opendatasource',
+    'fn_get_audit_file', 'fn_xe_file_target_read_file', 'fn_trace_gettable'
+];
+
+/**
  * SQL Server dialect implementation.
  * Uses [bracket] quoting, TOP for pagination, BIT for booleans, T-SQL functions.
  */
@@ -134,11 +143,13 @@ export class SQLServerDialect extends SQLDialect {
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {
-        return `[${name}]`;
+        // Double embedded closing brackets so a name containing `]` cannot terminate the
+        // quoting early (mirrors the PostgreSQL dialect's doubling of embedded `"`).
+        return `[${name.replace(/]/g, ']]')}]`;
     }
 
     QuoteSchema(schema: string, object: string): string {
-        return `[${schema}].[${object}]`;
+        return `${this.QuoteIdentifier(schema)}.${this.QuoteIdentifier(object)}`;
     }
 
     /**
@@ -399,6 +410,42 @@ export class SQLServerDialect extends SQLDialect {
 
     get DefaultPagingOrderBy(): string {
         return '(SELECT NULL)';
+    }
+
+    get SelectListPagingOrderBy(): string | null {
+        return '1';
+    }
+
+    get PagingRequiresOrderBy(): boolean {
+        return true;
+    }
+
+    get SupportsEscapeStringLiterals(): boolean {
+        return false;
+    }
+
+    get SupportsDollarQuotedStrings(): boolean {
+        return false;
+    }
+
+    get QueryHintKeyword(): string | null {
+        return 'OPTION';
+    }
+
+    get CallerSQLForbiddenFunctions(): readonly string[] {
+        return SQL_SERVER_CALLER_SQL_FORBIDDEN_FUNCTIONS;
+    }
+
+    StringLiteralPrefix(text: string): string {
+        return /[^\x00-\x7F]/.test(text) ? 'N' : '';
+    }
+
+    EscapeLikePattern(text: string): string {
+        return text.replace(/\[/g, '[[]').replace(/%/g, '[%]').replace(/_/g, '[_]');
+    }
+
+    BooleanParameterValue(value: boolean): boolean | number {
+        return value ? 1 : 0;
     }
 
     // ─── Data Types ──────────────────────────────────────────────────

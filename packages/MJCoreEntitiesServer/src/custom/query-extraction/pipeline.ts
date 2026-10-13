@@ -39,13 +39,10 @@ export async function RunExtractionPipeline(ctx: QuerySyncContext): Promise<Pipe
     // ── STAGE 2: RESOLVE ──
     const resolveResult = resolve(ctx, parseResult);
 
-    // ── STAGE 3: ENRICH (best-effort, non-fatal) ──
-    const llmResult = await RunLLMEnrichment(
-        ctx.sql,
-        resolveResult.EntityMetadata,
-        ctx.contextUser,
-        ctx.metadataProvider
-    );
+    // ── STAGE 3: ENRICH (best-effort, non-fatal; skipped on request, which merges like a failed call) ──
+    const llmResult = ctx.SkipAIEnrichment
+        ? null
+        : await RunLLMEnrichment(ctx.sql, resolveResult.EntityMetadata, ctx.contextUser, ctx.metadataProvider);
 
     // ── STAGE 4: MERGE ──
     const { finalParams, finalFields } = merge(resolveResult, llmResult, parseResult, ctx);
@@ -85,7 +82,7 @@ function resolve(ctx: QuerySyncContext, parseResult: ReturnType<typeof ParseQuer
     const allDeterministicParams = MergePassthroughParams(parseResult.DeterministicParams, passthroughParams);
 
     // Entity metadata (for LLM context and entity sync)
-    const entityMetadata = ExtractEntityMetadataFromSQL(ctx.sql, parseResult.TableRefs, md);
+    const entityMetadata = ExtractEntityMetadataFromSQL(ctx.sql, parseResult.TableRefs, md, ctx.platform);
 
     // Field resolution: try SELECT * expansion first (uses entity metadata), fall back to explicit SELECT columns
     const resolvedFields = BuildFieldsForSelectStar(ctx.sql, parseResult.TableRefs, parseResult.SelectColumns, md)

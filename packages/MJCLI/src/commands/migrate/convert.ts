@@ -641,6 +641,12 @@ export default class MigrateConvert extends Command {
       this.error('--bake-codegen requires DB_PLATFORM=postgresql with PG_* connection env (the working DB CodeGen objects are captured from).');
     }
     initializeConfig(process.cwd());
+    // The bake's artifact is the migration it writes, and CodeGen's own CodeGen_Run log is never
+    // opened here. With SQLOutput enabled (the default), CodeGen's no-artifact guard therefore
+    // refuses every metadata statement the capture executes, including the layered base-view
+    // setup, and the error is logged rather than thrown, so the bake reports success with
+    // views missing from both the working DB and the captured output.
+    if (configInfo.SQLOutput) configInfo.SQLOutput.enabled = false;
 
     let ds: DataSourceResult;
     try {
@@ -708,8 +714,15 @@ export default class MigrateConvert extends Command {
           directory: os.tmpdir(), // inert — writeFiles is false
           onlyPermissions: false,
           writeFiles: false,
-          skipExecution: false, // execute → keep the working DB current for later migrations
+          skipExecution: false,
         });
+        // generateSingleEntitySQLToSeparateFiles only GENERATES — it never executes, whatever
+        // skipExecution says. Apply the captured objects here so the working DB stays current:
+        // a later migration in the same run selects from these views and calls these routines,
+        // and without this its bake runs against a database that has none of them.
+        if (r.sql?.trim()) {
+          await ds.connection.query(r.sql);
+        }
         return { sql: r.sql ?? '', permissionsSQL: r.permissionsSQL ?? '' };
       },
       // The full CodeGen entity set — mirrors sql_codegen.ts's baseline filter

@@ -25,7 +25,8 @@
       "checksum": "8a94af86fb5dbe237d3f41622bfd24d6af137273f4ae0bb90a149f6245f59a88"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-10-02T21:42:50.820Z"
     }
   }
 ]

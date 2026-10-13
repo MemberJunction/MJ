@@ -331,6 +331,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
     this.clearWorkflowPoll();

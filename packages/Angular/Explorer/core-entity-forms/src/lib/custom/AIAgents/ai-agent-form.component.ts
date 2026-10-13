@@ -1,7 +1,7 @@
 import { Component, ViewContainerRef, ViewChild, AfterViewInit, OnDestroy, inject } from '@angular/core';
 import { MJActionEntity, MJAIAgentActionEntity, MJAIAgentLearningCycleEntity, MJAIAgentNoteEntity, MJAIAgentPromptEntity, MJAIAgentTypeEntity, MJAIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
-import { RegisterClass, MJGlobal , UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { RegisterClass, MJGlobal , UUIDsEqual, NormalizeUUID, FilterByUUIDs } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
@@ -1196,6 +1196,18 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     }
 
     /**
+     * The prompts and actions linked to this agent, in engine order. Gathers the agent's links once,
+     * rather than re-filtering every agent's links for each prompt and action.
+     */
+    private resolveLinkedPromptsAndActions(): void {
+        const agentPromptIDs = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID)).map(ap => ap.PromptID);
+        this.AgentPrompts = FilterByUUIDs(AIEngineBase.Instance.Prompts, agentPromptIDs);
+
+        const agentActionIDs = AIEngineBase.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, this.record.ID)).map(aa => aa.ActionID);
+        this.AgentActions = FilterByUUIDs(ActionEngineBase.Instance.Actions, agentActionIDs);
+    }
+
+    /**
      * Loads counts and preview data for all related entities including sub-agents,
      * prompts, actions, learning cycles, notes, and execution history. 
      * This data populates the various expander panels in the enhanced form interface.
@@ -1309,15 +1321,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             // totalSubAgentCount changes exactly once against settled state (no NG0100).
             this.allSubAgents = newSubAgents;
 
-            this.AgentPrompts = AIEngineBase.Instance.Prompts.filter(p => {
-                const filteredAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID));
-                return filteredAgentPrompts.some(ap => UUIDsEqual(ap.PromptID, p.ID));
-            });
-
-            this.AgentActions = ActionEngineBase.Instance.Actions.filter(a => {
-                const filteredAgentActions = AIEngineBase.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, this.record.ID));
-                return filteredAgentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID));
-            });
+            this.resolveLinkedPromptsAndActions();
 
             // Execute all queries in a single batch for better performance
             const results = await rv.RunViews([
@@ -4049,6 +4053,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Component cleanup - critical for preventing memory leaks
      */
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         // Signal all subscriptions to complete
         this.destroy$.next();
         this.destroy$.complete();

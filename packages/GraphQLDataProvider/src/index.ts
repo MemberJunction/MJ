@@ -47,9 +47,23 @@ export type {
     StartLiveKitAgentRoomSessionInput,
     LiveKitAgentRoomSessionResult,
     LiveKitRecordingResult,
+    LiveKitAgentVisionResult,
+    LiveKitRoomTurnState,
+    LiveKitRoomTurnStateResult,
+    LiveKitRoomTurnAgent,
+    LiveKitRoomTurnEvent,
+    LiveKitTurnEventType,
     RealtimeModelVoices,
     RealtimeVoiceOption
 } from './graphQLLiveKitClient';
+export { GraphQLHandoffClient } from './graphQLHandoffClient';
+export type {
+    HandoffOfferInfo,
+    HandoffOfferStatus,
+    HandoffOfferChange,
+    AcceptHandoffOfferResult,
+    DeclineHandoffOfferResult
+} from './graphQLHandoffClient';
 export { GraphQLClassifyClient } from './graphQLClassifyClient';
 export type {
     GenerateSeedTaxonomyInput,
@@ -118,3 +132,25 @@ export type {
 } from './graphQLIntegrationClient';
 export { GraphQLConversationClient } from './graphQLConversationClient';
 export type { ConversationRunEvent, ConversationTailResult } from './graphQLConversationClient';
+export { GraphQLRealtimeSessionClient, IsKnownRealtimeSessionVerificationErrorCode } from './graphQLRealtimeSessionClient';
+export type {
+    RealtimeSessionVerificationState,
+    RealtimeSessionVerificationErrorCode,
+    RealtimeSessionVerificationResult,
+    RealtimeSessionClientEvent,
+    RequestRealtimeSessionVerificationInput,
+    SubmitRealtimeSessionVerificationCodeInput,
+} from './graphQLRealtimeSessionClient';
+
+export { GraphQLMeetingClient } from './graphQLMeetingClient';
+export type {
+  MeetingInfo,
+  MeetingParticipantInfo,
+  DialInPhoneNumberInfo,
+  MeetingParticipantInput,
+  CreateMeetingInput,
+  UpdateMeetingInput,
+  RSVPMeetingInput,
+  MeetingResult,
+  StartMeetingResult,
+} from './graphQLMeetingClient';

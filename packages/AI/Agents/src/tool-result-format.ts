@@ -59,6 +59,21 @@ export interface CarryForwardStepRecord {
     OutputData: string | null;
 }
 
+/**
+ * The step projection the stopped-run carry-forward loads: the completed Actions and Tool steps
+ * of a run the user stopped, rendered for the next turn so it continues instead of redoing them.
+ * `InputData` carries the action call (`{ actionName, actionParams }`), `OutputData` the result
+ * (`{ actionResult: { success, message, parameters } }` for an action; the
+ * {@link CarryForwardToolStepOutput} contract for a tool).
+ */
+export interface StoppedRunStepRecord {
+    StepNumber: number;
+    StepType: string;
+    StepName: string;
+    InputData: string | null;
+    OutputData: string | null;
+}
+
 /** Identifies one tool call within a rendered result section. */
 export interface ToolResultSectionParts {
     /** The tool name, e.g. `getMessageBySequence` */

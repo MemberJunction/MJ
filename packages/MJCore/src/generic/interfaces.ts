@@ -41,6 +41,15 @@ export class ProviderConfigDataBase<D = any> {
     }
 
     /**
+     * Storage the provider should use from the start, before it loads metadata — typically a
+     * shared (Redis) store on a server fleet. When set, the provider installs it first, so the
+     * metadata load and every engine loaded at startup read and write the shared cache instead of
+     * a process-local one that is swapped out later. Optional; database providers otherwise
+     * default to an in-memory store.
+     */
+    public LocalStorageProvider?: ILocalStorageProvider;
+
+    /**
      * Constructor for ProviderConfigDataBase
      * @param data 
      * @param MJCoreSchemaName 
@@ -224,7 +233,25 @@ export class PotentialDuplicateResult {
 export class PotentialDuplicateResponse {
     Status: 'Inprogress' | 'Success' | 'Error';
     ErrorMessage?: string;
+    /**
+     * Per-record results. For a whole-entity run this is CAPPED — see
+     * {@link PotentialDuplicateResponse.ResultsTruncated}. Every result is persisted as
+     * `Duplicate Run Detail` / `Duplicate Run Detail Match` rows regardless, so the durable
+     * record of a run is the database, not this array.
+     */
     PotentialDuplicateResult: PotentialDuplicateResult[];
+    /**
+     * Count of source records found to have at least one potential duplicate, across the WHOLE
+     * run. Unlike `PotentialDuplicateResult.length` this is never capped, so it stays correct
+     * for runs of any size. Prefer it when reporting "how many duplicates were found".
+     */
+    TotalRecordsWithDuplicates?: number;
+    /**
+     * True when `PotentialDuplicateResult` holds fewer entries than the run actually produced,
+     * because retaining every result would grow without bound. Consumers that need the full set
+     * should read the persisted `Duplicate Run Detail Match` rows for the run.
+     */
+    ResultsTruncated?: boolean;
 }
 
 /**
@@ -580,6 +607,38 @@ export interface ILocalStorageProvider {
     readonly SharesReferences?: boolean;
 
     /**
+     * Whether a value written here can be read back by another process, or by this one after a
+     * restart.
+     *
+     * - `true` — the store outlives the process that wrote to it (Redis, or a browser's
+     *   localStorage / IndexedDB surviving a reload).
+     * - `false` — an in-process store whose contents die with the process.
+     *
+     * `ProviderBase` reads this before saving its metadata snapshot. That save serializes, gzips and
+     * base64-encodes the whole metadata graph, which on a large tenant is expensive enough to
+     * exhaust the heap, and an in-process store can only ever hand the result back to the heap that
+     * already holds those objects — so it is skipped. Declaring `false` therefore removes real work;
+     * declaring it wrongly on a persistent store would leave the cold-start cache unpopulated.
+     *
+     * Optional, but every in-repo provider declares it. `undefined` is treated as persistent, which
+     * is the safer default of the two: a pointless save wastes work, while a skipped necessary one
+     * breaks the cache. It is optional only so that adding this contract did not break external
+     * implementations at compile time.
+     */
+    readonly SupportsCrossProcessPersistence?: boolean;
+
+    /**
+     * Whether other processes read and write the same storage — `true` for Redis, where every
+     * server in a fleet shares one keyspace; `false`/omitted for per-process or per-browser
+     * stores (in-memory, IndexedDB, localStorage, MMKV).
+     *
+     * `LocalCacheManager` keeps its registry (per-process eviction accounting) out of shared
+     * storage: persisting it there made every server overwrite one key with its own view and
+     * publish the whole registry to every peer on each write.
+     */
+    readonly SharedAcrossProcesses?: boolean;
+
+    /**
      * Retrieves a value from storage. The implementation is responsible for any
      * deserialization required by the underlying medium:
      *  - **IndexedDB**: returns the value directly via structured clone (Date/Map/Set/typed arrays preserved, no parse needed)
@@ -635,8 +694,9 @@ export interface ILocalStorageProvider {
      * @param key - The key to store under
      * @param value - The value to store
      * @param category - Optional category for key isolation
+     * @param options - Optional expiry and index hints; a provider ignores what it cannot honour.
      */
-    SetItem<T>(key: string, value: T, category?: string): Promise<void>;
+    SetItem<T>(key: string, value: T, category?: string, options?: LocalStorageWriteOptions): Promise<void>;
 
     /**
      * Removes an item from storage.
@@ -657,6 +717,67 @@ export interface ILocalStorageProvider {
      * @param category - The category to list keys from
      */
     GetCategoryKeys?(category: string): Promise<string[]>;
+
+    /**
+     * Gets the keys in a category that were written with the given
+     * {@link LocalStorageWriteOptions.IndexGroup} and still exist.
+     *
+     * Implemented by providers whose storage is shared between processes (Redis): a process
+     * needs it to find entries another process wrote. A process-local provider does not need it,
+     * because the caller's own in-memory index already knows every key it wrote.
+     *
+     * @param category - The category the keys were written to
+     * @param group - The index group (for the RunView cache, the entity name)
+     */
+    GetIndexGroupKeys?(category: string, group: string): Promise<string[]>;
+
+    /**
+     * Runs `work` while holding an exclusive lock on one key across every process that shares this
+     * storage. Implemented by shared providers (Redis): a read-modify-write of one entry from two
+     * servers at once otherwise loses one of the writes. Rejects when the lock cannot be acquired
+     * in time, so the caller can fall back (`LocalCacheManager` invalidates the entry instead).
+     *
+     * @param key - The entry being rewritten
+     * @param category - Its category
+     * @param work - The read-modify-write to run under the lock
+     */
+    WithKeyLock?<T>(key: string, category: string, work: () => Promise<T>): Promise<T>;
+
+    /**
+     * Claims a named lease for `ttlMs` if no other process holds it. The lease is never released
+     * early; it simply expires. Implemented by shared providers (Redis) so one server in a fleet
+     * does a periodic job per interval. A provider that does not implement it is private to its
+     * process, so the caller treats the lease as held.
+     *
+     * @param name - The lease name
+     * @param ttlMs - How long the lease lasts
+     * @returns True when this call claimed the lease
+     */
+    TryAcquireLease?(name: string, ttlMs: number): Promise<boolean>;
+
+    /**
+     * Ends a lease this process claimed with {@link TryAcquireLease} before it expires, so the
+     * next process waiting for it can proceed. Does nothing for a lease held by someone else.
+     */
+    ReleaseLease?(name: string): Promise<void>;
+}
+
+/**
+ * Per-write options for {@link ILocalStorageProvider.SetItem}.
+ */
+export interface LocalStorageWriteOptions {
+    /**
+     * Seconds until the entry expires, overriding the provider's default. `0` stores the entry
+     * without expiry. Omit to use the provider's default.
+     */
+    TTLSeconds?: number;
+
+    /**
+     * A secondary index within the category that this key belongs to. `LocalCacheManager`
+     * passes the entity name for RunView cache entries, so a shared provider can answer
+     * {@link ILocalStorageProvider.GetIndexGroupKeys} without listing the whole category.
+     */
+    IndexGroup?: string;
 }
 
 /**
@@ -850,10 +971,12 @@ export interface IMetadataProvider {
     /**
      * Returns the Name of the specific recordId for a given entityName. This is done by
      * looking for the IsNameField within the EntityFields collection for a given entity.
-     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned
+     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned.
+     * When field-level security withholds a name field from the user, the answer is the same as for a
+     * record that does not exist.
      * @param entityName
      * @param CompositeKey
-     * @param contextUser - optional user context for permissions
+     * @param contextUser - the acting user; field- and row-level security are applied for them
      * @param forceRefresh - if true, bypasses cache and fetches fresh from database
      * @returns the name of the record
      */
@@ -871,6 +994,10 @@ export interface IMetadataProvider {
     /**
      * Asynchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
      * Use this for synchronous contexts (like template rendering) where you can't await GetEntityRecordName().
+     *
+     * Only a provider that serves a single user keeps record names (the browser's `GraphQLDataProvider`).
+     * A provider shared by several users, such as a server's database provider, keeps none, so its
+     * synchronous record-name methods always answer "not cached".
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
      * @param loadIfNeeded - If set to true, will load from database if not already cached
@@ -879,7 +1006,7 @@ export interface IMetadataProvider {
     GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined>;
 
     /**
-     * Checks whether an entity record name is currently available in the in-memory LRU cache.
+     * Checks whether an entity record name is currently cached. See {@link GetCachedRecordName} for which providers cache.
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
      * @returns True if the record name is cached in memory, false otherwise
@@ -887,7 +1014,7 @@ export interface IMetadataProvider {
     HasCachedRecordName(entityName: string, compositeKey: CompositeKey): boolean;
 
     /**
-     * Retrieves an entity record name from the in-memory LRU cache if already cached.
+     * Retrieves an entity record name if already cached. See {@link GetCachedRecordName} for which providers cache.
      * Returns undefined immediately when not cached and will NEVER initiate a database lookup.
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
@@ -896,8 +1023,9 @@ export interface IMetadataProvider {
     GetCachedRecordNameOnlyIfCached(entityName: string, compositeKey: CompositeKey): string | undefined;
 
     /**
-     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
-     * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
+     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName(), on a
+     * provider that caches; ignored otherwise. Called automatically by BaseEntity after Load(),
+     * LoadFromData(), and Save() operations.
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
      * @param recordName - The display name to cache
@@ -996,7 +1124,7 @@ export interface IMetadataProvider {
      * @param itemFilters 
      * @param dataset 
      */
-    CacheDataset(datasetName: string, itemFilters: DatasetItemFilterType[], dataset: DatasetResultType): Promise<void> 
+    CacheDataset(datasetName: string, itemFilters: DatasetItemFilterType[] | undefined, dataset: DatasetResultType): Promise<void> 
 
     /**
      * Determines if a given datasetName/itemFilters combination is cached locally or not
@@ -1113,6 +1241,16 @@ export type RunViewResult<T = any> = {
     Unsubscribe?: () => void;
 }
 
+/** What the database reports for one view; see {@link IRunViewProvider.GetRunViewsDatabaseStatus}. */
+export interface RunViewDatabaseStatus {
+    Success: boolean;
+    /** Rows the view returns. */
+    RowCount?: number;
+    /** Newest `__mj_UpdatedAt` among them (ISO), absent when there are none. */
+    MaxUpdatedAt?: string;
+    ErrorMessage?: string;
+}
+
 /**
  * Interface for providers that execute views.
  * Supports parameterized view execution with filtering and pagination.
@@ -1133,6 +1271,13 @@ export interface IRunViewProvider {
      * @returns Response containing status and fresh data only for stale caches
      */
     RunViewsWithCacheCheck?<T = unknown>(params: RunViewWithCacheCheckParams[], contextUser?: UserInfo): Promise<RunViewsWithCacheCheckResponse<T>>
+
+    /**
+     * Asks the database — never a cache — how many rows each view would return and the newest
+     * `__mj_UpdatedAt` among them. One entry per param, in order. Implemented by database providers;
+     * used by `BaseEngine.SweepAgainstDatabase` to find engine data changed outside MJ.
+     */
+    GetRunViewsDatabaseStatus?(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewDatabaseStatus[]>
 
     /**
      * Performs a full-text search across all entities that have FullTextSearchEnabled=true in their metadata.
@@ -1826,6 +1971,16 @@ export type DatasetStatusResultType = {
     LatestUpdateDate: Date;
     EntityUpdateDates: DatasetStatusEntityUpdateDateType[];
  }
+
+/** What `ProviderBase.SweepMetadataAgainstDatabase` found and did. */
+export type MetadataSweepResult = {
+    /** Metadata member entities that declare they can change without firing an event. */
+    Declared: string[];
+    /** Whether the database was consulted at all (false when nothing declared drift). */
+    Checked: boolean;
+    /** Whether metadata was actually reloaded. */
+    Refreshed: boolean;
+};
 
 /**
  * Update date information for a single entity within a dataset.
