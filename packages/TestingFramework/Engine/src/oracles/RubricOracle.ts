@@ -2,6 +2,7 @@ import '@memberjunction/ai-agents';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import type { OracleConfig, OracleInput, OracleResult } from '../types';
 import type { IOracle } from './IOracle';
+import { RenderJudgeEvidence, type JudgeOutputEvidence } from '../utils/judge-evidence';
 
 export interface RubricOracleEngine {
     EvaluateRecord(input: {
@@ -79,8 +80,10 @@ export class RubricOracle implements IOracle {
 }
 
 /** The output the driver already has. The test-run row is not saved until later. */
-export function RubricOracleContent(input: { test?: { InputDefinition?: unknown }; expectedOutput?: unknown; actualOutput?: unknown }): { text?: string; data: Record<string, unknown> } {
-    let text: string | undefined = typeof input.actualOutput === 'string' ? input.actualOutput : undefined;
+export function RubricOracleContent(input: { test?: { InputDefinition?: unknown }; expectedOutput?: unknown; actualOutput?: unknown; judgeEvidence?: JudgeOutputEvidence }): { text?: string; data: Record<string, unknown> } {
+    // Labeled evidence (message + payload + artifacts) is the fuller picture when the driver has it.
+    let text: string | undefined = input.judgeEvidence ? RenderJudgeEvidence(input.judgeEvidence) : undefined;
+    if (!text && typeof input.actualOutput === 'string') text = input.actualOutput;
     if (!text && input.actualOutput && typeof input.actualOutput === 'object') {
         const obj = input.actualOutput as Record<string, unknown>;
         if (typeof obj.message === 'string') text = obj.message;

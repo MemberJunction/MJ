@@ -60,6 +60,7 @@ export class TelephonyOperationsDashboardComponent
   public Metrics: OperationsMetrics = CalculateOperationsMetrics([], [], []);
 
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private destroyed = false;
   private readonly cdr = inject(ChangeDetectorRef);
 
   override async GetResourceDisplayName(_data: ResourceData): Promise<string> {
@@ -75,6 +76,12 @@ export class TelephonyOperationsDashboardComponent
     await this.LoadData();
     this.NotifyLoadComplete();
 
+    // The tab may have been closed while LoadData was in flight; ngOnDestroy already ran and
+    // found no timer, so arming one now would leak an interval on a destroyed component.
+    if (this.destroyed) {
+      return;
+    }
+
     // Auto-refresh live status every 15 seconds
     this.refreshTimer = setInterval(() => {
       this.recalculateMetrics();
@@ -88,6 +95,7 @@ export class TelephonyOperationsDashboardComponent
   }
 
   override ngOnDestroy(): void {
+    this.destroyed = true;
     super.ngOnDestroy();
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);

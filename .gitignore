@@ -261,3 +261,7 @@ dist-stricttmpl/
 
 # CodeGraph local index
 .codegraph/
+
+# Local one-off verification scripts (e.g. scratch-4946-e2e.mjs). They read a local .env and
+# hard-coded test data, so they never belong in the repo.
+scratch-*.mjs
