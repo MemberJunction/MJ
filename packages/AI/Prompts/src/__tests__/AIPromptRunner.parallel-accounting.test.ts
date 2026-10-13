@@ -76,7 +76,7 @@ import { ParallelExecutionCoordinator } from '../ParallelExecutionCoordinator';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJGlobal } from '@memberjunction/global';
 import { TestLLM, makeModelUsage, makeSuccessChatResult } from '@memberjunction/unit-testing';
-import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL_TYPE, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
+import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL, MODEL_TYPE, VENDOR, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
 import type { ExecutionTaskResult, ResultSelectionConfig } from '../ParallelExecution';
 import type { UserInfo } from '@memberjunction/core';
 import type { AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
@@ -323,12 +323,14 @@ describe('Spec §5 — Parallel-execution accounting', () => {
     });
     h.state.prompts.push(judgePrompt);
 
-    const judgeModel = h.state.models[0] as { ID: string; Name: string };
+    // A vendor that really offers the model: a row's VendorID is honoured (#5523), so a made-up
+    // vendor would leave the judge with no candidate at all.
+    const judgeModel = h.state.models.find(m => m.ID === MODEL.ClaudeOpus45) as { ID: string; Name: string };
     h.state.promptModels.push({
       ID: 'pm-judge',
       PromptID: judgePrompt.ID,
       ModelID: judgeModel.ID,
-      VendorID: 'vendor-judge-1',
+      VendorID: VENDOR.Anthropic,
       Status: 'Active',
     });
 
