@@ -1,5 +1,5 @@
 import { LogError, LogStatus, RunView } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJAIAgentRunEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
@@ -253,12 +253,12 @@ async function loadConversationOwners(
     if (!result.Success) {
         return owners;
     }
-    const users = UserCache.Instance.Users;
+    const usersByID = IndexByUUID(UserCache.Instance.Users);
     for (const row of result.Results ?? []) {
         if (!row.UserID) {
             continue;
         }
-        const user = users.find(u => UUIDsEqual(u.ID, row.UserID));
+        const user = usersByID.Get(row.UserID);
         if (user) {
             owners.set(row.ID, user);
         }

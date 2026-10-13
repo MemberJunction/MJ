@@ -33,7 +33,7 @@ import {
 } from "./search-guardrails";
 import { MapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
 import { SQLParser } from "@memberjunction/sql-parser";
-import { createDisplayName, EscapeSQLString, generatePluralName, MJGlobal, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
+import { createDisplayName, EscapeSQLString, generatePluralName, IndexByUUID, MJGlobal, NormalizeUUID, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 
 import * as fs from 'fs';
@@ -4124,16 +4124,13 @@ export class ManageMetadataBase {
          // individually caused a ping-pong bug where multi-FK pairs swapped JoinFields
          // on every CodeGen run.
          const entityPairGroups = this.groupFieldsByEntityPair(entityFields);
+         const relationshipsForPair = ManageMetadataBase.relationshipsByEntityPair(allRelationships);
 
          let batchSQL = '';
          let batchCount = 0;
          for (const [_pairKey, fkFields] of entityPairGroups) {
             const firstField = fkFields[0];
-            const relationships = allRelationships.filter(
-               (r: { EntityID: string; RelatedEntityID: string }) =>
-                  UUIDsEqual(r.EntityID, firstField.RelatedEntityID as string) &&
-                  UUIDsEqual(r.RelatedEntityID, firstField.EntityID as string)
-            );
+            const relationships = relationshipsForPair(firstField.RelatedEntityID as string, firstField.EntityID as string);
 
             if (relationships.length === 0) {
                // No relationships exist for this pair — create one per FK field
@@ -4226,6 +4223,25 @@ export class ManageMetadataBase {
          }
       }
       return groups;
+   }
+
+   /**
+    * Indexes relationship rows by their (EntityID, RelatedEntityID) pair, so each FK pair finds its
+    * relationships without scanning every relationship in the database. IDs match in any case, and
+    * each pair's rows keep their original order — exactly what a `filter` over the full list returns.
+    */
+   protected static relationshipsByEntityPair<T extends { EntityID: string; RelatedEntityID: string }>(
+      relationships: T[]
+   ): (entityID: string, relatedEntityID: string) => T[] {
+      const pairKey = (entityID: string, relatedEntityID: string) => `${NormalizeUUID(entityID)}|${NormalizeUUID(relatedEntityID)}`;
+      const byPair = new Map<string, T[]>();
+      for (const r of relationships) {
+         const key = pairKey(r.EntityID, r.RelatedEntityID);
+         const group = byPair.get(key);
+         if (group) group.push(r);
+         else byPair.set(key, [r]);
+      }
+      return (entityID, relatedEntityID) => byPair.get(pairKey(entityID, relatedEntityID)) ?? [];
    }
 
    /**
@@ -5849,14 +5865,14 @@ export class ManageMetadataBase {
 
          const columnLevelResults = result.filter((r: any) => r.EntityFieldID); // get the column level constraints
          const tableLevelResults = result.filter((r: any) => !r.EntityFieldID); // get the table level constraints
+         const entityFieldsByID = IndexByUUID(allEntityFields as { ID: string; Type?: string; IsPrimaryKey?: boolean; }[]);
          for (const r of columnLevelResults) {
             // now, for each of the constraints we get back here, loop through and evaluate if they're simple and if they're simple, parse and sync with entity field values for that field
             if (r.ConstraintDefinition && r.ConstraintDefinition.length > 0) {
                // parse first, then decide whether THIS field should carry the list (bit, PK singleton guards).
-               // UUIDsEqual, not ===: PG returns lowercase UUIDs and SQL Server uppercase, and a missed
-               // lookup here fails OPEN (the exclusions stop applying), so a case mismatch would be silent.
-               const field = allEntityFields.find((f: { ID: string; Type?: string; IsPrimaryKey?: boolean; }) =>
-                  UUIDsEqual(f.ID, r.EntityFieldID));
+               // Case-insensitive (the index normalizes IDs), not ===: PG returns lowercase UUIDs and SQL Server
+               // uppercase, and a missed lookup here fails OPEN (the exclusions stop applying), so a case mismatch would be silent.
+               const field = entityFieldsByID.Get(r.EntityFieldID);
                const parsedValues = ManageMetadataBase.valueListForField(
                   field,
                   this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName, r.EntityName));

@@ -63,6 +63,11 @@ describe('BuildEffectiveCategoryMap', () => {
     const map = BuildEffectiveCategoryMap([dash('D-1', 'ANA-1', null)], [link('d-1', 'USER-ME', 'c-1')], 'user-me');
     expect(map.get('D-1')).toBe('c-1');
   });
+
+  it("uses the user's first link when a dashboard has several, ignoring other users' links", () => {
+    const links = [link('d-1', ANA, 'ana-folder'), link('D-1', ME, 'first'), link('d-1', ME, 'second')];
+    expect(BuildEffectiveCategoryMap([dash('d-1', ANA, null)], links, ME).get('d-1')).toBe('first');
+  });
 });
 
 describe('BuildCategoryRows', () => {

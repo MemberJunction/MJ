@@ -26,7 +26,8 @@
     "@google/genai": "^2.8.0",
     "@memberjunction/ai": "6.2.0-edge.3",
     "@memberjunction/ai-gemini": "6.2.0-edge.3",
-    "@memberjunction/global": "6.2.0-edge.3"
+    "@memberjunction/global": "6.2.0-edge.3",
+    "google-auth-library": "^10.9.1"
   },
   "repository": {
     "type": "git",

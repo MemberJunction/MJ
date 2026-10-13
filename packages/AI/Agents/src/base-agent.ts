@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
@@ -20,12 +20,12 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, AIErrorType, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -50,7 +50,9 @@ import {
     RealtimeCoAgentConfig,
     ResolveEffectiveRealtimeConfig
 } from './realtime/realtime-coagent-config';
-import { SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
+import { ListRealtimeVendorsForModel, RealtimeVendorSelection, SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
+import { ChooseRealtimeVendorForAvatar, RealtimeModelShowsAvatar } from './realtime/realtime-video-output-gate';
+import { RealtimeSessionCanShowAvatar } from './realtime/realtime-avatar-resolution';
 import { RealtimeClientSessionService, PrepareClientSessionInput, WarnOnUnmatchedProviderVoice } from './realtime/realtime-client-session-service';
 import { BuildRealtimeAgentFraming } from './realtime/realtime-tool-broker';
 import { ReadHostTools, ReadTrimmedString } from './realtime/bridge-host-params';
@@ -1499,6 +1501,12 @@ export class BaseAgent {
     private _conversationToolManager: ConversationToolManager = new ConversationToolManager();
 
     /**
+     * The conversation's branch rows for the current run, loaded once when the run is on a
+     * branch (`ExecuteAgentParams.ConversationBranchID`). Empty on the trunk.
+     */
+    private _conversationBranches: ConversationBranchRow[] = [];
+
+    /**
      * Manages in-flight durable memory writes for the current agent run.
      * Only consulted when the agent has AllowMemoryWrite enabled.
      */
@@ -2107,10 +2115,16 @@ export class BaseAgent {
             // Arm conversation-history retrieval tools — available only when the run has a
             // conversation to page against (the same gate as all cross-turn context features).
             // A history floor holds here too: the tools page only rows from it onward.
+            // On a branch, the tools page only rows on that branch's path.
+            this._conversationBranches = wrappedParams.conversationId && wrappedParams.ConversationBranchID
+                ? await ConversationEngine.LoadBranchesFresh(wrappedParams.conversationId, params.contextUser, this.ProviderToUse)
+                : [];
             this._conversationToolManager.Initialize(
                 wrappedParams.conversationId || null,
                 params.contextUser,
-                wrappedParams.ConversationHistoryFrom ?? null
+                wrappedParams.ConversationHistoryFrom ?? null,
+                wrappedParams.ConversationBranchID ?? null,
+                this._conversationBranches
             );
             this._conversationToolManager.SetSummaryHost(this.buildConversationSummaryHost(wrappedParams));
 
@@ -2660,6 +2674,12 @@ export class BaseAgent {
             UserID: params.contextUser?.ID,
             DisableAutoResponse: meetingMode || undefined,
             SelfNames: selfNames,
+            // The bridge's bot can publish the agent's avatar into the room (set by the room coordinator after it asked).
+            AvatarDelivery: params.data?.realtimeAvatarDelivery === 'room' ? 'room' : undefined,
+            // A server-side session: without room delivery it can't show an avatar, so the model choice prefers none.
+            ServerSide: true,
+            // A phone call (set by the telephony hosts): the caller sees no video, so the session asks for no avatar.
+            PhoneCall: params.data?.realtimePhoneCall === true || undefined,
             // App awareness (Move 1/3/4): the app the session runs in (sources the app cascade layer +
             // RelevantAgents → allowed-agent union) and the live app-context snapshot injected at mint.
             // Both ride params.data, the same conduit async agents use for appContext.
@@ -2676,7 +2696,8 @@ export class BaseAgent {
      * without provider SDKs or DB metadata.
      *
      * Production resolution: pick the highest-power active model of AIModelType `Realtime`; then
-     * pick its highest-priority active vendor whose `DriverClass` has a resolvable API key; then
+     * pick its highest-priority active vendor whose `DriverClass` has a resolvable API key, unless another keyed
+     * vendor matches whether the run will show an avatar better ({@link ChooseRealtimeVendorForAvatar}); then
      * instantiate the driver via the `ClassFactory`. Returns `null` (never throws) if any step
      * can't be satisfied — the caller turns that into a clean FAILED result. (Per-agent realtime
      * model preference can later be wired through the agent's prompt-model config, the same path
@@ -2703,34 +2724,68 @@ export class BaseAgent {
         // brings its own credential for a vendor we hold no platform key for now reaches that
         // vendor — which is the point of bringing your own key, not a side effect of it.
         const resolveAPIKey = MakeAIAPIKeyResolver(params.apiKeys, undefined, params.CredentialScope);
+        // The vendor follows whether the run will show an avatar, by the co-agent session prep's rule: a vendor that
+        // renders avatars (Vertex AI for Gemini 3.8 Live) only when it will, or when it is the only keyed vendor.
+        const showsAvatar = this.realtimeRunShowsAvatar(params);
         const candidates = this.selectRealtimeModelCandidates(params.agent, overrideModelID);
         for (const model of candidates) {
             const vendor = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
-            if (!vendor) {
+            const first = vendor ? this.instantiateRealtimeRunVendor(model.ID, vendor, resolveAPIKey) : null;
+            if (!vendor || !first) {
                 continue;
             }
-            const apiKey = resolveAPIKey(vendor.DriverClass);
-            if (!apiKey) {
-                continue;
-            }
-            const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
-                BaseRealtimeModel,
-                vendor.DriverClass,
-                apiKey
-            );
-            if (!instance) {
-                continue;
-            }
-            return {
-                model: instance,
-                modelID: model.ID,
-                vendorID: vendor.VendorID,
-                modelVendorID: vendor.ModelVendorID,
-                apiName: vendor.APIName,
-                driverClass: vendor.DriverClass
-            };
+            return ChooseRealtimeVendorForAvatar(vendor, first, ListRealtimeVendorsForModel(model.ID), showsAvatar, {
+                Instantiate: (other) => this.instantiateRealtimeRunVendor(model.ID, other, resolveAPIKey),
+                RendersAvatar: (resolution) =>
+                    RealtimeModelShowsAvatar({ ModelID: resolution.modelID, APIName: resolution.apiName, Model: resolution.model }, AIEngine.Instance),
+            });
         }
         return null;
+    }
+
+    /**
+     * Whether a session-driven run will show an avatar: the agent's video setting is on and the run could show one
+     * ({@link RealtimeSessionCanShowAvatar}) — a server-side session, so only when its host publishes the avatar into a
+     * room (`params.data.realtimeAvatarDelivery` `'room'`) and it is not a phone call (`params.data.realtimePhoneCall`).
+     *
+     * @param params The execution parameters.
+     */
+    private realtimeRunShowsAvatar(params: ExecuteAgentParams): boolean {
+        if (this.resolveRealtimeEffectiveConfig(params.agent).realtime?.video?.enabled !== true) {
+            return false;
+        }
+        return RealtimeSessionCanShowAvatar({
+            ServerSide: true,
+            AvatarDelivery: params.data?.realtimeAvatarDelivery === 'room' ? 'room' : undefined,
+            PhoneCall: params.data?.realtimePhoneCall === true,
+        });
+    }
+
+    /**
+     * A vendor's realtime driver on its key, with the model and vendor identifiers a run resolves to; `null` when the
+     * key or the driver is missing.
+     */
+    private instantiateRealtimeRunVendor(
+        modelID: string,
+        vendor: RealtimeVendorSelection,
+        resolveAPIKey: AIAPIKeyResolver
+    ): { model: BaseRealtimeModel; modelID: string; vendorID: string; modelVendorID: string; apiName: string; driverClass: string } | null {
+        const apiKey = resolveAPIKey(vendor.DriverClass);
+        if (!apiKey) {
+            return null;
+        }
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(BaseRealtimeModel, vendor.DriverClass, apiKey);
+        if (!instance) {
+            return null;
+        }
+        return {
+            model: instance,
+            modelID,
+            vendorID: vendor.VendorID,
+            modelVendorID: vendor.ModelVendorID,
+            apiName: vendor.APIName,
+            driverClass: vendor.DriverClass
+        };
     }
 
     /**
@@ -7721,6 +7776,24 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * The `MJ: AI Agent Runs` predicate for this agent's previous settled root run on one
+     * branch path: the run's reply row must be on that path, so a run made on a sibling
+     * branch is never carried forward, and not replaced by a rerun of its turn, so a replaced
+     * answer's tool results are never carried forward.
+     */
+    public static BuildPriorTurnRunFilter(
+        conversationId: string,
+        agentId: string,
+        branchId: string | null,
+        branches: ReadonlyArray<ConversationBranchRow>,
+        statusList: string
+    ): string {
+        const pathFilter = ConversationEngine.BuildBranchPathFilter(conversationId, branchId, branches);
+        return `ConversationID='${conversationId}' AND Status IN (${statusList}) AND ParentRunID IS NULL AND AgentID='${agentId}'`
+            + ` AND ConversationDetailID IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE ${ConversationEngine.LiveRowsFilter(pathFilter)})`;
+    }
+
+    /**
      * Loads this agent's previous settled root run's Tool steps for this conversation
      * (settled = {@link settledRunStatuses}: Completed or AwaitingFeedback).
      * Deliberately loads ALL completed Tool steps — eligibility for carry-forward is
@@ -7735,7 +7808,8 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private async loadPriorTurnToolResultSteps(params: ExecuteAgentParams): Promise<CarryForwardStepRecord[]> {
-        const cached = PriorTurnToolResultCache.Instance.Get(params.conversationId!, params.agent.ID);
+        const branchId = params.ConversationBranchID ?? null;
+        const cached = PriorTurnToolResultCache.Instance.Get(params.conversationId!, params.agent.ID, branchId);
         if (cached) {
             this.logStatus(`[PriorTurnToolResults] Prior-run tool results served from cache (${cached.length} step(s), no DB lookup)`, true, params);
             return cached;
@@ -7745,10 +7819,11 @@ The context is now within limits. Please retry your request with the recovered c
         const statusList = predicate.runStatuses.map(s => `'${s}'`).join(', ');
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         // AgentID scopes provenance: in a multi-agent conversation, agent B must never
-        // inherit agent A's results labeled "your previous turn".
+        // inherit agent A's results labeled "your previous turn". The branch path scopes it
+        // the same way: a run on a sibling branch is never carried forward.
         const priorRun = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: `ConversationID='${params.conversationId}' AND Status IN (${statusList}) AND ParentRunID IS NULL AND AgentID='${params.agent.ID}'`,
+            ExtraFilter: BaseAgent.BuildPriorTurnRunFilter(params.conversationId!, params.agent.ID, branchId, this._conversationBranches, statusList),
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
             Fields: ['ID'],
@@ -7776,9 +7851,11 @@ The context is now within limits. Please retry your request with the recovered c
      * only when the run row settled as {@link settledRunStatuses} (Completed OR
      * AwaitingFeedback — the normal chat-turn ending) — a failed run leaves the previous
      * settled run's entry standing, just as the RunView filter would. Scoped to this
-     * run's agent (cache key = conversation + agent) so parallel agents in one
-     * conversation never cross-pollinate. An empty projection is cached too (the
-     * negative-cache case that spares tool-free conversations the queries every turn).
+     * run's agent and branch (cache key = conversation + agent + branch) so parallel
+     * agents in one conversation, and sibling branches, never cross-pollinate. An empty
+     * projection is cached too (the negative-cache case that spares tool-free
+     * conversations the queries every turn). The run's reply row is stored with the entry,
+     * so the entry is no longer served once a rerun of its turn replaces that row.
      * Same-node edge semantics (failed step INSERTs, concurrent completions) are
      * documented on the cache class. Called from {@link finalizeAgentRun}.
      * @private
@@ -7793,7 +7870,13 @@ The context is now within limits. Please retry your request with the recovered c
         const records: CarryForwardStepRecord[] = (this._agentRun.Steps || [])
             .filter(s => s.StepType === predicate.stepType && s.Status === predicate.stepStatus)
             .map(s => ({ OutputData: s.OutputData || null }));
-        PriorTurnToolResultCache.Instance.Set(conversationId, this._agentRun.AgentID, records);
+        PriorTurnToolResultCache.Instance.Set(
+            conversationId,
+            this._agentRun.AgentID,
+            this._executeParams?.ConversationBranchID ?? null,
+            records,
+            this._agentRun.ConversationDetailID ?? null
+        );
     }
 
     /**
@@ -11378,12 +11461,25 @@ The context is now within limits. Please retry your request with the recovered c
     }
  
     /**
+     * Throws unless `lastRunId` is absent or a UUID. The value can come from a client, and the run
+     * initialization places it in `ExtraFilter` clauses (the payload lookup, {@link validateRunChain}
+     * and {@link resolvePlanModeGate}).
+     */
+    private assertLastRunIdIsUUID(lastRunId: string | undefined): void {
+        if (lastRunId && !IsValidUUID(lastRunId)) {
+            throw new Error('Invalid lastRunId: expected the UUID of a prior AI Agent Run.');
+        }
+    }
+
+    /**
      * Initializes the agent run tracking by creating MJAIAgentRunEntityExtended and setting up context.
      * 
      * @private
      * @param {ExecuteAgentParams} params - The execution parameters
      */
     private async initializeAgentRun(params: ExecuteAgentParams): Promise<void> {
+        this.assertLastRunIdIsUUID(params.lastRunId);
+
         // Handle autoPopulateLastRunPayload if requested
         let modifiedParams = params;
         if (params.lastRunId && params.autoPopulateLastRunPayload) {
@@ -17876,6 +17972,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
         const outcome = await ConversationCompactionManager.CompactIfNeeded({
             ConversationId: params.conversationId,
+            BranchID: params.ConversationBranchID ?? null,
             Agent: params.agent,
             AgentType: config?.agentType || null,
             Budget: budget,

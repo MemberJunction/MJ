@@ -26,7 +26,7 @@ import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
 import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledJobEntity, MJContentItemDuplicateEntity, UserInfoEngine, MJTagEntity, MJTagSynonymEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { BuildSingleStaticParamConfiguration, ResolveActionJobTypeID } from '../../../shared/action-scheduled-job';
 import { TagEngineBase } from '@memberjunction/tag-engine-base';
-import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { IndexByUUID, RegisterClass, UUIDMap, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { MJLeftNavItem, MJLeftNavSection, TabConfig, MJConfirmService } from '@memberjunction/ng-ui-components';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
@@ -3616,8 +3616,9 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
      */
     private populateOrphansFromSuggestions(): void {
         const lows = this.SuggestionRows.filter(s => s.Reason === 'LowUsage' && s.BestMatchTagID);
+        const tagsByID = this.indexTagsByID();
         this.TaxOrphans = lows.map(s => {
-            const tag = this.TagsRaw.find(t => UUIDsEqual(t['ID'] as string, s.BestMatchTagID!));
+            const tag = tagsByID.Get(s.BestMatchTagID!);
             return {
                 ID: s.BestMatchTagID!,
                 Name: tag ? (tag['Name'] as string) : s.ProposedName,
@@ -5416,9 +5417,10 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 MJNotificationService.Instance.CreateSimpleNotification(`Failed to load suggestions: ${sugsResult.ErrorMessage}`, 'error', 5000);
                 this.SuggestionRows = [];
             } else {
+                const tagsByID = this.indexTagsByID();
                 this.SuggestionRows = sugsResult.Results.map(r => {
                     const matchID = (r['BestMatchTagID'] as string) ?? null;
-                    const matchTag = matchID ? this.TagsRaw.find(t => UUIDsEqual(t['ID'] as string, matchID)) : null;
+                    const matchTag = matchID ? tagsByID.Get(matchID) ?? null : null;
                     const matchName = matchTag ? (matchTag['Name'] as string) : null;
                     return {
                         ID: r['ID'] as string,
@@ -5426,7 +5428,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                         Reason: r['Reason'] as string,
                         BestMatchTagID: matchID,
                         BestMatchName: matchName,
-                        BestMatchPath: matchTag ? this.computeTagPath(matchTag) : null,
+                        BestMatchPath: matchTag ? this.computeTagPath(matchTag, tagsByID) : null,
                         BestMatchScore: (r['BestMatchScore'] as number) ?? null,
                         SourceContentSourceID: (r['SourceContentSourceID'] as string) ?? null,
                         SourceContentItemID: (r['SourceContentItemID'] as string) ?? null,
@@ -5455,13 +5457,18 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     }
 
     /** Walk the parent chain to build a › -separated breadcrumb for a tag. */
-    private computeTagPath(tag: Record<string, unknown>): string {
+    /** TagsRaw keyed by tag ID, for callers that look up many tags (one scan instead of one per lookup). */
+    private indexTagsByID(): UUIDMap<Record<string, unknown>> {
+        return IndexByUUID(this.TagsRaw, t => t['ID'] as string);
+    }
+
+    private computeTagPath(tag: Record<string, unknown>, tagsByID: UUIDMap<Record<string, unknown>>): string {
         const parts: string[] = [tag['Name'] as string];
         let cursorID = (tag['ParentID'] as string) ?? null;
         const guard = new Set<string>();
         while (cursorID && !guard.has(cursorID) && parts.length < 8) {
             guard.add(cursorID);
-            const next = this.TagsRaw.find(t => UUIDsEqual(t['ID'] as string, cursorID!));
+            const next = tagsByID.Get(cursorID);
             if (!next) break;
             parts.unshift(next['Name'] as string);
             cursorID = (next['ParentID'] as string) ?? null;
