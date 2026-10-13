@@ -5,8 +5,9 @@
  * The decision is pinned by `agent-run-data-guard.test.ts`, and what an untrusted run loses by the ai-core-plus and
  * ai-agents suites (`BaseAgent.Execute` drops the keys). These tests pin the call sites: the synchronous and
  * fire-and-forget paths of `RunAIAgent` and `RunAIAgentFromConversationDetail`, the widget-guest path (judged on
- * the guest's own payload, not the system principal it is elevated to) and the trusted callers — each through the
- * real `executeAIAgent`, up to the params handed to `AgentRunner`. The resolver forwards `data` as sent.
+ * the guest's own payload, not the system principal it is elevated to), the trusted callers, and an API key with and
+ * without the `agent:trusted` scope — each through the real `executeAIAgent`, up to the params handed to
+ * `AgentRunner`. The resolver forwards `data` as sent.
  */
 import 'reflect-metadata'; // must precede any type-graphql decorator evaluation
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -29,6 +30,13 @@ vi.mock('type-graphql', () => {
 const hoisted = vi.hoisted(() => ({
     runAgentInConversation: vi.fn(),
     resolveWidgetGuestRunContext: vi.fn(),
+    authorize: vi.fn(),
+}));
+
+// Only the key engine is stubbed: Authorize allows `agent:trusted` for the key whose hash is 'hash-trusted'.
+vi.mock('@memberjunction/api-keys', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/api-keys')>()),
+    GetAPIKeyEngine: () => ({ Authorize: hoisted.authorize }),
 }));
 
 vi.mock('@memberjunction/ai-agents', () => ({
@@ -47,6 +55,8 @@ vi.mock('../realtimeWidget/widgetGuestElevation.js', async (importOriginal) => (
     ResolveWidgetGuestRunContext: hoisted.resolveWidgetGuestRunContext,
 }));
 
+import { UserCache } from '@memberjunction/generic-database-provider';
+import type { UserInfo } from '@memberjunction/core';
 import { RunAIAgentResolver } from '../resolvers/RunAIAgentResolver.js';
 import type { AppContext, UserPayload } from '../types.js';
 
@@ -131,6 +141,11 @@ beforeEach(() => {
     hoisted.resolveWidgetGuestRunContext.mockReset().mockResolvedValue(null);
     // Stop right after the run's params are captured — the rest of the run is out of scope.
     hoisted.runAgentInConversation.mockReset().mockRejectedValue(new Error('stop here'));
+    hoisted.authorize.mockReset().mockImplementation(async (apiKeyHash: string, _app: string, scopePath: string) =>
+        apiKeyHash === 'hash-trusted' && scopePath === 'agent:trusted'
+            ? { Allowed: true, MatchedKeyRule: { ScopePath: scopePath }, EvaluatedRules: [] }
+            : { Allowed: false, Reason: 'No matching key scope rules', EvaluatedRules: [] });
+    vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(SYSTEM_USER as UserInfo);
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
 });
@@ -158,15 +173,26 @@ describe('RunAIAgent — reserved run-data keys', () => {
         expect((await handedParams()).TrustReservedRunData).toBe(false);
     });
 
-    it('marks it trusted for an API-key caller, on both paths', async () => {
+    it('marks it trusted for an API key holding agent:trusted, on both paths', async () => {
         const { resolver } = makeResolver();
-        const ctx = makeContext({ apiKeyId: 'key-1', apiKeyHash: 'hash-1' });
+        const ctx = makeContext({ apiKeyId: 'key-1', apiKeyHash: 'hash-trusted' });
 
         await runAIAgent(resolver, ctx);
         await runAIAgent(resolver, ctx, true);
 
         expect((await handedParams(0)).TrustReservedRunData).toBe(true);
         expect((await handedParams(1)).TrustReservedRunData).toBe(true);
+    });
+
+    it('marks it untrusted for an API key without agent:trusted, on both paths', async () => {
+        const { resolver } = makeResolver();
+        const ctx = makeContext({ apiKeyId: 'key-2', apiKeyHash: 'hash-plain' });
+
+        await runAIAgent(resolver, ctx);
+        await runAIAgent(resolver, ctx, true);
+
+        expect((await handedParams(0)).TrustReservedRunData).toBe(false);
+        expect((await handedParams(1)).TrustReservedRunData).toBe(false);
     });
 });
 
@@ -205,6 +231,16 @@ describe('RunAIAgentFromConversationDetail — reserved run-data keys', () => {
 
         expect((await handedParams(0)).TrustReservedRunData).toBe(true);
         expect((await handedParams(1)).TrustReservedRunData).toBe(true);
+    });
+
+    it('marks it trusted for an API key holding agent:trusted, and untrusted for one without', async () => {
+        const { resolver } = makeResolver();
+
+        await runFromDetail(resolver, makeContext({ apiKeyId: 'key-1', apiKeyHash: 'hash-trusted' }));
+        await runFromDetail(resolver, makeContext({ apiKeyId: 'key-2', apiKeyHash: 'hash-plain' }));
+
+        expect((await handedParams(0)).TrustReservedRunData).toBe(true);
+        expect((await handedParams(1)).TrustReservedRunData).toBe(false);
     });
 });
 

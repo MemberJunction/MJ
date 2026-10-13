@@ -569,9 +569,9 @@ export class RunAIAgentResolver extends ResolverBase {
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
 
         const p = GetReadWriteProvider(providers);
-        // Only the system user or an API-key integration may set a run's scope and agent-type params through
-        // data; for anyone else BaseAgent drops those keys (ExecuteAgentParams.TrustReservedRunData).
-        const trustRunData = IsTrustedAgentRunCaller({ UserPayload: userPayload, IsWidgetGuestRun: false });
+        // Only the system user or an API key holding the agent:trusted scope may set a run's scope and agent-type
+        // params through data; for anyone else BaseAgent drops those keys (ExecuteAgentParams.TrustReservedRunData).
+        const trustRunData = await IsTrustedAgentRunCaller({ UserPayload: userPayload, IsWidgetGuestRun: false, AgentID: agentId });
 
         if (fireAndForget) {
             // Fire-and-forget mode: start execution in background, return immediately.
@@ -653,7 +653,7 @@ export class RunAIAgentResolver extends ResolverBase {
         const p = GetReadWriteProvider(providers);
         // @RequireSystemUser admits only the system user, whom the rule trusts; it is still asked, so every
         // resolver entry that takes a client's data decides the same way.
-        const trustRunData = IsTrustedAgentRunCaller({ UserPayload: userPayload, IsWidgetGuestRun: false });
+        const trustRunData = await IsTrustedAgentRunCaller({ UserPayload: userPayload, IsWidgetGuestRun: false, AgentID: agentId });
         return this.executeAIAgent(
             p,
             dataSource,
@@ -936,10 +936,12 @@ export class RunAIAgentResolver extends ResolverBase {
         const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
         const effectiveAgentId = widgetElevation ? widgetElevation.PinnedAgentId : agentId;
         const effectiveUserPayload = widgetElevation ? ElevateUserPayload(userPayload, widgetElevation.ElevatedUser) : userPayload;
-        // Only the system user or an API-key integration may set a run's scope and agent-type params through
-        // data (ExecuteAgentParams.TrustReservedRunData). Judged on the caller's own payload: a widget guest runs
-        // under an elevated server principal but is never trusted.
-        const trustRunData = IsTrustedAgentRunCaller({ UserPayload: userPayload, IsWidgetGuestRun: widgetElevation !== null });
+        // Only the system user or an API key holding the agent:trusted scope may set a run's scope and agent-type
+        // params through data (ExecuteAgentParams.TrustReservedRunData). Judged on the caller's own payload: a widget
+        // guest runs under an elevated server principal but is never trusted.
+        const trustRunData = await IsTrustedAgentRunCaller({
+            UserPayload: userPayload, IsWidgetGuestRun: widgetElevation !== null, AgentID: agentId,
+        });
 
         try {
             // Parsed before anything loads: a floor the caller asked for must never be dropped.

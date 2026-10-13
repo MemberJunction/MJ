@@ -1231,7 +1231,8 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * Server code sets a run's scope with the first-class fields — {@link PrimaryScopeEntityName},
      * {@link PrimaryScopeRecordID}, {@link SecondaryScopes} — which need no marker. Set this only when `data` itself
      * comes from a caller the server has authenticated as trusted: MJServer's agent-run resolvers set it for the
-     * system user and API-key integrations (never for a widget guest), and a sub-agent inherits its parent's value
+     * system user and for an API key that holds the `agent:trusted` scope (never for a widget guest), and a sub-agent
+     * inherits its parent's value
      * (the model-authored `templateParameters` merged into the child's `data` lose the reserved keys regardless).
      *
      * @since 6.2.0

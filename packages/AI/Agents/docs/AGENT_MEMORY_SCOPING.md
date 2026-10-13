@@ -237,7 +237,7 @@ Secondary scopes are arbitrary key/value pairs for external applications (Skip, 
 
 Who sets the marker:
 
-- **MJServer's agent-run resolvers** (`RunAIAgent`, `RunAIAgentFromConversationDetail`, `RunAIAgentSystemUser`) set it for the system user and for API-key integrations only, never for a browser session or a widget guest. Those server-to-server callers can pass a scope in the `data` JSON argument:
+- **MJServer's agent-run resolvers** (`RunAIAgent`, `RunAIAgentFromConversationDetail`, `RunAIAgentSystemUser`) set it for the system user and for an `mj_sk_*` API key that holds the `agent:trusted` API scope, never for a browser session or a widget guest. A key without that scope is treated like a browser session of the user it belongs to: any user who may create keys can mint one, so an administrator grants the scope, and `full_access` does not include it. Those server-to-server callers can pass a scope in the `data` JSON argument:
 
 ```json
 {
