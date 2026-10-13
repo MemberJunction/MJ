@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ChartIssueLog } from '../issue-log';
-import { ResolveAspectRatioInput, ResolveHeightInput } from '../inputs';
+import { DeferredInput, ResolveAspectRatioInput, ResolveHeightInput } from '../inputs';
 
 /** A log whose sink records messages, so each case can assert how many times it logged. */
 function CreateLog(): { Log: ChartIssueLog; Messages: string[] } {
@@ -29,11 +29,13 @@ describe('ResolveHeightInput', () => {
         }
     });
 
-    it('logs a repeated bad value once', () => {
+    it('logs a repeated bad value once, and a different bad value again', () => {
         const { Log, Messages } = CreateLog();
         ResolveHeightInput(50, Log, 'ctx');
-        ResolveHeightInput(60, Log, 'ctx');
+        ResolveHeightInput(50, Log, 'ctx');
         expect(Messages).toHaveLength(1);
+        ResolveHeightInput(60, Log, 'ctx');
+        expect(Messages).toHaveLength(2);
     });
 });
 
@@ -66,10 +68,28 @@ describe('ResolveAspectRatioInput', () => {
         expect(Messages[0]).toContain('[AspectRatio]="16 / 9"');
     });
 
-    it('logs repeated invalid values once', () => {
+    it('logs a repeated invalid value once, and a different invalid value again', () => {
         const { Log, Messages } = CreateLog();
         ResolveAspectRatioInput(-1, Log, 'ctx');
-        ResolveAspectRatioInput(Number.NaN, Log, 'ctx');
+        ResolveAspectRatioInput(-1, Log, 'ctx');
         expect(Messages).toHaveLength(1);
+        ResolveAspectRatioInput(Number.NaN, Log, 'ctx');
+        expect(Messages).toHaveLength(2);
+    });
+});
+
+describe('DeferredInput', () => {
+    it('checks the value on first read, not on Set, and only once per Set', () => {
+        const seen: number[] = [];
+        const input = new DeferredInput<number, number>(1, (v) => { seen.push(v); return v * 2; });
+        input.Set(5);
+        expect(seen).toEqual([]);
+        expect(input.Raw).toBe(5);
+        expect(input.Value).toBe(10);
+        expect(input.Value).toBe(10);
+        expect(seen).toEqual([5]);
+        input.Set(6);
+        expect(input.Value).toBe(12);
+        expect(seen).toEqual([5, 6]);
     });
 });

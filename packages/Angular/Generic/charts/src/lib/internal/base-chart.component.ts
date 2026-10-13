@@ -2,7 +2,7 @@ import { ChangeDetectorRef, Directive, HostBinding, inject, Input, OnDestroy } f
 import { ChartValueFormatter, DefaultValueFormatter } from '../chart.types';
 import { ChartController } from './chart-controller';
 import { ActivePoint, ChartFrameKey } from './geometry.types';
-import { DefaultChartHeight, ResolveAspectRatioInput, ResolveHeightInput } from './inputs';
+import { DeferredInput, ResolveAspectRatioInput, ResolveHeightInput } from './inputs';
 import { ChartContext } from './prepare-helpers';
 import { LocalPoint, PointerKindOf } from './pointer';
 
@@ -16,8 +16,11 @@ export abstract class MJBaseChartComponent<TGeometry> implements OnDestroy {
     protected readonly cdr = inject(ChangeDetectorRef);
     protected formatter: ChartValueFormatter = DefaultValueFormatter;
     protected ariaLabel = '';
-    private height: number | 'fill' = DefaultChartHeight;
-    private aspectRatio: number | null = null;
+    // Checked on first read (see DeferredInput) so a clamp log names the chart even when AriaLabel is bound after these.
+    private readonly height = new DeferredInput<number | 'fill' | null | undefined, number | 'fill'>(
+        undefined, (v) => ResolveHeightInput(v, this.Controller.Log, this.Context()));
+    private readonly aspectRatio = new DeferredInput<number | null | undefined, number | null>(
+        undefined, (v) => ResolveAspectRatioInput(v, this.Controller.Log, this.Context()));
 
     public abstract readonly Controller: ChartController<TGeometry>;
     /** e.g. 'bar' — the start of every log line this chart writes. */
@@ -27,12 +30,12 @@ export abstract class MJBaseChartComponent<TGeometry> implements OnDestroy {
 
     // Height and AspectRatio skip MarkDirty on purpose: they don't change the controller's view, so the template/frame react to the input change directly.
     /** A px height (minimum 120; clamped and logged), or `'fill'` to take the parent's height. `undefined`/`null` (an unset binding) means 300 and is not a caller mistake. */
-    @Input() set Height(value: number | 'fill' | null | undefined) { this.height = ResolveHeightInput(value, this.Controller.Log, this.Context()); }
-    get Height(): number | 'fill' { return this.height; }
+    @Input() set Height(value: number | 'fill' | null | undefined) { this.height.Set(value); }
+    get Height(): number | 'fill' { return this.height.Value; }
 
     /** Width ÷ height (e.g. `16 / 9`); wins over `Height`. `undefined`/`null` is off; invalid values are logged and ignored, finite ones clamped to [0.25, 8]. */
-    @Input() set AspectRatio(value: number | null | undefined) { this.aspectRatio = ResolveAspectRatioInput(value, this.Controller.Log, this.Context()); }
-    get AspectRatio(): number | null { return this.aspectRatio; }
+    @Input() set AspectRatio(value: number | null | undefined) { this.aspectRatio.Set(value); }
+    get AspectRatio(): number | null { return this.aspectRatio.Value; }
 
     @Input() set ValueFormatter(value: ChartValueFormatter) { this.formatter = value ?? DefaultValueFormatter; this.Controller.MarkDirty(); }
     get ValueFormatter(): ChartValueFormatter { return this.formatter; }
@@ -44,11 +47,11 @@ export abstract class MJBaseChartComponent<TGeometry> implements OnDestroy {
     @Input() ShowTooltip = true;
     @Input() EmptyMessage = 'No data';
 
-    protected get HeightValue(): number | 'fill' { return this.height; }
-    protected get AspectRatioValue(): number | null { return this.aspectRatio; }
+    protected get HeightValue(): number | 'fill' { return this.height.Value; }
+    protected get AspectRatioValue(): number | null { return this.aspectRatio.Value; }
 
-    /** Lets the host fill its parent (the frame measures that height); see Height. */
-    @HostBinding('class.mj-chart-fill') protected get FillsParent(): boolean { return this.height === 'fill'; }
+    /** Lets the host fill its parent (the frame measures that height); see Height. Needs no check, so it reads the raw binding. */
+    @HostBinding('class.mj-chart-fill') protected get FillsParent(): boolean { return this.height.Raw === 'fill'; }
     public get AriaLabelText(): string { return this.ariaLabel || 'Chart'; }
 
     public OnPointerMove(event: PointerEvent): void {

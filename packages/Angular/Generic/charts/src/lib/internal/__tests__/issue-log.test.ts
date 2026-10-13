@@ -51,13 +51,17 @@ describe('ClampInput', () => {
         expect(sink).not.toHaveBeenCalled();
     });
 
-    it('clamps out-of-range values and logs once per input name', () => {
+    it('clamps out-of-range values and logs once per input name and value', () => {
         const sink = vi.fn();
         const log = new ChartIssueLog(sink);
         expect(ClampInput('InnerRadiusRatio', 5, 0, 0.85, log, 'donut chart "Mix"')).toBe(0.85);
-        expect(ClampInput('InnerRadiusRatio', 7, 0, 0.85, log, 'donut chart "Mix"')).toBe(0.85);
+        expect(ClampInput('InnerRadiusRatio', 5, 0, 0.85, log, 'donut chart "Mix"')).toBe(0.85);
         expect(sink).toHaveBeenCalledTimes(1);
         expect(sink.mock.calls[0][0]).toContain('InnerRadiusRatio');
+        // A later, different bad value is a new caller mistake (PR #5368 review).
+        expect(ClampInput('InnerRadiusRatio', 7, 0, 0.85, log, 'donut chart "Mix"')).toBe(0.85);
+        expect(sink).toHaveBeenCalledTimes(2);
+        expect(sink.mock.calls[1][0]).toContain('InnerRadiusRatio=7');
     });
 
     it('replaces a non-finite value with the minimum and logs', () => {

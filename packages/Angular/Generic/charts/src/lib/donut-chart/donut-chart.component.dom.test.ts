@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { ComponentFixture } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LogError } from '@memberjunction/core';
 import { OverlayQuery, ClearOverlayContainers, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import { MJDonutChartComponent } from './donut-chart.component';
@@ -217,8 +217,8 @@ describe('MJDonutChartComponent', () => {
     it('an invalid AspectRatio is logged once and ignored', async () => {
         const f = await render({ AspectRatio: -1, Height: 250 });
         expect((f.nativeElement.querySelector('.mj-chart') as HTMLElement).style.height).toBe('250px');
+        f.componentRef.setInput('AspectRatio', 2);
         f.componentRef.setInput('AspectRatio', -1);
-        f.componentRef.setInput('AspectRatio', Number.NaN);
         await Settle(f);
         expect((f.nativeElement.querySelector('.mj-chart') as HTMLElement).style.height).toBe('250px');
         expect(vi.mocked(LogError).mock.calls.filter((c) => String(c[0]).includes('AspectRatio'))).toHaveLength(1);
@@ -271,5 +271,17 @@ describe('MJDonutChartComponent', () => {
         const f = await render({ CenterLabel: 'Scored' });
         const g = f.componentInstance.Controller.View.Geometry!;
         expect(Number((f.nativeElement.querySelector('text.mj-chart-center-label') as SVGTextElement).getAttribute('y'))).toBe(g.CenterY);
+    });
+});
+
+describe('MJDonutChartComponent — clamp warnings (PR #5368 review)', () => {
+    it('names the chart even when InnerRadiusRatio is bound before AriaLabel', async () => {
+        const f = TestBed.createComponent(MJDonutChartComponent);
+        f.componentRef.setInput('InnerRadiusRatio', 2);
+        f.componentRef.setInput('AriaLabel', 'Mix');
+        f.componentRef.setInput('Slices', [{ Label: 'a', Value: 1 }]);
+        await Settle(f);
+        const ratioLogs = vi.mocked(LogError).mock.calls.map((c) => String(c[0])).filter((m) => m.includes('InnerRadiusRatio'));
+        expect(ratioLogs).toEqual([expect.stringContaining('donut chart "Mix"')]);
     });
 });

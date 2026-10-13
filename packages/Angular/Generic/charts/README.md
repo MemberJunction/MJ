@@ -96,7 +96,7 @@ OnPoint(e: ChartPointEvent): void { /* e.Category, e.SeriesName, e.Value (raw), 
 
 `mj-bar-chart` and `mj-area-chart` also take `ShowGridlines` (default `true`). `false` removes the gridlines and keeps the axis labels. Toggling it at runtime shows or hides the gridlines without changing the layout; changing `Height` or `AspectRatio` at runtime re-lays the chart out without a resize.
 
-Optional inputs that are `null` or `undefined` (`Height`, `AspectRatio`, `ShowGridlines`, `FillOpacity`, `InnerRadiusRatio`, `StackMode`, `Curve`, `Orientation`, `Stacked`, `ShowPercentLabels`) silently fall back to their defaults, so a binding to a not-yet-loaded value is safe. Only a real out-of-range number is clamped to the nearest limit and logged once.
+Optional inputs that are `null` or `undefined` (`Height`, `AspectRatio`, `ShowGridlines`, `FillOpacity`, `InnerRadiusRatio`, `StackMode`, `Curve`, `Orientation`, `Stacked`, `ShowPercentLabels`) silently fall back to their defaults, so a binding to a not-yet-loaded value is safe. Only a real out-of-range number is clamped to the nearest limit and logged — once per distinct value, naming the chart by its `AriaLabel` whatever order the inputs are bound in.
 
 ## Sizing
 

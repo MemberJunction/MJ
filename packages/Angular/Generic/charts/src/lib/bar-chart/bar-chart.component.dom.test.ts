@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { ComponentFixture } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LogError } from '@memberjunction/core';
 import { OverlayQuery, ClearOverlayContainers, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import { MJBarChartComponent } from './bar-chart.component';
@@ -267,8 +267,8 @@ describe('MJBarChartComponent', () => {
     it('an invalid AspectRatio is logged once and ignored', async () => {
         const f = await render({ AspectRatio: -1, Height: 250 });
         expect((f.nativeElement.querySelector('.mj-chart') as HTMLElement).style.height).toBe('250px');
+        f.componentRef.setInput('AspectRatio', 2);
         f.componentRef.setInput('AspectRatio', -1);
-        f.componentRef.setInput('AspectRatio', Number.NaN);
         await Settle(f);
         expect((f.nativeElement.querySelector('.mj-chart') as HTMLElement).style.height).toBe('250px');
         expect(vi.mocked(LogError).mock.calls.filter((c) => String(c[0]).includes('AspectRatio'))).toHaveLength(1);
@@ -353,5 +353,30 @@ describe('MJBarChartComponent', () => {
         } finally {
             vi.restoreAllMocks();
         }
+    });
+});
+
+describe('MJBarChartComponent — clamp warnings (PR #5368 review)', () => {
+    const logs = (needle: string): string[] => vi.mocked(LogError).mock.calls.map((c) => String(c[0])).filter((m) => m.includes(needle));
+
+    it('names the chart even when Height is bound before AriaLabel', async () => {
+        const f = TestBed.createComponent(MJBarChartComponent);
+        f.componentRef.setInput('Height', 50);
+        f.componentRef.setInput('AspectRatio', -1);
+        f.componentRef.setInput('AriaLabel', 'Revenue');
+        f.componentRef.setInput('Categories', ['A']);
+        f.componentRef.setInput('Series', [{ Name: 's', Values: [1] }]);
+        await Settle(f);
+        expect(logs('Height=50')).toEqual([expect.stringContaining('bar chart "Revenue"')]);
+        expect(logs('AspectRatio')).toEqual([expect.stringContaining('bar chart "Revenue"')]);
+    });
+
+    it('logs a later, different bad Height too, but not a repeat of the same one', async () => {
+        const f = await render({ Height: 50 });
+        f.componentRef.setInput('Height', 60);
+        await Settle(f);
+        f.componentRef.setInput('Height', 50);
+        await Settle(f);
+        expect(logs('Height=')).toHaveLength(2);
     });
 });

@@ -4,7 +4,7 @@ import { MJChartFrameComponent } from '../internal/chart-frame.component';
 import { ChartController, ChartPreparation } from '../internal/chart-controller';
 import { ActivePoint, DonutArc, DonutGeometry } from '../internal/geometry.types';
 import { ChartIssueLog } from '../internal/issue-log';
-import { ClampInput } from '../internal/inputs';
+import { ClampInput, DeferredInput } from '../internal/inputs';
 import { LogMissingAriaLabel, LogSoftCap, ResolveFills } from '../internal/prepare-helpers';
 import { MJBaseChartComponent } from '../internal/base-chart.component';
 import { IsFiniteValue, ValidateSlices } from '../internal/validate';
@@ -80,7 +80,9 @@ const MaxInnerRadiusRatio = 0.85;
 export class MJDonutChartComponent extends MJBaseChartComponent<DonutGeometry> {
     protected readonly ChartKind = 'donut';
     private slices: ReadonlyArray<DonutSlice> = [];
-    private innerRadiusRatio = DefaultInnerRadiusRatio;
+    /** Checked on first read, so a clamp log names the chart (see DeferredInput). */
+    private readonly innerRadiusRatio = new DeferredInput<number | null | undefined, number>(
+        undefined, (v) => (v == null ? DefaultInnerRadiusRatio : ClampInput('InnerRadiusRatio', v, 0, MaxInnerRadiusRatio, this.Controller.Log, this.Context())));
     private showPercentLabels = false;
     private fills: string[] = [];
     private percents: Array<number | null> = [];
@@ -90,7 +92,7 @@ export class MJDonutChartComponent extends MJBaseChartComponent<DonutGeometry> {
         Prepare: (log) => this.prepare(log),
         Table: () => BuildSliceTable(this.AriaLabelText, this.slices, this.formatter, this.percents),
         Layout: (surface) => ComputeDonutLayout({
-            Slices: this.slices, Fills: this.fills, InnerRadiusRatio: this.innerRadiusRatio,
+            Slices: this.slices, Fills: this.fills, InnerRadiusRatio: this.innerRadiusRatio.Value,
             ShowPercentLabels: this.showPercentLabels, Size: surface.Size, Measure: surface.Measure, Type: TypeMetrics(surface.FontSize),
         }),
         Points: (g) => DonutPoints(g),
@@ -108,13 +110,8 @@ export class MJDonutChartComponent extends MJBaseChartComponent<DonutGeometry> {
     get Slices(): ReadonlyArray<DonutSlice> { return this.slices; }
 
     /** `undefined`/`null` (an unset binding) means 0.7 and is not a caller mistake; numbers are clamped to [0, 0.85] and logged. */
-    @Input() set InnerRadiusRatio(value: number | null | undefined) {
-        this.innerRadiusRatio = value == null
-            ? DefaultInnerRadiusRatio
-            : ClampInput('InnerRadiusRatio', value, 0, MaxInnerRadiusRatio, this.Controller.Log, this.Context());
-        this.Controller.MarkDirty();
-    }
-    get InnerRadiusRatio(): number { return this.innerRadiusRatio; }
+    @Input() set InnerRadiusRatio(value: number | null | undefined) { this.innerRadiusRatio.Set(value); this.Controller.MarkDirty(); }
+    get InnerRadiusRatio(): number { return this.innerRadiusRatio.Value; }
 
     /** `undefined`/`null` (an unset binding) means false. */
     @Input() set ShowPercentLabels(value: boolean | null | undefined) { this.showPercentLabels = value ?? false; this.Controller.MarkDirty(); }

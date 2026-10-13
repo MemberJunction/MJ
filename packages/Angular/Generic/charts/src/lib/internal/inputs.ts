@@ -2,19 +2,20 @@ import { ChartIssueLog } from './issue-log';
 
 /**
  * Clamp a numeric input into [min, max]. Out-of-range or non-finite values are
- * a caller bug: logged once per input name, then clamped so the chart still renders.
+ * a caller bug: logged once per input name and value (a later, different bad value is a
+ * new mistake and is logged too), then clamped so the chart still renders.
  * NaN and -Infinity go to `min`; +Infinity goes to `max` when that is finite (an
  * "infinitely large" FillOpacity is opaque, not transparent), else to `min`.
  */
 export function ClampInput(name: string, value: number, min: number, max: number, log: ChartIssueLog, context: string): number {
     if (!Number.isFinite(value)) {
         const fallback = value === Infinity && Number.isFinite(max) ? max : min;
-        log.Once(`clamp:${name}`, `${context}: ${name} must be a finite number; using ${fallback}.`);
+        log.Once(`clamp:${name}:${value}`, `${context}: ${name} must be a finite number; using ${fallback}.`);
         return fallback;
     }
     if (value < min || value > max) {
         const clamped = Math.min(max, Math.max(min, value));
-        log.Once(`clamp:${name}`, `${context}: ${name}=${value} is outside [${min}, ${max}]; clamped to ${clamped}.`);
+        log.Once(`clamp:${name}:${value}`, `${context}: ${name}=${value} is outside [${min}, ${max}]; clamped to ${clamped}.`);
         return clamped;
     }
     return value;
@@ -41,7 +42,7 @@ export function ResolveHeightInput(value: number | 'fill' | null | undefined, lo
 
 /**
  * The `AspectRatio` input shared by every chart. An unset binding (null/undefined) is "off", silently.
- * A non-number, NaN, infinite or non-positive value cannot size anything, so it is logged once and treated
+ * A non-number, NaN, infinite or non-positive value cannot size anything, so it is logged once per value and treated
  * as unset (the chart falls back to `Height`); a finite value outside [MinAspectRatio, MaxAspectRatio] is clamped and logged.
  */
 export function ResolveAspectRatioInput(value: number | null | undefined, log: ChartIssueLog, context: string): number | null {
@@ -49,8 +50,39 @@ export function ResolveAspectRatioInput(value: number | null | undefined, log: C
         return null;
     }
     if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-        log.Once('aspect-ratio', `${context}: AspectRatio must be a positive finite number (width ÷ height, e.g. [AspectRatio]="16 / 9" and not a string attribute); ignoring ${String(value)}.`);
+        log.Once(`aspect-ratio:${String(value)}`, `${context}: AspectRatio must be a positive finite number (width ÷ height, e.g. [AspectRatio]="16 / 9" and not a string attribute); ignoring ${String(value)}.`);
         return null;
     }
     return ClampInput('AspectRatio', value, MinAspectRatio, MaxAspectRatio, log, context);
+}
+
+/**
+ * An input whose value is checked (clamped, logged) on first read rather than when it is set.
+ * Angular sets a component's inputs one at a time in template order, so a setter that logs can run
+ * before `AriaLabel` is bound and name the wrong chart; the first read comes from the template,
+ * after every input of that change-detection pass. Reading `Value` may therefore log once — the
+ * same documented exception to "getters are pure" as ChartController.View.
+ */
+export class DeferredInput<TRaw, TValue> {
+    private raw: TRaw;
+    private resolved: { Value: TValue } | null = null;
+
+    constructor(initial: TRaw, private readonly resolve: (raw: TRaw) => TValue) {
+        this.raw = initial;
+    }
+
+    /** The value as bound, before any check; for decisions that need no validation (e.g. `=== 'fill'`). */
+    public get Raw(): TRaw { return this.raw; }
+
+    public get Value(): TValue {
+        if (this.resolved === null) {
+            this.resolved = { Value: this.resolve(this.raw) };
+        }
+        return this.resolved.Value;
+    }
+
+    public Set(raw: TRaw): void {
+        this.raw = raw;
+        this.resolved = null;
+    }
 }

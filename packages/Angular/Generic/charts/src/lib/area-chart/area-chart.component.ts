@@ -4,7 +4,7 @@ import { MJChartFrameComponent } from '../internal/chart-frame.component';
 import { ChartController, ChartPreparation } from '../internal/chart-controller';
 import { ActivePoint, AreaGeometry, ChartAnchor } from '../internal/geometry.types';
 import { ChartIssueLog } from '../internal/issue-log';
-import { ClampInput } from '../internal/inputs';
+import { ClampInput, DeferredInput } from '../internal/inputs';
 import { LogMissingAriaLabel, LogSoftCap, ResolveFills } from '../internal/prepare-helpers';
 import { MJBaseChartComponent } from '../internal/base-chart.component';
 import { CategoryChartMode, ValidateCategorySeries } from '../internal/validate';
@@ -82,7 +82,9 @@ export class MJAreaChartComponent extends MJBaseChartComponent<AreaGeometry> {
     private stackMode: AreaStackMode = 'none';
     private curve: AreaCurve = 'smooth';
     private showGridlines = true;
-    private fillOpacity = DefaultFillOpacity;
+    /** Checked on first read, so a clamp log names the chart (see DeferredInput). */
+    private readonly fillOpacity = new DeferredInput<number | null | undefined, number>(
+        undefined, (v) => (v == null ? DefaultFillOpacity : ClampInput('FillOpacity', v, 0, 1, this.Controller.Log, this.Context())));
     private fills: string[] = [];
     private shares: number[][] | null = null;
 
@@ -120,12 +122,8 @@ export class MJAreaChartComponent extends MJBaseChartComponent<AreaGeometry> {
     get Curve(): AreaCurve { return this.curve; }
 
     /** `undefined`/`null` (an unset binding) means "use the default" and is not a caller mistake; numbers are clamped to [0, 1] and logged. */
-    @Input() set FillOpacity(value: number | null | undefined) {
-        this.fillOpacity = value == null
-            ? DefaultFillOpacity
-            : ClampInput('FillOpacity', value, 0, 1, this.Controller.Log, this.Context());
-    }
-    get FillOpacity(): number { return this.fillOpacity; }
+    @Input() set FillOpacity(value: number | null | undefined) { this.fillOpacity.Set(value); }
+    get FillOpacity(): number { return this.fillOpacity.Value; }
 
     // No MarkDirty: gridlines are template-only, so the input change re-renders them directly.
     /** `undefined`/`null` (an unset binding) means true. Axis labels stay; only the lines go. */
@@ -134,7 +132,7 @@ export class MJAreaChartComponent extends MJBaseChartComponent<AreaGeometry> {
 
     @Output() PointClick = new EventEmitter<ChartPointEvent>();
 
-    public get FillOpacityValue(): number { return this.fillOpacity; }
+    public get FillOpacityValue(): number { return this.fillOpacity.Value; }
 
     public FocusPoint(g: AreaGeometry, active: ActivePoint): ChartAnchor | null {
         return AreaAnchor(g, active);
