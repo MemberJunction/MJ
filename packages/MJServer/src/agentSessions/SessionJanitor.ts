@@ -646,7 +646,9 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
     private async restoreLostRecordingStatus(candidate: MJAIAgentSessionEntity, ledger: IRealtimeRecordingLedger): Promise<boolean> {
         const sessionID = candidate.ID;
         const expectedShards = candidate.RecordingExpectedShards ?? 0;
-        const capturedSamples = candidate.RecordingCapturedSamples ?? 0;
+        // Number(): the candidate comes from a RunView entity page, which keeps the driver's value for a
+        // BIGINT column, and the SQL Server driver returns BIGINT as a string (the ledger refuses strings).
+        const capturedSamples = Number(candidate.RecordingCapturedSamples ?? 0);
         const stamped = await ledger.StampTerminal(sessionID, expectedShards, capturedSamples);
         if (stamped.RecordingStatus == null) {
             LogError(

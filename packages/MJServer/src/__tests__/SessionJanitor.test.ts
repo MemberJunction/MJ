@@ -1197,6 +1197,17 @@ describe('SessionJanitor.RunRecordingLedgerSweep', () => {
         expect(ledgerMock.StampTerminal).toHaveBeenCalledWith(session.ID, 9, 2_000_000);
     });
 
+    it('stamps a BIGINT capture count that the candidate page delivers as a string as a number', async () => {
+        // A RunView entity page keeps the driver's value for a BIGINT column: the SQL Server driver
+        // returns it as a string, and the ledger's integer guard refused it (#5294 gauntlet, row S13 J3).
+        const session = ledgerCandidate({ RecordingStatus: null, RecordingExpectedShards: 5, RecordingCapturedSamples: '1137600' as unknown as number });
+        ledgerMock.StampTerminal.mockResolvedValueOnce({ Outcome: 'Stamped', RecordingStatus: 'Pending' });
+
+        await ledgerSweepWith([session]);
+
+        expect(ledgerMock.StampTerminal).toHaveBeenCalledWith(session.ID, 5, 1_137_600);
+    });
+
     it('LogErrors and backs off a lost status the stamp could not restore', async () => {
         const session = ledgerCandidate({ RecordingStatus: null });
         ledgerMock.StampTerminal.mockResolvedValueOnce({ Outcome: 'Ignored', RecordingStatus: null });
