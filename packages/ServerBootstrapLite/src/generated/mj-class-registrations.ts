@@ -168,8 +168,9 @@ import {
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
-// @memberjunction/ai-vertex (1 classes)
+// @memberjunction/ai-vertex (2 classes)
 import {
+    GeminiEnterpriseRealtime,
     VertexLLM,
 } from '@memberjunction/ai-vertex';
 
@@ -217,7 +218,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (448 classes)
+// @memberjunction/core-entities (450 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -386,6 +387,8 @@ import {
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -1447,6 +1450,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     SiliconFlowLLM,
     PerplexityDecision,
     SystemOneDecision,
+    GeminiEnterpriseRealtime,
     VertexLLM,
     xAILLM,
     xAIRealtime,
@@ -1601,11 +1605,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
-    MJCompanyIntegrationRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
@@ -1631,6 +1635,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -1803,13 +1809,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
-    MJRecordProcessCategoryEntity,
-    MJRecordProcessEntity,
-    MJRecordProcessWatermarkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordProcessCategoryEntity,
+    MJRecordProcessEntity,
+    MJRecordProcessWatermarkEntity,
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
     MJResourceLinkEntity,
@@ -2007,13 +2013,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CreateUserAction_actions_bizapps_lms,
     DetachTagsAction,
     EnrollUserAction,
-    GetBundlesAction,
-    GetCertificatesAction,
-    GetCourseAnalyticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetBundlesAction,
+    GetCertificatesAction,
+    GetCourseAnalyticsAction,
     GetLearnWorldsBulkDataAction,
     GetLearnWorldsCourseDetailsAction,
     GetLearnWorldsCoursesAction,
@@ -2211,13 +2217,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
-    TaskGraphForceCompleteTaskServerOperation,
-    TaskGraphGetStatusServerOperation,
-    TaskGraphOverrideEdgeServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TaskGraphForceCompleteTaskServerOperation,
+    TaskGraphGetStatusServerOperation,
+    TaskGraphOverrideEdgeServerOperation,
     TaskGraphPauseServerOperation,
     TaskGraphResumeServerOperation,
     TaskGraphRetryTaskServerOperation,
@@ -2415,13 +2421,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
     RetryAction,
-    ReverseGeocodeAction,
-    RevertInteractiveFormAction,
-    RevokeListInvitationAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ReverseGeocodeAction,
+    RevertInteractiveFormAction,
+    RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
     RunDecisionAction,
@@ -2500,7 +2506,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1062;
+export const CLASS_REGISTRATIONS_COUNT = 1065;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

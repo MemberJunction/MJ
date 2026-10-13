@@ -233,4 +233,61 @@ describe('ClonePolicyResolver', () => {
         expect(BagEntry({ Alpha: 1 }, 'ALPHA')).toBe(1);
         expect(BagEntry({ Alpha: 1 }, 'Beta')).toBeUndefined();
     });
+
+    describe('template mode', () => {
+        // The MJ: Users shape: the root keeps conversations Locked Skip; only a template preset opens them.
+        const lockedSkip: EdgePolicyResolutionContext = {
+            ...baseContext,
+            ParentEntityName: 'MJ: Users',
+            ChildEntityName: 'MJ: Conversations',
+            JoinField: 'UserID',
+            RelationshipID: 'rel-user-conversations',
+            RootEntityConfig: { Relationships: { 'MJ: Conversations': { Policy: 'Skip', Locked: true } } },
+            PresetConfig: { EdgeOverrides: [{ ChildEntityName: 'MJ: Conversations', Policy: 'Deep' }] },
+        };
+
+        it('ignores a preset on a Locked edge outside template mode', () => {
+            const res = ResolveEdgePolicy(lockedSkip);
+            expect(res.Policy).toBe('Skip');
+            expect(res.Warnings.map((w) => w.Code)).toContain('LOCKED_EDGE_OVERRIDE_IGNORED');
+        });
+
+        it('lets a template preset open a Locked edge', () => {
+            const res = ResolveEdgePolicy({ ...lockedSkip, TemplateMode: true });
+            expect(res.Policy).toBe('Deep');
+            expect(res.Locked).toBe(true);
+            expect(res.Warnings).toEqual([]);
+        });
+
+        it('still ignores request overrides on a Locked edge in template mode', () => {
+            const res = ResolveEdgePolicy({
+                ...lockedSkip,
+                TemplateMode: true,
+                RequestOverrides: [{ RelationshipID: 'rel-user-conversations', Policy: 'Skip' }],
+            });
+            expect(res.Policy).toBe('Deep');
+            expect(res.Warnings.map((w) => w.Code)).toContain('LOCKED_EDGE_OVERRIDE_IGNORED');
+        });
+
+        it('lifts NotCloneable only for a CloneableFromTemplate child, and only in template mode', () => {
+            const child = { NotCloneable: true, NotCloneableReason: 'Interactive transcripts', CloneableFromTemplate: true };
+            expect(ResolveEdgePolicy({ ...lockedSkip, TemplateMode: true, ChildEntityConfig: child }).Policy).toBe('Deep');
+
+            const outside = ResolveEdgePolicy({ ...lockedSkip, ChildEntityConfig: child });
+            expect(outside.Policy).toBe('Skip');
+            expect(outside.Warnings.map((w) => w.Code)).toContain('NOT_CLONEABLE');
+
+            const notOptedIn = ResolveEdgePolicy({ ...lockedSkip, TemplateMode: true, ChildEntityConfig: { ...child, CloneableFromTemplate: false } });
+            expect(notOptedIn.Policy).toBe('Skip');
+        });
+
+        it('never lifts AllowCreateAPI=false, even for a template', () => {
+            const res = ResolveEdgePolicy({
+                ...lockedSkip,
+                TemplateMode: true,
+                ChildEntityConfig: { AllowCreateAPI: false, CloneableFromTemplate: true },
+            });
+            expect(res.Policy).toBe('Skip');
+        });
+    });
 });

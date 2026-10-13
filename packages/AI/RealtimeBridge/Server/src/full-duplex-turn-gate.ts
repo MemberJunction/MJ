@@ -101,20 +101,29 @@ export class FullDuplexTurnGate {
      * @returns Whether to forward, drop, or cut — and whether this chunk took the floor.
      */
     public OnOutputAudio(byteLength: number): OutputGateResult {
+        return this.OnOutputDuration((byteLength / 2 / this.sampleRateHz) * 1000);
+    }
+
+    /**
+     * Decides what to do with one chunk of the model's outbound speech, given how long it plays: an avatar's media piece
+     * counts by its audio track's duration.
+     *
+     * A chunk with no speech (0 ms: an avatar piece with video only, or one its driver marks idle, which the engine
+     * counts as 0 ms) never starts a burst and never keeps one going, so the face an avatar shows between answers can't
+     * take the floor, count as an agent's turn, or hold a muted burst open. Inside a burst it goes with it: forwarded
+     * while the agent holds the floor or overlays, dropped once the burst is muted.
+     *
+     * @param chunkMs How long the chunk's speech plays, in milliseconds.
+     * @returns Whether to forward, drop, or cut — and whether this chunk took the floor.
+     */
+    public OnOutputDuration(chunkMs: number): OutputGateResult {
         const now = this.now();
         this.endStaleBurst(now);
-        this.lastChunkAtMs = now;
-        const chunkMs = (byteLength / 2 / this.sampleRateHz) * 1000;
-        switch (this.phase) {
-            case 'Idle':
-                return this.startBurst(chunkMs);
-            case 'Floor':
-                return this.continueFloor(chunkMs);
-            case 'Overlay':
-                return this.continueOverlay(chunkMs);
-            default:
-                return { Verdict: 'Drop', TookFloor: false };
+        if (chunkMs <= 0) {
+            return this.phase === 'Idle' ? { Verdict: 'Forward', TookFloor: false } : this.continueBurst(0);
         }
+        this.lastChunkAtMs = now;
+        return this.phase === 'Idle' ? this.startBurst(chunkMs) : this.continueBurst(chunkMs);
     }
 
     /**
@@ -145,7 +154,10 @@ export class FullDuplexTurnGate {
 
     // ── internals ────────────────────────────────────────────────────────────────
 
-    /** A pause between chunks ends a burst for a session that is not holding the floor (it holds it until `EndTurn`). */
+    /**
+     * A pause in speech ends a burst for a session that is not holding the floor (it holds it until `EndTurn`). Only a
+     * chunk with speech counts: the video an avatar shows between answers doesn't keep a burst going.
+     */
     private endStaleBurst(now: number): void {
         const stale = this.lastChunkAtMs > 0 && now - this.lastChunkAtMs > OUTPUT_BURST_GAP_MS;
         if (!stale || this.phase === 'Floor') {
@@ -172,6 +184,18 @@ export class FullDuplexTurnGate {
         }
         this.coordinator.TakeFloor(this.roomId, this.agentSessionId, 'Turn'); // records the denial in the room's events
         return this.refuse();
+    }
+
+    /** A chunk inside a burst goes the way the burst goes: on with the floor or a short overlay, dropped once muted. */
+    private continueBurst(chunkMs: number): OutputGateResult {
+        switch (this.phase) {
+            case 'Floor':
+                return this.continueFloor(chunkMs);
+            case 'Overlay':
+                return this.continueOverlay(chunkMs);
+            default:
+                return { Verdict: 'Drop', TookFloor: false };
+        }
     }
 
     /** A turn in progress: keep forwarding while the agent still holds the floor, cut it the moment it does not. */

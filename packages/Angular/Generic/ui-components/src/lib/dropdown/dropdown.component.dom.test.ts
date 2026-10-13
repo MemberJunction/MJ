@@ -11,7 +11,7 @@ import { MJDialogComponent } from '../dialog/dialog.component';
  * Its option panel renders through a CDK connected-overlay (into .cdk-overlay-container on the body),
  * so assertions on the open panel use the overlay-query helpers. Covers the trigger (placeholder /
  * selected text / aria-expanded), open → option list, option click → ValueChange + close, disabled
- * gating, the filter box, and the empty state.
+ * gating, the filter box, the empty state, and Escape.
  */
 
 const DATA = [
@@ -391,6 +391,21 @@ class DropdownLastInDialogHostComponent {
   Data = DATA;
 }
 
+/** A dialog that closes on Escape (mj-dialog listens for it on the document), counting its closes. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent, MJDropdownComponent],
+  template: `
+    <mj-dialog [Visible]="true" [AutoFocus]="false" Title="Form" (Close)="DialogCloses = DialogCloses + 1">
+      <mj-dropdown [Data]="Data" TextField="text" ValueField="value" [ValuePrimitive]="true" AriaLabel="Role"></mj-dropdown>
+    </mj-dialog>
+  `,
+})
+class DropdownInClosingDialogHostComponent {
+  Data = DATA;
+  DialogCloses = 0;
+}
+
 /** Closeable is off, so the dropdown is the first stop. Shift+Tab in its filter must wrap to the last. */
 @Component({
   standalone: true,
@@ -486,5 +501,145 @@ describe('MJDropdownComponent inside mj-dialog (DOM)', () => {
     expect(overlayQuery('.mj-dropdown-panel')).toBeNull();
     expect(document.activeElement).toBe(last);
     expect(document.activeElement).not.toBe(field);
+  });
+
+  it('Escape with the list open closes the list and leaves the dialog open; the next Escape closes the dialog', () => {
+    // #5340: one Escape closed both, because the key went on to the dialog's document listener.
+    const f = renderComponentFixture(DropdownInClosingDialogHostComponent, { imports: [DropdownInClosingDialogHostComponent] });
+    const field = query(f, '.mj-dropdown') as HTMLElement;
+    field.focus();
+    field.click();
+    f.detectChanges();
+    expect(overlayQuery('.mj-dropdown-panel')).not.toBeNull();
+
+    press(field, 'Escape');
+    f.detectChanges();
+
+    expect(overlayQuery('.mj-dropdown-panel')).toBeNull();
+    expect(f.componentInstance.DialogCloses).toBe(0);
+
+    press(field, 'Escape');
+
+    expect(f.componentInstance.DialogCloses).toBe(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A field in a host that listens for Escape on an element around the field. The specs below also
+ * listen on the document, where `mj-dialog`, popovers and pickers listen.
+ */
+@Component({
+  standalone: true,
+  imports: [MJDropdownComponent],
+  template: `
+    <div class="escape-host" (keydown)="OnHostKeyDown($event)">
+      <mj-dropdown [Data]="Data" TextField="text" ValueField="value" [ValuePrimitive]="true"
+        [Filterable]="Filterable" AriaLabel="Role"></mj-dropdown>
+    </div>
+  `,
+})
+class EscapeHostComponent {
+  Data = DATA;
+  @Input() Filterable = false;
+  /** Keys that reached the element around the field. */
+  HostKeys: string[] = [];
+  OnHostKeyDown(event: KeyboardEvent): void {
+    this.HostKeys.push(event.key);
+  }
+}
+
+/**
+ * #5340: Escape with the list open closes the list and goes no further, wherever focus is. With
+ * the list closed it reaches the host as before.
+ */
+describe('MJDropdownComponent — Escape (DOM)', () => {
+  let pageKeys: string[] = [];
+  const onPageKeyDown = (event: KeyboardEvent): void => {
+    pageKeys.push(event.key);
+  };
+  beforeEach(() => {
+    pageKeys = [];
+    document.addEventListener('keydown', onPageKeyDown);
+  });
+  afterEach(() => document.removeEventListener('keydown', onPageKeyDown));
+
+  const renderHost = (filterable = false) =>
+    renderComponentFixture(EscapeHostComponent, { imports: [EscapeHostComponent], inputs: { Filterable: filterable } });
+
+  /** Escape as a browser sends it. The CDK overlay matches Escape on keyCode, so the spec sets it too. */
+  const pressEscape = (target: EventTarget): KeyboardEvent => {
+    const event = new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true, cancelable: true });
+    target.dispatchEvent(event);
+    return event;
+  };
+
+  it('Escape in the field with the list open closes the list, and neither the host nor the page sees it', () => {
+    const f = renderHost();
+    const field = query(f, '.mj-dropdown') as HTMLElement;
+    field.focus();
+    field.click();
+    f.detectChanges();
+    expect(overlayQuery('.mj-dropdown-panel')).not.toBeNull();
+
+    const escape = pressEscape(field);
+    f.detectChanges();
+
+    expect(overlayQuery('.mj-dropdown-panel')).toBeNull();
+    expect(field.getAttribute('aria-expanded')).toBe('false');
+    expect(escape.defaultPrevented).toBe(true);
+    expect(f.componentInstance.HostKeys, 'the element around the field').toEqual([]);
+    expect(pageKeys, 'the document').toEqual([]);
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('Escape in the filter box closes the list, stays off the page, and puts focus back on the field', async () => {
+    const f = renderHost(true);
+    const field = query(f, '.mj-dropdown') as HTMLElement;
+    field.click();
+    f.detectChanges();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const filter = overlayQuery('.mj-dropdown-filter') as HTMLInputElement;
+    expect(document.activeElement).toBe(filter);
+
+    pressEscape(filter);
+    f.detectChanges();
+
+    expect(overlayQuery('.mj-dropdown-panel')).toBeNull();
+    expect(pageKeys).toEqual([]);
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('Escape after focus left the field for the page (a click in the panel) still closes only the list', () => {
+    // The key never passes through the field; the open list's overlay hears it on the body.
+    const f = renderHost();
+    const field = query(f, '.mj-dropdown') as HTMLElement;
+    field.focus();
+    field.click();
+    f.detectChanges();
+    field.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    const escape = pressEscape(document.body);
+    f.detectChanges();
+
+    expect(overlayQuery('.mj-dropdown-panel')).toBeNull();
+    expect(escape.defaultPrevented).toBe(true);
+    expect(pageKeys).toEqual([]);
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('Escape with the list closed still reaches the host and the page', () => {
+    const f = renderHost();
+    const field = query(f, '.mj-dropdown') as HTMLElement;
+    field.focus();
+
+    pressEscape(field);
+    f.detectChanges();
+
+    expect(f.componentInstance.HostKeys).toEqual(['Escape']);
+    expect(pageKeys).toEqual(['Escape']);
+    expect(field.getAttribute('aria-expanded')).toBe('false');
   });
 });

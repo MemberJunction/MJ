@@ -17,8 +17,13 @@
  *   where it was costs nothing).
  * - **One confirmation frame after an agent edit**, with a note telling the model not to narrate
  *   its own change — the agent should *see* what it did without announcing it.
+ * - **Only a frame the sink takes counts as sent.** The sink can refuse one: another video source
+ *   holds the model's only stream, the channel's source is switched off, or the frame came too soon
+ *   after the last. A refused frame is not the dedupe baseline, is not reported, and no confirmation
+ *   note goes out without its frame. When the model can see the channel again, {@link VisualPerceptionPump.Refresh}
+ *   sends the current picture even though it has not changed.
  *
- * Every frame pushed is reported with the **change id** of the state it was captured at, so a
+ * Every frame the sink takes is reported with the **change id** of the state it was captured at, so a
  * consumer can verify that pixels and the state events describing the same moment agree.
  *
  * Standalone (injected clock-free: it reads `Date.now()` and `setTimeout`, both fakeable) so the
@@ -32,7 +37,11 @@ export type VisualFrameReason = 'change' | 'settle' | 'confirmation';
 
 /** The slice of the shared video bridge the pump writes to. */
 export interface VisualFrameSink {
-    /** Pushes one base64 JPEG frame; returns whether it was dispatched. */
+    /**
+     * Pushes one base64 JPEG frame; returns whether it was dispatched to the model. `false` when the frame was refused
+     * (the session's video source arbiter is sending the model another source, this source is off, or the frame came
+     * inside the pacing interval), and the pump then treats it as never sent.
+     */
     PushFrame(base64Jpeg: string): boolean;
 }
 
@@ -53,9 +62,9 @@ export interface VisualPerceptionPumpHost {
     CaptureFrame(): Promise<string | null>;
     /** The id of the latest state change — read at capture time to tag the frame. */
     GetChangeId(): number;
-    /** Reports a pushed frame (for `Events$`, diagnostics, tests). */
+    /** Reports a frame the sink took (for `Events$`, diagnostics, tests). A refused frame is not reported. */
     OnFramePushed(frame: string, reason: VisualFrameReason, changeId: number): void;
-    /** Sends the "do not narrate your own change" note after a confirmation frame. */
+    /** Sends the "do not narrate your own change" note after a confirmation frame the sink took. */
     SendConfirmationNote(changeId: number): void;
     /** Logs a problem; the pump never throws into a timer or an unawaited promise. */
     OnError(context: string, error: unknown): void;
@@ -65,9 +74,12 @@ export interface VisualPerceptionPumpHost {
  * The change-driven pump. One per channel instance, created by `EnableVisualPerception`.
  */
 export class VisualPerceptionPump {
-    /** Epoch ms of the last frame pushed; 0 before the first. */
+    /**
+     * Epoch ms of the last frame offered to the sink, taken or not; 0 before the first. It paces the next capture, so a
+     * burst of changes while the sink refuses frames still costs one capture per cadence.
+     */
     private lastPushTimestamp = 0;
-    /** The last frame pushed, for dedupe. */
+    /** The last frame the sink took, for dedupe: the picture the model has. */
     private lastPushedFrame: string | null = null;
     /** The trailing settle timer; non-null while armed. */
     private trailingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -99,7 +111,8 @@ export class VisualPerceptionPump {
     /**
      * An AGENT change succeeded: push exactly one confirmation frame immediately (cancelling any
      * pending settle — the confirmation IS the settled state) and tell the model not to narrate it.
-     * No frame, no note, when nothing could be captured.
+     * No frame, no note, when nothing could be captured; no note when the sink refused the frame, since
+     * the model would be told to look at a change it was not shown.
      */
     public async Confirm(): Promise<void> {
         try {
@@ -109,13 +122,23 @@ export class VisualPerceptionPump {
             this.cancelTrailing();
             const changeId = this.host.GetChangeId();
             const frame = await this.host.CaptureFrame();
-            if (frame) {
-                this.push(frame, 'confirmation', changeId);
+            if (frame && this.push(frame, 'confirmation', changeId)) {
                 this.host.SendConfirmationNote(changeId);
             }
         } catch (error) {
             this.host.OnError('confirmation', error);
         }
+    }
+
+    /**
+     * The model can see this channel again after a time it could not: the channel's video source is being sent to the
+     * model again, after another source held its only stream or after the source was off. The model's picture of the
+     * channel is stale, so the dedupe frame is forgotten and the current picture is pushed even if it has not changed,
+     * respecting the cadence. Resolves once the decision has been carried out; never rejects.
+     */
+    public Refresh(): Promise<void> {
+        this.lastPushedFrame = null;
+        return this.OnChange();
     }
 
     /** Cancels a pending trailing settle without forgetting the dedupe frame (used when a channel is re-initialized). */
@@ -178,11 +201,19 @@ export class VisualPerceptionPump {
         }
     }
 
-    /** Pushes a frame through the sink and records it. */
-    private push(frame: string, reason: VisualFrameReason, changeId: number): void {
+    /**
+     * Offers a frame to the sink. Only a frame the sink took becomes the dedupe baseline and is reported; the attempt
+     * paces the next one either way.
+     *
+     * @returns Whether the sink took the frame.
+     */
+    private push(frame: string, reason: VisualFrameReason, changeId: number): boolean {
         this.lastPushTimestamp = Date.now();
+        if (!this.host.GetSink()?.PushFrame(frame)) {
+            return false;
+        }
         this.lastPushedFrame = frame;
-        this.host.GetSink()?.PushFrame(frame);
         this.host.OnFramePushed(frame, reason, changeId);
+        return true;
     }
 }
