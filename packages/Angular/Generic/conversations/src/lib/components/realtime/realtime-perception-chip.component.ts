@@ -20,6 +20,10 @@ export interface RealtimePerceptionToggle {
  * Whiteboard"); opening it lists each source with a switch. Turning a source off removes it from what the
  * agent receives and tells the agent (the runtime owns both, and remembers the choice per channel).
  *
+ * The agent may see fewer sources than are on (Gemini sees one). Then the trigger names the one it sees ("Agent
+ * sees: Camera"), and the panel lets the user pick another ({@link SourcePicked}) and, once they have, let the
+ * call choose again.
+ *
  * Purely presentational: it renders the sources it is given and raises {@link SourceToggled}; it never
  * touches the session. Every control has an accessible name; the open panel closes on Escape.
  *
@@ -43,6 +47,9 @@ export class RealtimePerceptionChipComponent {
   /** Raised when the user switches a source on or off. */
   @Output() SourceToggled = new EventEmitter<RealtimePerceptionToggle>();
 
+  /** Raised when the user picks the source the agent sees (its id), or lets the call choose again (`null`). */
+  @Output() SourcePicked = new EventEmitter<string | null>();
+
   /** Whether the per-source panel is open. */
   public Expanded = false;
 
@@ -51,13 +58,30 @@ export class RealtimePerceptionChipComponent {
     return this.Sources.filter((s) => s.Enabled);
   }
 
-  /** The one-line summary on the trigger. */
+  /** The one-line summary on the trigger: with more sources on than the agent sees, the ones it sees. */
   public get Summary(): string {
     const enabled = this.EnabledSources;
     if (enabled.length === 0) {
       return 'Agent view off';
     }
-    return enabled.length === 1 ? `Agent can see: ${enabled[0].Label}` : `Agent can see ${enabled.length} sources`;
+    if (enabled.length === 1) {
+      return `Agent can see: ${enabled[0].Label}`;
+    }
+    const seen = enabled.filter((s) => s.Active);
+    if (seen.length === 0 || seen.length === enabled.length) {
+      return `Agent can see ${enabled.length} sources`;
+    }
+    return seen.length === 1 ? `Agent sees: ${seen[0].Label}` : `Agent sees ${seen.length} of ${enabled.length} sources`;
+  }
+
+  /** Whether the user may pick a source: some source that is on is not one the agent sees. */
+  public get CanPick(): boolean {
+    return this.EnabledSources.some((s) => !s.Active);
+  }
+
+  /** Whether the user has picked the source the agent sees, so the call can be let choose again. */
+  public get HasPick(): boolean {
+    return this.Sources.some((s) => s.Picked);
   }
 
   /** The trigger's accessible name: the summary plus what activating it does. */
@@ -83,12 +107,25 @@ export class RealtimePerceptionChipComponent {
     }
   }
 
-  /** The row's status text: whether the agent is looking at it right now. */
+  /** The user picks the source the agent sees, or lets the call choose again (`null`). */
+  public OnPick(source: VideoSourceState | null): void {
+    this.SourcePicked.emit(source?.SourceID ?? null);
+  }
+
+  /** The row's status text: whether the agent is looking at it right now, and whether by the user's pick. */
   public StatusText(source: VideoSourceState): string {
     if (!source.Enabled) {
       return 'Off';
     }
-    return source.Active ? 'Viewing now' : 'Available';
+    if (!source.Active) {
+      return 'Available';
+    }
+    return source.Picked ? 'Viewing now, your pick' : 'Viewing now';
+  }
+
+  /** The pick button's accessible name. */
+  public PickLabel(source: VideoSourceState): string {
+    return `Show the agent ${source.Label}`;
   }
 
   /** The switch's accessible name. */

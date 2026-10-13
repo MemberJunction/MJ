@@ -289,21 +289,24 @@ describe('UserCache', () => {
 
         it('should build UserInfo objects with their roles attached', async () => {
             const stub = makeProviderStub({
-                users: [{ ID: 'id1', Name: 'Alice' }, { ID: 'id2', Name: 'Bob' }],
+                users: [{ ID: 'id1', Name: 'Alice' }, { ID: 'id2', Name: 'Bob' }, { ID: 'id3', Name: 'Carol' }],
                 roles: [
                     { UserID: 'id1', Role: 'Developer' },
-                    { UserID: 'ID1', Role: 'Integration' },
                     { UserID: 'id2', Role: 'UI' },
+                    { UserID: 'ID1', Role: 'Integration' },
                 ],
             });
 
             await UserCache.Instance.Refresh(stub.Provider);
 
             const users = UserCache.Instance.Users;
-            expect(users).toHaveLength(2);
-            // Role matching is UUID-comparison based, so the case-variant UserID still matches
-            expect((users[0] as unknown as { UserRoles: unknown[] }).UserRoles).toHaveLength(2);
-            expect((users[1] as unknown as { UserRoles: unknown[] }).UserRoles).toHaveLength(1);
+            const roleNames = (user: UserInfo) => (user as unknown as { UserRoles: { Role: string }[] }).UserRoles.map(r => r.Role);
+            expect(users).toHaveLength(3);
+            // Role matching is UUID-comparison based, so the case-variant UserID still matches,
+            // and each user's roles keep the order the view returned them in.
+            expect(roleNames(users[0])).toEqual(['Developer', 'Integration']);
+            expect(roleNames(users[1])).toEqual(['UI']);
+            expect(roleNames(users[2])).toEqual([]);
         });
 
         it('reads the views metadata names, when metadata is loaded', async () => {

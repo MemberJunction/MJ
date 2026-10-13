@@ -320,6 +320,38 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
   // carries its positive control, so a listener that died for an unrelated reason cannot pass
   // as "correctly gated".
 
+  describe('Move to stage', () => {
+    const stageButton = (f: Fix) =>
+      (Array.from(f.nativeElement.querySelectorAll('button.head-btn')) as HTMLButtonElement[]).find((b) =>
+        /Move to stage|Back to tab/.test(b.textContent ?? '')
+      ) as HTMLButtonElement;
+
+    it('offers "Move to stage", and asks for the stage when clicked', () => {
+      const f = render();
+      const asked: boolean[] = [];
+      f.componentInstance.FocusModeChange.subscribe((on: boolean) => asked.push(on));
+      expect(stageButton(f).textContent?.trim()).toBe('Move to stage');
+      stageButton(f).click();
+      f.detectChanges();
+      expect(asked).toEqual([true]);
+    });
+
+    it('offers "Back to tab" once the host reports the board on the stage, and asks for the tab when clicked', () => {
+      const f = render();
+      const asked: boolean[] = [];
+      f.componentInstance.FocusModeChange.subscribe((on: boolean) => asked.push(on));
+      f.componentInstance.SetOnStage(true);
+      f.detectChanges();
+      expect(stageButton(f).textContent?.trim()).toBe('Back to tab');
+      stageButton(f).click();
+      f.detectChanges();
+      expect(asked).toEqual([false]);
+      f.componentInstance.SetOnStage(false);
+      f.detectChanges();
+      expect(stageButton(f).textContent?.trim()).toBe('Move to stage');
+    });
+  });
+
   describe('ReadOnly', () => {
     const renderRO = (
       readOnly: boolean,
