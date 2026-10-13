@@ -3524,8 +3524,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     return;
                 }
                 // Ignore closes we initiated via disposeWSClient() — those already
-                // emit 'unknown' themselves. Only treat unexpected closes (retries
-                // exhausted) as 'disconnected'.
+                // emit 'unknown' themselves. Every unexpected close is 'disconnected' —
+                // including the first one, before graphql-ws decides whether to retry —
+                // so a consumer must treat it as "the socket dropped", not "retries are
+                // exhausted" (MJ #5510).
                 if (this._isDisposingSocketIntentionally) {
                     return;
                 }
