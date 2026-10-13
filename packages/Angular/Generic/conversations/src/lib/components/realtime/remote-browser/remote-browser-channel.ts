@@ -503,6 +503,13 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     void this.startAudioStream(instance);
   }
 
+  /** Pauses the surface's snapshot poll while it is out of sight; the screencast and the audio keep running. */
+  public override OnSurfaceVisibilityChange(visible: boolean): void {
+    if (this.surface) {
+      this.surface.Visible = visible;
+    }
+  }
+
   public override UnbindSurface(): void {
     this.humanInputSub?.unsubscribe();
     this.humanInputSub = null;
@@ -598,7 +605,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   /**
    * Forwards one PUSHED screencast frame to the bound surface's canvas. Called by the session service
    * when a `RemoteBrowserScreencastFrame` arrives on the push-status stream for THIS session. No-op when
-   * the channel isn't streaming or has no bound surface (e.g. the tab pane is collapsed).
+   * the channel isn't streaming or has no bound surface (e.g. its tab has not been shown yet).
    *
    * Under streaming the surface's snapshot poll is stopped, so this is the ONLY thing that sees the
    * page while frames are being pushed — which is why the frame now carries the URL (#3496). Without
