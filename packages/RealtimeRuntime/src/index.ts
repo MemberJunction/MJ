@@ -36,7 +36,6 @@ export {
     REALTIME_RECORDING_CONSENT_KEY,
     RECORDING_TERMINAL_ACK_TIMEOUT_MS,
     RECORDER_STOP_TIMEOUT_MS,
-    MAX_DRAINED_SHARDS_PER_LOAD,
     type RealtimeConnectionState,
     type RealtimeCaption,
     type RealtimeDelegationProgress,
@@ -191,3 +190,14 @@ export {
     type RecordingUploadOptions,
     type RecordingUploadOutcome,
 } from './session/RecordingTransport';
+export {
+    CreateRecordingTransportForProvider,
+    DeleteStoredRecordingShard,
+    DrainStoredRecordingShardsOnce,
+    MAX_DRAINED_SHARDS_PER_LOAD,
+    RECORDING_LOGOUT_SEND_TIMEOUT_MS,
+    ReleaseRecordingShardsAtLogout,
+    ReleaseUserRecordingShards,
+    type RecordingShardDrainPass,
+    type RecordingShardRelease,
+} from './session/RecordingShardDrain';

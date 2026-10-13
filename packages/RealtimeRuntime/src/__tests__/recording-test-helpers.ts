@@ -88,9 +88,15 @@ export class FakeShardStore implements IRecordingShardStore {
         this.Log.push(`delete:${sessionID}/${index}`);
         this.Rows.delete(`${sessionID}/${index}`);
     }
-    public async ListOldest(limit: number): Promise<PendingRecordingShard[]> {
+    public async ListOldest(limit: number, userID: string | null): Promise<PendingRecordingShard[]> {
         this.Log.push(`list:${limit}`);
-        return [...this.Rows.values()].sort((a, b) => a.SavedAt - b.SavedAt).slice(0, limit);
+        return [...this.Rows.values()].filter((r) => (r.UserID ?? null) === (userID ?? null)).sort((a, b) => a.SavedAt - b.SavedAt).slice(0, limit);
+    }
+    public async DeleteForUser(userID: string | null): Promise<void> {
+        this.Log.push(`delete-user:${userID}`);
+        for (const [key, row] of this.Rows) {
+            if ((row.UserID ?? null) === (userID ?? null)) this.Rows.delete(key);
+        }
     }
     /** Keys still waiting for an ack, sorted. */
     public get Keys(): string[] {

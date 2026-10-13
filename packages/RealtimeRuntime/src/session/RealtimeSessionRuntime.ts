@@ -88,7 +88,8 @@ import {
 import { RecordingShardQueue } from './RecordingShardQueue';
 import { RecordingShardWindow, type RecordingShard } from './RecordingShardWindow';
 import { CreateRecordingShardStore, type IRecordingShardStore } from './RecordingShardStore';
-import { FetchRecordingTransport, RecordingBaseURLFromGraphQLURL, type IRecordingTransport, type RecordingUploadOutcome } from './RecordingTransport';
+import type { IRecordingTransport } from './RecordingTransport';
+import { CreateRecordingTransportForProvider, DeleteStoredRecordingShard, DrainStoredRecordingShardsOnce, MAX_DRAINED_SHARDS_PER_LOAD, type RecordingShardDrainPass } from './RecordingShardDrain';
 
 /**
  * How long teardown waits for the server to acknowledge the recording's terminal request, measured
@@ -106,11 +107,6 @@ export const RECORDING_TERMINAL_ACK_TIMEOUT_MS = 3000;
  */
 export const RECORDER_STOP_TIMEOUT_MS = 2000;
 
-/**
- * Cap on stored shards one page load re-uploads from a previous, interrupted call. Bounds the work a
- * fresh page does at startup; anything left over is drained by the next load.
- */
-export const MAX_DRAINED_SHARDS_PER_LOAD = 50;
 
 function describeRecordingFailure(failure: unknown): string {
   return failure instanceof Error ? failure.message : String(failure);
@@ -123,6 +119,8 @@ function describeRecordingFailure(failure: unknown): string {
  */
 interface RecordingShardPipeline {
   SessionID: string;
+  /** The signed-in user who started the call; every stored shard carries it (see `PendingRecordingShard.UserID`). */
+  UserID: string | null;
   Window: RecordingShardWindow;
   Queue: RecordingShardQueue;
   /** Null when the provider has no REST configuration: shards are then only kept in the store. */
@@ -2327,24 +2325,9 @@ export class RealtimeSessionRuntime {
    * configured yet). Override to supply another transport.
    */
   protected createRecordingTransport(): IRecordingTransport | null {
-    // Typed as GraphQL, but read defensively: a test double or a non-GraphQL provider has no ConfigData.
-    const provider = this.Provider as GraphQLDataProvider | null | undefined;
-    const url = provider?.ConfigData?.URL;
-    if (!provider || !url) {
-      return null;
-    }
-    return new FetchRecordingTransport({
-      BaseURL: RecordingBaseURLFromGraphQLURL(url),
-      Headers: () => {
-        const config = provider.ConfigData;
-        const headers: Record<string, string> = {};
-        if (config?.Token) headers.authorization = `Bearer ${config.Token}`;
-        if (config?.MJAPIKey) headers['x-mj-api-key'] = config.MJAPIKey;
-        if (config?.UserAPIKey) headers['x-api-key'] = config.UserAPIKey;
-        return headers;
-      },
-    });
+    return CreateRecordingTransportForProvider(this.Provider);
   }
+
 
   /**
    * Builds the durable local shard store. The default is IndexedDB where the host has it and a no-op
@@ -2353,6 +2336,11 @@ export class RealtimeSessionRuntime {
    */
   protected createRecordingShardStore(): IRecordingShardStore {
     return CreateRecordingShardStore(globalThis.indexedDB);
+  }
+
+  /** The provider's signed-in user, or null (no provider yet, or an anonymous page). */
+  private signedInUserID(): string | null {
+    return this.Provider?.CurrentUser?.ID ?? null;
   }
 
   /** The runtime's shard store, created on first use. */
@@ -2421,35 +2409,9 @@ export class RealtimeSessionRuntime {
     }
   }
 
-  /**
-   * One drain pass: re-uploads up to {@link MAX_DRAINED_SHARDS_PER_LOAD} stored shards, oldest first. A
-   * shard the server acknowledges or refuses for good (see {@link RecordingUploadOutcome}) leaves the
-   * store; one that may still succeed stays for the next load.
-   */
-  private async drainStoredShardsOnce(transport: IRecordingTransport): Promise<{ Listed: number; Delivered: number; Refused: number }> {
-    const pending = await this.ensureShardStore().ListOldest(MAX_DRAINED_SHARDS_PER_LOAD);
-    let delivered = 0;
-    let refused = 0;
-    for (const shard of pending) {
-      let outcome: RecordingUploadOutcome = 'Retry';
-      try {
-        outcome = await transport.UploadShard(shard.SessionID, shard);
-      } catch (error) {
-        console.warn(`[RealtimeSession] Re-uploading stored recording shard ${shard.SessionID}/${shard.Index} failed: ${describeRecordingFailure(error)}; it stays stored for the next load.`, error);
-      }
-      if (outcome === 'Acked') {
-        await this.deleteStoredShard(shard.SessionID, shard.Index);
-        delivered++;
-      } else if (outcome === 'Refused') {
-        console.warn(`[RealtimeSession] The server refused stored recording shard ${shard.SessionID}/${shard.Index} for good; deleting it so it no longer holds back the shards behind it.`);
-        await this.deleteStoredShard(shard.SessionID, shard.Index);
-        refused++;
-      }
-    }
-    if (pending.length > 0) {
-      console.log(`[RealtimeSession] Re-uploaded ${delivered}/${pending.length} stored recording shard(s); ${refused} refused and deleted.`);
-    }
-    return { Listed: pending.length, Delivered: delivered, Refused: refused };
+  /** One drain pass over the signed-in user's stored shards (see {@link DrainStoredRecordingShardsOnce}). */
+  private drainStoredShardsOnce(transport: IRecordingTransport): Promise<RecordingShardDrainPass> {
+    return DrainStoredRecordingShardsOnce(this.ensureShardStore(), transport, this.signedInUserID());
   }
 
   /** Builds this recording's shard pipeline and starts the 5 s flush. */
@@ -2470,6 +2432,7 @@ export class RealtimeSessionRuntime {
     let shardsGivenUp = false;
     this.recordingShards = {
       SessionID: sessionId,
+      UserID: this.signedInUserID(),
       Window: new RecordingShardWindow(),
       Transport: transport,
       // Closes over this recording's session id and transport — never the runtime's current ones.
@@ -2600,32 +2563,28 @@ export class RealtimeSessionRuntime {
       console.warn(`[RealtimeSession] Failed to take encoded recording packets for session ${pipeline.SessionID}; this tick's audio is lost:`, error);
       return;
     }
-    await this.storeShards(pipeline.SessionID, sealed);
+    await this.storeShards(pipeline, sealed);
     await pipeline.Queue.Flush(sealed);
   }
 
   /** Writes shards to the local store, in order, before their upload starts. Never rejects. */
-  private async storeShards(sessionId: string, shards: RecordingShard[]): Promise<void> {
+  private async storeShards(pipeline: RecordingShardPipeline, shards: RecordingShard[]): Promise<void> {
     const store = this.ensureShardStore();
     for (const shard of shards) {
       try {
-        await store.Put({ SessionID: sessionId, Index: shard.Index, Bytes: shard.Bytes, SavedAt: Date.now() });
+        await store.Put({ SessionID: pipeline.SessionID, UserID: pipeline.UserID, Index: shard.Index, Bytes: shard.Bytes, SavedAt: Date.now() });
       } catch (error) {
         // The store contract is never-throw; an override that does must still not stop the upload.
-        console.warn(`[RealtimeSession] Failed to store recording shard ${sessionId}/${shard.Index}; uploading it anyway:`, error);
+        console.warn(`[RealtimeSession] Failed to store recording shard ${pipeline.SessionID}/${shard.Index}; uploading it anyway:`, error);
       }
     }
   }
 
   /** Removes an acknowledged shard from the local store. Never rejects. */
-  private async deleteStoredShard(sessionId: string, index: number): Promise<void> {
-    try {
-      await this.ensureShardStore().Delete(sessionId, index);
-    } catch (error) {
-      // Harmless beyond a wasted re-upload on the next load: the server acks a duplicate.
-      console.warn(`[RealtimeSession] Failed to delete acknowledged recording shard ${sessionId}/${index} from the local store:`, error);
-    }
+  private deleteStoredShard(sessionId: string, index: number): Promise<void> {
+    return DeleteStoredRecordingShard(this.ensureShardStore(), sessionId, index);
   }
+
 
   /**
    * Tells the server, right now, how much of the recording exists — for a host's `pagehide` and
@@ -2695,7 +2654,7 @@ export class RealtimeSessionRuntime {
     const toStore = tail ? [...sealedNow, tail] : sealedNow;
     let stored: Promise<void> = Promise.resolve();
     if (toStore.length > 0) {
-      stored = deferStore ? this.storeShardsLater(sessionId, toStore) : this.storeShards(sessionId, toStore);
+      stored = deferStore ? this.storeShardsLater(pipeline, toStore) : this.storeShards(pipeline, toStore);
     }
     this.resendUnacknowledgedWithKeepalive(pipeline, sealedNow, stored);
     return terminalAcked.then(async (acked) => {
@@ -2774,10 +2733,10 @@ export class RealtimeSessionRuntime {
    * page-lifecycle handler, which must not open an IndexedDB transaction itself. Resolves once they
    * are stored (never, if the page unloads first). Never rejects.
    */
-  private storeShardsLater(sessionId: string, shards: RecordingShard[]): Promise<void> {
+  private storeShardsLater(pipeline: RecordingShardPipeline, shards: RecordingShard[]): Promise<void> {
     return new Promise<void>((resolve) => {
       setTimeout(() => {
-        void this.storeShards(sessionId, shards).then(resolve);
+        void this.storeShards(pipeline, shards).then(resolve);
       }, 0);
     });
   }

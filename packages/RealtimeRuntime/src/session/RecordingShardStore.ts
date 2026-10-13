@@ -13,6 +13,12 @@
 /** A shard waiting in the store for the server to acknowledge it. */
 export interface PendingRecordingShard {
     SessionID: string;
+    /**
+     * The MJ user whose call this is, or null when the page had no signed-in user. A page only lists
+     * (and so re-sends) its own user's shards, and logout deletes them: on a shared browser one user's
+     * audio is never sent with, or left behind for, another user's session.
+     */
+    UserID: string | null;
     Index: number;
     Bytes: Uint8Array;
     /** Epoch ms at which the shard was stored; drives oldest-first draining and retention. */
@@ -28,8 +34,10 @@ export interface IRecordingShardStore {
     Put(shard: PendingRecordingShard): Promise<void>;
     /** Removes a shard once the server has acknowledged it. */
     Delete(sessionID: string, index: number): Promise<void>;
-    /** Purges entries past retention, then returns up to `limit` shards, oldest first. */
-    ListOldest(limit: number): Promise<PendingRecordingShard[]>;
+    /** Purges entries past retention (every user's), then returns up to `limit` of `userID`'s shards, oldest first. */
+    ListOldest(limit: number, userID: string | null): Promise<PendingRecordingShard[]>;
+    /** Removes every shard of `userID` (logout). */
+    DeleteForUser(userID: string | null): Promise<void>;
 }
 
 /** How long an unacknowledged shard is kept; the server stops accepting late shards well before this. */
@@ -45,6 +53,8 @@ const MAX_OPEN_ATTEMPTS = 2;
 /** Row shape in IndexedDB. Bytes is an ArrayBuffer copy so structured clone never aliases the caller's buffer. */
 interface StoredShardRow {
     SessionID: string;
+    /** Absent on rows written before shards carried a user; those count as no user (null). */
+    UserID?: string | null;
     Index: number;
     Buffer: ArrayBuffer;
     SavedAt: number;
@@ -58,8 +68,11 @@ export class NullRecordingShardStore implements IRecordingShardStore {
     public async Delete(_sessionID: string, _index: number): Promise<void> {
         // Intentionally empty.
     }
-    public async ListOldest(_limit: number): Promise<PendingRecordingShard[]> {
+    public async ListOldest(_limit: number, _userID: string | null): Promise<PendingRecordingShard[]> {
         return [];
+    }
+    public async DeleteForUser(_userID: string | null): Promise<void> {
+        // Intentionally empty.
     }
 }
 
@@ -90,6 +103,7 @@ class IndexedDBRecordingShardStore implements IRecordingShardStore {
         const context = `shard ${shard.SessionID}/${shard.Index}`;
         const row: StoredShardRow = {
             SessionID: shard.SessionID,
+            UserID: shard.UserID,
             Index: shard.Index,
             Buffer: shard.Bytes.slice().buffer,
             SavedAt: shard.SavedAt,
@@ -105,7 +119,7 @@ class IndexedDBRecordingShardStore implements IRecordingShardStore {
         });
     }
 
-    public async ListOldest(limit: number): Promise<PendingRecordingShard[]> {
+    public async ListOldest(limit: number, userID: string | null): Promise<PendingRecordingShard[]> {
         const rows: StoredShardRow[] = [];
         const cutoff = this.now() - RECORDING_SHARD_RETENTION_MS;
         await this.run('listing pending shards', 'readwrite', (store) => {
@@ -118,6 +132,8 @@ class IndexedDBRecordingShardStore implements IRecordingShardStore {
                 const row = cursor.value as StoredShardRow;
                 if (row.SavedAt < cutoff) {
                     cursor.delete();
+                } else if ((row.UserID ?? null) !== userID) {
+                    // another user's shard: neither listed nor counted against this page's limit
                 } else if (rows.length < limit) {
                     rows.push(row);
                 } else {
@@ -128,10 +144,24 @@ class IndexedDBRecordingShardStore implements IRecordingShardStore {
         });
         return rows.map((r) => ({
             SessionID: r.SessionID,
+            UserID: r.UserID ?? null,
             Index: r.Index,
             Bytes: new Uint8Array(r.Buffer),
             SavedAt: r.SavedAt,
         }));
+    }
+
+    public async DeleteForUser(userID: string | null): Promise<void> {
+        await this.run(`deleting the stored shards of user ${userID ?? '(none)'}`, 'readwrite', (store) => {
+            store.openCursor().onsuccess = (event) => {
+                const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
+                if (!cursor) return;
+                if (((cursor.value as StoredShardRow).UserID ?? null) === userID) {
+                    cursor.delete();
+                }
+                cursor.continue();
+            };
+        });
     }
 
     /** Runs one transaction; any failure is logged with `context` and swallowed. */

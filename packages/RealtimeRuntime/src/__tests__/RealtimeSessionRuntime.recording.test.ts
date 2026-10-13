@@ -39,6 +39,7 @@ class FakeRealtimeClient extends BaseRealtimeClient {
 
 /** Records every GraphQL mutation; stands in for the transport's progress topic so a session can start. */
 class GqlProvider {
+    public CurrentUser: { ID: string } | null = { ID: 'user-a' };
     public Mutations: string[] = [];
     public readonly sessionId = 'transport-session-1';
     public async ExecuteGQL(query: string): Promise<unknown> {
@@ -189,7 +190,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
     it('a new runtime drains a pending shard under its original session and index', async () => {
         const store = new FakeShardStore();
         const bytes = new Uint8Array([1, 2, 3]);
-        await store.Put({ SessionID: 'crashed-session', Index: 4, Bytes: bytes, SavedAt: 1 });
+        await store.Put({ UserID: null, SessionID: 'crashed-session', Index: 4, Bytes: bytes, SavedAt: 1 });
         const transport = new FakeRecordingTransport();
         const runtime = new FakeRecordingRuntime(new FakeRecordingHost(), store, transport);
 
@@ -203,7 +204,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
 
     it('leaves a pending shard whose drain upload is refused, and defers the drain while there is no transport', async () => {
         const store = new FakeShardStore();
-        await store.Put({ SessionID: 'old', Index: 0, Bytes: new Uint8Array([9]), SavedAt: 1 });
+        await store.Put({ UserID: null, SessionID: 'old', Index: 0, Bytes: new Uint8Array([9]), SavedAt: 1 });
         const runtime = new FakeRecordingRuntime(new FakeRecordingHost(), store, null);
 
         await expect(runtime.DrainPendingRecordingShards()).resolves.toBe(0);
@@ -214,14 +215,40 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         expect(store.Keys).toEqual(['old/0']);
     });
 
+    it('stores each shard with the user who started the call', async () => {
+        const { runtime, store, recorder } = await startRecorded(['unavailable']); // the shard stays stored
+        recorder.Capture(WINDOW);
+        await vi.advanceTimersByTimeAsync(FLUSH_MS);
+        const stored = [...store.Rows.values()];
+        expect(stored.length).toBeGreaterThan(0);
+        expect(stored.map((r) => r.UserID)).toEqual(stored.map(() => 'user-a'));
+        await runtime.EndRealtimeSession();
+    });
+
+    it("drains only the signed-in user's stored shards, never another user's (shared browser)", async () => {
+        const store = new FakeShardStore();
+        await store.Put({ SessionID: 'a-call', UserID: 'user-a', Index: 0, Bytes: new Uint8Array([1]), SavedAt: 1 });
+        await store.Put({ SessionID: 'b-call', UserID: 'user-b', Index: 0, Bytes: new Uint8Array([2]), SavedAt: 2 });
+        const transport = new FakeRecordingTransport();
+        const runtime = new FakeRecordingRuntime(new FakeRecordingHost(), store, transport);
+        const provider = new GqlProvider();
+        provider.CurrentUser = { ID: 'user-b' };
+        runtime.Provider = provider as unknown as IMetadataProvider;
+
+        await expect(runtime.DrainPendingRecordingShards()).resolves.toBe(1);
+
+        expect(transport.Uploads.map((u) => u.SessionID)).toEqual(['b-call']);
+        expect(store.Keys).toEqual(['a-call/0']);
+    });
+
     it('deletes a stored shard the server refuses for good, and still drains the shards behind it in the same load', async () => {
         // Live smoke B1: user A's unsent shards (now refused 403: not this caller's session) filled the
         // 50-shard drain page on every load, so user B's own stored shards were never sent.
         const store = new FakeShardStore();
         for (let i = 0; i < MAX_DRAINED_SHARDS_PER_LOAD; i++) {
-            await store.Put({ SessionID: 'someone-else', Index: i, Bytes: new Uint8Array([1]), SavedAt: i });
+            await store.Put({ UserID: null, SessionID: 'someone-else', Index: i, Bytes: new Uint8Array([1]), SavedAt: i });
         }
-        await store.Put({ SessionID: 'mine', Index: 0, Bytes: new Uint8Array([2]), SavedAt: 1000 });
+        await store.Put({ UserID: null, SessionID: 'mine', Index: 0, Bytes: new Uint8Array([2]), SavedAt: 1000 });
         const refusals: FakeUploadOutcome[] = Array.from({ length: MAX_DRAINED_SHARDS_PER_LOAD }, () => 'refused');
         const transport = new FakeRecordingTransport([], refusals);
         const runtime = new FakeRecordingRuntime(new FakeRecordingHost(), store, transport);
@@ -234,7 +261,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
 
     it('a drain that could not deliver everything stays armed, so a later call tries again', async () => {
         const store = new FakeShardStore();
-        await store.Put({ SessionID: 'old', Index: 0, Bytes: new Uint8Array([9]), SavedAt: 1 });
+        await store.Put({ UserID: null, SessionID: 'old', Index: 0, Bytes: new Uint8Array([9]), SavedAt: 1 });
         const runtime = new FakeRecordingRuntime(new FakeRecordingHost(), store, new FakeRecordingTransport([], ['network-error']));
         await expect(runtime.DrainPendingRecordingShards()).resolves.toBe(0);
         await expect(runtime.DrainPendingRecordingShards()).resolves.toBe(1);
@@ -243,7 +270,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
 
     it('drains at session start, after the constructor found no transport', async () => {
         const store = new FakeShardStore();
-        await store.Put({ SessionID: 'old', Index: 2, Bytes: new Uint8Array([9]), SavedAt: 1 });
+        await store.Put({ UserID: 'user-a', SessionID: 'old', Index: 2, Bytes: new Uint8Array([9]), SavedAt: 1 });
         const host = new FakeRecordingHost();
         const runtime = new FakeRecordingRuntime(host, store, null);
         await vi.advanceTimersByTimeAsync(0);
@@ -495,7 +522,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
 
     it('a drain re-armed while it runs runs again, so shards given up on meanwhile are not left for the next load', async () => {
         const store = new FakeShardStore();
-        await store.Put({ SessionID: 'old', Index: 0, Bytes: new Uint8Array([1]), SavedAt: 1 });
+        await store.Put({ UserID: null, SessionID: 'old', Index: 0, Bytes: new Uint8Array([1]), SavedAt: 1 });
         const transport = new FakeRecordingTransport();
         let release: (outcome: 'stored') => void = () => undefined;
         transport.HoldNextUpload = new Promise((resolve) => { release = resolve; });
@@ -504,7 +531,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         await vi.advanceTimersByTimeAsync(0);
 
         // While the first run's upload hangs, another shard is given up on and the drain is re-armed.
-        await store.Put({ SessionID: 'old', Index: 1, Bytes: new Uint8Array([2]), SavedAt: 2 });
+        await store.Put({ UserID: null, SessionID: 'old', Index: 1, Bytes: new Uint8Array([2]), SavedAt: 2 });
         (runtime as unknown as { rearmPendingShardDrain(): void }).rearmPendingShardDrain();
         void runtime.DrainPendingRecordingShards();
         release('stored');
