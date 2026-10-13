@@ -1675,17 +1675,13 @@ export class EntityFieldInfo extends BaseInfo {
      *
      * Each part earns its place, and the reasons are NOT equally strong — stated precisely, because
      * a future maintainer will use this to decide whether to tighten the comparison:
-     *   * **Lower-casing is load-bearing on MJ core itself.** Not merely defensive: the default-value
-     *     path puts a field's SQL default into a new record (`EntityField`'s constructor assigns
-     *     `DefaultValue` when no value is supplied), and two MJ core fields have a default that
-     *     matches their value list by CASE ALONE — `MJ: Entity AI Actions`.TriggerEvent defaults to
-     *     `'After Save'` against a list of `before save | after save`, and its OutputType defaults to
-     *     `'FIeld'` against `entity | field`. Under a case-sensitive comparison, creating either
-     *     record at its database default would fail validation. Separately, SQL Server's default
-     *     collation is case-insensitive, so `Status = 'active'` is accepted by
-     *     `CHECK (Status IN ('Active', ...))` and refusing it here would turn a save that succeeds
-     *     today into a failure. (PostgreSQL IS case-sensitive, so on PG a case variant is still
-     *     refused — by its CHECK, not by this rung.)
+     *   * **Lower-casing matches SQL Server's collation.** Its default collation is case-insensitive,
+     *     so `Status = 'active'` is accepted by `CHECK (Status IN ('Active', ...))`, and refusing it
+     *     here would turn a save that succeeds today into a failure. (PostgreSQL IS case-sensitive, so
+     *     on PG a case variant is still refused — by its CHECK, not by this rung.) It was once also
+     *     load-bearing on MJ core: two `MJ: Entity AI Actions` defaults (`'After Save'`, `'FIeld'`)
+     *     matched their lists by case alone until MJ #3985 corrected them, and the
+     *     `metadata-consistency` MC9 integration check now keeps every List default an exact member.
      *   * **Stringifying is required.** `EntityFieldValue.Value` is always a string in metadata while
      *     the field's runtime value may be a number, so a strict `===` would reject every legal value
      *     on a numeric list. It is not lossless: `String(1.0)` is `'1'`, so a metadata value written

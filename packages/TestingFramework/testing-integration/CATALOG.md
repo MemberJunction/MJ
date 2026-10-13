@@ -45,7 +45,7 @@ Bundles live in [`integration-test-suite/src/checks/`](../integration-test-suite
 | remote-operations (+wire-progress +ai-authoring) | 11 | det/live | server + **client** |
 | predictive-studio | 5 | det | server |
 | aggregates-cache / dataset-cache / api-keys / scheduled-jobs / field-rules-bulk-update / lists / open-app-teardown | 19 | det (+mut) | server |
-| metadata-consistency | 7 | det | server |
+| metadata-consistency | 8 | det | server |
 | view-execution | 9 | det | **client** |
 | app-wiring | 10 | det | **client** |
 | entity-writes | 9 | det | **client** |
@@ -81,7 +81,7 @@ Bundles live in [`integration-test-suite/src/checks/`](../integration-test-suite
 | realtime-deterministic | 9 | det | server |
 | search | 7 | det | **client** |
 | storage | 6 | det | server |
-| queue | 7 | det | server |
+| queue | 8 | det | server |
 | auth-validation | 7 | det | server |
 
 **882 checks / 109 registered bundles today** (IT01–IT110, with IT107 unassigned; the table above lists the majors — run `mj test list` or read `integration-test-suite/src/checks/` for the full set): 93 members land in the **deterministic** suite, 16 in **live-model**. The 2026-07 expansion added the IT31–IT52 client-first bundles; IT64 onward followed, through the Clef, Kev and Perplexity Decider decision-model bundles at IT108–IT110. The bundle count is pinned by `check-registry.test.ts` — treat that as the source of truth over any hand-count here. The older bundles are `bootstrapIntegrationServer` (in-process) — migrating them to client transport where a client path exists is tracked in the plan (Workstream M); the 2026-07 bundles are client-first where a client surface exists.

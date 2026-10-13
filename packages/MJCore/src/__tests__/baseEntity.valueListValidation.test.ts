@@ -150,12 +150,13 @@ describe('EntityField.Validate — value lists (#3969)', () => {
         }
     });
 
-    it('accepts a SQL default that matches the list by case alone — MJ core depends on this', () => {
-        // EntityField's constructor seeds a new record from DefaultValue, and two MJ core fields have
-        // a default that differs from their own value list only in case:
+    it('accepts a SQL default that matches the list by case alone', () => {
+        // EntityField's constructor seeds a new record from DefaultValue. MJ core had two defaults that
+        // differed from their own value list only in case until MJ #3985 fixed them:
         //   MJ: Entity AI Actions.TriggerEvent  default 'After Save'  list: before save | after save
         //   MJ: Entity AI Actions.OutputType    default 'FIeld'       list: entity | field
-        // A case-sensitive comparison would fail validation on creating either record at its default.
+        // The comparison stays case-insensitive to match SQL Server's collation, so a database that has
+        // not yet applied that migration (or an app with the same shape) still validates at its default.
         const triggerEvent = makeFieldInfo({
             Name: 'TriggerEvent',
             Type: 'nchar',

@@ -1,5 +1,5 @@
 /**
- * queue.checks.ts — the 'queue' bundle (QU1–QU7): the MJQueue subsystem's deterministic
+ * queue.checks.ts — the 'queue' bundle (QU1–QU8): the MJQueue subsystem's deterministic
  * lifecycle, exercised against the REAL engine (QueueBase's timer loop + StartTask) and the
  * REAL DB substrate (`MJ: Queue Types` / `MJ: Queues` / `MJ: Queue Tasks`) — a subsystem that
  * previously had only mocked unit coverage (packages/MJQueue).
@@ -31,15 +31,14 @@
  *          documented 'Queue Type ... not found.' error BEFORE any DB write; instance AddTask
  *          against the fixture INACTIVE type honors the tolerant-catch contract (undefined,
  *          no task row created).
+ *   - QU8  A task created at its default Status persists as 'Pending' — the status
+ *          QueueManager.AddTask writes. Before MJ #3985 `CK_QueueTask_Status` allowed only
+ *          'In Progress' | 'Completed' | 'Failed', so that save always failed.
  *
  * ⚠️ Schema findings this bundle deliberately WORKS AROUND (documented, not asserted, so a
  * product-side fix cannot turn the CI gate red):
- *   1. `CK_QueueTask_Status` allows only 'In Progress' | 'Completed' | 'Failed', while BOTH
- *      the column default AND `spCreateQueueTask`'s `ISNULL(@Status,'Pending')` produce
- *      'Pending' — so every insert that doesn't set an explicit valid Status fails the CHECK.
- *      QueueManager.AddTask writes 'Pending' explicitly and therefore cannot persist a task
- *      against the current schema (why QU3–QU5 drive QueueBase directly with rows this bundle
- *      creates using valid statuses).
+ *   1. (Fixed by MJ #3985, now asserted by QU8.) The CHECK used to refuse 'Pending', which is why
+ *      QU3–QU5 drive QueueBase directly with rows this bundle creates at 'Completed'/'Failed'.
  *   2. `Status` is nchar(10), so the CHECK-listed value 'In Progress' (11 chars) cannot be
  *      stored at all. Fixture rows use 'Failed'/'Completed' initial values and assert the
  *      TRANSITION the engine performs. (nchar padding ⇒ all Status reads are trimmed.)
@@ -387,6 +386,36 @@ export const QueueChecks: NamedCheck[] = [
             AssertEqual(await countFixtureTasks(ctx), before, 'the inactive-type attempt must not create any task row');
 
             console.log(`      → unknown name threw the documented error; inactive type → undefined with zero DB writes`);
+        }
+    },
+    {
+        Id: 'queue.QU8',
+        Name: 'QU8: a task created at its default Status persists as Pending (the status QueueManager.AddTask writes)',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // QueueManager.AddTask saves a NEW task with Status 'Pending', which is also the column
+            // default. Until MJ #3985 the CHECK omitted 'Pending', so that save could never succeed.
+            const task = await ctx.Provider.GetEntityObject<MJQueueTaskEntity>('MJ: Queue Tasks', ctx.User);
+            task.NewRecord();
+            task.QueueID = fx().QueueID;
+            task.Data = JSON.stringify({ probe: 'qu8' });
+            task.Comments = FIXTURE_TAG;
+            AssertEqual(task.Status, 'Pending', 'NewRecord must seed Status from the column default');
+            const saved = await task.Save();
+            if (task.ID) {
+                fx().TaskIds.push(task.ID);
+            }
+            Assert(saved, `a task at its default Status must save: ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+
+            const result = await new RunView().RunView<{ Status: string }>({
+                EntityName: 'MJ: Queue Tasks',
+                ExtraFilter: `ID='${task.ID}'`,
+                Fields: ['Status'],
+                ResultType: 'simple',
+                BypassCache: true
+            }, ctx.User);
+            Assert(result.Success, `reading back the QU8 task failed: ${result.ErrorMessage}`);
+            AssertEqual((result.Results?.[0]?.Status ?? '').trim(), 'Pending', 'the persisted Status must be Pending'); // nchar(10) pads
+            console.log(`      → default-status task ${task.ID} persisted as 'Pending'`);
         }
     }
 ];
