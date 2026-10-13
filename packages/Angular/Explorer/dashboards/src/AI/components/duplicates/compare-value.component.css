@@ -1,6 +1,8 @@
 :host {
     display: block;
     min-width: 0;
+    /* Keep text and the ellipsis clear of the cell's absolutely positioned select radio (right: 8px, 16px wide) */
+    padding-right: 28px;
 }
 
 .compare-value-text {
@@ -21,8 +23,8 @@
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    margin-top: 0.15rem;
-    padding: 0;
+    min-height: 24px;
+    padding: 0.25rem 0;
     border: none;
     background: none;
     color: var(--mj-brand-primary);
