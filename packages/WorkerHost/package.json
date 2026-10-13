@@ -1,0 +1,40 @@
+{
+  "name": "@memberjunction/worker-host",
+  "type": "module",
+  "version": "6.2.0-edge.3",
+  "description": "MemberJunction: Runs CPU-heavy server work on a long-lived worker thread so it cannot block the event loop that serves requests. Node only.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "devDependencies": {
+    "@types/node": "^24.10.11",
+    "tsc-alias": "^1.8.10",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@memberjunction/global": "6.2.0-edge.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "keywords": [
+    "memberjunction",
+    "worker_threads",
+    "event-loop"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
