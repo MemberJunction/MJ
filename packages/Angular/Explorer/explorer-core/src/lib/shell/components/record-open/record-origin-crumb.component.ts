@@ -28,12 +28,13 @@ import { CompositeKey, Metadata } from '@memberjunction/core';
   template: `
     @if (Origin) {
       @if (Clickable) {
-        <!-- The arrow is the obvious "back" affordance, so it must act like one:
-             same full restore as the page segment. -->
-        <button type="button" class="crumb-back" (click)="OnPageClick()"
-                title="Back to where you opened this record" aria-label="Back to where you opened this record">
-          <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+        <!-- Back is its own labeled control, split from the trail by a divider, so
+             it never reads as the lead-in to the first segment (Matt's mockup on
+             #5221). Same full restore as the page segment. -->
+        <button type="button" class="crumb-back" (click)="OnPageClick()" [title]="BackTitle">
+          <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back
         </button>
+        <span class="crumb-divider" aria-hidden="true"></span>
         @if (DisplayLabel) {
           <button type="button" class="crumb-seg" (click)="OnPageClick()" title="Back to where you opened this record">
             {{ DisplayLabel }}
@@ -75,26 +76,36 @@ import { CompositeKey, Metadata } from '@memberjunction/core';
     .crumb-back {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      width: 24px;
+      gap: 6px;
+      flex: none;
       height: 24px;
-      margin-right: 2px;
-      padding: 0;
+      padding: 0 8px 0 6px;
       border: none;
       border-radius: 4px;
       background: transparent;
-      font-size: 11px;
-      color: var(--mj-text-muted);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1;
+      color: var(--mj-text-primary);
+      white-space: nowrap;
       cursor: pointer;
-      transition: background 0.15s, color 0.15s;
+      transition: background 0.15s;
     }
+    .crumb-back i { font-size: 11px; }
     .crumb-back:hover {
       background: var(--mj-bg-surface-hover);
-      color: var(--mj-text-primary);
     }
     .crumb-back:focus-visible {
       outline: 2px solid var(--mj-border-focus);
       outline-offset: -2px;
+    }
+    .crumb-divider {
+      flex: none;
+      width: 1px;
+      height: 16px;
+      margin: 0 8px 0 6px;
+      background: var(--mj-border-default);
     }
     /* Each breadcrumb level is its OWN link with its own hover */
     .crumb-seg {
@@ -151,6 +162,12 @@ export class RecordOriginCrumbComponent {
 
   get Clickable(): boolean {
     return RecordSourceHasReturnTarget(this.Origin);
+  }
+
+  /** Back's tooltip names the page it restores (the same target as the page segment) */
+  get BackTitle(): string {
+    const destination = this.DisplayLabel || this.Origin?.sourceNavLabel || this.Origin?.sourceAppName;
+    return destination ? `Back to ${destination}` : 'Back to where you opened this record';
   }
 
   get DisplayLabel(): string | undefined {

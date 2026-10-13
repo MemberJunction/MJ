@@ -60,7 +60,7 @@ describe('RecordOriginCrumbComponent (DOM)', () => {
     expect(nav.SwitchToAppHome).toHaveBeenCalledWith('app-1');
   });
 
-  it('the back arrow is a button that returns to where the record was opened', () => {
+  it('Back is a labeled button, split from the trail by a divider, that restores the origin page', () => {
     const origin = {
       sourceAppId: 'app-1', sourceAppName: 'Data Explorer',
       sourceNavLabel: 'Entities', sourceTabId: 't-1'
@@ -68,25 +68,42 @@ describe('RecordOriginCrumbComponent (DOM)', () => {
     const { fixture, nav } = render(origin);
     const back = query(fixture, 'button.crumb-back') as HTMLButtonElement | null;
     expect(back).not.toBeNull();
-    expect(back?.getAttribute('aria-label')).toBe('Back to where you opened this record');
+    expect(back?.textContent?.trim()).toBe('Back');
+    expect(back?.getAttribute('title')).toBe('Back to Entities');
+    // Order: Back, divider, then the unchanged trail (App first)
+    const divider = back?.nextElementSibling as HTMLElement | null;
+    expect(divider?.classList.contains('crumb-divider')).toBe(true);
+    expect(divider?.getAttribute('aria-hidden')).toBe('true');
+    expect(divider?.nextElementSibling?.textContent?.trim()).toBe('Data Explorer');
     back?.click();
     expect(nav.ReturnToRecordSource).toHaveBeenCalledWith(origin);
     expect(nav.SwitchToAppHome).not.toHaveBeenCalled();
   });
 
-  it('the back arrow also works for a single-label origin', () => {
+  it('Back names the single-label destination in its tooltip and restores it', () => {
     const origin = { sourceAppId: 'app-chat', sourceAppName: 'Chat', sourceLabel: 'Conversation', sourceTabId: 't-9' };
     const { fixture, nav } = render(origin);
-    (query(fixture, 'button.crumb-back') as HTMLButtonElement).click();
+    const back = query(fixture, 'button.crumb-back') as HTMLButtonElement;
+    expect(back.getAttribute('title')).toBe('Back to Conversation');
+    back.click();
     expect(nav.ReturnToRecordSource).toHaveBeenCalledWith(origin);
   });
 
-  it('shows no back arrow when the origin has no return target', () => {
-    expect(query(render({ sourceLabel: 'Agent' }).fixture, '.crumb-back')).toBeNull();
+  it('Back falls back to the app name when the origin has no page label', () => {
+    const { fixture } = render({ sourceAppId: 'app-1', sourceAppName: 'Data Explorer', sourceTabId: 't-1' });
+    expect(query(fixture, 'button.crumb-back')?.getAttribute('title')).toBe('Back to Data Explorer');
   });
 
-  it('shows no back arrow without an origin', () => {
-    expect(query(render(null).fixture, '.crumb-back')).toBeNull();
+  it('shows no Back and no divider when the origin has no return target', () => {
+    const { fixture } = render({ sourceLabel: 'Agent' });
+    expect(query(fixture, '.crumb-back')).toBeNull();
+    expect(query(fixture, '.crumb-divider')).toBeNull();
+  });
+
+  it('shows no Back and no divider without an origin', () => {
+    const { fixture } = render(null);
+    expect(query(fixture, '.crumb-back')).toBeNull();
+    expect(query(fixture, '.crumb-divider')).toBeNull();
   });
 
   it('renders the label as a single link for overlay origins (sourceLabel wins)', () => {
