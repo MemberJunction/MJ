@@ -21,7 +21,7 @@ import { IMetadataProvider, LogError, LogStatus, UserInfo } from '@memberjunctio
 import { MJAIAgentEntity, MJAIAgentSessionEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import {
-    ParseRecordingShard, RecordingShardContents, RecordingShardFormatError, RECORDING_SAMPLE_RATE, RECORDING_SHARD_WINDOW_PACKETS, RECORDING_FRAME_SAMPLES,
+    ParseRecordingShard, RecordingShardContents, RecordingShardFormatError, RECORDING_SAMPLE_RATE, RECORDING_SHARD_MAX_PACKETS, RECORDING_FRAME_SAMPLES,
 } from '@memberjunction/ai-core-plus';
 import { IRealtimeRecordingLedger, LedgerShard, LedgerShardMetadata } from './realtime-recording-ledger';
 import {
@@ -235,10 +235,10 @@ export function AssembleOpusRecordingPcm(
 }
 
 /**
- * Most samples one shard can carry: the format caps a shard at two windows of packets (see
- * `ParseRecordingShard`), each packet at most one 960-sample frame of kept audio.
+ * Most samples one shard can carry: the format's packet cap ({@link RECORDING_SHARD_MAX_PACKETS}),
+ * each packet at most one 960-sample frame of kept audio.
  */
-const MAX_SHARD_SAMPLES = 2 * RECORDING_SHARD_WINDOW_PACKETS * RECORDING_FRAME_SAMPLES;
+const MAX_SHARD_SAMPLES = RECORDING_SHARD_MAX_PACKETS * RECORDING_FRAME_SAMPLES;
 
 /**
  * Fills the missing-shard ranges of a re-assembly from the session's previous recording.

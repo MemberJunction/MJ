@@ -61,8 +61,11 @@ const PACKET_COUNT_OFFSET = 24;
 export const RECORDING_PACKET_LENGTH_PREFIX_BYTES = 2;
 const U32_RANGE = 2 ** 32;
 const U16_MAX = 0xffff;
-/** A shard may exceed one window (a VBR-sealed or merged shard), but never by more than this factor. */
-const MAX_PACKETS_PER_SHARD = 2 * RECORDING_SHARD_WINDOW_PACKETS;
+/**
+ * Most packets one shard may hold: two windows. A writer cuts at this, not at one window, so a 5 s
+ * tick that took a few packets past the window seals one shard instead of a window plus a sliver.
+ */
+export const RECORDING_SHARD_MAX_PACKETS = 2 * RECORDING_SHARD_WINDOW_PACKETS;
 
 /** The fixed-size part of a shard. */
 export interface RecordingShardHeader {
@@ -107,9 +110,9 @@ function assertHeaderConsistent(header: RecordingShardHeader): void {
     assertSafeStartSample(header.StartSample);
     assertU32(header.SampleCount, 'sample count');
     assertU32(header.PacketCount, 'packet count');
-    if (header.PacketCount > MAX_PACKETS_PER_SHARD) {
+    if (header.PacketCount > RECORDING_SHARD_MAX_PACKETS) {
         throw new RecordingShardFormatError(
-            `packet count ${header.PacketCount} exceeds the maximum of ${MAX_PACKETS_PER_SHARD} per shard`
+            `packet count ${header.PacketCount} exceeds the maximum of ${RECORDING_SHARD_MAX_PACKETS} per shard`
         );
     }
     if (header.SampleCount > header.PacketCount * RECORDING_FRAME_SAMPLES) {
