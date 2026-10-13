@@ -63,6 +63,7 @@ export * from './checks/runquery-features.checks';
 export * from './checks/runquery-rendering.checks';
 export * from './checks/runquery-rendering-client.checks';
 export * from './checks/query-approvals.checks';
+export * from './checks/calendar-event-links.checks';
 export * from './checks/scope-enforcement.checks';
 export * from './checks/subscription-isolation.checks';
 export * from './checks/templates.checks';

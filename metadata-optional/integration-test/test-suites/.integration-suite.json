@@ -1413,6 +1413,14 @@
             "Sequence": 49,
             "Status": "Active"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT122 - Calendar Event Links and Sync",
+            "Sequence": 49,
+            "Status": "Active"
+          }
         }
       ]
     },

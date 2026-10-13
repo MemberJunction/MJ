@@ -217,7 +217,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (448 classes)
+// @memberjunction/core-entities (450 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -342,6 +342,8 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJCalendarEventLinkEntity,
+    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1584,6 +1586,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJCalendarEventLinkEntity,
+    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1601,12 +1605,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
-    MJCompanyIntegrationRunDetailEntity,
-    MJCompanyIntegrationRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationRunDetailEntity,
+    MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
@@ -1805,12 +1809,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
     MJRecordProcessCategoryEntity,
-    MJRecordProcessEntity,
-    MJRecordProcessWatermarkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordProcessEntity,
+    MJRecordProcessWatermarkEntity,
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
     MJResourceLinkEntity,
@@ -2009,12 +2013,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     DetachTagsAction,
     EnrollUserAction,
     GetBundlesAction,
-    GetCertificatesAction,
-    GetCourseAnalyticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetCertificatesAction,
+    GetCourseAnalyticsAction,
     GetLearnWorldsBulkDataAction,
     GetLearnWorldsCourseDetailsAction,
     GetLearnWorldsCoursesAction,
@@ -2213,12 +2217,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
-    TaskGraphGetStatusServerOperation,
-    TaskGraphOverrideEdgeServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TaskGraphGetStatusServerOperation,
+    TaskGraphOverrideEdgeServerOperation,
     TaskGraphPauseServerOperation,
     TaskGraphResumeServerOperation,
     TaskGraphRetryTaskServerOperation,
@@ -2417,13 +2421,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
     RetryAction,
-    ReverseGeocodeAction,
-    RevertInteractiveFormAction,
-    RevokeListInvitationAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ReverseGeocodeAction,
+    RevertInteractiveFormAction,
+    RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
     RunDecisionAction,
@@ -2502,7 +2506,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1063;
+export const CLASS_REGISTRATIONS_COUNT = 1065;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
