@@ -40,7 +40,7 @@ import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
 import { SQLParser } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
-import { EncryptionEngine } from '@memberjunction/encryption';
+import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
@@ -199,7 +199,11 @@ export class ResolverBase {
                   const decryptedValue = await engine.Decrypt(value, contextUser);
                   dataObject[fieldName] = decryptedValue;
                 } catch (err) {
-                  LogError(`Failed to decrypt field ${fieldName} for API response: ${err}`);
+                  if (IsEncryptionKeyUnavailable(err)) {
+                    ReportEncryptionKeyUnavailable(err);
+                  } else {
+                    LogError(`Failed to decrypt field ${fieldName} for API response: ${err}`);
+                  }
                   // On decryption failure, use sentinel for safety
                   dataObject[fieldName] = ENCRYPTED_SENTINEL;
                 }

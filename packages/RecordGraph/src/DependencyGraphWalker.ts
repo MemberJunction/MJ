@@ -384,6 +384,7 @@ export class DependencyGraphWalker {
                     const result = await rv.RunView<Record<string, unknown>>({
                         EntityName: entity.Name,
                         ExtraFilter: filter,
+                        OrderBy: this.creationOrder(entity),
                         ResultType: 'simple',
                     }, contextUser);
 
@@ -481,6 +482,7 @@ export class DependencyGraphWalker {
                     const result = await rv.RunView<Record<string, unknown>>({
                         EntityName: entity.Name,
                         ExtraFilter: filter,
+                        OrderBy: this.creationOrder(entity),
                         ResultType: 'simple',
                     }, contextUser);
 
@@ -884,6 +886,7 @@ export class DependencyGraphWalker {
             const result = await rv.RunView<Record<string, unknown>>({
                 EntityName: rel.ChildEntityInfo.Name,
                 ExtraFilter: extraFilter,
+                OrderBy: this.creationOrder(rel.ChildEntityInfo),
                 ResultType: 'simple',
             }, contextUser);
 
@@ -1075,6 +1078,15 @@ export class DependencyGraphWalker {
     /** Check if an entity has a soft delete field. */
     private entityHasSoftDelete(entityInfo: EntityInfo): boolean {
         return entityInfo.Fields.some(f => f.Name === '__mj_DeletedAt');
+    }
+
+    /**
+     * Oldest first, when the entity tracks creation time. Rows are discovered, and so copied, in
+     * this order, which keeps a clone's rows in their source's order wherever the UI sorts by
+     * creation time (a conversation's messages).
+     */
+    private creationOrder(entityInfo: EntityInfo): string | undefined {
+        return entityInfo.Fields.some(f => f.Name === '__mj_CreatedAt') ? '__mj_CreatedAt' : undefined;
     }
 
     /** Apply defaults to walk options. */
