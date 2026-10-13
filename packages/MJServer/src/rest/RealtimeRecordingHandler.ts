@@ -27,9 +27,9 @@ import { DatabaseProviderBase, LogError, LogStatus, UserInfo } from '@memberjunc
 import { IsValidUUID } from '@memberjunction/global';
 import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 import {
-    ParseRecordingShard, RecordingShardFormatError, RecordingShardHeader, RECORDING_SHARD_MAX_BYTES, RECORDING_TERMINAL_MAX_BYTES,
+    ParseRecordingShard, RecordingShardFormatError, RecordingShardHeader, RECORDING_SAMPLE_RATE, RECORDING_SHARD_MAX_BYTES, RECORDING_TERMINAL_MAX_BYTES,
 } from '@memberjunction/ai-core-plus';
-import type { IRealtimeRecordingLedger, RecordShardResult } from '@memberjunction/ai-agents';
+import { MAX_ASSEMBLY_SHARDS, type IRealtimeRecordingLedger, type RecordShardResult } from '@memberjunction/ai-agents';
 import {
     LoadOwnedRealtimeSession, RealtimeSessionNotFoundError, RealtimeSessionOwnershipError,
 } from '../realtimeSessions/ownedRealtimeSession.js';
@@ -40,10 +40,17 @@ import { AuthorizeSessionAccess, LoadSessionConversationExternalID } from '../re
 export const REALTIME_RECORDING_MOUNT_PATH = '/realtime/recording';
 
 /**
- * How long after a session closed a late gap shard still triggers a re-assembly. Past it the shard is
- * stored but the recording is left as it is (the janitor purges the ledger after its lookback).
+ * How long after a session closed it still accepts recording requests (a late gap shard re-assembles).
+ * Past it the recording is settled: shards and terminals are refused with 410 and nothing is stored.
  */
-const LATE_SHARD_REASSEMBLY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const LATE_SHARD_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Allowance on top of a session's lifetime when bounding how much audio a request may claim: the
+ * recorder starts after the session row exists, so a real claim never exceeds the lifetime, but a
+ * request in flight while the session closes must not be refused.
+ */
+const SESSION_LIFETIME_SLACK_MS = 2 * 60 * 1000;
 
 const OCTET_STREAM = 'application/octet-stream';
 /**
@@ -54,8 +61,6 @@ const OCTET_STREAM = 'application/octet-stream';
  */
 export const FINAL_TERMINAL_RECHECK_MS = 5000;
 
-/** Largest shard index the ledger's SQL `INT` column holds; also the bound on expected shards. */
-const MAX_SHARD_INDEX = 2_147_483_647;
 const NON_NEGATIVE_INT = /^\d+$/;
 const INT = /^-?\d+$/;
 
@@ -176,8 +181,8 @@ async function respond(req: Request, res: Response, kind: string, handler: () =>
 async function handleShard(deps: RealtimeRecordingRouterDeps, req: Request, res: Response): Promise<void> {
     const { SessionID, Caller } = res.locals['recording'] as RecordingRequestContext;
     const index = parseInteger(req.params['index'], 'shard index', NON_NEGATIVE_INT);
-    if (index > MAX_SHARD_INDEX) {
-        throw new RecordingRequestError(400, `shard index ${index} exceeds the maximum ${MAX_SHARD_INDEX}`);
+    if (index >= MAX_ASSEMBLY_SHARDS) {
+        throw new RecordingRequestError(400, `shard index ${index} is past the ${MAX_ASSEMBLY_SHARDS} shards one recording can assemble`);
     }
     const body = Buffer.isBuffer(req.body) ? req.body : null;
     if (!body || body.length === 0) {
@@ -188,7 +193,8 @@ async function handleShard(deps: RealtimeRecordingRouterDeps, req: Request, res:
         throw new RecordingRequestError(400, `Shard header index ${header.ShardIndex} does not match the path index ${index}`);
     }
 
-    await loadAuthorizedSession(deps, SessionID, Caller);
+    const session = await loadAuthorizedSession(deps, SessionID, Caller);
+    assertWithinSessionLifetime(session, header.StartSample + header.SampleCount, `shard ${index}`);
     const ledger = deps.CreateLedger(Caller.Provider, Caller.ContextUser);
     const result = await recordShard(ledger, SessionID, header, body);
     if (result.Outcome === 'Inserted') {
@@ -204,9 +210,8 @@ async function handleTerminal(deps: RealtimeRecordingRouterDeps, req: Request, r
     if (lastShardIndex < -1) {
         throw new RecordingRequestError(400, `lastShardIndex must be -1 or more, got ${lastShardIndex}`);
     }
-    // lastShardIndex + 1 is stored as the expected shard count, so it must fit the same INT column.
-    if (lastShardIndex >= MAX_SHARD_INDEX) {
-        throw new RecordingRequestError(400, `lastShardIndex must be below ${MAX_SHARD_INDEX}, got ${lastShardIndex}`);
+    if (lastShardIndex >= MAX_ASSEMBLY_SHARDS) {
+        throw new RecordingRequestError(400, `lastShardIndex ${lastShardIndex} lists more than the ${MAX_ASSEMBLY_SHARDS} shards one recording can assemble`);
     }
     if (lastShardIndex === -1 && capturedSamples !== 0) {
         throw new RecordingRequestError(400, `lastShardIndex -1 (no shards) contradicts capturedSamples ${capturedSamples}`);
@@ -215,6 +220,10 @@ async function handleTerminal(deps: RealtimeRecordingRouterDeps, req: Request, r
     const tail = readOptionalTail(req, SessionID, lastShardIndex);
 
     const session = await loadAuthorizedSession(deps, SessionID, Caller);
+    assertWithinSessionLifetime(session, capturedSamples, 'captured samples');
+    if (tail) {
+        assertWithinSessionLifetime(session, tail.Header.StartSample + tail.Header.SampleCount, `tail shard ${tail.Header.ShardIndex}`);
+    }
     const ledger = deps.CreateLedger(Caller.Provider, Caller.ContextUser);
     if (tail) {
         const tailResult = await recordShard(ledger, SessionID, tail.Header, tail.Bytes);
@@ -264,6 +273,27 @@ async function loadAuthorizedSession(deps: RealtimeRecordingRouterDeps, sessionI
         throw new RecordingRequestError(403, 'Not authorized for this realtime session');
     }
     return session;
+}
+
+/**
+ * Refuses a request the session's own lifetime rules out: 410 once the session closed more than
+ * {@link LATE_SHARD_WINDOW_MS} ago (the recording is settled), and 400 when `endSample` (a shard's end,
+ * or the terminal's captured count) is more audio than the session has existed, from its server-set
+ * creation to its close (or now), plus {@link SESSION_LIFETIME_SLACK_MS}. Without the second rule one
+ * 5 s shard and a terminal claiming 3 h made the server allocate and store a ~1 GB WAV.
+ */
+function assertWithinSessionLifetime(session: MJAIAgentSessionEntity, endSample: number, what: string): void {
+    const now = Date.now();
+    const closedAt = session.ClosedAt ? new Date(session.ClosedAt).getTime() : null;
+    if (closedAt !== null && now - closedAt > LATE_SHARD_WINDOW_MS) {
+        throw new RecordingRequestError(410, `Session ${session.ID} closed over 24 h ago; its recording no longer accepts audio`);
+    }
+    const lifetimeMs = (closedAt ?? now) - new Date(session.__mj_CreatedAt).getTime() + SESSION_LIFETIME_SLACK_MS;
+    const maxSamples = Math.max(0, Math.floor((lifetimeMs * RECORDING_SAMPLE_RATE) / 1000));
+    if (endSample > maxSamples) {
+        LogError(`RealtimeRecordingHandler: refused ${what} of session ${session.ID}: it reaches sample ${endSample}, past the ${maxSamples} the session's lifetime allows`);
+        throw new RecordingRequestError(400, `The ${what} reach sample ${endSample}, more audio than session ${session.ID} has existed for (${maxSamples} samples)`);
+    }
 }
 
 /** The tail shard of a terminal request, or null for an empty body. */
@@ -348,10 +378,7 @@ async function scheduleAfterLateShard(
         return;
     }
     if (result.RecordingStatus === 'Partial') {
-        if (Date.now() - result.ClosedAt.getTime() > LATE_SHARD_REASSEMBLY_WINDOW_MS) {
-            LogStatus(`RealtimeRecordingHandler: late shard ${index} of session ${sessionID} stored; the session closed over 24 h ago, so the Partial recording is not re-assembled`);
-            return;
-        }
+        // A session closed over LATE_SHARD_WINDOW_MS ago never gets here: its requests are refused (410).
         deps.Scheduler.ScheduleAssembly(sessionID, 0, false);
         return;
     }

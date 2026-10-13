@@ -20,6 +20,7 @@ import type {
     AssembleRealtimeRecordingInput, AssembleRealtimeRecordingOutcome, FinishAssemblyInput, IRealtimeRecordingLedger,
     LedgerShard, LedgerShardMetadata, RecordShardInput, RecordShardResult,
 } from '@memberjunction/ai-agents';
+import { MAX_ASSEMBLY_SHARDS } from '@memberjunction/ai-agents';
 import {
     CreateRealtimeRecordingRouter, FINAL_TERMINAL_RECHECK_MS, REALTIME_RECORDING_MOUNT_PATH, type RealtimeRecordingRouterDeps,
 } from '../rest/RealtimeRecordingHandler.js';
@@ -43,6 +44,8 @@ interface FakeSessionRow {
     RecordingCapturedSamples: number | null;
     RecordingAssemblyVersion: number;
     ClosedAt: Date | null;
+    /** When the server created the session: no recording can hold more audio than the session has lived. */
+    CreatedAt: Date;
     /** The session conversation's ExternalID: an anonymous widget guest's per-session scope. */
     ConversationExternalID?: string | null;
 }
@@ -226,7 +229,7 @@ describe('realtime recording REST routes', () => {
     function addSession(id: string, overrides: Partial<FakeSessionRow> = {}): FakeSessionRow {
         const row: FakeSessionRow = {
             UserID: OWNER_ID, RecordingStatus: null, RecordingExpectedShards: null, RecordingCapturedSamples: null,
-            RecordingAssemblyVersion: 0, ClosedAt: null, ...overrides,
+            RecordingAssemblyVersion: 0, ClosedAt: null, CreatedAt: new Date(Date.now() - 48 * HOUR_MS), ...overrides,
         };
         ledger.Sessions.set(id, row);
         return row;
@@ -274,7 +277,7 @@ describe('realtime recording REST routes', () => {
                 if (row.UserID !== contextUser.ID) {
                     throw new RealtimeSessionOwnershipError(agentSessionId);
                 }
-                return { ID: agentSessionId, ...row } as unknown as MJAIAgentSessionEntity;
+                return { ID: agentSessionId, __mj_CreatedAt: row.CreatedAt, ...row } as unknown as MJAIAgentSessionEntity;
             },
             CreateLedger: (_provider, contextUser) => (contextUser === SYSTEM_USER ? ledger : callerLedger(ledger)),
             SystemUser: () => SYSTEM_USER,
@@ -406,11 +409,25 @@ describe('realtime recording REST routes', () => {
             expect(scheduler.ScheduleAssembly).toHaveBeenCalledWith(SESSION, 0, false);
         });
 
-        it('does not schedule for a late gap shard on a Partial session closed over 24 h ago', async () => {
+        it('answers 410 to a shard for a session closed over 24 h ago and stores nothing (the recording is settled)', async () => {
             addSession(SESSION, { RecordingStatus: 'Partial', RecordingExpectedShards: 4, RecordingCapturedSamples: 4 * SHARD_SAMPLES, ClosedAt: new Date(Date.now() - 25 * HOUR_MS) });
-            expect((await postShard(2)).status).toBe(200);
-            expect(ledger.Shards.get(SESSION)?.has(2)).toBe(true);
+            expect((await postShard(2)).status).toBe(410);
+            expect(ledger.Shards.get(SESSION)?.has(2) ?? false).toBe(false);
             expect(scheduler.ScheduleAssembly).not.toHaveBeenCalled();
+        });
+
+        it('answers 400 to an index at or past the most shards a recording can assemble, storing nothing', async () => {
+            // Live smoke C2: 2100 shards were accepted (and kept) into one session, then one at index 50000.
+            expect((await postShard(MAX_ASSEMBLY_SHARDS)).status).toBe(400);
+            expect(ledger.Shards.get(SESSION)?.size ?? 0).toBe(0);
+        });
+
+        it("answers 400 to a shard whose audio ends after more time than the session has existed", async () => {
+            addSession(SESSION, { CreatedAt: new Date(Date.now() - 60_000) });
+            // index 100 starts at 500 s of audio; the session is a minute old
+            expect((await postShard(100)).status).toBe(400);
+            expect(ledger.Shards.get(SESSION)?.size ?? 0).toBe(0);
+            expect((await postShard(0)).status).toBe(200);
         });
 
         it('schedules now when the last missing shard of a closed Pending (grace-waiting) session arrives', async () => {
@@ -472,10 +489,25 @@ describe('realtime recording REST routes', () => {
             expect(scheduler.ScheduleAssembly).toHaveBeenCalledWith(SESSION, 0, false);
         });
 
-        it('does not re-assemble for a re-sent tail when the Partial session closed over 24 h ago', async () => {
+        it('answers 410 to a terminal for a session closed over 24 h ago and stamps nothing', async () => {
             addSession(SESSION, { RecordingStatus: 'Partial', RecordingExpectedShards: 4, RecordingCapturedSamples: 3 * SHARD_SAMPLES + 48_000, ClosedAt: new Date(Date.now() - 25 * HOUR_MS) });
-            expect((await postEnd(3, 3 * SHARD_SAMPLES + 48_000, shardBytes(3, 1, 48_000))).status).toBe(200);
+            expect((await postEnd(3, 3 * SHARD_SAMPLES + 48_000, shardBytes(3, 1, 48_000))).status).toBe(410);
+            expect(ledger.Shards.get(SESSION)?.has(3) ?? false).toBe(false);
             expect(scheduler.ScheduleAssembly).not.toHaveBeenCalled();
+        });
+
+        it('answers 400 to a terminal claiming more audio than the session has existed, and stamps nothing', async () => {
+            // Live smoke C1: one 5 s shard plus a 3 h claim made the server write a 1 GB recording.wav.
+            addSession(SESSION, { CreatedAt: new Date(Date.now() - 60_000) });
+            expect((await postShard(0)).status).toBe(200);
+            expect((await postEnd(0, 518_400_000)).status).toBe(400);
+            expect(ledger.Sessions.get(SESSION)?.RecordingExpectedShards).toBeNull();
+            expect(scheduler.ScheduleAssembly).not.toHaveBeenCalled();
+        });
+
+        it('answers 400 to a terminal listing more shards than a recording can assemble', async () => {
+            expect((await postEnd(MAX_ASSEMBLY_SHARDS, SHARD_SAMPLES)).status).toBe(400);
+            expect(ledger.Sessions.get(SESSION)?.RecordingExpectedShards).toBeNull();
         });
 
         it('without a system user still stamps the terminal and answers 200, leaving assembly to the janitor', async () => {
