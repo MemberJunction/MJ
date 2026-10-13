@@ -526,7 +526,7 @@ The Index Advisor runs at the end of every analysis (`OnPostRun`) unless turned 
 
 Turn the plugin off with `{ "Name": "IndexAdvisor", "Enabled": false }`.
 
-**The migration** (`export --format index-migration`) is named `V<yyyyMMddHHmm>__dbautodoc_indexes.sql` from the analysis time (override the prefix with `--file-prefix`), highest-priority index first, each with a comment giving its source and reason. Index names are `IX_<table>_<columns>`, shortened with a hash suffix to the platform's identifier limit.
+**The migration** (`export --format index-migration`) is named `V<yyyyMMddHHmm>__dbautodoc_indexes.sql` from the analysis time (override the prefix with `--file-prefix`), highest-priority index first, each with a comment giving its source and reason. Index names are `IX_<table>_<columns>`, shortened with a hash suffix to the platform's identifier limit. On PostgreSQL, where index names must be unique across a schema, every name carries a hash of its exact table and columns so two similar names can't collide. Reasons are written on a single comment line, so multi-line text from the LLM can't spill into the SQL.
 
 | Platform | Statement |
 |---|---|
@@ -1080,7 +1080,7 @@ Use different models for different pipeline phases. A cheaper/faster model for b
 {
   "ai": {
     "provider": "gemini",
-    "model": "gemini-3-flash-preview",
+    "model": "gemini-3.8-flash",
     "modelOverrides": {
       "fkPruning": {
         "model": "gemini-3.1-pro-preview",
@@ -1119,7 +1119,7 @@ DBAutoDoc integrates with [MemberJunction's AI provider system](../../packages/A
 ```json
 {
   "provider": "gemini",
-  "model": "gemini-3-flash-preview",
+  "model": "gemini-3.8-flash",
   "apiKey": "..."
 }
 ```

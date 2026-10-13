@@ -153,5 +153,11 @@ describe('PluginManager', () => {
         PluginManager.LoadModules([{ Name: 'Disabled', Module: path.join(dir, 'missing.mjs'), Enabled: false }])
       ).resolves.toBeUndefined();
     });
+
+    it('fails loudly when an enabled module path is broken', async () => {
+      await expect(
+        PluginManager.LoadModules([{ Name: 'Broken', Module: path.join(dir, 'missing.mjs') }])
+      ).rejects.toThrow();
+    });
   });
 });

@@ -11,5 +11,8 @@ DBAutoDoc gets a plugin system, and its first built-in plugin, the Index Advisor
   - SQL Server: `CREATE NONCLUSTERED INDEX`, guarded by `IF NOT EXISTS`.
   - PostgreSQL: `CREATE INDEX CONCURRENTLY IF NOT EXISTS` by default, plus a Flyway `.sql.conf` with `executeInTransaction=false`. Skyway 0.6.x runs every migration in a transaction, so apply a CONCURRENTLY migration with `psql` or Flyway, or set `Concurrently: false`.
   - MySQL: `CREATE INDEX`.
+  - PostgreSQL index names always end in a hash of the exact table and columns, because PostgreSQL requires index names to be unique per schema and the readable part can collide (`Order.Line_ID` and `Order_Line.ID`).
+  - Each index's reason is written on one comment line, so multi-line text from the LLM or a column name can't end the comment and run as SQL.
 - **State file.** `state.database.provider` now records the platform a run connected to (absent in older state files).
 - **Fix: MySQL login.** The MySQL driver overrode `mysql_native_password` and `caching_sha2_password` with handlers that sent an empty password, so every password-protected MySQL 8 connection failed ("using password: NO"). The override is removed; `mysql2` handles both methods itself.
+- **Default model.** New configs (`init`, and the built-in default) use `gemini-3.8-flash`, replacing `gemini-3-flash-preview`. Existing config files keep the model they name.

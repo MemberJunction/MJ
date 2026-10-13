@@ -157,10 +157,16 @@ describe('IndexRules.FindRedundantIndexes', () => {
   it('never flags unique, primary-key, partial or expression indexes, or indexes of a different method', () => {
     expect(FindRedundantIndexes([
       index('T', 'uq_a', ['a'], { IsUnique: true }),
+      index('T', 'pk_a', ['a'], { IsPrimaryKey: true }),
       index('T', 'part_a', ['a'], { FilterDefinition: 'x > 0' }),
       index('T', 'gin_a', ['a'], { Method: 'gin' }),
       index('T', 'ix_ab', ['a', 'b'])
     ])).toEqual([]);
+  });
+
+  it('never flags an expression index, even when a plain index covers its named columns', () => {
+    // The covering index has no expressions, so only the candidate-side expression check protects this case.
+    expect(FindRedundantIndexes([index('T', 'expr_a', ['a'], { HasExpressions: true }), index('T', 'ix_ab', ['a', 'b'])])).toEqual([]);
   });
 });
 
@@ -244,7 +250,7 @@ describe('IndexMigrationGenerator', () => {
   it('writes CREATE INDEX IF NOT EXISTS for PostgreSQL, with CONCURRENTLY plus a Flyway no-transaction .conf when enabled', () => {
     const plain = gen.Generate(data([PROPOSAL]), { Provider: 'postgresql' });
     expect(plain).toHaveLength(1);
-    expect(plain[0].Content).toContain('CREATE INDEX IF NOT EXISTS "IX_Orders_CustomerID" ON "dbo"."Orders" ("CustomerID");');
+    expect(plain[0].Content).toMatch(/CREATE INDEX IF NOT EXISTS "IX_Orders_CustomerID_[0-9a-f]{8}" ON "dbo"\."Orders" \("CustomerID"\);/);
 
     const concurrent = gen.Generate(data([PROPOSAL], true), { Provider: 'postgresql' });
     expect(concurrent[0].Content).toContain('CREATE INDEX CONCURRENTLY IF NOT EXISTS');
@@ -271,6 +277,26 @@ describe('IndexMigrationGenerator', () => {
     expect(IndexMigrationGenerator.IndexName({ TableName: 'Order Lines', Columns: ['a-b'] }, 'sqlserver')).toBe('IX_Order_Lines_a_b');
     expect(IndexMigrationGenerator.Quote('we]ird', 'sqlserver')).toBe('[we]]ird]');
     expect(IndexMigrationGenerator.Quote('we"ird', 'postgresql')).toBe('"we""ird"');
+  });
+
+  it('gives PostgreSQL indexes distinct names when the readable part collides', () => {
+    const pg = (TableName: string, Columns: string[]) => IndexMigrationGenerator.IndexName({ TableName, Columns }, 'postgresql');
+    expect(pg('Order', ['Line_ID'])).not.toBe(pg('Order_Line', ['ID']));
+    expect(pg('Order', ['Line_ID'])).toMatch(/^IX_Order_Line_ID_[0-9a-f]{8}$/);
+    expect(pg('订单', ['编号'])).not.toBe(pg('客户', ['编号']));
+    expect(pg('A'.repeat(70), ['B'])).toHaveLength(63);
+    // SQL Server and MySQL scope index names per table, so they keep the plain readable name.
+    expect(IndexMigrationGenerator.IndexName({ TableName: 'Order', Columns: ['Line_ID'] }, 'sqlserver')).toBe('IX_Order_Line_ID');
+  });
+
+  it('keeps a multi-line reason inside its comment so it cannot become SQL', () => {
+    const hostile = { ...PROPOSAL, Reason: 'Covers the dashboard filter.\nCREATE TABLE dbo.PWNED (x int);\r\nDROP TABLE dbo.Orders;\u2028SELECT 1;' };
+    for (const provider of ['sqlserver', 'postgresql', 'mysql'] as const) {
+      const lines = gen.Generate(data([hostile]), { Provider: provider })[0].Content.split(/\r?\n/);
+      const reasonLine = lines.find((l) => l.includes('Covers the dashboard filter.'));
+      expect(reasonLine).toBe('-- FKCoverage: Covers the dashboard filter. CREATE TABLE dbo.PWNED (x int); DROP TABLE dbo.Orders; SELECT 1;');
+      expect(lines.filter((l) => /^\s*(CREATE TABLE|DROP TABLE|SELECT 1)/.test(l))).toEqual([]);
+    }
   });
 });
 

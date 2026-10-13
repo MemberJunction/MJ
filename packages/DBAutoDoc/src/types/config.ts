@@ -1,9 +1,8 @@
+import type { AutoDocPluginConfigEntry } from '../plugins/types.js';
+
 /**
  * Configuration types for DBAutoDoc
  */
-
-import type { AutoDocPluginConfigEntry } from '../plugins/types.js';
-
 export interface DBAutoDocConfig {
   version: string;
   database: DatabaseConfig;

@@ -28,14 +28,27 @@ export class IndexMigrationGenerator {
     return files;
   }
 
-  /** Index name for a proposal: IX_<table>_<columns>, shortened with a hash suffix when too long. */
+  /**
+   * Index name for a proposal: IX_<table>_<columns>, shortened with a hash suffix when too long.
+   * PostgreSQL index names must be unique per schema, and the readable part is lossy (Order.Line_ID and
+   * Order_Line.ID both give IX_Order_Line_ID), so PostgreSQL names always carry a hash of the exact table and columns.
+   */
   public static IndexName(proposal: Pick<IndexProposal, 'TableName' | 'Columns'>, provider: Provider): string {
     const raw = `IX_${proposal.TableName}_${proposal.Columns.join('_')}`.replace(/[^A-Za-z0-9_]/g, '_');
     const max = MAX_IDENTIFIER[provider];
+    if (provider === 'postgresql') {
+      const suffix = IndexMigrationGenerator.hash(JSON.stringify([proposal.TableName, proposal.Columns]));
+      return `${raw.slice(0, max - 9)}_${suffix}`;
+    }
     if (raw.length <= max) {
       return raw;
     }
     return `${raw.slice(0, max - 9)}_${IndexMigrationGenerator.hash(raw)}`;
+  }
+
+  /** Flattens text onto one line so it cannot end a `--` comment and become executable SQL. */
+  public static CommentText(text: string): string {
+    return text.replace(/[\r\n\u0085\u2028\u2029]+/g, ' ');
   }
 
   /** yyyyMMddHHmm (UTC) from an ISO timestamp. */
@@ -52,7 +65,7 @@ export class IndexMigrationGenerator {
       '-- Review before applying. Each index is created only if it does not already exist.',
       provider === 'mysql' ? '-- MySQL has no CREATE INDEX IF NOT EXISTS; re-running this script fails on indexes that already exist.' : ''
     ].filter((l) => l.length > 0);
-    const statements = data.Proposed.map((p) => `-- ${p.Source}: ${p.Reason}\n${this.statement(p, provider, concurrently)}`);
+    const statements = data.Proposed.map((p) => `-- ${p.Source}: ${IndexMigrationGenerator.CommentText(p.Reason)}\n${this.statement(p, provider, concurrently)}`);
     return `${header.join('\n')}\n\n${statements.join('\n\n')}\n`;
   }
 

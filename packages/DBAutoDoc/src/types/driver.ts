@@ -125,9 +125,6 @@ export interface AutoDocConnectionConfig {
 }
 
 /**
- * Query result wrapper
- */
-/**
  * Placeholder for an expression key part in {@link AutoDocIndex.Columns}. It can never equal a
  * real column name in a prefix comparison, so an index led by an expression covers no column.
  */
@@ -159,6 +156,9 @@ export interface AutoDocIndex {
   HasExpressions: boolean;
 }
 
+/**
+ * Query result wrapper
+ */
 export interface AutoDocQueryResult<T = any> {
   success: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   data?: T[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
