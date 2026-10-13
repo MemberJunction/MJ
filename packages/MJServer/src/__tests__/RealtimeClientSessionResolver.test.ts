@@ -217,6 +217,8 @@ interface FakeSession {
     LatestResult?: { CompleteMessage?: string; Success?: boolean };
     /** Only set on the fakes exercising `describeSaveFailure`'s "no failure detail recorded" branches. */
     ResultHistory?: unknown[];
+    /** The fork a conversation-detail fake is written on (null is Main). */
+    BranchID?: string | null;
 }
 
 /**
@@ -246,13 +248,44 @@ function makeSessionEntity(overrides: Partial<FakeSession> = {}): FakeSession {
     };
 }
 
-/** Provider whose GetEntityObject returns a fixed entity per entity name. */
-function makeProvider(factory: (entityName: string) => FakeSession): unknown {
-    return { GetEntityObject: vi.fn(async (name: string) => factory(name)) };
+/** Co-agent observability and paused-run ids, as a voice session's Config holds them. */
+const CO_RUN_ID = 'c0c0c0c0-0000-4000-8000-000000000001';
+const PROMPT_RUN_ID = 'c0c0c0c0-0000-4000-8000-000000000002';
+const PAUSED_RUN_ID = 'c0c0c0c0-0000-4000-8000-000000000003';
+
+/** `RunView`/`RunViews` stubs for a provider. */
+interface RunLookups {
+    RunView: ReturnType<typeof vi.fn>;
+    RunViews: ReturnType<typeof vi.fn>;
+}
+
+/**
+ * Answers the session run-id lookups: each id in `runIDs` is a run of the session, and
+ * `promptRunID` (when given) is the TargetLogID of the co-agent run's Prompt step.
+ */
+function sessionRunLookups(runIDs: string[], promptRunID?: string): RunLookups {
+    const runView = vi.fn(async (params: { EntityName?: string }) => {
+        if (params.EntityName === 'MJ: AI Agent Runs') {
+            return { Success: true, Results: runIDs.map((ID) => ({ ID })) };
+        }
+        if (params.EntityName === 'MJ: AI Agent Run Steps' && promptRunID) {
+            return { Success: true, Results: [{ ID: 'c0c0c0c0-0000-4000-8000-0000000000a1', StepType: 'Prompt', TargetLogID: promptRunID }] };
+        }
+        return { Success: true, Results: [] };
+    });
+    const runViews = vi.fn(async (paramsList: Array<{ EntityName?: string }>) => Promise.all(paramsList.map((params) => runView(params))));
+    return { RunView: runView, RunViews: runViews };
+}
+
+/** Provider whose GetEntityObject returns a fixed entity per entity name, plus optional run-id lookups. */
+function makeProvider(factory: (entityName: string) => FakeSession, lookups?: RunLookups): unknown {
+    return { GetEntityObject: vi.fn(async (name: string) => factory(name)), ...lookups };
 }
 
 beforeEach(() => {
     hasPermissionMock.mockReset();
+    // Callers may run the agents in play unless a test says otherwise; relays re-check CanRun on the target.
+    hasPermissionMock.mockResolvedValue(true);
     engineCoAgentsMock.mockReset();
     engineCoAgentsMock.mockReturnValue([]);
     engineChannelsMock.mockReset();
@@ -721,10 +754,12 @@ describe('RealtimeClientSessionResolver.ExecuteRealtimeSessionTool', () => {
     });
 
     it('reads the target + co-agent run id from the session config and returns ResultJson', async () => {
-        currentProvider = makeProvider(() =>
-            makeSessionEntity({
-                Config_: JSON.stringify({ targetAgentID: 'target-from-session', coAgentRunID: 'co-run-77' }),
-            }),
+        currentProvider = makeProvider(
+            () =>
+                makeSessionEntity({
+                    Config_: JSON.stringify({ targetAgentID: 'target-from-session', coAgentRunID: CO_RUN_ID }),
+                }),
+            sessionRunLookups([CO_RUN_ID]),
         );
         executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
         const resolver = makeResolver();
@@ -747,7 +782,7 @@ describe('RealtimeClientSessionResolver.ExecuteRealtimeSessionTool', () => {
         // Target comes from the session, NOT the client.
         expect(relayArg.TargetAgentID).toBe('target-from-session');
         // Delegated run nests under the co-agent observability run from the session config.
-        expect(relayArg.ParentRunID).toBe('co-run-77');
+        expect(relayArg.ParentRunID).toBe(CO_RUN_ID);
         expect(relayArg.Call).toEqual({ CallID: 'call-1', ToolName: 'invoke-target-agent', Arguments: '{"request":"do it"}' });
         expect(heartbeatMock).toHaveBeenCalledWith('session-1', USER, currentProvider);
     });
@@ -811,9 +846,9 @@ describe('RealtimeClientSessionResolver.ExecuteRealtimeSessionTool', () => {
 
     it('consumes pendingFeedbackRunID as ResumeRunID and clears it on the next call', async () => {
         const session = makeSessionEntity({
-            Config_: JSON.stringify({ targetAgentID: 'target-1', pendingFeedbackRunID: 'paused-1' }),
+            Config_: JSON.stringify({ targetAgentID: 'target-1', pendingFeedbackRunID: PAUSED_RUN_ID }),
         });
-        currentProvider = makeProvider(() => session);
+        currentProvider = makeProvider(() => session, sessionRunLookups([PAUSED_RUN_ID]));
         // Resumed run completes (no new pause).
         executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"done":1}', Success: true });
         const resolver = makeResolver();
@@ -822,7 +857,7 @@ describe('RealtimeClientSessionResolver.ExecuteRealtimeSessionTool', () => {
 
         // The paused id was passed in to resume the run...
         const relayArg = executeRelayedToolMock.mock.calls[0][0] as { ResumeRunID?: string };
-        expect(relayArg.ResumeRunID).toBe('paused-1');
+        expect(relayArg.ResumeRunID).toBe(PAUSED_RUN_ID);
         // ...and cleared from the session config afterward.
         expect(JSON.parse(session.Config_ as string).pendingFeedbackRunID).toBeUndefined();
         expect(session.Save).toHaveBeenCalled();
@@ -830,16 +865,16 @@ describe('RealtimeClientSessionResolver.ExecuteRealtimeSessionTool', () => {
 
     it('re-stores a new pendingFeedbackRunID when a resumed run pauses again', async () => {
         const session = makeSessionEntity({
-            Config_: JSON.stringify({ targetAgentID: 'target-1', pendingFeedbackRunID: 'paused-1' }),
+            Config_: JSON.stringify({ targetAgentID: 'target-1', pendingFeedbackRunID: PAUSED_RUN_ID }),
         });
-        currentProvider = makeProvider(() => session);
+        currentProvider = makeProvider(() => session, sessionRunLookups([PAUSED_RUN_ID]));
         executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"q":2}', Success: true, PausedRunID: 'paused-2' });
         const resolver = makeResolver();
 
         await resolver.ExecuteRealtimeSessionTool('session-1', 'call-3', 'invoke-target-agent', '{"request":"yes"}', makeCtx(), makePubSub());
 
         const relayArg = executeRelayedToolMock.mock.calls[0][0] as { ResumeRunID?: string };
-        expect(relayArg.ResumeRunID).toBe('paused-1');
+        expect(relayArg.ResumeRunID).toBe(PAUSED_RUN_ID);
         expect(JSON.parse(session.Config_ as string).pendingFeedbackRunID).toBe('paused-2');
     });
 
@@ -942,6 +977,26 @@ describe('RealtimeClientSessionResolver.RelayRealtimeTranscript', () => {
         expect(detail.UserID).toBe('user-1');
         expect(detail.Save).toHaveBeenCalled();
         expect(heartbeatMock).toHaveBeenCalledWith('session-1', USER, currentProvider);
+    });
+
+    it("writes the turn on the session's fork", async () => {
+        const detail = makeSessionEntity({ ID: 'detail-t' });
+        const session = makeSessionEntity({ ConversationID: 'conv-7', Config_: JSON.stringify({ targetAgentID: 'target-1', conversationBranchID: 'b1' }) });
+        currentProvider = makeProvider((name) => (name === 'MJ: Conversation Details' ? detail : session));
+
+        await makeResolver().RelayRealtimeTranscript('session-1', 'user', 'hello', makeCtx());
+
+        expect(detail.BranchID).toBe('b1');
+    });
+
+    it('writes the turn on Main when the session has no fork', async () => {
+        const detail = makeSessionEntity({ ID: 'detail-m' });
+        const session = makeSessionEntity({ ConversationID: 'conv-7' });
+        currentProvider = makeProvider((name) => (name === 'MJ: Conversation Details' ? detail : session));
+
+        await makeResolver().RelayRealtimeTranscript('session-1', 'user', 'hello', makeCtx());
+
+        expect(detail.BranchID).toBeNull();
     });
 
     it("maps a non-user role to 'AI'", async () => {
@@ -2328,10 +2383,11 @@ describe('RealtimeClientSessionResolver.RelayRealtimeUsage', () => {
     }): { provider: unknown; promptRun: FakeSession } {
         const session =
             opts.session ??
-            makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }) });
-        const promptRun = opts.promptRun ?? makeSessionEntity({ ID: 'prompt-run-1', TokensPrompt: null, TokensCompletion: null, TokensUsed: null });
+            makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 'target-1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }) });
+        const promptRun = opts.promptRun ?? makeSessionEntity({ ID: PROMPT_RUN_ID, TokensPrompt: null, TokensCompletion: null, TokensUsed: null });
         const provider = {
             GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Prompt Runs' ? promptRun : session)),
+            ...sessionRunLookups([CO_RUN_ID], PROMPT_RUN_ID),
         };
         return { provider, promptRun };
     }
@@ -2357,7 +2413,7 @@ describe('RealtimeClientSessionResolver.RelayRealtimeUsage', () => {
         const ok = await resolver.RelayRealtimeUsage('session-1', 30, 5, makeCtx());
 
         expect(ok).toBe(true);
-        expect(promptRun.Load).toHaveBeenCalledWith('prompt-run-1');
+        expect(promptRun.Load).toHaveBeenCalledWith(PROMPT_RUN_ID);
         expect(promptRun.TokensPrompt).toBe(130);
         expect(promptRun.TokensCompletion).toBe(45);
         expect(promptRun.TokensUsed).toBe(175);
@@ -2454,7 +2510,7 @@ describe('RealtimeClientSessionResolver.RelayRealtimeUsage', () => {
         const { provider, promptRun } = makeUsageProvider({
             session: makeSessionEntity({
                 Status: 'Closed',
-                Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }),
+                Config_: JSON.stringify({ targetAgentID: 'target-1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
             }),
         });
         currentProvider = provider;
@@ -2914,7 +2970,7 @@ describe('RealtimeClientSessionResolver — app awareness (applicationId / appCo
         expect(relayArg.AllowedAgents?.map(a => a.agentId)).toEqual(['skip-1']);
     });
 
-    it('passes the persisted directActions from the session config into ExecuteRelayedTool', async () => {
+    it('does not pass the directActions stored in the session config into ExecuteRelayedTool', async () => {
         currentProvider = makeProvider(() =>
             makeSessionEntity({
                 Config_: JSON.stringify({
@@ -2931,7 +2987,8 @@ describe('RealtimeClientSessionResolver — app awareness (applicationId / appCo
         );
 
         const relayArg = executeRelayedToolMock.mock.calls[0][0] as { DirectActions?: { enabled: boolean; actionNames: string[] } };
-        expect(relayArg.DirectActions).toEqual({ enabled: true, actionNames: ['SendEmail'] });
+        // The owner can edit Config, so the service takes direct actions from server-side state instead.
+        expect(relayArg.DirectActions).toBeUndefined();
     });
 });
 
@@ -3183,7 +3240,7 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(executeRelayedToolMock.mock.calls[0][1]).toBe(ANON_USER);
     });
 
-    it('writes the hidden direct-action tool turn (ExecuteRealtimeSessionTool) as the CALLER, not the system user (#4791)', async () => {
+    it('refuses a direct action from a scoped anonymous caller without dispatching it or writing a turn as the system user (#4791)', async () => {
         const detail = makeSessionEntity({ ID: 'detail-1' });
         currentProvider = {
             GetEntityObject: vi.fn(async (name: string) =>
@@ -3193,17 +3250,16 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"success":true}', Success: true });
         const resolver = makeAnonResolver();
 
-        await resolver.ExecuteRealtimeSessionTool(
+        const out = await resolver.ExecuteRealtimeSessionTool(
             'session-1', 'call-1', 'Some Direct Action', '{}', makeCtx(), makePubSub(),
         );
 
-        // The dispatch itself still runs elevated (SYSTEM_USER)…
-        expect(executeRelayedToolMock.mock.calls[0][1]).toBe(SYSTEM_USER);
-        // …but the hidden Conversation Detail turn is written as the CALLER, never the system user.
-        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Details', ANON_USER);
+        // Scope-limited callers get no direct actions, so nothing is dispatched, elevated or not…
+        expect(JSON.parse(out)).toMatchObject({ success: false });
+        expect(executeRelayedToolMock).not.toHaveBeenCalled();
+        // …and no hidden Conversation Detail turn is written, least of all as the system user.
         expect(getEntityObjectSpy()).not.toHaveBeenCalledWith('MJ: Conversation Details', SYSTEM_USER);
-        expect(detail.Save).toHaveBeenCalled();
-        expect(detail.UserID).toBe('anon-1');
+        expect(detail.Save).not.toHaveBeenCalled();
     });
 
     it('writes the direct-action tool turn as the caller unchanged for a normal authenticated user', async () => {
@@ -3224,11 +3280,12 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
     it('accumulates relayed usage onto the prompt run under the SYSTEM user', async () => {
         const session = makeSessionEntity({
             UserID: 'anon-1',
-            Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }),
+            Config_: JSON.stringify({ targetAgentID: 'target-1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
         });
-        const promptRun = makeSessionEntity({ ID: 'prompt-run-1', TokensPrompt: null, TokensCompletion: null, TokensUsed: null });
+        const promptRun = makeSessionEntity({ ID: PROMPT_RUN_ID, TokensPrompt: null, TokensCompletion: null, TokensUsed: null });
         currentProvider = {
             GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Prompt Runs' ? promptRun : session)),
+            ...sessionRunLookups([CO_RUN_ID], PROMPT_RUN_ID),
         };
         const resolver = makeAnonResolver();
 
@@ -3243,9 +3300,9 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
     it('mirrors the transcript turn onto the prompt run as SYSTEM while the Conversation Detail stays the caller', async () => {
         const session = makeSessionEntity({
             UserID: 'anon-1',
-            Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }),
+            Config_: JSON.stringify({ targetAgentID: 'target-1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
         });
-        const promptRun = makeSessionEntity({ ID: 'prompt-run-1', Messages: null });
+        const promptRun = makeSessionEntity({ ID: PROMPT_RUN_ID, Messages: null });
         const detail = makeSessionEntity({ ID: 'detail-1' });
         currentProvider = {
             GetEntityObject: vi.fn(async (name: string) => {
@@ -3253,6 +3310,7 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
                 if (name === 'MJ: Conversation Details') return detail;
                 return session;
             }),
+            ...sessionRunLookups([CO_RUN_ID], PROMPT_RUN_ID),
         };
         const resolver = makeAnonResolver();
 
@@ -3269,11 +3327,12 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
     it('records the co-agent tool turn (RelayRealtimeToolTurn) under the SYSTEM user', async () => {
         const session = makeSessionEntity({
             UserID: 'anon-1',
-            Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }),
+            Config_: JSON.stringify({ targetAgentID: 'target-1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
         });
-        const promptRun = makeSessionEntity({ ID: 'prompt-run-1', Messages: null });
+        const promptRun = makeSessionEntity({ ID: PROMPT_RUN_ID, Messages: null });
         currentProvider = {
             GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Prompt Runs' ? promptRun : session)),
+            ...sessionRunLookups([CO_RUN_ID], PROMPT_RUN_ID),
         };
         const resolver = makeAnonResolver();
 
@@ -3286,9 +3345,9 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
     it('writes the hidden co-agent tool turn (RelayRealtimeToolTurn) as the CALLER (#4791)', async () => {
         const session = makeSessionEntity({
             UserID: 'anon-1',
-            Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }),
+            Config_: JSON.stringify({ targetAgentID: 'target-1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
         });
-        const promptRun = makeSessionEntity({ ID: 'prompt-run-1', Messages: null });
+        const promptRun = makeSessionEntity({ ID: PROMPT_RUN_ID, Messages: null });
         const detail = makeSessionEntity({ ID: 'detail-3' });
         currentProvider = {
             GetEntityObject: vi.fn(async (name: string) => {
@@ -3296,6 +3355,7 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
                 if (name === 'MJ: Conversation Details') return detail;
                 return session;
             }),
+            ...sessionRunLookups([CO_RUN_ID], PROMPT_RUN_ID),
         };
         const resolver = makeAnonResolver();
 
@@ -3336,6 +3396,30 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(prepUser).toBe(SYSTEM_USER);
         // …but run attribution + memory scope stay the visitor's.
         expect(prepInput.UserID).toBe('anon-1');
+    });
+
+    /** Starts a session as `resolver`'s caller and returns the input the prepare service received. */
+    async function startAndCapturePrepInput(resolver: RealtimeClientSessionResolver, userID: string): Promise<{ ExcludeDirectActions?: boolean }> {
+        currentProvider = makeProvider(() => makeSessionEntity({ UserID: userID }));
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-start', UserID: userID }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: { Provider: 'openai', Model: 'gpt-realtime', EphemeralToken: 'ek_abc', ExpiresAt: '2026-01-01T00:00:00Z', SessionConfig: {} },
+        });
+        await resolver.StartRealtimeClientSession('target-1', makeCtx());
+        return prepareClientSessionMock.mock.calls[0][0] as { ExcludeDirectActions?: boolean };
+    }
+
+    it('prepares a scope-limited caller\'s session with no direct actions', async () => {
+        const prepInput = await startAndCapturePrepInput(makeAnonResolver(), 'anon-1');
+
+        expect(prepInput.ExcludeDirectActions).toBe(true);
+    });
+
+    it('prepares a caller that is not scope-limited with direct actions', async () => {
+        const prepInput = await startAndCapturePrepInput(makeResolver(), 'user-1');
+
+        expect(prepInput.ExcludeDirectActions).toBe(false);
     });
 
     it('junction-links delegated artifacts under the SYSTEM user and stamps the hidden anchor with the SESSION owner', async () => {
@@ -3496,15 +3580,16 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
     function makeToolTurnProvider(detail: FakeSession): unknown {
         const session = makeSessionEntity({
             UserID: 'anon-1',
-            Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }),
+            Config_: JSON.stringify({ targetAgentID: 'target-1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
         });
-        const promptRun = makeSessionEntity({ ID: 'prompt-run-1', Messages: null });
+        const promptRun = makeSessionEntity({ ID: PROMPT_RUN_ID, Messages: null });
         return {
             GetEntityObject: vi.fn(async (name: string) => {
                 if (name === 'MJ: AI Prompt Runs') return promptRun;
                 if (name === 'MJ: Conversation Details') return detail;
                 return session;
             }),
+            ...sessionRunLookups([CO_RUN_ID], PROMPT_RUN_ID),
         };
     }
 
@@ -3664,7 +3749,8 @@ describe('RealtimeClientSessionResolver — colleague authorization (allowedAgen
 
     it('excludes every colleague when the caller can run none of them', async () => {
         currentProvider = makeProvider(() => makeMultiTargetSession('user-1'));
-        hasPermissionMock.mockResolvedValue(false);
+        // The caller can run the lead target, and none of the colleagues.
+        hasPermissionMock.mockImplementation((...args: unknown[]) => Promise.resolve(args[0] === 'target-1'));
 
         await makeResolver().ExecuteRealtimeSessionTool(
             'session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub(),
@@ -3673,7 +3759,7 @@ describe('RealtimeClientSessionResolver — colleague authorization (allowedAgen
         expect(dispatchedAgentIDs()).toEqual([]);
     });
 
-    it('passes a single-target session through with no permission checks', async () => {
+    it('passes a single-target session through with only the target permission check', async () => {
         currentProvider = makeProvider(() => makeSessionEntity());
         hasPermissionMock.mockResolvedValue(true);
 
@@ -3683,7 +3769,8 @@ describe('RealtimeClientSessionResolver — colleague authorization (allowedAgen
 
         const input = executeRelayedToolMock.mock.calls[0][0] as { AllowedAgents?: unknown };
         expect(input.AllowedAgents).toBeUndefined();
-        expect(hasPermissionMock).not.toHaveBeenCalled();
+        expect(hasPermissionMock).toHaveBeenCalledTimes(1);
+        expect((hasPermissionMock.mock.calls[0] as unknown[])[0]).toBe('target-1');
     });
 });
 
@@ -3714,18 +3801,36 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
         return { ID: `h-${message ?? 'x'}`, Role: role, Message: message, HiddenToUser: false, AgentSessionID: null, ...over };
     }
 
+    /** A `MJ: Conversation Branches` row as the branch-path read selects it. */
+    interface BranchRow {
+        ID: string;
+        ConversationID: string;
+        ParentBranchID: string | null;
+        ForkFromSequence: number | null;
+        Name: string | null;
+    }
+
     /**
      * Provider that answers BOTH Conversation Details queries separately: the prior-leg transcript
-     * (filtered by `AgentSessionID IN (…)`) and the conversation history (`ConversationID=…`).
-     * Routing on the filter is what keeps the two from being confused for one another.
+     * (filtered by `AgentSessionID IN (…)`) and the conversation history (the session's path filter).
+     * Routing on the filter is what keeps the two from being confused for one another. It also
+     * serves the conversation's branch rows, which the start reads to check the named fork and
+     * to build its path.
      */
     function makeProvider(opts: {
         chain?: Record<string, { UserID: string; LastSessionID?: string | null }>;
         legRows?: Array<{ ID: string; Role: string; Message: string | null; HiddenToUser: boolean }>;
         historyRows?: HistoryRow[];
         historyFails?: boolean;
+        branchRows?: BranchRow[];
+        branchesFail?: boolean;
     }): { provider: unknown; runView: ReturnType<typeof vi.fn> } {
         const runView = vi.fn(async (params: { EntityName: string; ExtraFilter?: string }) => {
+            if (params.EntityName === 'MJ: Conversation Branches') {
+                return opts.branchesFail
+                    ? { Success: false, ErrorMessage: 'db down', Results: [] }
+                    : { Success: true, Results: opts.branchRows ?? [] };
+            }
             if (params.EntityName === 'MJ: Conversation Details') {
                 if (params.ExtraFilter?.startsWith('AgentSessionID IN')) {
                     return { Success: true, Results: opts.legRows ?? [] };
@@ -3752,6 +3857,15 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
             RunView: runView,
         };
         return { provider, runView };
+    }
+
+    /** The history read: the Conversation Details query that is not the prior-leg lookup. */
+    function historyCall(runView: ReturnType<typeof vi.fn>): { ExtraFilter: string; OrderBy: string } | undefined {
+        const call = runView.mock.calls.find((c) => {
+            const params = c[0] as { EntityName: string; ExtraFilter?: string };
+            return params.EntityName === 'MJ: Conversation Details' && !params.ExtraFilter?.startsWith('AgentSessionID IN');
+        });
+        return call?.[0] as { ExtraFilter: string; OrderBy: string } | undefined;
     }
 
     function historyArg(): Array<{ role: string; content: unknown }> {
@@ -3791,17 +3905,62 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
         ]);
     });
 
-    it('scopes the read to the session\'s conversation', async () => {
+    /** Starts a session on `conversationId`, optionally on a fork (the mutation's last argument). */
+    function start(conversationId: string, forkId?: string): Promise<{ AgentSessionId: string }> {
+        return makeResolver().StartRealtimeClientSession(
+            'target-1', makeCtx(), conversationId,
+            undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            undefined, undefined, forkId,
+        );
+    }
+
+    it('reads Main when the start names no fork, with the apostrophe doubled once', async () => {
         const { provider, runView } = makeProvider({ historyRows: [row('User', 'hi')] });
         currentProvider = provider;
 
-        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), "conv-o'brien");
+        await start("conv-o'brien");
 
-        const call = runView.mock.calls.find(
-            (c) => (c[0] as { ExtraFilter?: string }).ExtraFilter?.startsWith('ConversationID='),
-        );
-        // The apostrophe must be doubled, not passed through — this string is concatenated into SQL.
-        expect((call![0] as { ExtraFilter: string }).ExtraFilter).toBe("ConversationID='conv-o''brien'");
+        expect(historyCall(runView)).toMatchObject({ ExtraFilter: "[ConversationID]='conv-o''brien' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL", OrderBy: 'Sequence ASC' });
+        expect(runView.mock.calls.some((c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversation Branches')).toBe(false);
+        expect(historyArg()).toEqual([{ role: 'user', content: 'hi' }]);
+    });
+
+    it('reads the path of the fork the start names, and stores the fork on the session', async () => {
+        const { provider, runView } = makeProvider({
+            historyRows: [row('User', 'in the fork')],
+            branchRows: [{ ID: 'b1', ConversationID: 'conv-1', ParentBranchID: null, ForkFromSequence: 4, Name: null }],
+        });
+        currentProvider = provider;
+
+        await start('conv-1', 'B1');
+
+        expect(historyCall(runView)).toMatchObject({
+            ExtraFilter: "[ConversationID]='conv-1' AND ([BranchID]='b1' OR ([BranchID] IS NULL AND [Sequence] <= 4)) AND [ReplacedAt] IS NULL",
+            OrderBy: 'Sequence ASC',
+        });
+        const config = JSON.parse((createSessionMock.mock.calls.at(-1)![0] as { config: string }).config) as { conversationBranchID?: string };
+        expect(config.conversationBranchID).toBe('b1');
+    });
+
+    it.each([
+        ['the fork is not a fork of the conversation', { branchRows: [] }],
+        ['the fork rows cannot be read', { branchesFail: true }],
+    ])('refuses the start when %s', async (_label, opts) => {
+        const { provider } = makeProvider({ historyRows: [row('User', 'never read')], ...opts });
+        currentProvider = provider;
+        const sessionsBefore = createSessionMock.mock.calls.length;
+
+        await expect(start('conv-1', 'b1')).rejects.toThrow(/fork b1/);
+        expect(createSessionMock.mock.calls.length).toBe(sessionsBefore);
+    });
+
+    it('refuses a fork without a conversation', async () => {
+        const { provider } = makeProvider({});
+        currentProvider = provider;
+
+        await expect(makeResolver().StartRealtimeClientSession(
+            'target-1', makeCtx(), undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, 'b1',
+        )).rejects.toThrow(/needs a conversation/);
     });
 
     it('skips hidden rows, error rows, and empty messages', async () => {
@@ -3912,7 +4071,8 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
         await makeResolver().StartRealtimeClientSession('target-1', makeCtx());
 
         expect(historyArg()).toEqual([]);
-        expect(runView.mock.calls.some((c) => (c[0] as { ExtraFilter?: string }).ExtraFilter?.startsWith('ConversationID='))).toBe(false);
+        expect(historyCall(runView)).toBeUndefined();
+        expect(runView.mock.calls.some((c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversations')).toBe(false);
     });
 });
 
