@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { ConversationEngine } from '@memberjunction/core-entities';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { FallbackContent, ShapeContent, TestRunContent } from '../content.js';
 import { DeterministicRubricEvaluator } from '../DeterministicRubricEvaluator.js';
-import { RubricEngine, type RubricEvaluationStore } from '../RubricEngine.js';
+import { RubricEngine, type RubricEvaluationStore, type RubricRecords } from '../RubricEngine.js';
 import { GetAgreement, GetConsensus, GetDiagnostics, KrippendorffAlpha, QuadraticKappa } from '../statistics.js';
 import { FakePromptService } from './fakePromptService.js';
 
@@ -360,5 +361,44 @@ describe('agreement and consensus', () => {
         ]);
         expect(flags.filter(flag => flag.Flag === 'NoDiscrimination').map(flag => flag.CriterionKey)).toEqual(['noise']);
         expect(flags.filter(flag => flag.Flag === 'HighCorrelation').map(flag => `${flag.CriterionKey}:${flag.OtherKey}`).sort()).toEqual(['a:b', 'b:a']);
+    });
+});
+
+describe('conversation subject scope', () => {
+    function records(conversationScope?: RubricRecords['conversationScope']): RubricRecords & { reads: string[]; filters: Map<string, string> } {
+        const reads: string[] = [];
+        const filters = new Map<string, string>();
+        return {
+            reads,
+            filters,
+            async rows(entityName: string, filter: string) {
+                reads.push(entityName);
+                filters.set(entityName, filter);
+                return entityName === 'MJ: Conversations' ? [{ ID: 'conv-1', Name: 'Standup' }] : [];
+            },
+            async createDraft() { return { id: 'draft', status: 'Draft' }; },
+            conversationScope,
+        };
+    }
+
+    it('throws when the records cannot read the conversation scope', async () => {
+        const failing = records(async () => { throw new Error('Conversation conv-1 not found'); });
+        await expect(new RubricEngine(undefined, failing).SubjectContent({ subjectEntityName: 'MJ: Conversations', subjectRecordId: 'conv-1' }))
+            .rejects.toThrow('subject conversation not readable');
+        expect(failing.reads).not.toContain('MJ: Conversation Details');
+    });
+
+    it('throws when the records have no conversation scope reader', async () => {
+        const without = records();
+        await expect(new RubricEngine(undefined, without).SubjectContent({ subjectEntityName: 'MJ: Conversations', subjectRecordId: 'conv-1' }))
+            .rejects.toThrow('subject conversation not readable');
+        expect(without.reads).not.toContain('MJ: Conversation Details');
+    });
+
+    it('reads only the details of Main that no rerun replaced', async () => {
+        const main = records(async (conversationId) => ConversationEngine.TrunkScope(conversationId));
+        await new RubricEngine(undefined, main).SubjectContent({ subjectEntityName: 'MJ: Conversations', subjectRecordId: 'conv-1' });
+        expect(main.filters.get('MJ: Conversation Details'))
+            .toBe(`[ConversationID]='conv-1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
     });
 });

@@ -10,10 +10,11 @@
  * so it builds + unit-tests with NO network and NO real LiveKit SDK (the Zoom `SetSdkFactory`
  * testability pattern).
  *
- * LiveKit capability coverage (per the §4c / §8 seed row): on-demand join, **full** audio/video/screen
- * in+out (LiveKit does the lot), and per-participant diarization (`SpeakerDiarization`) — the SFU
- * delivers tracks per participant, so speaker labels come free. No scheduled/invite/telephony features.
- * Those virtual base methods keep throwing `BridgeCapabilityNotSupportedError`.
+ * LiveKit capability coverage (per the §4c / §8 seed row): on-demand join, audio in+out, camera and
+ * screen in, video out as the agent's live avatar only (no raw video frames, no screen share out), and
+ * per-participant diarization (`SpeakerDiarization`) — the SFU delivers tracks per participant, so speaker
+ * labels come free. No scheduled/invite/telephony features. Those virtual base methods keep throwing
+ * `BridgeCapabilityNotSupportedError`.
  *
  * ## Echo / self-audio
  * A LiveKit SFU **never delivers a participant its own published track back**, so the bot does not hear
@@ -27,14 +28,17 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { LogError, LogStatus } from '@memberjunction/core';
+import { IsAgentParticipantIdentity, UnnamedVideoSourceLabel } from '@memberjunction/ai';
 import {
     BaseRealtimeBridge,
+    BridgeAvatarFailure,
     BridgeConnectResult,
     BridgeDisconnectReason,
     BridgeMediaFrame,
     BridgeMediaTrackKind,
     BridgeParticipantInfo,
     BridgeParticipantRole,
+    BridgeVideoSourceEnd,
     RealtimeBridgeContext,
     IBridgeMeetingControlsEventSource,
 } from '@memberjunction/ai-bridge-base';
@@ -44,7 +48,11 @@ import {
     LiveKitParticipant,
     LiveKitParticipantRole,
     LiveKitAudioFrame,
+    LiveKitAvatarStatus,
     LiveKitConnectArgs,
+    LiveKitVideoFrame,
+    LiveKitVideoSourceEnd,
+    LiveKitVideoSourceKind,
 } from './livekit-sdk';
 import { LiveKitMeetingControlsEventSource } from './livekit-meeting-controls';
 
@@ -73,25 +81,54 @@ function mapParticipantRole(role: LiveKitParticipantRole, isLocal: boolean | und
 }
 
 /**
- * The bot-identity convention the LiveKit room coordinator mints (`agent-<agentSessionId>`). A bridge only
- * knows its OWN bot via `IsLocal`; OTHER agents in a multi-agent room are REMOTE participants, so they must
- * be recognized by this identity prefix. Without it every other agent reads as a human — breaking
- * turn-taking's agent-exclusion (an agent treats another agent's speech as being addressed) AND the
+ * Maps a LiveKit participant onto the bridge's {@link BridgeParticipantInfo}. A bridge knows only its OWN bot, through
+ * `IsLocal`; OTHER agents in a multi-agent room are REMOTE participants, recognized by the identity the room coordinator
+ * gives every bot (`IsAgentParticipantIdentity` in `@memberjunction/ai`). Without it every other agent reads as a
+ * human, breaking turn-taking's agent exclusion (an agent treats another agent's speech as being addressed) AND the
  * "are any humans still present?" occupancy check the engine uses to auto-leave an empty room.
  */
-function isAgentParticipantIdentity(identity: string | undefined): boolean {
-    return typeof identity === 'string' && identity.toLowerCase().startsWith('agent-');
-}
-
-/** Maps a LiveKit participant onto the bridge's {@link BridgeParticipantInfo}. */
 function toBridgeParticipant(p: LiveKitParticipant): BridgeParticipantInfo {
     return {
         ExternalId: p.Identity,
         DisplayName: p.DisplayName,
         Role: mapParticipantRole(p.Role, p.IsLocal),
         // The local bot OR any remote agent bot (by identity convention) counts as an agent, not a human.
-        IsAgent: p.IsLocal === true || isAgentParticipantIdentity(p.Identity),
+        IsAgent: p.IsLocal === true || IsAgentParticipantIdentity(p.Identity),
     };
+}
+
+/** The bridge track a participant's video source arrives on: a camera is `video-in`, a shared screen `screen-in`. */
+export function VideoTrackOf(source: LiveKitVideoSourceKind): Extract<BridgeMediaTrackKind, 'video-in' | 'screen-in'> {
+    return source === 'screen' ? 'screen-in' : 'video-in';
+}
+
+/**
+ * The stable key of one participant's video source (`participant:<identity>:camera|screen`): the same while they keep
+ * sharing, so the host can tell sources apart and notice a switch.
+ */
+export function VideoSourceIdOf(participantIdentity: string, source: LiveKitVideoSourceKind): string {
+    return `participant:${participantIdentity}:${source}`;
+}
+
+/**
+ * Whether an outbound `video-out` frame is a piece of an agent's live avatar (fragmented MP4, published by the room
+ * client as a camera track with the voice) rather than a raw video frame.
+ */
+export function IsAvatarMediaFrame(frame: BridgeMediaFrame): boolean {
+    return /^video\/mp4\b/i.test(frame.MimeType?.trim() ?? '');
+}
+
+/** The outbound tracks a frame can arrive on that the room has no publisher for (beyond an avatar on `video-out`). */
+type UnpublishedOutboundTrack = Extract<BridgeMediaTrackKind, 'video-out' | 'screen-out'>;
+
+/**
+ * The name the model is given for a video source: "Ada's camera", "Ada's screen". A source whose person has no display
+ * name gets the name for an unnamed source in `@memberjunction/ai` ("a participant's camera";
+ * {@link UnnamedVideoSourceLabel}), the one the bridge engine gives a source its driver didn't name.
+ */
+export function VideoSourceLabelOf(displayName: string | undefined, source: LiveKitVideoSourceKind): string {
+    const name = displayName?.trim();
+    return name ? `${name}'s ${source}` : UnnamedVideoSourceLabel(source);
 }
 
 /**
@@ -118,8 +155,17 @@ export class LiveKitBridge extends BaseRealtimeBridge {
     /** The roster-change handler registered via {@link OnParticipantChange}. */
     private participantHandler?: (participants: BridgeParticipantInfo[]) => void;
 
+    /** The handler registered via {@link OnVideoSourceEnded}. */
+    private videoSourceEndedHandler?: (source: BridgeVideoSourceEnd) => void;
+
+    /** The handler registered via {@link OnAvatarUnavailable}. */
+    private avatarUnavailableHandler?: (reason: BridgeAvatarFailure) => void;
+
     /** The Meeting Controls event source for this session (only when diarization is supported). */
     private meetingControls: LiveKitMeetingControlsEventSource | null = null;
+
+    /** The outbound tracks whose dropped frames this session has already logged (one line per track per session). */
+    private readonly loggedDrops = new Set<UnpublishedOutboundTrack>();
 
     /**
      * The SDK creation seam. Defaults to a factory that throws an explicit "bind the real LiveKit SDK"
@@ -160,9 +206,18 @@ export class LiveKitBridge extends BaseRealtimeBridge {
         this.applyContext(ctx);
         this.RequireFeature('AudioIn'); // a LiveKit room bridge requires bidirectional audio at minimum
         this.RequireFeature('AudioOut');
+        this.loggedDrops.clear();
 
-        this.sdk = this.sdkFactory(ctx.Configuration);
+        // The provider's directional video flags travel with the session configuration, so the room client reads only
+        // the kinds of video this provider allows in.
+        this.sdk = this.sdkFactory({
+            ...ctx.Configuration,
+            VideoIn: this.features.VideoIn === true,
+            ScreenIn: this.features.ScreenIn === true,
+        });
         this.wireInboundAudio(this.sdk);
+        this.wireInboundVideo(this.sdk);
+        this.sdk.onAvatarStatus?.((status) => this.handleAvatarStatus(status));
         this.sdk.onDisconnected((reason) => this.handleRoomDisconnected(reason));
 
         // Roster diarization is native to LiveKit (per-participant tracks); only stand up the Meeting
@@ -195,6 +250,8 @@ export class LiveKitBridge extends BaseRealtimeBridge {
         this.meetingControls = null;
         this.mediaHandler = undefined;
         this.participantHandler = undefined;
+        this.videoSourceEndedHandler = undefined;
+        this.avatarUnavailableHandler = undefined;
         if (sdk) {
             try {
                 await sdk.disconnect();
@@ -204,19 +261,21 @@ export class LiveKitBridge extends BaseRealtimeBridge {
         }
     }
 
-    /**
-     * Sends an outbound media frame into the room. LiveKit does the FULL media set, so audio, video, and
-     * screen are all published on their respective tracks (gated by the directional capability flags —
-     * the realtime models light audio first, video/screen ride the same path once a model emits them).
-     *
-     * @param track The outbound track the frame targets.
-     * @param frame The media frame to send.
-     */
     /** Flushes the agent's queued outbound voice on barge-in (the user interrupted the agent). */
     public override FlushOutboundMedia(): void {
         this.sdk?.flushOutboundAudio();
     }
 
+    /**
+     * Sends an outbound media frame into the room: the agent's voice on `audio-out`, and on `video-out` the pieces of its
+     * live avatar (fragmented MP4), which the room client decodes and publishes with the voice. The avatar is the bot's
+     * only video: the room has no publisher for a raw video frame or a `screen-out` frame, so each is dropped, with one log
+     * line per track per session when the provider allows that track. Video and screen are gated by the directional
+     * capability flags (`VideoOut`, `ScreenOut`).
+     *
+     * @param track The outbound track the frame targets.
+     * @param frame The media frame to send.
+     */
     public SendMedia(track: BridgeMediaTrackKind, frame: BridgeMediaFrame): void {
         if (!this.sdk) {
             return; // not connected — drop
@@ -230,19 +289,45 @@ export class LiveKitBridge extends BaseRealtimeBridge {
                 this.sdk.publishAudioFrame(bytes);
                 break;
             case 'video-out':
-                if (this.features.VideoOut === true) {
-                    this.sdk.publishVideoFrame(bytes);
-                }
+                this.sendVideoOut(this.sdk, frame, bytes);
                 break;
             case 'screen-out':
                 if (this.features.ScreenOut === true) {
-                    this.sdk.publishScreenFrame(bytes);
+                    this.logDroppedOnce('screen-out', 'a screen-share frame');
                 }
                 break;
             default:
                 // An inbound track was passed to SendMedia — ignore (defensive).
                 break;
         }
+    }
+
+    /**
+     * Publishes a piece of the agent's avatar when the provider allows video out. Any other video frame has no publisher
+     * in the room: it is dropped, and the first one is logged.
+     */
+    private sendVideoOut(sdk: ILiveKitRoomSdk, frame: BridgeMediaFrame, bytes: ArrayBuffer): void {
+        if (this.features.VideoOut !== true) {
+            return;
+        }
+        if (IsAvatarMediaFrame(frame)) {
+            // An agent's live avatar: the room client decodes it and publishes the face and the voice together.
+            sdk.publishAvatarMedia?.({ Bytes: bytes, MimeType: frame.MimeType ?? 'video/mp4' });
+            return;
+        }
+        this.logDroppedOnce('video-out', `a video frame that is not an avatar's MP4 (type ${frame.MimeType?.trim() || 'none'})`);
+    }
+
+    /** Logs a dropped outbound frame once per track per session; later drops on that track are silent. */
+    private logDroppedOnce(track: UnpublishedOutboundTrack, what: string): void {
+        if (this.loggedDrops.has(track)) {
+            return;
+        }
+        this.loggedDrops.add(track);
+        LogStatus(
+            `[LiveKitBridge] Dropped ${what} on ${track}: the room publishes only the agent's avatar. ` +
+                `Later ${track} frames in this session are dropped without a log line.`,
+        );
     }
 
     /**
@@ -253,6 +338,26 @@ export class LiveKitBridge extends BaseRealtimeBridge {
      */
     public OnMedia(handler: (frame: BridgeMediaFrame) => void): void {
         this.mediaHandler = handler;
+    }
+
+    /**
+     * Registers the handler for a camera or screen the room client stopped reading (the person opted out, left, stopped
+     * sharing or turned it off, or the client moved the agent's view to another source), so the engine can tell the model.
+     *
+     * @param handler Invoked with each source that ended.
+     */
+    public override OnVideoSourceEnded(handler: (source: BridgeVideoSourceEnd) => void): void {
+        this.videoSourceEndedHandler = handler;
+    }
+
+    /**
+     * Registers the handler for an avatar the room client took down (its decoders kept failing, or the room refused the
+     * camera track), so the engine can replace the model session with an audio-only one.
+     *
+     * @param handler Invoked with why the avatar can no longer be shown.
+     */
+    public override OnAvatarUnavailable(handler: (reason: BridgeAvatarFailure) => void): void {
+        this.avatarUnavailableHandler = handler;
     }
 
     // ── Capability-gated virtuals LiveKit supports (gated by SupportedFeatures) ───────
@@ -341,6 +446,45 @@ export class LiveKitBridge extends BaseRealtimeBridge {
     }
 
     /**
+     * Wires the SDK's sampled camera and screen frames (only people who let agents see them; the room client decides)
+     * to inbound `video-in` / `screen-in` frames carrying the source's key and name, the image's size, and the key-frame
+     * flag every JPEG gets (it decodes on its own), and its ended sources to {@link OnVideoSourceEnded}'s handler. Each
+     * frame re-checks the provider's directional flag, as {@link SendMedia} does for outbound video. Optional on the SDK
+     * seam: an SDK without inbound video wires nothing.
+     */
+    private wireInboundVideo(sdk: ILiveKitRoomSdk): void {
+        sdk.onVideoTrack?.((frame: LiveKitVideoFrame) => {
+            const track = VideoTrackOf(frame.Source);
+            if (!this.allowsVideoIn(track)) {
+                return;
+            }
+            this.mediaHandler?.({
+                Track: track,
+                Bytes: frame.Bytes,
+                MimeType: frame.MimeType,
+                Width: frame.Width,
+                Height: frame.Height,
+                KeyFrame: true,
+                SourceID: VideoSourceIdOf(frame.ParticipantIdentity, frame.Source),
+                SourceLabel: VideoSourceLabelOf(frame.DisplayName, frame.Source),
+                TimestampMs: frame.TimestampMs,
+            });
+        });
+        sdk.onVideoSourceEnded?.((source: LiveKitVideoSourceEnd) => {
+            this.videoSourceEndedHandler?.({
+                Track: VideoTrackOf(source.Source),
+                SourceID: VideoSourceIdOf(source.ParticipantIdentity, source.Source),
+                SourceLabel: VideoSourceLabelOf(source.DisplayName, source.Source),
+            });
+        });
+    }
+
+    /** Whether the provider lets this kind of video in: cameras need `VideoIn`, shared screens `ScreenIn`. */
+    private allowsVideoIn(track: Extract<BridgeMediaTrackKind, 'video-in' | 'screen-in'>): boolean {
+        return track === 'screen-in' ? this.features.ScreenIn === true : this.features.VideoIn === true;
+    }
+
+    /**
      * Wires the SDK's participant join/leave streams ONCE (the driver is the single owner; the SDK seam
      * is latest-handler-wins). Each roster change fans out to both the driver's own roster-change
      * handler and the Meeting Controls source.
@@ -358,6 +502,18 @@ export class LiveKitBridge extends BaseRealtimeBridge {
             this.meetingControls?.IngestRoster(participants);
         } catch (err) {
             LogError(`[LiveKitBridge] roster refresh failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /** Handles a change in what the room client shows of the avatar: a take-down goes to the engine; publishing is logged. */
+    private handleAvatarStatus(status: LiveKitAvatarStatus): void {
+        if (status.State === 'on') {
+            LogStatus("[LiveKitBridge] the agent's avatar is published in the room");
+            return;
+        }
+        LogStatus(`[LiveKitBridge] the agent's avatar was taken down (${status.Reason ?? 'unknown'}); the agent goes on audio only`);
+        if (status.Reason) {
+            this.avatarUnavailableHandler?.(status.Reason);
         }
     }
 

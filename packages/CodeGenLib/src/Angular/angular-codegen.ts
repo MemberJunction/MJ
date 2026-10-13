@@ -975,7 +975,7 @@ ${indentedFormHTML}
                 if (!re.DisplayInForm || isaChildIDs.has(re.RelatedEntityID)) {
                     return false;
                 }
-                const targetEntity = md.Entities.find(e => UUIDsEqual(e.ID, re.RelatedEntityID));
+                const targetEntity = md.EntityByID(re.RelatedEntityID);
                 if (targetEntity && excludedSchemas.has(targetEntity.SchemaName.toLowerCase())) {
                     return false;
                 }
@@ -996,7 +996,7 @@ ${indentedFormHTML}
             }
             // If no custom icon, try to use the related entity's icon
             else {
-                const re: EntityInfo | undefined = md.Entities.find(e => UUIDsEqual(e.ID, relatedEntity.RelatedEntityID))
+                const re: EntityInfo | undefined = md.EntityByID(relatedEntity.RelatedEntityID)
                 if (re && re.Icon && re.Icon.length > 0) {
                     icon = `<span class="${re.Icon} tab-header-icon"></span>`;
                     iconClass = re.Icon;
@@ -1088,7 +1088,7 @@ ${componentCodeWithIndent}
         let index = startIndex;
         for (const organicKey of organicKeys) {
             for (const relatedEntity of organicKey.RelatedEntities) {
-                const re: EntityInfo | undefined = md.Entities.find(e => UUIDsEqual(e.ID, relatedEntity.RelatedEntityID));
+                const re: EntityInfo | undefined = md.EntityByID(relatedEntity.RelatedEntityID);
                 if (re && excludedSchemas.has(re.SchemaName.toLowerCase())) {
                     continue;
                 }

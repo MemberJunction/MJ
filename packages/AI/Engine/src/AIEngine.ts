@@ -290,6 +290,13 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get ClientToolDefinitions(): MJAIClientToolDefinitionEntity[] { return this.Base.ClientToolDefinitions; }
     public get AgentClientTools(): MJAIAgentClientToolEntity[] { return this.Base.AgentClientTools; }
     public GetClientToolsForAgent(agentId: string): MJAIClientToolDefinitionEntity[] { return this.Base.GetClientToolsForAgent(agentId); }
+    /** Agent storage-account routing — see {@link AIEngineBase.ResolveAgentStorageAccountID}. */
+    public ResolveAgentStorageAccountID(
+        agent: Parameters<AIEngineBase['ResolveAgentStorageAccountID']>[0],
+        overrideStorageAccountId?: string | null
+    ): string | null {
+        return this.Base.ResolveAgentStorageAccountID(agent, overrideStorageAccountId);
+    }
     public GetCredentialBindingsForTarget(
         bindingType: 'Vendor' | 'ModelVendor' | 'PromptModel',
         targetId: string

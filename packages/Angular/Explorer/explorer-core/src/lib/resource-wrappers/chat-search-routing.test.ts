@@ -20,7 +20,28 @@ describe('ResolveChatSearchRoute', () => {
     });
   });
 
-  it('opens the parent conversation of a message result', () => {
+  it('opens a message result at its branch and sequence', () => {
+    expect(
+      ResolveChatSearchRoute(result({ id: 'M1', type: 'message', conversationId: 'C9', branchId: 'B2', sequence: 14 }))
+    ).toEqual({ Kind: 'message', ConversationId: 'C9', BranchId: 'B2', Sequence: 14 });
+  });
+
+  it('opens a trunk message result with a null branch', () => {
+    expect(
+      ResolveChatSearchRoute(result({ id: 'M1', type: 'message', conversationId: 'C9', branchId: null, sequence: 3 }))
+    ).toEqual({ Kind: 'message', ConversationId: 'C9', BranchId: null, Sequence: 3 });
+  });
+
+  it('treats a message result without a branch as a trunk message', () => {
+    expect(ResolveChatSearchRoute(result({ id: 'M1', type: 'message', conversationId: 'C9', sequence: 0 }))).toEqual({
+      Kind: 'message',
+      ConversationId: 'C9',
+      BranchId: null,
+      Sequence: 0,
+    });
+  });
+
+  it('opens the parent conversation of a message result that has no sequence', () => {
     expect(ResolveChatSearchRoute(result({ id: 'M1', type: 'message', conversationId: 'C9' }))).toEqual({
       Kind: 'conversation',
       ConversationId: 'C9',

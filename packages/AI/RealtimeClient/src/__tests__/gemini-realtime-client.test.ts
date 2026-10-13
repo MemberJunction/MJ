@@ -17,6 +17,8 @@ import {
     IGeminiAudioPlayback,
     IGeminiMicCapture,
 } from '../drivers/geminiRealtimeClient';
+import { ConfirmGeminiSetup, FakeMicCapture } from './helpers/realtime-fakes';
+import { DescribePcmMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
 
@@ -60,14 +62,6 @@ class FakePlayback implements IGeminiAudioPlayback {
     public Close(): void {
         this.Closed = true;
         this.IsPlaying = false;
-    }
-}
-
-/** Fake mic capture handle. */
-class FakeMicCapture implements IGeminiMicCapture {
-    public Stopped = false;
-    public Stop(): void {
-        this.Stopped = true;
     }
 }
 
@@ -147,9 +141,13 @@ class TestGeminiClient extends GeminiRealtimeClient {
     public LastConnectArgs: GeminiClientConnectArgs | null = null;
     /** The driver's mic-chunk callback, captured so tests can simulate worklet frames. */
     public OnPcmChunk: ((base64Pcm16: string) => void) | null = null;
+    /** How many Live connections the client opened (a resume opens another). */
+    public ConnectCount = 0;
 
     protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         this.LastConnectArgs = args;
+        this.ConnectCount++;
+        ConfirmGeminiSetup(args);
         return this.Fake;
     }
     protected override async createMicCapture(
@@ -808,6 +806,16 @@ describe('GeminiRealtimeClient', () => {
             ]);
         });
 
+        it("ends the call with a time-limit error, without resuming, when the relay closes at the session's time limit", async () => {
+            const { states, errors } = collect(client);
+            await connect(client);
+            client.Emit({ sessionResumptionUpdate: { newHandle: 'handle-1' } } as LiveServerMessage);
+            client.LastConnectArgs?.OnClose(new CloseEvent('close', { code: 4000, reason: 'Call time limit reached' }));
+            expect(errors).toEqual([{ Message: 'Gemini Live session reached its time limit (4000): Call time limit reached', Code: 'time-limit', Fatal: true }]);
+            expect(states[states.length - 1]).toBe('error');
+            expect(client.ConnectCount).toBe(1);
+        });
+
         it('should still emit the fatal error on an abnormal close when there is no global process (browser)', async () => {
             const { states, errors } = collect(client);
             await connect(client);
@@ -835,6 +843,7 @@ describe('GeminiRealtimeClient', () => {
                     this.ArgsPerSession.push(args);
                     const session = new FakeGeminiSession();
                     this.Sessions.push(session);
+                    ConfirmGeminiSetup(args);
                     return session;
                 }
             }
@@ -887,6 +896,15 @@ describe('GeminiRealtimeClient', () => {
         });
     });
 });
+
+DescribePcmMicrophoneReplacement(
+    async () => {
+        const client = new TestGeminiClient();
+        const track = await connect(client);
+        return { Client: client, Track: track, Capture: client.Capture };
+    },
+    () => new TestGeminiClient()
+);
 
 describe('GeminiRealtimeClient remote media stream (issue #5153)', () => {
     /** Playback fake that exposes an output stream, like the production Web Audio engine. */

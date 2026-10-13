@@ -19,10 +19,32 @@ import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
  *
  * Node preset. The run half touches three browser-only seams, all faked here the same narrow way
  * the sibling voice-session suites do: the ClassFactory-resolved provider driver (a registered
- * fake `BaseRealtimeClient`), `navigator.mediaDevices.getUserMedia` (stubbed via `vi.stubGlobal` —
- * node has no media stack), and the GraphQL provider (a fake with `ExecuteGQL` + the
+ * fake `BaseRealtimeClient`), `navigator.mediaDevices` (stubbed via `vi.stubGlobal` — node has no
+ * media stack; see {@link stubBrowserMicrophone}), and the GraphQL provider (a fake with `ExecuteGQL` + the
  * push-status seam `subscribeDelegationProgress` needs).
  */
+
+/**
+ * Stubs the browser's microphone: a `MediaDevices` that is an `EventTarget`, as in every browser, whose
+ * `getUserMedia` returns one live audio track. The run half opens it through the host's
+ * `LocalMediaController`, which follows device changes and reads the track's settings.
+ */
+function stubBrowserMicrophone(): void {
+  const track = Object.assign(new EventTarget(), {
+    kind: 'audio',
+    enabled: true,
+    label: 'Test microphone',
+    stop: () => undefined,
+    getSettings: () => ({ deviceId: 'default' })
+  });
+  const stream = { getTracks: () => [track], getAudioTracks: () => [track], addTrack: () => undefined, removeTrack: () => undefined };
+  vi.stubGlobal('navigator', {
+    mediaDevices: Object.assign(new EventTarget(), {
+      getUserMedia: vi.fn(async () => stream),
+      enumerateDevices: vi.fn(async () => [])
+    })
+  });
+}
 
 /** Provider key of the fake driver — never collides with a real registered provider. */
 const FAKE_PROVIDER = 'test-realtime-provider';
@@ -159,11 +181,7 @@ describe('RealtimeSessionService — mint/run split (StartRealtimeSessionFromRes
       PushStatusUpdates: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) })
     } as unknown as IMetadataProvider;
     // Node has no media stack — the run half acquires the mic before Connect().
-    vi.stubGlobal('navigator', {
-      mediaDevices: {
-        getUserMedia: vi.fn(async () => ({ getTracks: () => [], getAudioTracks: () => [] }))
-      }
-    });
+    stubBrowserMicrophone();
   });
 
   afterEach(async () => {
@@ -281,11 +299,7 @@ describe('RealtimeSessionService — StartRealtimeSession after the mint/run spl
       sessionId: 'transport-1',
       PushStatusUpdates: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) })
     } as unknown as IMetadataProvider;
-    vi.stubGlobal('navigator', {
-      mediaDevices: {
-        getUserMedia: vi.fn(async () => ({ getTracks: () => [], getAudioTracks: () => [] }))
-      }
-    });
+    stubBrowserMicrophone();
   });
 
   afterEach(() => {
