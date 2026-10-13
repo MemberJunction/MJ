@@ -18733,7 +18733,7 @@
             "Priority": 0,
             "Status": "Active",
             "SupportedResponseFormats": "Any",
-            "SupportsEffortLevel": true,
+            "SupportsEffortLevel": false,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
@@ -18756,7 +18756,7 @@
             "MaxInputTokens": 256000,
             "MaxOutputTokens": 2000000,
             "SupportedResponseFormats": "Any, JSON",
-            "SupportsEffortLevel": true,
+            "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
