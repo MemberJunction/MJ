@@ -8,7 +8,9 @@ export function IsFiniteValue(value: number | null | undefined): value is number
 }
 
 /**
- * Spec §8.2. Pure — returns a status and never logs; the controller reports it.
+ * The rules in the README's Data rules table: no categories or series is empty; a series whose length differs
+ * from the categories, or a negative value in a stacked or percent area, is invalid.
+ * Pure — returns a status and never logs; the controller reports it.
  * Details carry series names and indexes only, never data values.
  */
 export function ValidateCategorySeries(

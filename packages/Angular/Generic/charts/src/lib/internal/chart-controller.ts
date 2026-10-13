@@ -42,7 +42,7 @@ export interface ChartControllerOptions<TGeometry> {
 export const PointerLeaveGraceMs = 120;
 
 /**
- * Orchestrates one chart: a memoized view per input snapshot (spec §10.1) plus
+ * Orchestrates one chart: a memoized view per input snapshot (inputs are replaced, never mutated) plus
  * interaction state. Input setters call MarkDirty(); the template reads View
  * and Pointer, which rebuild at most once per change.
  */

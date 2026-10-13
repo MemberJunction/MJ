@@ -84,7 +84,7 @@ describe('anchors', () => {
         const d = Math.hypot(a.X - donut.CenterX, a.Y - donut.CenterY);
         expect(d).toBeCloseTo((donut.InnerRadius + donut.OuterRadius) / 2, 1);
     });
-    it('returns null for a point that is not drawn', () => expect(BarAnchor(bar, { CategoryIndex: 1, SeriesIndex: 1 })).toBeNull());
+    it('returns null for a point that is not drawn', () => expect(BarAnchor(bar, { CategoryIndex: 5, SeriesIndex: 0 })).toBeNull());
 });
 
 describe('category anchors (tooltip)', () => {
@@ -137,8 +137,15 @@ describe('category anchors (tooltip)', () => {
 });
 
 describe('navigable points', () => {
-    it('bar points skip undrawn (zero) cells', () => {
-        expect(BarPoints(bar)).toEqual([{ CategoryIndex: 0, SeriesIndex: 0 }, { CategoryIndex: 0, SeriesIndex: 1 }, { CategoryIndex: 1, SeriesIndex: 0 }]);
+    it('bar points include zero cells (a real 0 is a keyboard stop)', () => {
+        expect(BarPoints(bar)).toEqual([{ CategoryIndex: 0, SeriesIndex: 0 }, { CategoryIndex: 0, SeriesIndex: 1 }, { CategoryIndex: 1, SeriesIndex: 0 }, { CategoryIndex: 1, SeriesIndex: 1 }]);
+    });
+    it('bar points skip null and NaN cells', () => {
+        const g = ComputeBarLayout({
+            Categories: ['A', 'B'], Series: [{ Name: 's0', Values: [1, null] }, { Name: 's1', Values: [Number.NaN, 2] }],
+            Fills: ['f0', 'f1'], Orientation: 'vertical', Stacked: false, Size: { Width: 400, Height: 200 }, Measure: measure, Type: TypeMetrics(12), Formatter: fmt,
+        });
+        expect(BarPoints(g)).toEqual([{ CategoryIndex: 0, SeriesIndex: 0 }, { CategoryIndex: 1, SeriesIndex: 1 }]);
     });
     it('area points cover every defined cell', () => expect(AreaPoints(areaG)).toHaveLength(6));
     it('donut points skip excluded slices without renumbering', () => {
@@ -189,5 +196,22 @@ describe('SamePoint', () => {
         expect(SamePoint({ CategoryIndex: 1, SeriesIndex: 2 }, { CategoryIndex: 1, SeriesIndex: 2 })).toBe(true);
         expect(SamePoint(null, { CategoryIndex: 1, SeriesIndex: 2 })).toBe(false);
         expect(SamePoint(null, null)).toBe(true);
+    });
+});
+
+describe('zero-valued bars (PR #5368 review)', () => {
+    const g = ComputeBarLayout({
+        Categories: ['A', 'B'], Series: [{ Name: 's0', Values: [5, 0] }], Fills: ['f'], Orientation: 'vertical', Stacked: false,
+        Size: { Width: 400, Height: 200 }, Measure: (t: string) => t.length * 7, Type: TypeMetrics(12), Formatter: (v: number) => String(v),
+    });
+    const bandB = g.CategoryBands[1];
+
+    it('hovering the category of a real 0 hits it', () => {
+        expect(HitTestBar(g, bandB.Start + bandB.Size / 2, g.Box.Y + g.Box.Height / 2)).toEqual({ CategoryIndex: 1, SeriesIndex: 0 });
+    });
+
+    it('keyboard navigation reaches the real 0', () => {
+        const points = BarPoints(g);
+        expect(NavigateGrid(points, { CategoryIndex: 0, SeriesIndex: 0 }, 'ArrowRight', 'x')).toEqual({ CategoryIndex: 1, SeriesIndex: 0 });
     });
 });

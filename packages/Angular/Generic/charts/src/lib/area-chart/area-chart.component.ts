@@ -57,6 +57,10 @@ const DefaultFillOpacity = 0.85;
                         <path class="mj-chart-mark" [attr.d]="layer.Path" [style.fill]="layer.Fill" [attr.fill-opacity]="FillOpacityValue"
                             [class.mj-chart-mark-inactive]="pointer.Active !== null && pointer.Active.SeriesIndex !== layer.SeriesIndex" />
                         <path [attr.d]="layer.LinePath" [style.stroke]="layer.Fill" fill="none" stroke-width="2" pointer-events="none" />
+                        @for (dot of layer.LonePoints; track dot.X) {
+                            <circle class="mj-chart-point" [attr.cx]="dot.X" [attr.cy]="dot.Y" r="3" [style.fill]="layer.Fill"
+                                [class.mj-chart-mark-inactive]="pointer.Active !== null && pointer.Active.SeriesIndex !== layer.SeriesIndex" />
+                        }
                     }
                     @for (tick of g.CategoryAxis; track tick.Key) {
                         <text class="mj-chart-axis-label" [attr.x]="tick.Position" [attr.y]="g.Box.Y + g.Box.Height + g.Type.LineHeight" [attr.text-anchor]="tick.Anchor">{{ tick.Label }}</text>

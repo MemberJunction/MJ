@@ -156,19 +156,25 @@ function stackedSegments(input: BarLayoutInput, band: ScaleBand<number>, value: 
         const start = band(c) ?? 0;
         let positive = 0;
         let negative = 0;
-        const made: Array<{ S: number; From: number; To: number; Raw: number; Positive: boolean }> = [];
+        const made: Array<{ S: number; From: number; To: number; Raw: number; Side: 'positive' | 'negative' | 'zero' }> = [];
         input.Series.forEach((s, si) => {
             const raw = s.Values[c];
-            if (!IsFiniteValue(raw) || raw === 0) {
+            if (!IsFiniteValue(raw)) {
+                return;
+            }
+            if (raw === 0) {
+                // A real 0 still needs a hit target and a keyboard stop: a zero-length segment on the baseline
+                // that neither moves the stack nor takes the rounded end from a segment that has length.
+                made.push({ S: si, From: 0, To: 0, Raw: 0, Side: 'zero' });
                 return;
             }
             const from = raw > 0 ? positive : negative;
             const to = from + raw;
             if (raw > 0) positive = to; else negative = to;
-            made.push({ S: si, From: from, To: to, Raw: raw, Positive: raw > 0 });
+            made.push({ S: si, From: from, To: to, Raw: raw, Side: raw > 0 ? 'positive' : 'negative' });
         });
-        const lastPositive = made.map((m) => m.Positive).lastIndexOf(true);
-        const lastNegative = made.map((m) => m.Positive).lastIndexOf(false);
+        const lastPositive = made.map((m) => m.Side).lastIndexOf('positive');
+        const lastNegative = made.map((m) => m.Side).lastIndexOf('negative');
         made.forEach((m, i) => {
             out.push(makeSegment(input, value, horizontal, m.S, c, start, band.bandwidth(), m.From, m.To, m.Raw, i === lastPositive || i === lastNegative));
         });
@@ -185,7 +191,8 @@ function groupedSegments(input: BarLayoutInput, band: ScaleBand<number>, value: 
     input.Categories.forEach((_, c) => {
         input.Series.forEach((s, si) => {
             const raw = s.Values[c];
-            if (!IsFiniteValue(raw) || raw === 0) {
+            // A 0 gets a zero-length segment, so it can still be hovered, focused and clicked.
+            if (!IsFiniteValue(raw)) {
                 return;
             }
             const start = (band(c) ?? 0) + (inner(si) ?? 0);

@@ -1,6 +1,6 @@
 /**
  * Internal contract between the pure layout modules, the controller, the frame
- * and the chart templates (spec §7). NOT exported from public-api.ts — free to
+ * and the chart templates. NOT exported from public-api.ts — free to
  * change without a breaking release.
  */
 import { BarOrientation } from '../chart.types';
@@ -100,6 +100,12 @@ export interface AreaLayer {
     /** Stacked lower/upper edge per category in plot px; null where the series is missing (StackMode 'none' only). */
     Y0: ReadonlyArray<number | null>;
     Y1: ReadonlyArray<number | null>;
+    /**
+     * Points with no defined neighbour on either side (a value between two gaps, or every point of a
+     * single-category chart). The area and line through such a point have zero length and paint nothing,
+     * so the template draws these as dots.
+     */
+    LonePoints: ReadonlyArray<ChartAnchor>;
 }
 
 export interface AreaGeometry {

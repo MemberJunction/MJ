@@ -24,7 +24,7 @@ export const DonutLayoutConstants = {
     PadAngle: 0.008,
 } as const;
 
-/** Negative, null and non-finite slices contribute nothing (spec §8.2). */
+/** Negative, null and non-finite slices contribute nothing (README, Data rules). */
 export function SliceValue(value: number | null): number {
     return IsFiniteValue(value) && value > 0 ? value : 0;
 }

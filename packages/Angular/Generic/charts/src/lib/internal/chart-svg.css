@@ -37,6 +37,12 @@
     transition: opacity 120ms ease;
 }
 
+/* A lone area point's dot; hit testing is geometric, so the dot never takes the pointer. */
+.mj-chart-point {
+    pointer-events: none;
+    transition: opacity 120ms ease;
+}
+
 .mj-chart-mark-inactive {
     opacity: 0.55;
 }
@@ -65,7 +71,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .mj-chart-mark {
+    .mj-chart-mark,
+    .mj-chart-point {
         transition: none;
     }
 }

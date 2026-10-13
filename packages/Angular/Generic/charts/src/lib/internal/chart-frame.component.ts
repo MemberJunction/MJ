@@ -12,7 +12,7 @@ import { DefaultFontSize, ParseFontSize, TypeMetrics } from './scales';
 import { CreateTextMeasure, EstimateTextMeasure } from './text-measure';
 
 /**
- * Spec §10.1: the width used when ResizeObserver is absent, or when the host is hidden at mount and so
+ * The width used when ResizeObserver is absent, or when the host is hidden at mount and so
  * has no layout width yet. A host hidden later keeps its last visible width instead.
  */
 export const FallbackWidth = 600;
@@ -100,7 +100,7 @@ function scheduleFrame(callback: () => void): () => void {
 }
 
 /**
- * Internal shell shared by the three charts (spec §5): sizing, legend, empty/invalid
+ * Internal shell shared by the three charts: sizing, legend, empty/invalid
  * states, the accessible group + data table + live region, and the CDK-overlay tooltip.
  * Which datum is active and what the tooltip says come from the chart, not from here.
  */
@@ -203,9 +203,13 @@ export class MJChartFrameComponent implements OnDestroy {
     get TooltipPlacement(): TooltipPlacement { return this.placement; }
 
     @Input() set TooltipAnchor(anchor: ChartAnchor | null) {
+        const moved = anchor?.X !== this.anchor?.X || anchor?.Y !== this.anchor?.Y;
         this.anchor = anchor;
-        // The overlay does not follow a moved origin by itself.
-        afterNextRender(() => this.overlay?.overlayRef?.updatePosition(), { injector: this.injector });
+        // The overlay does not follow a moved origin by itself. Charts hand over a new object on every
+        // pointer-view rebuild, and updatePosition forces a layout, so only an anchor that moved re-positions.
+        if (moved) {
+            afterNextRender(() => this.overlay?.overlayRef?.updatePosition(), { injector: this.injector });
+        }
     }
     get TooltipAnchor(): ChartAnchor | null { return this.anchor; }
 
@@ -258,6 +262,8 @@ export class MJChartFrameComponent implements OnDestroy {
     private rendered = false;
     private observer: ResizeObserver | null = null;
     private cancelFrame: (() => void) | null = null;
+    /** Removes the document.fonts listener; null until mounted, or where the Font Loading API is absent (jsdom). */
+    private stopFontWatch: (() => void) | null = null;
 
     constructor() {
         afterNextRender(() => {
@@ -275,7 +281,26 @@ export class MJChartFrameComponent implements OnDestroy {
                 this.observer = new ResizeObserver((entries) => this.onResize(entries[0]?.contentRect.width ?? 0, entries[0]?.contentRect.height ?? 0));
                 this.observer.observe(this.host.nativeElement);
             }
+            this.watchFontLoads();
         });
+    }
+
+    /**
+     * A web font that finishes loading after the first paint changes every text width, but not the
+     * font size or family the measure is keyed by, so without this the fallback font's widths would
+     * stay cached (truncation, margins and legend fit all wrong) until the next size change.
+     */
+    private watchFontLoads(): void {
+        const fonts = typeof document !== 'undefined' ? document.fonts : undefined;
+        if (!fonts) {
+            return;
+        }
+        const onLoaded = (): void => {
+            this.measureKey = '';
+            this.schedulePublish();
+        };
+        fonts.addEventListener('loadingdone', onLoaded);
+        this.stopFontWatch = () => fonts.removeEventListener('loadingdone', onLoaded);
     }
 
     /**
@@ -335,6 +360,8 @@ export class MJChartFrameComponent implements OnDestroy {
         this.observer = null;
         this.cancelFrame?.();
         this.cancelFrame = null;
+        this.stopFontWatch?.();
+        this.stopFontWatch = null;
     }
 
     private onResize(width: number, height: number): void {

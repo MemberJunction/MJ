@@ -4,7 +4,7 @@ import { SamePoint } from './hit-test';
 export type PointerKind = 'mouse' | 'touch' | 'pen';
 
 /**
- * Pointer / touch / keyboard state for one chart (spec §10.2).
+ * Pointer / touch / keyboard state for one chart.
  * Touch: first tap arms and shows the value; a second tap on the same point
  * emits. The synthetic click a browser fires after a touch never emits.
  */

@@ -27,7 +27,7 @@ beforeEach(() => vi.mocked(LogError).mockClear());
 afterEach(() => ClearOverlayContainers());
 
 describe('MJBarChartComponent', () => {
-    it('draws one mark per finite non-zero cell with token fills', async () => {
+    it('draws one mark per finite cell with token fills', async () => {
         const f = await render({ Stacked: true });
         expect(marks(f)).toHaveLength(4);
         const fills = marks(f).map((m) => m.style.fill);

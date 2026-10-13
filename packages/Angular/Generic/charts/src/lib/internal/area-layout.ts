@@ -1,6 +1,6 @@
 import { area, curveLinear, curveMonotoneX, line } from 'd3';
 import { AreaCurve, AreaStackMode, ChartSeries, ChartValueFormatter } from '../chart.types';
-import { AreaGeometry, AreaLayer, AxisTick, ChartTypeMetrics, PlotBox, PlotSize, TextMeasure } from './geometry.types';
+import { AreaGeometry, AreaLayer, AxisTick, ChartAnchor, ChartTypeMetrics, PlotBox, PlotSize, TextMeasure } from './geometry.types';
 import { IsFiniteValue } from './validate';
 import { BuildValueTicks, CreateValueScale, CullKeepingEnds, FormatPercent, MaxOf, MaxTickLabels, MinOf, PercentDomain, Round2, TruncateLabel, ValueDomain } from './scales';
 
@@ -50,7 +50,7 @@ export function ComputeAreaLayout(input: AreaLayoutInput): AreaGeometry {
     const percent = input.StackMode === 'percent';
     const raw: Array<Array<number | null>> = input.Series.map((s) => indices.map((c) => (IsFiniteValue(s.Values[c]) ? (s.Values[c] as number) : null)));
 
-    // Stacked data space: missing counts as 0 so layers stay continuous (spec §8.2).
+    // Stacked data space: missing counts as 0 so layers stay continuous (a gap would tear every layer above it).
     const lower: number[][] = [];
     const upper: number[][] = [];
     let stackMax = 0;
@@ -88,7 +88,7 @@ export function ComputeAreaLayout(input: AreaLayoutInput): AreaGeometry {
         const defined = (c: number): boolean => y1[c] !== null;
         const fill = area<number>().x((c) => xs[c]).y0((c) => y0[c] ?? 0).y1((c) => y1[c] ?? 0).defined(defined).curve(curve);
         const top = line<number>().x((c) => xs[c]).y((c) => y1[c] ?? 0).defined(defined).curve(curve);
-        return { SeriesIndex: si, Path: fill(indices) ?? '', LinePath: top(indices) ?? '', Fill: input.Fills[si], Y0: y0, Y1: y1 };
+        return { SeriesIndex: si, Path: fill(indices) ?? '', LinePath: top(indices) ?? '', Fill: input.Fills[si], Y0: y0, Y1: y1, LonePoints: lonePoints(xs, y1) };
     });
 
     return {
@@ -102,6 +102,17 @@ export function ComputeAreaLayout(input: AreaLayoutInput): AreaGeometry {
         Stacked: stacked,
         Percent: percent,
     };
+}
+
+/** Defined points whose neighbours on both sides are missing or off the end: see AreaLayer.LonePoints. */
+function lonePoints(xs: ReadonlyArray<number>, y1: ReadonlyArray<number | null>): ChartAnchor[] {
+    const out: ChartAnchor[] = [];
+    y1.forEach((y, c) => {
+        if (y !== null && (y1[c - 1] ?? null) === null && (y1[c + 1] ?? null) === null) {
+            out.push({ X: xs[c], Y: y });
+        }
+    });
+    return out;
 }
 
 /**

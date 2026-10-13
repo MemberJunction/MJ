@@ -12,7 +12,7 @@ describe('IsFiniteValue', () => {
     });
 });
 
-describe('ValidateCategorySeries — spec §8.2 matrix', () => {
+describe('ValidateCategorySeries — README Data rules matrix', () => {
     it.each(['bar', 'area-none', 'area-stacked', 'area-percent'] as const)('%s: no categories or no series is empty', (mode) => {
         expect(ValidateCategorySeries([], [s('A', [])], mode)).toEqual({ Kind: 'empty' });
         expect(ValidateCategorySeries(cats, [], mode)).toEqual({ Kind: 'empty' });

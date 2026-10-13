@@ -1,4 +1,4 @@
-/** Spec §4 rule 1: a caller color must be exactly `var(--token-name)`. */
+/** A caller color must be exactly `var(--token-name)`, so every color re-themes through CSS; anything else is logged and replaced. */
 const TokenColorPattern = /^var\(--[A-Za-z0-9-]+\)$/;
 
 /** Number of categorical tokens `--mj-viz-1 … --mj-viz-10`. */

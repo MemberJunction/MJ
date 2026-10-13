@@ -6,6 +6,7 @@ import { FallbackWidth, KeyToCommand, MJChartFrameComponent, ResolveOuterHeight 
 import { ChartSurface, ChartTableModel, LegendItem } from './geometry.types';
 import { TypeMetrics } from './scales';
 import { CreateTextMeasure } from './text-measure';
+import type { CdkConnectedOverlay } from '@angular/cdk/overlay';
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -724,5 +725,51 @@ describe('MJChartFrameComponent — tooltip', () => {
         tip.dispatchEvent(new MouseEvent('pointerenter'));
         tip.dispatchEvent(new MouseEvent('pointerleave'));
         expect(hovers).toEqual([true, false]);
+    });
+});
+
+describe('MJChartFrameComponent — web font load (PR #5368 review)', () => {
+    const realFonts = Object.getOwnPropertyDescriptor(document, 'fonts');
+    afterEach(() => {
+        if (realFonts) Object.defineProperty(document, 'fonts', realFonts);
+        else delete (document as { fonts?: FontFaceSet }).fonts;
+    });
+
+    it('rebuilds the text measure and republishes when a web font finishes loading, at an unchanged size and family', async () => {
+        const fonts = new EventTarget();
+        Object.defineProperty(document, 'fonts', { configurable: true, value: fonts });
+        const { fixture, surfaces } = await render({ Height: 300 });
+        const before = surfaces[surfaces.length - 1];
+        const builds = vi.mocked(CreateTextMeasure).mock.calls.length;
+        fonts.dispatchEvent(new Event('loadingdone'));
+        await frameWait(fixture);
+        expect(vi.mocked(CreateTextMeasure).mock.calls.length).toBe(builds + 1);
+        expect(surfaces[surfaces.length - 1].Measure).not.toBe(before.Measure);
+    });
+
+    it('stops listening on destroy', async () => {
+        const fonts = new EventTarget();
+        const remove = vi.spyOn(fonts, 'removeEventListener');
+        Object.defineProperty(document, 'fonts', { configurable: true, value: fonts });
+        const { fixture } = await render({ Height: 300 });
+        fixture.destroy();
+        expect(remove).toHaveBeenCalledWith('loadingdone', expect.any(Function));
+    });
+});
+
+describe('MJChartFrameComponent — tooltip anchor churn (PR #5368 review)', () => {
+    // The frame's own @ViewChild; importing the CdkConnectedOverlay token at runtime breaks this file's vi.mock hoisting.
+    const overlayOf = (f: ComponentFixture<MJChartFrameComponent>): CdkConnectedOverlay =>
+        (f.componentInstance as unknown as { overlay: CdkConnectedOverlay }).overlay;
+
+    it('a new anchor object at the same X/Y does not re-position the overlay; a moved one does', async () => {
+        const { fixture } = await render({ Tooltip: { Title: 'Q1', Rows: [] }, TooltipAnchor: { X: 10, Y: 20 } });
+        const update = vi.spyOn(overlayOf(fixture).overlayRef, 'updatePosition');
+        fixture.componentRef.setInput('TooltipAnchor', { X: 10, Y: 20 });
+        await settle(fixture);
+        expect(update).not.toHaveBeenCalled();
+        fixture.componentRef.setInput('TooltipAnchor', { X: 30, Y: 20 });
+        await settle(fixture);
+        expect(update).toHaveBeenCalledTimes(1);
     });
 });

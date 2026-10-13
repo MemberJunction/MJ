@@ -159,8 +159,9 @@ The host page must define these custom properties (every MJ host does): `--mj-vi
 |---|---|---|---|---|
 | No categories / series / slices | empty state | empty state | empty state | empty state |
 | `Values.length` ≠ `Categories.length` | invalid state + logged | invalid | invalid | — |
-| All values `0` | axes + baseline | flat at 0 | flat at 0 | empty state |
+| All values `0` | axes + baseline; each `0` can still be hovered, focused and clicked | flat at 0 | flat at 0 | empty state |
 | `null`, `NaN`, `±Infinity` | no bar; "—" in tooltip/table | gap in the line | counted as 0, drawn continuous | slice skipped |
+| A value with no neighbour on either side (between two gaps, or a single category) | — | drawn as a dot | drawn as a dot | — |
 | Negative values | grouped: below 0; stacked: away from 0 | allowed | invalid + logged | slice excluded + logged |
 
 **Inputs are snapshots.** Mutating an array in place does not update the chart — pass a new array.

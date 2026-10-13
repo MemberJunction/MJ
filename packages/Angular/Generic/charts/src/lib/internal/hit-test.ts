@@ -162,7 +162,8 @@ const categoryStepY: Partial<Record<ChartNavKey, Step>> = { ArrowUp: -1, ArrowDo
 const seriesStepY: Partial<Record<ChartNavKey, Step>> = { ArrowLeft: -1, ArrowRight: 1 };
 
 /**
- * Keyboard movement over a category × series grid (spec §7.2).
+ * Keyboard movement over a category × series grid: arrows along the category axis move between categories
+ * (keeping the nearest series), arrows across it move between series in the category; Home/End jump to the ends.
  * categoryAxis 'x': vertical bars and area. 'y': horizontal bars (category 0 at the top).
  */
 export function NavigateGrid(points: ReadonlyArray<ActivePoint>, current: ActivePoint | null, key: ChartNavKey, categoryAxis: 'x' | 'y'): ActivePoint | null {

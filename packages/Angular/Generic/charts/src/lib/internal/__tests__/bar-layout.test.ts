@@ -29,7 +29,7 @@ describe('RoundedEndRectPath', () => {
 });
 
 describe('ComputeBarLayout — grouped', () => {
-    it('draws one segment per finite non-zero cell, with unique keys and rounded ends', () => {
+    it('draws one segment per finite cell, with unique keys and rounded ends', () => {
         const g = ComputeBarLayout(base({}));
         expect(g.Segments).toHaveLength(4);
         expect(new Set(g.Segments.map((s) => s.Key)).size).toBe(4);
@@ -37,9 +37,9 @@ describe('ComputeBarLayout — grouped', () => {
         expect(g.Segments.map((s) => s.Fill)).toEqual(['var(--mj-viz-1)', 'var(--mj-viz-2)', 'var(--mj-viz-1)', 'var(--mj-viz-2)']);
     });
 
-    it('skips null, NaN and zero cells but keeps the others', () => {
+    it('skips null and NaN cells but keeps zero and the others', () => {
         const g = ComputeBarLayout(base({ Series: [{ Name: 's0', Values: [null, 0] }, { Name: 's1', Values: [Number.NaN, 5] }] }));
-        expect(g.Segments.map((s) => s.Key)).toEqual(['1:1']);
+        expect(g.Segments.map((s) => s.Key)).toEqual(['0:1', '1:1']);
     });
 
     it('extends negative bars below the baseline', () => {
@@ -107,7 +107,7 @@ describe('ComputeBarLayout — horizontal', () => {
 describe('ComputeBarLayout — degenerate data', () => {
     it('all-zero data still has a value axis and a baseline at the bottom of the plot', () => {
         const g = ComputeBarLayout(base({ Series: [{ Name: 's0', Values: [0, 0] }], Fills: ['a'] }));
-        expect(g.Segments).toHaveLength(0);
+        expect(g.Segments.map((s) => s.Height)).toEqual([0, 0]);
         expect(g.ValueAxis.length).toBeGreaterThan(0);
         near(g.Baseline, g.Box.Y + g.Box.Height);
     });
@@ -142,5 +142,28 @@ describe('ComputeBarLayout - type metrics', () => {
         const g = ComputeBarLayout(base({ Orientation: 'horizontal', Size: { Width: 320, Height: 200 }, Categories: ['A very long category name indeed', 'B'] }));
         expect(g.Box.Width).toBeGreaterThanOrEqual(0);
         expect(g.CategoryAxis[0].Label.endsWith('\u2026')).toBe(true);
+    });
+});
+
+describe('ComputeBarLayout — zero values (PR #5368 review)', () => {
+    const zeroB = { Categories: ['A', 'B'], Series: [{ Name: 's0', Values: [5, 0] }], Fills: ['f'] };
+
+    it('gives a real 0 a zero-length, unrounded segment on the baseline, so it can be hovered, focused and clicked', () => {
+        for (const Stacked of [false, true]) {
+            const g = ComputeBarLayout(base({ ...zeroB, Stacked }));
+            const zero = g.Segments.find((s) => s.Key === '0:1');
+            expect(zero, `Stacked=${Stacked}`).toBeDefined();
+            expect(zero!.Value).toBe(0);
+            expect(zero!.Height).toBe(0);
+            expect(zero!.CornerRadius).toBe(0);
+            near(zero!.Y, g.Baseline);
+        }
+    });
+
+    it('a zero in a stack neither moves the stack nor takes the rounded end from the real outermost segment', () => {
+        const g = ComputeBarLayout(base({ Stacked: true, Categories: ['A'], Series: [{ Name: 's0', Values: [3] }, { Name: 's1', Values: [0] }], Fills: ['f', 'g'] }));
+        const three = g.Segments.find((s) => s.Key === '0:0')!;
+        expect(three.CornerRadius).toBeGreaterThan(0);
+        near(three.Y + three.Height, g.Baseline);
     });
 });

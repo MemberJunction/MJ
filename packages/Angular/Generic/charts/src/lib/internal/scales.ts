@@ -24,7 +24,7 @@ export function ParseFontSize(value: string | null | undefined): number {
     return Number.isFinite(n) && n > 0 && /px\s*$/.test(value ?? '') ? n : DefaultFontSize;
 }
 
-/** Spec §8.3: at most ~8 visible tick labels per axis. */
+/** At most ~8 visible tick labels per axis; more overlap at typical chart widths. */
 export const MaxTickLabels = 8;
 
 export interface NumericDomain { Min: number; Max: number; }
@@ -71,7 +71,7 @@ export function MinOf(values: Iterable<number>, ceiling: number): number {
 /**
  * A value domain that always includes 0. A zero-width domain is padded to [0, 1]:
  * d3 maps a zero-span domain to the middle of the range, which would float the
- * baseline at half height (spec §8.2).
+ * baseline at half height (all-zero data must still sit on a bottom baseline).
  */
 export function ValueDomain(min: number, max: number): NumericDomain {
     const lo = Math.min(0, min);

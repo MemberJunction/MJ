@@ -304,3 +304,21 @@ describe('MJAreaChartComponent', () => {
         expect(Number(value.getAttribute('x'))).toBe(g.Box.X - g.Type.AxisGap);
     });
 });
+
+describe('MJAreaChartComponent — lone points (PR #5368 review)', () => {
+    const lonePoints = (f: ComponentFixture<unknown>): SVGCircleElement[] => Array.from(f.nativeElement.querySelectorAll('circle.mj-chart-point'));
+
+    it('draws a dot in the series color for a value whose neighbours are missing', async () => {
+        const f = await render({ Series: [{ Name: 'Healthy', Values: [null, 20, null] }] });
+        const dots = lonePoints(f);
+        expect(dots).toHaveLength(1);
+        const g = f.componentInstance.Controller.View.Geometry!;
+        expect(Number(dots[0].getAttribute('cx'))).toBe(g.CategoryX[1]);
+        expect(dots[0].style.fill).toBe('var(--mj-viz-1)');
+    });
+
+    it('draws one dot per series in a single-category chart', async () => {
+        const f = await render({ Categories: ['Only'], Series: [{ Name: 'a', Values: [1] }, { Name: 'b', Values: [2] }] });
+        expect(lonePoints(f)).toHaveLength(2);
+    });
+});

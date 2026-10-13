@@ -206,3 +206,23 @@ describe('ComputeAreaLayout - type metrics', () => {
         expect(g.CategoryAxis[0].Label.endsWith('\u2026')).toBe(true);
     });
 });
+
+describe('ComputeAreaLayout — lone points (PR #5368 review)', () => {
+    it('marks a value whose neighbours are both missing, which the area and line cannot paint', () => {
+        const g = ComputeAreaLayout(base({ Categories: ['a', 'b', 'c', 'd', 'e'], Series: [{ Name: 'a', Values: [null, 20, null, 4, 5] }], Fills: ['f'] }));
+        const layer = g.Layers[0];
+        expect(layer.LonePoints).toEqual([{ X: g.CategoryX[1], Y: layer.Y1[1] }]);
+    });
+
+    it('marks every series of a single-category chart, in every stack mode', () => {
+        for (const StackMode of ['none', 'stacked', 'percent'] as const) {
+            const g = ComputeAreaLayout(base({ StackMode, Categories: ['Only'], Series: [{ Name: 'a', Values: [3] }, { Name: 'b', Values: [5] }] }));
+            expect(g.Layers.map((l) => l.LonePoints)).toEqual(g.Layers.map((l) => [{ X: g.CategoryX[0], Y: l.Y1[0] }]));
+        }
+    });
+
+    it('marks nothing where a run has two or more points (the line already draws it)', () => {
+        const g = ComputeAreaLayout(base({ Series: [{ Name: 'a', Values: [1, 2, null, 4, 5] }], Categories: ['a', 'b', 'c', 'd', 'e'], Fills: ['f'] }));
+        expect(g.Layers[0].LonePoints).toEqual([]);
+    });
+});

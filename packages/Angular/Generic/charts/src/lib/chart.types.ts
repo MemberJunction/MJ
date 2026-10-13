@@ -1,21 +1,21 @@
 /**
  * Public types for @memberjunction/ng-charts.
  *
- * Everything in this file is the package's published contract (spec §6.3):
+ * Everything in this file is the package's published contract:
  * renaming a member or changing its meaning after release is a breaking change.
  */
 
 /**
  * A design-token color reference: `var(--token-name)`.
  * Any other value (hex, named color, a bare `--token`) is logged once and
- * replaced by the series' default `var(--mj-viz-N)` (spec §4 rule 1).
+ * replaced by the series' default `var(--mj-viz-N)`.
  */
 export type ChartColor = string;
 
 /** One series of a bar or area chart. */
 export interface ChartSeries {
     Name: string;
-    /** Aligned index-for-index with `Categories`. Missing values follow spec §8.2. */
+    /** Aligned index-for-index with `Categories`. `null`, `NaN` and `±Infinity` are missing values; how each chart draws them is in the README's Data rules table. */
     Values: ReadonlyArray<number | null>;
     Color?: ChartColor;
 }
