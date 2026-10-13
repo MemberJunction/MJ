@@ -320,6 +320,34 @@ describe('calibration against MJ core entity field names', () => {
     });
 });
 
+describe('names the second review found slipping through', () => {
+    it('refuses them', () => {
+        for (const name of [
+            // `driverlicense` alone missed the possessive spelling, the common one
+            'DriversLicense', 'DriversLicenseNumber', 'drivers_license_no',
+            // holds a database password more often than not
+            'ConnectionString', 'connection_string', 'DbConnectionString',
+            // the other credential tokens
+            'SessionToken', 'session_token', 'IdToken', 'IDToken', 'id_token', 'OidcIdToken',
+            // a tax identification number written as a word of its own
+            'TIN', 'tin', 'VendorTIN', 'vendor_tin', 'TIN_Number', 'TINNumber',
+        ]) {
+            expect(IsSensitiveFieldName(name), `must refuse ${name}`).toBe(true);
+        }
+    });
+
+    it('does not refuse the look-alikes, which carry no signal', () => {
+        // `idtoken` sits inside `Pa-idToken-s` and `Val-idToken-Count`, both counts. `tin`
+        // has to be a whole word: `Tint`, `TinyInt` and `Timing`-style words begin with it.
+        for (const name of [
+            'PaidTokens', 'ValidTokenCount', 'AvoidTokenReuse',
+            'Tint', 'TintColor', 'TinyInt', 'Tinker', 'Destination', 'Rating', 'Setting',
+        ]) {
+            expect(IsSensitiveFieldName(name), `must accept ${name}`).toBe(false);
+        }
+    });
+});
+
 describe('the asymmetry argument has a limit, and the limit is also pinned', () => {
     it('over-refuses a near-miss of the concept — deliberate, and kept', () => {
         // `auth` really is the prefix of authentication, so `AuthorName` resembles the
