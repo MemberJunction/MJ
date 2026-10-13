@@ -2,4 +2,4 @@
 "@memberjunction/ng-composer": patch
 ---
 
-Chat composer: long messages no longer run behind the floating attach / voice / send buttons. While the text stays clear of the button corner nothing changes; once it would reach the buttons, the editor adds a strip below the text for them (the ChatGPT pattern), and removes it again when the text shrinks.
+Chat composer: long messages no longer run behind the attach / voice / plan / skills / send buttons. The buttons now sit in their own row below the text instead of floating over the editor's bottom-right corner, and the editor gives up that row's height, so the composer's resting and maximum sizes are unchanged.

@@ -1,5 +1,5 @@
 <div class="message-input-box-container" (click)="OnContainerClick($event)">
-  <div class="input-wrapper" #inputWrapper [class.actions-row]="ActionsRow" [style.--mj-composer-actions-row.px]="ActionsRowPx">
+  <div class="input-wrapper">
     <mj-mention-editor
       #mentionEditor
       [placeholder]="Placeholder"
@@ -23,81 +23,83 @@
       (editorBlurred)="Blurred.emit()">
     </mj-mention-editor>
 
-    <!-- Attach + voice + plan-mode buttons - Positioned over editor -->
-    @if (EnableAttachments || EnableRealtime || EnablePlanMode || EnableSkills) {
-      <div class="attach-buttons">
-        @if (EnableSkills) {
-        <button
-          class="attach-button-icon skills-button-icon"
-          [class.skills-button-icon--active]="SkillsActive"
-          [disabled]="Disabled"
-          [attr.aria-expanded]="SkillsActive"
-          aria-haspopup="true"
-          (mousedown)="$event.preventDefault(); $event.stopPropagation()"
-          (click)="OnSkillsClick($event); $event.stopPropagation()"
-          title="Skills, or type / in the message box"
-          aria-label="Show skills"
-          >
-          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
-        </button>
-        }
-        @if (EnablePlanMode) {
-        <button
-          class="attach-button-icon plan-mode-button-icon"
-          [class.plan-mode-button-icon--active]="PlanModeActive"
-          [disabled]="Disabled"
-          [attr.aria-pressed]="PlanModeActive"
-          (click)="PlanModeToggle.emit(); $event.stopPropagation()"
-          [title]="PlanModeActive ? 'Plan Mode ON — the agent presents a plan for your approval before it acts' : 'Plan Mode: have the agent present a plan for your approval before it acts'"
-          aria-label="Toggle Plan Mode"
-          >
-          <i class="fa-solid fa-route" aria-hidden="true"></i>
-        </button>
-        }
-        @if (EnableAttachments) {
-        <button
-          class="attach-button-icon"
-          [disabled]="Disabled"
-          (click)="OpenFilePicker(); $event.stopPropagation()"
-          title="Attach file"
-          >
-          <i class="fa-solid fa-paperclip"></i>
-        </button>
-        }
-        @if (EnableRealtime) {
-        <button
-          class="attach-button-icon voice-button-icon"
-          [class.voice-button-icon--active]="VoiceActive"
-          [disabled]="!CanStartRealtime"
-          (click)="OnRealtimeClick(); $event.stopPropagation()"
-          [title]="VoiceActive ? 'Voice call active' : 'Start a voice call'"
-          aria-label="Start a voice call"
-          >
-          <i class="fa-solid fa-phone" aria-hidden="true"></i>
-        </button>
-        <!-- Caret beside the phone: opens the agent/model picker so call OPTIONS stay one
-             click away while the plain phone click keeps its instant-start behavior. -->
-        <button
-          class="attach-button-icon voice-options-button-icon"
-          [disabled]="!CanStartRealtime"
-          (click)="OnRealtimeOptionsClick(); $event.stopPropagation()"
-          title="Voice call options (choose agent and voice model)"
-          aria-label="Voice call options"
-          >
-          <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-        </button>
-        }
-      </div>
-    }
+    <!-- Action row: its own strip below the editor (not floating over it), so text never runs behind a button -->
+    <div class="composer-actions">
+      @if (EnableAttachments || EnableRealtime || EnablePlanMode || EnableSkills) {
+        <div class="attach-buttons">
+          @if (EnableSkills) {
+          <button
+            class="attach-button-icon skills-button-icon"
+            [class.skills-button-icon--active]="SkillsActive"
+            [disabled]="Disabled"
+            [attr.aria-expanded]="SkillsActive"
+            aria-haspopup="true"
+            (mousedown)="$event.preventDefault(); $event.stopPropagation()"
+            (click)="OnSkillsClick($event); $event.stopPropagation()"
+            title="Skills, or type / in the message box"
+            aria-label="Show skills"
+            >
+            <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+          </button>
+          }
+          @if (EnablePlanMode) {
+          <button
+            class="attach-button-icon plan-mode-button-icon"
+            [class.plan-mode-button-icon--active]="PlanModeActive"
+            [disabled]="Disabled"
+            [attr.aria-pressed]="PlanModeActive"
+            (click)="PlanModeToggle.emit(); $event.stopPropagation()"
+            [title]="PlanModeActive ? 'Plan Mode ON — the agent presents a plan for your approval before it acts' : 'Plan Mode: have the agent present a plan for your approval before it acts'"
+            aria-label="Toggle Plan Mode"
+            >
+            <i class="fa-solid fa-route" aria-hidden="true"></i>
+          </button>
+          }
+          @if (EnableAttachments) {
+          <button
+            class="attach-button-icon"
+            [disabled]="Disabled"
+            (click)="OpenFilePicker(); $event.stopPropagation()"
+            title="Attach file"
+            >
+            <i class="fa-solid fa-paperclip"></i>
+          </button>
+          }
+          @if (EnableRealtime) {
+          <button
+            class="attach-button-icon voice-button-icon"
+            [class.voice-button-icon--active]="VoiceActive"
+            [disabled]="!CanStartRealtime"
+            (click)="OnRealtimeClick(); $event.stopPropagation()"
+            [title]="VoiceActive ? 'Voice call active' : 'Start a voice call'"
+            aria-label="Start a voice call"
+            >
+            <i class="fa-solid fa-phone" aria-hidden="true"></i>
+          </button>
+          <!-- Caret beside the phone: opens the agent/model picker so call OPTIONS stay one
+               click away while the plain phone click keeps its instant-start behavior. -->
+          <button
+            class="attach-button-icon voice-options-button-icon"
+            [disabled]="!CanStartRealtime"
+            (click)="OnRealtimeOptionsClick(); $event.stopPropagation()"
+            title="Voice call options (choose agent and voice model)"
+            aria-label="Voice call options"
+            >
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+          </button>
+          }
+        </div>
+      }
 
-    <!-- Send Button (Icon Only) - Positioned over editor -->
-    <button
-      class="send-button-icon"
-      [disabled]="!CanSend"
-      (click)="OnSendClick()"
-      title="Send message (Enter)"
-      >
-      <i class="fa-solid fa-paper-plane"></i>
-    </button>
+      <!-- Send Button (Icon Only) -->
+      <button
+        class="send-button-icon"
+        [disabled]="!CanSend"
+        (click)="OnSendClick()"
+        title="Send message (Enter)"
+        >
+        <i class="fa-solid fa-paper-plane"></i>
+      </button>
+    </div>
   </div>
 </div>
