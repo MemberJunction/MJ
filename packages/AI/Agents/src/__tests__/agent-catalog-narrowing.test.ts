@@ -356,6 +356,7 @@ class CatalogHarness {
             Agents: [this.agent, ...SUB_AGENTS],
             AgentRelationships: [],
             AgentCategories: [],
+            ResolveAgentStorageAccountID: () => null,
             ScopedPromptParts: [],
             ScopedPromptConfigs: [],
             AgentTypes: [

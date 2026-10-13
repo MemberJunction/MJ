@@ -1171,6 +1171,34 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "Locations",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Person locations as Apollo spells them, e.g. [\"Boston, Massachusetts, United States\"]. Pass a JSON array or a real array: a bare comma-separated string splits on the commas inside a location.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E40936C7-6D3E-4727-A362-884AD5FE81BC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Keywords",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Free-text keywords matched against names, titles and employers.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "209FA0C5-35D2-4ED2-B91A-67B9CEDF009D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "Page",
             "DefaultValue": "1",
             "Type": "Input",
@@ -1267,7 +1295,7 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Number of people returned on this page.",
+            "Description": "Number of people returned on this page, not the total; see TotalEntries.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -1276,6 +1304,20 @@
           "sync": {
             "lastModified": "2026-09-01T16:57:33.839Z",
             "checksum": "3b2ccbcc764a3c102fc5cb70fe3db6c3e9e1a52e7be436a2923076926ce364ec"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalEntries",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total people matching the filter across all pages, from Apollo's total_entries.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9375BC74-D21D-493C-9171-27A7FBF2BFF7"
           }
         },
         {
