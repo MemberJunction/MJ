@@ -30,6 +30,19 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
  */
 export abstract class BaseAction {
    /**
+    * True when the action authorizes its caller itself, so a public entry point such as the
+    * `RunAction` mutation may run it for an authenticated user without an `MJ: Action
+    * Authorizations` link. Set it only on an action that either checks an authorization the caller
+    * must hold, or reads and writes only with the caller's own permissions. Leave it false for an
+    * action that acts with more authority than its caller, or that reaches data or sends messages
+    * the caller chooses but could not otherwise reach.
+    *
+    * The engine reads the marker only from the class that runs, never from its parent classes. A
+    * subclass that overrides a marked action must declare the marker again.
+    */
+   public static readonly AuthorizesCaller: boolean = false;
+
+   /**
     * Executes the action with the provided parameters.
     * 
     * @param params - The action execution parameters including context

@@ -128,7 +128,10 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   /** Query sync state — drives the toolbar UI for saved query actions */
   public QuerySyncState: QuerySyncState = 'no-query-latest';
 
-  /** Latest version number for this artifact (from cache) */
+  /**
+   * Latest version number for this artifact: the greatest of {@link VisibleVersionNumbers} when
+   * the viewer passes them, otherwise the artifact-wide latest from the cache.
+   */
   public LatestVersionNumber = 0;
 
   /** Metadata from live execution (overrides spec.metadata when live) */
@@ -478,10 +481,16 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   /**
-   * Determine the latest version number for this artifact from cache.
+   * Determine the latest version number for this artifact: the greatest visible version when the
+   * viewer passes {@link VisibleVersionNumbers}, otherwise the newest cached version.
    * Falls back to current version if cache miss.
    */
   private resolveLatestVersionNumber(): number {
+    const visible = this.VisibleVersionNumbers;
+    if (visible && visible.length > 0) {
+      return Math.max(...visible);
+    }
+
     if (!this.artifactVersion?.ArtifactID) {
       return this.CurrentVersionNumber;
     }

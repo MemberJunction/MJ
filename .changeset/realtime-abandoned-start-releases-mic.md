@@ -1,0 +1,5 @@
+---
+"@memberjunction/realtime-runtime": patch
+---
+
+A call ended while the microphone is still opening now hands the microphone back to the host once the opening returns (#5386). `RealtimeSessionRuntime` calls the host's `ReleaseMicrophone()` once each time it asks for the microphone, after that request returns: at the end of the session, or, when the session ended while the request was pending, from the start's own unwind once it returns. Before, teardown called it while `AcquireMicrophone()` was still pending, before the opening had changed anything, and the unwind never called it, so on iOS the React Native host stayed in the call audio category after the call. A start ended while connecting whose connection then fails now releases once instead of twice, and a session that ends before asking for the microphone no longer calls it, since there is nothing to undo. When a newer session on the same runtime has asked for the microphone by then, the abandoned start leaves the release to that session's end.

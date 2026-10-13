@@ -33,12 +33,18 @@ interface FakeRuntime {
     CancelInFlightDelegations: ReturnType<typeof vi.fn>;
     CancelPendingNarration: ReturnType<typeof vi.fn>;
     SetLocalToolHandler: ReturnType<typeof vi.fn>;
+    Finalize: ReturnType<typeof vi.fn>;
 }
 
 function fakeSession(cancelled = 0): { session: IRealtimeSession; runtime: FakeRuntime; close: ReturnType<typeof vi.fn> } {
     const close = vi.fn(async () => undefined);
     const session = { Close: close, SendContextNote: vi.fn() } as unknown as IRealtimeSession;
-    const runtime: FakeRuntime = { CancelInFlightDelegations: vi.fn(() => cancelled), CancelPendingNarration: vi.fn(), SetLocalToolHandler: vi.fn() };
+    const runtime: FakeRuntime = {
+        CancelInFlightDelegations: vi.fn(() => cancelled),
+        CancelPendingNarration: vi.fn(),
+        SetLocalToolHandler: vi.fn(),
+        Finalize: vi.fn(async () => undefined),
+    };
     runtimes.set(session, runtime as unknown as BridgeRealtimeRuntime);
     return { session, runtime, close };
 }
@@ -152,6 +158,17 @@ describe('TelephonyCallSessionStarter.Start — agents', () => {
         const s = setup();
         await s.starter.Start(s.args());
         expect(s.sessionFactory.mock.calls[0][0]).toMatchObject({ AgentSessionID: 'AS1', ConversationID: 'CONV1' });
+    });
+
+    it('opens every model session as a phone call, inbound or outbound and after a recovery, so it asks for no avatar', async () => {
+        const s = setup();
+        await s.starter.Start(s.args());
+        await s.starter.Start(s.args({ Direction: 'Outbound', RemoteNumber: '+14155550188' }));
+        const recover = (s.engine.StartBridgeSession.mock.calls[0][0] as { RecoverRealtimeSession: (r: { PriorTranscript: string; Attempt: number; Reason: string }) => Promise<IRealtimeSession> }).RecoverRealtimeSession;
+        await recover({ PriorTranscript: 'User: hi', Attempt: 1, Reason: 'closed' });
+        const opened = s.sessionFactory.mock.calls.map((c) => c[0] as Record<string, unknown>);
+        expect(opened.map((o) => o['PhoneCall'])).toEqual([true, true, true]);
+        expect(opened.every((o) => o['AvatarDelivery'] === undefined)).toBe(true);
     });
 
     it('gives the model the phone framing, the caller number and an unverified-caller warning', async () => {
@@ -354,6 +371,35 @@ describe('TelephonyCallSessionStarter.Start — cleanup', () => {
         expect(s.gate.Active).toBe(0);
         expect(s.sessions[0].close).toHaveBeenCalled();
         expect(s.db.saved).toContainEqual(expect.objectContaining({ Status: 'Closed', CloseReason: 'Error' }));
+    });
+
+    // Closing the model session alone finalizes its co-agent run as completed, so the call that never connected would
+    // read as a completed run.
+    it("on a failed start: finalizes the call's co-agent run as failed, with the start's error, before closing the model session", async () => {
+        const s = setup();
+        s.engine.StartBridgeSession.mockRejectedValue(new Error('connect failed'));
+
+        await expect(s.starter.Start(s.args())).rejects.toThrow('connect failed');
+
+        const { runtime, close } = s.sessions[0];
+        expect(runtime.Finalize).toHaveBeenCalledWith(false, 'connect failed');
+        expect(runtime.Finalize.mock.invocationCallOrder[0]).toBeLessThan(close.mock.invocationCallOrder[0]);
+    });
+
+    it('on a failed start: still closes the model session and rethrows the start error when recording the failure fails', async () => {
+        const s = setup();
+        s.engine.StartBridgeSession.mockRejectedValue(new Error('connect failed'));
+        s.sessionFactory.mockImplementationOnce(async () => {
+            const made = fakeSession();
+            made.runtime.Finalize.mockRejectedValue(new Error('db down'));
+            s.sessions.push(made);
+            return made.session;
+        });
+
+        await expect(s.starter.Start(s.args())).rejects.toThrow('connect failed');
+
+        expect(s.sessions[0].close).toHaveBeenCalled();
+        expect(vi.mocked(LogError)).toHaveBeenCalledWith(expect.stringContaining("recording a failed start on the call's agent run failed: db down"));
     });
 
     it('releases the slot when the co-agent cannot be resolved', async () => {

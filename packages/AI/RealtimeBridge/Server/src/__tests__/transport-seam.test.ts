@@ -13,15 +13,18 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
+import { hostname } from 'node:os';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { IRealtimeSession, RealtimeTranscript } from '@memberjunction/ai';
+import type { IRealtimeSession, RealtimeInputFrame, RealtimeSessionCapabilities, RealtimeTranscript } from '@memberjunction/ai';
 import type {
+    MJAIAgentSessionBridgeEntity,
     MJAIBridgeProviderEntity,
     MJAIBridgeProviderEntity_IBridgeProviderFeatures,
 } from '@memberjunction/core-entities';
 import { BridgeMediaFrame, AIBridgeEngineBase } from '@memberjunction/ai-bridge-base';
 import {
     AIBridgeEngine,
+    DefaultHostInstanceIdentity,
     IHostInstanceIdentity,
     StartBridgeSessionParams,
     TurnModeratorContext,
@@ -32,18 +35,39 @@ import { LoopbackBridge, LOOPBACK_BRIDGE_DRIVER_CLASS } from '../loopback-bridge
 // Test doubles.
 // ──────────────────────────────────────────────────────────────────────────────
 
+/** The tracks a session declares: audio only, as every realtime model before Gemini 3.8 Live did. */
+const AUDIO_SESSION: Pick<RealtimeSessionCapabilities, 'SupportedInboundTracks'> = {
+    SupportedInboundTracks: [{ Modality: 'audio', Direction: 'inbound' }],
+};
+
+/** The tracks a session declares: audio and one inbound video stream (JPEG), as Gemini 3.8 Live does. */
+const VIDEO_SESSION: Pick<RealtimeSessionCapabilities, 'SupportedInboundTracks'> = {
+    SupportedInboundTracks: [
+        { Modality: 'audio', Direction: 'inbound' },
+        { Modality: 'video', Direction: 'inbound', Encoding: 'image/jpeg', Rate: 1 },
+    ],
+};
+
 /**
  * A mock IRealtimeSession capturing what the agent "hears" (SendInput) and exposing the registered
  * output/transcript handlers so a test can drive what the agent "says" / what is transcribed.
  */
 class MockRealtimeSession implements IRealtimeSession {
+    /** @param tracks The media tracks the session declares; none by default, which the engine reads as audio only. */
+    constructor(private readonly tracks?: Pick<RealtimeSessionCapabilities, 'SupportedInboundTracks'>) {}
+
     public readonly Heard: ArrayBuffer[] = [];
+    public readonly HeardFrames: RealtimeInputFrame[] = [];
     public readonly SpokenUpdates: string[] = [];
+    /** Everything that reached the model, in order: `video frame` / `audio frame`, and each note's text. */
+    public readonly Log: string[] = [];
     private outputHandler?: (chunk: ArrayBuffer) => void;
     private transcriptHandler?: (t: RealtimeTranscript) => void;
 
-    public SendInput(chunk: ArrayBuffer): void {
-        this.Heard.push(chunk);
+    public SendInput(frame: RealtimeInputFrame): void {
+        this.HeardFrames.push(frame);
+        this.Heard.push(frame.Data);
+        this.Log.push(`${frame.Kind} frame`);
     }
     public async RegisterTools(): Promise<void> {
         /* no-op for tests */
@@ -76,12 +100,19 @@ class MockRealtimeSession implements IRealtimeSession {
         this.SpokenUpdates.push(instructions);
     }
 
+    /** Context notes the engine sent the model (e.g. that a camera it was seeing ended). */
+    public readonly Notes: string[] = [];
+    public SendContextNote(text: string): void {
+        this.Notes.push(text);
+        this.Log.push(text);
+    }
+
     /** Capability flag + capture for the live-reconfigure path (§6). */
     public CanReconfigure = true;
     public FullDuplex = false;
     public readonly ReconfigureCalls: Array<{ DisableAutoResponse?: boolean }> = [];
-    public get Capabilities(): { CanReconfigureTurnMode: boolean; FullDuplex?: boolean } {
-        return { CanReconfigureTurnMode: this.CanReconfigure, FullDuplex: this.FullDuplex };
+    public get Capabilities(): RealtimeSessionCapabilities {
+        return { CanReconfigureTurnMode: this.CanReconfigure, FullDuplex: this.FullDuplex, ...this.tracks };
     }
     public Reconfigure(params: { DisableAutoResponse?: boolean }): void {
         this.ReconfigureCalls.push(params);
@@ -168,10 +199,38 @@ const AUDIO_FEATURES: MJAIBridgeProviderEntity_IBridgeProviderFeatures = {
     SpeakerDiarization: true,
 };
 
-const HOST: IHostInstanceIdentity = {
-    GetHostInstanceID: () => 'testhost:123:bootA',
-    GetHostNamePrefix: () => 'testhost:',
-};
+/**
+ * A host-instance identity shaped like the one MJServer injects: an instance is a host and the port it serves on, and
+ * each boot adds its pid and a boot id (`host:port:pid:bootId`). A row of another boot of the same instance is a prior
+ * boot's.
+ */
+class TestHostInstance implements IHostInstanceIdentity {
+    constructor(
+        private readonly host: string,
+        private readonly port: number,
+        private readonly pid: number,
+        private readonly bootID: string,
+    ) {}
+
+    public GetHostInstanceID(): string {
+        return `${this.GetInstancePrefix()}${this.pid}:${this.bootID}`;
+    }
+
+    public GetInstancePrefix(): string {
+        return `${this.host}:${this.port}:`;
+    }
+
+    public IsPriorBoot(hostInstanceID: string | null | undefined): boolean {
+        if (!hostInstanceID || hostInstanceID === this.GetHostInstanceID()) {
+            return false;
+        }
+        const prefix = this.GetInstancePrefix();
+        return hostInstanceID.startsWith(prefix) && /^\d+:[^:]+$/.test(hostInstanceID.slice(prefix.length));
+    }
+}
+
+/** This engine's instance: port 4000 on `testhost`, pid 123, boot `bootA`. */
+const HOST = new TestHostInstance('testhost', 4000, 123, 'bootA');
 
 /** Builds a fresh engine for a test by reusing the singleton but resetting its host identity. */
 function engine(): AIBridgeEngine {
@@ -256,6 +315,209 @@ describe('AIBridgeEngine — transport seam round-trip (LoopbackBridge + mock se
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
 
+    it('tags inbound media by track and passes its type and capture time to the session', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'audio-in', Bytes: bytes(1, 2) });
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', TimestampMs: 1234 });
+
+        expect(session.HeardFrames.map((f) => ({ Kind: f.Kind, MimeType: f.MimeType, TimestampMs: f.TimestampMs }))).toEqual([
+            { Kind: 'audio', MimeType: undefined, TimestampMs: undefined },
+            { Kind: 'video', MimeType: 'image/jpeg', TimestampMs: 1234 },
+        ]);
+        expect(new Uint8Array(session.HeardFrames[1].Data)).toEqual(new Uint8Array([0xff, 0xd8]));
+        expect(session.Notes).toEqual([]); // a frame with no SourceID is not tracked, so nothing is said about it
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('sends a camera frame to the model the same whether or not it says its size and key frame', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', TimestampMs: 5, Width: 640, Height: 360, KeyFrame: true });
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', TimestampMs: 5 });
+
+        expect(session.HeardFrames).toHaveLength(2);
+        expect(session.HeardFrames[0]).toEqual(session.HeardFrames[1]);
+        expect(session.HeardFrames[0]).toMatchObject({ Kind: 'video', MimeType: 'image/jpeg', TimestampMs: 5 });
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('sends a shared screen to a video model as a video frame', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'screen-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:ada:screen', SourceLabel: "Ada's screen" });
+
+        expect(session.HeardFrames.map((f) => ({ Kind: f.Kind, MimeType: f.MimeType }))).toEqual([{ Kind: 'video', MimeType: 'image/jpeg' }]);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('sends no camera or screen frames to a session that takes no video: it would read the image as audio', async () => {
+        const session = new MockRealtimeSession(AUDIO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg' });
+        loopback.EmitInbound({ Track: 'audio-in', Bytes: bytes(1, 2) });
+        loopback.EmitInbound({ Track: 'screen-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg' });
+
+        expect(session.HeardFrames.map((f) => f.Kind)).toEqual(['audio']);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it("tells the driver how many video sources the session takes, and at what rate (the model's)", async () => {
+        const videoSession = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const video = await engine().StartBridgeSession(baseParams(videoSession, provider));
+        const videoConfig = (video.Bridge as LoopbackBridge).ConnectContext?.Configuration;
+        expect(videoConfig?.InboundVideoStreams).toBe(1);
+        expect(videoConfig?.InboundVideoRate).toBe(1);
+        await engine().StopBridgeSession(video.SessionBridgeID, 'Explicit');
+
+        const audio = await engine().StartBridgeSession(baseParams(new MockRealtimeSession(AUDIO_SESSION), provider));
+        const audioConfig = (audio.Bridge as LoopbackBridge).ConnectContext?.Configuration;
+        expect(audioConfig?.InboundVideoStreams).toBe(0);
+        expect(audioConfig?.InboundVideoRate).toBeUndefined();
+        await engine().StopBridgeSession(audio.SessionBridgeID, 'Explicit');
+    });
+
+    it('tells the model when a camera it was seeing ends, once', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
+
+        expect(session.Notes).toEqual(["[You can now see: Ada's camera]", "[You can no longer see: Ada's camera]"]);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('says nothing about the end of a source whose frames never reached the model', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'screen-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:bo:screen', SourceLabel: "Bo's screen" });
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
+
+        expect(session.Notes).toEqual(["[You can now see: Bo's screen]"]);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('tells the model what it can now see right before the first frame of a source, and only once', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+        const ada = { SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" };
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...ada });
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...ada });
+        loopback.EmitInbound({ Track: 'audio-in', Bytes: bytes(1, 2) });
+
+        expect(session.Log).toEqual(["[You can now see: Ada's camera]", 'video frame', 'video frame', 'audio frame']);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it("on a switch, says the old source ended, then names the new one right before its first frame", async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+        const bob = { SourceID: 'participant:bob:camera', SourceLabel: "Bob's camera" };
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...bob });
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', ...bob });
+        loopback.EmitInbound({ Track: 'screen-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:ada:screen', SourceLabel: "Ada's screen" });
+
+        expect(session.Log).toEqual([
+            "[You can now see: Bob's camera]",
+            'video frame',
+            "[You can no longer see: Bob's camera]",
+            "[You can now see: Ada's screen]",
+            'video frame',
+        ]);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('names a source again when it is seen again after it ended', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+        const ada = { SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" };
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...ada });
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', ...ada });
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', ...ada });
+
+        expect(session.Notes).toEqual(["[You can now see: Ada's camera]", "[You can no longer see: Ada's camera]", "[You can now see: Ada's camera]"]);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('names a source the driver gave no label by its kind, never by its SourceID', async () => {
+        const session = new MockRealtimeSession(VIDEO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'screen-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:ada:screen' });
+        loopback.EmitVideoSourceEnded({ Track: 'screen-in', SourceID: 'participant:ada:screen' });
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:bob:camera' });
+
+        expect(session.Notes).toEqual([
+            "[You can now see: a participant's screen]",
+            "[You can no longer see: a participant's screen]",
+            "[You can now see: a participant's camera]",
+        ]);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('says nothing to a session that takes no video, whose camera frames were dropped', async () => {
+        const session = new MockRealtimeSession(AUDIO_SESSION);
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
+        loopback.EmitVideoSourceEnded({ Track: 'video-in', SourceID: 'participant:ada:camera', SourceLabel: "Ada's camera" });
+
+        expect(session.Notes).toEqual([]);
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('treats a session that declares no capabilities as audio only', async () => {
+        const session = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+
+        loopback.EmitInbound({ Track: 'video-in', Bytes: bytes(0xff, 0xd8), MimeType: 'image/jpeg' });
+        loopback.EmitInbound({ Track: 'audio-in', Bytes: bytes(1, 2) });
+
+        expect(session.HeardFrames.map((f) => f.Kind)).toEqual(['audio']);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
     it('drops an empty inbound frame (no payload) without calling SendInput', async () => {
         const session = new MockRealtimeSession();
         const { provider } = makeProvider(() => makeBridgeRow());
@@ -284,7 +546,7 @@ describe('AIBridgeEngine — lifecycle and status transitions', () => {
         expect(row.NewRecord).toHaveBeenCalled();
         // Final persisted status is Connected; handles + host stamped.
         expect(row.Status).toBe('Connected');
-        expect(row.HostInstanceID).toBe('testhost:123:bootA');
+        expect(row.HostInstanceID).toBe('testhost:4000:123:bootA');
         expect(row.BotParticipantID).toBe('loopback-agent');
         expect(typeof row.ExternalConnectionID).toBe('string');
         expect(row.ConnectedAt).toBeInstanceOf(Date);
@@ -796,28 +1058,123 @@ describe('AIBridgeEngine — unified room transcript', () => {
 // Janitor — orphan reconciliation.
 // ──────────────────────────────────────────────────────────────────────────────
 
+/** A bridge row as the janitor reads and writes it. */
+interface BridgeTableRow {
+    ID: string;
+    Status: MJAIAgentSessionBridgeEntity['Status'];
+    HostInstanceID: string;
+    AgentSessionID: string;
+    CloseReason?: MJAIAgentSessionBridgeEntity['CloseReason'];
+}
+
+/** A `LIKE` pattern as a regular expression: `%` any run of characters, `_` any one character. */
+function likePattern(pattern: string): RegExp {
+    const body = [...pattern]
+        .map((c) => (c === '%' ? '.*' : c === '_' ? '.' : c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+        .join('');
+    return new RegExp(`^${body}$`);
+}
+
+/**
+ * A bridge table the janitor reads and writes the way it would the database: its read returns the open rows whose
+ * `HostInstanceID` matches the filter's `LIKE` pattern and isn't the id the filter excludes, and a row it loads and
+ * saves is written back. `row(id)` reads a row's current state.
+ */
+function bridgeTable(rows: BridgeTableRow[]): { provider: IMetadataProvider; row: (id: string) => BridgeTableRow } {
+    const table = new Map(rows.map((r) => [r.ID, { ...r }]));
+    runViewMock.mockImplementation(async (params: { EntityName: string; ExtraFilter: string }) => {
+        if (params.EntityName !== 'MJ: AI Agent Session Bridges') {
+            return { Success: true, Results: [] };
+        }
+        const like = likePattern(/HostInstanceID LIKE '(.*?)'/.exec(params.ExtraFilter)?.[1] ?? '');
+        const excluded = /HostInstanceID <> '(.*?)'/.exec(params.ExtraFilter)?.[1];
+        const results = [...table.values()]
+            .filter((r) => r.Status === 'Connecting' || r.Status === 'Connected')
+            .filter((r) => like.test(r.HostInstanceID) && r.HostInstanceID !== excluded)
+            .map((r) => ({ ...r }));
+        return { Success: true, Results: results };
+    });
+    const provider = {
+        GetEntityObject: vi.fn(async () => {
+            const entity: BridgeTableRow & Pick<FakeEntity, 'Load' | 'Save' | 'LatestResult'> = {
+                ID: '',
+                Status: 'Pending',
+                HostInstanceID: '',
+                AgentSessionID: '',
+                CloseReason: null,
+                LatestResult: { CompleteMessage: '' },
+                Load: vi.fn(async (id: string) => {
+                    const stored = table.get(id);
+                    if (!stored) {
+                        return false;
+                    }
+                    Object.assign(entity, stored);
+                    return true;
+                }),
+                Save: vi.fn(async () => {
+                    const stored = table.get(entity.ID);
+                    if (stored) {
+                        stored.Status = entity.Status;
+                        stored.CloseReason = entity.CloseReason;
+                    }
+                    return true;
+                }),
+            };
+            return entity;
+        }),
+    } as unknown as IMetadataProvider;
+    return { provider, row: (id: string) => table.get(id) as BridgeTableRow };
+}
+
+/** The `ExtraFilter` of the janitor's read. */
+function janitorFilter(): string {
+    const call = runViewMock.mock.calls.find((c) => (c[0] as { EntityName: string }).EntityName === 'MJ: AI Agent Session Bridges');
+    return (call?.[0] as { ExtraFilter: string }).ExtraFilter;
+}
+
+/** Runs `body` with a run finalizer that records the agent sessions it finalizes, then resets the finalizer. */
+async function withFinalizedSessions(body: (finalized: string[]) => Promise<void>): Promise<void> {
+    const finalized: string[] = [];
+    engine().SetSessionRunFinalizer(async (agentSessionID: string) => {
+        finalized.push(agentSessionID);
+    });
+    try {
+        await body(finalized);
+    } finally {
+        engine().SetSessionRunFinalizer(async () => undefined); // reset shared singleton state
+    }
+}
+
 describe('AIBridgeEngine — ReconcileOrphans (janitor)', () => {
-    it('closes Connected bridges from a prior boot of this host with CloseReason Janitor', async () => {
-        const orphanRows = [
-            makeBridgeRow({ ID: 'orphan-1', Status: 'Connected' }),
-            makeBridgeRow({ ID: 'orphan-2', Status: 'Connecting' }),
-        ];
-        // The janitor's RunView returns the orphan rows; subsequent loads (markBridgeDisconnected)
-        // GetEntityObject returns rows that Load successfully.
-        runViewMock.mockResolvedValueOnce({ Success: true, Results: orphanRows });
-        const { provider } = makeProvider((_name) => {
-            // markBridgeDisconnected loads a fresh row each time; return a Connected loadable row.
-            return makeBridgeRow({ Status: 'Connected' });
+    it('closes the bridges an earlier boot of this instance left, and nothing else (one instance, as before)', async () => {
+        await withFinalizedSessions(async (finalized) => {
+            const { provider, row } = bridgeTable([
+                { ID: 'before-restart', Status: 'Connected', HostInstanceID: 'testhost:4000:99:bootBefore', AgentSessionID: 'session-before' },
+                // The OS gave the restarted process the same pid; the boot id still differs.
+                { ID: 'before-restart-same-pid', Status: 'Connecting', HostInstanceID: 'testhost:4000:123:bootBefore', AgentSessionID: 'session-same-pid' },
+                { ID: 'this-boot', Status: 'Connected', HostInstanceID: HOST.GetHostInstanceID(), AgentSessionID: 'session-live' },
+                { ID: 'other-host', Status: 'Connected', HostInstanceID: 'otherhost:4000:99:bootX', AgentSessionID: 'session-other-host' },
+                // Stamped by the fallback identity before an instance identity was injected; no instance owns it.
+                { ID: 'fallback-stamped', Status: 'Connected', HostInstanceID: 'unknown-host:99:bootOld', AgentSessionID: 'session-fallback' },
+            ]);
+
+            const closed = await engine().ReconcileOrphans(makeUser(), provider);
+
+            expect(closed).toBe(2);
+            expect(row('before-restart')).toMatchObject({ Status: 'Disconnected', CloseReason: 'Janitor' });
+            expect(row('before-restart-same-pid')).toMatchObject({ Status: 'Disconnected', CloseReason: 'Janitor' });
+            expect(row('this-boot').Status).toBe('Connected');
+            expect(row('other-host').Status).toBe('Connected');
+            expect(row('fallback-stamped').Status).toBe('Connected');
+            // Each closed bridge's co-agent run is finalized; no other session's is.
+            expect([...finalized].sort()).toEqual(['session-before', 'session-same-pid']);
+
+            // The read is narrowed to this instance's other boots: its host and port, never this boot.
+            const filter = janitorFilter();
+            expect(filter).toContain("Status IN ('Connecting','Connected')");
+            expect(filter).toContain("HostInstanceID LIKE 'testhost:4000:%'");
+            expect(filter).toContain("HostInstanceID <> 'testhost:4000:123:bootA'");
         });
-
-        const closed = await engine().ReconcileOrphans(makeUser(), provider);
-
-        expect(closed).toBe(2);
-        // Verify the filter scoping (own host prefix, different instance id).
-        const filterArg = (runViewMock.mock.calls[0][0] as { ExtraFilter: string }).ExtraFilter;
-        expect(filterArg).toContain("HostInstanceID LIKE 'testhost:%'");
-        expect(filterArg).toContain("HostInstanceID <> 'testhost:123:bootA'");
-        expect(filterArg).toContain("Status IN ('Connecting','Connected')");
     });
 
     it('returns 0 when there are no orphans', async () => {
@@ -825,6 +1182,139 @@ describe('AIBridgeEngine — ReconcileOrphans (janitor)', () => {
         const { provider } = makeProvider(() => makeBridgeRow());
         const closed = await engine().ReconcileOrphans(makeUser(), provider);
         expect(closed).toBe(0);
+    });
+
+    it("leaves a bridge the LIKE matches but the identity doesn't own (a '_' in the host name)", async () => {
+        const underscored = new TestHostInstance('web_1', 4000, 7, 'bootA');
+        const { provider, row } = bridgeTable([
+            { ID: 'web-1-live', Status: 'Connected', HostInstanceID: 'web-1:4000:8:bootX', AgentSessionID: 'session-web-1' },
+            { ID: 'web_1-before', Status: 'Connected', HostInstanceID: 'web_1:4000:6:bootBefore', AgentSessionID: 'session-web_1' },
+        ]);
+        const e = engine();
+        e.SetHostInstanceIdentity(underscored);
+        try {
+            const closed = await e.ReconcileOrphans(makeUser(), provider);
+
+            expect(closed).toBe(1);
+            expect(row('web-1-live').Status).toBe('Connected');
+            expect(row('web_1-before').Status).toBe('Disconnected');
+        } finally {
+            e.SetHostInstanceIdentity(HOST);
+        }
+    });
+
+    it('HandleStartup does not start the orphan reconcile: the host starts it once it owns its instance', async () => {
+        const configSpy = vi.spyOn(AIBridgeEngineBase.Instance, 'Config').mockResolvedValue(undefined);
+        const e = engine();
+        const reconcileSpy = vi.spyOn(e, 'ReconcileOrphans').mockResolvedValue(0);
+        try {
+            await e.HandleStartup(makeUser(), {} as IMetadataProvider);
+
+            expect(reconcileSpy).not.toHaveBeenCalled();
+        } finally {
+            e.StopStaleSessionSweep();
+            e.StopOrphanReconciliation();
+            reconcileSpy.mockRestore();
+            configSpy.mockRestore();
+        }
+    });
+});
+
+describe('AIBridgeEngine — ReconcileOrphans with two instances on one host (#5310)', () => {
+    /** A second instance on the same host: port 4100, pid 456, boot `bootB`. */
+    const theirs = new TestHostInstance('testhost', 4100, 456, 'bootB');
+
+    /** Both instances' live bridges, and one each left by an earlier boot. */
+    function sharedTable(): BridgeTableRow[] {
+        return [
+            { ID: 'ours-live', Status: 'Connected', HostInstanceID: HOST.GetHostInstanceID(), AgentSessionID: 'session-ours-live' },
+            { ID: 'ours-stale', Status: 'Connected', HostInstanceID: 'testhost:4000:99:bootOursBefore', AgentSessionID: 'session-ours-stale' },
+            { ID: 'theirs-live', Status: 'Connected', HostInstanceID: theirs.GetHostInstanceID(), AgentSessionID: 'session-theirs-live' },
+            { ID: 'theirs-stale', Status: 'Connecting', HostInstanceID: 'testhost:4100:77:bootTheirsBefore', AgentSessionID: 'session-theirs-stale' },
+        ];
+    }
+
+    it("closes its own orphans and leaves the other instance's live bridges open", async () => {
+        await withFinalizedSessions(async (finalized) => {
+            const { provider, row } = bridgeTable(sharedTable());
+
+            const closed = await engine().ReconcileOrphans(makeUser(), provider);
+
+            expect(closed).toBe(1);
+            expect(row('ours-stale')).toMatchObject({ Status: 'Disconnected', CloseReason: 'Janitor' });
+            expect(row('ours-live').Status).toBe('Connected');
+            expect(row('theirs-live').Status).toBe('Connected');
+            expect(row('theirs-stale').Status).toBe('Connecting');
+            expect(finalized).toEqual(['session-ours-stale']);
+        });
+    });
+
+    it("the other instance's reconcile closes its own orphans and leaves this one's live bridges open", async () => {
+        await withFinalizedSessions(async (finalized) => {
+            const { provider, row } = bridgeTable(sharedTable());
+            const e = engine();
+            e.SetHostInstanceIdentity(theirs);
+            try {
+                const closed = await e.ReconcileOrphans(makeUser(), provider);
+
+                expect(closed).toBe(1);
+                expect(row('theirs-stale')).toMatchObject({ Status: 'Disconnected', CloseReason: 'Janitor' });
+                expect(row('theirs-live').Status).toBe('Connected');
+                expect(row('ours-live').Status).toBe('Connected');
+                expect(row('ours-stale').Status).toBe('Connected');
+                expect(finalized).toEqual(['session-theirs-stale']);
+            } finally {
+                e.SetHostInstanceIdentity(HOST);
+            }
+        });
+    });
+});
+
+describe('DefaultHostInstanceIdentity (no identity injected)', () => {
+    const fallback = new DefaultHostInstanceIdentity();
+    const prefix = `${hostname()}:pid-${process.pid}:`;
+
+    it('is this process alone on this host: hostname:pid-<pid>:<pid>:<bootId>, a new boot id per identity', () => {
+        expect(fallback.GetInstancePrefix()).toBe(prefix);
+        expect(fallback.GetHostInstanceID().startsWith(`${prefix}${process.pid}:`)).toBe(true);
+        expect(fallback.GetHostInstanceID().slice(`${prefix}${process.pid}:`.length)).toMatch(/^[0-9a-f-]{36}$/);
+        expect(new DefaultHostInstanceIdentity().GetHostInstanceID()).not.toBe(fallback.GetHostInstanceID());
+    });
+
+    it('owns only an earlier process that had this pid on this host', () => {
+        expect(fallback.IsPriorBoot(`${prefix}${process.pid}:boot-before`)).toBe(true);
+    });
+
+    it.each([
+        ['this boot', fallback.GetHostInstanceID()],
+        ['another process on this host', `${hostname()}:pid-${process.pid + 1}:${process.pid + 1}:boot-other`],
+        ['an MJAPI instance on this host', `${hostname()}:4000:${process.pid}:boot-other`],
+        ['the fallback id used before #5310, which named no host', `unknown-host:${process.pid}:boot-other`],
+        ['the same pid on another host', `other-host:pid-${process.pid}:${process.pid}:boot-other`],
+        ['no id', null],
+        ['an empty id', ''],
+    ])('does not own %s', (_case, hostInstanceID) => {
+        expect(fallback.IsPriorBoot(hostInstanceID)).toBe(false);
+    });
+
+    it("an engine with it closes no other process's bridges", async () => {
+        const { provider, row } = bridgeTable([
+            { ID: 'other-mjapi', Status: 'Connected', HostInstanceID: `unknown-host:${process.pid + 1}:bootOther`, AgentSessionID: 'session-1' },
+            { ID: 'other-process', Status: 'Connected', HostInstanceID: `${hostname()}:pid-${process.pid + 1}:${process.pid + 1}:bootOther`, AgentSessionID: 'session-2' },
+            { ID: 'this-pid-before', Status: 'Connected', HostInstanceID: `${prefix}${process.pid}:bootBefore`, AgentSessionID: 'session-3' },
+        ]);
+        const e = engine();
+        e.SetHostInstanceIdentity(fallback);
+        try {
+            const closed = await e.ReconcileOrphans(makeUser(), provider);
+
+            expect(closed).toBe(1);
+            expect(row('this-pid-before').Status).toBe('Disconnected');
+            expect(row('other-mjapi').Status).toBe('Connected');
+            expect(row('other-process').Status).toBe('Connected');
+        } finally {
+            e.SetHostInstanceIdentity(HOST);
+        }
     });
 });
 

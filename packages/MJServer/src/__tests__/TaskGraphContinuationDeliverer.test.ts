@@ -34,10 +34,11 @@ import type { TaskContinuationParams } from '@memberjunction/task-graph';
 import type { UserInfo } from '@memberjunction/core';
 
 /** A conversation-detail row that can be loaded (the source) and saved (the reply). */
-function detailRow(over: Partial<{ loads: boolean; saves: boolean; conversationID: string }> = {}) {
-    const { loads = true, saves = true, conversationID = 'conv-1' } = over;
+function detailRow(over: Partial<{ loads: boolean; saves: boolean; conversationID: string; branchID: string | null }> = {}) {
+    const { loads = true, saves = true, conversationID = 'conv-1', branchID = null } = over;
     return {
         ConversationID: conversationID,
+        BranchID: branchID as string | null,
         Role: '', Status: '', HiddenToUser: true, Message: '',
         NewRecord: vi.fn(),
         Load: vi.fn().mockResolvedValue(loads),
@@ -51,6 +52,9 @@ function harness(over: Parameters<typeof detailRow>[0] = {}) {
     const provider = {
         GetEntityObject: vi.fn().mockImplementation(async () => {
             const row = detailRow(over);
+            if (rows.length > 0) {
+                row.BranchID = 'stale';
+            }
             rows.push(row);
             return row;
         }),
@@ -60,7 +64,8 @@ function harness(over: Parameters<typeof detailRow>[0] = {}) {
         providerFactory as never,
         { ID: 'user-1' } as UserInfo,
     );
-    // First row is the source detail (Load), second is the reply (Save).
+    // First row is the source detail (Load), second is the reply (Save). Every reply row starts on a
+    // 'stale' fork, so a test sees the deliverer set it.
     return { deliverer, providerFactory, provider, rows, reply: () => rows[1] };
 }
 
@@ -127,6 +132,18 @@ describe('posting the outcome', () => {
         expect(message).not.toContain('Step 49');
         // The count is stated rather than silently dropped — the task rows remain the full record.
         expect(message).toContain('30 more');
+    });
+
+    it('posts into the fork of the message that started the graph', async () => {
+        const h = harness({ branchID: 'T1' });
+        await h.deliverer.PostMessage(params());
+        expect(h.reply().BranchID).toBe('T1');
+    });
+
+    it('posts into Main when that message is in Main', async () => {
+        const h = harness();
+        await h.deliverer.PostMessage(params());
+        expect(h.reply().BranchID).toBeNull();
     });
 
     it('mints a fresh provider per delivery', async () => {
@@ -245,5 +262,35 @@ describe('Reinvoke — restarting the submitting agent', () => {
         runAgent.mockRejectedValueOnce(new Error('agent exploded'));
         const h = reinvokeHarness();
         await expect(h.deliverer.Reinvoke(params())).resolves.toBeUndefined();
+    });
+});
+
+describe('Reinvoke — on the fork of the message that started the graph', () => {
+    /** A provider whose agent run and agent load, and whose origin detail sits on `originBranch` (null is Main). */
+    function forkHarness(originBranch: string | null) {
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async (name: string) => {
+                if (name === 'MJ: AI Agent Runs') return { AgentID: 'agent-1', Load: vi.fn().mockResolvedValue(true) };
+                if (name === 'MJ: AI Agents') return { ID: 'agent-1', Load: vi.fn().mockResolvedValue(true) };
+                return detailRow({ branchID: originBranch });
+            }),
+        };
+        return new TaskGraphContinuationDeliverer(
+            { CreateProvider: vi.fn().mockResolvedValue(provider) } as never,
+            { ID: 'user-1' } as UserInfo,
+        );
+    }
+
+    it('runs the reinvoked agent on that fork, as PostMessage posts into it', async () => {
+        await forkHarness('T1').Reinvoke(params());
+
+        expect(runAgent).toHaveBeenCalledTimes(1);
+        expect(runAgent.mock.calls[0][0].ConversationBranchID).toBe('T1');
+    });
+
+    it('leaves the branch unset when that message is in Main', async () => {
+        await forkHarness(null).Reinvoke(params());
+
+        expect(runAgent.mock.calls[0][0].ConversationBranchID).toBeUndefined();
     });
 });

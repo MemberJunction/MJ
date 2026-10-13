@@ -1,0 +1,11 @@
+[
+  {
+    "fields": {
+      "Name": "MJ: Conversation Branches",
+      "CascadeDeletes": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Conversation Branches"
+    }
+  }
+]
