@@ -36,7 +36,7 @@ import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-da
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility, agentFailureDisposition, agentFailureMessage } from '@memberjunction/ai-core-plus';
-import { PendingAttachment } from '@memberjunction/ng-composer';
+import { PendingAttachment, SendSlotMode } from '@memberjunction/ng-composer';
 import { AiComposerComponent } from '../composer/ai-composer.component';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { MentionParserService } from '../../services/mention-parser.service';
@@ -116,6 +116,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Blocks sending. Distinct from {@link Disabled}, which means the composer is busy.
    */
   @Input() ReadOnly = false;
+
+  // ── The send slot as a stop control (pass-through to the composer; the chat area decides) ──
+  /** What the send slot is doing; see `SendSlotMode` in `@memberjunction/ng-composer`. */
+  @Input() SendSlotMode: SendSlotMode = 'send';
+  /** How many things a stop would stop; above 1 the slot reads "Stop all". */
+  @Input() StopCount: number = 0;
+  /** Tooltip and accessible name of the slot in `stop` mode. */
+  @Input() StopLabel: string = 'Stop';
+  /** Status line shown bottom-left inside the composer while non-null. */
+  @Input() StatusText: string | null = null;
+  /** Elapsed time after the status text, kept out of the live region and dropped on narrow screens. */
+  @Input() StatusElapsed: string | null = null;
   @Input() Placeholder: string = 'Type a message... (Ctrl+Enter to send)';
 
   /** @deprecated Use {@link Placeholder}. */
@@ -602,6 +614,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    */
   @Input() EnableDecisionRouting: boolean = false;
 
+  /** The send slot was clicked in `stop` mode; the chat area stops the run(s). */
+  @Output() StopClicked = new EventEmitter<void>();
   @Output() MessageSent = new EventEmitter<MJConversationDetailEntity>();
 
   /**

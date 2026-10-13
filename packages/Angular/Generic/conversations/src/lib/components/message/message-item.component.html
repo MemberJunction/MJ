@@ -42,12 +42,13 @@
           class="time-pill"
           [class.in-progress]="isInProgressAIMessage"
           [class.active]="!isInProgressAIMessage && isAgentRunActive"
-          [class.complete]="!isInProgressAIMessage && !isAgentRunActive && messageStatus === 'Complete'"
+          [class.complete]="!isInProgressAIMessage && !isAgentRunActive && messageStatus === 'Complete' && !IsStoppedRun"
+          [class.stopped]="IsStoppedRun && messageStatus !== 'Error'"
           [class.failed]="messageStatus === 'Error'"
           [class.checking]="LivenessState === 'checking'"
           [class.stalled]="LivenessState === 'stalled'"
           [title]="LivenessState === 'stalled' ? 'No progress reported for several minutes' : (LivenessState === 'checking' ? 'No recent progress — re-checking' : '')">
-          <i class="fas" [ngClass]="LivenessState === 'live' ? 'fa-clock' : 'fa-exclamation-triangle'"></i>
+          <i class="fas" [ngClass]="LivenessState !== 'live' ? 'fa-exclamation-triangle' : (IsStoppedRun ? 'fa-stop' : 'fa-clock')"></i>
           {{ timePillText }}
           @if (LivenessState === 'checking') {
             <span class="liveness-label">checking…</span>
@@ -55,6 +56,20 @@
             <span class="liveness-label">no response</span>
           }
         </span>
+      }
+
+      <!-- Stop control for an in-flight agent reply. Marks the run Cancelled; the owning
+           server process aborts the in-flight step and finalizes the run as stopped. -->
+      @if (CanStopRun) {
+        <button
+          type="button"
+          class="stop-run-pill"
+          [disabled]="IsStopping"
+          (click)="OnStopClick()"
+          [title]="IsStopping ? 'Stopping the run…' : 'Stop this run'">
+          <i class="fas" [ngClass]="IsStopping ? 'fa-circle-notch fa-spin' : 'fa-stop'"></i>
+          {{ IsStopping ? 'Stopping…' : 'Stop' }}
+        </button>
       }
 
       <!-- Test feedback icon (appears for test runs only) -->
@@ -126,6 +141,19 @@
             <span class="edited-badge">(edited)</span>
           }
         </div>
+
+        <!-- A stopped reply: what the run kept, and the way to pick it up again. Any message
+             resumes the stopped run; the Continue control just sends one that says so. -->
+        @if (StoppedLineText) {
+          <div class="stopped-line"><i class="fa-solid fa-stop" aria-hidden="true"></i>{{ StoppedLineText }}</div>
+        }
+        @if (CanContinueStoppedRun) {
+          <div class="stopped-actions">
+            <button mjButton Variant="outline" Size="sm" type="button" class="continue-run" (click)="OnContinueClick()" title="Continue where you left off">
+              <i class="fa-solid fa-play" aria-hidden="true"></i> Continue
+            </button>
+          </div>
+        }
 
         <!-- messageExtra slot — per-message additive decoration projected by the
              consumer via `mjChatSlot="messageExtra"`. Renders after the message
