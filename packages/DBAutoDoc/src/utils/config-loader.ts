@@ -89,7 +89,7 @@ export class ConfigLoader {
       },
       ai: {
         provider: 'gemini',
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.8-flash',
         apiKey: '',
         temperature: 0.1,
         maxTokens: 4000
