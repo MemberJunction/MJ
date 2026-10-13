@@ -73,6 +73,8 @@ Each item lands with its unit tests and, where it touches the database or GraphQ
 - The optional `BoundParameters` column on `MJ: AI Agent Actions` is not built. Runtime bindings are not persisted, so a run resumed from a stored request ([§ 9](#9-design-points-to-settle-first), new point 8) starts without them.
 - Known limits, documented on the field: the realtime client-direct action path and the workflow meta-actions (Loop, Conditional, Retry, Parallel Execute, Execute Agent) dispatch actions themselves and do not apply bindings; an action's own message text may mention a bound value.
 
+**Resume (2026-10-12, § 9 point 8, option b):** a run's bindings are stored on `MJ: AI Agent Runs.BoundActionParams`, and a run that continues another (`lastRunId`, including a resume after `ask_user` and a client's continuation) applies them when its caller passes none. Reading the earlier run fails the new run rather than starting it unbound. The per-agent `BoundParameters` column is still not built.
+
 ## 3. A14. Properties on user views
 
 **Today:**
@@ -113,6 +115,13 @@ Each item lands with its unit tests and, where it touches the database or GraphQ
 **Tests:** the SQL a property produces for each operator and type; a wrong-typed value refused; a required property with no value refused; a token default worked out on the server; row-level security still applied; a client value for a locked property refused over GraphQL; a view with no properties runs exactly as today.
 
 **Accept:** a *Members* view with a `Chapter` property that defaults to null returns every member to staff; run with `Chapter = X`, it returns X's members; a value of the wrong type is refused; row-level security still applies on top. A *Recent Sign-ups* view whose `Since` property defaults to thirty days ago returns the last thirty days' members when run with no value.
+
+**Built (2026-10-12), with these decisions beyond the text above:**
+- A run's value comes from `RunViewParams.ServerProperties` (server code only: no GraphQL input carries it and REST strips it, through `SERVER_ONLY_RUN_VIEW_PARAMS`), then `Properties`, then the default. A key present with `null` means no value: no predicate, and the default is skipped. Any client value for a property with `AllowOverride` false is refused.
+- RunView takes no SQL parameters, so a value is always a type-checked literal; `IN` takes a list, and an empty list matches no rows.
+- The server resolves values before the cache lookup and keys the result cache on them, as canonical JSON rather than the 32-bit hash a client could steer.
+- The entity viewer runs a view with properties by `ViewID` (every view type, paging, count and export), shows a read-only chip row, and the view designer has a Properties tab. A view without properties sends exactly today's params.
+- **A locked property is not a data boundary.** It fixes the value inside one saved view; anyone who can read the entity can still run their own view. Keeping one chapter's members from another needs row-level security or permissions.
 
 ### Defaults and tokens
 
@@ -233,6 +242,12 @@ Amith, 2026-09-28: a part's event can set a dashboard property, so selecting a r
 
 **Accept:** a dashboard with a *Chapters* view on the left and a *Members* view on the right. The left part's `RecordSelected` is wired, by its `ID`, to a `Chapter` property, which the right part maps onto its view's `ChapterID`. Selecting a chapter shows its members on the right, and clearing the selection shows every member the viewer may see. When the host sets `Chapter`, selecting on the left doesn't change the right.
 
+**Built (2026-10-12), with these decisions beyond the text above:**
+- Dashboard `Properties` and `Wires` live in the dashboard's config (`UIConfigDetails`), so no migration; part mappings live in each part's configuration as `inputMappings`. A dashboard with none of these renders and saves byte-for-byte as before.
+- Data access (§ 9 point 1): parts take the viewer's `Provider`; the Component part passes `ProviderToUse` to the React host. No separate query-runner input.
+- A required input counts as missing only when it is mapped, except Web URL placeholders and component props. Clearing a wired selection is a button on the part, because the entity viewer reports no deselect.
+- The query parameter form leaves server-set parameters (A17) out and shows mapped ones read-only; mapped values are never saved into the user's last-used set.
+
 ## 5. A17. Locked query parameters, server-set context variables, and an approval status
 
 **Today:**
@@ -250,6 +265,13 @@ Amith, 2026-09-28: a part's event can set a dashboard property, so selecting a r
 **Tests:** a client value for a locked parameter is refused and logged; server code sets it; a context variable can't be set from a client; a query with no locked parameters and no context variables runs exactly as today; the approval status reads and writes, with its audit.
 
 **Accept:** a query's `ChapterID`, locked, can't be changed over GraphQL; the attempt is refused and logged.
+
+**Built (2026-10-12), with these decisions beyond the text above:**
+- `MJ: Query Parameters.IsServerSet` (§ 9 point 2); a server-set parameter takes its value only from `RunQueryParams.ServerParameters`; a caller value for it, for a name a composed query protects, or for `Context` is refused and logged. Server values win over caller values.
+- `{{ Context.* }}` in a template is built on the server from the context user, the clock and the caller's time zone, through the same SQL-safety path as parameters. Query caches key on `ServerParameters` and the `Context` values a query reads; results that read `Context.Now` are not cached.
+- Materialized reads now bind `ServerParameters` (before, a server-set filter was skipped).
+- Approvals are fingerprint-bound (§ 9 point 3, model 1): SHA-256 over each definition's material fields, child rows in semantic order, with a token-contract version for queries. The server stamps fingerprint, approver and time when the status moves to Approved and ignores client values for them. `RunQueryParams.RequireApproved` refuses a query, or any query it composes, whose approval is not current. Re-approving after an edit means moving the status away from Approved and back. No approval UI.
+- **Boundary:** `AdhocQueryResolver` still lets an authenticated user run their own SELECT; a server-set parameter constrains the saved query, not what that user can read.
 
 ## 6. A18. Calendars in Communication, and a calendar view
 
@@ -269,6 +291,14 @@ Amith, 2026-09-28: a part's event can set a dashboard property, so selecting a r
 **Tests:** each provider's create, update, cancel, invite and RSVP against recorded responses; a delta sync applying a moved time and a changed RSVP; the iCalendar UID stored on create and matched on sync; the bridge's invitation polling on the new layer; the Calendar view placing records by their start and end fields, and one with no end field.
 
 **Accept:** an MJ record creates an Outlook event and a Google event with attendees; a time change in either calendar flows back to the record; an RSVP updates the attendee. A user view of those records shows them on a calendar.
+
+**Built (2026-10-12), with these decisions beyond the text above:**
+- Calendar support is a provider's operations list (`CreateEvent`, `UpdateEvent`, `CancelEvent`, `GetEvent`, `SyncEvents`), not a database flag. Writes require a `CalendarTarget` (§ 9 point 5).
+- MS Graph uses its client secret, or a caller's bearer `accessToken`. Google Calendar is on the Gmail provider, through the same OAuth client; its refresh token needs the `calendar.events` scope.
+- The sync cursor lives in `MJ: Calendar Sync States`, one row per calendar, because Graph delta links and Google sync tokens are per calendar, not per event. A sync stores the new cursor only after every change applied.
+- Changes reach an app's record through a `BaseCalendarEventLinkHandler` registered for its entity; with none, only the link is updated.
+- The realtime bridge's calendar sources now read through the providers; its own Graph and Google clients are removed.
+- The Calendar view type needs no migration: a `MJ: View Types` row and a renderer. It loads up to 10,000 rows in the view's order, and is offered only for entities with a date field of their own.
 
 ### 6.1 A18 in the apps: meetings in bizapps-tasks, activities in bizapps-common
 
@@ -327,6 +357,8 @@ This part isn't built in this pull request. It says where calendar tracking goes
 **Tests:** a grantee's message with another person's `UserID` refused, and one with none saved with the grantee's; a grantee's `AI` row refused; a grantee changing or deleting another person's message refused; the owner deleting any message allowed; the runner creating the reply's row as the system user, and the chat showing it; the owner rating an agent's reply still allowed; a person's own conversation, agent replies included, working exactly as today.
 
 **Accept:** in a conversation shared with `Edit`, the grantee's message saved with the owner's `UserID` is refused, and so is one with `Role` `AI`. The grantee's @-mention of an agent still gets a reply, written by the system user.
+
+**Built (2026-10-12) in its own pull request, #5299,** with one change to the text above: server code marks its reply writes on the entity instance (`MarkServerAuthoredReply()`, not a field a client can reach) instead of writing as the system user, because some server paths elevate an anonymous visitor to the system user (MJ#4791).
 
 ## 8. Rules for the work
 
