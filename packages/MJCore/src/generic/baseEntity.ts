@@ -399,9 +399,13 @@ export class EntityField {
     /**
      * Validates the current value of the field. If the field is read only, or if the field is marked to skip validation, nothing happens.
      * If the field is not read only, and the field is not marked to skip validation, the value is checked against the validation rules defined in the metadata for the field.
+     * @param isResolvedNameField Whether this field is the one `EntityInfo.NameField` resolves to, which
+     * enables the blank-name rung (#4683). `BaseEntity.Validate()` supplies it; a field has no
+     * back-pointer to its entity and must not reach for the global metadata provider to find out.
+     * Defaults to false, so a field validated in isolation keeps its previous behaviour.
      * @returns
      */
-    public Validate(): ValidationResult {
+    public Validate(isResolvedNameField: boolean = false): ValidationResult {
         const ef = this._entityFieldInfo;
         const result = new ValidationResult();
         result.Success = true; // assume success
@@ -431,6 +435,35 @@ export class EntityField {
                         result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} cannot be null`, null));
                     }
                 }
+            }
+            // Blank NAME field (MJ issue #4683). An entity's name field is how every other surface
+            // REFERS to the record — FK display, CodeGen's JOIN aliases, search, pickers, related-record
+            // grids. A blank one does not corrupt the row; it makes the row unidentifiable everywhere it
+            // is referenced from, which is a different failure from an empty Description. SQL Server
+            // accepts '' in a NOT NULL column and the rung above only refuses null, so nothing caught it.
+            //
+            // Deliberately narrow, and each narrowing is load-bearing:
+            //   - Only the field `EntityInfo.NameField` RESOLVES to, passed in by BaseEntity.Validate()
+            //     (EntityFieldInfo has no back-pointer to its entity, and reaching for the global
+            //     Metadata provider here would read the wrong server's metadata under a non-default
+            //     provider). 45 entities flag several fields IsNameField, so keying on the flag alone
+            //     would also protect things like DisplayName, which must stay blankable.
+            //   - Only when the column is NOT NULL. Where a developer made the name field nullable they
+            //     have said absence is legal, and '' is absence's twin; the column's own declaration is
+            //     the authority rather than a constraint invented here.
+            //   - Whitespace counts: '   ' is as unidentifiable as ''.
+            //   - `_notLoaded` fields are exempt for the same reason the required check above exempts
+            //     them: the save does not write them, so the stored name is untouched.
+            const blankNameField: boolean =
+                isResolvedNameField &&
+                !ef.AllowsNull &&
+                !this._notLoaded &&
+                ef.TSType === EntityFieldTSType.String &&
+                typeof this.Value === 'string' &&
+                this.Value.trim().length === 0;
+            if (blankNameField) {
+                result.Success = false;
+                result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} cannot be blank — it is the name this record is identified by`, this.Value));
             }
             if (ef.TSType == EntityFieldTSType.String && ef.MaxLength > 0 && this.Value && this.Value.length > ef.MaxLength) {
                 result.Success = false;
@@ -465,7 +498,9 @@ export class EntityField {
             // EntityFieldInfo.ValueIsPermittedByValueList: the normalized set of legal values is
             // derived from immutable metadata SHARED by every EntityField instance of this field, so
             // it is built once per field rather than rebuilt on every record's validation.
-            if (!ef.ValueIsPermittedByValueList(this.Value)) {
+            // `blankNameField` suppresses this: a blanked name-with-a-value-list is one mistake and
+            // must produce one message, the same contract the nullability rung has with this rung.
+            if (!blankNameField && !ef.ValueIsPermittedByValueList(this.Value)) {
                 result.Success = false;
                 const nullNote: string = ef.AllowsNull ? ' (or null)' : '';
                 result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be one of: ${ef.ValueListValuesForDisplay}${nullNote}. Current value is '${this.Value}'`, this.Value));
@@ -6189,11 +6224,14 @@ export abstract class BaseEntity<T = unknown> {
 
             // Validate own fields — for IS-A entities, skip parent field mirrors since
             // those are validated via _parentEntity above
+            // Resolved ONCE per validation rather than per field: NameField walks + caches the field
+            // list, and the blank-name rung (#4683) needs to know which single field it applies to.
+            const nameFieldName: string | null = this.EntityInfo?.NameField?.Name ?? null;
             for (let field of this.Fields) {
                 if (this._parentEntityFieldNames?.has(field.Name))
                     continue; // skip parent field mirrors — authoritative validation is on _parentEntity
 
-                const err = field.Validate();
+                const err = field.Validate(nameFieldName !== null && field.Name === nameFieldName);
                 err.Errors.forEach(element => {
                     result.Errors.push(element);
                 });

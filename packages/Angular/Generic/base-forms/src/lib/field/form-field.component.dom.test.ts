@@ -75,6 +75,10 @@ function makeWidgetEntityInfo(): EntityInfo {
       { ID: 'F1', Name: 'ID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true, AllowUpdateAPI: false },
       { ID: 'F2', Name: 'Name', DisplayName: 'Widget Name', Type: 'nvarchar', Length: 200, AllowsNull: false, AllowUpdateAPI: true },
       { ID: 'F3', Name: 'Description', Type: 'nvarchar', Length: 200, AllowsNull: true, AllowUpdateAPI: true },
+      // NOT NULL but NOT the name field: `EntityInfo.NameField` resolves to `Name` here (no field
+      // carries IsNameField, so the legacy 'column literally named Name' fallback wins). This field
+      // is what keeps the #4359 rule (blank is a value) distinguishable from #4683 (blank name is not).
+      { ID: 'F13', Name: 'SerialNumber', Type: 'nvarchar', Length: 100, AllowsNull: false, AllowUpdateAPI: true },
       { ID: 'F4', Name: 'Quantity', Type: 'int', AllowsNull: true, AllowUpdateAPI: true },
       { ID: 'F5', Name: 'LaunchDate', Type: 'datetime', AllowsNull: true, AllowUpdateAPI: true },
       // A DATE-ONLY column, deliberately beside the datetime above: the two must render differently.
@@ -409,11 +413,11 @@ describe('MjFormFieldComponent (DOM)', () => {
       expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
     });
 
-    it('does NOT flag a required field holding an empty string — that is a value, not absence (#4359)', () => {
+    it('does NOT flag a required NON-NAME field holding an empty string — that is a value, not absence (#4359)', () => {
       // A NOT NULL string column accepts '' in SQL Server and in EntityField.Validate(), so the
       // form must not paint red a value the save will happily accept. Requiring text is a separate
       // constraint, not an inference from nullability.
-      const f = render({ Record: makeWidget({ Name: '' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
+      const f = render({ Record: makeWidget({ SerialNumber: '' }), FieldName: 'SerialNumber', Type: 'textbox', EditMode: true });
       expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(false);
     });
 
@@ -421,6 +425,19 @@ describe('MjFormFieldComponent (DOM)', () => {
       const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true });
       expect(query(f, '.mj-forms-field')).not.toBeNull();
       expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(false);
+    });
+
+    it('DOES flag the resolved NAME field when it is blanked — the save refuses it (#4683)', () => {
+      // The one case where '' IS missing: the field the record is identified by. `Name` is what
+      // EntityInfo.NameField resolves to here, and EntityField.Validate() refuses a blank there, so
+      // the form must agree — the same form/save alignment #4359 established, reached by both refusing.
+      const f = render({ Record: makeWidget({ Name: '' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
+    });
+
+    it('flags a whitespace-only name — as unidentifiable as an empty one (#4683)', () => {
+      const f = render({ Record: makeWidget({ Name: '   ' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
     });
 
     it('Image ExtendedType edit mode shows upload, hides the data URI from the URL box, and Clear empties the field', () => {
