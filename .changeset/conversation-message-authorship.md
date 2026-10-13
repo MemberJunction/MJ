@@ -1,7 +1,6 @@
 ---
 "@memberjunction/core-entities": patch
 "@memberjunction/server": patch
-"@memberjunction/ng-conversations": patch
 "@memberjunction/integration-test-suite": patch
 ---
 
@@ -17,5 +16,5 @@ A person who cannot read an existing
 conversation can no longer write to it. GraphQL updates of `MJ: Conversation Details` always load the stored row, so a
 client's `OldValues___` cannot claim a message's author, role or rating. A conversation message whose values a
 TransactionGroup `Use` variable fills in is refused for people, and `ExecuteTransactionGroup` now registers a group's
-variables before any item is saved (an invalid `ItemIndex` fails before any write). The chat shows the edit pencil
-only on the owner's own messages. Agent replies keep today's rules until MJ's chat stops writing them from the browser.
+variables before any item is saved (an invalid `ItemIndex` fails before any write). Agent replies keep
+today's rules until MJ's chat stops writing them from the browser.

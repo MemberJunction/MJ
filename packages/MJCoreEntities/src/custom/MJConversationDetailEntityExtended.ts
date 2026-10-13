@@ -10,15 +10,8 @@ import {
     WellKnownUserSource
 } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import {
-    MJConversationDetailEntity,
-    MJConversationEntity,
-    MJResourcePermissionEntity
-} from '../generated/entity_subclasses';
-import { ResourcePermissionEngine } from './ResourcePermissions/ResourcePermissionEngine';
-
-/** `MJ: Resource Types.ID` for Conversations — seeded in the resource type catalog. */
-const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
+import { MJConversationDetailEntity, MJConversationEntity } from '../generated/entity_subclasses';
+import { ConversationWriteDecision, UserMayWriteConversation } from './ConversationWriteAccess';
 
 /**
  * Fields that represent the conversation owner's evaluation of an AI message.
@@ -131,30 +124,9 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
         }
 
         try {
-            const conversation = await provider.GetEntityObject<MJConversationEntity>(
-                'MJ: Conversations',
-                user
-            );
-            const loaded = await conversation.Load(this.ConversationID);
-            if (!loaded) {
-                // The person cannot read the conversation. If it exists, it is hidden from them (a row filter), and
-                // they may not write to it. If no one can find it, it is missing or being created in this same
-                // transaction: let the foreign key and the base save decide, as before, but a person's message in it
-                // is still theirs (no one is its owner yet, so an empty UserID gets the poster's).
-                const refusal = (await this.conversationExists(provider))
-                    ? 'You do not have access to this conversation.'
-                    : isSystemUser ? null : this.authorshipRefusal(operation, user, null, false);
-                if (refusal) {
-                    this.recordDenied(refusal, resultType);
-                    return false;
-                }
-                return true;
-            }
-
-            const isOwner =
-                !!conversation.UserID && UUIDsEqual(conversation.UserID, user.ID);
-            const refusal = (isOwner ? null : await this.nonOwnerAccessRefusal(provider, user))
-                ?? (isSystemUser ? null : this.authorshipRefusal(operation, user, conversation.UserID, isOwner));
+            const access = await UserMayWriteConversation(provider, user, this.ConversationID);
+            const refusal = (await this.accessRefusal(provider, access))
+                ?? (isSystemUser ? null : this.authorshipRefusal(operation, user, access.IsOwner));
             if (refusal) {
                 this.recordDenied(refusal, resultType);
                 return false;
@@ -173,52 +145,41 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
     }
 
     /**
-     * Why a person who does not own the conversation may not write to it, or `null` when they may: the rating fields
-     * are the owner's alone, and anyone else needs an `Edit` or `Owner` grant on the conversation.
+     * Why the user may not write to this message's conversation at all, or `null` when they may. The owner may. Anyone
+     * else may not change the rating fields, which are the owner's alone, and needs an `Edit` or `Owner` grant. A
+     * conversation that does not load for the user is hidden from them when it exists (a row filter), and they may not
+     * write to it; when no one can find it, it is missing or being created in this same transaction, and the foreign
+     * key and the base save decide, as before.
      */
-    private async nonOwnerAccessRefusal(provider: IMetadataProvider, user: UserInfo): Promise<string | null> {
+    private async accessRefusal(provider: IMetadataProvider, access: ConversationWriteDecision): Promise<string | null> {
+        if (access.IsOwner) {
+            return null;
+        }
         // Non-owners are *never* allowed to touch the rating fields, even
         // when they hold Edit/Owner grants on the conversation. UserRating
         // and UserFeedback represent the owner's evaluation of an AI
         // message and there is no per-user storage to overwrite.
-        if (this.dirtyRatingFieldNames().length > 0) {
+        if (OWNER_ONLY_RATING_FIELDS.some((name) => this.isFieldDirty(name))) {
             return 'Only the conversation owner can set or change the rating and feedback on this message.';
         }
-
-        const engine = ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(
-            provider,
-            ResourcePermissionEngine
-        ) as ResourcePermissionEngine;
-        await engine.Config(false, user);
-
-        const grant = engine
-            .GetUserAvailableResources(user, CONVERSATIONS_RESOURCE_TYPE_ID)
-            .find((p: MJResourcePermissionEntity) => UUIDsEqual(p.ResourceRecordID, this.ConversationID));
-
-        if (!grant) {
+        if (!access.Allowed) {
+            return access.Reason ?? 'Permission denied.';
+        }
+        if (!access.Loaded && (await this.conversationExists(provider))) {
             return 'You do not have access to this conversation.';
         }
-        if (grant.PermissionLevel === 'Edit' || grant.PermissionLevel === 'Owner') {
-            return null;
-        }
-        // Only View — block writes.
-        return 'You have view-only access to this conversation.';
+        return null;
     }
 
     /**
      * Why this write breaks the rules for people's messages (see the class doc), or `null` when it does not. On a new
      * message from a grantee with no `UserID`, fills in the grantee's.
      */
-    private authorshipRefusal(
-        operation: 'save' | 'delete',
-        user: UserInfo,
-        ownerID: string | null,
-        isOwner: boolean
-    ): string | null {
+    private authorshipRefusal(operation: 'save' | 'delete', user: UserInfo, isOwner: boolean): string | null {
         if (operation === 'delete') {
-            return this.deleteRefusal(user, ownerID, isOwner);
+            return this.deleteRefusal(user, isOwner);
         }
-        return this.IsSaved ? this.changeRefusal(user, ownerID) : this.postRefusal(user, isOwner);
+        return this.IsSaved ? this.changeRefusal(user, isOwner) : this.postRefusal(user, isOwner);
     }
 
     /** A new person's message names its author as the poster, or names no one (filled in for a grantee). */
@@ -240,9 +201,9 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
 
     /**
      * An existing person's message: only its author changes who wrote it and what it says, no one its role (to or
-     * from `User`), and no one moves it to another conversation.
+     * from `User`), and no one moves it to another conversation. A message with no `UserID` is the owner's.
      */
-    private changeRefusal(user: UserInfo, ownerID: string | null): string | null {
+    private changeRefusal(user: UserInfo, isOwner: boolean): string | null {
         const wasPerson = isPersonRole(this.originalFieldText('Role'));
         if (this.isFieldDirty('Role') && (wasPerson || isPersonRole(this.Role))) {
             return "A message's role cannot be changed.";
@@ -259,7 +220,7 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
         if (changed.length === 0) {
             return null;
         }
-        const author = this.originalFieldText('UserID') ?? ownerID;
+        const author = this.originalFieldText('UserID') ?? (isOwner ? user.ID : null);
         if (!author || !UUIDsEqual(author, user.ID)) {
             return 'Only the person who wrote this message can change it.';
         }
@@ -269,13 +230,12 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
         return null;
     }
 
-    /** A person's message is deleted by its author or by the conversation's owner. */
-    private deleteRefusal(user: UserInfo, ownerID: string | null, isOwner: boolean): string | null {
+    /** A person's message is deleted by its author or by the conversation's owner (whose it is with no `UserID`). */
+    private deleteRefusal(user: UserInfo, isOwner: boolean): string | null {
         if (!isPersonRole(this.Role) || isOwner) {
             return null;
         }
-        const author = this.UserID || ownerID;
-        return author && UUIDsEqual(author, user.ID)
+        return this.UserID && UUIDsEqual(this.UserID, user.ID)
             ? null
             : "Only the message's author or the conversation's owner can delete it.";
     }
@@ -298,20 +258,6 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
     private originalFieldText(name: string): string | null {
         const original: unknown = this.Fields.find((f) => f.Name === name)?.OldValue;
         return typeof original === 'string' && original.length > 0 ? original : null;
-    }
-
-    /**
-     * Names of the rating/feedback fields that are dirty on this save.
-     * Used by `currentUserMayWrite` to detect attempts by non-owners to
-     * modify the owner-only fields and surface a specific denial message.
-     */
-    private dirtyRatingFieldNames(): string[] {
-        const matches: string[] = [];
-        for (const name of OWNER_ONLY_RATING_FIELDS) {
-            const field = this.Fields.find((f) => f.Name === name);
-            if (field?.Dirty) matches.push(name);
-        }
-        return matches;
     }
 
     /**

@@ -65,6 +65,8 @@ export interface RealtimeHostChannelDeclaration {
 export interface RealtimeSessionStartOptions {
     /** Channels the host brings to this session (see {@link RealtimeHostChannelDeclaration}). */
     HostChannels?: RealtimeHostChannelDeclaration[];
+    /** The fork (`MJ: Conversation Branches.ID`) the session starts on; omitted or null is Main. */
+    ConversationBranchID?: string | null;
     /**
      * Have the user check the camera before the agent sees it. The call's first camera start opens the camera for the
      * user only: the camera's state is `starting` with `Checking` set and the stream to preview, and nothing reaches the
