@@ -52,9 +52,20 @@ function describeFailure(failure: unknown): string {
     return failure instanceof Error ? failure.message : String(failure);
 }
 
-/** Derives the REST base from the GraphQL endpoint URL by dropping a trailing slash and `/graphql`. */
+const GRAPHQL_SUFFIX = '/graphql';
+
+/**
+ * Derives the REST base from the GraphQL endpoint URL by dropping trailing slashes and `/graphql`.
+ * A scan, not a regex: `/\/+$/` backtracks quadratically on a long run of slashes that does not end
+ * the string, and the URL comes from host configuration.
+ */
 export function RecordingBaseURLFromGraphQLURL(url: string): string {
-    return url.replace(/\/+$/, '').replace(/\/graphql$/, '');
+    let end = url.length;
+    while (end > 0 && url.charCodeAt(end - 1) === 47 /* '/' */) {
+        end--;
+    }
+    const trimmed = url.slice(0, end);
+    return trimmed.endsWith(GRAPHQL_SUFFIX) ? trimmed.slice(0, -GRAPHQL_SUFFIX.length) : trimmed;
 }
 
 export class FetchRecordingTransport implements IRecordingTransport {

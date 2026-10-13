@@ -106,7 +106,19 @@ describe('RecordingBaseURLFromGraphQLURL', () => {
         ['https://h/api/graphql', 'https://h/api'],
         ['https://h/graphql/', 'https://h'],
         ['http://h:4000', 'http://h:4000'],
+        ['https://h/api/graphql///', 'https://h/api'],
+        ['https://h/graphqlx', 'https://h/graphqlx'],
+        ['', ''],
     ])('%s -> %s', (input, expected) => {
         expect(RecordingBaseURLFromGraphQLURL(input)).toBe(expected);
+    });
+
+    it('runs in linear time on a long run of slashes that does not end the string (CodeQL polynomial regex)', () => {
+        // A backtracking `/\/+$/` retries every start position of the run: tens of thousands of
+        // slashes followed by another character cost seconds. The URL comes from host configuration.
+        const input = `https://h/${'/'.repeat(50_000)}x`;
+        const started = performance.now();
+        expect(RecordingBaseURLFromGraphQLURL(input)).toBe(input);
+        expect(performance.now() - started).toBeLessThan(250);
     });
 });
