@@ -134,6 +134,8 @@ class TestEnterprise extends GeminiEnterpriseRealtime {
     public readonly Session = new FakeLiveSession();
     /** When set, the next Vertex client creation fails once. */
     public FailNextClient = false;
+    /** When set, the socket closes before Google confirms the setup, and the connect never settles (what the SDK does). */
+    public CloseBeforeSetup = false;
 
     protected override CreateGoogleAuth(options: GoogleAuthOptions): VertexGoogleAuth {
         this.AuthOptions.push(options);
@@ -150,6 +152,10 @@ class TestEnterprise extends GeminiEnterpriseRealtime {
             live: {
                 connect: async (params: LiveConnectParameters): Promise<GeminiLiveSession> => {
                     this.Connects.push(params);
+                    if (this.CloseBeforeSetup) {
+                        params.callbacks.onclose?.({ code: 1008, reason: 'model not found' } as CloseEvent);
+                        return new Promise<GeminiLiveSession>(() => undefined);
+                    }
                     // Google confirms the setup; the session puts a connection to use only after that.
                     params.callbacks.onmessage(Object.assign(new LiveServerMessage(), { setupComplete: {} }));
                     return this.Session;
@@ -701,6 +707,12 @@ describe('GeminiEnterpriseRealtime', () => {
             await driver.StartSession(makeParams());
             expect(driver.ClientOptions).toHaveLength(2);
             expect(driver.Connects).toHaveLength(2);
+        });
+
+        it('fails the start when the socket closes before Google confirms the setup, instead of hanging', async () => {
+            const driver = new TestEnterprise(serviceAccountKey());
+            driver.CloseBeforeSetup = true;
+            await expect(driver.StartSession(makeParams())).rejects.toThrow('closed during setup (code 1008: model not found)');
         });
 
         it('warns about an undocumented location for bridged sessions too', async () => {
