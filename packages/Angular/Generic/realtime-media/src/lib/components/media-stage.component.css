@@ -1,0 +1,92 @@
+/* The stage covers its positioned parent; only the surfaces on it take pointer input. */
+:host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* A surface's box. The host's content inside it sizes itself to the box. */
+.stage-surface {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.stage-surface--stage {
+  inset: 0;
+}
+
+/* A stage surface in the host's stage slot is placed by its box instead. */
+.stage-surface--in-slot {
+  inset: auto;
+}
+
+/* A picture-in-picture box floats over everything else on the stage; the one touched last floats highest. */
+.stage-surface--pip {
+  z-index: 2;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-strong);
+  border-radius: var(--mj-radius-md);
+  box-shadow: var(--mj-shadow-xl, 0 12px 32px rgba(0, 0, 0, 0.25));
+}
+.stage-surface--top {
+  z-index: 3;
+}
+
+/* The bar a picture-in-picture box is dragged by: its name, then the host's buttons. */
+.stage-pip-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  flex-shrink: 0;
+  padding: 0 4px 0 10px;
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.stage-pip-bar:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: -2px;
+}
+.stage-pip-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-secondary);
+}
+
+/* The corner a picture-in-picture box is resized from. */
+.stage-pip-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+/* Read by assistive technology through the bar's aria-describedby; never shown. */
+.stage-pip-hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Out of sight but alive: the surface keeps its state until it shows again. */
+.stage-surface--hidden {
+  display: none;
+}

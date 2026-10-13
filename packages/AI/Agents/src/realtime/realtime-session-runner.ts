@@ -31,7 +31,7 @@ import {
     RealtimeUsageModalityDetail,
     RealtimeToolDefinition,
     RealtimeSessionError,
-    RealtimeMediaKind,
+    RealtimeInputFrame,
     JSONObject
 } from '@memberjunction/ai';
 import { RealtimeRecordingController } from './realtime-recording-capture';
@@ -445,11 +445,11 @@ export class RealtimeSessionRunner {
         recording.Start();
         session.OnOutput((chunk) => recording.AppendOutbound(chunk));
         const originalSendInput = session.SendInput.bind(session);
-        session.SendInput = (chunk: ArrayBuffer, kind?: RealtimeMediaKind): void => {
-            if (kind !== 'video') {
-                recording.AppendInbound(chunk);
+        session.SendInput = (frame: RealtimeInputFrame): void => {
+            if (frame.Kind === 'audio') {
+                recording.AppendInbound(frame.Data);
             }
-            originalSendInput(chunk, kind);
+            originalSendInput(frame);
         };
     }
 

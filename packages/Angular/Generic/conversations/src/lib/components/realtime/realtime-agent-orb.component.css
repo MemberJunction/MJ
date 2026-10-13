@@ -1,0 +1,88 @@
+:host {
+  display: block;
+  --orb-size: var(--mj-realtime-orb-size, 120px);
+}
+
+.orb-stage {
+  position: relative;
+  width: calc(var(--orb-size) * 1.834);
+  height: calc(var(--orb-size) * 1.834);
+  display: grid;
+  place-items: center;
+}
+
+/* The orb mirrors the app-bar orb's visual language at stage scale. */
+.orb {
+  width: var(--orb-size);
+  height: var(--orb-size);
+  border-radius: 50%;
+  position: relative;
+  background: radial-gradient(circle at 35% 30%,
+    var(--mj-brand-accent, var(--mj-brand-primary)),
+    var(--mj-brand-primary) 60%,
+    var(--mj-brand-primary-active, var(--mj-brand-primary)));
+  box-shadow:
+    0 0 0 calc(var(--orb-size) * 0.067) color-mix(in srgb, var(--mj-brand-primary) 12%, transparent),
+    0 0 calc(var(--orb-size) * 0.4) color-mix(in srgb, var(--mj-brand-primary) 45%, transparent);
+}
+.orb[data-state='speaking'] {
+  animation: realtime-orb-bob 0.9s ease-in-out infinite;
+}
+.orb[data-state='listening'] {
+  box-shadow:
+    0 0 0 calc(var(--orb-size) * 0.067) color-mix(in srgb, var(--mj-status-success) 16%, transparent),
+    0 0 calc(var(--orb-size) * 0.4) color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+  background: radial-gradient(circle at 35% 30%,
+    color-mix(in srgb, var(--mj-status-success) 60%, white), var(--mj-brand-primary) 65%);
+}
+.orb[data-state='thinking'] {
+  box-shadow:
+    0 0 0 calc(var(--orb-size) * 0.067) color-mix(in srgb, var(--mj-status-warning) 14%, transparent),
+    0 0 calc(var(--orb-size) * 0.333) color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
+}
+@keyframes realtime-orb-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(calc(var(--orb-size) * -0.033)); }
+}
+
+/* Expanding sound-wave rings (staggered). */
+.orb-ring {
+  position: absolute;
+  width: var(--orb-size);
+  height: var(--orb-size);
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--mj-brand-primary) 55%, transparent);
+  opacity: 0;
+  animation: realtime-orb-wave 2.7s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+.orb-ring--2 { animation-delay: 0.9s; }
+.orb-ring--3 { animation-delay: 1.8s; }
+@keyframes realtime-orb-wave {
+  0% { transform: scale(1); opacity: 0.5; }
+  70% { opacity: 0.1; }
+  100% { transform: scale(1.85); opacity: 0; }
+}
+
+/* ---------- AUDIO-REACTIVE MODE (the overlay's data-audio-live, set by its meter loop) ----------
+   With real audio metering the orb stops acting and starts REACTING: scale and glow follow the smoothed output
+   envelope (--voice-out) like a speaker cone, and [data-voice-dir] colors it by who is speaking (agent = brand,
+   user = green). Without metering the turn-state animations above stay in charge. */
+:host-context(.call-overlay[data-audio-live='true']) .orb {
+  animation: none;
+  transform: scale(calc(1 + var(--voice-out, 0) * 0.18));
+  transition: transform 70ms linear;
+}
+:host-context(.call-overlay[data-audio-live='true']) .orb-ring {
+  opacity: calc(var(--voice-out, 0) * 0.55);
+  animation-duration: 2.1s;
+}
+:host-context(.call-overlay[data-audio-live='true'][data-voice-dir='user']) .orb {
+  box-shadow:
+    0 0 0 calc(var(--orb-size) * 0.067) color-mix(in srgb, var(--mj-status-success) 16%, transparent),
+    0 0 calc(var(--orb-size) * 0.4) color-mix(in srgb, var(--mj-status-success) 45%, transparent);
+  background: radial-gradient(circle at 35% 30%,
+    color-mix(in srgb, var(--mj-status-success) 60%, white), var(--mj-brand-primary) 65%);
+}
+:host-context(.call-overlay[data-audio-live='true'][data-voice-dir='user']) .orb-ring {
+  border-color: color-mix(in srgb, var(--mj-status-success) 55%, transparent);
+}
