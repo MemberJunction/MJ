@@ -6994,7 +6994,8 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Generates a vector embedding for a single text field using AI engine.
-     * Only generates embeddings for new records or when the source field has changed.
+     * Only generates embeddings for new records, when the source field has changed, or when
+     * {@link IsEmbeddingStale} reports the stored vector came from another model.
      * Stores the vector embedding, the model ID used to generate it and, when the entity has one, the
      * vector's binary companion.
      *
@@ -7014,11 +7015,13 @@ export abstract class BaseEntity<T = unknown> {
     protected async GenerateEmbedding(field: EntityField, vectorField: EntityField, modelField: EntityField, binaryVectorField?: EntityField): Promise<boolean> {
         try {
             if (this._skipEmbeddings) return true;
-            if (!this.IsSaved || field.Dirty) {
+            const stale = vectorField.Value != null && await this.IsEmbeddingStale(modelField?.Value ?? null);
+            if (!this.IsSaved || field.Dirty || stale) {
                 if (field.Value?.trim().length > 0) {
                     // recalc vector
                     const e = await this.EmbedTextLocal(field.Value)
-                    if (e && e.vector) {
+                    // An empty vector is a failed embed (the BaseEmbeddings convention); don't persist it.
+                    if (e?.vector?.length) {
                         vectorField.Value = JSON.stringify(e.vector);
                         if (binaryVectorField)
                             binaryVectorField.Value = Float32VectorToBase64(e.vector);
@@ -7051,6 +7054,19 @@ export abstract class BaseEntity<T = unknown> {
      */
     protected async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult>{
         throw new Error("EmbedTextLocal not implemented in BaseEntity, sub-classes must implement this functionality to use it");
+    }
+
+    /**
+     * Whether a stored vector is stale: it came from a model other than the one this entity embeds
+     * with now, or from an unrecorded one. Asked only for a field that holds a vector. A stale vector
+     * is regenerated on the next save even when its text is unchanged, which is how stored vectors
+     * follow a change of embedding model. The base implementation returns false (only new or changed
+     * text is embedded); server-side sub-classes that embed with the platform's default local model
+     * override it.
+     * @param embeddingModelID - The ID of the AI model that produced the stored vector, or null
+     */
+    protected async IsEmbeddingStale(embeddingModelID: string | null): Promise<boolean> {
+        return false;
     }
 
     /**

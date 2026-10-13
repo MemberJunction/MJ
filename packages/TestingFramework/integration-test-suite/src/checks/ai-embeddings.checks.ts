@@ -23,6 +23,7 @@
 import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIEngine } from '@memberjunction/aiengine';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -285,7 +286,7 @@ export const AiEmbeddingsChecks: NamedCheck[] = [
     },
     {
         Id: 'ai-embeddings.AE5',
-        Name: 'AE5: LocalEmbeddings catalog shape — the EmbedTextLocal chain has a driver-resolvable local Embeddings model (or is loudly absent)',
+        Name: 'AE5: LocalEmbeddings catalog shape — EmbedTextLocal resolves an active, driver-resolvable default local Embeddings model (or is loudly absent)',
         Fn: async (ctx): Promise<void> => {
             // The deterministic tier cannot CALL the local embedder (first use downloads an ONNX
             // model), but it CAN pin the catalog shape `AIEngine.EmbedTextLocal` resolves through:
@@ -307,18 +308,26 @@ export const AiEmbeddingsChecks: NamedCheck[] = [
                         : ' (deployment does not use local embeddings; skip-as-pass)'));
                 return;
             }
+            // What EmbedTextLocal actually resolves: AIEngine's candidate list and the default it picks.
+            // Read from the getters only — AIEngine.Config would pre-warm embeddings (an ONNX download).
+            const candidates = AIEngine.Instance.LocalEmbeddingModels;
+            const chosen = AIEngine.Instance.DefaultLocalEmbeddingModel;
             const problems: string[] = [];
-            for (const model of localEmbedders) {
-                if (!model.IsActive) {
-                    problems.push(`'${model.Name}' is inactive — EmbedTextLocal filters to active models`);
-                }
-                if (!model.DriverClass || model.DriverClass.trim().length === 0) {
-                    problems.push(`'${model.Name}' has no DriverClass — ClassFactory resolution of the embedder is impossible`);
-                }
+            const inactiveCandidates = candidates.filter(m => !m.IsActive).map(m => m.Name);
+            if (inactiveCandidates.length > 0) {
+                problems.push(`LocalEmbeddingModels includes inactive model(s) ${inactiveCandidates.join(', ')} — EmbedTextLocal could pick one`);
+            }
+            if (!chosen) {
+                problems.push(`no default local embedding model resolves although ${localEmbedders.length} LocalEmbeddings model(s) exist — are they all inactive?`);
+            } else if (!chosen.DriverClass || chosen.DriverClass.trim().length === 0) {
+                problems.push(`default local embedding model '${chosen.Name}' has no DriverClass — ClassFactory resolution of the embedder is impossible`);
+            }
+            for (const model of candidates.filter(m => !m.DriverClass || m.DriverClass.trim().length === 0)) {
+                problems.push(`'${model.Name}' is active but has no DriverClass — it could become the default and fail to resolve`);
             }
             Assert(problems.length === 0, `LocalEmbeddings catalog shape violations: ${problems.join('; ')}`);
             AssertEqual(problems.length, 0, 'unreachable'); // keep the assert count honest for tooling
-            console.log(`      → ${localEmbedders.length} LocalEmbeddings model(s) present, active, driver-resolvable (e.g. '${localEmbedders[0].Name}' → ${localEmbedders[0].DriverClass})`);
+            console.log(`      → ${candidates.length} active LocalEmbeddings model(s); default '${chosen?.Name}' → ${chosen?.DriverClass}`);
         }
     }
 ];

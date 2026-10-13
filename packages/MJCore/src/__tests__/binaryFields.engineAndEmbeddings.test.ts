@@ -203,6 +203,12 @@ class EmbeddingTestEntity extends BaseEntity {
     }
     public override SupportsEmbedTextLocal(): boolean { return true; }
 
+    /** Model IDs this entity treats as stale (a server subclass compares with the default model). */
+    public StaleModelIDs = new Set<string>();
+    protected override async IsEmbeddingStale(embeddingModelID: string | null): Promise<boolean> {
+        return embeddingModelID != null && this.StaleModelIDs.has(embeddingModelID);
+    }
+
     public Embed(field: EntityField, vector: EntityField, model: EntityField, binary?: EntityField): Promise<boolean> {
         return this.GenerateEmbedding(field, vector, model, binary);
     }
@@ -356,6 +362,22 @@ describe('BaseEntity.GenerateEmbedding with a binary vector field', () => {
         await doc.Embed(doc.F('Body'), doc.F('BodyVector'), doc.F('BodyModelID'), doc.F('BodyVectorBinary'));
         expect(doc.EmbedCalls).toEqual([]);
         expect(doc.Get('BodyVectorBinary')).toBe('AACAPw==');
+    });
+
+    it('re-embeds a saved, unchanged record whose stored vector came from a stale model', async () => {
+        const doc = await loadedDoc({ Body: 'hello', BodyModelID: 'old-model', BodyVector: '[1]', BodyVectorBinary: 'AACAPw==' });
+        doc.StaleModelIDs.add('old-model');
+        await doc.Embed(doc.F('Body'), doc.F('BodyVector'), doc.F('BodyModelID'), doc.F('BodyVectorBinary'));
+        expect(doc.EmbedCalls).toEqual(['hello']);
+        expect(doc.Get('BodyModelID')).toBe(MODEL_ID);
+        expect(doc.Get('BodyVectorBinary')).toBe(Float32VectorToBase64(VECTOR));
+    });
+
+    it('does not re-embed a saved, unchanged record that holds no vector', async () => {
+        const doc = await loadedDoc({ Body: 'hello', BodyModelID: 'old-model' });
+        doc.StaleModelIDs.add('old-model');
+        await doc.Embed(doc.F('Body'), doc.F('BodyVector'), doc.F('BodyModelID'), doc.F('BodyVectorBinary'));
+        expect(doc.EmbedCalls).toEqual([]);
     });
 
     it('re-embeds a saved record when the source text changes', async () => {

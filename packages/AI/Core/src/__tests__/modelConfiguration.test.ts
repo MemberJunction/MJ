@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     AIModelConfiguration,
+    ApplyEmbeddingInputPrefix,
     IsPrefixPromptCache,
     IsZeroDataRetention,
     ParseModelConfiguration,
@@ -346,3 +347,28 @@ describe('ResolveIsModelFullDuplex — metadata wins over driver fallback', () =
     });
 });
 
+describe('ApplyEmbeddingInputPrefix — catalog-driven query/document prefixes', () => {
+    const gemma: AIModelConfiguration = {
+        Embedding: { QueryPrefix: 'task: search result | query: ', DocumentPrefix: 'title: none | text: ' },
+    };
+
+    it('prepends the query prefix for a query', () => {
+        expect(ApplyEmbeddingInputPrefix('red planet?', 'query', gemma)).toBe('task: search result | query: red planet?');
+    });
+
+    it('prepends the document prefix for a document, and when inputType is omitted', () => {
+        expect(ApplyEmbeddingInputPrefix('Mars', 'document', gemma)).toBe('title: none | text: Mars');
+        expect(ApplyEmbeddingInputPrefix('Mars', undefined, gemma)).toBe('title: none | text: Mars');
+    });
+
+    it('returns the text unchanged when the model declares no prefix', () => {
+        expect(ApplyEmbeddingInputPrefix('Mars', 'query', null)).toBe('Mars');
+        expect(ApplyEmbeddingInputPrefix('Mars', 'query', { Embedding: { DocumentPrefix: 'doc: ' } })).toBe('Mars');
+    });
+
+    it('takes the prefix from the most specific catalog layer', () => {
+        const merged = ResolveEffectiveModelConfiguration(gemma, { Embedding: { QueryPrefix: 'task: code retrieval | query: ' } });
+        expect(ApplyEmbeddingInputPrefix('sort a list', 'query', merged)).toBe('task: code retrieval | query: sort a list');
+        expect(ApplyEmbeddingInputPrefix('Mars', 'document', merged)).toBe('title: none | text: Mars');
+    });
+});

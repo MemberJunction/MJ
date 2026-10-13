@@ -8,7 +8,7 @@ import {
 } from "@memberjunction/core";
 import { MJQuerySQLEntity, MJQueryEntityExtended, MJSQLDialectEntity, QueryEngine } from "@memberjunction/core-entities";
 import { Float32VectorToBase64, RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
-import { EmbedTextLocalHelper } from "./util";
+import { EmbedTextLocalHelper, IsLocalEmbeddingStaleHelper } from "./util";
 import {
     RunExtractionPipeline,
     CleanupQueryData,
@@ -41,6 +41,11 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         return EmbedTextLocalHelper(this, textToEmbed);
     }
 
+    /** A stored vector from a model other than the default local one is re-embedded on save. */
+    protected override async IsEmbeddingStale(embeddingModelID: string | null): Promise<boolean> {
+        return IsLocalEmbeddingStaleHelper(this, embeddingModelID);
+    }
+
     /**
      * Generates an embedding from composite text (Name + UserQuestion + Description) for richer semantic search.
      * Stores the vector in EmbeddingVector (JSON) and EmbeddingVectorBinary (float32 bytes, base64), and the
@@ -50,8 +55,11 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * embedder error — all three columns are cleared, so a query whose text changed never keeps a vector
      * computed from its old text. An embedder error is logged and does not fail the save; the query simply
      * has no semantic match until its next successful embedding.
+     *
+     * @param textChanged - false when the text is unchanged and only the stored vector's model is stale:
+     *   a failed embed then keeps the existing vector, which still matches the text.
      */
-    protected async GenerateCompositeEmbedding(): Promise<void> {
+    protected async GenerateCompositeEmbedding(textChanged: boolean = true): Promise<void> {
         const parts = [
             this.Name || '',
             this.UserQuestion || '',
@@ -75,7 +83,9 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         } catch (error) {
             LogError(`[MJQueryEntityServer] Embedding refresh failed for query "${this.Name}": ${error instanceof Error ? error.message : String(error)}`);
         }
-        this.clearEmbedding();
+        if (textChanged) {
+            this.clearEmbedding();
+        }
     }
 
     /** Clears the stored vector (both forms) and the model it was computed with. */
@@ -94,15 +104,13 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             const descriptionField = this.GetFieldByName('Description');
             const userQuestionField = this.GetFieldByName('UserQuestion');
             const shouldExtractData = !this.IsSaved || sqlField.Dirty;
-            const shouldGenerateEmbedding = !this.IsSaved || nameField.Dirty || descriptionField.Dirty || userQuestionField.Dirty;
+            const textChanged = !this.IsSaved || nameField.Dirty || descriptionField.Dirty || userQuestionField.Dirty;
+            const shouldGenerateEmbedding = textChanged
+                || (this.EmbeddingVector != null && await this.IsEmbeddingStale(this.EmbeddingModelID));
 
             // Generate embedding from composite text for better semantic search
             if (shouldGenerateEmbedding) {
-                await this.GenerateCompositeEmbedding();
-            } else if (!this.Description || this.Description.trim().length === 0) {
-                this.EmbeddingVector = null;
-                this.EmbeddingVectorBinary = null;
-                this.EmbeddingModelID = null;
+                await this.GenerateCompositeEmbedding(textChanged);
             }
 
             // Save the query first without AI processing

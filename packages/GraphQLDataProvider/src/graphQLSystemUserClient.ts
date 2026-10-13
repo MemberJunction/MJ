@@ -1314,14 +1314,16 @@ export class GraphQLSystemUserClient {
      */
     public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
         try {
+            // inputType is only sent when set, so a server that predates the argument still answers
+            const withInputType = params.inputType != null;
             const query = gql`
                 query EmbedTextSystemUser(
                     $textToEmbed: [String!]!,
-                    $modelSize: String!
+                    $modelSize: String!${withInputType ? ', $inputType: String' : ''}
                 ) {
                     EmbedTextSystemUser(
                         textToEmbed: $textToEmbed,
-                        modelSize: $modelSize
+                        modelSize: $modelSize${withInputType ? ', inputType: $inputType' : ''}
                     ) {
                         embeddings
                         modelName
@@ -1338,7 +1340,8 @@ export class GraphQLSystemUserClient {
 
             const variables = {
                 textToEmbed: textArray,
-                modelSize: params.modelSize
+                modelSize: params.modelSize,
+                ...(withInputType ? { inputType: params.inputType } : {})
             };
 
             // Execute the query
