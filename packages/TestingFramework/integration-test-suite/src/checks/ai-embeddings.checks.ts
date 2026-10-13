@@ -309,7 +309,7 @@ export const AiEmbeddingsChecks: NamedCheck[] = [
                 return;
             }
             // What EmbedTextLocal actually resolves: AIEngine's candidate list and the default it picks.
-            // Read from the getters only — AIEngine.Config would pre-warm embeddings (an ONNX download).
+            // Read from the getters only, without embedding anything, so the check never loads an ONNX model.
             const candidates = AIEngine.Instance.LocalEmbeddingModels;
             const chosen = AIEngine.Instance.DefaultLocalEmbeddingModel;
             const problems: string[] = [];

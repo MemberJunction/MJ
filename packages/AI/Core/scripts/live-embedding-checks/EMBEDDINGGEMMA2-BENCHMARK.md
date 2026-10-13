@@ -132,7 +132,8 @@ case for a server that size.
   fresh process: 0.9 GB at 512 tokens, 1.1 GB at 1,024, 1.6 GB at 2,048, 3.1 GB at 4,096 and
   8.4 GB at 8,192. ONNX Runtime keeps that memory afterwards, and turning its arena off does not
   help. In an 8 GB container one 8,192-token text was killed for running out of memory (exit 137).
-  A full batch (8,192 padded tokens) peaks at 2.7–3.7 GB.
+  A full batch (8,192 padded tokens) peaks at 2.7–3.7 GB. The catalog row therefore sets
+  `MaxInputTokens` to 2,048.
 - **q8 has a fixed cost per call.** On 2 CPUs, fp32 answers a query in 25 ms against 92 ms for q8,
   with the same document speed (0.43 s against 0.46 s per 256 tokens) and the same vectors (cosine
   0.99993). fp32 costs 1.08 GB of weights instead of 314 MB and about 0.45 GB more RSS.

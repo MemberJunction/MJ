@@ -7013,6 +7013,16 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Promise that resolves to true if embedding was generated successfully, false otherwise
      */
     protected async GenerateEmbedding(field: EntityField, vectorField: EntityField, modelField: EntityField, binaryVectorField?: EntityField): Promise<boolean> {
+        const clearVector = () => {
+            vectorField.Value = null;
+            if (binaryVectorField)
+                binaryVectorField.Value = null;
+            if (modelField)
+                modelField.Value = null;
+        };
+        // After an edit to a saved record, its stored vector describes the old text, so a failed
+        // re-embed clears it rather than leaving it searchable.
+        const edited = this.IsSaved && field.Dirty;
         try {
             if (this._skipEmbeddings) return true;
             const stale = vectorField.Value != null && await this.IsEmbeddingStale(modelField?.Value ?? null);
@@ -7028,19 +7038,20 @@ export abstract class BaseEntity<T = unknown> {
                         if (modelField)
                             modelField.Value = e.modelID;
                     }
+                    else if (edited) {
+                        clearVector();
+                    }
                 }
                 else {
-                    vectorField.Value = null;
-                    if (binaryVectorField)
-                        binaryVectorField.Value = null;
-                    if (modelField)
-                        modelField.Value = null;
+                    clearVector();
                 }
             }
             return true;
         }
         catch (e) {
             console.error("Error generating embedding:", e);
+            if (edited)
+                clearVector();
             return false;
         }
     }

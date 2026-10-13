@@ -529,7 +529,8 @@ items are not done. What ships is the model, available to opt into:
 1. **AI Model + vendor row** — *done*, in a new file
    `metadata/ai-models/.embeddinggemma-2-models.json`: `EmbeddingGemma 2 (Local)`, LocalEmbeddings,
    `DriverClass: LocalEmbedding`, `APIName: onnx-community/embeddinggemma-2-ONNX`,
-   `MaxInputTokens: 8192`, `MaxOutputTokens: 768`.
+   `MaxInputTokens: 2048`, `MaxOutputTokens: 768`. The model accepts 8,192 tokens, but one 8,192-token
+   text peaked at 8.4 GB (see the benchmark's "Speed and memory"), so the row caps inputs at 2,048 (1.6 GB).
    - **`PowerRank` 8**, below all-mpnet-base-v2's 9. This answers open decision #1 (opt-in, not an
      implicit cutover), and it is also an honest quality rank: it tied mpnet on English retrieval.
    - **No prefixes in `ModelConfiguration`.** The benchmark found the model-card prefixes equal or
@@ -610,7 +611,8 @@ items are not done. What ships is the model, available to opt into:
   q4 is **not** a latency mitigation on CPU: it was slower than q8 at 512 tokens (226 vs 147 ms)
   and 2k tokens (1129 vs 756 ms). It only saves memory. Re-measure on the MJAPI target hardware.
 - **Memory:** measured 0.6 GB (q4) to 0.9 GB (q8) RSS after load, rising to 1.6–2.0 GB after a
-  2k-token input (ONNX Runtime keeps its arena). Check against container limits. Don't load the
+  2k-token input and 8.4 GB after an 8k-token one (ONNX Runtime keeps its arena); a full batch peaks
+  at 2.7–3.7 GB. The catalog row caps inputs at 2,048 tokens for this reason. Check against container limits. Don't load the
   vision/audio encoders.
 - **Implicit cutover on upgrade:** *resolved by the go/no-go: opt-in.* The row ships at `PowerRank`
   8, so an upgraded host keeps all-mpnet-base-v2 unless it sets `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL`.

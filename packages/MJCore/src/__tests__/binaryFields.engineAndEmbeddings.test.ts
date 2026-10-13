@@ -380,6 +380,28 @@ describe('BaseEntity.GenerateEmbedding with a binary vector field', () => {
         expect(doc.EmbedCalls).toEqual([]);
     });
 
+    it.each([
+        ['returns no vector', null, true],
+        ['throws', new Error('model offline'), false],
+    ])('clears the old vector of an edited record when EmbedTextLocal %s', async (_label, result, expected) => {
+        const doc = await loadedDoc({ Body: 'hello', BodyModelID: 'model-1', BodyVector: '[1]', BodyVectorBinary: 'AACAPw==' });
+        doc.Set('Body', 'changed');
+        doc.NextResult = result;
+        expect(await doc.Embed(doc.F('Body'), doc.F('BodyVector'), doc.F('BodyModelID'), doc.F('BodyVectorBinary'))).toBe(expected);
+        expect(doc.Get('BodyVector')).toBeNull();
+        expect(doc.Get('BodyVectorBinary')).toBeNull();
+        expect(doc.Get('BodyModelID')).toBeNull();
+    });
+
+    it('keeps the vector of an unchanged record when its stale-model re-embed fails', async () => {
+        const doc = await loadedDoc({ Body: 'hello', BodyModelID: 'old-model', BodyVector: '[1]' });
+        doc.StaleModelIDs.add('old-model');
+        doc.NextResult = new Error('model offline');
+        expect(await doc.Embed(doc.F('Body'), doc.F('BodyVector'), doc.F('BodyModelID'))).toBe(false);
+        expect(doc.Get('BodyVector')).toBe('[1]');
+        expect(doc.Get('BodyModelID')).toBe('old-model');
+    });
+
     it('re-embeds a saved record when the source text changes', async () => {
         const doc = await loadedDoc({ Body: 'hello', BodyVectorBinary: 'AACAPw==' });
         doc.Set('Body', 'changed');

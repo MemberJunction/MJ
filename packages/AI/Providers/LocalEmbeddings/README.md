@@ -51,7 +51,7 @@ graph TD
 
 Any Hugging Face repo with transformers.js ONNX weights works the same way, for example
 `onnx-community/embeddinggemma-2-ONNX` (768 dimensions, truncatable to 512/256/128, 8,192-token
-window). Its catalog row is `EmbeddingGemma 2 (Local)`; it is opt-in through
+window). Its catalog row is `EmbeddingGemma 2 (Local)`, which caps inputs at 2,048 tokens to bound memory; it is opt-in through
 `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` (see `plans/embeddinggemma-2-local-embeddings.md`).
 
 ## Installation
@@ -95,7 +95,7 @@ const result = await embedder.EmbedText({
     text: 'Your text to embed',
     model: 'onnx-community/embeddinggemma-2-ONNX',
     dimensions: 256,       // Matryoshka: keep the first 256 values, then re-normalize
-    maxInputTokens: 8192   // truncate longer inputs; this model's tokenizer declares no limit
+    maxInputTokens: 2048   // truncate longer inputs; this model's tokenizer declares no limit
 });
 ```
 
