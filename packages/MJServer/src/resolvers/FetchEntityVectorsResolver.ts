@@ -41,6 +41,9 @@ export class FetchEntityVectorsResult {
     ErrorMessage?: string;
 }
 
+/** A stored vector row, as `fetchStoredVectors` reads it from `MJ: Entity Record Documents`. */
+type StoredVectorRow = { ID: string; RecordID: string; VectorJSON: string };
+
 /* ───── Resolver ───── */
 
 @Resolver()
@@ -88,8 +91,8 @@ export class FetchEntityVectorsResolver extends ResolverBase {
 
             // Providers that keep their vectors in MJ, keyed by EntityDocumentID (the in-process
             // SimpleVectorServiceProvider), can't be listed through QueryIndex: they key by the
-            // document ID rather than the index name, aren't handed the context user, and return
-            // matches without vector values. Read the stored Entity Record Document rows instead.
+            // document ID rather than the index name, and return matches without vector values.
+            // Read the stored Entity Record Document rows instead.
             if (vectorDBInstance.QueryKeyIsEntityDocumentID) {
                 const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }) ?? Metadata.Provider;
                 const results = await this.fetchStoredVectors(entityDoc, limit, filter, currentUser, md);
@@ -255,22 +258,12 @@ export class FetchEntityVectorsResolver extends ResolverBase {
         if (!entityInfo) {
             throw new Error(`Entity "${entityDoc.Entity}" not found in metadata`);
         }
-        const labelsByRecordID = await this.loadRecordLabels(entityInfo, filter, contextUser);
-
-        const rv = new RunView();
-        const docResult = await rv.RunView<{ ID: string; RecordID: string; VectorJSON: string }>({
-            EntityName: 'MJ: Entity Record Documents',
-            ExtraFilter: `EntityDocumentID='${EscapeSQLString(entityDoc.ID)}' AND VectorJSON IS NOT NULL`,
-            Fields: ['ID', 'RecordID', 'VectorJSON'],
-            IgnoreMaxRows: true,
-            ResultType: 'simple',
-        }, contextUser);
-        if (!docResult.Success) {
-            throw new Error(`Failed to load stored vectors: ${docResult.ErrorMessage}`);
-        }
+        const nameFields = this.labelFieldNames(entityInfo);
+        const { records, vectors } = await this.loadRecordsAndStoredVectors(entityInfo, entityDoc, nameFields, filter, contextUser);
+        const labelsByRecordID = this.mapRecordLabels(entityInfo, nameFields, records);
 
         const results: EntityVectorItem[] = [];
-        for (const row of docResult.Results) {
+        for (const row of vectors) {
             const labels = labelsByRecordID.get(row.RecordID.toLowerCase());
             if (!labels) continue; // filtered out, not readable by this user, or the record no longer exists
             results.push({
@@ -283,35 +276,63 @@ export class FetchEntityVectorsResolver extends ResolverBase {
         return results;
     }
 
-    /**
-     * Map each record that passes `filter` to its name-field values, keyed by the same compact
-     * record-ID form the vector sync writes to `MJ: Entity Record Documents.RecordID` (lower-cased).
-     */
-    private async loadRecordLabels(
-        entityInfo: EntityInfo,
-        filter: string | undefined,
-        contextUser: UserInfo
-    ): Promise<Map<string, Record<string, string>>> {
+    /** The fields a stored vector is labelled with: the entity's name fields, else its NameField. */
+    private labelFieldNames(entityInfo: EntityInfo): string[] {
         const nameFields = entityInfo.Fields.filter(f => f.IsNameField).map(f => f.Name);
         if (nameFields.length === 0 && entityInfo.NameField) {
             nameFields.push(entityInfo.NameField.Name);
         }
+        return nameFields;
+    }
+
+    /**
+     * Load the records that pass `filter` (key and name fields only) and the document's stored
+     * vectors. The two views don't depend on each other, so they go in one `RunViews` round trip.
+     */
+    private async loadRecordsAndStoredVectors(
+        entityInfo: EntityInfo,
+        entityDoc: MJEntityDocumentEntity,
+        nameFields: string[],
+        filter: string | undefined,
+        contextUser: UserInfo
+    ): Promise<{ records: Record<string, unknown>[]; vectors: StoredVectorRow[] }> {
         const keyFields = entityInfo.PrimaryKeys.map(pk => pk.Name);
-
-        const rv = new RunView();
-        const result = await rv.RunView<Record<string, unknown>>({
-            EntityName: entityInfo.Name,
-            ExtraFilter: filter || undefined,
-            Fields: [...new Set([...keyFields, ...nameFields])],
-            IgnoreMaxRows: true,
-            ResultType: 'simple',
-        }, contextUser);
-        if (!result.Success) {
-            throw new Error(`Failed to load "${entityInfo.Name}" records: ${result.ErrorMessage}`);
+        const [recordResult, docResult] = await new RunView().RunViews<Record<string, unknown>>([
+            {
+                EntityName: entityInfo.Name,
+                ExtraFilter: filter || undefined,
+                Fields: [...new Set([...keyFields, ...nameFields])],
+                IgnoreMaxRows: true,
+                ResultType: 'simple',
+            },
+            {
+                EntityName: 'MJ: Entity Record Documents',
+                ExtraFilter: `EntityDocumentID='${EscapeSQLString(entityDoc.ID)}' AND VectorJSON IS NOT NULL`,
+                Fields: ['ID', 'RecordID', 'VectorJSON'],
+                IgnoreMaxRows: true,
+                ResultType: 'simple',
+            },
+        ], contextUser);
+        if (!recordResult.Success) {
+            throw new Error(`Failed to load "${entityInfo.Name}" records: ${recordResult.ErrorMessage}`);
         }
+        if (!docResult.Success) {
+            throw new Error(`Failed to load stored vectors: ${docResult.ErrorMessage}`);
+        }
+        return { records: recordResult.Results, vectors: docResult.Results as StoredVectorRow[] };
+    }
 
+    /**
+     * Map each loaded record to its name-field values, keyed by the same compact record-ID form
+     * the vector sync writes to `MJ: Entity Record Documents.RecordID` (lower-cased).
+     */
+    private mapRecordLabels(
+        entityInfo: EntityInfo,
+        nameFields: string[],
+        rows: Record<string, unknown>[]
+    ): Map<string, Record<string, string>> {
         const map = new Map<string, Record<string, string>>();
-        for (const row of result.Results) {
+        for (const row of rows) {
             const key = CompositeKey.FromEntityRecord(entityInfo, row).ToCompactURLSegment().toLowerCase();
             const labels: Record<string, string> = {};
             for (const name of nameFields) {

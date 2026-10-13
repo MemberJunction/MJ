@@ -22,6 +22,8 @@ vi.mock('type-graphql', () => {
 });
 
 const runViewCalls: Array<{ params: RunViewParams; contextUser: UserInfo | undefined }> = [];
+/** Each RunViews call, as the list of entity names it batched. */
+const runViewsBatches: string[][] = [];
 let runViewHandler: RunViewHandler = () => ({ Success: true, Results: [] });
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -30,6 +32,10 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
         async RunView(params: RunViewParams, contextUser?: UserInfo): Promise<ViewResult> {
             runViewCalls.push({ params, contextUser });
             return runViewHandler(params, contextUser);
+        }
+        async RunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<ViewResult[]> {
+            runViewsBatches.push(params.map((p) => p.EntityName ?? ''));
+            return Promise.all(params.map((p) => this.RunView(p, contextUser)));
         }
     }
     return { ...actual, RunView: MockRunView, LogStatus: () => undefined, LogError: () => undefined };
@@ -134,6 +140,7 @@ describe('FetchEntityVectorsResolver', () => {
 
     beforeEach(() => {
         runViewCalls.length = 0;
+        runViewsBatches.length = 0;
     });
 
     afterEach(() => {
@@ -259,6 +266,49 @@ describe('FetchEntityVectorsResolver', () => {
             expect(result.Success).toBe(false);
             expect(result.Results).toEqual([]);
             expect(result.ErrorMessage).toBe('Failed to load "Members" records: bad filter');
+        });
+
+        it('returns an error result when the stored vectors cannot be loaded', async () => {
+            useVectorDB(true);
+            routeViews('Members', {
+                'MJ: Entity Record Documents': () => ({ Success: false, Results: [], ErrorMessage: 'timeout' }),
+                Members: () => ({ Success: true, Results: memberRows }),
+            });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, undefined, undefined, appContext(membersEntity));
+
+            expect(result.Success).toBe(false);
+            expect(result.Results).toEqual([]);
+            expect(result.TotalCount).toBe(0);
+            expect(result.ErrorMessage).toBe('Failed to load stored vectors: timeout');
+        });
+
+        it('returns an error result, and runs neither view, when the document names an entity missing from metadata', async () => {
+            const { queryIndex } = useVectorDB(true);
+            routeViews('Retired Entity', {
+                'MJ: Entity Record Documents': () => ({ Success: true, Results: storedRows }),
+            });
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, undefined, undefined, appContext(membersEntity));
+
+            expect(result.Success).toBe(false);
+            expect(result.Results).toEqual([]);
+            expect(result.ErrorMessage).toBe('Entity "Retired Entity" not found in metadata');
+            expect(queryIndex).not.toHaveBeenCalled();
+            expect(callsFor('MJ: Entity Record Documents')).toHaveLength(0);
+            expect(runViewsBatches).toHaveLength(0);
+        });
+
+        it('loads the entity records and the stored vectors in one RunViews batch', async () => {
+            useVectorDB(true);
+            routeViews('Members', {
+                'MJ: Entity Record Documents': () => ({ Success: true, Results: storedRows }),
+                Members: () => ({ Success: true, Results: memberRows }),
+            });
+
+            await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, undefined, undefined, appContext(membersEntity));
+
+            expect(runViewsBatches).toEqual([['Members', 'MJ: Entity Record Documents']]);
         });
     });
 
