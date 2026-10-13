@@ -1,0 +1,28 @@
+[
+  {
+    "_comments": [
+      "User.IsTemplate sits with the other account flags (Type, IsActive) and shows in the Users grid, so template users stand out wherever users are listed."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Users"
+    },
+    "fields": {
+      "Name": "MJ: Users"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "Category": "Account Settings",
+            "AutoUpdateCategory": false,
+            "DefaultInView": true,
+            "GeneratedFormSection": "Category"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=IsTemplate"
+          }
+        }
+      ]
+    }
+  }
+]
