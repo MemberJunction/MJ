@@ -42,9 +42,10 @@ export type RecordingUploadOutcome = 'Acked' | 'Refused' | 'Retry';
 
 /**
  * Statuses that mean the server will never accept this shard, whoever sends it and however often.
- * 401 is not here: a refreshed token can still send it.
+ * 401 is not here (a refreshed token can still send it), nor 404: an MJAPI older than the recording
+ * routes answers 404 to every shard, and a browser upgraded first must keep its audio for the server.
  */
-const PERMANENT_REFUSAL_STATUSES: ReadonlySet<number> = new Set([400, 403, 404, 409, 410, 413]);
+const PERMANENT_REFUSAL_STATUSES: ReadonlySet<number> = new Set([400, 403, 409, 410, 413]);
 
 /** Sends recording bytes to the server. */
 export interface IRecordingTransport {

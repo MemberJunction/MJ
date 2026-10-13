@@ -81,14 +81,16 @@ describe('FetchRecordingTransport', () => {
         expect(msg).toContain('6');
     });
 
-    it.each([400, 403, 404, 409, 410, 413])('reports Refused on %i: the server will never take that shard', async (status) => {
+    it.each([400, 403, 409, 410, 413])('reports Refused on %i: the server will never take that shard', async (status) => {
         vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         const fetchMock = vi.fn().mockResolvedValue({ ok: false, status });
         const outcome = await make(fetchMock).UploadShard('s', { Index: 1, StartSample: 0, SampleCount: 1, Bytes: new Uint8Array(1) });
         expect(outcome).toBe('Refused');
     });
 
-    it.each([401, 408, 429, 500, 502])('reports Retry on %i: a refreshed token or a recovered server can still take it', async (status) => {
+    // 404 stays Retry: an MJAPI older than the recording routes answers 404 for every shard, and a browser
+    // upgraded before its server must keep its audio until the server catches up.
+    it.each([401, 404, 408, 429, 500, 502])('reports Retry on %i: a refreshed token, a recovered or upgraded server can still take it', async (status) => {
         vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         const fetchMock = vi.fn().mockResolvedValue({ ok: false, status });
         const outcome = await make(fetchMock).UploadShard('s', { Index: 1, StartSample: 0, SampleCount: 1, Bytes: new Uint8Array(1) });
