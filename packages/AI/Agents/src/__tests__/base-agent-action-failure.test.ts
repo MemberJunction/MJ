@@ -160,6 +160,7 @@ class FailureHarness {
             Agents: [],
             AgentRelationships: [],
             AgentCategories: [],
+            ResolveAgentStorageAccountID: () => null,
             ScopedPromptParts: [],
             ScopedPromptConfigs: [],
             AgentTypes: [

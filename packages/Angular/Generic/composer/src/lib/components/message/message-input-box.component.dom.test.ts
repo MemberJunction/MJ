@@ -41,6 +41,8 @@ class MentionEditorStub implements ControlValueAccessor {
   getPlainTextWithJsonMentions(): string { return 'hi [json]'; }
   hasAttachments(): boolean { return false; }
   clear(): void { /* no-op */ }
+  // read by the skills button's SkillsActive binding
+  IsTriggerOpen(): boolean { return false; }
   // CVA
   writeValue(): void { /* no-op */ }
   registerOnChange(): void { /* no-op */ }
@@ -114,5 +116,26 @@ describe('MessageInputBoxComponent (DOM)', () => {
     const out = capture(f.componentInstance.ValueChange);
     f.componentInstance.OnValueChange('typed');
     expect(out).toContain('typed');
+  });
+});
+
+describe('MessageInputBoxComponent (DOM) — action row layout', () => {
+  it('puts every action button in its own row after the editor, not over it', () => {
+    const f = render({ EnableAttachments: true, EnableRealtime: true, EnablePlanMode: true, EnableSkills: true });
+    const editor = query(f, 'mj-mention-editor') as HTMLElement;
+    const row = query(f, '.composer-actions') as HTMLElement;
+    expect(row).not.toBeNull();
+    expect(editor.nextElementSibling).toBe(row);
+    expect(row.querySelector('.attach-buttons')).not.toBeNull();
+    expect(row.querySelector('.send-button-icon')).not.toBeNull();
+    expect(row.querySelectorAll('.attach-button-icon').length).toBe(5); // skills, plan, attach, voice, voice options
+  });
+
+  it('keeps the row (with just the send button) when every optional control is off', () => {
+    const f = render({ EnableAttachments: false, EnableRealtime: false, EnablePlanMode: false, EnableSkills: false });
+    const row = query(f, '.composer-actions') as HTMLElement;
+    expect(row.querySelector('.attach-buttons')).toBeNull();
+    expect(row.children.length).toBe(1);
+    expect(row.firstElementChild?.classList.contains('send-button-icon')).toBe(true);
   });
 });
