@@ -16,7 +16,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { TestingDialogService } from '@memberjunction/ng-testing';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 import { TestingInstrumentationService } from '../services/testing-instrumentation.service';
-import { UUIDsEqual } from '@memberjunction/global';
+import { CountByUUID, IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 // ---------------------------------------------------------------------------
@@ -2022,13 +2022,14 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
     const filteredSuites = this.AllSuites;
 
     const nodeMap = new Map<string, SuiteTreeNode>();
+    const testCountBySuite = CountByUUID(this.allSuiteTests, st => st.SuiteID);
 
     for (const suite of filteredSuites) {
       nodeMap.set(suite.ID, {
         ID: suite.ID,
         Name: suite.Name,
         ParentID: suite.ParentID,
-        TestCount: this.allSuiteTests.filter(st => UUIDsEqual(st.SuiteID, suite.ID)).length,
+        TestCount: testCountBySuite.Get(suite.ID) ?? 0,
         Children: [],
         Expanded: false
       });
@@ -2131,11 +2132,10 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
         const testIdsInSuites = new Set(this.allSuiteTests.map(st => st.TestID));
         return tests.filter(t => !testIdsInSuites.has(t.ID));
       }
-      case 'testType':
-        return tests.filter(t => {
-          const testEntity = this.allTests.find(te => UUIDsEqual(te.ID, t.ID));
-          return UUIDsEqual(testEntity?.TypeID, sel.ID);
-        });
+      case 'testType': {
+        const testsByID = IndexByUUID(this.allTests);
+        return tests.filter(t => UUIDsEqual(testsByID.Get(t.ID)?.TypeID, sel.ID));
+      }
       default:
         return tests;
     }

@@ -9,7 +9,8 @@ import {
     HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE,
 } from '../drivers/huggingFaceRealtimeClient';
 import { IOpenAIProtocolClientSocket, OpenAIProtocolServerEvent } from '../generic/openAIProtocolClient';
-import { collect, FakeMediaStream, FakeTrack } from './helpers/realtime-fakes';
+import { collect, FakeMediaStream, FakeMicCapture, FakeTrack } from './helpers/realtime-fakes';
+import { DescribePcmMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
 
@@ -74,14 +75,6 @@ class FakePlayback implements IRealtimePcmPlayback {
     public Close(): void {
         this.Closed = true;
         this.IsPlaying = false;
-    }
-}
-
-/** Fake mic capture handle. */
-class FakeMicCapture implements IPcmMicCapture {
-    public Stopped = false;
-    public Stop(): void {
-        this.Stopped = true;
     }
 }
 
@@ -632,3 +625,12 @@ describe('QA hardening: B5 pre-open send guard', () => {
         expect(client.Fake.Frames().some((f) => f.type === 'conversation.item.create')).toBe(true);
     });
 });
+
+DescribePcmMicrophoneReplacement(
+    async () => {
+        const client = new TestHuggingFaceClient();
+        const track = await connect(client);
+        return { Client: client, Track: track, Capture: client.Capture };
+    },
+    () => new TestHuggingFaceClient()
+);

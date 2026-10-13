@@ -1,0 +1,12 @@
+[
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Conversations: Fork",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "9979C87D-27C6-46EC-B287-8CFF7E30B3FD"
+    }
+  }
+]

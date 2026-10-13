@@ -40,7 +40,7 @@ import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
 import { SQLParser } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
-import { EncryptionEngine } from '@memberjunction/encryption';
+import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
@@ -199,7 +199,11 @@ export class ResolverBase {
                   const decryptedValue = await engine.Decrypt(value, contextUser);
                   dataObject[fieldName] = decryptedValue;
                 } catch (err) {
-                  LogError(`Failed to decrypt field ${fieldName} for API response: ${err}`);
+                  if (IsEncryptionKeyUnavailable(err)) {
+                    ReportEncryptionKeyUnavailable(err);
+                  } else {
+                    LogError(`Failed to decrypt field ${fieldName} for API response: ${err}`);
+                  }
                   // On decryption failure, use sentinel for safety
                   dataObject[fieldName] = ENCRYPTED_SENTINEL;
                 }
@@ -932,6 +936,7 @@ export class ResolverBase {
     label: string,
     provider?: IMetadataProvider,
     user?: UserInfo,
+    options?: { LeaveUnparseableToProvider?: boolean },
   ): void {
     if (!clause?.trim()) return;
 
@@ -945,6 +950,9 @@ export class ResolverBase {
         ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${clause}`
         : `SELECT 1 FROM __mj_clause_screen WHERE (${clause})`;
     const parser = new SQLParser(wrapped, dialect);
+    // A clause the provider checks again on its own (an aggregate expression) leaves text the parser
+    // cannot read to that per-item check instead of failing the whole request.
+    if (!parser.IsValid && options?.LeaveUnparseableToProvider) return;
     if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
       throw new Error(
         `Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`,
@@ -1062,6 +1070,11 @@ export class ResolverBase {
    * The single place that is not true is a field carrying `UserSearchParamFormatAPI`, whose
    * admin-authored format may splice the term in unquoted; `createViewUserSearchSQL` re-applies
    * `ValidateUserProvidedSQLClause` for exactly those entities.
+   *
+   * Each `Aggregates[].expression` gets the same screen, except that text the parser cannot read
+   * goes on to the provider, which refuses it per aggregate. The provider never runs the caller's
+   * aggregate text: it runs the SQL that `CheckAggregateExpression` rebuilds from a single
+   * aggregate call over the entity's columns, and refuses everything else per aggregate.
    */
   protected screenClientViewClauses(
     clauses: {
@@ -1069,6 +1082,7 @@ export class ResolverBase {
       orderBy?: string | null;
       userSearchString?: string | null;
       overrideExcludeFilter?: string | null;
+      aggregates?: AggregateExpression[] | null;
     },
     provider?: IMetadataProvider,
     user?: UserInfo,
@@ -1076,6 +1090,9 @@ export class ResolverBase {
     this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider, user);
     this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider, user);
     this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider, user);
+    for (const aggregate of clauses.aggregates ?? []) {
+      this.assertClientClauseUsesEntityBaseViews(aggregate?.expression, 'Aggregate', provider, user, { LeaveUnparseableToProvider: true });
+    }
   }
 
   /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */
@@ -1223,7 +1240,7 @@ export class ResolverBase {
       // Screen at this boundary: parse, reject writes, allow only entity BaseViews the
       // acting user can read (subqueries do not inherit the top entity's permission check).
       this.screenClientViewClauses(
-        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
+        { extraFilter, orderBy, userSearchString, overrideExcludeFilter, aggregates },
         provider as unknown as IMetadataProvider,
         user,
       );
@@ -1390,6 +1407,7 @@ export class ResolverBase {
             orderBy: param.orderBy,
             userSearchString: param.userSearchString,
             overrideExcludeFilter: param.overrideExcludeFilter,
+            aggregates: param.aggregates,
           },
           md,
           contextUser ?? undefined,

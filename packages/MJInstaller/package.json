@@ -17,11 +17,13 @@
     "adm-zip": "^0.5.16",
     "minimatch": "^9.0.5",
     "mssql": "^12.2.0",
+    "pg": "^8.13.3",
     "simple-git": "^3.30.0"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
     "@types/mssql": "^9.1.9",
+    "@types/pg": "^8.16.0",
     "typescript": "^5.9.3",
     "tsc-alias": "^1.8.15"
   },
