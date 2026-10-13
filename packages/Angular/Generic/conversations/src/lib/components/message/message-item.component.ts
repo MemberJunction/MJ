@@ -505,6 +505,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * say which one, and the composer stops them all.
    */
   @Input() public InFlightCount = 0;
+
+  /**
+   * Whether the viewer may stop this reply's run. The host decides from who started it: a user
+   * stops their own runs, the conversation's owner stops any. Default true.
+   */
+  @Input() public StopAllowed = true;
   /** Host override for the AI message display name (white-label persona). Null = the agent record's name. */
   @Input() public AssistantDisplayName: string | null = null;
 
@@ -1630,11 +1636,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Whether this message offers a Stop control: an AI reply still in progress, in a conversation
-   * the viewer may write to, while more than one reply is in flight (see {@link InFlightCount}).
+   * the viewer may write to, when the host lets the viewer stop this run ({@link StopAllowed}),
+   * while more than one reply is in flight (see {@link InFlightCount}).
    * The server's permission check is the real gate; this only decides whether the control is shown.
    */
   public get CanStopRun(): boolean {
-    return this.IsInProgressAIMessage && !this.ReadOnly && this.AllowStopRun && this.InFlightCount > 1;
+    return this.IsInProgressAIMessage && !this.ReadOnly && this.AllowStopRun && this.StopAllowed !== false && this.InFlightCount > 1;
   }
 
   /** Stop button handler: marks the message as stopping and hands the request to the host. */
