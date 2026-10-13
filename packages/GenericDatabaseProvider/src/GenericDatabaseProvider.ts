@@ -5326,6 +5326,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Checks whether a new record's field values pass the Create RLS filter.
      * Builds a synthetic single-row subquery from entity field values, then tests the RLS filter against it.
+     * Null fields are projected as typed NULLs (see {@link BuildRLSSyntheticRowProjections}), so a
+     * filter that references a column the new row leaves NULL evaluates instead of failing to bind.
      */
     protected override async CheckCreateRLS(
         entity: BaseEntity,
@@ -5337,7 +5339,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return true;
         }
 
-        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo, false);
+        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo);
         const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
         const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
         return result && result.length > 0 && Number(result[0]['pass']) === 1;
@@ -5378,7 +5380,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
 
-        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo);
         const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
         const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
         return result && result.length > 0 && Number(result[0]['pass']) === 1;
@@ -5416,21 +5418,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Builds field projections for an RLS synthetic-row subquery (Create post-image and
      * Update post-image checks).
      *
-     * @param includeNulls - The Update post-image REQUIRES null fields to be projected as
-     * typed NULLs: a filter referencing a column the caller just nulled must see SQL NULL,
-     * not a missing column. A bare `SELECT NULL AS Col` is untyped and can evaluate
-     * differently from a real row, so nulls are emitted as `CAST(NULL AS <sqltype>)` using
-     * the field's metadata-resolved type. An unresolvable type fails the save (throw)
-     * rather than emitting an untyped NULL. The Create check keeps its historical
-     * skip-nulls behavior (includeNulls=false).
+     * Every non-virtual field is projected, null fields included: a filter referencing a
+     * column the row leaves NULL must see SQL NULL, not a missing column (which fails to
+     * bind with `Invalid column name` instead of evaluating). A bare `SELECT NULL AS Col` is
+     * untyped and can evaluate differently from a real row, so nulls are emitted as
+     * `CAST(NULL AS <sqltype>)` using the field's metadata-resolved type. An unresolvable
+     * type fails the save (throw) rather than emitting an untyped NULL.
      */
-    protected BuildRLSSyntheticRowProjections(entity: BaseEntity, entityInfo: EntityInfo, includeNulls: boolean): string {
+    protected BuildRLSSyntheticRowProjections(entity: BaseEntity, entityInfo: EntityInfo): string {
         const parts: string[] = [];
         for (const field of entityInfo.Fields) {
             if (field.IsVirtual) continue;
             const val = entity.Get(field.Name);
-            if (val == null && !includeNulls) continue;
-
             parts.push(`${this.renderRLSProjectionValue(field, val)} AS ${this.QuoteIdentifier(field.Name)}`);
         }
         return parts.join(', ');
