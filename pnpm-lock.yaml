@@ -4161,6 +4161,31 @@ importers:
         specifier: ^3.1.1
         version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/Actions/PeopleDataLabs:
+    dependencies:
+      '@memberjunction/actions':
+        specifier: 6.2.0-edge.3
+        version: link:../Engine
+      '@memberjunction/actions-base':
+        specifier: 6.2.0-edge.3
+        version: link:../Base
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.3
+        version: link:../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.2.0-edge.3
+        version: link:../../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.2.0-edge.3
+        version: link:../../Credentials/Engine
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.3
+        version: link:../../MJGlobal
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/Actions/Runtime:
     dependencies:
       '@memberjunction/actions-base':
@@ -12990,6 +13015,9 @@ importers:
       '@memberjunction/actions-bizapps-social':
         specifier: 6.2.0-edge.3
         version: link:../Actions/BizApps/Social
+      '@memberjunction/actions-peopledatalabs':
+        specifier: 6.2.0-edge.3
+        version: link:../Actions/PeopleDataLabs
       '@memberjunction/ai':
         specifier: 6.2.0-edge.3
         version: link:../AI/Core
@@ -14954,6 +14982,9 @@ importers:
       '@memberjunction/actions-content-autotag':
         specifier: 6.2.0-edge.3
         version: link:../Actions/ContentAutotag
+      '@memberjunction/actions-peopledatalabs':
+        specifier: 6.2.0-edge.3
+        version: link:../Actions/PeopleDataLabs
       '@memberjunction/ai-agent-harness':
         specifier: 6.2.0-edge.3
         version: link:../AI/AgentHarness
@@ -15357,6 +15388,9 @@ importers:
       '@memberjunction/actions-bizapps-social':
         specifier: 6.2.0-edge.3
         version: link:../Actions/BizApps/Social
+      '@memberjunction/actions-peopledatalabs':
+        specifier: 6.2.0-edge.3
+        version: link:../Actions/PeopleDataLabs
       '@memberjunction/ai-agent-harness':
         specifier: 6.2.0-edge.3
         version: link:../AI/AgentHarness
