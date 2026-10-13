@@ -124,7 +124,7 @@ export class ResolverBase {
       // single-record resolvers, where "once per row" and "once per request" are the same
       // thing) rather than failing open — a missing argument must never mean missing security.
       const denied = deniedReadFields ?? (
-        entityInfo.EnableFieldLevelSecurity && contextUser
+        entityInfo.FieldLevelSecurityApplies && contextUser
           ? entityInfo.GetDeniedReadFields(contextUser)
           : null
       );
@@ -287,7 +287,7 @@ export class ResolverBase {
     // flag so non-FLS entities (nearly all of them) don't even resolve the entity twice.
     const md = provider ?? new Metadata();
     const entityInfo = md.EntityByName(entityName);
-    const deniedReadFields = entityInfo?.EnableFieldLevelSecurity && contextUser
+    const deniedReadFields = entityInfo?.FieldLevelSecurityApplies && contextUser
       ? entityInfo.GetDeniedReadFields(contextUser)
       : undefined;
     // Record Changes payload security is resolved per DISTINCT target entity, and one array can
@@ -1952,7 +1952,7 @@ export class ResolverBase {
       !input.OldValues___ ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
-      entityInfo.EnableFieldLevelSecurity ||
+      entityInfo.FieldLevelSecurityApplies ||
       !user ||
       entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Update, '').length > 0
     );
@@ -1984,7 +1984,7 @@ export class ResolverBase {
     input: { OldValues___?: Array<{ Key: string; Value: unknown }> } & Record<string, unknown>,
     clientNewValues: Record<string, unknown>
   ): boolean {
-    if (!entityInfo.EnableFieldLevelSecurity || !userInfo) {
+    if (!entityInfo.FieldLevelSecurityApplies || !userInfo) {
       return false;
     }
     const deniedReadNames = entityInfo.GetDeniedReadFields(userInfo);
