@@ -27927,7 +27927,7 @@ export const MJQueueTaskSchema = z.object({
     Status: z.union([z.literal('Completed'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
-        * * SQL Data Type: nchar(10)
+        * * SQL Data Type: nvarchar(20)
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
@@ -116505,7 +116505,7 @@ export class MJQueueTaskEntity extends BaseEntity<MJQueueTaskEntityType> {
     /**
     * * Field Name: Status
     * * Display Name: Status
-    * * SQL Data Type: nchar(10)
+    * * SQL Data Type: nvarchar(20)
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 

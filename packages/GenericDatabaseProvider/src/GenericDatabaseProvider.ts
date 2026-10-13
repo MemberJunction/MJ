@@ -621,7 +621,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 const ai = AIEngine.Instance;
                 for (let i = 0; i < actions.length; i++) {
                     const a = actions[i];
-                    if ((a.TriggerEvent === 'before save' && before) || (a.TriggerEvent === 'after save' && !before)) {
+                    // Normalize as GetEntityAIActions does: the CHECK is case-insensitive on SQL Server,
+                    // so rows saved at the old 'After Save' default exist (MJ #3985).
+                    const trigger = a.TriggerEvent.toLowerCase().trim();
+                    if ((trigger === 'before save' && before) || (trigger === 'after save' && !before)) {
                         const p: EntityAIActionParams = {
                             entityAIActionId: a.ID,
                             entityRecord: entity,

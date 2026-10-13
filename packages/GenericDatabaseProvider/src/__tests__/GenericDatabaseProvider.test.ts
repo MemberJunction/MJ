@@ -2983,6 +2983,20 @@ describe('GenericDatabaseProvider after-save dispatch captures the token before 
         await dispatched;
         expect(p.aiTokens).toEqual([expected]);
     });
+
+    it('AI actions: an action whose TriggerEvent differs only in case is still dispatched (MJ #3985)', async () => {
+        // GetEntityAIActions selects case-insensitively, and SQL Server's CHECK accepts any casing,
+        // so rows saved at the old column default ('After Save') exist. They must not be skipped.
+        class MixedCaseProvider extends DispatchProvider {
+            protected override GetEntityAIActions(): MJEntityAIActionEntity[] {
+                return [{ ID: 'ai-2', TriggerEvent: 'After Save', AIActionID: 'a', AIModelID: 'm' } as unknown as MJEntityAIActionEntity];
+            }
+        }
+        vi.spyOn(AIEngine.Instance, 'Config').mockResolvedValue(undefined as never);
+        const p = new MixedCaseProvider();
+        await p.DispatchAfterSaveAI();
+        expect(p.aiTokens).toHaveLength(1);
+    });
 });
 
 describe('TransactionFrameTracker', () => {
