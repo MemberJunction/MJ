@@ -6,6 +6,7 @@ import {
   EmbedTextsResult,
   EmbedTextParams,
   EmbedTextResult,
+  EmbeddingDimensionsError,
   ModelUsage,
 } from '@memberjunction/ai';
 import { UserInfo } from '@memberjunction/core';
@@ -588,6 +589,51 @@ describe('AIEmbeddingRunner', () => {
     expect(result.Success).toBe(true);
     expect(scriptFor(DRIVER_1).Calls[0]?.dimensions).toBe(512);
     expect(result.Vectors[0]).toHaveLength(512);
+  });
+
+  it('a driver that degrades to an empty result fails the call instead of answering with no vectors', async () => {
+    // BaseEmbeddings drivers answer a failed request with `vectors: []` (graceful degrade) rather than
+    // throwing; OpenAI does this when a model rejects `dimensions` (#5234). Read as a success, that empty
+    // answer would leave every caller querying with no vector and reporting no matches.
+    const degraded = async (params: EmbedTextsParams): Promise<EmbedTextsResult> =>
+      ({ object: 'list', model: params.model ?? '', ModelUsage: new ModelUsage(0, 0), vectors: [] });
+    for (const key of [DRIVER_1, DRIVER_1B, DRIVER_2, DRIVER_LOCAL]) {
+      scriptFor(key).Answer = degraded;
+    }
+
+    const result = await runner.RunEmbedding({
+      Texts: ['degraded embedding text'],
+      ContextUser: mockUser,
+      PromptID: PROMPT_ID,
+      Dimensions: 1536,
+    });
+
+    expect(result.Success).toBe(false);
+    expect(result.ErrorMessage).toContain('No vectors returned');
+    expect(result.Vectors).toEqual([]);
+  });
+
+  it('a width the model can\'t produce fails at once with the cause, without retrying or failing over', async () => {
+    // A driver whose model table says the model can't produce the requested width refuses before any
+    // API call (#5234). Every vendor of that model would refuse too, so the runner must not try one,
+    // unlike the 503 case above, where a second vendor of the same model answers.
+    addSecondVendorToModel1();
+    scriptFor(DRIVER_1).Answer = (params) =>
+      Promise.reject(new EmbeddingDimensionsError(params.model ?? '', params.dimensions ?? 0, 'only 1536'));
+
+    const result = await runner.RunEmbedding({
+      Texts: ['impossible width text'],
+      ContextUser: mockUser,
+      PromptID: PROMPT_ID,
+      Dimensions: 3072,
+    });
+
+    expect(result.Success).toBe(false);
+    expect(result.ErrorMessage).toContain("can't produce 3072-dimension vectors");
+    expect(result.Vectors).toEqual([]);
+    expect(scriptFor(DRIVER_1).Calls).toHaveLength(1);
+    expect(scriptFor(DRIVER_1B).Calls).toHaveLength(0);
+    expect(scriptFor(DRIVER_2).Calls).toHaveLength(0);
   });
 
   describe('keyless drivers', () => {
