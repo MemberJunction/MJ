@@ -72,3 +72,57 @@ export function ReadRealtimeVideoOutputRow(modelID: string, source: RealtimeModa
 export function RealtimeModelShowsAvatar(candidate: RealtimeAvatarCandidate, source: RealtimeModalitySource): boolean {
     return ReadRealtimeVideoOutputRow(candidate.ModelID, source) !== 'unsupported' && candidate.Model.SupportsAvatarOutput(candidate.APIName);
 }
+
+/** How {@link ChooseRealtimeVendorForAvatar} instantiates and judges a vendor; each caller has its own resolution shape. */
+export interface RealtimeVendorAvatarRules<V extends RealtimeVendorIdentity, T> {
+    /** The vendor's resolution (its driver on its key), or `null` when it has no key or no driver. */
+    Instantiate(vendor: V): T | null;
+    /** Whether the resolution renders an avatar ({@link RealtimeModelShowsAvatar}). */
+    RendersAvatar(resolution: T): boolean;
+    /** Whether another vendor's resolution may stand in for the first one; absent accepts any. */
+    Accepts?(resolution: T): boolean;
+}
+
+/** What identifies a model's vendor row: the vendor and the driver that serves it. */
+export interface RealtimeVendorIdentity {
+    /** The `MJ: AI Vendors` row id. */
+    VendorID: string;
+    /** The vendor's `DriverClass`. */
+    DriverClass: string;
+}
+
+/**
+ * The vendor a realtime session runs on, by whether it will show an avatar. The highest-Priority keyed vendor (`first`)
+ * stands when it renders avatars exactly when the session will show one; otherwise the first other keyed vendor that
+ * does (and that `Accepts` allows) is taken, when there is one. So a vendor that renders avatars (Vertex AI for Gemini
+ * 3.8 Live, with its own billing and limits) takes a session only when it will show an avatar, or when it is the only
+ * keyed vendor; and a session that will show one goes to such a vendor whatever the Priority order.
+ *
+ * @param firstVendor The highest-Priority keyed vendor's identity.
+ * @param first That vendor's resolution.
+ * @param vendors The model's vendors, highest Priority first (keys not checked).
+ * @param showsAvatar Whether the session will show an avatar.
+ * @param rules How a vendor is instantiated and judged.
+ * @returns The chosen resolution: `first` unless another keyed vendor matches the session better.
+ */
+export function ChooseRealtimeVendorForAvatar<V extends RealtimeVendorIdentity, T>(
+    firstVendor: V,
+    first: T,
+    vendors: V[],
+    showsAvatar: boolean,
+    rules: RealtimeVendorAvatarRules<V, T>,
+): T {
+    if (vendors.length < 2 || rules.RendersAvatar(first) === showsAvatar) {
+        return first;
+    }
+    for (const vendor of vendors) {
+        if (vendor.DriverClass === firstVendor.DriverClass && vendor.VendorID === firstVendor.VendorID) {
+            continue;
+        }
+        const resolution = rules.Instantiate(vendor);
+        if (resolution && (rules.Accepts?.(resolution) ?? true) && rules.RendersAvatar(resolution) === showsAvatar) {
+            return resolution;
+        }
+    }
+    return first;
+}

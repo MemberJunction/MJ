@@ -112,6 +112,28 @@ export function ResolveAvatarUnseenReason(viewers: RealtimeAvatarViewers): Realt
     return viewers.ShowsAgentVideo === false ? 'host' : undefined;
 }
 
+/** What says whether a session could show an avatar at all: who is on the other end, and where the session runs. */
+export interface RealtimeAvatarSessionShape extends RealtimeAvatarViewers {
+    /** `true` for a server-side (bridged or agent-run) session; absent for a browser session. */
+    ServerSide?: boolean;
+    /** `'room'` when the session's host publishes the avatar into a room. */
+    AvatarDelivery?: 'room';
+}
+
+/**
+ * Whether a session could show an avatar at all: a browser session whose app may show agent video, or a server-side
+ * one whose host publishes the avatar into a room. A phone call or an app without agent video
+ * ({@link ResolveAvatarUnseenReason}), or a server-side session whose host can't publish video, can't.
+ *
+ * @param session What the session says about its viewers and where it runs.
+ */
+export function RealtimeSessionCanShowAvatar(session: RealtimeAvatarSessionShape): boolean {
+    if (ResolveAvatarUnseenReason(session)) {
+        return false;
+    }
+    return session.ServerSide !== true || session.AvatarDelivery === 'room';
+}
+
 /**
  * A resolution without its avatar request when nobody in the session would see the avatar
  * ({@link ResolveAvatarUnseenReason}), so the driver is never asked to render video that nobody sees. The reason replaces

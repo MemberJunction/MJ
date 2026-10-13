@@ -74,14 +74,14 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
-    ResolveAvatarUnseenReason,
+    RealtimeSessionCanShowAvatar,
     ResolveBridgedAvatarStatus,
     ResolveRealtimeAvatar,
     ResolveRealtimeAvatarStatus,
     WithoutUnseenAvatar,
     type RealtimeAvatarResolution,
 } from './realtime-avatar-resolution';
-import { ReadRealtimeVideoOutputRow, RealtimeModelShowsAvatar } from './realtime-video-output-gate';
+import { ChooseRealtimeVendorForAvatar, ReadRealtimeVideoOutputRow, RealtimeModelShowsAvatar } from './realtime-video-output-gate';
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
 import { AgentRunner } from '../AgentRunner';
@@ -2417,7 +2417,7 @@ export class RealtimeClientSessionService {
         // subclass that overrides the seam would lose to AI_VENDOR_API_KEY__<driver>.
         const resolveRunKey = this.buildRunKeyResolver(input.APIKeys);
         const scope = input.CredentialScope ?? 'Any';
-        const preferAvatar = effectiveConfig?.realtime?.video?.enabled === true && this.sessionCanShowAvatar(input);
+        const preferAvatar = effectiveConfig?.realtime?.video?.enabled === true && RealtimeSessionCanShowAvatar(input);
         if (input.PreferredModelID) {
             return this.resolvePreferredRealtimeModel(input.PreferredModelID, resolveRunKey, scope, preferAvatar);
         }
@@ -2427,18 +2427,6 @@ export class RealtimeClientSessionService {
         }
         const resolution = await this.resolveDefaultRealtimeModel(coAgent, preferAvatar, resolveRunKey, scope);
         return resolution ? { Resolution: resolution } : { ErrorMessage: this.noModelMessage() };
-    }
-
-    /**
-     * Whether the session could show an avatar at all: a browser session whose app may show agent video, or a server-side
-     * one whose host publishes the avatar into a room. A phone call or an app without agent video
-     * ({@link ResolveAvatarUnseenReason}), or a meeting whose host can't publish video, can't.
-     */
-    private sessionCanShowAvatar(input: PrepareClientSessionInput): boolean {
-        if (ResolveAvatarUnseenReason(input)) {
-            return false;
-        }
-        return input.ServerSide !== true || input.AvatarDelivery === 'room';
     }
 
     /**
@@ -2696,38 +2684,15 @@ export class RealtimeClientSessionService {
         const resolveKey = this.buildKeyChain(resolve, credentialScope);
         const vendor = this.selectRealtimeVendor(model.ID, resolveKey);
         const first = vendor ? this.instantiateRealtimeVendor(model, vendor, resolveKey) : null;
-        const vendors = first ? ListRealtimeVendorsForModel(model.ID) : [];
-        if (!first || vendors.length < 2 || RealtimeModelShowsAvatar(first, AIEngine.Instance) === showsAvatar) {
+        if (!vendor || !first) {
             return first;
         }
-        return this.vendorMatchingAvatar(model, vendors, resolveKey, showsAvatar, first) ?? first;
-    }
-
-    /**
-     * The first keyed vendor of a model, other than `first`, that renders avatars exactly when the session will show one
-     * and does client-direct sessions when `first` does; `null` when none does.
-     */
-    private vendorMatchingAvatar(
-        model: MJAIModelEntityExtended,
-        vendors: RealtimeVendorSelection[],
-        resolveKey: AIAPIKeyResolver,
-        showsAvatar: boolean,
-        first: RealtimeModelResolution,
-    ): RealtimeModelResolution | null {
-        for (const vendor of vendors) {
-            if (vendor.DriverClass === first.DriverClass && vendor.VendorID === first.VendorID) {
-                continue;
-            }
-            const resolution = this.instantiateRealtimeVendor(model, vendor, resolveKey);
-            if (
-                resolution &&
-                (resolution.Model.SupportsClientDirect || !first.Model.SupportsClientDirect) &&
-                RealtimeModelShowsAvatar(resolution, AIEngine.Instance) === showsAvatar
-            ) {
-                return resolution;
-            }
-        }
-        return null;
+        return ChooseRealtimeVendorForAvatar(vendor, first, ListRealtimeVendorsForModel(model.ID), showsAvatar, {
+            Instantiate: (other) => this.instantiateRealtimeVendor(model, other, resolveKey),
+            RendersAvatar: (resolution) => RealtimeModelShowsAvatar(resolution, AIEngine.Instance),
+            // A stand-in does client-direct sessions when the first one does.
+            Accepts: (resolution) => resolution.Model.SupportsClientDirect || !first.Model.SupportsClientDirect,
+        });
     }
 
     /**
