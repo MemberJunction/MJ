@@ -657,7 +657,8 @@ export function IsResizableKind(kind: WhiteboardItemKind): boolean {
  *  - full-box kinds (`shape`, `highlight`, `html`) commit X / Y / W / H;
  *  - `markdown` commits X / Y / W / H too: its `H` is a max-height cap (agents set one when
  *    they add a panel), and content beyond it is clipped — so the user must be able to drag
- *    the cap taller to reveal it, or shorter to compact the panel;
+ *    the cap taller to reveal it, or shorter to compact the panel (the board applies `H`
+ *    only when a top / bottom handle moved, so a side handle never caps an uncapped panel);
  *  - content-driven-height kinds (`sticky`, `text`, `image`) commit X / Y / W only;
  *  - non-resizable kinds (`ink`, `connector`) return `null` (nothing to commit).
  */
