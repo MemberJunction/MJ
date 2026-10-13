@@ -14865,7 +14865,7 @@ SET
 SET
   @CanDelete_2d3b75fc556b = 1
 SET
-  @ID_2d3b75fc556b = 'E893433E-F36B-1410-8045-0077034ECA4A' EXEC [${flyway:defaultSchema}].spUpdateEntityPermission @CanCreate = @CanCreate_2d3b75fc556b,
+  @ID_2d3b75fc556b = (SELECT ep.ID FROM [${flyway:defaultSchema}].EntityPermission ep INNER JOIN [${flyway:defaultSchema}].Entity e ON e.ID = ep.EntityID INNER JOIN [${flyway:defaultSchema}].Role r ON r.ID = ep.RoleID WHERE e.Name = N'MJ: Conversation Branches' AND r.Name = N'UI' AND ep.Type = N'Allow') EXEC [${flyway:defaultSchema}].spUpdateEntityPermission @CanCreate = @CanCreate_2d3b75fc556b,
   @CanUpdate = @CanUpdate_2d3b75fc556b,
   @CanDelete = @CanDelete_2d3b75fc556b,
   @ID = @ID_2d3b75fc556b;
@@ -14884,7 +14884,7 @@ SET
 SET
   @CanDelete_0abf11e41e7c = 1
 SET
-  @ID_0abf11e41e7c = '9C93433E-F36B-1410-8045-0077034ECA4A' EXEC [${flyway:defaultSchema}].spUpdateEntityPermission @CanCreate = @CanCreate_0abf11e41e7c,
+  @ID_0abf11e41e7c = (SELECT ep.ID FROM [${flyway:defaultSchema}].EntityPermission ep INNER JOIN [${flyway:defaultSchema}].Entity e ON e.ID = ep.EntityID INNER JOIN [${flyway:defaultSchema}].Role r ON r.ID = ep.RoleID WHERE e.Name = N'MJ: Entity Form Contributions' AND r.Name = N'UI' AND ep.Type = N'Allow') EXEC [${flyway:defaultSchema}].spUpdateEntityPermission @CanCreate = @CanCreate_0abf11e41e7c,
   @CanUpdate = @CanUpdate_0abf11e41e7c,
   @CanDelete = @CanDelete_0abf11e41e7c,
   @ID = @ID_0abf11e41e7c;
@@ -14897,7 +14897,7 @@ DECLARE @CanRead_1edd131ef5f9 BIT,
 SET
   @CanRead_1edd131ef5f9 = 0
 SET
-  @ID_1edd131ef5f9 = 'BC93433E-F36B-1410-8045-0077034ECA4A' EXEC [${flyway:defaultSchema}].spUpdateEntityPermission @CanRead = @CanRead_1edd131ef5f9,
+  @ID_1edd131ef5f9 = (SELECT ep.ID FROM [${flyway:defaultSchema}].EntityPermission ep INNER JOIN [${flyway:defaultSchema}].Entity e ON e.ID = ep.EntityID INNER JOIN [${flyway:defaultSchema}].Role r ON r.ID = ep.RoleID WHERE e.Name = N'MJ: Work Queue Messages' AND r.Name = N'UI' AND ep.Type = N'Allow') EXEC [${flyway:defaultSchema}].spUpdateEntityPermission @CanRead = @CanRead_1edd131ef5f9,
   @ID = @ID_1edd131ef5f9;
 
 GO
@@ -14908,7 +14908,7 @@ DECLARE @CanRead_7a4c50ffdb49 BIT,
 SET
   @CanRead_7a4c50ffdb49 = 0
 SET
-  @ID_7a4c50ffdb49 = 'C493433E-F36B-1410-8045-0077034ECA4A' EXEC [${flyway:defaultSchema}].spUpdateEntityPermission @CanRead = @CanRead_7a4c50ffdb49,
+  @ID_7a4c50ffdb49 = (SELECT ep.ID FROM [${flyway:defaultSchema}].EntityPermission ep INNER JOIN [${flyway:defaultSchema}].Entity e ON e.ID = ep.EntityID INNER JOIN [${flyway:defaultSchema}].Role r ON r.ID = ep.RoleID WHERE e.Name = N'MJ: Work Queue Deliveries' AND r.Name = N'UI' AND ep.Type = N'Allow') EXEC [${flyway:defaultSchema}].spUpdateEntityPermission @CanRead = @CanRead_7a4c50ffdb49,
   @ID = @ID_7a4c50ffdb49;
 
 GO
