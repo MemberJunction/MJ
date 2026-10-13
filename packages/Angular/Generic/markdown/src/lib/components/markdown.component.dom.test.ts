@@ -130,6 +130,13 @@ describe('MarkdownComponent (DOM)', () => {
       expect(container(f).querySelector('math, code.mj-math')).toBeNull();
       expect(container(f).textContent).toContain('$x^2$');
     });
+
+    it('EnableMath=false still fixes the styled letters of MathML markup', async () => {
+      const f = render({ data: 'Field <math><mi mathvariant="bold">E</mi></math> here', EnableMath: false });
+      const c = container(f);
+      await vi.waitFor(() => expect(c.querySelector('mi')?.textContent).toBe('𝐄'));
+      expect(c.querySelector('mi[mathvariant]')).toBeNull();
+    });
   });
 
   /**

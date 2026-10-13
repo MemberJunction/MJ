@@ -456,6 +456,17 @@ export class MarkdownService {
   }
 
   /**
+   * Spell MathML's styled letters (`mathvariant="bold"`, `"double-struck"`, ...) with their Unicode
+   * math characters, which Chrome renders. `RenderMath` already does this; call it on its own when
+   * math is off, because MathML that arrived as markup still renders then.
+   *
+   * @param container The DOM element containing the MathML
+   */
+  public UseUnicodeMathLetters(container: HTMLElement): void {
+    useUnicodeMathLetters(container);
+  }
+
+  /**
    * Typeset TeX math in a container: every `code.mj-math` placeholder that markdown-core's
    * math extension emitted. Call this after the HTML has been inserted into the DOM. MathML that
    * arrived as markup is already rendered by the browser; it only gets the letter fix below.

@@ -538,9 +538,14 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       this.setupCollapsibleListeners(container as HTMLElement);
     }
 
-    // Typeset TeX math (async: KaTeX loads on first use)
-    if (this.EnableMath && this.hasMath) {
-      await this.markdownService.RenderMath(container as HTMLElement);
+    // Typeset TeX math (async: KaTeX loads on first use). With math off, MathML that arrived as
+    // markup still renders, so it still gets the styled-letter fix.
+    if (this.hasMath) {
+      if (this.EnableMath) {
+        await this.markdownService.RenderMath(container as HTMLElement);
+      } else {
+        this.markdownService.UseUnicodeMathLetters(container as HTMLElement);
+      }
     }
 
     // Render mermaid diagrams (async)
