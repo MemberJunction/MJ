@@ -1304,11 +1304,11 @@ BEGIN
     SELECT * FROM [${flyway:defaultSchema}].[vwConversationBranches] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateConversationBranch] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateConversationBranch] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
 /* spCreate Permissions for MJ: Conversation Branches */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateConversationBranch] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateConversationBranch] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
 /* spUpdate SQL for MJ: Conversation Branches */
 -----------------------------------------------------------------
@@ -1372,7 +1372,7 @@ BEGIN
 END
 GO
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateConversationBranch] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateConversationBranch] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
 GO
 
 ------------------------------------------------------------
@@ -1401,7 +1401,7 @@ GO
 
 /* spUpdate Permissions for MJ: Conversation Branches */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateConversationBranch] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateConversationBranch] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
 /* spDelete SQL for MJ: Conversation Branches */
 -----------------------------------------------------------------
@@ -1425,6 +1425,92 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteConversationBranch]
 AS
 BEGIN
     SET NOCOUNT ON;
+    -- Cascade update on ConversationBranch using cursor to call spUpdateConversationBranch
+    DECLARE @MJConversationBranches_ParentBranchIDID uniqueidentifier
+    DECLARE @MJConversationBranches_ParentBranchID_ConversationID uniqueidentifier
+    DECLARE @MJConversationBranches_ParentBranchID_ParentBranchID uniqueidentifier
+    DECLARE @MJConversationBranches_ParentBranchID_ForkFromSequence int
+    DECLARE @MJConversationBranches_ParentBranchID_Name nvarchar(255)
+    DECLARE @MJConversationBranches_ParentBranchID_Kind nvarchar(20)
+    DECLARE @MJConversationBranches_ParentBranchID_SourceDetailID uniqueidentifier
+    DECLARE @MJConversationBranches_ParentBranchID_UserID uniqueidentifier
+    DECLARE cascade_update_MJConversationBranches_ParentBranchID_cursor CURSOR FOR
+        SELECT [ID], [ConversationID], [ParentBranchID], [ForkFromSequence], [Name], [Kind], [SourceDetailID], [UserID]
+        FROM [${flyway:defaultSchema}].[ConversationBranch]
+        WHERE [ParentBranchID] = @ID
+
+    OPEN cascade_update_MJConversationBranches_ParentBranchID_cursor
+    FETCH NEXT FROM cascade_update_MJConversationBranches_ParentBranchID_cursor INTO @MJConversationBranches_ParentBranchIDID, @MJConversationBranches_ParentBranchID_ConversationID, @MJConversationBranches_ParentBranchID_ParentBranchID, @MJConversationBranches_ParentBranchID_ForkFromSequence, @MJConversationBranches_ParentBranchID_Name, @MJConversationBranches_ParentBranchID_Kind, @MJConversationBranches_ParentBranchID_SourceDetailID, @MJConversationBranches_ParentBranchID_UserID
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJConversationBranches_ParentBranchID_ParentBranchID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateConversationBranch] @ID = @MJConversationBranches_ParentBranchIDID, @ConversationID = @MJConversationBranches_ParentBranchID_ConversationID, @ParentBranchID_Clear = 1, @ParentBranchID = @MJConversationBranches_ParentBranchID_ParentBranchID, @ForkFromSequence = @MJConversationBranches_ParentBranchID_ForkFromSequence, @Name = @MJConversationBranches_ParentBranchID_Name, @Kind = @MJConversationBranches_ParentBranchID_Kind, @SourceDetailID = @MJConversationBranches_ParentBranchID_SourceDetailID, @UserID = @MJConversationBranches_ParentBranchID_UserID
+
+        FETCH NEXT FROM cascade_update_MJConversationBranches_ParentBranchID_cursor INTO @MJConversationBranches_ParentBranchIDID, @MJConversationBranches_ParentBranchID_ConversationID, @MJConversationBranches_ParentBranchID_ParentBranchID, @MJConversationBranches_ParentBranchID_ForkFromSequence, @MJConversationBranches_ParentBranchID_Name, @MJConversationBranches_ParentBranchID_Kind, @MJConversationBranches_ParentBranchID_SourceDetailID, @MJConversationBranches_ParentBranchID_UserID
+    END
+
+    CLOSE cascade_update_MJConversationBranches_ParentBranchID_cursor
+    DEALLOCATE cascade_update_MJConversationBranches_ParentBranchID_cursor
+    
+    -- Cascade update on ConversationDetail using cursor to call spUpdateConversationDetail
+    DECLARE @MJConversationDetails_BranchIDID uniqueidentifier
+    DECLARE @MJConversationDetails_BranchID_ConversationID uniqueidentifier
+    DECLARE @MJConversationDetails_BranchID_ExternalID nvarchar(100)
+    DECLARE @MJConversationDetails_BranchID_Role nvarchar(20)
+    DECLARE @MJConversationDetails_BranchID_Message nvarchar(MAX)
+    DECLARE @MJConversationDetails_BranchID_Error nvarchar(MAX)
+    DECLARE @MJConversationDetails_BranchID_HiddenToUser bit
+    DECLARE @MJConversationDetails_BranchID_UserRating int
+    DECLARE @MJConversationDetails_BranchID_UserFeedback nvarchar(MAX)
+    DECLARE @MJConversationDetails_BranchID_ReflectionInsights nvarchar(MAX)
+    DECLARE @MJConversationDetails_BranchID_SummaryOfEarlierConversation nvarchar(MAX)
+    DECLARE @MJConversationDetails_BranchID_UserID uniqueidentifier
+    DECLARE @MJConversationDetails_BranchID_ArtifactID uniqueidentifier
+    DECLARE @MJConversationDetails_BranchID_ArtifactVersionID uniqueidentifier
+    DECLARE @MJConversationDetails_BranchID_CompletionTime bigint
+    DECLARE @MJConversationDetails_BranchID_IsPinned bit
+    DECLARE @MJConversationDetails_BranchID_ParentID uniqueidentifier
+    DECLARE @MJConversationDetails_BranchID_AgentID uniqueidentifier
+    DECLARE @MJConversationDetails_BranchID_Status nvarchar(20)
+    DECLARE @MJConversationDetails_BranchID_SuggestedResponses nvarchar(MAX)
+    DECLARE @MJConversationDetails_BranchID_TestRunID uniqueidentifier
+    DECLARE @MJConversationDetails_BranchID_ResponseForm nvarchar(MAX)
+    DECLARE @MJConversationDetails_BranchID_ActionableCommands nvarchar(MAX)
+    DECLARE @MJConversationDetails_BranchID_AutomaticCommands nvarchar(MAX)
+    DECLARE @MJConversationDetails_BranchID_OriginalMessageChanged bit
+    DECLARE @MJConversationDetails_BranchID_AgentSessionID uniqueidentifier
+    DECLARE @MJConversationDetails_BranchID_TurnEndedAt datetimeoffset
+    DECLARE @MJConversationDetails_BranchID_UtteranceStartMs int
+    DECLARE @MJConversationDetails_BranchID_UtteranceEndMs int
+    DECLARE @MJConversationDetails_BranchID_MediaType nvarchar(20)
+    DECLARE @MJConversationDetails_BranchID_BranchID uniqueidentifier
+    DECLARE @MJConversationDetails_BranchID_ReplacedAt datetimeoffset
+    DECLARE cascade_update_MJConversationDetails_BranchID_cursor CURSOR FOR
+        SELECT [ID], [ConversationID], [ExternalID], [Role], [Message], [Error], [HiddenToUser], [UserRating], [UserFeedback], [ReflectionInsights], [SummaryOfEarlierConversation], [UserID], [ArtifactID], [ArtifactVersionID], [CompletionTime], [IsPinned], [ParentID], [AgentID], [Status], [SuggestedResponses], [TestRunID], [ResponseForm], [ActionableCommands], [AutomaticCommands], [OriginalMessageChanged], [AgentSessionID], [TurnEndedAt], [UtteranceStartMs], [UtteranceEndMs], [MediaType], [BranchID], [ReplacedAt]
+        FROM [${flyway:defaultSchema}].[ConversationDetail]
+        WHERE [BranchID] = @ID
+
+    OPEN cascade_update_MJConversationDetails_BranchID_cursor
+    FETCH NEXT FROM cascade_update_MJConversationDetails_BranchID_cursor INTO @MJConversationDetails_BranchIDID, @MJConversationDetails_BranchID_ConversationID, @MJConversationDetails_BranchID_ExternalID, @MJConversationDetails_BranchID_Role, @MJConversationDetails_BranchID_Message, @MJConversationDetails_BranchID_Error, @MJConversationDetails_BranchID_HiddenToUser, @MJConversationDetails_BranchID_UserRating, @MJConversationDetails_BranchID_UserFeedback, @MJConversationDetails_BranchID_ReflectionInsights, @MJConversationDetails_BranchID_SummaryOfEarlierConversation, @MJConversationDetails_BranchID_UserID, @MJConversationDetails_BranchID_ArtifactID, @MJConversationDetails_BranchID_ArtifactVersionID, @MJConversationDetails_BranchID_CompletionTime, @MJConversationDetails_BranchID_IsPinned, @MJConversationDetails_BranchID_ParentID, @MJConversationDetails_BranchID_AgentID, @MJConversationDetails_BranchID_Status, @MJConversationDetails_BranchID_SuggestedResponses, @MJConversationDetails_BranchID_TestRunID, @MJConversationDetails_BranchID_ResponseForm, @MJConversationDetails_BranchID_ActionableCommands, @MJConversationDetails_BranchID_AutomaticCommands, @MJConversationDetails_BranchID_OriginalMessageChanged, @MJConversationDetails_BranchID_AgentSessionID, @MJConversationDetails_BranchID_TurnEndedAt, @MJConversationDetails_BranchID_UtteranceStartMs, @MJConversationDetails_BranchID_UtteranceEndMs, @MJConversationDetails_BranchID_MediaType, @MJConversationDetails_BranchID_BranchID, @MJConversationDetails_BranchID_ReplacedAt
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJConversationDetails_BranchID_BranchID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateConversationDetail] @ID = @MJConversationDetails_BranchIDID, @ConversationID = @MJConversationDetails_BranchID_ConversationID, @ExternalID = @MJConversationDetails_BranchID_ExternalID, @Role = @MJConversationDetails_BranchID_Role, @Message = @MJConversationDetails_BranchID_Message, @Error = @MJConversationDetails_BranchID_Error, @HiddenToUser = @MJConversationDetails_BranchID_HiddenToUser, @UserRating = @MJConversationDetails_BranchID_UserRating, @UserFeedback = @MJConversationDetails_BranchID_UserFeedback, @ReflectionInsights = @MJConversationDetails_BranchID_ReflectionInsights, @SummaryOfEarlierConversation = @MJConversationDetails_BranchID_SummaryOfEarlierConversation, @UserID = @MJConversationDetails_BranchID_UserID, @ArtifactID = @MJConversationDetails_BranchID_ArtifactID, @ArtifactVersionID = @MJConversationDetails_BranchID_ArtifactVersionID, @CompletionTime = @MJConversationDetails_BranchID_CompletionTime, @IsPinned = @MJConversationDetails_BranchID_IsPinned, @ParentID = @MJConversationDetails_BranchID_ParentID, @AgentID = @MJConversationDetails_BranchID_AgentID, @Status = @MJConversationDetails_BranchID_Status, @SuggestedResponses = @MJConversationDetails_BranchID_SuggestedResponses, @TestRunID = @MJConversationDetails_BranchID_TestRunID, @ResponseForm = @MJConversationDetails_BranchID_ResponseForm, @ActionableCommands = @MJConversationDetails_BranchID_ActionableCommands, @AutomaticCommands = @MJConversationDetails_BranchID_AutomaticCommands, @OriginalMessageChanged = @MJConversationDetails_BranchID_OriginalMessageChanged, @AgentSessionID = @MJConversationDetails_BranchID_AgentSessionID, @TurnEndedAt = @MJConversationDetails_BranchID_TurnEndedAt, @UtteranceStartMs = @MJConversationDetails_BranchID_UtteranceStartMs, @UtteranceEndMs = @MJConversationDetails_BranchID_UtteranceEndMs, @MediaType = @MJConversationDetails_BranchID_MediaType, @BranchID_Clear = 1, @BranchID = @MJConversationDetails_BranchID_BranchID, @ReplacedAt = @MJConversationDetails_BranchID_ReplacedAt
+
+        FETCH NEXT FROM cascade_update_MJConversationDetails_BranchID_cursor INTO @MJConversationDetails_BranchIDID, @MJConversationDetails_BranchID_ConversationID, @MJConversationDetails_BranchID_ExternalID, @MJConversationDetails_BranchID_Role, @MJConversationDetails_BranchID_Message, @MJConversationDetails_BranchID_Error, @MJConversationDetails_BranchID_HiddenToUser, @MJConversationDetails_BranchID_UserRating, @MJConversationDetails_BranchID_UserFeedback, @MJConversationDetails_BranchID_ReflectionInsights, @MJConversationDetails_BranchID_SummaryOfEarlierConversation, @MJConversationDetails_BranchID_UserID, @MJConversationDetails_BranchID_ArtifactID, @MJConversationDetails_BranchID_ArtifactVersionID, @MJConversationDetails_BranchID_CompletionTime, @MJConversationDetails_BranchID_IsPinned, @MJConversationDetails_BranchID_ParentID, @MJConversationDetails_BranchID_AgentID, @MJConversationDetails_BranchID_Status, @MJConversationDetails_BranchID_SuggestedResponses, @MJConversationDetails_BranchID_TestRunID, @MJConversationDetails_BranchID_ResponseForm, @MJConversationDetails_BranchID_ActionableCommands, @MJConversationDetails_BranchID_AutomaticCommands, @MJConversationDetails_BranchID_OriginalMessageChanged, @MJConversationDetails_BranchID_AgentSessionID, @MJConversationDetails_BranchID_TurnEndedAt, @MJConversationDetails_BranchID_UtteranceStartMs, @MJConversationDetails_BranchID_UtteranceEndMs, @MJConversationDetails_BranchID_MediaType, @MJConversationDetails_BranchID_BranchID, @MJConversationDetails_BranchID_ReplacedAt
+    END
+
+    CLOSE cascade_update_MJConversationDetails_BranchID_cursor
+    DEALLOCATE cascade_update_MJConversationDetails_BranchID_cursor
+    
 
     DELETE FROM
         [${flyway:defaultSchema}].[ConversationBranch]
@@ -1439,11 +1525,11 @@ BEGIN
         SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
 END
 GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationBranch] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationBranch] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
 /* spDelete Permissions for MJ: Conversation Branches */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationBranch] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationBranch] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
 /* Index for Foreign Keys for ConversationDetail */
 -----------------------------------------------------------------
@@ -5397,322 +5483,4 @@ IF NOT EXISTS (
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
          WHERE [EntityID] = 'C43A32A6-3400-4A03-A0E3-8817D24C341D';
-
-/* spCreate SQL for MJ: Conversation Branches */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Conversation Branches
--- Item: spCreateConversationBranch
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ CREATE PROCEDURE FOR ConversationBranch
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateConversationBranch]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateConversationBranch];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateConversationBranch]
-    @ID uniqueidentifier = NULL,
-    @ConversationID uniqueidentifier,
-    @ParentBranchID_Clear bit = 0,
-    @ParentBranchID uniqueidentifier = NULL,
-    @ForkFromSequence_Clear bit = 0,
-    @ForkFromSequence int = NULL,
-    @Name_Clear bit = 0,
-    @Name nvarchar(255) = NULL,
-    @Kind nvarchar(20) = NULL,
-    @SourceDetailID_Clear bit = 0,
-    @SourceDetailID uniqueidentifier = NULL,
-    @UserID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-
-    IF @ID IS NOT NULL
-    BEGIN
-        -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[ConversationBranch]
-            (
-                [ID],
-                [ConversationID],
-                [ParentBranchID],
-                [ForkFromSequence],
-                [Name],
-                [Kind],
-                [SourceDetailID],
-                [UserID]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @ID,
-                @ConversationID,
-                CASE WHEN @ParentBranchID_Clear = 1 THEN NULL ELSE ISNULL(@ParentBranchID, NULL) END,
-                CASE WHEN @ForkFromSequence_Clear = 1 THEN NULL ELSE ISNULL(@ForkFromSequence, NULL) END,
-                CASE WHEN @Name_Clear = 1 THEN NULL ELSE ISNULL(@Name, NULL) END,
-                ISNULL(@Kind, 'Fork'),
-                CASE WHEN @SourceDetailID_Clear = 1 THEN NULL ELSE ISNULL(@SourceDetailID, NULL) END,
-                @UserID
-            )
-    END
-    ELSE
-    BEGIN
-        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[ConversationBranch]
-            (
-                [ConversationID],
-                [ParentBranchID],
-                [ForkFromSequence],
-                [Name],
-                [Kind],
-                [SourceDetailID],
-                [UserID]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @ConversationID,
-                CASE WHEN @ParentBranchID_Clear = 1 THEN NULL ELSE ISNULL(@ParentBranchID, NULL) END,
-                CASE WHEN @ForkFromSequence_Clear = 1 THEN NULL ELSE ISNULL(@ForkFromSequence, NULL) END,
-                CASE WHEN @Name_Clear = 1 THEN NULL ELSE ISNULL(@Name, NULL) END,
-                ISNULL(@Kind, 'Fork'),
-                CASE WHEN @SourceDetailID_Clear = 1 THEN NULL ELSE ISNULL(@SourceDetailID, NULL) END,
-                @UserID
-            )
-    END
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwConversationBranches] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateConversationBranch] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* spCreate Permissions for MJ: Conversation Branches */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateConversationBranch] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* spUpdate SQL for MJ: Conversation Branches */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Conversation Branches
--- Item: spUpdateConversationBranch
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ UPDATE PROCEDURE FOR ConversationBranch
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateConversationBranch]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateConversationBranch];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateConversationBranch]
-    @ID uniqueidentifier,
-    @ConversationID uniqueidentifier = NULL,
-    @ParentBranchID_Clear bit = 0,
-    @ParentBranchID uniqueidentifier = NULL,
-    @ForkFromSequence_Clear bit = 0,
-    @ForkFromSequence int = NULL,
-    @Name_Clear bit = 0,
-    @Name nvarchar(255) = NULL,
-    @Kind nvarchar(20) = NULL,
-    @SourceDetailID_Clear bit = 0,
-    @SourceDetailID uniqueidentifier = NULL,
-    @UserID uniqueidentifier = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[ConversationBranch]
-    SET
-        [ConversationID] = ISNULL(@ConversationID, [ConversationID]),
-        [ParentBranchID] = CASE WHEN @ParentBranchID_Clear = 1 THEN NULL ELSE ISNULL(@ParentBranchID, [ParentBranchID]) END,
-        [ForkFromSequence] = CASE WHEN @ForkFromSequence_Clear = 1 THEN NULL ELSE ISNULL(@ForkFromSequence, [ForkFromSequence]) END,
-        [Name] = CASE WHEN @Name_Clear = 1 THEN NULL ELSE ISNULL(@Name, [Name]) END,
-        [Kind] = ISNULL(@Kind, [Kind]),
-        [SourceDetailID] = CASE WHEN @SourceDetailID_Clear = 1 THEN NULL ELSE ISNULL(@SourceDetailID, [SourceDetailID]) END,
-        [UserID] = ISNULL(@UserID, [UserID])
-    WHERE
-        [ID] = @ID
-
-    -- Check if the update was successful
-    IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwConversationBranches] WHERE 1=0
-    ELSE
-        -- Return the updated record so the caller can see the updated values and any calculated fields
-        SELECT
-                                        *
-                                    FROM
-                                        [${flyway:defaultSchema}].[vwConversationBranches]
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateConversationBranch] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
-GO
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the ConversationBranch table
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateConversationBranch]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateConversationBranch];
-GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateConversationBranch
-ON [${flyway:defaultSchema}].[ConversationBranch]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[ConversationBranch]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[ConversationBranch] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-
-/* spUpdate Permissions for MJ: Conversation Branches */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateConversationBranch] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* spDelete SQL for MJ: Conversation Branches */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Conversation Branches
--- Item: spDeleteConversationBranch
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR ConversationBranch
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteConversationBranch]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteConversationBranch];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteConversationBranch]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    -- Cascade update on ConversationBranch using cursor to call spUpdateConversationBranch
-    DECLARE @MJConversationBranches_ParentBranchIDID uniqueidentifier
-    DECLARE @MJConversationBranches_ParentBranchID_ConversationID uniqueidentifier
-    DECLARE @MJConversationBranches_ParentBranchID_ParentBranchID uniqueidentifier
-    DECLARE @MJConversationBranches_ParentBranchID_ForkFromSequence int
-    DECLARE @MJConversationBranches_ParentBranchID_Name nvarchar(255)
-    DECLARE @MJConversationBranches_ParentBranchID_Kind nvarchar(20)
-    DECLARE @MJConversationBranches_ParentBranchID_SourceDetailID uniqueidentifier
-    DECLARE @MJConversationBranches_ParentBranchID_UserID uniqueidentifier
-    DECLARE cascade_update_MJConversationBranches_ParentBranchID_cursor CURSOR FOR
-        SELECT [ID], [ConversationID], [ParentBranchID], [ForkFromSequence], [Name], [Kind], [SourceDetailID], [UserID]
-        FROM [${flyway:defaultSchema}].[ConversationBranch]
-        WHERE [ParentBranchID] = @ID
-
-    OPEN cascade_update_MJConversationBranches_ParentBranchID_cursor
-    FETCH NEXT FROM cascade_update_MJConversationBranches_ParentBranchID_cursor INTO @MJConversationBranches_ParentBranchIDID, @MJConversationBranches_ParentBranchID_ConversationID, @MJConversationBranches_ParentBranchID_ParentBranchID, @MJConversationBranches_ParentBranchID_ForkFromSequence, @MJConversationBranches_ParentBranchID_Name, @MJConversationBranches_ParentBranchID_Kind, @MJConversationBranches_ParentBranchID_SourceDetailID, @MJConversationBranches_ParentBranchID_UserID
-
-    WHILE @@FETCH_STATUS = 0
-    BEGIN
-        -- Set the FK field to NULL
-        SET @MJConversationBranches_ParentBranchID_ParentBranchID = NULL
-
-        -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateConversationBranch] @ID = @MJConversationBranches_ParentBranchIDID, @ConversationID = @MJConversationBranches_ParentBranchID_ConversationID, @ParentBranchID_Clear = 1, @ParentBranchID = @MJConversationBranches_ParentBranchID_ParentBranchID, @ForkFromSequence = @MJConversationBranches_ParentBranchID_ForkFromSequence, @Name = @MJConversationBranches_ParentBranchID_Name, @Kind = @MJConversationBranches_ParentBranchID_Kind, @SourceDetailID = @MJConversationBranches_ParentBranchID_SourceDetailID, @UserID = @MJConversationBranches_ParentBranchID_UserID
-
-        FETCH NEXT FROM cascade_update_MJConversationBranches_ParentBranchID_cursor INTO @MJConversationBranches_ParentBranchIDID, @MJConversationBranches_ParentBranchID_ConversationID, @MJConversationBranches_ParentBranchID_ParentBranchID, @MJConversationBranches_ParentBranchID_ForkFromSequence, @MJConversationBranches_ParentBranchID_Name, @MJConversationBranches_ParentBranchID_Kind, @MJConversationBranches_ParentBranchID_SourceDetailID, @MJConversationBranches_ParentBranchID_UserID
-    END
-
-    CLOSE cascade_update_MJConversationBranches_ParentBranchID_cursor
-    DEALLOCATE cascade_update_MJConversationBranches_ParentBranchID_cursor
-    
-    -- Cascade update on ConversationDetail using cursor to call spUpdateConversationDetail
-    DECLARE @MJConversationDetails_BranchIDID uniqueidentifier
-    DECLARE @MJConversationDetails_BranchID_ConversationID uniqueidentifier
-    DECLARE @MJConversationDetails_BranchID_ExternalID nvarchar(100)
-    DECLARE @MJConversationDetails_BranchID_Role nvarchar(20)
-    DECLARE @MJConversationDetails_BranchID_Message nvarchar(MAX)
-    DECLARE @MJConversationDetails_BranchID_Error nvarchar(MAX)
-    DECLARE @MJConversationDetails_BranchID_HiddenToUser bit
-    DECLARE @MJConversationDetails_BranchID_UserRating int
-    DECLARE @MJConversationDetails_BranchID_UserFeedback nvarchar(MAX)
-    DECLARE @MJConversationDetails_BranchID_ReflectionInsights nvarchar(MAX)
-    DECLARE @MJConversationDetails_BranchID_SummaryOfEarlierConversation nvarchar(MAX)
-    DECLARE @MJConversationDetails_BranchID_UserID uniqueidentifier
-    DECLARE @MJConversationDetails_BranchID_ArtifactID uniqueidentifier
-    DECLARE @MJConversationDetails_BranchID_ArtifactVersionID uniqueidentifier
-    DECLARE @MJConversationDetails_BranchID_CompletionTime bigint
-    DECLARE @MJConversationDetails_BranchID_IsPinned bit
-    DECLARE @MJConversationDetails_BranchID_ParentID uniqueidentifier
-    DECLARE @MJConversationDetails_BranchID_AgentID uniqueidentifier
-    DECLARE @MJConversationDetails_BranchID_Status nvarchar(20)
-    DECLARE @MJConversationDetails_BranchID_SuggestedResponses nvarchar(MAX)
-    DECLARE @MJConversationDetails_BranchID_TestRunID uniqueidentifier
-    DECLARE @MJConversationDetails_BranchID_ResponseForm nvarchar(MAX)
-    DECLARE @MJConversationDetails_BranchID_ActionableCommands nvarchar(MAX)
-    DECLARE @MJConversationDetails_BranchID_AutomaticCommands nvarchar(MAX)
-    DECLARE @MJConversationDetails_BranchID_OriginalMessageChanged bit
-    DECLARE @MJConversationDetails_BranchID_AgentSessionID uniqueidentifier
-    DECLARE @MJConversationDetails_BranchID_TurnEndedAt datetimeoffset
-    DECLARE @MJConversationDetails_BranchID_UtteranceStartMs int
-    DECLARE @MJConversationDetails_BranchID_UtteranceEndMs int
-    DECLARE @MJConversationDetails_BranchID_MediaType nvarchar(20)
-    DECLARE @MJConversationDetails_BranchID_BranchID uniqueidentifier
-    DECLARE @MJConversationDetails_BranchID_ReplacedAt datetimeoffset
-    DECLARE cascade_update_MJConversationDetails_BranchID_cursor CURSOR FOR
-        SELECT [ID], [ConversationID], [ExternalID], [Role], [Message], [Error], [HiddenToUser], [UserRating], [UserFeedback], [ReflectionInsights], [SummaryOfEarlierConversation], [UserID], [ArtifactID], [ArtifactVersionID], [CompletionTime], [IsPinned], [ParentID], [AgentID], [Status], [SuggestedResponses], [TestRunID], [ResponseForm], [ActionableCommands], [AutomaticCommands], [OriginalMessageChanged], [AgentSessionID], [TurnEndedAt], [UtteranceStartMs], [UtteranceEndMs], [MediaType], [BranchID], [ReplacedAt]
-        FROM [${flyway:defaultSchema}].[ConversationDetail]
-        WHERE [BranchID] = @ID
-
-    OPEN cascade_update_MJConversationDetails_BranchID_cursor
-    FETCH NEXT FROM cascade_update_MJConversationDetails_BranchID_cursor INTO @MJConversationDetails_BranchIDID, @MJConversationDetails_BranchID_ConversationID, @MJConversationDetails_BranchID_ExternalID, @MJConversationDetails_BranchID_Role, @MJConversationDetails_BranchID_Message, @MJConversationDetails_BranchID_Error, @MJConversationDetails_BranchID_HiddenToUser, @MJConversationDetails_BranchID_UserRating, @MJConversationDetails_BranchID_UserFeedback, @MJConversationDetails_BranchID_ReflectionInsights, @MJConversationDetails_BranchID_SummaryOfEarlierConversation, @MJConversationDetails_BranchID_UserID, @MJConversationDetails_BranchID_ArtifactID, @MJConversationDetails_BranchID_ArtifactVersionID, @MJConversationDetails_BranchID_CompletionTime, @MJConversationDetails_BranchID_IsPinned, @MJConversationDetails_BranchID_ParentID, @MJConversationDetails_BranchID_AgentID, @MJConversationDetails_BranchID_Status, @MJConversationDetails_BranchID_SuggestedResponses, @MJConversationDetails_BranchID_TestRunID, @MJConversationDetails_BranchID_ResponseForm, @MJConversationDetails_BranchID_ActionableCommands, @MJConversationDetails_BranchID_AutomaticCommands, @MJConversationDetails_BranchID_OriginalMessageChanged, @MJConversationDetails_BranchID_AgentSessionID, @MJConversationDetails_BranchID_TurnEndedAt, @MJConversationDetails_BranchID_UtteranceStartMs, @MJConversationDetails_BranchID_UtteranceEndMs, @MJConversationDetails_BranchID_MediaType, @MJConversationDetails_BranchID_BranchID, @MJConversationDetails_BranchID_ReplacedAt
-
-    WHILE @@FETCH_STATUS = 0
-    BEGIN
-        -- Set the FK field to NULL
-        SET @MJConversationDetails_BranchID_BranchID = NULL
-
-        -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateConversationDetail] @ID = @MJConversationDetails_BranchIDID, @ConversationID = @MJConversationDetails_BranchID_ConversationID, @ExternalID = @MJConversationDetails_BranchID_ExternalID, @Role = @MJConversationDetails_BranchID_Role, @Message = @MJConversationDetails_BranchID_Message, @Error = @MJConversationDetails_BranchID_Error, @HiddenToUser = @MJConversationDetails_BranchID_HiddenToUser, @UserRating = @MJConversationDetails_BranchID_UserRating, @UserFeedback = @MJConversationDetails_BranchID_UserFeedback, @ReflectionInsights = @MJConversationDetails_BranchID_ReflectionInsights, @SummaryOfEarlierConversation = @MJConversationDetails_BranchID_SummaryOfEarlierConversation, @UserID = @MJConversationDetails_BranchID_UserID, @ArtifactID = @MJConversationDetails_BranchID_ArtifactID, @ArtifactVersionID = @MJConversationDetails_BranchID_ArtifactVersionID, @CompletionTime = @MJConversationDetails_BranchID_CompletionTime, @IsPinned = @MJConversationDetails_BranchID_IsPinned, @ParentID = @MJConversationDetails_BranchID_ParentID, @AgentID = @MJConversationDetails_BranchID_AgentID, @Status = @MJConversationDetails_BranchID_Status, @SuggestedResponses = @MJConversationDetails_BranchID_SuggestedResponses, @TestRunID = @MJConversationDetails_BranchID_TestRunID, @ResponseForm = @MJConversationDetails_BranchID_ResponseForm, @ActionableCommands = @MJConversationDetails_BranchID_ActionableCommands, @AutomaticCommands = @MJConversationDetails_BranchID_AutomaticCommands, @OriginalMessageChanged = @MJConversationDetails_BranchID_OriginalMessageChanged, @AgentSessionID = @MJConversationDetails_BranchID_AgentSessionID, @TurnEndedAt = @MJConversationDetails_BranchID_TurnEndedAt, @UtteranceStartMs = @MJConversationDetails_BranchID_UtteranceStartMs, @UtteranceEndMs = @MJConversationDetails_BranchID_UtteranceEndMs, @MediaType = @MJConversationDetails_BranchID_MediaType, @BranchID_Clear = 1, @BranchID = @MJConversationDetails_BranchID_BranchID, @ReplacedAt = @MJConversationDetails_BranchID_ReplacedAt
-
-        FETCH NEXT FROM cascade_update_MJConversationDetails_BranchID_cursor INTO @MJConversationDetails_BranchIDID, @MJConversationDetails_BranchID_ConversationID, @MJConversationDetails_BranchID_ExternalID, @MJConversationDetails_BranchID_Role, @MJConversationDetails_BranchID_Message, @MJConversationDetails_BranchID_Error, @MJConversationDetails_BranchID_HiddenToUser, @MJConversationDetails_BranchID_UserRating, @MJConversationDetails_BranchID_UserFeedback, @MJConversationDetails_BranchID_ReflectionInsights, @MJConversationDetails_BranchID_SummaryOfEarlierConversation, @MJConversationDetails_BranchID_UserID, @MJConversationDetails_BranchID_ArtifactID, @MJConversationDetails_BranchID_ArtifactVersionID, @MJConversationDetails_BranchID_CompletionTime, @MJConversationDetails_BranchID_IsPinned, @MJConversationDetails_BranchID_ParentID, @MJConversationDetails_BranchID_AgentID, @MJConversationDetails_BranchID_Status, @MJConversationDetails_BranchID_SuggestedResponses, @MJConversationDetails_BranchID_TestRunID, @MJConversationDetails_BranchID_ResponseForm, @MJConversationDetails_BranchID_ActionableCommands, @MJConversationDetails_BranchID_AutomaticCommands, @MJConversationDetails_BranchID_OriginalMessageChanged, @MJConversationDetails_BranchID_AgentSessionID, @MJConversationDetails_BranchID_TurnEndedAt, @MJConversationDetails_BranchID_UtteranceStartMs, @MJConversationDetails_BranchID_UtteranceEndMs, @MJConversationDetails_BranchID_MediaType, @MJConversationDetails_BranchID_BranchID, @MJConversationDetails_BranchID_ReplacedAt
-    END
-
-    CLOSE cascade_update_MJConversationDetails_BranchID_cursor
-    DEALLOCATE cascade_update_MJConversationDetails_BranchID_cursor
-    
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[ConversationBranch]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationBranch] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* spDelete Permissions for MJ: Conversation Branches */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationBranch] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
