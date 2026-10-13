@@ -41,3 +41,32 @@ describe('CohereEmbedding.EmbedTexts (real BaseEmbeddings dispatch → embedBatc
         await expect(e.EmbedTexts({ texts: ['a', 'b', 'c'], model: 'm' })).rejects.toThrow(/1:1|misaligned/i);
     });
 });
+
+describe('CohereEmbedding inputType mapping', () => {
+    beforeEach(() => {
+        mockEmbed.mockReset();
+        mockEmbed.mockResolvedValue(embedResponse([[1, 0]]));
+    });
+
+    it('sends search_query for a query and search_document for a document', async () => {
+        const e = new CohereEmbedding('k');
+        await e.EmbedText({ text: 'q', model: 'm', inputType: 'query' });
+        await e.EmbedText({ text: 'd', model: 'm', inputType: 'document' });
+        expect(mockEmbed.mock.calls[0][0]).toMatchObject({ inputType: 'search_query' });
+        expect(mockEmbed.mock.calls[1][0]).toMatchObject({ inputType: 'search_document' });
+    });
+
+    it('maps inputType on the batch path too', async () => {
+        await new CohereEmbedding('k').EmbedTexts({ texts: ['q'], model: 'm', inputType: 'query' });
+        expect(mockEmbed.mock.calls[0][0]).toMatchObject({ inputType: 'search_query' });
+    });
+
+    it('falls back to the AdditionalSettings override, then search_document, when inputType is omitted', async () => {
+        const e = new CohereEmbedding('k');
+        await e.EmbedText({ text: 'd', model: 'm' });
+        e.SetAdditionalSettings({ inputType: 'classification' });
+        await e.EmbedText({ text: 'd', model: 'm' });
+        expect(mockEmbed.mock.calls[0][0]).toMatchObject({ inputType: 'search_document' });
+        expect(mockEmbed.mock.calls[1][0]).toMatchObject({ inputType: 'classification' });
+    });
+});

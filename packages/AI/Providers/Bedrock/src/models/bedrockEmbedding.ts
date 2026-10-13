@@ -5,6 +5,7 @@ import {
   ModelUsage, 
   EmbedTextResult, 
   EmbedTextsResult,
+  EmbeddingInputType,
   ErrorAnalyzer 
 } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
@@ -12,6 +13,11 @@ import {
   BedrockRuntimeClient, 
   InvokeModelCommand 
 } from '@aws-sdk/client-bedrock-runtime';
+
+/** Cohere-on-Bedrock's required input_type for a call's retrieval role (omitted means a document). */
+function cohereInputType(inputType: EmbeddingInputType | undefined): string {
+  return inputType === 'query' ? 'search_query' : 'search_document';
+}
 
 @RegisterClass(BaseEmbeddings, 'BedrockEmbedding')
 export class BedrockEmbedding extends BaseEmbeddings {
@@ -55,7 +61,7 @@ export class BedrockEmbedding extends BaseEmbeddings {
           ...(params.dimensions ? { dimensions: params.dimensions } : {})
         };
       } else if (modelId.startsWith('cohere.embed')) {
-        requestBody = { texts: [params.text], input_type: "search_document" };
+        requestBody = { texts: [params.text], input_type: cohereInputType(params.inputType) };
       } else {
         throw new Error(`Unsupported embedding model provider for Bedrock: ${modelId}`);
       }
@@ -119,7 +125,7 @@ export class BedrockEmbedding extends BaseEmbeddings {
         // Cohere supports batch embedding
         const requestBody = { 
           texts: params.texts, 
-          input_type: "search_document" 
+          input_type: cohereInputType(params.inputType) 
         };
         
         // Invoke the model

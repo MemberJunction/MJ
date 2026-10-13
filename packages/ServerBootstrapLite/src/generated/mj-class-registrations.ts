@@ -1200,7 +1200,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (156 classes)
+// @memberjunction/core-actions (157 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1314,6 +1314,7 @@ import {
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
+    ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     ResolveAudienceAction,
@@ -2423,13 +2424,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
+    ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
-    ResolveAudienceAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
     RevertInteractiveFormAction,
@@ -2512,7 +2514,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1066;
+export const CLASS_REGISTRATIONS_COUNT = 1067;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

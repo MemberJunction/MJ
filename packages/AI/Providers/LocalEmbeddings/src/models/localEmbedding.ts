@@ -1,5 +1,7 @@
 import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, BaseEmbeddings, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
+import type { PreTrainedModel, PreTrainedTokenizer, PretrainedConfig, Tensor } from "@huggingface/transformers";
+import { availableParallelism } from "node:os";
 
 /**
  * Whether verbose logging is enabled, mirroring the MJ_VERBOSE semantics used by
@@ -14,29 +16,46 @@ function isVerbose(): boolean {
     return v !== undefined && ['true', '1', 'yes'].includes(v.toLowerCase());
 }
 
-// Dynamic import for ESM-only package
-// TypeScript types for @xenova/transformers (since we can't import them directly)
-interface TransformersEnv {
-    allowLocalModels: boolean;
-    cacheDir: string;
-    localURL?: string;
+type TransformersModule = typeof import("@huggingface/transformers");
+
+/** A loaded model: its tokenizer and ONNX model, shared by every call for that model ID. */
+interface LoadedModel {
+    tokenizer: PreTrainedTokenizer;
+    model: PreTrainedModel;
 }
 
-interface TransformersModule {
-    pipeline: (task: string, model: string, options?: Record<string, unknown>) => Promise<unknown>;
-    env: TransformersEnv;
+/** The part of a feature-extraction model's output this driver reads. */
+interface ModelOutput {
+    last_hidden_state: Tensor;
 }
 
-let pipeline: TransformersModule['pipeline'] | null = null;
-let env: TransformersEnv | null = null;
-let transformersLoaded = false;
-let transformersLoadingPromise: Promise<void> | null = null;
-let pendingSettings: Record<string, unknown> = {};
+/**
+ * Most texts per ONNX call. One call per batch is ~6× faster than one call per text. The `Xenova/*`
+ * models are dynamically quantized, so a vector depends slightly on its batch-mates (cosine ≥ 0.998
+ * to the same text embedded alone); EmbeddingGemma 2 is unaffected.
+ */
+const BATCH_SIZE = 32;
+
+/**
+ * Most padded tokens per ONNX call (texts × the longest one). A batch is padded to its longest text,
+ * so memory grows with both; this keeps 32 texts at 256 tokens in one call, while 8k-token documents
+ * go one at a time. A text longer than the budget still goes, alone.
+ */
+const BATCH_TOKENS = 8192;
+
+/**
+ * ONNX precision. `q8` loads `onnx/model_quantized.onnx`, the same file `@xenova/transformers`'
+ * `quantized: true` loaded, and is lossless for EmbeddingGemma 2 (cosine 0.99996 to fp32).
+ */
+const DTYPE = 'q8';
 
 // Retry configuration for model downloads
 const DEFAULT_MAX_RETRIES = 5;
 const DEFAULT_INITIAL_DELAY_MS = 2000;
 const DEFAULT_MAX_DELAY_MS = 30000;
+
+let pendingCacheDir: string | undefined;
+let transformersPromise: Promise<TransformersModule> | null = null;
 
 /**
  * Delays execution for the specified number of milliseconds
@@ -59,55 +78,52 @@ function calculateBackoffDelay(attempt: number, initialDelay: number, maxDelay: 
 }
 
 /**
- * Loads the @xenova/transformers ESM module with proper synchronization.
- * Uses a loading promise to prevent multiple concurrent imports when
- * parallel embedding requests occur during startup.
+ * Loads `@huggingface/transformers` once, on first use. This is a deferred import (category 3 in
+ * `.claude/rules/typescript-style.md`): importing it costs ~80–150 ms and ~50 MB RSS (native
+ * onnxruntime and sharp), and every process that loads the server class manifest imports this
+ * module, whether or not it ever embeds locally. The package is still a declared dependency.
+ * The promise is shared, so concurrent first calls import once.
  */
-async function loadTransformers(): Promise<void> {
-    // Fast path: already loaded
-    if (transformersLoaded) {
-        return;
+function loadTransformers(): Promise<TransformersModule> {
+    transformersPromise ??= import("@huggingface/transformers").then(transformers => {
+        transformers.env.allowLocalModels = true;
+        transformers.env.cacheDir = pendingCacheDir ?? process.env.TRANSFORMERS_CACHE_DIR ?? './.cache/transformers';
+        return transformers;
+    });
+    return transformersPromise;
+}
+
+/**
+ * Drops the vision and audio encoder configs of a multimodal model (e.g. EmbeddingGemma 2) so only
+ * the text session loads. EmbeddingGemma 2 at q8: 314 MB of text weights instead of 850 MB.
+ * A text-only config has no such keys and is returned unchanged.
+ */
+function textOnly(config: PretrainedConfig): PretrainedConfig {
+    const encoders = config as PretrainedConfig & { vision_config?: object | null; audio_config?: object | null };
+    if (encoders.vision_config) encoders.vision_config = null;
+    if (encoders.audio_config) encoders.audio_config = null;
+    return config;
+}
+
+/**
+ * Matryoshka truncation: keeps the leading `dimensions` values, then L2 re-normalizes, because a
+ * slice of a unit vector is not unit length and cosine scores would drift silently.
+ */
+function truncateToDimensions(vector: number[], dimensions: number): number[] {
+    if (dimensions === vector.length) {
+        return vector;
     }
-
-    // If currently loading, wait for the same promise (prevents duplicate imports)
-    if (transformersLoadingPromise) {
-        return transformersLoadingPromise;
+    if (dimensions > vector.length) {
+        throw new Error(`Requested ${dimensions} dimensions, but the model produces ${vector.length}`);
     }
-
-    // Start loading and store the promise for concurrent callers to reuse
-    transformersLoadingPromise = (async () => {
-        // Use dynamic import to load ESM module in CommonJS context
-        // This approach is cleaner than Function constructor and TypeScript-friendly
-        const transformers = await (eval('import("@xenova/transformers")') as Promise<TransformersModule>);
-        pipeline = transformers.pipeline;
-        env = transformers.env;
-
-        // Configure Transformers.js settings
-        env.allowLocalModels = true;
-        // Note: localURL might not be available in all versions of transformers.js
-        if ('localURL' in env) {
-            env.localURL = process.env.TRANSFORMERS_LOCAL_URL || '';
-        }
-        env.cacheDir = process.env.TRANSFORMERS_CACHE_DIR || './.cache/transformers';
-
-        // Apply any pending settings that were set before transformers was loaded
-        if (pendingSettings.cacheDir) {
-            env.cacheDir = pendingSettings.cacheDir as string;
-        }
-        if (pendingSettings.localURL && 'localURL' in env) {
-            env.localURL = pendingSettings.localURL as string;
-        }
-
-        transformersLoaded = true;
-    })();
-
-    return transformersLoadingPromise;
+    const head = vector.slice(0, dimensions);
+    const norm = Math.hypot(...head);
+    return norm > 0 ? head.map(x => x / norm) : head;
 }
 
 @RegisterClass(BaseEmbeddings, 'LocalEmbedding')
 export class LocalEmbedding extends BaseEmbeddings {
-    private static pipelines: Map<string, any> = new Map();
-    private static loadingPromises: Map<string, Promise<any>> = new Map();
+    private static models: Map<string, Promise<LoadedModel>> = new Map();
 
     constructor(apiKey?: string) {
         // Local embeddings don't require an API key
@@ -123,48 +139,37 @@ export class LocalEmbedding extends BaseEmbeddings {
         return false;
     }
 
-    /**
-     * Get or create a pipeline for the specified model
-     */
-    private async getPipeline(modelName: string): Promise<any> {
-        // Ensure transformers is loaded
-        await loadTransformers();
-        // Check if pipeline already exists
-        if (LocalEmbedding.pipelines.has(modelName)) {
-            return LocalEmbedding.pipelines.get(modelName)!;
-        }
-
-        // Check if pipeline is currently being loaded
-        if (LocalEmbedding.loadingPromises.has(modelName)) {
-            return LocalEmbedding.loadingPromises.get(modelName)!;
-        }
-
-        // Create loading promise
-        // The modelName should be the Hugging Face model ID (e.g., 'Xenova/all-MiniLM-L6-v2')
-        const loadingPromise = this.loadPipeline(modelName);
-        LocalEmbedding.loadingPromises.set(modelName, loadingPromise);
-
-        try {
-            const pipeline = await loadingPromise;
-            LocalEmbedding.pipelines.set(modelName, pipeline);
-            LocalEmbedding.loadingPromises.delete(modelName);
-            return pipeline;
-        } catch (error) {
-            LocalEmbedding.loadingPromises.delete(modelName);
-            throw error;
-        }
+    /** Batches go through {@link embedBatch}: one ONNX call per {@link BATCH_SIZE} texts or {@link BATCH_TOKENS} padded tokens. */
+    public override get SupportsBatchEmbeddings(): boolean {
+        return true;
     }
 
     /**
-     * Load a pipeline for the specified model with retry logic.
+     * Get or start loading the model for a Hugging Face model ID (e.g. 'Xenova/all-MiniLM-L6-v2').
+     * Concurrent callers share one load; a failed load is forgotten so the next call retries.
+     */
+    private getModel(modelId: string): Promise<LoadedModel> {
+        let loading = LocalEmbedding.models.get(modelId);
+        if (!loading) {
+            loading = this.loadModel(modelId);
+            LocalEmbedding.models.set(modelId, loading);
+            const pending = loading;
+            pending.catch(() => {
+                if (LocalEmbedding.models.get(modelId) === pending) {
+                    LocalEmbedding.models.delete(modelId);
+                }
+            });
+        }
+        return loading;
+    }
+
+    /**
+     * Load a model with retry logic.
      * Uses exponential backoff to handle transient network failures when
      * downloading models from HuggingFace Hub on first startup.
      */
-    private async loadPipeline(modelId: string): Promise<unknown> {
-        if (!pipeline) {
-            throw new Error('Transformers module not loaded');
-        }
-
+    private async loadModel(modelId: string): Promise<LoadedModel> {
+        const { AutoConfig, AutoModel, AutoTokenizer } = await loadTransformers();
         const maxRetries = DEFAULT_MAX_RETRIES;
         let lastError: unknown = null;
 
@@ -181,10 +186,16 @@ export class LocalEmbedding extends BaseEmbeddings {
                     await delay(backoffDelay);
                 }
 
-                // Create feature extraction pipeline
-                const pipe = await pipeline('feature-extraction', modelId, {
-                    quantized: true, // Use quantized models for better performance
-                });
+                const config = textOnly(await AutoConfig.from_pretrained(modelId));
+                // ONNX Runtime sizes its thread pool from the host's cores and ignores a container's CPU limit;
+                // with 2 CPUs on an 18-core host that made EmbeddingGemma 2 queries 1.3 s instead of 0.1 s.
+                // availableParallelism() honors cpusets and CPU quotas.
+                const [tokenizer, model] = await Promise.all([
+                    AutoTokenizer.from_pretrained(modelId),
+                    AutoModel.from_pretrained(modelId, {
+                        config, dtype: DTYPE, device: 'cpu', session_options: { intraOpNumThreads: availableParallelism() },
+                    }),
+                ]);
 
                 if (attempt > 0) {
                     // Recovered after a retry — worth surfacing regardless of verbosity
@@ -193,7 +204,7 @@ export class LocalEmbedding extends BaseEmbeddings {
                     console.log(`Model ${modelId} loaded successfully`);
                 }
 
-                return pipe;
+                return { tokenizer, model };
             } catch (error) {
                 lastError = error;
 
@@ -292,118 +303,70 @@ export class LocalEmbedding extends BaseEmbeddings {
     }
 
     /**
+     * Embeds texts with mean pooling and L2 normalization, the same computation as the
+     * transformers.js `feature-extraction` pipeline. The driver tokenizes itself so it can truncate
+     * to `maxInputTokens`: the pipeline only truncates to the tokenizer's own limit, and some
+     * tokenizers declare none (EmbeddingGemma 2's reads as 1e30, past its 8,192-token window).
+     */
+    private async embed(modelId: string, texts: string[], dimensions?: number, maxInputTokens?: number): Promise<{ vectors: number[][]; tokens: number }> {
+        const { tokenizer, model } = await this.getModel(modelId);
+        const { mean_pooling } = await loadTransformers();
+        const vectors: number[][] = [];
+        let tokens = 0;
+
+        const lengths = texts.map(t => Math.min(tokenizer.encode(t).length, maxInputTokens ?? Infinity));
+        for (let start = 0, end = 0; start < texts.length; start = end) {
+            let longest = lengths[start];
+            for (end = start + 1; end < texts.length && end - start < BATCH_SIZE; end++) {
+                const next = Math.max(longest, lengths[end]);
+                if (next * (end - start + 1) > BATCH_TOKENS) break;
+                longest = next;
+            }
+            const inputs = tokenizer(texts.slice(start, end), { padding: true, truncation: true, max_length: maxInputTokens });
+            const output: ModelOutput = await model(inputs);
+            const pooled = mean_pooling(output.last_hidden_state, inputs.attention_mask).normalize(2, -1);
+            vectors.push(...(pooled.tolist() as number[][]));
+            tokens += Number(inputs.attention_mask.sum().item());
+        }
+
+        return { vectors: dimensions ? vectors.map(v => truncateToDimensions(v, dimensions)) : vectors, tokens };
+    }
+
+    private requireModel(model: string | undefined): string {
+        if (!model) {
+            throw new Error('Model name is required for LocalEmbedding provider');
+        }
+        return model;
+    }
+
+    /**
      * Embed a single text string
      */
     public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
-        if (!params.model) {
-            throw new Error('Model name is required for LocalEmbedding provider');
-        }
-        const modelName = params.model;
-        const startTime = Date.now();
-
+        const modelName = this.requireModel(params.model);
         try {
-            // Get or load the pipeline
-            const pipe = await this.getPipeline(modelName);
-            
-            // Generate embeddings
-            const output = await pipe(params.text, {
-                pooling: 'mean',
-                normalize: true
-            });
-            
-            // Convert tensor to array
-            const embedding = Array.from(output.data as Float32Array);
-            
-            // Calculate approximate token count (rough estimation)
-            const tokenCount = Math.ceil(params.text.length / 4);
-            
-            const endTime = Date.now();
-            // Only log if it took more than 1 second (indicating potential performance issues)
-            if (endTime - startTime > 1000) {
-                console.log(`Embedded text in ${endTime - startTime}ms using ${modelName}`);
-            }
-
-            return {
-                object: 'object',
-                model: modelName,
-                ModelUsage: new ModelUsage(tokenCount, 0),
-                vector: embedding
-            };
+            const { vectors, tokens } = await this.embed(modelName, [params.text], params.dimensions, params.maxInputTokens);
+            return { object: 'object', model: modelName, ModelUsage: new ModelUsage(tokens, 0), vector: vectors[0] };
         } catch (error) {
-            const errorInfo = ErrorAnalyzer.analyzeError(error, 'LocalEmbedding');
-            console.error('Local embedding error:', errorInfo);
-            
-            return {
-                object: 'object',
-                model: modelName,
-                ModelUsage: new ModelUsage(0, 0),
-                vector: []
-            };
+            // BaseEmbeddings error convention: a failed single embed returns an empty vector.
+            console.error('Local embedding error:', ErrorAnalyzer.analyzeError(error, 'LocalEmbedding'));
+            return { object: 'object', model: modelName, ModelUsage: new ModelUsage(0, 0), vector: [] };
         }
     }
 
     /**
-     * Embed multiple text strings
+     * Native batch path behind {@link BaseEmbeddings.EmbedTexts}, which checks the result is 1:1
+     * with the inputs.
      */
-    public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
-        if (!params.model) {
-            throw new Error('Model name is required for LocalEmbedding provider');
-        }
-        const modelName = params.model;
-        const startTime = Date.now();
-
+    protected override async embedBatch(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+        const modelName = this.requireModel(params.model);
         try {
-            // Get or load the pipeline
-            const pipe = await this.getPipeline(modelName);
-            
-            // Process texts in batches for efficiency
-            const batchSize = 32;
-            const vectors: number[][] = [];
-            let totalTokens = 0;
-            
-            for (let i = 0; i < params.texts.length; i += batchSize) {
-                const batch = params.texts.slice(i, i + batchSize);
-                
-                // Generate embeddings for batch
-                const outputs = await Promise.all(
-                    batch.map(text => pipe(text, {
-                        pooling: 'mean',
-                        normalize: true
-                    }))
-                );
-                
-                // Convert tensors to arrays
-                for (const output of outputs) {
-                    const embedding = Array.from(output.data as Float32Array);
-                    vectors.push(embedding);
-                }
-                
-                // Estimate token count
-                totalTokens += batch.reduce((sum, text) => sum + Math.ceil(text.length / 4), 0);
-            }
-            
-            const endTime = Date.now();
-            // Only log if it took more than 1 second per text on average
-            if ((endTime - startTime) / params.texts.length > 1000) {
-                console.log(`Embedded ${params.texts.length} texts in ${endTime - startTime}ms using ${modelName}`);
-            }
-
-            return {
-                object: 'list',
-                model: modelName,
-                ModelUsage: new ModelUsage(totalTokens, 0),
-                vectors: vectors
-            };
+            const { vectors, tokens } = await this.embed(modelName, params.texts, params.dimensions, params.maxInputTokens);
+            return { object: 'list', model: modelName, ModelUsage: new ModelUsage(tokens, 0), vectors };
         } catch (error) {
-            const errorInfo = ErrorAnalyzer.analyzeError(error, 'LocalEmbedding');
-            console.error('Local embedding error:', errorInfo);
-            
-            return {
-                object: 'list',
-                model: modelName,
-                ModelUsage: new ModelUsage(0, 0),
-                vectors: []
-            };
+            // BaseEmbeddings error convention: a failed batch returns no vectors at all.
+            console.error('Local embedding error:', ErrorAnalyzer.analyzeError(error, 'LocalEmbedding'));
+            return { object: 'list', model: modelName, ModelUsage: new ModelUsage(0, 0), vectors: [] };
         }
     }
 
@@ -419,32 +382,21 @@ export class LocalEmbedding extends BaseEmbeddings {
     }
 
     /**
-     * Override SetAdditionalSettings to handle local embedding specific settings
+     * Accepts `cacheDir`, the model download directory. It applies when the runtime first loads,
+     * so set it before the first embed.
      */
     public override SetAdditionalSettings(settings: Record<string, any>): void {
         super.SetAdditionalSettings(settings);
-        
-        // Store settings in pendingSettings to be applied when transformers loads
         if (settings.cacheDir) {
-            pendingSettings.cacheDir = settings.cacheDir;
-        }
-        if (settings.localURL) {
-            pendingSettings.localURL = settings.localURL;
-        }
-        
-        // Handle quantized model preference
-        if (settings.useQuantized !== undefined) {
-            // Store for use when loading models
-            this._additionalSettings.useQuantized = settings.useQuantized;
+            pendingCacheDir = settings.cacheDir;
         }
     }
 
     /**
-     * Clear loaded pipelines to free memory
+     * Clear loaded models to free memory
      */
     public ClearCache(): void {
-        LocalEmbedding.pipelines.clear();
-        LocalEmbedding.loadingPromises.clear();
+        LocalEmbedding.models.clear();
         console.log('Cleared local embedding model cache');
     }
 
@@ -452,13 +404,12 @@ export class LocalEmbedding extends BaseEmbeddings {
     public clearCache(): void {
         return this.ClearCache();
     }
-    
+
     /**
      * Static method to clear the shared cache
      */
     public static ClearSharedCache(): void {
-        LocalEmbedding.pipelines.clear();
-        LocalEmbedding.loadingPromises.clear();
+        LocalEmbedding.models.clear();
         console.log('Cleared shared local embedding model cache');
     }
 
@@ -471,7 +422,7 @@ export class LocalEmbedding extends BaseEmbeddings {
      * Preload a specific model for faster first inference
      */
     public async PreloadModel(modelName: string): Promise<void> {
-        await this.getPipeline(modelName);
+        await this.getModel(modelName);
     }
 
     /** @deprecated Use {@link PreloadModel}. */

@@ -549,10 +549,13 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     }
 
     try {
+      const prepared = AIEngine.Instance.PrepareEmbeddingInput(candidate.model, params.Texts, params.InputType, candidate.vendorId);
       const embedResult = await embeddingInstance.EmbedTexts({
-        texts: params.Texts,
+        texts: prepared.texts,
         model: candidate.apiName,
         dimensions: params.Dimensions,
+        inputType: params.InputType,
+        maxInputTokens: prepared.maxInputTokens,
       });
 
       if (!embedResult || !embedResult.vectors || embedResult.vectors.length === 0) {
