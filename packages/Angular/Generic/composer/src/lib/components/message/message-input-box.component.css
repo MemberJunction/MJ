@@ -92,6 +92,62 @@
   opacity: 0.5;
 }
 
+/* The send slot as a stop control. Same element, same place; red says what a click does now. */
+.send-button-icon--stop {
+  background: var(--mj-status-error);
+  color: var(--mj-brand-on-primary);
+}
+.send-button-icon--stop:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mj-status-error) 85%, var(--mj-text-primary));
+}
+/* "Stop all N": the square widens into a labelled button. */
+.send-button-icon--stop-all {
+  width: auto;
+  padding: 0 12px;
+  gap: 8px;
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.send-slot-count {
+  background: color-mix(in srgb, var(--mj-brand-on-primary) 22%, transparent);
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: var(--mj-text-xs);
+}
+/* Stopping: neutral and waiting, not greyed-out like an empty Send. */
+.send-button-icon--stopping:disabled {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-secondary);
+  cursor: default;
+  opacity: 1;
+}
+
+/* Status line, bottom-left of the box. The editor gets room above it so a draft never sits under it. */
+.input-wrapper--status mj-mention-editor {
+  padding-bottom: 1.75rem;
+}
+.send-slot-status {
+  position: absolute;
+  left: 0.9rem;
+  bottom: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 4.5rem);
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
+  pointer-events: none;
+}
+.send-slot-status--stopping {
+  color: var(--mj-text-muted);
+}
+.send-slot-status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Attach buttons container */
 .attach-buttons {
   position: absolute;
@@ -180,6 +236,13 @@
     bottom: 0.625rem;
     right: 2.75rem;
   }
+  /* The status line drops its elapsed time; "Sage is working" is enough at this width. */
+  .send-slot-status-elapsed {
+    display: none;
+  }
+  .send-slot-status {
+    bottom: 0.875rem;
+  }
   .attach-button-icon {
     width: 32px;
     height: 32px;
@@ -210,6 +273,12 @@
   }
   .send-button-icon i {
     font-size: 0.875rem;
+  }
+  /* The status line truncates before the slot; it never wraps under it. */
+  .send-slot-status {
+    left: 0.75rem;
+    bottom: 0.75rem;
+    max-width: calc(100% - 3.75rem);
   }
   .attach-buttons {
     bottom: 0.5rem;
