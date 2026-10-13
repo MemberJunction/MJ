@@ -7,5 +7,14 @@
     "primaryKey": {
       "ID": "76CF3040-4B61-44F5-BD62-57EAB3445558"
     }
+  },
+  {
+    "fields": {
+      "Name": "Realtime Agent Vision Consent",
+      "Description": "A person chose whether agents may see their camera and shared screen in a meeting room: allowed, or stopped allowing. Written by MJAPI when it sets the person's mj.agentCanSee LiveKit attribute, including when LiveKit refuses (Status Failed). UserID and RecordID are the person; Details carries the room and the choice."
+    },
+    "primaryKey": {
+      "ID": "5E569E46-F80A-4272-9E9A-F360DCB54C66"
+    }
   }
 ]

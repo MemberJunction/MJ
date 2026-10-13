@@ -84,6 +84,18 @@ describe('rubric version publish', () => {
         expect(errors).toMatch(/empty group/);
     });
 
+    it('finds an advisory ancestor even when the leaf spells the parent ID in a different case', () => {
+        // SQL Server returns UUIDs upper-case and PostgreSQL lower-case, so a node's parentId and its
+        // parent's id can differ only in case. The advisory-ancestor walk must still find the parent.
+        const draft = version({
+            nodes: [
+                { id: 'aaaaaaaa-0000-0000-0000-00000000000a', key: 'advice', name: 'Advice', nodeType: 'Group', weight: 1, isAdvisory: true, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 },
+                { id: 'bbbbbbbb-0000-0000-0000-00000000000b', key: 'scored', name: 'Scored', nodeType: 'Criterion', parentId: 'AAAAAAAA-0000-0000-0000-00000000000A', scaleId: 'scale', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 1 },
+            ],
+        });
+        expect(ValidateRubricTree(draft).errors.join(' ')).toMatch(/scored is a non-advisory leaf under the advisory group advice/);
+    });
+
     it('rejects a criterion with children, an empty tree, an advisory parent, and bands that do not tile 0..1', () => {
         const leaf = version().nodes[0];
         const withChild = version({
