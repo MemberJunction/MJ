@@ -154,7 +154,8 @@ function skipQuoted(sql: string, i: number, close: string, backslashEscapes: boo
  * open one (a positional parameter such as `$1`, or a stray `$`).
  */
 function skipDollarQuoted(sql: string, i: number): number {
-    const tag = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(sql.substring(i));
+    // PostgreSQL accepts any non-ASCII character in a tag, as well as ASCII letters, digits and `_`.
+    const tag = /^\$([A-Za-z_\u0080-\uffff][A-Za-z0-9_\u0080-\uffff]*)?\$/.exec(sql.substring(i));
     if (!tag) return i;
     const delimiter = tag[0];
     const close = sql.indexOf(delimiter, i + delimiter.length);
