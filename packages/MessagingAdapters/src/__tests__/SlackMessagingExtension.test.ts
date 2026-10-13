@@ -411,6 +411,33 @@ describe('SlackMessagingExtension', () => {
         });
     });
 
+    describe('handleSlashCommand logging', () => {
+        it('logs slash-command text containing line breaks on a single line (CWE-117)', async () => {
+            const { LogStatus } = await import('@memberjunction/core');
+            vi.mocked(LogStatus).mockClear();
+            const app = createMockApp();
+            await extension.Initialize(app, createConfig());
+            const handleSlashCommand = (extension as unknown as {
+                handleSlashCommand: (req: Request, res: Response) => Promise<void>;
+            }).handleSlashCommand.bind(extension);
+
+            const req = {
+                body: {
+                    command: '/no-such-command',
+                    text: 'hi\r\n[Slack] forged entry',
+                    user_id: 'U1',
+                    channel_id: 'C1\n',
+                },
+            } as unknown as Request;
+            const res = { json: vi.fn() } as unknown as Response;
+
+            await handleSlashCommand(req, res);
+
+            const line = vi.mocked(LogStatus).mock.calls.map(c => String(c[0])).find(l => l.startsWith('Slack slash command:'));
+            expect(line).toBe('Slack slash command: command=/no-such-command, text="hi[Slack] forged entry", user=U1, channel=C1');
+        });
+    });
+
     describe('processSlackEvent', () => {
         async function getProcessEvent(ext: SlackMessagingExtension): (event: Record<string, unknown> | undefined) => Promise<void> {
             const app = createMockApp();
@@ -488,6 +515,22 @@ describe('SlackMessagingExtension', () => {
             expect(vi.mocked(LogStatus)).toHaveBeenCalledWith(
                 expect.stringContaining('skipping bot/subtype message')
             );
+        });
+
+        it('logs event fields containing line breaks on a single line (CWE-117)', async () => {
+            const { LogStatus } = await import('@memberjunction/core');
+            const processEvent = await getProcessEvent(extension);
+
+            await processEvent({
+                type: 'reaction_added',
+                user: 'U1\n[Slack] forged entry',
+                channel: 'C1\r\nC2',
+            });
+
+            const lines = vi.mocked(LogStatus).mock.calls.map(c => String(c[0]));
+            const received = lines.find(l => l.startsWith('Slack event received'));
+            expect(received).toBe('Slack event received: type=reaction_added, channel=C1C2, user=U1[Slack] forged entry');
+            for (const l of lines) expect(l).not.toMatch(/[\r\n]/);
         });
 
         it('should handle undefined event gracefully', async () => {
