@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { ManageMetadataBase, CREATION_TIME_ENTITY_ATTRIBUTES, type CreationTimeEntityAttribute } from '../Database/manage-metadata';
+import { ManageMetadataBase } from '../Database/manage-metadata';
+import type { EntityConfigurableAtCreationAttribute } from '@memberjunction/core';
 import { SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
@@ -69,7 +70,7 @@ class TestableManageMetadata extends ManageMetadataBase {
    public resolveCreationTimeEntityConfigPublic(
       schemaName: string,
       tableName: string
-   ): Partial<Record<CreationTimeEntityAttribute, boolean | number>> {
+   ): Partial<Record<EntityConfigurableAtCreationAttribute, boolean | number>> {
       return this.resolveCreationTimeEntityConfig(schemaName, tableName);
    }
 
@@ -310,7 +311,7 @@ describe('ManageMetadataBase.resolveCreationTimeEntityConfig', () => {
                BaseTable: 'Orders',
                SchemaName: 'dbo',
                TrackRecordChanges: false,
-               AllowMultipleSubtypes: true, // not in CREATION_TIME_ENTITY_ATTRIBUTES
+               AllowMultipleSubtypes: true, // not in EntityInfo.ConfigurableAtCreationAttributes
                SomeOtherField: 'value',
             },
          ],

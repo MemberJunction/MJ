@@ -11,7 +11,7 @@ import { QueryParameterProcessor, type QueryTemplateInput } from '@memberjunctio
 // and the SS code path silently fails.
 import './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, currentWorkingDirectory, DbPlatform, GetSettingValue, MjCoreSchema, OutputDir } from '../Config/config';
-import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExternalDataSourceReadRouter, ExternalSchemaObject, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, RunQuerySQLFilterManager, SeverityType, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, type EntityConfigurableAtCreationAttribute, ExternalDataSourceReadRouter, ExternalSchemaObject, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, RunQuerySQLFilterManager, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity, MJEntityFieldSchema, MJQueryParameterEntity } from "@memberjunction/core-entities";
 import { logError, LogMessage, logStatus, LogWarning, StartSpinner, UpdateSpinner, SucceedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
@@ -205,17 +205,6 @@ export interface EntityConfig {
    /** Any additional Entity-table columns to set, keyed by column name */
    [key: string]: unknown;
 }
-
-/**
- * Entity columns that a per-table `Entities` entry in the additionalSchemaInfo config may set when
- * CodeGen first creates the entity, overriding the global `newEntityDefaults`. See
- * `ManageMetadataBase.resolveCreationTimeEntityConfig`.
- */
-export const CREATION_TIME_ENTITY_ATTRIBUTES = [
-   'IncludeInAPI', 'AllowUserSearchAPI', 'AllowCaching', 'TrackRecordChanges', 'AuditRecordAccess',
-   'AuditViewRuns', 'AllowAllRowsAPI', 'AllowCreateAPI', 'AllowUpdateAPI', 'AllowDeleteAPI', 'UserViewMaxRows',
-] as const;
-export type CreationTimeEntityAttribute = typeof CREATION_TIME_ENTITY_ATTRIBUTES[number];
 
 /**
  * Configuration for a transitive bridge view that CodeGen will create automatically.
@@ -7645,10 +7634,10 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
     * `TrackRecordChanges: false` used to receive `__mj_CreatedAt` / `__mj_UpdatedAt` columns on its
     * first CodeGen run anyway.
     *
-    * Only the attributes in {@link CREATION_TIME_ENTITY_ATTRIBUTES} are returned, and only with a value of the right type
+    * Only the attributes in {@link EntityInfo.ConfigurableAtCreationAttributes} are returned, and only with a value of the right type
     * (boolean, or number for `UserViewMaxRows`); anything else is left to `processEntityConfigs`.
     */
-   protected resolveCreationTimeEntityConfig(schemaName: string, tableName: string): Partial<Record<CreationTimeEntityAttribute, boolean | number>> {
+   protected resolveCreationTimeEntityConfig(schemaName: string, tableName: string): Partial<Record<EntityConfigurableAtCreationAttribute, boolean | number>> {
       const config = ManageMetadataBase.getSoftPKFKConfig();
       if (!config) return {};
       const match = this.extractEntitiesFromConfig(config).find(ec =>
@@ -7656,8 +7645,8 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
          ec.BaseTable.trim().toLowerCase() === tableName.trim().toLowerCase());
       if (!match) return {};
 
-      const overrides: Partial<Record<CreationTimeEntityAttribute, boolean | number>> = {};
-      for (const attr of CREATION_TIME_ENTITY_ATTRIBUTES) {
+      const overrides: Partial<Record<EntityConfigurableAtCreationAttribute, boolean | number>> = {};
+      for (const attr of EntityInfo.ConfigurableAtCreationAttributes) {
          const value = match[attr];
          if (attr === 'UserViewMaxRows' ? typeof value === 'number' : typeof value === 'boolean') {
             overrides[attr] = value as boolean | number;
@@ -7689,7 +7678,7 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
 
       // Effective value for each optional flag: per-table config first, then the global default.
       // `undefined` leaves the column out of the INSERT so the table default applies.
-      const flag = (attr: CreationTimeEntityAttribute, globalDefault: boolean | number | undefined): boolean | number | undefined =>
+      const flag = (attr: EntityConfigurableAtCreationAttribute, globalDefault: boolean | number | undefined): boolean | number | undefined =>
          overrides[attr] !== undefined ? overrides[attr] : globalDefault;
       const literal = (value: boolean | number): string => typeof value === 'boolean' ? this.boolLit(value) : String(value);
 
@@ -7698,7 +7687,7 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
          ['AllowUserSearchAPI', literal(flag('AllowUserSearchAPI', newEntityDefaults.AllowUserSearchAPI ?? true) as boolean)],
          ['AllowCaching', literal(flag('AllowCaching', this.resolveAllowCachingForSchema(newEntity.SchemaName)) as boolean)],
       ];
-      const optional: Array<[CreationTimeEntityAttribute, boolean | number | undefined]> = [
+      const optional: Array<[EntityConfigurableAtCreationAttribute, boolean | number | undefined]> = [
          ['TrackRecordChanges', newEntityDefaults.TrackRecordChanges],
          ['AuditRecordAccess', newEntityDefaults.AuditRecordAccess],
          ['AuditViewRuns', newEntityDefaults.AuditViewRuns],
