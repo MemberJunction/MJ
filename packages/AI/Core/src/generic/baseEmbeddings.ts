@@ -2,6 +2,41 @@ import { FileCapabilities } from './baseLLM';
 import { BaseModel, ModelUsage } from './baseModel';
 import { ChatMessageContent, ChatMessageContentBlock } from './chat.types';
 import { EmbedContentParams, EmbedContentResult, EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult } from './embed.types';
+import { AIErrorInfo } from './errorTypes';
+
+/** An embedding model's output widths, as a driver's {@link BaseEmbeddings.EmbeddingModels} table lists it. */
+export interface EmbeddingModelInfo {
+    Model: string;
+    Description: string;
+    /** The width of the vectors the model produces when no `dimensions` is requested. */
+    OutputDimension: number;
+    /**
+     * Whether the model accepts a `dimensions` request parameter. A model that doesn't (OpenAI's
+     * text-embedding-ada-002, Bedrock's Titan Embed Text V1) has one width and rejects the parameter,
+     * even when the requested width is its own.
+     */
+    AcceptsDimensions: boolean;
+    /**
+     * The widths a model that accepts `dimensions` can produce. Omitted, it can produce any width from
+     * 1 to {@link OutputDimension} (OpenAI's text-embedding-3 models).
+     */
+    SupportedDimensions?: readonly number[];
+}
+
+/**
+ * Thrown before any API call when a driver's model table says the model can't produce the requested
+ * width. The request would fail (or return vectors of the wrong width) on every vendor of that model,
+ * so the error carries a non-retriable classification that {@link ErrorAnalyzer} passes through.
+ */
+export class EmbeddingDimensionsError extends Error {
+    public readonly errorInfo: AIErrorInfo;
+
+    constructor(model: string, requested: number, supported: string) {
+        super(`Embedding model '${model}' can't produce ${requested}-dimension vectors; it supports ${supported}.`);
+        this.name = 'EmbeddingDimensionsError';
+        this.errorInfo = { errorType: 'InvalidRequest', severity: 'Fatal', canFailover: false, error: this };
+    }
+}
 
 /**
  * Base class for all embedding model implementations
@@ -105,6 +140,52 @@ export abstract class BaseEmbeddings extends BaseModel {
      */
     public abstract EmbedText(params: EmbedTextParams): Promise<EmbedTextResult>;
     public abstract GetEmbeddingModels(): Promise<any>;
+
+    /**
+     * The driver's known embedding models and their widths. Empty by default: a driver with no table
+     * forwards `dimensions` as it is given. Used by {@link DimensionsParam}.
+     */
+    protected get EmbeddingModels(): readonly EmbeddingModelInfo[] {
+        return [];
+    }
+
+    /**
+     * The `dimensions` request parameter for a call to `model`, or none.
+     *
+     * Callers pass the vector index's `Dimensions` on every call, and MJ stamps one on every index it
+     * creates, so a model with a single width is asked for it too. For a model in
+     * {@link EmbeddingModels}:
+     * - a model that rejects the parameter is sent nothing when the requested width is its own,
+     *   which is what it produces anyway;
+     * - a width the model can't produce throws {@link EmbeddingDimensionsError} before any (paid)
+     *   API call. Call this outside the driver's try/catch so the error isn't degraded to an empty
+     *   result.
+     *
+     * A model not in the table gets the width as requested.
+     */
+    protected DimensionsParam(model: string, dimensions?: number): { dimensions?: number } {
+        if (!dimensions) {
+            return {};
+        }
+        const info = this.EmbeddingModels.find((m) => m.Model === model);
+        if (!info) {
+            return { dimensions };
+        }
+        if (!info.AcceptsDimensions) {
+            if (dimensions !== info.OutputDimension) {
+                throw new EmbeddingDimensionsError(model, dimensions, `only ${info.OutputDimension}`);
+            }
+            return {};
+        }
+        if (info.SupportedDimensions) {
+            if (!info.SupportedDimensions.includes(dimensions)) {
+                throw new EmbeddingDimensionsError(model, dimensions, info.SupportedDimensions.join(', '));
+            }
+        } else if (dimensions > info.OutputDimension) {
+            throw new EmbeddingDimensionsError(model, dimensions, `1 to ${info.OutputDimension}`);
+        }
+        return { dimensions };
+    }
 
     /**
      * Whether this provider's embedding model has a NATIVE batch endpoint that returns one vector

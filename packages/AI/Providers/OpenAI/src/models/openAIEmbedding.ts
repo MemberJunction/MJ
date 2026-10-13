@@ -1,20 +1,12 @@
-import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, BaseEmbeddings, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
+import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, BaseEmbeddings, EmbeddingModelInfo, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 import { OpenAI } from "openai";
 
-/** An OpenAI embedding model, as {@link OpenAIEmbedding.GetEmbeddingModels} lists it. */
-export interface OpenAIEmbeddingModelInfo {
-    Model: string;
-    Description: string;
-    /** The width of the vectors the model produces when no `dimensions` is requested. */
-    OutputDimension: number;
-    /**
-     * Whether the model accepts the `dimensions` request parameter. OpenAI's API reference: "Only
-     * supported in `text-embedding-3` and later models." text-embedding-ada-002 has a fixed width of
-     * 1536 and rejects the parameter, even when the requested width is its own.
-     */
-    AcceptsDimensions: boolean;
-}
+/**
+ * An OpenAI embedding model, as {@link OpenAIEmbedding.GetEmbeddingModels} lists it. OpenAI's API
+ * reference on `dimensions`: "Only supported in `text-embedding-3` and later models."
+ */
+export type OpenAIEmbeddingModelInfo = EmbeddingModelInfo;
 
 const OPENAI_EMBEDDING_MODELS: readonly OpenAIEmbeddingModelInfo[] = [
     {
@@ -36,6 +28,8 @@ const OPENAI_EMBEDDING_MODELS: readonly OpenAIEmbeddingModelInfo[] = [
         AcceptsDimensions: false,
     },
 ];
+
+const DEFAULT_MODEL = 'text-embedding-3-small';
 
 @RegisterClass(BaseEmbeddings, 'OpenAIEmbedding')
 export class OpenAIEmbedding extends BaseEmbeddings {
@@ -61,11 +55,16 @@ export class OpenAIEmbedding extends BaseEmbeddings {
         return true;
     }
 
+    protected override get EmbeddingModels(): readonly OpenAIEmbeddingModelInfo[] {
+        return OPENAI_EMBEDDING_MODELS;
+    }
+
     public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
+        const model = params.model || DEFAULT_MODEL;
         let body: OpenAI.Embeddings.EmbeddingCreateParams = {
             input: params.text,
-            model: params.model || "text-embedding-3-small",
-            ...this.DimensionsParam(params.model || "text-embedding-3-small", params.dimensions),
+            model,
+            ...this.DimensionsParam(model, params.dimensions),
         }
 
         try{
@@ -86,7 +85,7 @@ export class OpenAIEmbedding extends BaseEmbeddings {
             // Return error result
             return {
                 object: "object",
-                model: params.model || "text-embedding-3-small",
+                model,
                 ModelUsage: new ModelUsage(0, 0),
                 vector: []
             };
@@ -94,10 +93,11 @@ export class OpenAIEmbedding extends BaseEmbeddings {
     }
 
     protected override async embedBatch(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+        const model = params.model || DEFAULT_MODEL;
         let body: OpenAI.Embeddings.EmbeddingCreateParams = {
             input: params.texts,
-            model: params.model || "text-embedding-3-small",
-            ...this.DimensionsParam(params.model || "text-embedding-3-small", params.dimensions),
+            model,
+            ...this.DimensionsParam(model, params.dimensions),
         }
 
         try{
@@ -118,31 +118,11 @@ export class OpenAIEmbedding extends BaseEmbeddings {
             // Return error result
             return {
                 object: "list",
-                model: params.model || "text-embedding-3-small",
+                model,
                 ModelUsage: new ModelUsage(0, 0),
                 vectors: []
             };
         }
-    }
-
-    /**
-     * The `dimensions` request parameter for a call, or none.
-     *
-     * Callers pass the vector index's `Dimensions` on every call, and MJ stamps one on every index it
-     * creates, so a model with a single width is asked for it too. A model that rejects the parameter
-     * is sent nothing when the requested width is its own, which is what it produces anyway. Any other
-     * width is still sent: the model can't produce it, and the API's rejection is better than vectors
-     * of the wrong width.
-     */
-    protected DimensionsParam(model: string, dimensions?: number): { dimensions?: number } {
-        if (!dimensions) {
-            return {};
-        }
-        const info = OPENAI_EMBEDDING_MODELS.find((m) => m.Model === model);
-        if (info && !info.AcceptsDimensions && info.OutputDimension === dimensions) {
-            return {};
-        }
-        return { dimensions };
     }
 
     //openAI doesnt have an endpoint we can call

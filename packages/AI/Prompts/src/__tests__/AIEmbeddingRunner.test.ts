@@ -6,6 +6,7 @@ import {
   EmbedTextsResult,
   EmbedTextParams,
   EmbedTextResult,
+  EmbeddingDimensionsError,
   ModelUsage,
 } from '@memberjunction/ai';
 import { UserInfo } from '@memberjunction/core';
@@ -610,6 +611,29 @@ describe('AIEmbeddingRunner', () => {
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toContain('No vectors returned');
     expect(result.Vectors).toEqual([]);
+  });
+
+  it('a width the model can\'t produce fails at once with the cause, without retrying or failing over', async () => {
+    // A driver whose model table says the model can't produce the requested width refuses before any
+    // API call (#5234). Every vendor of that model would refuse too, so the runner must not try one,
+    // unlike the 503 case above, where a second vendor of the same model answers.
+    addSecondVendorToModel1();
+    scriptFor(DRIVER_1).Answer = (params) =>
+      Promise.reject(new EmbeddingDimensionsError(params.model ?? '', params.dimensions ?? 0, 'only 1536'));
+
+    const result = await runner.RunEmbedding({
+      Texts: ['impossible width text'],
+      ContextUser: mockUser,
+      PromptID: PROMPT_ID,
+      Dimensions: 3072,
+    });
+
+    expect(result.Success).toBe(false);
+    expect(result.ErrorMessage).toContain("can't produce 3072-dimension vectors");
+    expect(result.Vectors).toEqual([]);
+    expect(scriptFor(DRIVER_1).Calls).toHaveLength(1);
+    expect(scriptFor(DRIVER_1B).Calls).toHaveLength(0);
+    expect(scriptFor(DRIVER_2).Calls).toHaveLength(0);
   });
 
   describe('keyless drivers', () => {

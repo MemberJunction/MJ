@@ -5,6 +5,7 @@ import {
   ModelUsage, 
   EmbedTextResult, 
   EmbedTextsResult,
+  EmbeddingModelInfo,
   ErrorAnalyzer 
 } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
@@ -12,6 +13,29 @@ import {
   BedrockRuntimeClient, 
   InvokeModelCommand 
 } from '@aws-sdk/client-bedrock-runtime';
+
+/** The model the driver calls when it's given no model name. */
+const DEFAULT_MODEL = 'amazon.titan-embed-text-v1';
+
+/**
+ * The Titan text models' widths. The Cohere models aren't listed: the driver doesn't send them
+ * `dimensions`, so a requested width is passed through as before.
+ */
+const BEDROCK_EMBEDDING_MODELS: readonly EmbeddingModelInfo[] = [
+  {
+    Model: 'amazon.titan-embed-text-v1',
+    Description: 'Amazon Titan Embed Text V1',
+    OutputDimension: 1536,
+    AcceptsDimensions: false,
+  },
+  {
+    Model: 'amazon.titan-embed-text-v2:0',
+    Description: 'Amazon Titan Embed Text V2',
+    OutputDimension: 1024,
+    AcceptsDimensions: true,
+    SupportedDimensions: [256, 512, 1024],
+  },
+];
 
 @RegisterClass(BaseEmbeddings, 'BedrockEmbedding')
 export class BedrockEmbedding extends BaseEmbeddings {
@@ -36,23 +60,27 @@ export class BedrockEmbedding extends BaseEmbeddings {
     return this._client;
   }
 
+  protected override get EmbeddingModels(): readonly EmbeddingModelInfo[] {
+    return BEDROCK_EMBEDDING_MODELS;
+  }
+
   /**
    * Embeds a single text using Amazon Bedrock embedding models
    */
   public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
+    // The modelId should be specified in the model parameter, e.g., "amazon.titan-embed-text-v1"
+    const modelId = params.model || DEFAULT_MODEL;
+    // Outside the try: a width the model can't produce throws before any API call.
+    const dimensionsParam = this.DimensionsParam(modelId, params.dimensions);
     try {
-      // The modelId should be specified in the model parameter, e.g., "amazon.titan-embed-text-v1"
-      const modelId = params.model || 'amazon.titan-embed-text-v1';
       
       // Create request body - differs based on the provider's embedding model
       let requestBody: any;
       
       if (modelId.startsWith('amazon.titan-embed')) {
-        // `dimensions` is supported by Titan Embed Text V2 (256/512/1024); V1 rejects it,
-        // so it is only sent when the caller explicitly opts in.
         requestBody = {
           inputText: params.text,
-          ...(params.dimensions ? { dimensions: params.dimensions } : {})
+          ...dimensionsParam
         };
       } else if (modelId.startsWith('cohere.embed')) {
         requestBody = { texts: [params.text], input_type: "search_document" };
@@ -97,7 +125,7 @@ export class BedrockEmbedding extends BaseEmbeddings {
       // Return error result
       return {
         object: "object" as "object" | "list",
-        model: params.model || 'amazon.titan-embed-text-v1',
+        model: modelId,
         ModelUsage: new ModelUsage(0, 0),
         vector: []
       };
@@ -108,9 +136,12 @@ export class BedrockEmbedding extends BaseEmbeddings {
    * Embeds multiple texts using Amazon Bedrock embedding models
    */
   public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+    // The modelId should be specified in the model parameter, e.g., "amazon.titan-embed-text-v1"
+    const modelId = params.model || DEFAULT_MODEL;
+    // Checked once, outside the try, so a width the model can't produce throws before the first call
+    // instead of being degraded to an empty result.
+    this.DimensionsParam(modelId, params.dimensions);
     try {
-      // The modelId should be specified in the model parameter, e.g., "amazon.titan-embed-text-v1"
-      const modelId = params.model || 'amazon.titan-embed-text-v1';
       
       // Some embedding models may support batch processing, others may not
       // For those that don't, we'll process texts one by one
@@ -171,7 +202,7 @@ export class BedrockEmbedding extends BaseEmbeddings {
       // Return error result
       return {
         object: "list",
-        model: params.model || 'amazon.titan-embed-text-v1',
+        model: modelId,
         ModelUsage: new ModelUsage(0, 0),
         vectors: []
       };

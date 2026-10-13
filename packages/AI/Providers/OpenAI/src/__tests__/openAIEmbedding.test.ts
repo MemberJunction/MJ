@@ -93,12 +93,32 @@ describe('OpenAIEmbedding and the dimensions parameter', () => {
         expect(r.vectors[0]).toHaveLength(512);
     });
 
-    it('sends a width ada-002 cannot produce, so the mismatch fails instead of returning the wrong width', async () => {
-        const r = await new OpenAIEmbedding('k').EmbedTexts({ texts: ['a'], model: 'text-embedding-ada-002', dimensions: 512 });
+    it('refuses a width ada-002 cannot produce before calling the API', async () => {
+        const e = new OpenAIEmbedding('k');
 
-        expect(mockCreate.mock.calls[0][0]).toMatchObject({ dimensions: 512 });
-        // The base convention: a failed request degrades to an empty result, which AIEmbeddingRunner fails.
-        expect(r.vectors).toEqual([]);
+        await expect(e.EmbedTexts({ texts: ['a'], model: 'text-embedding-ada-002', dimensions: 512 }))
+            .rejects.toMatchObject({ name: 'EmbeddingDimensionsError', errorInfo: { severity: 'Fatal', canFailover: false } });
+        await expect(e.EmbedText({ text: 'a', model: 'text-embedding-ada-002', dimensions: 512 }))
+            .rejects.toThrow(/can't produce 512-dimension vectors/);
+        expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('refuses a width wider than a text-embedding-3 model produces', async () => {
+        await expect(new OpenAIEmbedding('k').EmbedTexts({ texts: ['a'], model: 'text-embedding-3-small', dimensions: 3072 }))
+            .rejects.toThrow(/supports 1 to 1536/);
+        expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('applies the default model\'s widths when no model is named', async () => {
+        await expect(new OpenAIEmbedding('k').EmbedTexts({ texts: ['a'], model: '', dimensions: 3072 }))
+            .rejects.toThrow(/text-embedding-3-small/);
+        expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('sends the width as requested for a model it doesn\'t know', async () => {
+        await new OpenAIEmbedding('k').EmbedTexts({ texts: ['a'], model: 'text-embedding-4-future', dimensions: 4096 });
+
+        expect(mockCreate.mock.calls[0][0]).toMatchObject({ model: 'text-embedding-4-future', dimensions: 4096 });
     });
 
     it('sends nothing when no width is requested', async () => {
