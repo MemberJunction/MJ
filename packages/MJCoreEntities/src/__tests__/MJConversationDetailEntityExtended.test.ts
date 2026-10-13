@@ -539,7 +539,7 @@ describe('MJConversationDetailEntityExtended: who a message is from (A19)', () =
     }
 
     it('refuses a message whose author, text, rating or place a transaction variable fills in at submit, after this check', async () => {
-        for (const field of ['UserID', 'Role', 'Message', 'ParentID', 'ConversationID', 'BranchID', 'UserRating']) {
+        for (const field of ['UserID', 'Role', 'Message', 'ParentID', 'ConversationID', 'BranchID', 'UserRating', 'ID']) {
             const entity = await messageWithVariable(field);
 
             expect(await entity.Save()).toBe(false);
@@ -548,6 +548,28 @@ describe('MJConversationDetailEntityExtended: who a message is from (A19)', () =
             );
         }
         expect(mocks.superSave).not.toHaveBeenCalled();
+    });
+
+    it("refuses a variable on the message's ID: an update's SQL is rebuilt at submit and would write another row", async () => {
+        const entity = await messageWithVariable('ID');
+        entity.IsSaved = true;
+
+        expect(await entity.Save()).toBe(false);
+        expect(entity.LatestResult?.CompleteMessage).toBe(
+            'A conversation message cannot take its values from a transaction variable.'
+        );
+    });
+
+    it('holds the system user to the variable rule for the row, conversation and rating, not for authorship', async () => {
+        mocks.isSystemUser.mockReturnValue(true);
+        for (const field of ['ID', 'ConversationID', 'UserRating']) {
+            const entity = await messageWithVariable(field);
+            entity.ContextCurrentUser = { ID: 'system-account' };
+            expect(await entity.Save()).toBe(false);
+        }
+        const authored = await messageWithVariable('UserID');
+        authored.ContextCurrentUser = { ID: 'system-account' };
+        expect(await authored.Save()).toBe(true);
     });
 
     it("matches a variable's field the way Set does at submit: trimmed, any case", async () => {

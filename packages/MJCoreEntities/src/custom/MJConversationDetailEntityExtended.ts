@@ -36,10 +36,15 @@ const AUTHORED_FIELDS = ['UserID', 'Role', 'Message', 'ArtifactID', 'ArtifactVer
 const PLACEMENT_FIELDS = ['ConversationID', 'BranchID'];
 
 /**
- * The fields this gate decides on when a person saves a message. A transaction variable sets its field at submit,
- * after the gate has run, so none of these may take its value from one.
+ * The fields the access rule, which holds for everyone, decides on: which row is written (`ID`; an update's SQL is
+ * rebuilt with the variable's value at submit, so it would write another row), its conversation, and the owner's
+ * rating. A transaction variable sets its field at submit, after the gate has run, so none of these may take its
+ * value from one.
  */
-const GATED_FIELDS = [...PLACEMENT_FIELDS, ...OWNER_ONLY_RATING_FIELDS, ...AUTHORED_FIELDS];
+const ACCESS_GATED_FIELDS = ['ID', 'ConversationID', ...OWNER_ONLY_RATING_FIELDS];
+
+/** {@link ACCESS_GATED_FIELDS} plus the fields the authorship rules decide on, which the system user skips. */
+const GATED_FIELDS = [...ACCESS_GATED_FIELDS, 'BranchID', ...AUTHORED_FIELDS];
 
 /**
  * Whether a `Role` value is a person's message. Compared the way validation and the database's CHECK constraint
@@ -76,7 +81,8 @@ function isPersonRole(role: string | null | undefined): boolean {
  *
  * The system user is exempt from these authorship rules, since server code writes on people's behalf, but it still
  * needs to own the conversation or hold a grant on it, as before: some server paths elevate an anonymous visitor to
- * the system user (MJ#4791), and this gate keeps those paths out of other people's conversations. The plan's "the
+ * the system user (MJ#4791), and this gate keeps those paths out of other people's conversations, so no transaction
+ * variable may set the row or conversation it writes ({@link ACCESS_GATED_FIELDS}) for it either. The plan's "the
  * system user may write any message" lands with A19's second half, which must design that boundary. Agent replies
  * (`Role='AI'`/`'Error'`) keep today's rules until MJ's chat stops writing them from the browser.
  * MJ's permissions engine has no native primitive for per-field row-conditional
@@ -126,9 +132,10 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
         // the conversation or hold a grant on it: some server paths elevate an anonymous visitor to the system user
         // (MJ#4791), and this gate is what keeps those paths out of other people's conversations.
         const isSystemUser = WellKnownUserSource.Instance.IsSystemUser(user);
-        if (operation === 'save' && !isSystemUser && this.gatedFieldSetByTransactionVariable()) {
+        if (operation === 'save' && this.fieldSetByTransactionVariable(isSystemUser ? ACCESS_GATED_FIELDS : GATED_FIELDS)) {
             // A transaction variable sets its field after this check has passed, at submit, to any value an earlier
-            // item in the group produced: a person's message would be checked with one author and saved with another.
+            // item in the group produced: a message would be checked as one row, author or conversation and saved as
+            // another.
             this.recordDenied('A conversation message cannot take its values from a transaction variable.', resultType);
             return false;
         }
@@ -274,13 +281,13 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
     }
 
     /**
-     * Whether a transaction variable of this message's group sets one of {@link GATED_FIELDS} on it. The field is
-     * resolved the way `Set` resolves it at submit (trimmed, any case).
+     * Whether a transaction variable of this message's group sets one of `fields` on it. The field is resolved the way
+     * `Set` resolves it at submit (trimmed, any case).
      */
-    private gatedFieldSetByTransactionVariable(): boolean {
+    private fieldSetByTransactionVariable(fields: string[]): boolean {
         return !!this.TransactionGroup?.Variables.some((v) => {
             const name = v.EntityObject === this && v.Type === 'Use' ? this.GetFieldByName(v.FieldName)?.Name : null;
-            return !!name && GATED_FIELDS.includes(name);
+            return !!name && fields.includes(name);
         });
     }
 
