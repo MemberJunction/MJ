@@ -6,7 +6,9 @@ import {
     ExcludeByUUIDs,
     CountByUUID,
     IndexByUUID,
+    GroupByUUID,
 } from '../util/UUIDCollections';
+import { NormalizeUUID } from '../util/UUIDUtils';
 
 // SQL Server returns UUIDs upper-case, PostgreSQL lower-case: every collection must treat the
 // two spellings of one ID as the same ID.
@@ -152,6 +154,35 @@ describe('CountByUUID', () => {
 
     it('uses the item ID by default', () => {
         expect(CountByUUID([...rows, { ID: A_LOWER, Name: 'a2' }]).Get(A_LOWER)).toBe(2);
+    });
+});
+
+describe('GroupByUUID', () => {
+    const roles = [
+        { ID: 'r1', UserID: A_UPPER },
+        { ID: 'r2', UserID: B_LOWER },
+        { ID: 'r3', UserID: A_LOWER },
+        { ID: 'r4', UserID: null },
+    ];
+
+    it('groups items by ID in any case, keeping each group in items order', () => {
+        const byUser = GroupByUUID(roles, r => r.UserID);
+        expect(byUser.Get(A_LOWER)?.map(r => r.ID)).toEqual(['r1', 'r3']);
+        expect(byUser.Get(B_UPPER)?.map(r => r.ID)).toEqual(['r2']);
+        expect(byUser.Get(C_LOWER)).toBeUndefined();
+        expect(byUser.Size).toBe(3);
+    });
+
+    it('puts null and undefined IDs in one group, as NormalizeUUID does', () => {
+        expect(GroupByUUID(roles, r => r.UserID).Get(undefined)?.map(r => r.ID)).toEqual(['r4']);
+    });
+
+    it('matches the nested filter it replaces', () => {
+        const byUser = GroupByUUID(roles, r => r.UserID);
+        for (const id of [A_LOWER, B_UPPER, C_LOWER]) {
+            const nested = roles.filter(r => NormalizeUUID(r.UserID) === NormalizeUUID(id));
+            expect(byUser.Get(id) ?? []).toEqual(nested);
+        }
     });
 });
 
