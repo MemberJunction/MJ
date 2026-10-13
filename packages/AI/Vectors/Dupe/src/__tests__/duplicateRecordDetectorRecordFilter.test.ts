@@ -38,11 +38,8 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 vi.mock('@memberjunction/ai-prompts', () => ({
-    AIEmbeddingRunner: class {
-        async RunEmbedding(params: { Texts: string[] }) {
-            return { Success: true, Vectors: params.Texts.map(() => [0.1, 0.2]) };
-        }
-    },
+    // This line's ai-vector-sync and ai-vector-dupe import only AIPromptRunner from ai-prompts.
+    AIPromptRunner: class {},
 }));
 
 vi.mock('@memberjunction/ai', () => ({
