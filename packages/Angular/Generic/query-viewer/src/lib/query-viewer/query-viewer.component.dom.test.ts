@@ -33,7 +33,7 @@ class GridStub {
   @Output() RefreshRequest = new EventEmitter<void>();
 }
 @Component({ standalone: true, selector: 'mj-query-parameter-form', template: '' })
-class ParamFormStub { @Input() QueryInfo: MJQueryEntityExtended | null = null; @Input() InitialValues: unknown; @Input() IsOpen = false;
+class ParamFormStub { @Input() QueryInfo: MJQueryEntityExtended | null = null; @Input() InitialValues: unknown; @Input() IsOpen = false; @Input() ReadOnlyParameters: string[] = [];
   @Output() ParametersSubmit = new EventEmitter<unknown>(); @Output() Close = new EventEmitter<void>(); }
 @Component({ standalone: true, selector: 'mj-query-info-panel', template: '' })
 class InfoPanelStub { @Input() Provider: IMetadataProvider | null = null; @Input() QueryInfo: MJQueryEntityExtended | null = null; @Input() Visible = false;

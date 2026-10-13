@@ -6992,6 +6992,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.3
         version: link:../../../MJGlobal
+      '@memberjunction/interactive-component-types':
+        specifier: 6.2.0-edge.3
+        version: link:../../../InteractiveComponents
       '@memberjunction/ng-artifacts':
         specifier: 6.2.0-edge.3
         version: link:../artifacts
@@ -7007,6 +7010,9 @@ importers:
       '@memberjunction/ng-query-viewer':
         specifier: 6.2.0-edge.3
         version: link:../query-viewer
+      '@memberjunction/ng-react':
+        specifier: 6.2.0-edge.3
+        version: link:../react
       '@memberjunction/ng-shared-generic':
         specifier: 6.2.0-edge.3
         version: link:../shared

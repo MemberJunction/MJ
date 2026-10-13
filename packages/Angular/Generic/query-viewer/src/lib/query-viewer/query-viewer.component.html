@@ -105,7 +105,8 @@
   <!-- Parameter form panel -->
   <mj-query-parameter-form
     [QueryInfo]="QueryInfo"
-    [InitialValues]="SavedParams"
+    [InitialValues]="ParameterFormValues"
+    [ReadOnlyParameters]="ReadOnlyParameters"
     [IsOpen]="ShowParamsPanel"
     (ParametersSubmit)="OnParametersSubmit($event)"
     (Close)="OnParamsPanelClose()">

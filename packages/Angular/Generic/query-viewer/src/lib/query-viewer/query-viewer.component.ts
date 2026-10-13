@@ -122,6 +122,28 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
      */
     @Input() PageSize: number = 100;
 
+    /**
+     * Parameter values the host sets (a dashboard part's input mappings). They override the user's
+     * saved values, are never saved back into the user's last-used set (`QueryViewer_<id>_LastParams`,
+     * which every page showing the query shares), and show read-only in the parameter form. A change
+     * reruns a query that has run; before the first run, the query's own load uses them. Null (the
+     * default): every parameter is the user's, as before.
+     */
+    @Input()
+    set MappedParameters(value: QueryParameterValues | null) {
+        const changed = JSON.stringify(value ?? null) !== JSON.stringify(this._mappedParameters ?? null);
+        this._mappedParameters = value;
+        this.ReadOnlyParameters = value ? Object.keys(value) : [];
+        this.updateParameterFormValues();
+        if (changed && this.QueryInfo && this.HasRun) {
+            void this.RunQuery(this.SavedParams, 1);
+        }
+    }
+    get MappedParameters(): QueryParameterValues | null {
+        return this._mappedParameters;
+    }
+    private _mappedParameters: QueryParameterValues | null = null;
+
     // ========================================
     // Outputs
     // ========================================
@@ -186,7 +208,22 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
     public ExecutionTimeMs: number | null = null;
 
     public SavedGridState: QueryGridState | null = null;
-    public SavedParams: QueryParameterValues = {};
+
+    /** The user's own parameter values: loaded from and saved to their last-used set. Never holds a mapped value it didn't have. */
+    public get SavedParams(): QueryParameterValues {
+        return this._savedParams;
+    }
+    public set SavedParams(value: QueryParameterValues) {
+        this._savedParams = value;
+        this.updateParameterFormValues();
+    }
+    private _savedParams: QueryParameterValues = {};
+
+    /** What the parameter form shows: the user's values, with the mapped ones over them. */
+    public ParameterFormValues: QueryParameterValues = {};
+
+    /** The names of the mapped parameters, which the parameter form shows read-only. */
+    public ReadOnlyParameters: string[] = [];
 
     /** Paging state */
     public QueryTotalRowCount: number = 0;
@@ -276,10 +313,12 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
     private canAutoRunWithSavedParams(): boolean {
         if (!this.QueryInfo) return false;
 
-        const requiredParams = this.QueryInfo.QueryParameters?.filter(p => p.IsRequired) || [];
+        // A server-set parameter is never the user's to fill: the server sets it.
+        const requiredParams = this.QueryInfo.QueryParameters?.filter(p => p.IsRequired && !p.IsServerSet) || [];
+        const values = this.withMappedParameters(this.SavedParams);
 
         for (const param of requiredParams) {
-            const savedValue = this.SavedParams[param.Name];
+            const savedValue = values[param.Name];
             if (savedValue === null || savedValue === undefined || savedValue === '') {
                 return false;
             }
@@ -361,16 +400,16 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
         // Normalize array parameters: saved state or callers may pass arrays
         // with JSON fragment strings (e.g. ['["A"', '"B"]']) from the old
         // comma-split bug. Re-join and re-parse to clean them up.
-        const normalizedParams = this.normalizeArrayParams(params);
+        const normalizedParams = this.normalizeArrayParams(this.withMappedParameters(params));
 
         this.IsLoading = true;
         this.LastError = null;
         this.QueryStart.emit();
         this.cdr.markForCheck();
 
-        // Save normalized parameters for next time
-        this.SavedParams = normalizedParams;
-        await this.saveParameters(normalizedParams);
+        // Save normalized parameters for next time; mapped values are never saved into the user's set
+        this.SavedParams = this.withoutMappedParameters(normalizedParams);
+        await this.saveParameters(this.SavedParams);
 
         const startTime = performance.now();
 
@@ -378,7 +417,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
             const runQuery = this.RunQueryToUse;
             const runParams: RunQueryParams = {
                 QueryID: this._queryId,
-                Parameters: normalizedParams as Record<string, unknown>
+                Parameters: this.withoutServerSetParameters(normalizedParams) as Record<string, unknown>
             };
 
             // Add server-side paging when PageSize > 0
@@ -443,7 +482,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
             // the top. This is a much larger window than the on-screen page, so export covers the set.
             const result = await this.RunQueryToUse.RunQuery({
                 QueryID: this._queryId,
-                Parameters: this.SavedParams as Record<string, unknown>,
+                Parameters: this.withoutServerSetParameters(this.withMappedParameters(this.SavedParams)) as Record<string, unknown>,
                 MaxRows: QueryViewerComponent.EXPORT_MAX_RECORDS,
                 StartRow: 0
             });
@@ -541,6 +580,45 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
 
     public get HasParameters(): boolean {
         return (this.QueryInfo?.QueryParameters?.length || 0) > 0;
+    }
+
+    // ========================================
+    // Mapped and server-set parameters
+    // ========================================
+
+    /** The values with the mapped ones over them. Without mapped parameters, the values themselves. */
+    private withMappedParameters(params: QueryParameterValues): QueryParameterValues {
+        return this._mappedParameters ? { ...params, ...this._mappedParameters } : params;
+    }
+
+    /**
+     * The values to save as the user's: each mapped name keeps the value the user's set had for it
+     * (or none), so a mapped value never reaches the shared last-used set.
+     */
+    private withoutMappedParameters(params: QueryParameterValues): QueryParameterValues {
+        if (!this._mappedParameters) return params;
+        const result = { ...params };
+        for (const name of Object.keys(this._mappedParameters)) {
+            if (name in this._savedParams) {
+                result[name] = this._savedParams[name];
+            } else {
+                delete result[name];
+            }
+        }
+        return result;
+    }
+
+    /** The values without the server-set parameters, which only the server may set (a client value is refused). */
+    private withoutServerSetParameters(params: QueryParameterValues): QueryParameterValues {
+        const serverSet = (this.QueryInfo?.QueryParameters ?? []).filter(p => p.IsServerSet && p.Name in params);
+        if (serverSet.length === 0) return params;
+        const result = { ...params };
+        for (const param of serverSet) delete result[param.Name];
+        return result;
+    }
+
+    private updateParameterFormValues(): void {
+        this.ParameterFormValues = this.withMappedParameters(this._savedParams);
     }
 
     /**

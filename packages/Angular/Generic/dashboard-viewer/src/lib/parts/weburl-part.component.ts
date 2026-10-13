@@ -3,6 +3,8 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
+import { FillUrlPlaceholders, PartInputProblemMessage } from '../models/dashboard-properties';
+import { WebUrlPartInterface } from '../models/dashboard-part-interfaces';
 
 /**
  * Runtime renderer for WebURL dashboard parts.
@@ -282,6 +284,8 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
     } // Hidden by default, shown if content might be blocked
 
     private sanitizer: DomSanitizer;
+    /** True while the part shows a problem with its mappings. */
+    private showingInputProblem = false;
     private loadCheckTimeout: ReturnType<typeof setTimeout> | null = null;
     private iframeLoaded: boolean = false;
 
@@ -299,7 +303,8 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
 
     public async loadContent(): Promise<void> {
         const config = this.getConfig<PanelConfig>();
-        const url = config?.['url'] as string | undefined;
+        const url = this.fillPlaceholders(config?.['url'] as string | undefined);
+        if (url === null) return; // a mapping problem is shown
 
         // Clear any existing timeout
         if (this.loadCheckTimeout) {
@@ -345,6 +350,26 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         } catch (error) {
             this.setError(error instanceof Error ? error.message : 'Failed to load URL');
         }
+    }
+
+    /**
+     * The URL with its `{Name}` placeholders filled, each value URL-encoded, from the part's input
+     * mappings. A part without mappings keeps its URL exactly as configured. Returns null, showing
+     * why, when a mapping is broken or a placeholder has no value.
+     */
+    private fillPlaceholders(url: string | undefined): string | undefined | null {
+        const resolution = this.UpdateInputs(WebUrlPartInterface(url).Inputs);
+        if (!resolution || !url) return url;
+        const problem = PartInputProblemMessage(resolution);
+        if (this.showingInputProblem && !problem) this.ErrorMessage = null; // the values arrived
+        this.showingInputProblem = problem !== null;
+        if (problem) {
+            this.SafeUrl = null;
+            this.RawUrl = '';
+            this.setError(problem);
+            return null;
+        }
+        return FillUrlPlaceholders(url, resolution.Values);
     }
 
     /**
