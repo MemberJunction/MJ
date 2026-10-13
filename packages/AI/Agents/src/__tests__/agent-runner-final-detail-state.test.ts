@@ -25,7 +25,7 @@ describe('AgentRunner.ResolveFinalDetailState', () => {
         const state = AgentRunner.ResolveFinalDetailState(result(false, {
             Status: 'Cancelled', CancellationReason: 'User Request', ErrorMessage: 'Cancelled by user request',
         }));
-        expect(state).toEqual({ Status: 'Complete', Message: '⏹️ Stopped by user' });
+        expect(state).toEqual({ Status: 'Complete', Message: 'Stopped by user' });
     });
 
     it('a run cancelled for another reason ends Complete and names the reason', () => {
@@ -33,7 +33,7 @@ describe('AgentRunner.ResolveFinalDetailState', () => {
             Status: 'Cancelled', CancellationReason: 'Timeout', ErrorMessage: "Agent 'X' exceeded maxExecutionTimeMs (10ms)",
         }));
         expect(state.Status).toBe('Complete');
-        expect(state.Message).toBe("⏹️ Stopped: Agent 'X' exceeded maxExecutionTimeMs (10ms)");
+        expect(state.Message).toBe("Stopped: Agent 'X' exceeded maxExecutionTimeMs (10ms)");
     });
 
     it('a successful run keeps its own message, or Completed when it wrote none', () => {

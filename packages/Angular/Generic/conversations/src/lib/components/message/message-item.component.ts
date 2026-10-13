@@ -1921,6 +1921,45 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.calculateTimePillText();
   }
 
+  // ── A stopped reply ──────────────────────────────────────────────────────────────────────
+  /** The message the Continue control sends; the next turn then resumes the stopped run. */
+  public static readonly ContinueMessage = 'Continue where you left off';
+
+  /** True when the reply's run was cancelled, by the user or otherwise. */
+  public get IsStoppedRun(): boolean {
+    return this.AgentRun?.Status === MJAIAgentRunEntityExtended.CancelledStatus;
+  }
+
+  /** True when the user stopped the reply's run (the stopped reply, as against a timeout). */
+  public get WasStoppedByUser(): boolean {
+    return MJAIAgentRunEntityExtended.IsUserStopped(this.AgentRun?.Status, this.AgentRun?.CancellationReason);
+  }
+
+  /** The "N steps kept" line under a stopped reply; null when the run kept nothing or was not stopped. */
+  public get StoppedLineText(): string | null {
+    if (!this.IsStoppedRun) {
+      return null;
+    }
+    const steps = this.AgentRunStepCount;
+    return steps > 0 ? `${steps} ${steps === 1 ? 'step' : 'steps'} kept` : null;
+  }
+
+  /**
+   * Whether the Continue control is offered: the last message in the conversation is a reply the
+   * user stopped, and the viewer may write. Any message resumes the run; this one says so.
+   */
+  public get CanContinueStoppedRun(): boolean {
+    return this.WasStoppedByUser && this.IsLastMessageInConversation && !this.ReadOnly;
+  }
+
+  /** The Continue control: sends {@link ContinueMessage} the way a suggested response is sent. */
+  public OnContinueClick(): void {
+    if (!this.CanContinueStoppedRun) {
+      return;
+    }
+    this.SuggestedResponseSelected.emit({ text: MessageItemComponent.ContinueMessage });
+  }
+
   /** @deprecated Use {@link TimePillText}. */
   public get timePillText(): string | null {
     return this.TimePillText;
@@ -1929,6 +1968,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private calculateTimePillText(): string | null {
     if (this.IsUserMessage) {
       return null;
+    }
+
+    // A stopped run: neutral, named as such, with the time it ran before the stop.
+    if (this.IsStoppedRun) {
+      const duration = this.AgentRunDuration ?? this.FormattedGenerationTime;
+      return duration ? `Stopped · ${duration}` : 'Stopped';
     }
 
     // For temporary messages (in-progress), show live elapsed time

@@ -105,7 +105,7 @@ export class AgentRunner {
             const byUser = run.CancellationReason === 'User Request';
             return {
                 Status: 'Complete',
-                Message: byUser ? '⏹️ Stopped by user' : `⏹️ Stopped: ${run.ErrorMessage || 'the run was cancelled'}`,
+                Message: byUser ? 'Stopped by user' : `Stopped: ${run.ErrorMessage || 'the run was cancelled'}`,
             };
         }
         return {
