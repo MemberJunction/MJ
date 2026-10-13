@@ -529,6 +529,18 @@
   },
   {
     "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Live",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ben",
+      "Sequence": 6,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "1028EA9C-DCBC-4E43-9ABF-E4B2EC02E4F7"
+    }
+  },
+  {
+    "fields": {
       "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Live Extended Thinking",
       "PersonaID": "@lookup:MJ: AI Personas.Name=Puck",
       "Sequence": 1,

@@ -15,6 +15,7 @@
  */
 
 import { RunView, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { ConversationEngine } from '@memberjunction/core-entities';
 import type { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { setupGraphQLClient, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
@@ -202,14 +203,20 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
         return detail;
     }
 
-    /** Reads the newest AI Conversation Detail for the conversation (the agent's reply). */
+    /** Reads the newest AI Conversation Detail in Main (the agent's reply). */
     private async readLatestAgentReply(): Promise<string> {
+        const conversationId = this.conversationId;
+        if (!conversationId || !this.contextUser) {
+            return '';
+        }
+        // The widget's conversations have no forks.
+        const scope = ConversationEngine.TrunkScope(conversationId);
         const rv = new RunView();
         const result = await rv.RunView<MJConversationDetailEntity>(
             {
                 EntityName: CONVERSATION_DETAILS_ENTITY,
-                ExtraFilter: `ConversationID='${this.conversationId}' AND Role='AI'`,
-                OrderBy: '__mj_CreatedAt DESC',
+                ExtraFilter: `${ConversationEngine.ScopeFilter(scope)} AND [Role]='AI'`,
+                OrderBy: 'Sequence DESC',
                 MaxRows: 1,
                 ResultType: 'entity_object',
             },

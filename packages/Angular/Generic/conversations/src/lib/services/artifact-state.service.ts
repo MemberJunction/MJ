@@ -247,43 +247,6 @@ export class ArtifactStateService {
   }
 
   /**
-   * Loads artifacts for a conversation
-   * @param conversationId The conversation ID
-   * @param currentUser The current user context
-   * @returns Array of artifacts
-   */
-  async LoadArtifactsForConversation(conversationId: string, currentUser: UserInfo): Promise<MJArtifactEntity[]> {
-    try {
-      const rv = RunView.FromMetadataProvider(this.Provider);
-      const result = await rv.RunView<MJArtifactEntity>(
-        {
-          EntityName: 'MJ: Artifacts',
-          ExtraFilter: `ConversationID='${conversationId}'`,
-          OrderBy: '__mj_CreatedAt DESC',
-          MaxRows: 1000,
-          ResultType: 'entity_object'
-        },
-        currentUser
-      );
-
-      if (result.Success && result.Results) {
-        // Cache all artifacts
-        result.Results.forEach(artifact => this.CacheArtifact(artifact));
-        return result.Results;
-      }
-      return [];
-    } catch (error) {
-      console.error('Error loading artifacts:', error);
-      return [];
-    }
-  }
-
-  /** @deprecated Use {@link LoadArtifactsForConversation}. */
-  async loadArtifactsForConversation(conversationId: string, currentUser: UserInfo): Promise<MJArtifactEntity[]> {
-    return this.LoadArtifactsForConversation(conversationId, currentUser);
-  }
-
-  /**
    * Loads artifacts for a collection
    * @param collectionId The collection ID
    * @param currentUser The current user context
@@ -573,6 +536,7 @@ export class ArtifactStateService {
     let targetVersionId = versionId;
     if (!targetVersionId) {
       const rv = RunView.FromMetadataProvider(this.Provider);
+      // conversation-scope: artifact-wide read, no conversation path applies
       const versionResult = await rv.RunView<any>(
         {
           EntityName: 'MJ: Artifact Versions',

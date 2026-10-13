@@ -17,6 +17,8 @@ import {
     JSONObject,
     RealtimeTurnDetectionMode,
     RealtimeTurnDetectionSettings,
+    RealtimeDroppedInputReporter,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { ClientRealtimeSessionConfig, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { OpenAI } from 'openai';
@@ -322,14 +324,19 @@ interface ExtractedRealtimeFeatures {
     /** Per-session input-transcription model override (`inputTranscriptionModel` bag key). */
     inputTranscriptionModel?: string;
     /**
-     * MJ-side transport settings (`endpoint`, `sampleRate`, `proxyBaseUrl` bag keys) consumed by
-     * self-hosted/proxied drivers — ALWAYS scrubbed so they never leak into a provider payload.
+     * MJ-side transport settings (`endpoint`, `sampleRate`, `proxyBaseUrl`, `brokerBaseUrl` bag keys) consumed by
+     * self-hosted/proxied drivers and OpenAI Live — ALWAYS scrubbed so they never leak into a provider payload.
      */
     endpoint?: string;
     /** See {@link ExtractedRealtimeFeatures.endpoint}. */
     sampleRate?: number;
     /** See {@link ExtractedRealtimeFeatures.endpoint}. */
     proxyBaseUrl?: string;
+    /**
+     * OpenAI Live's SDP broker origin. No driver in this family reads it, but a co-agent's provider bag keyed
+     * `openai` is filed onto OpenAI Realtime as well as OpenAI Live. See {@link ExtractedRealtimeFeatures.endpoint}.
+     */
+    brokerBaseUrl?: string;
     /** The remaining bag entries, safe to spread into the session payload. */
     rest: JSONObject;
 }
@@ -424,7 +431,7 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
 
     // Per-session transcription-model override + MJ-side transport settings. All scrubbed
     // unconditionally — none of these are wire fields on ANY provider in the family.
-    const bag = rest as JSONObject & { inputTranscriptionModel?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown };
+    const bag = rest as JSONObject & { inputTranscriptionModel?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown; brokerBaseUrl?: unknown };
     const rawItm = bag.inputTranscriptionModel;
     delete bag.inputTranscriptionModel;
     const inputTranscriptionModel = typeof rawItm === 'string' && rawItm.trim().length > 0 ? rawItm.trim() : undefined;
@@ -437,8 +444,11 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     const rawProxy = bag.proxyBaseUrl;
     delete bag.proxyBaseUrl;
     const proxyBaseUrl = typeof rawProxy === 'string' && rawProxy.trim().length > 0 ? rawProxy.trim() : undefined;
+    const rawBroker = bag.brokerBaseUrl;
+    delete bag.brokerBaseUrl;
+    const brokerBaseUrl = typeof rawBroker === 'string' && rawBroker.trim().length > 0 ? rawBroker.trim() : undefined;
 
-    return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, turnDetection, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, rest };
+    return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, turnDetection, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, brokerBaseUrl, rest };
 }
 
 /**
@@ -862,12 +872,19 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     private lastUserTranscript = '';
 
     /**
+     * Reports the frames {@link SendInput} drops, once per kind and type. Named for the profile's provider, so an xAI or
+     * Hugging Face session's line says which it is.
+     */
+    private readonly droppedInput: RealtimeDroppedInputReporter;
+
+    /**
      * @param connection The injectable provider-connection seam.
      * @param profile The provider profile (defaults to OpenAI's so existing direct construction keeps working).
      */
     constructor(connection: IOpenAIRealtimeConnection, profile: OpenAIRealtimeProfile = OPENAI_REALTIME_PROFILE) {
         this.connection = connection;
         this.profile = profile;
+        this.droppedInput = new RealtimeDroppedInputReporter(`${profile.providerKey}Realtime`, 'this session sends audio only');
         this.configAppliedPromise = new Promise<void>((resolve, reject) => {
             this.resolveConfigApplied = resolve;
             this.rejectConfigApplied = reject;
@@ -1006,11 +1023,21 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     // ---- IRealtimeSession outbound ----
 
-    /** @inheritdoc */
-    public SendInput(chunk: ArrayBuffer): void {
+    /**
+     * @inheritdoc
+     *
+     * Appends one audio frame to the input audio buffer. The session sends audio only, so a frame of another kind (a
+     * camera or screen frame) is dropped, never appended as audio, and reported once per kind and type. The xAI and
+     * Hugging Face sessions inherit this.
+     */
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind !== 'audio') {
+            this.droppedInput.Report(frame);
+            return;
+        }
         this.connection.send({
             type: 'input_audio_buffer.append',
-            audio: this.encodeBase64(chunk),
+            audio: this.encodeBase64(frame.Data),
         });
     }
 

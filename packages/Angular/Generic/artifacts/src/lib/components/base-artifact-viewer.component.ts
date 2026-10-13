@@ -112,6 +112,12 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
   @Input() cssClass?: string;
 
   /**
+   * Optional: The version numbers of this artifact that the viewer lists in its conversation
+   * scope. Null when the viewer has no scope, so every version of the artifact counts.
+   */
+  @Input() VisibleVersionNumbers: ReadonlyArray<number> | null = null;
+
+  /**
    * Whether this plugin is showing an "elevated" display (e.g., extracted markdown/HTML)
    * vs raw content. When true and content type is JSON, the wrapper will show a JSON tab.
    *
