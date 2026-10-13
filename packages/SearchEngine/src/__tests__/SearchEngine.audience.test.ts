@@ -24,6 +24,7 @@ vi.mock('@memberjunction/core', async () => {
         static Provider = { EntityByName: (_name: string) => null, Entities: [] };
     }
     class MockRunView {
+        static FromMetadataProvider(): MockRunView { return new MockRunView(); }
         RunView = mockRunViewFn;
     }
     return {

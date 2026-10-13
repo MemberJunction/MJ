@@ -30,6 +30,7 @@ const { mockRunViewFn } = vi.hoisted(() => ({ mockRunViewFn: vi.fn() }));
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
     class MockRunView {
+        static FromMetadataProvider(): MockRunView { return new MockRunView(); }
         RunView = mockRunViewFn;
     }
     return { ...actual, RunView: MockRunView, LogError: vi.fn(), LogStatus: vi.fn() };

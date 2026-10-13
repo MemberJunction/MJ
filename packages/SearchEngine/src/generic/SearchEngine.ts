@@ -2990,7 +2990,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     ): Promise<Set<string> | null> {
         const params = this.readableKeysParams(entity, recordIDs, rlsClause);
         if (!params) return null;
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         return this.readableKeySet(entity, await rv.RunView<Record<string, unknown>>(params, contextUser));
     }
 
@@ -3315,7 +3315,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         contextUser: UserInfo
     ): Promise<T[] | null> {
         if (ids.length === 0) return [];
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<T>({
             EntityName: entityName,
             Fields: fields,
@@ -3384,7 +3384,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         const readable = new Map<string, Set<string>>();
         const checks = this.originReadChecks(idsByEntity, contextUser);
         if (checks.length === 0) return readable;
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const results = await rv.RunViews<Record<string, unknown>>(checks.map(c => c.Params), contextUser);
         checks.forEach((check, i) => {
             const keys = this.readableKeySet(check.Entity, results[i]);
