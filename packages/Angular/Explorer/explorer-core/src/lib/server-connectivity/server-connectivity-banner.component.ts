@@ -1,4 +1,4 @@
-import { Component, OnDestroy, inject } from '@angular/core';
+import { Component, OnDestroy, Signal, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { trigger, transition, style, animate, AnimationEvent } from '@angular/animations';
 import { ServerConnectivityService } from '../services/server-connectivity.service';
@@ -6,9 +6,8 @@ import { ServerConnectivityService } from '../services/server-connectivity.servi
 /**
  * When visible, this banner sets --mj-connectivity-banner-height on <html>
  * so that any position:fixed element referencing the shell header offset
- * (e.g. app-switcher mobile dropdown) can account for the banner. The same
- * height goes to `ServerConnectivityService.BannerHeightPx` for template
- * bindings, which must not read the custom property (MJ #4377).
+ * (e.g. app-switcher mobile dropdown) can account for the banner. Template
+ * bindings read the same height from `HeightPx` instead (MJ #4377).
  */
 @Component({
   selector: 'mj-server-connectivity-banner',
@@ -91,6 +90,19 @@ export class ServerConnectivityBannerComponent implements OnDestroy {
    */
   public readonly IsConnected = toSignal(this.connectivityService.IsConnected$, { initialValue: true });
 
+  private readonly heightPx = signal(0);
+  /**
+   * Rendered height (px) of the banner, 0 while it is hidden. Published together with the
+   * `--mj-connectivity-banner-height` custom property on `<html>`.
+   *
+   * CSS should keep using the custom property; a template binding must use this signal. A
+   * binding that reads the custom property is invisible to change detection: the height is
+   * published from the animation-done listener, which can fire while views are refreshing,
+   * so the reading view is never re-checked and dev mode reports NG0100 on every later pass
+   * (MJ #4377). Reading a signal makes the view a consumer, so the write re-refreshes it.
+   */
+  public readonly HeightPx: Signal<number> = this.heightPx.asReadonly();
+
   ngOnDestroy(): void {
     this.setBannerHeight(0);
   }
@@ -110,6 +122,6 @@ export class ServerConnectivityBannerComponent implements OnDestroy {
       ServerConnectivityBannerComponent.CSS_VAR,
       `${px}px`
     );
-    this.connectivityService.SetBannerHeightPx(px);
+    this.heightPx.set(px);
   }
 }

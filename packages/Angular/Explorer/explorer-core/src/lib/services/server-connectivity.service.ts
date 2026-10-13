@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy, Signal, signal } from '@angular/core';
+import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, Subscription } from 'rxjs';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { GraphQLDataProvider, SocketConnectionState } from '@memberjunction/graphql-dataprovider';
@@ -23,20 +23,6 @@ export class ServerConnectivityService implements OnDestroy {
 
   private readonly isConnected = new BehaviorSubject<boolean>(true);
   public readonly IsConnected$: Observable<boolean> = this.isConnected.asObservable();
-
-  private readonly bannerHeightPx = signal(0);
-  /**
-   * Rendered height (px) of the offline banner, 0 while it is hidden. Published by
-   * `ServerConnectivityBannerComponent` together with the `--mj-connectivity-banner-height`
-   * custom property on `<html>`.
-   *
-   * CSS should keep using the custom property; a template binding must use this signal. A
-   * binding that reads the custom property is invisible to change detection: the banner
-   * publishes from its animation-done listener, which can fire while views are refreshing,
-   * so the reading view is never re-checked and dev mode reports NG0100 on every later pass
-   * (MJ #4377). Reading a signal makes the view a consumer, so the write re-refreshes it.
-   */
-  public readonly BannerHeightPx: Signal<number> = this.bannerHeightPx.asReadonly();
 
   private healthCheckUrl: string | null = null;
   private pollingTimerId: ReturnType<typeof setTimeout> | null = null;
@@ -79,11 +65,6 @@ export class ServerConnectivityService implements OnDestroy {
       this.socketSubscription = null;
     }
     this.healthCheckUrl = null;
-  }
-
-  /** Record the offline banner's rendered height; called by `ServerConnectivityBannerComponent`. */
-  public SetBannerHeightPx(px: number): void {
-    this.bannerHeightPx.set(px);
   }
 
   /** Force an immediate health check and return the result */

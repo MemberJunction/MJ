@@ -14,7 +14,7 @@ later change-detection pass reported:
 
     NG0100: ExpressionChangedAfterItHasBeenCheckedError ... Previous value: '60'. Current value: '95'.
 
-`ServerConnectivityService` now carries the height as a `BannerHeightPx` signal, which the banner
-sets alongside the custom property (CSS consumers keep using the property). The getter reads the
-signal, so the write marks the shell view as a stale consumer and Angular re-refreshes it in the
-same pass. Dev-mode only — the overlay was positioned correctly either way.
+The banner now also exposes its height as a `HeightPx` signal (CSS consumers keep using the
+property), and the shell reads it through a `viewChild` query of the banner. The write marks the shell
+view as a stale consumer, so Angular re-refreshes it in the same pass. Dev-mode only — the overlay was
+positioned correctly either way.
