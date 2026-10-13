@@ -243,21 +243,43 @@ export class QueryPagingEngine {
     }
 
     /**
-     * Drops the table or schema qualifier from every dotted name in `sql`, keeping its last part:
-     * `a.Name` → `Name`, `[dbo].[A].[Name]` → `[Name]`. Whitespace, comments and every other token
-     * are kept as written.
+     * Drops the table or schema qualifier from every dotted column name in `sql`, keeping its last
+     * part: `a.Name` → `Name`, `[dbo].[A].[Name]` → `[Name]`. A dotted name followed by `(` is a
+     * function call such as `dbo.fnLen(Name)`, whose schema SQL Server requires, so it is kept.
+     * Whitespace, comments and every other token are kept as written.
      */
     private static unqualifyColumnReferences(sql: string, dialect: SQLDialect): string {
         const tokens = LexSQL(sql, dialect);
         let result = '';
-        for (let i = 0; i < tokens.length; i++) {
-            if (QueryPagingEngine.isNamePart(tokens[i]) && tokens[i + 1]?.Kind === 'dot' && QueryPagingEngine.isNamePart(tokens[i + 2])) {
-                i++; // skip the qualifier and its dot; the next part is examined on the next pass
-                continue;
+        let i = 0;
+        while (i < tokens.length) {
+            const end = QueryPagingEngine.dottedNameEnd(tokens, i);
+            if (end > i && !QueryPagingEngine.isFollowedByOpenParen(tokens, end)) {
+                result += tokens[end - 1].Text;
+            } else {
+                for (let k = i; k < Math.max(end, i + 1); k++) result += tokens[k].Text;
             }
-            result += tokens[i].Text;
+            i = Math.max(end, i + 1);
         }
         return result;
+    }
+
+    /**
+     * The index just past the dotted name (`part.part[.part…]`) that starts at `start`, or `start`
+     * when no name of two or more parts starts there.
+     */
+    private static dottedNameEnd(tokens: SQLLexToken[], start: number): number {
+        if (!QueryPagingEngine.isNamePart(tokens[start])) return start;
+        let end = start + 1;
+        while (tokens[end]?.Kind === 'dot' && QueryPagingEngine.isNamePart(tokens[end + 1])) end += 2;
+        return end > start + 1 ? end : start;
+    }
+
+    /** Whether the next token at or after `index`, other than whitespace and comments, opens a parenthesis. */
+    private static isFollowedByOpenParen(tokens: SQLLexToken[], index: number): boolean {
+        let k = index;
+        while (tokens[k]?.Kind === 'whitespace' || tokens[k]?.Kind === 'comment') k++;
+        return tokens[k]?.Kind === 'open';
     }
 
     /** Whether a token can be one part of a dotted name: a bare word or a quoted identifier. */

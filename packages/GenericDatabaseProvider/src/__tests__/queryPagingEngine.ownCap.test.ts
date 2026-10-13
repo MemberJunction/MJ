@@ -239,6 +239,16 @@ describe('#3778 — a set operation’s ORDER BY moved outside a derived table s
         expect(QueryPagingEngine.WrapWithMaxRows(`${union} ORDER BY dbo.A.Name`, 10, 'sqlserver')).toMatch(/\nORDER BY Name$/);
     });
 
+    it('a schema-qualified function call keeps its schema, while its column argument loses the alias', () => {
+        expect(QueryPagingEngine.WrapWithMaxRows(`${union} ORDER BY dbo.fnLen(a.Name), [dbo].[fnRank] (ID) DESC`, 10, 'sqlserver'))
+            .toMatch(/\nORDER BY dbo\.fnLen\(Name\), \[dbo\]\.\[fnRank\] \(ID\) DESC$/);
+    });
+
+    it('a dotted string literal and a COLLATE clause are moved unchanged', () => {
+        const orderBy = "ORDER BY CASE WHEN Name = 'a.b' THEN 0 ELSE 1 END, Name COLLATE Latin1_General_CS_AS";
+        expect(QueryPagingEngine.WrapWithMaxRows(`${union} ${orderBy}`, 10, 'sqlserver')).toMatch(new RegExp(`\\n${orderBy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
+    });
+
     it('an unqualified ORDER BY is moved unchanged', () => {
         expect(QueryPagingEngine.WrapWithMaxRows(`${union} ORDER BY Name`, 10, 'sqlserver')).toMatch(/\nORDER BY Name$/);
     });
