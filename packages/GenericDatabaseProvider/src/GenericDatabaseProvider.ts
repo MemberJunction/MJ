@@ -4167,6 +4167,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**
      * Checks whether a new record's field values pass the Create RLS filter.
      * Builds a synthetic single-row subquery from entity field values, then tests the RLS filter against it.
+     * Null fields are projected as typed NULLs (see {@link BuildCreateRLSProjections}), so a
+     * filter that references a column the new row leaves NULL evaluates instead of failing to bind.
+     * The row is what the caller sends: a column the database fills on insert (a non-literal default
+     * or a trigger) is seen as NULL here.
      */
     protected override async CheckCreateRLS(
         entity: BaseEntity,
@@ -4186,17 +4190,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Builds field projections for the Create RLS synthetic row subquery.
-     * Only includes non-virtual fields that have non-null values.
+     *
+     * Every non-virtual field is projected, null fields included: a filter referencing a
+     * column the new row leaves NULL must see SQL NULL, not a missing column (which fails to
+     * bind with `Invalid column name` instead of evaluating). A bare `SELECT NULL AS Col` is
+     * untyped and can evaluate differently from a real row, so nulls are emitted as
+     * `CAST(NULL AS <sqltype>)` (see {@link typedNullProjection}).
      */
     private BuildCreateRLSProjections(entity: BaseEntity, entityInfo: EntityInfo): string {
         const parts: string[] = [];
         for (const field of entityInfo.Fields) {
             if (field.IsVirtual) continue;
             const val = entity.Get(field.Name);
-            if (val == null) continue;
 
             let sqlVal: string;
-            if (typeof val === 'boolean') {
+            if (val == null) {
+                sqlVal = this.typedNullProjection(field);
+            } else if (typeof val === 'boolean') {
                 sqlVal = val ? '1' : '0';
             } else if (field.NeedsQuotes) {
                 sqlVal = `'${String(val).replace(/'/g, "''")}'`;
@@ -4206,6 +4216,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             parts.push(`${sqlVal} AS ${this.QuoteIdentifier(field.Name)}`);
         }
         return parts.join(', ');
+    }
+
+    /**
+     * A typed NULL for one field of the RLS synthetic row, in the provider's dialect.
+     * Maps from `field.Type` (the base type), not `field.SQLFullType`, which already has the
+     * length formatted in and would pass through the dialect unmapped. `field.Length` is the
+     * byte length while the dialect takes a character count, so `MaxLength` is used, with the
+     * `-1` MAX sentinel passed through. `MaxLength` is 0 for `binary`/`varbinary`, whose length
+     * is a byte count, and SQL Server rejects `VARBINARY(0)`, so those keep `field.Length`.
+     * An unresolvable type fails the save (throw) rather than emitting an untyped NULL.
+     */
+    private typedNullProjection(field: EntityFieldInfo): string {
+        const baseType = field.Type;
+        if (!baseType || baseType.trim().length === 0) {
+            throw new Error(
+                `Cannot build RLS row projection: field ${field.Name} has no resolvable SQL type for a typed NULL`
+            );
+        }
+        const isBinary = /^(var)?binary$/i.test(baseType.trim());
+        const charLength = field.Length === -1 || isBinary ? field.Length : field.MaxLength;
+        const mapped = this.getDialect()?.MapDataTypeToString(baseType, charLength, field.Precision, field.Scale);
+        return `CAST(NULL AS ${mapped ?? field.SQLFullType})`;
     }
 
     /**************************************************************************/
