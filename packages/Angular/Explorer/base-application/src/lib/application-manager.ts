@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager, IMetadataProvider, PermissionConstrainedError } from '@memberjunction/core';
 import { MJUserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
@@ -417,8 +417,9 @@ export class ApplicationManager {
     const defaults = this.Provider.Applications
       .filter(a => a.DefaultForNewUser && a.Status === 'Active' && engine.UserHasApplicationAccess(a.ID))
       .sort((a, b) => (a.DefaultSequence ?? 100) - (b.DefaultSequence ?? 100));
+    const appsByID = IndexByUUID(allApps);
     return defaults
-      .map(info => allApps.find(app => UUIDsEqual(app.ID, info.ID)))
+      .map(info => appsByID.Get(info.ID))
       .filter((app): app is BaseApplication => !!app);
   }
 
