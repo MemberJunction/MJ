@@ -404,12 +404,16 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     this._disposed = true;
 
     if (this._fileHandle) {
-      // Write footer comment (label the part number only when splitting produced multiple parts)
-      const footer = this._generateFooter(this._rotated ? this._partIndex : undefined);
-      await this._fileHandle.writeFile(footer);
-
-      await this._fileHandle.close();
-      this._fileHandle = null;
+      // Write footer comment (label the part number only when splitting produced multiple parts).
+      // Close in `finally`: a failed footer write still reports its error, but must not leak the
+      // handle, since `_disposed` is already set and a retried Dispose() returns early.
+      try {
+        const footer = this._generateFooter(this._rotated ? this._partIndex : undefined);
+        await this._fileHandle.writeFile(footer);
+      } finally {
+        await this._fileHandle.close();
+        this._fileHandle = null;
+      }
 
       // Check if we should delete empty log files. We delete silently — callers
       // inspect `StatementCount` to decide what (if anything) to report to the user.

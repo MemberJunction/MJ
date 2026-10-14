@@ -12,6 +12,7 @@ import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig, DEFAULT_SQL
 import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
+import { DescribeSqlLogParts } from '../lib/sql-log-parts';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordDependencyAnalyzer, FlattenedRecord, groupRecordsByGraphId } from '../lib/record-dependency-analyzer';
@@ -532,11 +533,7 @@ export class PushService {
             // Always surface a multi-part split (not just in verbose) — the user needs to know
             // the migration is several files so they commit/rename all of them.
             const effectiveLimit = this.syncConfig?.sqlLogging?.maxFileSize ?? DEFAULT_SQL_LOG_MAX_FILE_SIZE;
-            const mib = effectiveLimit / (1024 * 1024);
-            const limitStr = mib >= 1 ? `${mib >= 10 ? Math.round(mib) : mib.toFixed(1)} MiB` : `${Math.round(effectiveLimit / 1024)} KiB`;
-            callbacks?.onLog?.(`📝 SQL log split into ${paths.length} parts (each ≤ ~${limitStr} unless a single statement exceeds it):`);
-            const pad = String(paths.length).length;
-            paths.forEach((p, i) => callbacks?.onLog?.(`   ${String(i + 1).padStart(pad, '0')}. ${p}`));
+            DescribeSqlLogParts(paths, effectiveLimit).forEach((line) => callbacks?.onLog?.(line));
           } else if (options.verbose) {
             callbacks?.onLog?.(`📝 SQL log written to: ${paths[0]}`);
           }

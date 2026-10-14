@@ -7,7 +7,7 @@
  * an independent runnable migration, splitting strictly on statement boundaries so no statement
  * is ever torn and none is lost or duplicated.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -244,6 +244,65 @@ describe('SqlLoggingSessionImpl — state after a rotation', () => {
       }
       await alone.Dispose();
       expect(shape).toEqual(batchShape(fs.readFileSync(alone.FilePath, 'utf8')));
+    }
+  });
+});
+
+describe('SqlLoggingSessionImpl — size limit boundary and closing', () => {
+  /** Bytes the logger holds back for the part footer when deciding to rotate (FOOTER_RESERVE_BYTES). */
+  const FOOTER_RESERVE = 1024;
+
+  /** File size after the header and the first statement, and after the second statement, with no limit. */
+  async function sizesWithoutLimit(): Promise<{ afterFirst: number; afterSecond: number }> {
+    const filePath = makeTmpFile();
+    const session = new SqlLoggingSessionImpl('measure', filePath, {});
+    await session.Initialize();
+    await session.LogSqlStatement(stmt(0), undefined, undefined, true);
+    const afterFirst = fs.statSync(filePath).size;
+    await session.LogSqlStatement(stmt(1), undefined, undefined, true);
+    const afterSecond = fs.statSync(filePath).size;
+    await session.Dispose();
+    return { afterFirst, afterSecond };
+  }
+
+  async function partsAt(maxFileSize: number): Promise<number> {
+    const session = new SqlLoggingSessionImpl('boundary', makeTmpFile(), { maxFileSize });
+    await session.Initialize();
+    await session.LogSqlStatement(stmt(0), undefined, undefined, true);
+    await session.LogSqlStatement(stmt(1), undefined, undefined, true);
+    await session.Dispose();
+    return session.FilePaths.length;
+  }
+
+  it('keeps a statement in the current part when the part plus the footer reserve lands exactly on the limit', async () => {
+    const { afterFirst, afterSecond } = await sizesWithoutLimit();
+    expect(afterSecond).toBeGreaterThan(afterFirst);
+
+    expect(await partsAt(afterSecond + FOOTER_RESERVE)).toBe(1);
+    expect(await partsAt(afterSecond + FOOTER_RESERVE - 1)).toBe(2);
+  });
+
+  it('closes the file even when writing the footer fails, and still reports the failure', async () => {
+    let footerFails = false;
+    let closes = 0;
+    const handle = {
+      writeFile: async (): Promise<void> => {
+        if (footerFails) throw new Error('disk full');
+      },
+      close: async (): Promise<void> => {
+        closes++;
+      },
+    };
+    const open = vi.spyOn(fs.promises, 'open').mockResolvedValue(handle as unknown as fs.promises.FileHandle);
+    try {
+      const session = new SqlLoggingSessionImpl('footer-fails', makeTmpFile(), {});
+      await session.Initialize();
+      footerFails = true;
+
+      await expect(session.Dispose()).rejects.toThrow('disk full');
+      expect(closes).toBe(1);
+    } finally {
+      open.mockRestore();
     }
   });
 });

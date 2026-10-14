@@ -6,6 +6,7 @@ import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { LoadEntityConfig, LoadSyncConfig, DEFAULT_SQL_LOG_MAX_FILE_SIZE } from '../config';
 import { FindEntityDirectories } from '../lib/provider-utils';
 import { configManager } from '../lib/config-manager';
+import { DescribeSqlLogParts } from '../lib/sql-log-parts';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import type { SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
@@ -122,7 +123,14 @@ export class WatchService {
         // Dispose SQL logging session
         if (this.sqlLoggingSession) {
           try {
-            callbacks?.onLog?.(`📝 SQL log written to: ${this.sqlLoggingSession.FilePath}`);
+            const parts = this.sqlLoggingSession.FilePaths;
+            if (parts.length > 1) {
+              // A split capture is several files; name every one so none is missed when committing.
+              DescribeSqlLogParts(parts, this.sqlLoggingSession.Options.maxFileSize ?? DEFAULT_SQL_LOG_MAX_FILE_SIZE)
+                .forEach((line) => callbacks?.onLog?.(line));
+            } else {
+              callbacks?.onLog?.(`📝 SQL log written to: ${this.sqlLoggingSession.FilePath}`);
+            }
             await this.sqlLoggingSession.Dispose();
             this.sqlLoggingSession = null;
           } catch (error) {
