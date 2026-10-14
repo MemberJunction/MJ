@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { SessionRunIDVerifier } from '../agentSessions/SessionRunIDVerifier.js';
 
 const SESSION_ID = 'd3d3d3d3-0000-4000-8000-000000000001';
@@ -28,12 +28,16 @@ function issuedViews(runViews: ReturnType<typeof vi.fn>): RunViewParams[] {
     return runViews.mock.calls.flatMap(([paramsList]) => paramsList as RunViewParams[]);
 }
 
+/** Stubs the cached system user; lts/5's UserCache has no SetUsers. */
+let getSystemUserSpy: ReturnType<typeof vi.spyOn>;
+
 beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    getSystemUserSpy = vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(undefined as unknown as UserInfo);
 });
 
 afterEach(() => {
-    UserCache.Instance.SetUsers([]);
+    vi.restoreAllMocks();
 });
 
 describe('SessionRunIDVerifier.Verify', () => {
@@ -74,7 +78,7 @@ describe('SessionRunIDVerifier.Verify', () => {
         // Row-level security can hide a session's own runs from its owner: a web-widget guest's
         // delegated runs carry no ConversationID, so the guest's run filter does not match them.
         const systemUser = { ID: UserCache.Instance.SYSTEM_USER_ID, Email: 'system@example.com' } as unknown as UserInfo;
-        UserCache.Instance.SetUsers([systemUser]);
+        getSystemUserSpy.mockReturnValue(systemUser);
         const { provider, runViews } = makeProvider({ 'MJ: AI Agent Runs': [{ ID: PAUSED_RUN_ID }] });
 
         const result = await new SessionRunIDVerifier().Verify(SESSION_ID, { PendingFeedbackRunID: PAUSED_RUN_ID }, USER, provider);

@@ -5,11 +5,19 @@
  * @module @memberjunction/server
  */
 import { IMetadataProvider, LogError, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { IsValidUUID, UUIDsEqual } from '@memberjunction/global';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 
 const AGENT_RUN_ENTITY = 'MJ: AI Agent Runs';
 const AGENT_RUN_STEP_ENTITY = 'MJ: AI Agent Run Steps';
+
+/**
+ * Escapes a value for a single-quoted SQL literal: drops null bytes and doubles quotes. A copy of
+ * `EscapeSQLString` from `@memberjunction/global` on next, which lts/5 does not have.
+ */
+function EscapeSQLString(value: string): string {
+    return value.replace(/\0/g, '').replace(/'/g, "''");
+}
 
 /**
  * The run ids a realtime voice session keeps in its `Config` JSON. Server code reads and writes the

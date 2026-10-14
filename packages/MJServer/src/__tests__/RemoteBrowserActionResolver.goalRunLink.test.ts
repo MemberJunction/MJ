@@ -43,11 +43,16 @@ vi.mock('@memberjunction/remote-browser-server', () => ({
 const beginStepMock = vi.fn(async (_provider: unknown, _user: unknown, _coAgentRunID: string | undefined, _goal: string) => null);
 vi.mock('../agentSessions/remoteBrowserGoalEngine.js', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../agentSessions/remoteBrowserGoalEngine.js')>()),
-    BeginBrowserGoalStep: (provider: unknown, user: unknown, coAgentRunID: string | undefined, goal: string) =>
+    beginBrowserGoalStep: (provider: unknown, user: unknown, coAgentRunID: string | undefined, goal: string) =>
         beginStepMock(provider, user, coAgentRunID, goal),
-    FinalizeBrowserGoalStep: vi.fn(async () => undefined),
+    finalizeBrowserGoalStep: vi.fn(async () => undefined),
 }));
 
+// lts/5's UserCache throws from GetSystemUser while unloaded; no system user is cached here.
+vi.mock('@memberjunction/sqlserver-dataprovider', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    UserCache: { get Instance() { return { GetSystemUser: () => undefined }; } },
+}));
 vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { Instance: { Config: vi.fn(), Prompts: [] } } }));
 vi.mock('@memberjunction/ai-prompts', async (importOriginal) => ({
     ...(await importOriginal<typeof import('@memberjunction/ai-prompts')>()),

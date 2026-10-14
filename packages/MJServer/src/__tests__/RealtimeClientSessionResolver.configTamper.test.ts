@@ -58,7 +58,7 @@ vi.mock('../util.js', () => ({
 }));
 
 const getSystemUserMock = vi.fn<() => UserInfo | undefined>();
-vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
+vi.mock('@memberjunction/sqlserver-dataprovider', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
     return {
         ...actual,
