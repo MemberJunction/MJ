@@ -522,8 +522,9 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Handle errors and create error result. A request its signal aborted is reported as cancelled,
-     * not classified as a provider error.
+     * Handle errors and create error result. A request its signal aborted is classified by why it was
+     * aborted, not as a provider error: a caller cancellation is reported as cancelled (never failed
+     * over), and an abort caused by a timeout as a retriable network error.
      */
     private handleError(error: unknown, startTime: Date, signal?: AbortSignal): ImageGenerationResult {
         if (IsRequestAborted(error, signal)) {

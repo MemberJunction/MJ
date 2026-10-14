@@ -204,10 +204,12 @@ export abstract class BaseEmbeddings extends BaseModel {
      * as failed.
      *
      * ERROR CONTRACT (deliberate — change here if a different policy is wanted): mirrors the
-     * per-provider Gemini fix. On ANY per-text failure that survives retry (EmbedText throws OR yields
-     * an empty vector) we return an EMPTY result rather than throwing, so batch pipelines that don't
-     * wrap EmbedTexts (e.g. EntityVectorSyncer) degrade gracefully instead of aborting. To make it
-     * fully fail-loud instead, replace the two `emptyEmbedTextsResult(...)` returns below with `throw`.
+     * per-provider Gemini fix. On any other per-text failure that survives retry (EmbedText throws OR
+     * yields an empty vector) we return an EMPTY result rather than throwing, so batch pipelines that
+     * don't wrap EmbedTexts (e.g. EntityVectorSyncer) degrade gracefully instead of aborting. An aborted
+     * request (cancelled or timed out) is the exception: it is rethrown (see {@link EmbedTexts}). To
+     * make it fully fail-loud instead, replace the two `emptyEmbedTextsResult(...)` returns below with
+     * `throw`.
      */
     protected async embedPerText(params: EmbedTextsParams): Promise<EmbedTextsResult> {
         const { texts, ...rest } = params;
