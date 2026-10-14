@@ -292,7 +292,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
         'entity-server-invariants': 9,
-        'entity-writes': 9,
+        'entity-writes': 10,
         'field-rules-bulk-update': 3,
         'fls-enforcement': 24,
         'fls-enforcement-client': 6,
@@ -381,7 +381,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(115);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(116);
     });
 });
 
@@ -497,6 +497,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'entity-server-invariants.ESI4',
         'entity-server-invariants.ESI9',
         'entity-writes.EW1',
+        'entity-writes.EW10',
         'entity-writes.EW2',
         'entity-writes.EW3',
         'entity-writes.EW5',
