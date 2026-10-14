@@ -971,13 +971,16 @@ The effective co-agent config gained a `session` sub-section that flows into the
       "effortLevel": 85,                 // MJ-normalized (ChatParams.effortLevel vocabulary: 1–100 or named)
       "parallelToolCalls": true,
       "mcpTools": [{ "type": "mcp", "server_label": "kb", "server_url": "https://…", "require_approval": "never" }],
-      "inputTranscriptionModel": "whisper-1"
+      "inputTranscriptionModel": "whisper-1",
+      "transcriptionLanguages": ["en-US"]  // BCP-47 caption-language hint (Gemini); unset = auto-detect
     }
   }
 }
 ```
 
 `GetSessionTuningSettings` projects the section onto the flat bag keys; each driver translates a key to its native wire field **only when its profile confirms support** and scrubs it otherwise — a shared config is safe on every provider (Gemini additionally warns on scrubbed foreign keys via `REALTIME_SHARED_CONFIG_KEYS`). Grok's GA gates are OFF pending xAI docs; flipping them is a one-line profile change.
+
+`transcriptionLanguages` matters for Gemini Live, whose captions on BOTH sides come from its own transcription streams. Unset, Gemini guesses each utterance's language, and a call held in English can show captions in another script (Arabic, Tamil, Korean) even though the audio is fine. The codes are a hint, not a lock: speech in another language is still captioned in that language. The OpenAI family scrubs the key, since the agent's captions there are the model's own text.
 
 ### Turn detection — catalog-driven, per model (`ModelConfiguration`)
 

@@ -23,7 +23,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@google/genai": "^2.8.0",
+    "@google/genai": "^2.16.0",
     "@memberjunction/ai": "6.2.0-edge.3",
     "@memberjunction/ai-gemini": "6.2.0-edge.3",
     "@memberjunction/global": "6.2.0-edge.3",

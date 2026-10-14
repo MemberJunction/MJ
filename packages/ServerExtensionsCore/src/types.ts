@@ -62,6 +62,34 @@ export interface ServerExtensionConfig {
     Phase?: ServerExtensionPhase;
 
     /**
+     * When `true`, this extension owns the CORS policy for every request under its `RootPath`,
+     * and MJServer's global CORS middleware skips those paths. Defaults to `false`.
+     *
+     * Without this, MJServer's global CORS runs ahead of every extension. It reflects any
+     * allowed origin onto the extension's responses, including its refusals, and it answers
+     * every preflight (`OPTIONS`) with `204` itself, so the extension's own `OPTIONS` handler
+     * never runs. An extension with its own origin policy, such as a public pre-auth endpoint
+     * whose allowed origins are set per resource, cannot enforce that policy.
+     *
+     * With `OwnsCORS: true`:
+     * - no `Access-Control-*` header is added to any response under `RootPath` by MJServer;
+     * - preflight requests reach the extension's routes, so the extension must answer
+     *   `OPTIONS` itself (for example with the `cors` package and an origin callback);
+     * - a path without CORS headers is not readable cross-origin, so an extension that
+     *   forgets to answer is closed, not open.
+     *
+     * Matching follows Express mount semantics: case-insensitive, on a path-segment
+     * boundary (`/ballot` owns `/ballot` and `/ballot/x`, not `/ballots`). Disabled entries
+     * own nothing. MJServer's auth middleware passes `OPTIONS` through, so the flag also
+     * works for `'post-auth'` extensions; their 401 responses then carry no CORS headers
+     * unless the extension adds them.
+     *
+     * Open Apps can set this in their published `MJ_SERVER_EXTENSIONS` entries; the host
+     * `mj.config.cjs` `serverExtensions[]` overlay can override it by `DriverClass`.
+     */
+    OwnsCORS?: boolean;
+
+    /**
      * Extension-specific configuration. The shape varies by extension type.
      * For messaging adapters, this contains `AgentID`, `BotToken`, etc.
      * The extension is responsible for parsing and validating its own settings.
