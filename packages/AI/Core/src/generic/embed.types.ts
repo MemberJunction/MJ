@@ -11,6 +11,14 @@ export type EmbedTextParams = BaseParams & {
      * read it from there and pass it here.
      */
     dimensions?: number
+    /**
+     * Optional signal for cancelling the request. Drivers whose SDK can abort a request forward it,
+     * so an abort tears the request down; drivers that call an in-process model check it between
+     * items and stop. A request that stops because the signal fired throws a cancellation error
+     * (classified `Cancelled`, or a retriable `NetworkError` when the signal was aborted by a
+     * timeout) rather than returning an empty result, and is never retried.
+     */
+    CancellationToken?: AbortSignal
 }
 
 export type EmbedTextsParams = BaseParams & {
@@ -19,6 +27,11 @@ export type EmbedTextsParams = BaseParams & {
      * Optional output dimension override. See `EmbedTextParams.dimensions`.
      */
     dimensions?: number
+    /**
+     * Optional signal for cancelling the request. See `EmbedTextParams.CancellationToken`. Once it
+     * fires, no further text or batch is sent.
+     */
+    CancellationToken?: AbortSignal
 }
 
 export type EmbedContentParams = BaseParams & {
@@ -27,6 +40,10 @@ export type EmbedContentParams = BaseParams & {
      * Optional output dimension override. See `EmbedTextParams.dimensions`.
      */
     dimensions?: number
+    /**
+     * Optional signal for cancelling the request. See `EmbedTextParams.CancellationToken`.
+     */
+    CancellationToken?: AbortSignal
 }
 
 export type EmbedResult = {

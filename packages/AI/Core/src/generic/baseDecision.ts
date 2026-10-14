@@ -9,6 +9,7 @@
 
 import { BaseModel } from './baseModel';
 import { ErrorAnalyzer } from './errorAnalyzer';
+import { BuildCancellationErrorInfo, IsRequestAborted } from './cancellation';
 import {
     ChoiceAnswer,
     ChoiceQuestion,
@@ -111,7 +112,11 @@ export abstract class BaseDecision extends BaseModel {
             const failure = new DecisionResult(false, startTime, endTime);
             failure.errorMessage = error instanceof Error ? error.message : String(error);
             failure.exception = error;
-            failure.errorInfo = ErrorAnalyzer.AnalyzeError(error, this.constructor.name);
+            // An abort is classified by its signal: a caller cancellation is never failed over, while
+            // an abort the runner's timeout caused stays retriable.
+            failure.errorInfo = IsRequestAborted(error, params.CancellationToken)
+                ? BuildCancellationErrorInfo({ error, signal: params.CancellationToken, provider: this.constructor.name })
+                : ErrorAnalyzer.AnalyzeError(error, this.constructor.name);
             failure.Answers = {};
             return failure;
         }

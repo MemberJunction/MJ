@@ -241,7 +241,8 @@ describe('Dataset Caching in GetDatasetByName', () => {
             entityData,    // SQL batch result
         ]);
 
-        const result = await provider.GetDatasetByName('ResourceTypes', undefined, mockUser);
+        // No context user: this covers cache slot marking, not per-user scope (dataset-caller-scope.test.ts).
+        const result = await provider.GetDatasetByName('ResourceTypes', undefined, undefined);
 
         expect(result.Success).toBe(true);
         expect(cacheSetSpy).toHaveBeenCalledTimes(1);
@@ -309,8 +310,10 @@ describe('Dataset Caching in GetDatasetByName', () => {
             [{ ID: 'g' }],        // Gamma SQL
         ]);
 
-        const result = await provider.GetDatasetByName('TestDataset', undefined, mockUser);
+        // No context user: this covers result ordering, not per-user scope (dataset-caller-scope.test.ts).
+        const result = await provider.GetDatasetByName('TestDataset', undefined, undefined);
 
+        expect(result.Success).toBe(true);
         // Order should match original items: Alpha, Beta, Gamma
         expect(result.Results[0].Code).toBe('Alpha');
         expect(result.Results[1].Code).toBe('Beta');
