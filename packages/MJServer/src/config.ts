@@ -316,6 +316,15 @@ const loggingSettingsSchema = z.object({
   }).optional().default({}),
 });
 
+const aiPromptRunsSchema = z.object({
+  /**
+   * Server default for which template inputs prompt runs store in AIPromptRun.Messages:
+   * 'None' (key sizes only), 'Referenced' (keys the templates read) or 'Full'.
+   * AIPrompt.TemplateDataCapture and AIPromptParams.TemplateDataCapture override it.
+   */
+  templateDataCapture: z.enum(['None', 'Referenced', 'Full']).optional(),
+});
+
 const corsSchema = z.object({
   /** Allowed origins for CORS. Default ['*'] preserves backward-compatible "allow all" behavior. */
   allowedOrigins: z.array(z.string()).default(['*']),
@@ -833,6 +842,7 @@ const configInfoSchema = z.object({
   serverExtensions: z.array(serverExtensionSchema).optional().default([]),
   cacheSettings: cacheSettingsSchema.optional().default({}),
   loggingSettings: loggingSettingsSchema.optional().default({}),
+  aiPromptRuns: aiPromptRunsSchema.optional(),
   feedbackSettings: feedbackSettingsSchema.optional().default({}),
   cors: corsSchema.optional().default({}),
   rateLimiting: rateLimitSchema.optional().default({}),
@@ -896,6 +906,7 @@ export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
 export type ServerExtensionConfig = z.infer<typeof serverExtensionSchema>;
 export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
 export type LoggingSettingsConfig = z.infer<typeof loggingSettingsSchema>;
+export type AIPromptRunsConfig = z.infer<typeof aiPromptRunsSchema>;
 export type FeedbackGithubSettingsConfig = z.infer<typeof feedbackGithubSettingsSchema>;
 export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
 export type CorsConfig = z.infer<typeof corsSchema>;

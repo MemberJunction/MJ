@@ -1474,6 +1474,9 @@ importers:
       '@memberjunction/templates-base-types':
         specifier: 6.2.0-edge.3
         version: link:../../Templates/base-types
+      cosmiconfig:
+        specifier: 9.0.0
+        version: 9.0.0(typescript@5.9.3)
       date-fns:
         specifier: ^2.30.0
         version: 2.30.0

@@ -9,11 +9,11 @@ import {
 import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling, ResolveToolChoiceForRequest } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo, PickPromptExecutionScope } from '@memberjunction/ai-core-plus';
-import { LogStatus, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
 import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
-import { TemplateEngineServer } from '@memberjunction/templates';
+import { TemplateEngineServer, type ReferencedVariablesResult } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
@@ -26,8 +26,16 @@ import {
     TemplateMessageRole,
     ChildPromptParam,
     AIPromptParams,
-    ResolvePromptRunUserID
+    ResolvePromptRunUserID,
+    type StoredParallelExecutionInfo,
+    type TemplateDataCaptureMode,
 } from '@memberjunction/ai-core-plus';
+import {
+  BuildCaptureFailedPromptRunMessages,
+  BuildStoredPromptRunMessages,
+  ReadServerTemplateDataCaptureDefault,
+  ResolveTemplateDataCaptureMode,
+} from './PromptRunDataCapture';
 // json5 is a CJS module: under this package's ESM output its import namespace has no
 // `parse` — only the default export does. `import * as JSON5` made JSON5.parse
 // undefined at runtime ("JSON5.parse is not a function"), silently disabling the
@@ -190,6 +198,9 @@ export class AIPromptRunner extends BaseModelRunner {
    * already been selected. See the DECISION note in {@link selectModelWithAPIKeyTracked}.
    */
   private static readonly NOT_EVALUATED_REASON = 'Not evaluated (a higher-priority candidate was already selected; set AIPromptParams.forceFullModelEvaluation to probe all)';
+
+  /** Server default capture mode, read from mj.config once per process. */
+  private static serverTemplateDataCaptureDefault: TemplateDataCaptureMode | undefined;
 
   constructor() {
     super();
@@ -860,8 +871,8 @@ export class AIPromptRunner extends BaseModelRunner {
       }
     }
 
-    // Add parallel execution metadata to Messages field
-    const parallelMetadata = {
+    // Store the parallel execution summary in the Messages field, with the messages and the allowed template inputs
+    const parallelMetadata: StoredParallelExecutionInfo = {
       parallelizationMode: prompt.ParallelizationMode,
       totalTasks: executionTasks.length,
       successfulTasks: parallelResult.successCount,
@@ -869,15 +880,7 @@ export class AIPromptRunner extends BaseModelRunner {
       selectedTaskId: selectedResult.task.taskId,
       executionGroups: Array.from(parallelResult.groupResults.keys()),
     };
-
-    if (params.data || params.templateData || parallelMetadata) {
-      consolidatedPromptRun.Messages = JSON.stringify({
-        data: params.data,
-        templateData: params.templateData,
-        parallelExecution: parallelMetadata,
-        messages: params.conversationMessages || [],
-      });
-    }
+    consolidatedPromptRun.Messages = this.buildStoredMessagesJSON(prompt, params, params.conversationMessages || [], parallelMetadata);
 
     // For parallel execution, set rollup fields to match totals
     consolidatedPromptRun.TokensPromptRollup = totalPromptTokens;
@@ -3947,7 +3950,8 @@ export class AIPromptRunner extends BaseModelRunner {
       promptRun.StopSequences = JSON.stringify(params.additionalParameters.stopSequences);
     }
 
-    // Store the input data/context as JSON in Messages field.
+    // Store the messages the model received in the Messages field, plus the template inputs
+    // (data, templateData) that the run's template-data capture mode allows.
     // Also capture callers that supply conversationMessages directly (e.g. templateMessageRole='none',
     // no rendered system prompt) — otherwise their assembled prompt would never be persisted.
     if (params.data || params.templateData || systemPromptText || (params.conversationMessages?.length ?? 0) > 0) {
@@ -3972,11 +3976,7 @@ export class AIPromptRunner extends BaseModelRunner {
       // Always include any caller-supplied conversation messages (previously only recorded when a
       // template system prompt was present, which dropped them for the pure-conversationMessages path).
       messages.push(...(params.conversationMessages || []));
-      promptRun.Messages = JSON.stringify({
-        data: params.data,
-        templateData: params.templateData,
-        messages: messages || [],
-      });
+      promptRun.Messages = this.buildStoredMessagesJSON(prompt, params, messages);
     }
 
     // Populate new retry tracking columns with initial values
@@ -3987,6 +3987,84 @@ export class AIPromptRunner extends BaseModelRunner {
     promptRun.ValidationAttemptCount = 0; // Will be updated during execution
     promptRun.SuccessfulValidationCount = 0;
     promptRun.FinalValidationPassed = false; // Will be updated after execution
+  }
+
+  /** The server default template-data capture mode (`aiPromptRuns.templateDataCapture` in mj.config). */
+  protected GetServerTemplateDataCaptureDefault(): TemplateDataCaptureMode {
+    if (AIPromptRunner.serverTemplateDataCaptureDefault === undefined) {
+      AIPromptRunner.serverTemplateDataCaptureDefault = ReadServerTemplateDataCaptureDefault();
+    }
+    return AIPromptRunner.serverTemplateDataCaptureDefault;
+  }
+
+  /**
+   * Serializes what this run stores in `AIPromptRun.Messages`, applying the template-data capture mode.
+   * A capture error never fails the run: it is logged, and the run stores `None` with a fixed note and no template data.
+   */
+  private buildStoredMessagesJSON(
+    prompt: MJAIPromptEntityExtended,
+    params: AIPromptParams,
+    messages: ChatMessage[],
+    parallelExecution?: StoredParallelExecutionInfo,
+  ): string {
+    try {
+      const mode = ResolveTemplateDataCaptureMode(
+        params.TemplateDataCapture,
+        this.promptTemplateDataCaptureSettings(prompt, params),
+        this.GetServerTemplateDataCaptureDefault(),
+      );
+      return JSON.stringify(BuildStoredPromptRunMessages({
+        Mode: mode,
+        Data: params.data,
+        TemplateData: params.templateData,
+        Messages: messages,
+        GetReferencedVariables: () => this.collectReferencedVariables(prompt, params),
+        ParallelExecution: parallelExecution,
+      }));
+    } catch (error) {
+      LogError(`Template data capture failed for prompt "${prompt.Name}"; the run stores no template data`, null, error);
+      return JSON.stringify(BuildCaptureFailedPromptRunMessages(messages, parallelExecution));
+    }
+  }
+
+  /** The child prompts rendered in a run, depth first: each child prompt, then its own child prompts. */
+  private childPromptsDepthFirst(children: ChildPromptParam[] | undefined): MJAIPromptEntityExtended[] {
+    const prompts: MJAIPromptEntityExtended[] = [];
+    for (const child of children ?? []) {
+      prompts.push(child.childPrompt.prompt, ...this.childPromptsDepthFirst(child.childPrompt.childPrompts));
+    }
+    return prompts;
+  }
+
+  /**
+   * `TemplateDataCapture` of each prompt in the run, most specific first: the child prompts depth first, then the
+   * main prompt. For a Loop or Harness agent, the agent's own prompt is a child prompt of the agent-type system prompt.
+   */
+  private promptTemplateDataCaptureSettings(prompt: MJAIPromptEntityExtended, params: AIPromptParams): Array<MJAIPromptEntityExtended['TemplateDataCapture']> {
+    return [...this.childPromptsDepthFirst(params.childPrompts).map((child) => child.TemplateDataCapture), prompt.TemplateDataCapture];
+  }
+
+  /** Variables read by the prompt's template and by every child prompt template rendered in the same run. */
+  private collectReferencedVariables(prompt: MJAIPromptEntityExtended, params: AIPromptParams): ReferencedVariablesResult {
+    const names = new Set<string>();
+    const problems: string[] = [];
+    const addPromptTemplate = (templateId: string | null, promptName: string): void => {
+      if (!templateId) return;
+      const template = this._templateEngine.Templates.find((t) => UUIDsEqual(t.ID, templateId));
+      const text = template?.GetHighestPriorityContent()?.TemplateText;
+      if (!text) {
+        problems.push(`the template of prompt "${promptName}" was not found`);
+        return;
+      }
+      const result = this._templateEngine.GetReferencedVariables(text);
+      result.Names.forEach((name) => names.add(name));
+      if (!result.Complete) problems.push(`prompt "${promptName}": ${result.Reason ?? 'incomplete analysis'}`);
+    };
+    addPromptTemplate(prompt.TemplateID, prompt.Name);
+    for (const child of this.childPromptsDepthFirst(params.childPrompts)) {
+      addPromptTemplate(child.TemplateID, child.Name);
+    }
+    return problems.length === 0 ? { Names: names, Complete: true } : { Names: names, Complete: false, Reason: problems.join('; ') };
   }
 
   /**

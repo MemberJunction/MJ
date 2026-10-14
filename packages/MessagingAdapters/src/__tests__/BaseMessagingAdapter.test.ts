@@ -851,13 +851,14 @@ describe('BaseMessagingAdapter', () => {
             expect(sent?.PlainText).toContain('Something went wrong');
         });
 
-        it('should skip orchestration metadata in step outputs and use agentRun.Result', async () => {
+        it('should skip orchestration metadata in step outputs and use a string agentRun.FinalPayload', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
                 RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
-                        Result: 'Quantum computing is a paradigm that uses quantum bits.',
+                        // A string payload is stored JSON-encoded ("..."), which looksLikeJSON does not skip
+                        FinalPayload: JSON.stringify('Quantum computing is a paradigm that uses quantum bits.'),
                         Steps: [{
                             OutputData: JSON.stringify({
                                 subAgentResult: { success: true, finalStep: 'Chat' },
@@ -878,7 +879,65 @@ describe('BaseMessagingAdapter', () => {
             expect(sent?.PlainText).not.toContain('subAgentResult');
         });
 
-        it('should show friendly fallback when agentRun.Result is JSON (artifact handles it)', async () => {
+        it('should fall back to a string agentRun.Result on an older row with no FinalPayload', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
+                    success: true,
+                    agentRun: {
+                        Result: JSON.stringify('Quantum computing is a paradigm that uses quantum bits.'),
+                        Steps: []
+                    }
+                }))
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toContain('Quantum computing');
+        });
+
+        it('should prefer agentRun.FinalPayload over agentRun.Result when a row has both', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
+                    success: true,
+                    agentRun: {
+                        FinalPayload: JSON.stringify('payload text'),
+                        Result: JSON.stringify('result text'),
+                        Steps: []
+                    }
+                }))
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toContain('payload text');
+            expect(sent?.PlainText).not.toContain('result text');
+        });
+
+        it('should show friendly fallback when the run payload is JSON (artifact handles it)', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
+                    success: true,
+                    agentRun: {
+                        FinalPayload: JSON.stringify({ summary: 'Quantum computing is a paradigm...' }),
+                        Steps: []
+                    }
+                }))
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            // A JSON payload should NOT be shown raw — friendly fallback instead
+            expect(sent?.PlainText).toContain('MJ Explorer');
+            expect(sent?.PlainText).not.toContain('"summary"');
+        });
+
+        it('should show friendly fallback when an older row has only a JSON agentRun.Result', async () => {
             const { AgentRunner } = await import('@memberjunction/ai-agents');
             vi.mocked(AgentRunner).mockImplementation(() => ({
                 RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
@@ -893,7 +952,6 @@ describe('BaseMessagingAdapter', () => {
             const msg = createMessage({ IsDirectMessage: true });
             await adapter.HandleMessage(msg);
             const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
-            // JSON Result should NOT be shown raw — friendly fallback instead
             expect(sent?.PlainText).toContain('MJ Explorer');
             expect(sent?.PlainText).not.toContain('"summary"');
         });

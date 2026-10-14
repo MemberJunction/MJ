@@ -210,10 +210,13 @@ class MockStepEntity {
     public InputData: string | null = null;
     public OutputData: string | null = null;
     public PayloadAtStart: string | null = null;
+    public PayloadAtStartSourceStepID: string | null = null;
     public PayloadAtEnd: string | null = null;
     public Skills: string | null = null;
 
     public saveCount = 0;
+    /** True once the INSERT has landed (BaseEntity.IsSaved). */
+    public IsSaved = false;
 
     constructor(private readonly seq: number) {}
 
@@ -223,6 +226,7 @@ class MockStepEntity {
 
     public async Save(): Promise<boolean> {
         this.saveCount++;
+        this.IsSaved = true;
         return true;
     }
 }
@@ -640,7 +644,9 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         const [, prompt1, actionStep, prompt2] = harness.steps;
         expect(JSON.parse(prompt1.PayloadAtStart ?? 'null')).toEqual(initialPayload);
         expect(JSON.parse(prompt1.PayloadAtEnd ?? 'null')).toEqual(afterStep1);
-        expect(JSON.parse(actionStep.PayloadAtStart ?? 'null')).toEqual(afterStep1);
+        // The action step starts from prompt 1's end, so it stores a pointer to prompt 1 instead of a copy
+        expect(actionStep.PayloadAtStart).toBeNull();
+        expect(actionStep.PayloadAtStartSourceStepID).toBe(prompt1.ID);
         expect(JSON.parse(actionStep.PayloadAtEnd ?? 'null')).toEqual(afterStep1);
         expect(JSON.parse(prompt2.PayloadAtEnd ?? 'null')).toEqual(finalPayload);
 
