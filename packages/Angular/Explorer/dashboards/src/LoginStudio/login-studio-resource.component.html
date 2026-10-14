@@ -1,0 +1,121 @@
+<mj-page-layout>
+  <mj-page-header Title="Sign-in Page" Icon="fa-solid fa-right-to-bracket"
+                  [Subtitle]="Theme ? 'What visitors see before they sign in. Designed on the default theme, ' + Theme.Name + '.' : 'What visitors see before they sign in.'">
+    <!-- One root element per block: a control-flow block is projected by its single root's selector. -->
+    @if (Theme && !Loading && StatusVariant) {
+      <mj-stat-badge meta [Label]="StatusLabel" [Variant]="StatusVariant"></mj-stat-badge>
+    }
+    @if (Theme && !Loading) {
+      <div actions class="ls__actions">
+        <button type="button" mjButton Variant="icon" Size="sm" (click)="Undo()" [disabled]="!CanUndo" title="Undo (Ctrl/Cmd Z)" AriaLabel="Undo"><i class="fa-solid fa-rotate-left"></i></button>
+        <button type="button" mjButton Variant="icon" Size="sm" (click)="Redo()" [disabled]="!CanRedo" title="Redo (Shift Ctrl/Cmd Z)" AriaLabel="Redo"><i class="fa-solid fa-rotate-right"></i></button>
+        <button type="button" mjButton Variant="outline" Size="sm" (click)="Discard()" [disabled]="!Unsaved || Saving">Discard changes</button>
+        <button type="button" mjButton Variant="outline" Size="sm" (click)="SaveDraft()" [disabled]="Saving || !Unsaved">
+          <i class="fa-regular fa-floppy-disk"></i> Save draft
+        </button>
+        <button type="button" mjButton Variant="primary" Size="sm" (click)="Publish()"
+                [disabled]="Saving || (!Unsaved && !Unpublished && IsLive)" title="Save and show this page to everyone signing in">
+          <i class="fa-solid fa-upload"></i> Publish
+        </button>
+      </div>
+    }
+  </mj-page-header>
+
+  <mj-page-body>
+    @if (ErrorMessage) {
+      <mj-alert class="ls__alert" Variant="error" [Message]="ErrorMessage" Dismissible (Dismissed)="DismissError()"></mj-alert>
+    }
+    @if (NoticeMessage) {
+      <mj-alert class="ls__alert" Variant="success" [Message]="NoticeMessage" Dismissible (Dismissed)="DismissNotice()"></mj-alert>
+    }
+
+    @if (Loading) {
+      <mj-loading Text="Reading the sign-in page..." Size="medium"></mj-loading>
+    } @else if (!Theme) {
+      <mj-empty-state Icon="fa-solid fa-palette" Title="No default theme"
+                      Message="The sign-in page is designed on the default theme. Set one in Theme Studio, under Manage Themes."></mj-empty-state>
+    } @else {
+      <div class="ls" cdkDropListGroup>
+        <!-- PALETTE -->
+        <aside class="ls__palette" aria-label="Blocks">
+          <h2 class="ls__heading">Blocks</h2>
+          <p class="ls__hint">Drag a block onto the page, or click one to add it after the selected block.</p>
+          <div class="ls__palette-list" cdkDropList [cdkDropListData]="PaletteListID" cdkDropListSortingDisabled
+               [cdkDropListEnterPredicate]="NoEnter">
+            @for (t of Palette; track t.Type) {
+              <button type="button" mjButton Variant="outline" Size="sm" class="ls__tile" cdkDrag [cdkDragData]="t.Type" (click)="AddBlock(t.Type)" [title]="t.Hint">
+                <i [class]="t.Icon" aria-hidden="true"></i>
+                <span>{{ t.Label }}</span>
+              </button>
+            }
+          </div>
+        </aside>
+
+        <!-- PREVIEW -->
+        <section class="ls__stage" (click)="OnStageClick()" aria-label="Preview">
+          <div class="ls__stage-bar" (click)="$event.stopPropagation()">
+            <mj-view-toggle role="group" aria-label="Preview size" [Options]="DeviceOptions" [ActiveKey]="Device" (KeyChange)="SetDevice($event)"></mj-view-toggle>
+            <span class="ls__hint">The sign-in button is a stand-in. The real one opens your sign-in provider.</span>
+          </div>
+
+          <div class="ls__frame" [class.ls__frame--phone]="Stacked" [style]="FrameStyle">
+            <!-- Clicking the page selects what was clicked: a block (it stops the click), the sign-in column,
+                 or else the story panel, which in the centered layout is the whole background. -->
+            <div class="lp" [class.lp--reverse]="Design.Layout === 'split-reverse'" [class.lp--centered]="Design.Layout === 'centered'"
+                 [class.lp--stacked]="Stacked" [class.lp--surface-on]="Surface === 'Banner' && Design.Layout === 'centered'"
+                 (click)="SelectSurface('Banner', $event)">
+              <div class="lp__banner" [class.lp__banner--center]="Design.Alignment === 'center' || Stacked"
+                   [class.lp__surface-on]="Surface === 'Banner' && Design.Layout !== 'centered'">
+                <div class="lp__brand">
+                  <span class="lp__region-label">{{ RegionLabel.Banner }}</span>
+                  <mj-login-region Region="Banner" [Blocks]="Design.Regions.Banner" [Logos]="Logos" [BrandName]="Theme.Name"
+                                   [Stacked]="Stacked" [Center]="Design.Alignment === 'center' || Stacked" [Editable]="true"
+                                   [SelectedID]="SelectedID"
+                                   (Dropped)="OnDrop($event)" (SelectRequested)="Select($event)" (CommandRequested)="OnCommand($event)"></mj-login-region>
+                  @if (!Design.Regions.Banner.length) {
+                    <p class="lp__default-note">Empty: visitors see the stock logo and "Welcome back" here.</p>
+                  }
+                </div>
+              </div>
+              <div class="lp__panel" [class.lp__surface-on]="Surface === 'Panel'" (click)="SelectSurface('Panel', $event)">
+                <div class="lp__stack">
+                  <span class="lp__region-label">{{ RegionLabel.PanelTop }}</span>
+                  <mj-login-region Region="PanelTop" [Blocks]="Design.Regions.PanelTop" [Logos]="Logos" [BrandName]="Theme.Name"
+                                   [Stacked]="Stacked" [Editable]="true" [SelectedID]="SelectedID"
+                                   (Dropped)="OnDrop($event)" (SelectRequested)="Select($event)" (CommandRequested)="OnCommand($event)"></mj-login-region>
+                  <div class="lp__picker" aria-hidden="true">
+                    @if (Design.Heading) {
+                      <span class="lp__heading">{{ Design.Heading }}</span>
+                    }
+                    <span class="lp__signin">Log in</span>
+                  </div>
+                  <span class="lp__region-label">{{ RegionLabel.PanelBottom }}</span>
+                  <mj-login-region Region="PanelBottom" [Blocks]="Design.Regions.PanelBottom" [Logos]="Logos" [BrandName]="Theme.Name"
+                                   [Stacked]="Stacked" [Editable]="true" [SelectedID]="SelectedID"
+                                   (Dropped)="OnDrop($event)" (SelectRequested)="Select($event)" (CommandRequested)="OnCommand($event)"></mj-login-region>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- INSPECTOR -->
+        <aside class="ls__side" aria-label="Settings">
+          <div class="ls__side-head">
+            <i [class]="SideIcon" aria-hidden="true"></i>
+            <h2 class="ls__side-title">{{ SideTitle }}</h2>
+            @if (Selected || Surface) {
+              <button type="button" mjButton Variant="icon" Size="sm" (click)="Select(null)" title="Page settings" AriaLabel="Back to page settings">
+                <i class="fa-solid fa-table-columns"></i>
+              </button>
+            }
+          </div>
+          <mj-login-studio-inspector [Design]="Design" [Selected]="Selected" [SelectedRegion]="SelectedRegion" [Surface]="Surface"
+                                     [CanReset]="IsLive || Unpublished" [Saving]="Saving"
+                                     (EditRequested)="ApplyEdit($event)" (CommandRequested)="OnCommand($event)"
+                                     (StockPageRequested)="UseStockPage()" (SurfaceSelectRequested)="SelectSurface($event)"></mj-login-studio-inspector>
+        </aside>
+      </div>
+    }
+  </mj-page-body>
+</mj-page-layout>
