@@ -181,8 +181,8 @@ GO
  **      AIAgentExample, which V202610061614 added without regenerating this procedure.          **
  **                                                                                              **
  **  The new PayloadAtStart and Result descriptions need no generated SQL here:                  **
- **  spUpdateExistingEntityFieldsFromSchema (run by CodeGen and by R__RefreshMetadata)           **
- **  copies them from the extended properties above.                                             **
+ **  the EntityField metadata refresh (run by CodeGen and by R__RefreshMetadata) copies them      **
+ **  from the extended properties above.                                                         **
  **                                                                                              **
  **  It is appended here — rather than left as a standalone CodeGen_Run_*.sql file — so the      **
  **  whole change applies as ONE migration, per MJ convention. DO NOT hand-edit below this       **
