@@ -38,6 +38,12 @@ const reReadFixture = vi.hoisted(() => ({ row: null as Record<string, unknown> |
  */
 let runQueryResultQueue: Array<{ Success: boolean; Results: unknown[] | null; ErrorMessage?: string }> = [];
 
+/**
+ * Every RunView param object, in call order. Lets a test assert on what the engine asked for
+ * rather than only its result.
+ */
+let runViewParamsLog: Array<Record<string, unknown>> = [];
+
 const DEFAULT_RV_RESULT = { Success: true, Results: [] };
 const DEFAULT_RQ_RESULT = { Success: true, Results: [] };
 
@@ -143,7 +149,8 @@ vi.mock('@memberjunction/core', () => {
         },
         Metadata: MockMetadata,
         RunView: class MockRunView {
-            RunView() {
+            RunView(params: Record<string, unknown>) {
+                runViewParamsLog.push(params);
                 return Promise.resolve(nextRunViewResult());
             }
         },
@@ -300,6 +307,7 @@ describe('ConversationEngine', () => {
 
         // Clear both queues
         runViewResultQueue = [];
+        runViewParamsLog = [];
         runQueryResultQueue = [];
     });
 
