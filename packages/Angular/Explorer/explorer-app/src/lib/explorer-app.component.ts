@@ -8,7 +8,7 @@
  *   <mj-explorer-app></mj-explorer-app>
  */
 
-import { Component, OnInit, OnDestroy, Inject, Input, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector, ContentChildren, QueryList, TemplateRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, Input, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector, ContentChildren, QueryList, TemplateRef, viewChild } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
@@ -26,7 +26,7 @@ import {
 import { LoginDesignTokens, LoginThemeTokens, type LoginBlock, type LoginDesign, type LoginRegion, type PublicLoginScreen, type ThemeLogos } from '@memberjunction/theme-engine';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
-import { SystemValidationService, ServerConnectivityService } from '@memberjunction/ng-explorer-core';
+import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent } from '@memberjunction/ng-explorer-core';
 import { NavigationService, AgentContextUpdate, RecordSourceContext } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
@@ -342,19 +342,24 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   /** Shell-header height in pixels — matches `.shell-header { height: 60px }`. */
   private static readonly SHELL_HEADER_PX = 60;
 
+  /** The offline banner above the shell header; absent until the shell renders. */
+  private readonly connectivityBanner = viewChild(ServerConnectivityBannerComponent);
+
   /**
    * Top boundary (in px) the chat overlay bubble cannot be dragged past. The
    * shell-header is 60px tall, but if the server-connectivity banner is showing
-   * it sits above the shell-header and pushes everything down. The banner
-   * component publishes its height to `--mj-connectivity-banner-height` on
-   * `<html>`, so we add it in. Re-evaluated on every change-detection pass —
-   * Angular's animation events fire CD when the banner show/hides finish.
+   * it sits above the shell-header and pushes everything down, so we add its
+   * height in.
+   *
+   * The height is read from the banner's `HeightPx` signal, never from the DOM.
+   * The banner publishes it from an animation-done listener that can fire while
+   * views are refreshing; a DOM read is invisible to change detection, so this
+   * binding went stale and dev mode reported NG0100 on every later pass
+   * (MJ #4377). A signal read registers this view as a consumer, so the write
+   * re-refreshes it.
    */
   public get ChatOverlayTopBoundaryPx(): number {
-    const bannerHeight = parseFloat(
-      getComputedStyle(document.documentElement).getPropertyValue('--mj-connectivity-banner-height')
-    ) || 0;
-    return MJExplorerAppComponent.SHELL_HEADER_PX + bannerHeight;
+    return MJExplorerAppComponent.SHELL_HEADER_PX + (this.connectivityBanner()?.HeightPx() ?? 0);
   }
 
   private destroy$ = new Subject<void>();

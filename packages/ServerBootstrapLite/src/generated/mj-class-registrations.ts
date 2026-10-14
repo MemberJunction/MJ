@@ -121,9 +121,10 @@ import {
     OllamaLLM,
 } from '@memberjunction/ai-ollama';
 
-// @memberjunction/ai-openai (6 classes)
+// @memberjunction/ai-openai (7 classes)
 import {
     OpenAIAudioGenerator,
+    OpenAIDecision,
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
@@ -1442,6 +1443,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OllamaEmbedding,
     OllamaLLM,
     OpenAIAudioGenerator,
+    OpenAIDecision,
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
@@ -1610,11 +1612,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
-    MJCompanyIntegrationRunDetailEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
@@ -1814,11 +1816,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
-    MJRecordMergeLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordMergeLogEntity,
     MJRecordProcessCategoryEntity,
     MJRecordProcessEntity,
     MJRecordProcessWatermarkEntity,
@@ -2018,11 +2020,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     WatchNewTypeformResponsesAction,
     AttachTagsAction,
     CreateUserAction_actions_bizapps_lms,
-    DetachTagsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    DetachTagsAction,
     EnrollUserAction,
     GetBundlesAction,
     GetCertificatesAction,
@@ -2222,11 +2224,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioScoreRecordSetServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
-    PredictiveStudioTrainModelServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
@@ -2426,11 +2428,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     QRCodeAction,
     ReadRSSFeedAction,
     RefreshListFromSourceAction,
-    RemoveRecordsFromListAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    RemoveRecordsFromListAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -2514,7 +2516,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1067;
+export const CLASS_REGISTRATIONS_COUNT = 1068;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

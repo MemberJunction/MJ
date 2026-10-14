@@ -29,6 +29,7 @@ import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 import { GraphQLAIClient } from "./graphQLAIClient";
 import { BrowserIndexedDBStorageProvider } from "./storage-providers";
 import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError";
+import { IsGraphQLMutation } from "./graphQLOperationKind";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -58,6 +59,25 @@ export type SocketConnectionState = 'connected' | 'disconnected' | 'unknown';
  * The client application should use this to notify the user and force re-authentication.
  */
 export type AuthenticationErrorCallback = (error: Error) => void;
+
+/**
+ * Options for {@link GraphQLDataProvider.ExecuteGQL}.
+ */
+export interface ExecuteGQLOptions {
+    /**
+     * The entities a mutation is known to write. After a mutation the provider drops its RunView
+     * dedup-linger entries; with this set, only the entries touching these entities are dropped
+     * instead of every entry. The entity `Save()`/`Delete()` paths pass their own entity — the same
+     * scope the local BaseEntity save/delete event already invalidates. Leave it unset for any
+     * mutation whose writes are not known up front (Remote Operations, Actions, agent runs): those
+     * drop everything, because a stale replay is worse than a re-query. Ignored for queries.
+     *
+     * Rows a server-side save hook writes to OTHER entities are outside the scope, exactly as they
+     * were before mutations invalidated at all; code that reads such rows right after the save can
+     * call `InvalidateRunViewDedupCache()` itself.
+     */
+    AffectedEntityNames?: readonly string[];
+}
 
 /**
  * One dispatcher lifecycle frame for a durable workflow run (task graph), as delivered by the
@@ -2249,8 +2269,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 return true; // part of a TG always return true after we setup the transaction group item above
             }
             else {
-                // not part of a transaction group, so just go for it and send across our GQL
-                const d = await this.ExecuteGQL(outer, vars)
+                // not part of a transaction group, so just go for it and send across our GQL. The
+                // mutation writes this entity, so only its dedup-linger entries are dropped.
+                const d = await this.ExecuteGQL(outer, vars, true, { AffectedEntityNames: [entity.EntityInfo.Name] })
                 if (d && d[mutationName]) {
                     result.Success = true;
                     result.EndedAt = new Date();
@@ -2508,8 +2529,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 return true;
             }
             else {
-                // no transaction just go for it
-                const d = await this.ExecuteGQL(query, vars)
+                // no transaction just go for it (scoped like Save: the delete writes this entity)
+                const d = await this.ExecuteGQL(query, vars, true, { AffectedEntityNames: [entity.EntityInfo.Name] })
                 if (d && d[queryName]) {
                     const data = d[queryName];
                     for (let key of entity.PrimaryKey.KeyValuePairs) {
@@ -2956,8 +2977,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param refreshTokenIfNeeded 
      * @returns 
      */
-    public static async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
-        return GraphQLDataProvider.Instance.ExecuteGQL(query, variables, refreshTokenIfNeeded);
+    public static async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true, options?: ExecuteGQLOptions): Promise<any> {
+        return GraphQLDataProvider.Instance.ExecuteGQL(query, variables, refreshTokenIfNeeded, options);
     }
 
     /**
@@ -2988,6 +3009,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         const url = this._configData.URL;
         const payload = JSON.stringify({ query, variables });
+        const isMutation = IsGraphQLMutation(query);
+        const settle = () => {
+            // see ExecuteGQL — a mutation can write server-side without a local BaseEntity event
+            if (isMutation) {
+                this.InvalidateRunViewDedupCache();
+            }
+        };
 
         return new Promise<T>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
@@ -3047,7 +3075,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             xhr.onabort = () => reject(new Error('Request aborted'));
 
             xhr.send(payload);
-        });
+        }).finally(settle);
     }
 
     /**
@@ -3055,9 +3083,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param query 
      * @param variables 
      * @param refreshTokenIfNeeded 
+     * @param options - see {@link ExecuteGQLOptions}
      * @returns 
      */
-    public async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
+    public async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true, options?: ExecuteGQLOptions): Promise<any> {
+        const isMutation = IsGraphQLMutation(query);
         try {
             const data = await this._client.request(query, variables);
             return data;
@@ -3099,7 +3129,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     if (refreshTokenIfNeeded) {
                         // token expired, so we need to refresh it and try again
                         await this.RefreshToken();
-                        return await this.ExecuteGQL(query, variables, false/*don't attempt to refresh again*/);
+                        return await this.ExecuteGQL(query, variables, false/*don't attempt to refresh again*/, options);
                     }
                     else {
                         // token expired but the caller doesn't want a refresh, so just return the error
@@ -3115,6 +3145,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // for the raw error class yields the full serialised request.
                 LogError(JSON.stringify(safeError));
                 throw safeToThrow; // force the caller to handle the error
+            }
+        }
+        finally {
+            // A mutation can write server-side (Remote Operations, Actions, agent runs, server-side
+            // save hooks) without a BaseEntity event ever reaching this process, so drop the RunView
+            // dedup-linger entries — otherwise an identical RunView in the next DedupLingerMs replays
+            // pre-mutation rows. Runs on failure too: a failed mutation may have written part-way.
+            // A caller that knows exactly what it wrote (entity Save/Delete) scopes the drop.
+            if (isMutation) {
+                this.InvalidateRunViewDedupCache(options?.AffectedEntityNames);
             }
         }
     }
