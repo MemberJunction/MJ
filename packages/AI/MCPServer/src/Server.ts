@@ -14,7 +14,7 @@
  */
 
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
-import { CountByUUID, NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
+import { CountByUUID, IndexByUUID, UUIDsEqual } from "@memberjunction/global";
 import { setupSQLServerClient, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -2262,7 +2262,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
 
             const step = steps[stepNumber - 1];
             // A step can store its start payload as a pointer to an earlier step's end; export the resolved payload.
-            const stepsById = new Map<string, MJAIAgentRunStepEntityExtended>(steps.map(s => [NormalizeUUID(s.ID), s]));
+            const stepsById = IndexByUUID(steps);
             const stepData: Record<string, unknown> = { ...step.GetAll(), PayloadAtStart: ResolvePayloadAtStart(step, stepsById) };
 
             // Determine output file path

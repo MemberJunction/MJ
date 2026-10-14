@@ -22,7 +22,7 @@
 
 import { BaseEntitySaveQueue } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
-import { NormalizeUUID } from '@memberjunction/global';
+import { IndexByUUID, UUIDMap } from '@memberjunction/global';
 
 /** The `StepType` union of `MJ: AI Agent Run Steps` (mirrors the generated entity). */
 export type AgentRunStepType = MJAIAgentRunStepEntity['StepType'];
@@ -159,13 +159,12 @@ export function finalizeAgentRunStep(step: MJAIAgentRunStepEntity, opts: Finaliz
  * or plain rows.
  *
  * @param step The step whose start payload to resolve.
- * @param stepsById Steps of the same run, keyed by `NormalizeUUID(ID)`. The pointer is looked up with
- *   `NormalizeUUID(step.PayloadAtStartSourceStepID)`, so the keys must be normalized the same way.
+ * @param stepsById Steps of the same run, keyed by ID (see `IndexByUUID`).
  * @returns The start payload JSON, or null when the step has none or its source step is not in the map.
  */
 export function ResolvePayloadAtStart(
     step: Pick<MJAIAgentRunStepEntity, 'PayloadAtStart' | 'PayloadAtStartSourceStepID'>,
-    stepsById: ReadonlyMap<string, Pick<MJAIAgentRunStepEntity, 'PayloadAtEnd'>>
+    stepsById: UUIDMap<Pick<MJAIAgentRunStepEntity, 'PayloadAtEnd'>>
 ): string | null {
     if (step.PayloadAtStart != null) {
         return step.PayloadAtStart;
@@ -173,7 +172,7 @@ export function ResolvePayloadAtStart(
     if (!step.PayloadAtStartSourceStepID) {
         return null;
     }
-    return stepsById.get(NormalizeUUID(step.PayloadAtStartSourceStepID))?.PayloadAtEnd ?? null;
+    return stepsById.Get(step.PayloadAtStartSourceStepID)?.PayloadAtEnd ?? null;
 }
 
 /**
@@ -187,7 +186,7 @@ export function ResolvePayloadAtStart(
 export function ApplyResolvedPayloadAtStart<
     T extends Pick<MJAIAgentRunStepEntity, 'ID' | 'PayloadAtStart' | 'PayloadAtStartSourceStepID' | 'PayloadAtEnd'>
 >(steps: T[]): void {
-    const stepsById = new Map(steps.map((step) => [NormalizeUUID(step.ID), step] as const));
+    const stepsById = IndexByUUID(steps);
     for (const step of steps) {
         if (step.PayloadAtStart != null) {
             continue;

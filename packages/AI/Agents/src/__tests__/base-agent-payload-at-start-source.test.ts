@@ -14,7 +14,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { BaseAgent } from '../base-agent';
 import { ResolvePayloadAtStart, type AgentPayloadChangeRequest, type BaseAgentNextStep, type ForEachOperation } from '@memberjunction/ai-core-plus';
-import { NormalizeUUID } from '@memberjunction/global';
+import { IndexByUUID } from '@memberjunction/global';
 
 // ============================================================================
 // Module mocks (boundaries only)
@@ -459,7 +459,7 @@ class Harness {
     /** A step's start payload as a reader resolves it from the saved rows: the stored copy, or the source row's end. */
     public SavedStart(step: MockStep): string | null {
         const rows = this.Steps.flatMap((s) => (s.SavedRow ? [s.SavedRow] : []));
-        const rowsById = new Map(rows.map((row) => [NormalizeUUID(row.ID), row] as const));
+        const rowsById = IndexByUUID(rows);
         expect(step.SavedRow).not.toBeNull();
         return step.SavedRow ? ResolvePayloadAtStart(step.SavedRow, rowsById) : null;
     }

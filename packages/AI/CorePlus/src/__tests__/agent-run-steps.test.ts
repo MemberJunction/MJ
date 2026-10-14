@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { UUIDMap } from '@memberjunction/global';
 import { InitAgentRunStep, FinalizeAgentRunStep, ResolvePayloadAtStart, ApplyResolvedPayloadAtStart } from '../agent-run-steps';
 
 /** A minimal mutable stand-in — the helpers only assign/read plain fields, so no BaseEntity machinery is needed. */
@@ -156,8 +157,7 @@ describe('finalizeAgentRunStep', () => {
 describe('ResolvePayloadAtStart', () => {
     const SOURCE_ID = 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e';
     const MISSING_ID = 'c3d4e5f6-a7b8-4c9d-8e0f-2a3b4c5d6e7f';
-    // Keyed by NormalizeUUID(ID) (trimmed, lowercase), as the function documents.
-    const stepsById = new Map<string, Pick<MJAIAgentRunStepEntity, 'PayloadAtEnd'>>([[SOURCE_ID, { PayloadAtEnd: '{"p":1}' }]]);
+    const stepsById = new UUIDMap<Pick<MJAIAgentRunStepEntity, 'PayloadAtEnd'>>([[SOURCE_ID, { PayloadAtEnd: '{"p":1}' }]]);
 
     it('returns the stored PayloadAtStart even when a pointer is also set', () => {
         const step = { PayloadAtStart: '{"p":0}', PayloadAtStartSourceStepID: SOURCE_ID };
