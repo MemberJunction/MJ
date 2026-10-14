@@ -75,7 +75,11 @@ export class SqlLoggingSession {
   @Field(() => String)
   id: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
-  /** Absolute file path where SQL statements are being logged */
+  /**
+   * Absolute file path where SQL statements are being logged. If the session's `maxFileSize`
+   * splitting has triggered, this is the first part (`*.part001.sql`); this type does not list
+   * the other parts.
+   */
   @Field(() => String)
   filePath: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 

@@ -306,3 +306,54 @@ describe('SqlLoggingSessionImpl — size limit boundary and closing', () => {
     }
   });
 });
+
+describe('SqlLoggingSessionImpl — concurrent callers', () => {
+  // mj sync push with isolated transactions saves record graphs in parallel, so several saves can
+  // call LogSqlStatement on one session at once (PR #3369 review).
+
+  it('splits correctly when statements arrive concurrently: no failed rotation, no oversized part, nothing lost', async () => {
+    const filePath = makeTmpFile();
+    const limit = 3000;
+    const session = new SqlLoggingSessionImpl('concurrent', filePath, { maxFileSize: limit });
+    await session.Initialize();
+
+    const count = 80;
+    const waves = 10;
+    for (let wave = 0; wave < count / waves; wave++) {
+      await Promise.all(
+        Array.from({ length: waves }, (_, i) => session.LogSqlStatement(stmt(wave * waves + i), undefined, undefined, true))
+      );
+    }
+    await session.Dispose();
+
+    const paths = session.FilePaths;
+    expect(paths.length).toBeGreaterThan(1);
+    for (const p of paths) {
+      expect(fs.statSync(p).size).toBeLessThanOrEqual(limit);
+    }
+    const combined = paths.map(p => fs.readFileSync(p, 'utf8')).join('\n');
+    expect(markers(combined)).toEqual(Array.from({ length: count }, (_, i) => i));
+    expect(session.StatementCount).toBe(count);
+  });
+
+  it('writes every statement logged before Dispose(), even when Dispose() is called without waiting for them', async () => {
+    const filePath = makeTmpFile();
+    const session = new SqlLoggingSessionImpl('dispose-race', filePath, { maxFileSize: 2000 });
+    await session.Initialize();
+
+    const count = 30;
+    const pending = Array.from({ length: count }, (_, i) => session.LogSqlStatement(stmt(i), undefined, undefined, true));
+    await Promise.all([...pending, session.Dispose()]);
+
+    const paths = session.FilePaths;
+    const combined = paths.map(p => fs.readFileSync(p, 'utf8')).join('\n');
+    expect(markers(combined)).toEqual(Array.from({ length: count }, (_, i) => i));
+    // Each part ends with its footer: no statement was written after a part was closed.
+    for (const p of paths) {
+      const text = fs.readFileSync(p, 'utf8');
+      const footerAt = text.indexOf('-- End of SQL Logging Session');
+      expect(footerAt).toBeGreaterThan(0);
+      expect(text.slice(footerAt)).not.toContain('INSERT INTO');
+    }
+  });
+});

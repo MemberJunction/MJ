@@ -56,6 +56,13 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   private _rotated: boolean = false;
   /** Ordered list of every part path produced (starts with the base path). */
   private _partPaths: string[] = [];
+  /**
+   * Tail of the queue that runs {@link LogSqlStatement} and {@link Dispose} one at a time, in call
+   * order. Callers can log concurrently (e.g. `mj sync push` with isolated transactions saves record
+   * graphs in parallel), and a rotation spans several awaits, so unserialized callers could rotate
+   * twice or write past the size limit. Never rejects: each caller gets its own result.
+   */
+  private _queueTail: Promise<void> = Promise.resolve();
 
   /**
    * @param dialect - The SQL dialect to use for platform-specific SQL emission
@@ -139,7 +146,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * footer, closes it, and opens the next part with a fresh header. On the FIRST rotation
    * the base file is renamed to `.part001` so all parts share the `.partNNN` naming.
    *
-   * Called only from `logSqlStatement`, only when splitting is enabled and the current part
+   * Called only from `LogSqlStatement` (inside its queued write), only when splitting is enabled and the current part
    * already holds at least one statement — so rotation always happens on a statement boundary
    * and never produces an empty leading part.
    */
@@ -187,7 +194,22 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * @param isMutation - Whether this is a data mutation operation
    * @param simpleSQLFallback - Optional simple SQL to use if logRecordChangeMetadata=false
    */
-  public async LogSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
+  public LogSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
+    return this._enqueue(() => this._writeStatement(query, parameters, description, isMutation, simpleSQLFallback));
+  }
+
+  /**
+   * Runs `work` after every earlier queued call has settled. A failed call rejects only its own
+   * caller; the queue moves on to the next one.
+   */
+  private _enqueue(work: () => Promise<void>): Promise<void> {
+    const run = this._queueTail.then(work);
+    this._queueTail = run.catch(() => undefined);
+    return run;
+  }
+
+  /** The body of {@link LogSqlStatement}; runs one call at a time through {@link _enqueue}. */
+  private async _writeStatement(query: string, parameters: unknown, description: string | undefined, isMutation: boolean, simpleSQLFallback: string | undefined): Promise<void> {
     const verbose = this.Options.verboseOutput === true;
 
     if (verbose) {
@@ -394,9 +416,14 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   }
 
   /**
-   * Disposes of the logging session, writes the footer, closes the file, and optionally deletes empty files
+   * Disposes of the logging session, writes the footer, closes the file, and optionally deletes empty files.
+   * Statements logged before this call are written first; statements logged after it are skipped.
    */
-  public async Dispose(): Promise<void> {
+  public Dispose(): Promise<void> {
+    return this._enqueue(() => this._dispose());
+  }
+
+  private async _dispose(): Promise<void> {
     if (this._disposed) {
       return;
     }
