@@ -207,6 +207,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
      * format. Reports `'listening'` only after all of that (obligation #7).
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
+        this.AssertTransportSupported(config);
         this.micStream = micStream;
         this.closedByConsumer = false;
         this.setState('connecting');
@@ -259,6 +260,9 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
 
         await ready;
         this.playback = this.createPlayback(ASSEMBLYAI_PCM_SAMPLE_RATE);
+        // The agent voice plays through Web Audio only; publish it so a host recorder can mix
+        // it in (issue #5153). Null for playbacks with no output stream (fakes, no WebAudio).
+        this.publishRemoteMediaStream(this.playback.GetOutputStream?.() ?? null);
         this.micCapture = await this.createMicCapture(micStream, ASSEMBLYAI_PCM_SAMPLE_RATE, (base64Pcm16) =>
             this.sendMicChunk(base64Pcm16)
         );
@@ -285,6 +289,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         this.micCapture = null;
         this.playback?.Close();
         this.playback = null;
+        this.clearRemoteMediaStream();
         if (this.socket) {
             try {
                 this.socket.send(JSON.stringify({ type: 'session.end' }));
@@ -415,6 +420,16 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         for (const track of tracks) {
             track.enabled = !muted;
         }
+    }
+
+    /** Rebinds the PCM capture and the input meter to the stream's current track (obligation #10); the socket stays open. */
+    public async ReplaceMicrophone(micStream: MediaStream): Promise<void> {
+        if (!this.micCapture) {
+            return;
+        }
+        this.micCapture.Rebind(micStream);
+        this.micStream = micStream;
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
     }
 
     /** @inheritdoc */

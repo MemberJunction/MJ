@@ -11,7 +11,7 @@
  * load-truth-from-DB branch so denied fields hold real values a stripped SetMany never
  * touches.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 
 // ─── Hoisted mocks ────────────────────────────────────────────────────────
 const { mockUserCacheUsers } = vi.hoisted(() => ({
@@ -116,7 +116,7 @@ vi.mock('@memberjunction/core-entities', () => ({}));
 
 // ─── Import after mocks ──────────────────────────────────────────────────
 import { ResolverBase } from '../generic/ResolverBase';
-import { EntityInfo, UserInfo, UserRoleInfo } from '@memberjunction/core';
+import { EntityInfo, Metadata, RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from '@memberjunction/core';
 
 // ─── Metadata builders (mirrors MJCore's fieldSecurity.enforcement tests) ──
 
@@ -192,8 +192,9 @@ class TestResolver extends ResolverBase {
         return this.StripDeniedReadFieldsFromClientInput(entityInfo, userInfo, input, clientNewValues);
     }
 
-    public TestMustLoadTruth(entityInfo: EntityInfo, input: ClientInput, hasDeniedReadFields: boolean, hasNarrowedAuditPayload: boolean): boolean {
-        return this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload);
+    /** The user defaults to HR, whose permission rows carry no row filter; pass null for a missing user. */
+    public TestMustLoadTruth(entityInfo: EntityInfo, input: ClientInput, hasDeniedReadFields: boolean, hasNarrowedAuditPayload: boolean, user: UserInfo | null = buildUser([HR_ROLE_ID])): boolean {
+        return this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload, user ?? undefined);
     }
 }
 
@@ -479,5 +480,87 @@ describe('ResolverBase.MustLoadTruthFromDatabase', () => {
         const tracked = employeeEntityInit(false);
         tracked['TrackRecordChanges'] = true;
         expect(resolver.TestMustLoadTruth(new EntityInfo(tracked), withOldValues(), false, false)).toBe(true);
+    });
+});
+
+/**
+ * #4919: a caller under an Update row filter must not be hydrated from its own OldValues.
+ *
+ * The save's post-image RLS check skips its query when no column the filter reads is dirty. Hydrated
+ * from OldValues, "dirty" is whatever the client claims: an Intern bound to `Status = 'Draft'` sends
+ * Status = 'Published' and claims 'Published' as the old value too, so Status is clean, the check is
+ * skipped, and the update moves the row out of the Intern's scope.
+ */
+describe('ResolverBase.MustLoadTruthFromDatabase: Update row filters (#4919)', () => {
+    const DRAFTS_ONLY = 'F0000000-0000-0000-0000-000000004919';
+    let resolver: TestResolver;
+    let savedProvider: typeof Metadata.Provider;
+
+    beforeAll(() => {
+        savedProvider = Metadata.Provider;
+        Metadata.Provider = {
+            Entities: [],
+            RowLevelSecurityFilters: [new RowLevelSecurityFilterInfo({ ID: DRAFTS_ONLY, Name: 'Drafts only', FilterText: "Status = 'Draft'" })],
+        } as unknown as typeof Metadata.Provider;
+    });
+    afterAll(() => {
+        Metadata.Provider = savedProvider;
+    });
+    beforeEach(() => {
+        resolver = new TestResolver();
+    });
+
+    /** Untracked, no field security: the OldValues shortcut is open unless the row filter closes it. */
+    function entityWithInternFilter(filter: { UpdateRLSFilterID?: string; ReadRLSFilterID?: string }): EntityInfo {
+        const init = employeeEntityInit(false);
+        init['TrackRecordChanges'] = false;
+        init['Permissions'] = [
+            { EntityID: ENTITY_ID, RoleID: HR_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
+            { EntityID: ENTITY_ID, RoleID: INTERN_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true, ...filter },
+        ];
+        return new EntityInfo(init);
+    }
+
+    const claimsNewStatusAsOld = (): ClientInput => ({
+        ID: '1',
+        Status: 'Published',
+        OldValues___: [
+            { Key: 'ID', Value: '1' },
+            { Key: 'Status', Value: 'Published' },
+        ],
+    });
+
+    it('loads the stored row for a caller under an Update row filter, whatever OldValues claim', () => {
+        const entity = entityWithInternFilter({ UpdateRLSFilterID: DRAFTS_ONLY });
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([INTERN_ROLE_ID]))).toBe(true);
+    });
+
+    it('keeps the shortcut for a caller with no Update row filter, on the same entity', () => {
+        const entity = entityWithInternFilter({ UpdateRLSFilterID: DRAFTS_ONLY });
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([HR_ROLE_ID]))).toBe(false);
+        // A role without the filter exempts the user from it (roles are additive).
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([INTERN_ROLE_ID, HR_ROLE_ID]))).toBe(false);
+    });
+
+    it('loads the stored row when the user is missing, instead of throwing or skipping the filter', () => {
+        const entity = entityWithInternFilter({ UpdateRLSFilterID: DRAFTS_ONLY });
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, null)).toBe(true);
+    });
+
+    it('loads the stored row under an API-key Update row filter, even for a role-exempt user', () => {
+        const entity = entityWithInternFilter({});
+        const keyBound = (permissionType: 'Read' | 'Update') => {
+            const user = buildUser([HR_ROLE_ID]); // no role filter: only the key binding narrows this caller
+            user.APIKeyRowFilters = [{ EntityID: ENTITY_ID, PermissionType: permissionType, FilterID: DRAFTS_ONLY }];
+            return user;
+        };
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([HR_ROLE_ID]))).toBe(false);
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, keyBound('Update'))).toBe(true);
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, keyBound('Read'))).toBe(false);
+    });
+
+    it('ignores a Read-only row filter: only the Update filter gates this save', () => {
+        const entity = entityWithInternFilter({ ReadRLSFilterID: DRAFTS_ONLY });
+        expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([INTERN_ROLE_ID]))).toBe(false);
     });
 });

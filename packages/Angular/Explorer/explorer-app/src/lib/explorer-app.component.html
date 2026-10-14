@@ -15,6 +15,7 @@
 @if ((authBase.isAuthenticated() | async) && !isOAuthCallback) {
   @if (!preShellBlocked) {
     <div class="app-main">
+      <mj-template-user-banner></mj-template-user-banner>
       <mj-server-connectivity-banner></mj-server-connectivity-banner>
       <mj-system-validation-banner></mj-system-validation-banner>
       @if (!HasError) {

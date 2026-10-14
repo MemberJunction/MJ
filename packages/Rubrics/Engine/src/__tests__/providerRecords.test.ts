@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const viewCalls: { EntityName: string; ExtraFilter?: string }[] = [];
+const viewCalls: { EntityName: string; ExtraFilter?: string; OrderBy?: string }[] = [];
 const promptCalls: Record<string, unknown>[] = [];
 const renderCalls: { children: { childPrompt: { prompt: { Name: string }; data: Record<string, unknown> }; parentPlaceholder: string }[] }[] = [];
 const decisionCalls: Record<string, unknown>[] = [];
@@ -15,8 +15,14 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
         RunView: {
             FromMetadataProvider() {
                 return {
-                    async RunView(params: { EntityName: string; ExtraFilter?: string }) {
+                    async RunView(params: { EntityName: string; ExtraFilter?: string; OrderBy?: string }) {
                         viewCalls.push(params);
+                        if (params.EntityName === 'MJ: Conversations') {
+                            return { Success: true, Results: [{ ID: 'conv-1', Name: 'Standup', Description: 'Shipped' }] };
+                        }
+                        if (params.EntityName === 'MJ: Conversation Details') {
+                            return { Success: true, Results: [{ Role: 'User', Message: 'hello' }] };
+                        }
                         if (params.EntityName === 'MJ: AI Prompts') {
                             if (params.ExtraFilter?.includes('missing')) return { Success: true, Results: [] };
                             const key = params.ExtraFilter?.match(/='(.*)'$/)?.[1]?.replace(/''/g, "'") ?? '';
@@ -82,7 +88,8 @@ vi.mock('@memberjunction/ai-core-plus', async () => ({
 
 import type { AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import type { EvaluationAgentRunner } from '../AgentRubricEvaluator.js';
-import { ProviderDecisionService, ProviderEvaluationStore, ProviderPromptService, ProviderRubricEngine, RegisterRubricAgentRunner } from '../providerRecords.js';
+import { ProviderDecisionService, ProviderEvaluationStore, ProviderPromptService, ProviderRecords, ProviderRubricEngine, RegisterRubricAgentRunner } from '../providerRecords.js';
+import { RubricEngine } from '../RubricEngine.js';
 
 describe('provider evaluator services', () => {
     beforeEach(() => {
@@ -332,5 +339,34 @@ describe('ProviderEvaluationStore.submit', () => {
             completeness: null,
             confidence: null,
         }]);
+    });
+});
+
+describe('conversation subject content', () => {
+    const provider = {
+        async GetEntityObject(): Promise<never> { throw new Error('this test does not create rows'); },
+    };
+    const user = { ID: 'user' };
+
+    beforeEach(() => {
+        viewCalls.length = 0;
+    });
+
+    function subjectContent() {
+        return new RubricEngine(undefined, ProviderRecords(provider, user)).SubjectContent({
+            subjectEntityName: 'MJ: Conversations',
+            subjectRecordId: 'conv-1',
+        });
+    }
+
+    function detailCall() {
+        return viewCalls.find(call => call.EntityName === 'MJ: Conversation Details');
+    }
+
+    it('reads the live Main details of a conversation subject, in Sequence order', async () => {
+        const content = await subjectContent();
+        expect(detailCall()?.ExtraFilter).toBe("[ConversationID]='conv-1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL");
+        expect(detailCall()?.OrderBy).toBe('Sequence');
+        expect(content.data?.details).toEqual([{ Role: 'User', Message: 'hello' }]);
     });
 });

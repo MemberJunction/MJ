@@ -42,6 +42,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AppSwitcherStyle } from './components/header/app-switcher.component';
 import { ApplyShellChromePolicy, BaseShellChromePolicy, ShellChromeFlags } from './shell-chrome-policy';
 import { SetReadinessBeacon } from './readiness-beacon';
+import { FindDashboardTabForUrl, OpenDashboardForUrl, ParseAppDashboardUrl } from './dashboard-tab-for-url';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -468,6 +469,27 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private resolvedRecordOpenStyle: RecordOpenStyle = 'records';
 
   /**
+   * When the current url became current.
+   *
+   * It exists so a url sync can tell whether it is reacting to something OLDER than the active tab.
+   * Without it the only available answer was Date.now(), which is newer than everything and so can
+   * never lose -- the bug this was added for.
+   *
+   * SEEDED AT CONSTRUCTION, AND UPDATED ON EVERY NavigationEnd THIS COMPONENT SEES — which is not
+   * quite every NavigationEnd, and the difference is worth stating because an earlier version of this
+   * comment claimed otherwise. On a deep link `ngOnInit` starts `InitializeShell` FROM the first
+   * NavigationEnd, and the subscriber that maintains this field is created later, inside that method.
+   * So the first navigation is never stamped, and the startup sync at the end of `InitializeShell`
+   * compares against construction time instead.
+   *
+   * That is harmless where it has been looked at: by the time the startup sync runs, the tab the url
+   * matches is the active tab, so the guard is not reached. It is recorded rather than fixed because
+   * the construction seed and the first navigation are milliseconds apart, and because a reader who
+   * trusts the old wording would mis-reason about the startup path.
+   */
+  private lastNavigationAt = Date.now();
+
+  /**
    * Resolve `Shell.RecordOpen.Style` from instance config and push it to the
    * two collaborators that partition tabs by it: the ng-shared style module
    * (NavigationService forks record opens on it) and the workspace manager's
@@ -865,6 +887,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Wait for workspace initialization to complete before allowing any tab operations
     await this.workspaceManager.Initialize(user.ID);
 
+    // A saved tab of a nav item that moved to another app becomes a tab of that app's nav item: once now, before the
+    // shell syncs the URL or the active app from the saved tabs, and again each time the user's app list changes.
+    this.subscriptions.push(await this.navigationService.WatchMovedNavItemTabs());
+
     // Subscribe to tab bar visibility changes
     this.subscriptions.push(
       this.workspaceManager.TabBarVisible.subscribe(visible => {
@@ -1065,8 +1091,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.router.events.pipe(
         filter((event): event is NavigationEnd => event instanceof NavigationEnd)
       ).subscribe(event => {
+        // Record WHEN the url changed, whether or not the shell is ready to act on it: the stamp is
+        // what later tells a sync that it is older than an activation it would otherwise override.
+        this.lastNavigationAt = Date.now();
         if (this.Initialized) {
-          this.syncWorkspaceWithUrl(event.urlAfterRedirects || event.url);
+          this.syncWorkspaceWithUrl(event.urlAfterRedirects || event.url, this.lastNavigationAt);
         }
       })
     );
@@ -1084,8 +1113,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         if (updateEvent.eventCode === EventCodes.AvatarUpdated) {
           const md = this.ProviderToUse;
           const currentUserInfo = md.CurrentUser;
-          const userEntity = await md.GetEntityObject<any>('MJ: Users');
+          const userEntity = await md.GetEntityObject<MJUserEntity>('MJ: Users');
           await userEntity.Load(currentUserInfo.ID);
+          // The user menu reads its own context entity (GetUserDisplayInfo), so refresh it too.
+          this.userEntity = userEntity;
+          this.userMenu?.UpdateContext({ userEntity });
           this.applyUserAvatar(userEntity);
         }
       })
@@ -1326,10 +1358,19 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   }
 
   /**
-   * Sync workspace state with the current URL (for browser back/forward navigation).
-   * Finds and activates the tab that matches the URL.
+   * Sync workspace state with the current URL: find the tab that matches it and activate that tab.
+   *
+   * TWO CALLERS, not one. Browser back/forward reaches it through the NavigationEnd subscriber, which
+   * passes the time that navigation landed. The end of `InitializeShell` also calls it once, to settle
+   * a deep-linked url against the restored workspace, and passes nothing.
+   *
+   * @param url the url to match a tab against.
+   * @param navigatedAt when that url became current, as a `Date.now()` reading. It decides whether this
+   *   sync is older than the active tab's own activation; see the ordering guard below, which yields
+   *   when it is. Defaults to {@link lastNavigationAt}, which for the startup call is construction time
+   *   rather than the first navigation — that field's comment says why.
    */
-  private async syncWorkspaceWithUrl(url: string): Promise<void> {
+  private async syncWorkspaceWithUrl(url: string, navigatedAt: number = this.lastNavigationAt): Promise<void> {
     const config = this.workspaceManager.GetConfiguration();
     if (!config?.tabs?.length) {
       return;
@@ -1339,6 +1380,49 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const matchingTab = await this.findTabForUrl(url, config.tabs);
 
     if (matchingTab && matchingTab.id !== config.activeTabId) {
+      /**
+       * ORDERING. A url sync must not override an activation that happened AFTER this url was
+       * current, because then the url is the stale fact, not the active tab.
+       *
+       * The case that motivated this: opening a new record activates its tab immediately, and the
+       * record's own url is written a few milliseconds later. A NavigationEnd for the PREVIOUS url
+       * is still in flight; when it resolves, findTabForUrl matches the nav tab, and switching back
+       * to it hides the records region -- with a fully rendered form inside it -- permanently,
+       * because the records region cannot re-activate itself once it stops being shown.
+       *
+       * Measured before this guard: the switch happened on every new-deal open, and whether the
+       * user saw a form at all depended on whether it had finished rendering first. Suppressing
+       * exactly this call took a usable form from 12/18 opens to 18/18 (Fisher p = 0.0095).
+       *
+       * This deliberately compares TIMES rather than tab kinds. Back/forward navigation must still
+       * move the active tab, and it arrives here too -- but there the navigation is newer than the
+       * activation, so it wins, which is correct. A "don't leave a record tab" guard would break it.
+       */
+      const latest = this.workspaceManager.GetConfiguration();
+      const activeTab = latest?.tabs.find(t => t.id === latest.activeTabId);
+      const activatedAt = activeTab?.lastAccessedAt ? Date.parse(activeTab.lastAccessedAt) : 0;
+      /**
+       * A STAMP FROM THE FUTURE IS NOT EVIDENCE, because it did not come from this clock.
+       *
+       * The workspace configuration — `lastAccessedAt` included — is saved to `MJ: Workspaces` and
+       * restored unchanged on the next load, on any device, and nothing on restore restamps the active
+       * tab. So a tab stamped on a machine whose clock runs ahead keeps an `activatedAt` that beats
+       * every `navigatedAt` here, and the guard would then suppress EVERY url sync until something
+       * called `SetActiveTab` locally: back, forward and the startup deep link would all silently do
+       * nothing until the user clicked a tab.
+       *
+       * Measured in review with the active tab stamped five minutes ahead: no `SetActiveTab` at all,
+       * where `next` switched. Clamping to "not later than now" restores both cases and costs one
+       * condition. An activation cannot legitimately be in this clock's future, so nothing real is
+       * excluded.
+       */
+      // `Number.isFinite` is belt-and-braces, not load-bearing: an unparseable `lastAccessedAt` gives
+      // NaN, and `NaN > navigatedAt` is already false, so the guard declines to yield either way. It
+      // stays because it says what the comparison relies on, but removing it changes no behaviour and
+      // breaks no test — do not read it as the thing that handles NaN.
+      if (Number.isFinite(activatedAt) && activatedAt > navigatedAt && activatedAt <= Date.now()) {
+        return;
+      }
       // Activate the matching tab
       this.workspaceManager.SetActiveTab(matchingTab.id);
     } else if (matchingTab && matchingTab.id === config.activeTabId) {
@@ -1428,11 +1512,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         return;
       }
 
-      // Check for app-scoped dashboard URL: /app/:appName/dashboard/:dashboardId
-      const appDashboardMatch = urlPath.match(/^\/app\/([^\/]+)\/dashboard\/(.+)$/);
-      if (appDashboardMatch) {
-        const dashboardId = appDashboardMatch[2];
-        this.navigationService.OpenDashboard(dashboardId, 'Dashboard');
+      // Check for app-scoped dashboard URL: /app/:appName/dashboard/:dashboardId. The tab goes to
+      // the URL's application, where the ResourceResolver also opens it.
+      const openedDashboard = OpenDashboardForUrl(urlPath, {
+        FindApp: (appPath) => this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath),
+        OpenDashboard: (dashboardId, dashboardName, options) => this.navigationService.OpenDashboard(dashboardId, dashboardName, options),
+      });
+      if (openedDashboard) {
         return;
       }
 
@@ -1638,17 +1724,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Pattern: /app/:appName/:resourceType/:param1/:param2?
 
     // Dashboard: /app/:appName/dashboard/:dashboardId
-    const appDashboardMatch = urlPath.match(/^\/app\/([^\/]+)\/dashboard\/(.+)$/);
-    if (appDashboardMatch) {
-      const dashboardId = appDashboardMatch[2];
-
-      return tabs.find(tab => {
-        const tabConfig = tab.configuration || {};
-        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-        const tabDashboardId = (tabConfig['dashboardId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
-
-        return resourceType === 'dashboards' && tabDashboardId === dashboardId;
-      }) || null;
+    const appDashboardUrl = ParseAppDashboardUrl(urlPath);
+    if (appDashboardUrl) {
+      const app = this.appManager.GetAppByPath(appDashboardUrl.AppPath) || this.appManager.GetAppByName(appDashboardUrl.AppPath);
+      return FindDashboardTabForUrl(tabs, appDashboardUrl.DashboardId, app?.ID);
     }
 
     // Record: /app/:appName/record/:entityName/:recordId
@@ -1762,15 +1841,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Check for dashboard URL: /resource/dashboard/:dashboardId
     const dashboardMatch = urlPath.match(/^\/resource\/dashboard\/(.+)$/);
     if (dashboardMatch) {
-      const dashboardId = dashboardMatch[1];
-
-      return tabs.find(tab => {
-        const tabConfig = tab.configuration || {};
-        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-        const tabDashboardId = (tabConfig['dashboardId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
-
-        return resourceType === 'dashboards' && tabDashboardId === dashboardId;
-      }) || null;
+      return FindDashboardTabForUrl(tabs, dashboardMatch[1]);
     }
 
     // Check for artifact URL: /resource/artifact/:artifactId

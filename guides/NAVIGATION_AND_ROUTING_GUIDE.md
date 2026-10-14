@@ -1,5 +1,7 @@
 # MJ Explorer Navigation and Routing Guide
 
+> **Part of the UI guide set.** Navigation belongs to L3 only; this guide covers how Explorer's shell owns it. For the big picture (the layers, choosing where UI lives, and why), start with [Building UI on MemberJunction](BUILDING_UI_ON_MJ.md) ([illustrated edition](https://docs.memberjunction.org/v6/building-ui/)).
+
 This guide documents the navigation and URL management architecture in MJ Explorer. It is a developer reference for the implemented system — covering how the shell owns URL state, how back/forward navigation works, and how to add URL-synced sub-navigation to a new component.
 
 ## Table of Contents
@@ -189,6 +191,17 @@ protected UpdateQueryParams(params: Record<string, string | null>): void {
     this.navigationService.UpdateActiveTabQueryParams(params);
 }
 ```
+
+### A Tab's Params Reach Only the Resource It Shows
+
+With one unpinned tab, opening another app replaces that tab in place and keeps its ID. The component cache keys on app, resource type and record, not on tab ID, so the replaced component stays alive and still bound to the tab's ID. Without a check, it would receive the next resource's params too. Before this rule, a Home pin wrote `?dashboard=<id>` to Home's tab, the cached Dashboards Library received it and opened the dashboard in the Dashboards app, and Back looped.
+
+So `BaseResourceComponent` passes its own `Data` as the owner on both delivery paths:
+
+- `NavigationService.ObserveTabQueryParams(tabId, owner)` emits only while the tab shows `owner`.
+- The back/forward path checks `NavigationService.IsTabShowingResource(tabId, owner)`.
+
+A tab shows `owner` when the app, resource type, driver class, entity and record match the `ResourceData` the tab container gave the component. This is the read-side match to the write guard in `UpdateTabQueryParams`. A child that a host stamps with `ParentTabId` has no owner, so it still receives its host tab's params.
 
 ---
 
