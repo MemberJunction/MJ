@@ -1,0 +1,14 @@
+[
+  {
+    "fields": {
+      "Name": "Conversations: Fork",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": false,
+      "Description": "Lets a person start a fork of a conversation: Fork from here, and Edit or Regenerate as a fork. Without it, Edit and Regenerate change the latest turn in place, and the person can still read and write in forks other people made. Granted to the UI role; deny it to a role to turn forking off for its members. Enforced by the server when an MJ: Conversation Branches row is created."
+    },
+    "primaryKey": {
+      "ID": "153B9DA6-42C9-4111-9862-834237E3AAC9"
+    }
+  }
+]

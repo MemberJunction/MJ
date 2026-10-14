@@ -26,6 +26,8 @@ import { DiscoveryTriggerAnalyzer } from '../discovery/DiscoveryTriggerAnalyzer.
 import { DiscoveryEngine } from '../discovery/DiscoveryEngine.js';
 import { OrganicKeyDetector } from '../discovery/OrganicKeyDetector.js';
 import { DetectedOrganicKeysOutput } from '../discovery/OrganicKeyTranslator.js';
+import { PluginManager } from '../plugins/PluginManager.js';
+import type { AutoDocPluginHook } from '../plugins/types.js';
 
 export interface AnalysisOptions {
   config: DBAutoDocConfig;
@@ -107,6 +109,13 @@ export class AnalysisOrchestrator {
       stateManager.updateSummary(state);
       await stateManager.save(state);
 
+      // Load plugins (built-ins + config entries). An unknown plugin name fails the run here.
+      const plugins = new PluginManager();
+      await plugins.Load(this.config.plugins);
+      const runHook = (hook: AutoDocPluginHook): Promise<void> =>
+        this.runPluginHook(plugins, hook, state, stateManager, runFolder, db);
+      await runHook('PreRun');
+
       // Connect to database
       this.onProgress('Connecting to database');
       const driverConfig: AutoDocConnectionConfig = {
@@ -133,6 +142,7 @@ export class AnalysisOrchestrator {
         throw new Error(`Database connection failed: ${testResult.message}`);
       }
       this.onProgress('Connected to database', { database: this.config.database.database });
+      state.database.provider = driverConfig.provider;
 
       // Introspect database (unless resuming with existing schema data)
       if (!this.resumeFromState || state.schemas.length === 0) {
@@ -181,6 +191,7 @@ export class AnalysisOrchestrator {
         await stateManager.save(state);
 
       }
+      await runHook('AfterIntrospection');
 
       // Relationship Discovery Phase (if enabled)
       // Runs on both fresh and resumed runs; resumes from partial progress if interrupted
@@ -266,6 +277,7 @@ export class AnalysisOrchestrator {
       } else if (discoveryComplete) {
         this.onProgress('Relationship discovery: using completed results from prior run');
       }
+      await runHook('AfterDiscovery');
 
       // Topological sort
       this.onProgress('Computing dependency graph');
@@ -344,6 +356,7 @@ export class AnalysisOrchestrator {
           this.onProgress('Analysis converged');
         }
       }
+      await runHook('AfterDescriptions');
 
       // Sanity checks
       // FUTURE FEATURE: Schema/cross-schema sanity checks disabled.
@@ -381,6 +394,7 @@ export class AnalysisOrchestrator {
         stateManager.updateSummary(state);
         await stateManager.save(state);
       }
+      await runHook('AfterPruning');
 
       // Complete run
       if (!converged) {
@@ -430,6 +444,9 @@ export class AnalysisOrchestrator {
           this.onProgress(`Organic-key detection failed (continuing): ${(err as Error).message}`);
         }
       }
+
+      // Last plugin hook, while the database connection is still open
+      await runHook('PostRun');
 
       // Final state update
       stateManager.updateSummary(state);
@@ -486,6 +503,33 @@ export class AnalysisOrchestrator {
   /** @deprecated Use {@link Execute}. */
   public async execute(): Promise<OrchestratorResult> {
     return this.Execute();
+  }
+
+  /**
+   * Runs one plugin hook and persists whatever the plugins recorded. A no-op when no plugins
+   * are loaded, so runs without plugins write exactly the state files they did before.
+   */
+  private async runPluginHook(
+    plugins: PluginManager,
+    hook: AutoDocPluginHook,
+    state: DatabaseDocumentation,
+    stateManager: StateManager,
+    runFolder: string,
+    db: DatabaseConnection | undefined
+  ): Promise<void> {
+    if (plugins.Plugins.length === 0) {
+      return;
+    }
+    this.onProgress(`Running plugins: ${hook}`);
+    await plugins.RunHook(hook, {
+      State: state,
+      Config: this.config,
+      Driver: db?.getDriver(),
+      RunFolder: runFolder,
+      Log: (message: string) => this.onProgress(message)
+    });
+    stateManager.updateSummary(state);
+    await stateManager.save(state);
   }
 
   /**
