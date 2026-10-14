@@ -30,20 +30,6 @@ type GeminiUsageMetadataLike = {
 };
 
 /**
- * True when `error` represents a client-initiated cancellation rather than a genuine provider or
- * network failure. Node's fetch (which @google/genai uses under the hood) rejects with a
- * `DOMException` named `AbortError` when the supplied `AbortSignal` fires, and with `TimeoutError`
- * when the signal came from `AbortSignal.timeout()`.
- */
-function isGeminiCancellationError(error: unknown): boolean {
-    if (!error || typeof error !== 'object') {
-        return false;
-    }
-    const name = (error as { name?: string }).name;
-    return name === 'AbortError' || name === 'TimeoutError';
-}
-
-/**
  * Gemini 3 requires a `thoughtSignature` on every replayed `functionCall` part. Calls the model made
  * carry their own (kept on `ChatToolCall.providerMetadata`); calls constructed outside the model —
  * a corpus history, a conversation transferred from another provider — use this documented
@@ -93,11 +79,6 @@ export class GeminiLLM extends BaseLLM {
     // Diagnostic context for the in-flight streaming request, used only by the GEMINI_CACHE_DEBUG
     // logging path so the final chunk's usage can be reported alongside the request's prefix info.
     private _cacheDiagContext: GeminiCacheDiagContext | null = null;
-
-    // Cancellation token for the in-flight STREAMING request. The base class's streaming loop
-    // swallows mid-stream iteration errors, so finalizeStreamingResponse() consults this to detect
-    // that the stream ended because the caller aborted (rather than because the model finished).
-    private _streamingCancellationToken: AbortSignal | null = null;
 
     constructor(apiKey: string) {
         super(apiKey);
@@ -219,9 +200,6 @@ export class GeminiLLM extends BaseLLM {
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
         try {
-            // Fail fast if the caller already cancelled before we opened a socket.
-            this.throwIfCancelled(params.cancellationToken);
-
             // For text-only input, use the gemini-pro model
             const modelName = params.model || "gemini-pro";
             
@@ -398,8 +376,9 @@ export class GeminiLLM extends BaseLLM {
             }
         }
         catch (e) {
-            if (this.isCancelled(e, params.cancellationToken)) {
-                return this.buildCancelledResult(startTime, e, params.cancellationToken);
+            // Node's fetch, which @google/genai uses, rejects with an AbortError when the signal fires.
+            if (this.IsCancellationError(e, params.cancellationToken)) {
+                return this.BuildCancelledChatResult(startTime, { error: e, signal: params.cancellationToken });
             }
             return {
                 success: false,
@@ -418,11 +397,6 @@ export class GeminiLLM extends BaseLLM {
         }
     }
 
-    /**
-     * Attach the caller's cancellation token to a Gemini per-request config. @google/genai reads
-     * `GenerateContentConfig.abortSignal` and forwards it to the underlying `fetch` call, so an
-     * abort tears down the HTTP socket instead of merely abandoning the promise.
-     */
     /**
      * Maps the neutral {@link ChatParams.tools} onto Gemini's `tools` / `toolConfig` request fields.
      *
@@ -521,59 +495,15 @@ export class GeminiLLM extends BaseLLM {
         return calls.length > 0 ? calls : undefined;
     }
 
+    /**
+     * Attach the caller's cancellation token to a Gemini per-request config. @google/genai reads
+     * `GenerateContentConfig.abortSignal` and forwards it to the underlying `fetch` call, so an
+     * abort tears down the HTTP socket instead of merely abandoning the promise.
+     */
     private applyCancellationToken(requestConfig: Record<string, unknown>, token: AbortSignal | undefined): void {
         if (token) {
             requestConfig.abortSignal = token;
         }
-    }
-
-    /** Throw immediately (before any socket is opened) when the caller has already cancelled. */
-    private throwIfCancelled(token: AbortSignal | undefined): void {
-        if (token?.aborted) {
-            throw this.createCancellationError(token);
-        }
-    }
-
-    /** The canonical abort error we raise for a pre-aborted request, shaped like fetch's own. */
-    private createCancellationError(token: AbortSignal): Error {
-        const error = new Error(this.describeCancellation(token));
-        error.name = 'AbortError';
-        return error;
-    }
-
-    /** True when this failure is the caller's cancellation rather than a provider/network fault. */
-    private isCancelled(error: unknown, token: AbortSignal | undefined): boolean {
-        return token?.aborted === true || isGeminiCancellationError(error);
-    }
-
-    /** Human-readable reason for a cancellation, preferring the signal's own reason when present. */
-    private describeCancellation(token: AbortSignal | undefined): string {
-        const reason: unknown = token?.reason;
-        if (reason instanceof Error && reason.message) {
-            return `Gemini request cancelled: ${reason.message}`;
-        }
-        if (typeof reason === 'string' && reason.length > 0) {
-            return `Gemini request cancelled: ${reason}`;
-        }
-        return 'Gemini request cancelled by caller';
-    }
-
-    /**
-     * Build the typed ChatResult for a cancelled request. Reported as a normal failed ChatResult —
-     * same shape as every other Gemini error path — never as an unhandled rejection.
-     */
-    private buildCancelledResult(startTime: Date, error: unknown, token?: AbortSignal | null): ChatResult {
-        const endTime = new Date();
-        const result = new ChatResult(false, startTime, endTime);
-        result.statusText = 'Cancelled';
-        result.errorMessage = this.describeCancellation(token ?? undefined);
-        result.exception = error;
-        result.errorInfo = ErrorAnalyzer.analyzeError(error, 'Gemini');
-        result.data = {
-            choices: [],
-            usage: new ModelUsage(0, 0)
-        };
-        return result;
     }
 
     /**
@@ -760,7 +690,6 @@ export class GeminiLLM extends BaseLLM {
             pendingContent: '',
             thinkingComplete: false
         };
-        this._streamingCancellationToken = null;
     }
 
     /**
@@ -769,8 +698,6 @@ export class GeminiLLM extends BaseLLM {
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
         // Reset streaming state for new request
         this.resetStreamingState();
-        this.throwIfCancelled(params.cancellationToken);
-        this._streamingCancellationToken = params.cancellationToken ?? null;
         const modelName = params.model || "gemini-pro";
 
         // Filter out system messages and extract system instruction content
@@ -1042,15 +969,6 @@ export class GeminiLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
-        // A mid-stream abort surfaces as an iteration error that the base class swallows, so the
-        // ONLY reliable signal here is the token itself. Report cancellation as a clean failure
-        // rather than passing off a truncated stream as a successful completion.
-        const cancellationToken = this._streamingCancellationToken;
-        if (cancellationToken?.aborted) {
-            const now = new Date();
-            return this.buildCancelledResult(now, this.createCancellationError(cancellationToken), cancellationToken);
-        }
-
         // Extract finish reason from last chunk if available
         let finishReason = 'stop';
         if (lastChunk?.candidates && lastChunk.candidates.length > 0 && lastChunk.candidates[0].finishReason) {

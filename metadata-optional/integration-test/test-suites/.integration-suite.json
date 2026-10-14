@@ -1302,6 +1302,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT122 - Agent Prompt Cancellation",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7A7D504D-15A9-45A2-9BD7-2F7DB12C3E8F"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT108 - Cloudflare Clef Decision Models",
             "Sequence": 48,
             "Status": "Active"
