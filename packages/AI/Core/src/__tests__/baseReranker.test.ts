@@ -22,6 +22,51 @@ class ErrorReranker extends BaseReranker {
     }
 }
 
+// Reranker whose provider call waits until the request's signal aborts, as an SDK honoring it would
+class AbortableReranker extends BaseReranker {
+    public Calls = 0;
+    protected async doRerank(params: RerankParams): Promise<RerankResult[]> {
+        this.Calls++;
+        return new Promise<RerankResult[]>((_, reject) => {
+            params.CancellationToken?.addEventListener('abort', () => {
+                const error = new Error('This operation was aborted');
+                error.name = 'AbortError';
+                reject(error);
+            }, { once: true });
+        });
+    }
+}
+
+describe('BaseReranker cancellation', () => {
+    const documents: RerankDocument[] = [{ id: 'a', text: 'alpha' }];
+
+    it('refuses a call whose signal is already aborted, without calling the driver', async () => {
+        const reranker = new AbortableReranker('key', 'model');
+        const controller = new AbortController();
+        controller.abort('user stopped it');
+
+        const response = await reranker.Rerank({ query: 'q', documents, CancellationToken: controller.signal });
+
+        expect(reranker.Calls).toBe(0);
+        expect(response.success).toBe(false);
+        expect(response.errorInfo?.errorType).toBe('Cancelled');
+        expect(response.errorInfo?.canFailover).toBe(false);
+    });
+
+    it('reports a call cancelled mid-flight as Cancelled, not as a provider error', async () => {
+        const reranker = new AbortableReranker('key', 'model');
+        const controller = new AbortController();
+
+        const pending = reranker.Rerank({ query: 'q', documents, CancellationToken: controller.signal });
+        controller.abort('user stopped it');
+        const response = await pending;
+
+        expect(reranker.Calls).toBe(1);
+        expect(response.success).toBe(false);
+        expect(response.errorInfo?.errorType).toBe('Cancelled');
+    });
+});
+
 describe('BaseReranker', () => {
     let reranker: TestReranker;
 

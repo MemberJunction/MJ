@@ -68,6 +68,7 @@ describe('coreReservedServerExtensionRoots', () => {
         // Explicit allowlist of known non-path middleware mounts (e.g. app.use(mw), app.use(cors()), app.use(compression(...)))
         const knownNonPathTokens = [
             'cors',
+            'CreateGlobalCorsMiddleware',
             'express.',
             'compression',
             'cookieParser',

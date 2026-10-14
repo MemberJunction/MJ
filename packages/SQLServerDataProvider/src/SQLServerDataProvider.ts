@@ -1648,13 +1648,13 @@ export class SQLServerDataProvider
                                                                                         @Source='Clone',
                                                                                         @ChangeContext=${bind('ChangeContext', `N'${EscapeSQLString(payload.changeContext)}'`)}`
       : '';
-    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
+    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entityName}',
                                                                                         @RecordID=${recordIDSQL},
                                                                                         @UserID=${bind('UserID', `'${payload.userID}'`)},
                                                                                         @Type='${payload.type}',
-                                                                                        @ChangesJSON=${bind('ChangesJSON', `'${payload.changesJSON}'`)},
-                                                                                        @ChangesDescription=${bind('ChangesDescription', `'${payload.changesDescription}'`)},
-                                                                                        @FullRecordJSON=${bind('FullRecordJSON', `'${payload.fullRecordJSON}'`)},
+                                                                                        @ChangesJSON=${bind('ChangesJSON', `N'${payload.changesJSON}'`)},
+                                                                                        @ChangesDescription=${bind('ChangesDescription', `N'${payload.changesDescription}'`)},
+                                                                                        @FullRecordJSON=${bind('FullRecordJSON', `N'${payload.fullRecordJSON}'`)},
                                                                                         @Status='Complete',
                                                                                         @Comments=null${lineageClause}`;
   }
@@ -1889,7 +1889,7 @@ export class SQLServerDataProvider
     if (!payload) return null;
 
     // A quoted record ID is escaped, so a key holding a quote no longer breaks the statement.
-    const recordIDSQL = wrapRecordIdInQuotes ? `'${EscapeSQLString(String(recordID))}'` : String(recordID);
+    const recordIDSQL = wrapRecordIdInQuotes ? `N'${EscapeSQLString(String(recordID))}'` : String(recordID);
     const boundRecordID = params && wrapRecordIdInQuotes ? params.AddField(this.recordChangeField('RecordID'), recordIDSQL) : recordIDSQL;
     return this.renderRecordChangeEXEC(entityName, boundRecordID, payload, params);
   }
@@ -2787,12 +2787,12 @@ DECLARE ${varName} NVARCHAR(MAX) = (
 );
 IF ${varName} IS NOT NULL
     EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal
-        @EntityName='${safeEntityName}',
-        @RecordID='${recordID}',
+        @EntityName=N'${safeEntityName}',
+        @RecordID=N'${recordID}',
         @UserID='${safeUserId}',
         @Type='Update',
-        @ChangesJSON='${safeChangesJSON}',
-        @ChangesDescription='${safeChangesDesc}',
+        @ChangesJSON=N'${safeChangesJSON}',
+        @ChangesDescription=N'${safeChangesDesc}',
         @FullRecordJSON=${varName},
         @Status='Complete',
         @Comments=NULL${lineageClause};`;

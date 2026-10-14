@@ -24,11 +24,13 @@
  *   - EW8 (CD10) ClassFactory server-subclass resolution: a save that passes CLIENT validation is
  *                rejected by the server-only `*EntityServer` invariant — proof the resolver
  *                instantiated the higher-priority server subclass.
+ *   - EW10       Record Change text keeps characters outside the database code page: emoji, CJK and
+ *                Greek survive in ChangesJSON, FullRecordJSON and ChangesDescription.
  *   - EW11       Typed save parameters: decimal, bigint, datetime, int, bit and Unicode text round-trip
  *                with the conversions the literal batch always applied (a decimal is rounded by
  *                SQL Server from its exact text, never through a double).
  *
- * MUTATION TIER: EW1/EW2/EW3/EW5/EW6/EW7/EW9/EW11 write to the database and therefore carry
+ * MUTATION TIER: EW1/EW2/EW3/EW5/EW6/EW7/EW9/EW10/EW11 write to the database and therefore carry
  * `RequiresMutation: true` (they run only under RUN_MUTATION_TESTS=1). EW4 and EW8 are read-only —
  * EW8's saves are rejected during validation, before any INSERT is attempted.
  *
@@ -545,6 +547,46 @@ export const EntityWritesChecks: NamedCheck[] = [
             } finally {
                 await conversation.Delete();
             }
+        }
+    },
+    {
+        Id: 'entity-writes.EW10',
+        Name: 'EW10: Record Change text keeps characters outside the database code page (emoji, CJK, Greek)',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // spCreateRecordChange_Internal takes NVARCHAR text, but the SQL Server provider used to
+            // send it as plain '…' literals. SQL Server reads those in the database's code page first,
+            // so on a SQL_Latin1_General_CP1 database every character outside code page 1252 was
+            // stored in the audit row as '?' while the record itself saved correctly.
+            const f = fx(ctx);
+            const text = 'EW10 Zoë 😀 日本 Ωμέγα';
+            const cat = await createCategory(ctx, 'unicode');
+            cat.Description = text;
+            Assert(await cat.Save(), `EW10 update failed: ${cat.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+
+            // Control: the record's own column keeps the text, so any loss below is in the audit row.
+            const reloaded = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+            Assert(await reloaded.Load(cat.ID), 'EW10 reload failed');
+            AssertEqual(reloaded.Description, text, 'ActionCategory.Description (control)');
+
+            // Record Changes land through the server's fire-and-forget queue (see EW1): poll, then assert.
+            const findUpdate = async () => (await fetchRecordChanges(ctx, f.ActionCategoryEntityID, cat.ID))
+                .find(c => c.Type === 'Update' && parseChanges(c, 'EW10 update').Description != null);
+            let update = await findUpdate();
+            const deadline = Date.now() + 15000;
+            while (update == null && Date.now() < deadline) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                update = await findUpdate();
+            }
+            Assert(update != null, 'no Update Record Change captured the Description change');
+
+            AssertEqual(parseChanges(update!, 'EW10 update').Description.newValue, text, 'ChangesJSON Description newValue');
+            const full: unknown = JSON.parse(update!.FullRecordJSON ?? '{}');
+            AssertEqual((full as { Description?: string }).Description, text, 'FullRecordJSON.Description');
+            Assert((update!.ChangesDescription ?? '').includes('😀 日本 Ωμέγα'),
+                `ChangesDescription lost the text: ${update!.ChangesDescription}`);
+
+            console.log('      → emoji, CJK and Greek survive in ChangesJSON, FullRecordJSON and ChangesDescription');
         }
     },
     {
