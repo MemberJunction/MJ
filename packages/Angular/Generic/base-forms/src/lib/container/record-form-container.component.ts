@@ -42,7 +42,7 @@ import type { FormChromeSpec } from '../chrome/form-chrome';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
 import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
-import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges, ReplacedSectionChromeGroup, RailGroupSectionKeys, SlotChromeGroup, SectionDrawingAnyField } from '../chrome/form-chrome';
+import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges, ReplacedSectionChromeGroup, RailGroupSectionKeys, DefaultContributionChromeGroup, SectionDrawingAnyField } from '../chrome/form-chrome';
 import type { FormChromeGroup, FormChromePanelSnapshot } from '../chrome/form-chrome';
 import {
   ClampRailWidth,
@@ -1600,7 +1600,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * was part of, not in a rail item of its own beside it. Without this the replaced section
    * disappears and the panel surfaces somewhere else, so the form loses a section and gains
    * a tab and neither is what was asked for. A panel drawn inside a section belongs to that
-   * section's rail item the same way, and anything else to the item its slot sits in.
+   * section's rail item the same way. Anything else goes to the item its slot sits in, unless it
+   * declared an `inclusion` — that is more specific than the slot (see DefaultContributionChromeGroup).
    *
    * Derived here rather than written to the row, because which rail item a section belongs
    * to is a property of the rendered form. The same contribution on an accordion form, or
@@ -1619,7 +1620,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         : undefined;
       const group = this.groupOfReplacedSection(ReplacedSectionKeys(meta)[0])
         ?? this.groupOfReplacedSection(hostSection)
-        ?? SlotChromeGroup(meta.slot);
+        ?? DefaultContributionChromeGroup(meta.slot, ReadRegisteredInclusion(meta.inclusion) !== null);
       if (group) map.set(key, group);
     }
     return map;
