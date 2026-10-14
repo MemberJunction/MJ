@@ -1477,7 +1477,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             : options?.IgnoreDirtyState
               ? undefined
               : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap));
-        const simpleSQL = replaySQL ?? baseSaveSQL.sql;
+        // A statement that runs with parameters is logged in its literal form, which replays alone.
+        const simpleSQL = replaySQL ?? baseSaveSQL.literalSQL ?? baseSaveSQL.sql;
 
         // 5. Optionally wrap with record-change emission.
         let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
@@ -1520,6 +1521,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             simpleSQL,
             parameters: saveSQL.parameters ?? null,
         };
+        if (saveSQL.literalSQL) {
+            result.literalSQL = saveSQL.literalSQL;
+        }
         if (overlappingChangeData) {
             (result as unknown as { extraData: Record<string, unknown> }).extraData = { overlappingChangeData };
         }

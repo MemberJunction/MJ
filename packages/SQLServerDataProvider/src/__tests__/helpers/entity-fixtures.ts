@@ -137,6 +137,12 @@ export function makeRecordChangesEntityInfo(): EntityInfo {
       { ...base, ID: 'FC000000-0000-0000-0000-000000000004', Sequence: 4, Name: 'Type', Type: 'nvarchar', Length: 40 },
       { ...base, ID: 'FC000000-0000-0000-0000-000000000005', Sequence: 5, Name: 'ChangesJSON', Type: 'nvarchar', Length: -1, AllowsNull: true },
       { ...base, ID: 'FC000000-0000-0000-0000-000000000006', Sequence: 6, Name: 'FullRecordJSON', Type: 'nvarchar', Length: -1, AllowsNull: true },
+      // The columns the Record Change parameters are typed from (real types: uniqueidentifier / nvarchar(MAX)).
+      { ...base, ID: 'FC000000-0000-0000-0000-000000000007', Sequence: 7, Name: 'UserID', Type: 'uniqueidentifier', Length: 16 },
+      { ...base, ID: 'FC000000-0000-0000-0000-000000000008', Sequence: 8, Name: 'ChangesDescription', Type: 'nvarchar', Length: -1, AllowsNull: true },
+      { ...base, ID: 'FC000000-0000-0000-0000-000000000009', Sequence: 9, Name: 'RestoredFromID', Type: 'uniqueidentifier', Length: 16, AllowsNull: true },
+      { ...base, ID: 'FC000000-0000-0000-0000-00000000000A', Sequence: 10, Name: 'RestoreReason', Type: 'nvarchar', Length: -1, AllowsNull: true },
+      { ...base, ID: 'FC000000-0000-0000-0000-00000000000B', Sequence: 11, Name: 'ChangeContext', Type: 'nvarchar', Length: -1, AllowsNull: true },
     ],
     EntityPermissions: [],
   });

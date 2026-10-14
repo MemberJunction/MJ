@@ -38,6 +38,11 @@ export interface SaveSQLResult {
     simpleSQL?: string;
     /** Parameterized query values (e.g. [$1,$2] for PG). Null/undefined for inline SQL. */
     parameters?: unknown[] | null;
+    /**
+     * `fullSQL` with its parameter values written in as literals, when the provider runs it with
+     * parameters and can render it. Logged instead of `fullSQL`, and shown in error messages.
+     */
+    literalSQL?: string;
     /** Provider-specific extra data (e.g. overlapping-change data for ISA propagation) */
     extraData?: Record<string, unknown>;
 }
@@ -49,6 +54,8 @@ export interface DeleteSQLResult {
     fullSQL: string;
     simpleSQL?: string;
     parameters?: unknown[] | null;
+    /** See {@link SaveSQLResult.literalSQL}. */
+    literalSQL?: string;
 }
 
 /**
@@ -1238,6 +1245,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         if (sqlDetails.simpleSQL) {
             opts.simpleSQLFallback = sqlDetails.simpleSQL;
         }
+        if (sqlDetails.literalSQL) {
+            opts.literalSQL = sqlDetails.literalSQL;
+        }
         return opts;
     }
 
@@ -1251,6 +1261,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         };
         if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
             opts.simpleSQLFallback = sqlDetails.simpleSQL;
+        }
+        if (sqlDetails.literalSQL) {
+            opts.literalSQL = sqlDetails.literalSQL;
         }
         return opts;
     }
@@ -1851,9 +1864,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         return result[0];
                     } else {
                         if (bNewRecord)
-                            throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ${sqlDetails.fullSQL}`);
+                            throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
                         else
-                            throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ${sqlDetails.fullSQL}`);
+                            throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
                     }
                 }
             } else {
@@ -2671,6 +2684,11 @@ export interface ExecuteSQLOptions {
   isMutation?: boolean;
   /** Simple SQL fallback for loggers to emit logging of a simpler SQL statement that doesn't have extra functionality that isn't important for migrations or other logging purposes. */
   simpleSQLFallback?: string;
+  /**
+   * The statement with its parameter values written in as literals. A provider that supports it
+   * logs this in place of the parameterized statement and shows it in error messages.
+   */
+  literalSQL?: string;
   /**
    * Explicit driver handle (pool, client, or transaction). When set, the statement
    * bypasses the ambient transaction — required for teardown/probes after a doomed TX.
