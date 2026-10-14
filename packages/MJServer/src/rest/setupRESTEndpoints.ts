@@ -3,6 +3,12 @@ import BodyParser from 'body-parser';
 import { LogStatusEx } from '@memberjunction/core';
 import { RESTEndpointHandler } from './RESTEndpointHandler.js';
 
+/**
+ * Known exception to the API-root rule (#5674): REST stays at the ORIGIN-absolute `/api/v1` and does NOT go
+ * through `ApiRoute()`. Prefixed deployments already run with `GRAPHQL_ROOT_PATH=/api/`, where this path
+ * sits under the API root and the edge forwards it; wrapping it would make it `/api/api/v1` there and break
+ * every REST client. It is passed as a constant, so `check:api-root` (which flags literals) does not trip.
+ */
 export const REST_API_BASE_PATH = '/api/v1';
 
 /** @deprecated Use {@link REST_API_BASE_PATH}. */

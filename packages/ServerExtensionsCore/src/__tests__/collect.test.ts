@@ -12,6 +12,7 @@ import {
     PrepareServerExtensionConfigs,
     ServerExtensionRootsOverlap,
     ValidateServerExtensionRootPath,
+    ComposeServerExtensionMountPath,
 } from '../collect.js';
 import { ServerExtensionConfig } from '../types.js';
 
@@ -328,7 +329,7 @@ describe('validateServerExtensionRootPath', () => {
         // Parent of a reserved mount: Express prefix-match would shadow the core route.
         expect(ValidateServerExtensionRootPath('/telephony', extra)).toMatch(/reserved prefix/);
         expect(ValidateServerExtensionRootPath('/telephony/twilio', extra)).toMatch(/reserved prefix/);
-        // graphqlRootPath other than the static /graphql baseline.
+        // Any caller-supplied extra root (serve() no longer reserves graphqlRootPath — see #5674).
         expect(ValidateServerExtensionRootPath('/api', extra)).toMatch(/reserved prefix/);
         expect(ValidateServerExtensionRootPath('/api/v1', extra)).toMatch(/reserved prefix/);
         expect(ValidateServerExtensionRootPath('/apiv2', extra)).toBeNull();
@@ -410,6 +411,55 @@ describe('prepareServerExtensionConfigs', () => {
             { onOverlap }
         );
         expect(onOverlap).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('API root composition (#5674)', () => {
+    const configs: ServerExtensionConfig[] = [
+        { Enabled: true, DriverClass: 'Twilio', RootPath: '/telephony/twilio', Settings: {} },
+        { Enabled: true, DriverClass: 'Checkout', RootPath: '/checkout/', Settings: {} },
+    ];
+
+    it('composes every RootPath under the API root', () => {
+        const result = PrepareServerExtensionConfigs(configs, { apiRootPath: '/api/' });
+        expect(result.map((c) => c.RootPath)).toEqual(['/api/telephony/twilio', '/api/checkout']);
+    });
+
+    it('leaves RootPaths byte-identical at the default root', () => {
+        for (const apiRootPath of [undefined, '', '/']) {
+            const result = PrepareServerExtensionConfigs(configs, { apiRootPath });
+            expect(result.map((c) => c.RootPath)).toEqual(['/telephony/twilio', '/checkout']);
+        }
+    });
+
+    it('checks reserved roots relative to the API root, before composing', () => {
+        const onInvalid = vi.fn();
+        const result = PrepareServerExtensionConfigs(
+            [
+                { Enabled: true, DriverClass: 'Media', RootPath: '/media', Settings: {} },
+                { Enabled: true, DriverClass: 'Root', RootPath: '/', Settings: {} },
+                { Enabled: true, DriverClass: 'Forms', RootPath: '/forms', Settings: {} },
+            ],
+            { apiRootPath: '/api', extraReservedRoots: ['/media'], onInvalid }
+        );
+        expect(result.map((c) => c.RootPath)).toEqual(['/api/forms']);
+        expect(onInvalid).toHaveBeenCalledTimes(2);
+    });
+
+    it('compares composed paths for overlap between extensions', () => {
+        const onOverlap = vi.fn();
+        PrepareServerExtensionConfigs(
+            [
+                { Enabled: true, DriverClass: 'A', RootPath: '/webhooks', Settings: {} },
+                { Enabled: true, DriverClass: 'B', RootPath: '/webhooks/payments', Settings: {} },
+            ],
+            { apiRootPath: '/api/', onOverlap }
+        );
+        expect(onOverlap).toHaveBeenCalledWith(expect.stringContaining('/api/webhooks'));
+    });
+
+    it('rejects an API root without a leading slash', () => {
+        expect(() => ComposeServerExtensionMountPath('api', '/x')).toThrow(/must start with '\/'/);
     });
 });
 

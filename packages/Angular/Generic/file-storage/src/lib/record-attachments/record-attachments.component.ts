@@ -1516,9 +1516,10 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       let uploadUrl = '/media/upload-stage';
-      const gqlUrl = GraphQLDataProvider.Instance?.ConfigData?.URL;
-      if (gqlUrl && gqlUrl.startsWith('http')) {
-        uploadUrl = gqlUrl.replace(/\/graphql\/?$/i, '').replace(/\/+$/, '') + '/media/upload-stage';
+      // Under the API root (MJ #5674): the configured API_ROOT_URI, else the GraphQL URL minus /graphql.
+      const apiRootUrl = GraphQLDataProvider.Instance?.ConfigData?.APIRootURL;
+      if (apiRootUrl && apiRootUrl.startsWith('http')) {
+        uploadUrl = `${apiRootUrl}/media/upload-stage`;
       }
 
       const xhr = new XMLHttpRequest();

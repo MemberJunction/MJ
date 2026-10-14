@@ -477,6 +477,10 @@ Your server package should:
 - Depend on `@memberjunction/global` (for `RegisterClass`) and any MJ packages it needs
 - Be published to npm (or a private registry specified in `packages.registry`)
 
+### HTTP Routes: the API Path Isn't Always at `/`
+
+MJAPI is often served under a prefix (`GRAPHQL_ROOT_PATH`, e.g. `/api/`). A server extension's `RootPath` is **relative to that API root**: core composes the real mount path and passes it back as `context.config.RootPath`, so mount on it as-is. Build browser, email and webhook URLs from `context.publicUrl` (the full public API root, prefix included) plus a path relative to the root, and hand `context.apiRootPath` to browser bundles instead of letting them guess from `window.location` or by stripping `/graphql`. Never mount at a root-relative literal (`app.use('/forms', …)`). The full rule is in the [Open App spec](../../plans/open-app-spec.md#http-routes-and-the-api-root).
+
 ---
 
 ## Building Client-Side Packages

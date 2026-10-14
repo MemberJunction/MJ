@@ -610,6 +610,17 @@ Apps follow a bootstrap package pattern similar to MJ core's `@memberjunction/se
 @acme/mj-crm-ng                 # Angular module + components
 ```
 
+### HTTP Routes and the API Root
+
+MJAPI is often served under a path prefix (`GRAPHQL_ROOT_PATH`, e.g. `/api/`), with the CDN forwarding only that prefix to it. That prefix is the **API root**, and an app's HTTP surface lives under it:
+
+1. Everything MJAPI serves sits under one API root, equal to `GRAPHQL_ROOT_PATH`. GraphQL is served at the API root itself. Every other core or app route is `<apiRoot>/<segment>/...` and takes precedence over the GraphQL mount (Apollo mounts last).
+2. An app's server extension `RootPath` is **relative to the API root**. Core composes the real mount path (`/api` + `/forms` → `/api/forms`) and hands it back as `context.config.RootPath`; mount on it as-is and never add the root yourself. Core no longer reserves `graphqlRootPath`, so extensions may (and do) sit under it. Collision checks against core routes and other extensions still apply.
+3. `MJAPI_PUBLIC_URL` (`context.publicUrl`) is the full public API root, prefix included. It is the only base for a URL handed to a browser, an email or a webhook registration: `publicUrl` + a path relative to the API root.
+4. `context.apiRootPath` carries the API root path (no trailing slash; `''` at `/`). Browser bundles receive the API root as an input (a rendered attribute, provider config, or Explorer's `API_ROOT_URI`). They never derive it from `window.location` or by hand-stripping `/graphql`; MJ's own browser code goes through `ResolveAPIRootURL()` in `@memberjunction/core`.
+
+Core code uses `ApiRoute()` from `@memberjunction/server` for the same job. See MJ #5674.
+
 ### Bootstrap Package Requirement
 
 Every app MUST publish bootstrap packages that serve as the entry point for class registration. These packages:

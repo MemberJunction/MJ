@@ -293,7 +293,7 @@ function foldRoot(rootPath: string): string {
  * and bidirectional: claiming a parent of a reserved prefix (`/telephony` vs `/telephony/twilio`)
  * is also a collision because Express prefix-matches the parent.
  *
- * `extraReservedRoots` is the running server's actual mounts (graphqlRootPath, widget, …)
+ * `extraReservedRoots` is the running server's actual core mounts (widget, media, …)
  * so this check cannot drift from `serve()`. Discovery-time normalize uses only the
  * static baseline; `prepareServerExtensionConfigs` passes the extras.
  */
@@ -362,11 +362,26 @@ export function serverExtensionRootsOverlap(a: string, b: string): boolean {
 export interface PrepareServerExtensionOptions extends NormalizeServerExtensionOptions {
     onOverlap?: (message: string) => void;
     /**
-     * Additional reserved roots from the running server (graphqlRootPath, WIDGET_MOUNT_PATH, …).
-     * Compared case-insensitively and bidirectionally (an extension at `/telephony` collides
-     * with a core mount at `/telephony/twilio`).
+     * Additional reserved roots from the running server (WIDGET_MOUNT_PATH, `/media`, …), relative to the
+     * API root like every RootPath. Compared case-insensitively and bidirectionally (an extension at
+     * `/telephony` collides with a core mount at `/telephony/twilio`).
      */
     extraReservedRoots?: readonly string[];
+    /**
+     * The API root (`GRAPHQL_ROOT_PATH`, e.g. `/api/`). Every RootPath is relative to it: the returned
+     * configs carry the composed mount path (`/api` + `/telephony/twilio`). Omitted or `/` leaves RootPaths
+     * unchanged.
+     */
+    apiRootPath?: string; // case-violation-ok-legacy-back-compat: matches this options type's existing camelCase members
+}
+
+/** Prefixes a validated, normalized RootPath with the API root (`''` / `/` leaves it unchanged). */
+export function ComposeServerExtensionMountPath(apiRootPath: string | undefined, rootPath: string): string {
+    const prefix = (apiRootPath ?? '').trim().replace(/\/+$/, '');
+    if (prefix && !prefix.startsWith('/')) {
+        throw new Error(`API root path must start with '/', got '${prefix}'`);
+    }
+    return `${prefix}${rootPath}`;
 }
 
 /**
@@ -385,7 +400,10 @@ export function PrepareServerExtensionConfigs(
             invalid(options, `Dropping server extension '${entry.DriverClass}': ${rootError}`);
             continue;
         }
-        kept.push(cloneConfig({ ...entry, RootPath: normalizeRoot(entry.RootPath) }));
+        // Validated relative to the API root (as are the reserved roots), then composed: every RootPath
+        // shares one prefix, so relative overlap and composed overlap are the same test.
+        const mountPath = ComposeServerExtensionMountPath(options?.apiRootPath, normalizeRoot(entry.RootPath));
+        kept.push(cloneConfig({ ...entry, RootPath: mountPath }));
     }
 
     const enabled = kept.filter((c) => c.Enabled);

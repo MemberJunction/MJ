@@ -7,6 +7,8 @@
 export interface WorkspaceEnvironment {
   GRAPHQL_URI: string;
   GRAPHQL_WS_URI: string;
+  /** Public URL of the MJAPI API root; optional (see `ResolveAPIRootURL` in `@memberjunction/core`). */
+  API_ROOT_URI?: string;
   MJ_CORE_SCHEMA_NAME: string;
 }
 

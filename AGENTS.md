@@ -328,6 +328,17 @@ If you're tempted to use `localStorage` because "it's just a little thing" — t
 
 ---
 
+## The API path isn't always at `/`
+
+MJAPI is often served under a prefix (`GRAPHQL_ROOT_PATH`, e.g. `/api/`, with the CDN forwarding only `/api/*` to it). That prefix is the **API root**: GraphQL is served at it, and every other route sits beneath it. Every HTTP route and every URL handed to a browser, email or webhook provider MUST go through `ApiRoute()` from `@memberjunction/server`.
+
+- Wrong: `app.use('/media', …)`, `` `${publicUrl}/media/${id}` `` built by hand. Right: `app.use(ApiRoute('/media'), …)`, ``ApiRoute(`/media/${id}`, { absolute: true })``.
+- Server extensions mount on `context.config.RootPath`, which core has already composed under the API root, and read the root itself from `context.apiRootPath`. Never re-add the root, and never append `RootPath` to `publicUrl` (that doubles it).
+- Browser code resolves core routes with `ResolveAPIRootURL()` from `@memberjunction/core` (the host's `API_ROOT_URI`, else `GRAPHQL_URI` minus a trailing `/graphql`, decided in that one place). Never `new URL('/x', graphqlUri)` (it drops the prefix), never `window.location`, `req.protocol`/`Host`, or a hand-rolled `/graphql` strip.
+- `MJAPI_PUBLIC_URL` is the full public API root, prefix included (`https://host/api`).
+- One known exception: REST stays at the origin-absolute `/api/v1` (`REST_API_BASE_PATH`).
+- CI enforces this (`pnpm run check:api-root` + `packages/MJServer/src/__tests__/apiRootBoot.test.ts`, which boots the core routes with `GRAPHQL_ROOT_PATH=/api/`). Do not disable either.
+
 ## 📚 Development Guides
 
 The `/guides/` folder contains comprehensive best practices guides for specific development tasks. **Always consult these guides when working on related features:**

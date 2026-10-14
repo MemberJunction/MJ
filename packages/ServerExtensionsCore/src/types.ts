@@ -138,8 +138,20 @@ export interface ServerExtensionInitContext {
     /** Extension configuration from mj.config.cjs or Open App metadata. */
     config: ServerExtensionConfig;
 
-    /** Canonical public base URL of the MJ server (e.g. 'https://api.example.com'). */
+    /**
+     * Public URL of the API root (`MJAPI_PUBLIC_URL`), prefix included (e.g. 'https://example.com/api').
+     * Build outward URLs as `publicUrl` + a path relative to the API root — e.g. `config.RootPath` minus
+     * `apiRootPath` — never by appending the already-composed `config.RootPath` to it.
+     */
     publicUrl?: string;
+
+    /**
+     * The API root path every MJAPI route lives under (`GRAPHQL_ROOT_PATH` with no trailing slash; `''`
+     * when MJAPI owns the origin root). `config.RootPath` is already composed under it, so mount on
+     * `config.RootPath` as-is. Hand this to browser bundles; they must never derive it from
+     * `window.location` or by stripping `/graphql`.
+     */
+    apiRootPath?: string; // case-violation-ok-legacy-back-compat: matches this context's existing camelCase members
 
     /** Shared service registry for cross-extension service lookup and registration. */
     services: ServerExtensionServiceRegistry;

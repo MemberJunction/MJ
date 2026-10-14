@@ -58,6 +58,8 @@ export interface LoadExtensionsOptions {
 
     /** Canonical public base URL of the MJ server. */
     publicUrl?: string;
+    /** API root path (no trailing slash), passed through to {@link ServerExtensionInitContext.apiRootPath}. */
+    apiRootPath?: string; // case-violation-ok-legacy-back-compat: matches this options type's existing camelCase members
 
     /** Custom service registry if not using the loader's default. */
     services?: ServerExtensionServiceRegistry;
@@ -149,6 +151,7 @@ export class ServerExtensionLoader {
     public async NotifyAllExtensionsMounted(options?: {
         httpServer?: HttpServer;
         publicUrl?: string;
+        apiRootPath?: string;
     }): Promise<void> {
         for (const ext of this._loadedExtensions) {
             if (typeof ext.Instance.OnAllExtensionsMounted === 'function') {
@@ -158,6 +161,7 @@ export class ServerExtensionLoader {
                         httpServer: options?.httpServer ?? ext.Context.httpServer,
                         config: ext.Config,
                         publicUrl: options?.publicUrl ?? ext.Context.publicUrl,
+                        apiRootPath: options?.apiRootPath ?? ext.Context.apiRootPath,
                         services: this._services,
                         phase: ext.Config.Phase ?? ext.Instance.DefaultPhase ?? 'pre-auth',
                     };
@@ -287,6 +291,7 @@ export class ServerExtensionLoader {
                 httpServer: options?.httpServer,
                 config: { ...config, Phase: effectivePhase },
                 publicUrl: options?.publicUrl,
+                apiRootPath: options?.apiRootPath,
                 services,
                 phase: effectivePhase,
             };

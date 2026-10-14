@@ -39,6 +39,7 @@ export * from "./generic/externalDataSourceReadRouter";
 export * from "./generic/securityInfo";
 export * from "./generic/transactionGroup";
 export * from "./generic/util";
+export * from "./generic/apiRootUrl";
 export * from "./generic/logging";
 export * from "./generic/queryInfo";
 export * from "./generic/queryInfoInterfaces";

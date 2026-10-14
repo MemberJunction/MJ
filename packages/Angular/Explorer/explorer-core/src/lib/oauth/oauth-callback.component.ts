@@ -242,15 +242,8 @@ export class OAuthCallbackComponent extends BaseAngularComponent implements OnIn
         const gqlProvider = this.ProviderToUse as GraphQLDataProvider;
         const configData = gqlProvider.ConfigData;
 
-        // Build the exchange endpoint URL from the GraphQL URL
-        // Handle both cases: URL with /graphql suffix and URL without
-        let apiUrl = configData.URL;
-        if (apiUrl.includes('/graphql')) {
-            apiUrl = apiUrl.replace('/graphql', '/oauth/exchange');
-        } else {
-            // URL doesn't have /graphql, append /oauth/exchange
-            apiUrl = apiUrl.replace(/\/$/, '') + '/oauth/exchange';
-        }
+        // The exchange endpoint lives under the API root (MJ #5674).
+        const apiUrl = `${configData.APIRootURL}/oauth/exchange`;
 
         try {
             const response = await fetch(apiUrl, {

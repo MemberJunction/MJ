@@ -127,6 +127,8 @@ After making code changes, **always compile the affected package** and fix all T
 
 **PostgreSQL is toolchain territory — do not hand-author it, and do not build tooling for it.** A feature PR ships the **T-SQL migration only**. Never write a `migrations-pg/**` counterpart, and never write a script that checks, generates, or gates PG parity. Converting T-SQL to PG is deterministic transpilation (`mj migrate convert`, the SQLConverter package, `/pg-migrate-v2`) run by the **build engineer at release time** — the same cadence as the consolidated metadata-sync migration. LLM-inferred PG SQL and one-off parity scripts are exactly what that toolchain exists to replace: they drift from the converter, gate feature PRs on work that is not theirs, and rot. If PG conversion looks wrong, fix the converter or tell the build engineer — do not route around it. Details: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
+**The API path isn't always at `/`.** MJAPI is often served under `GRAPHQL_ROOT_PATH` (e.g. `/api/`). Every server route and every URL handed to a browser, email or webhook goes through `ApiRoute()` from `@memberjunction/server` — never `app.use('/x')` or a hand-built `${publicUrl}/x`. CI enforces it (`check:api-root` + a `/api/` boot test). Rule and examples: [`packages/MJAPI/CLAUDE.md`](packages/MJAPI/CLAUDE.md).
+
 **Record Changes**: MJ has built-in version control for all entities. Don't implement custom versioning.
 
 **Never stage or commit local host artifacts**: Never commit `mj.config.cjs`, `mj.config.json`, or generated host folders (`packages/GeneratedEntities/**`, `packages/MJAPI/src/generated/**`, `packages/MJExplorer/src/app/generated/**`) to the repository. They belong strictly to local running environments.
