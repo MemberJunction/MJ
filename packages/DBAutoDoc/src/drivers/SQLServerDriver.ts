@@ -6,6 +6,7 @@
 import sql from 'mssql';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAutoDocDriver } from './BaseAutoDocDriver.js';
+import { BuildSQLServerIndexQuery, SQLServerIndexRow, MapSQLServerIndexRows } from './IndexCatalog.js';
 import {
   AutoDocSchema,
   AutoDocTable,
@@ -19,7 +20,8 @@ import {
   AutoDocTableFilter,
   AutoDocColumnStatistics,
   AutoDocValueDistribution,
-  AutoDocExistingDescription
+  AutoDocExistingDescription,
+  AutoDocIndex
 } from '../types/driver.js';
 
 /**
@@ -281,6 +283,17 @@ export class SQLServerDriver extends BaseAutoDocDriver {
       precision: row.precision > 0 ? row.precision : undefined,
       scale: row.scale > 0 ? row.scale : undefined
     }));
+  }
+
+  /**
+   * Get every existing index on the tables of one schema (primary-key indexes included).
+   */
+  public async GetIndexes(schemaName: string): Promise<AutoDocIndex[]> {
+    const result = await this.executeQuery<SQLServerIndexRow>(BuildSQLServerIndexQuery(schemaName));
+    if (!result.success) {
+      throw new Error(`Failed to read indexes for schema ${schemaName}: ${result.errorMessage}`);
+    }
+    return MapSQLServerIndexRows(result.data ?? []);
   }
 
   public async getExistingDescriptions(
@@ -898,3 +911,4 @@ export class SQLServerDriver extends BaseAutoDocDriver {
     return [parts[0], parts[1]];
   }
 }
+
