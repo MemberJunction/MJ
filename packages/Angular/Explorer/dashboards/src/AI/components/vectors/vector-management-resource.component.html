@@ -67,6 +67,7 @@
                 <tr>
                   <th>Entity</th>
                   <th>Document</th>
+                  <th>Type</th>
                   <th class="text-right">Vectors</th>
                   <th>Last Synced</th>
                   <th>Status</th>
@@ -78,6 +79,7 @@
                   <tr>
                     <td class="entity-name">{{ row.EntityName }}</td>
                     <td class="document-name">{{ row.DocumentName }}</td>
+                    <td class="document-type">{{ row.DocumentType }}</td>
                     <td class="text-right vector-count">{{ row.VectorCount | number }}</td>
                     <td class="last-synced">{{ FormatDate(row.LastSynced) }}</td>
                     <td>
@@ -201,6 +203,10 @@
             <div class="suggest-field">
               <label class="suggest-label">Entity</label>
               <span class="edit-readonly-value">{{ EditDocEntityName }}</span>
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Type</label>
+              <span class="edit-readonly-value">{{ EditDocType }}</span>
             </div>
 
             <!-- Template Section -->
@@ -464,12 +470,6 @@
                           (click)="SuggestUseCase = 'search'">
                     <i class="fa-solid fa-magnifying-glass"></i>
                     Search
-                  </button>
-                  <button class="use-case-btn"
-                          [class.use-case-btn-active]="SuggestUseCase === 'classification'"
-                          (click)="SuggestUseCase = 'classification'">
-                    <i class="fa-solid fa-tags"></i>
-                    Classification
                   </button>
                 </div>
               </div>
