@@ -1346,7 +1346,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     Fields: [ // limit what we take from runs as this is where we can have a LOT come down if we include JSON fields
                         "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
                         "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp",
-                        "Configuration","ConversationID","Result","ErrorMessage","__mj_CreatedAt"
+                        "Configuration","ConversationID","FinalPayload","Result","ErrorMessage","__mj_CreatedAt"
                     ],
                     ExtraFilter: `AgentID='${this.record.ID}'`,
                     OrderBy: '__mj_CreatedAt DESC',
@@ -1498,7 +1498,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     Fields: [
                         "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
                         "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp",
-                        "Configuration","ConversationID","Result","ErrorMessage","__mj_CreatedAt"
+                        "Configuration","ConversationID","FinalPayload","Result","ErrorMessage","__mj_CreatedAt"
                     ],
                     ExtraFilter: `AgentID='${this.record.ID}'`,
                     OrderBy: '__mj_CreatedAt DESC',
@@ -2781,7 +2781,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 Fields: [
                     "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
                     "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp",
-                    "Configuration","ConversationID","Result","ErrorMessage","__mj_CreatedAt"
+                    "Configuration","ConversationID","FinalPayload","Result","ErrorMessage","__mj_CreatedAt"
                 ],
                 ExtraFilter: `AgentID='${this.record.ID}' AND ID LIKE '%${searchText}%'`,
                 OrderBy: '__mj_CreatedAt DESC',
@@ -2813,14 +2813,28 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     }
     
     /**
+     * Whether to show a run's result: the run is no longer Running and has a result. A running run can
+     * already have a partial `FinalPayload`.
+     */
+    public HasExecutionResult(execution: MJAIAgentRunEntityExtended): boolean {
+        return execution.Status !== 'Running' && !!this.executionResultJSON(execution);
+    }
+
+    /** A run's result JSON: `FinalPayload`, or `Result` on older runs. */
+    private executionResultJSON(execution: MJAIAgentRunEntityExtended): string | null {
+        return execution.FinalPayload ?? execution.Result;
+    }
+
+    /**
      * Gets a preview of the execution result for collapsed view
      */
     public GetExecutionResultPreview(execution: MJAIAgentRunEntityExtended, trimLongMessages: boolean): string {
+        const resultJSON = this.executionResultJSON(execution);
         try {
-            if (!execution.Result) return 'No result';
+            if (!resultJSON) return 'No result';
             
             // Try to parse the result as JSON
-            const parsed = JSON.parse(execution.Result);
+            const parsed = JSON.parse(resultJSON);
             
             // Extract the user message if it exists
             if (parsed.returnValue?.nextStep?.userMessage) {
@@ -2839,7 +2853,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 return stringified;
         } catch {
             // If not JSON, just return the string
-            const result = execution.Result || '';
+            const result = resultJSON || '';
             if (trimLongMessages)
                 return result.length > 120 ? result.substring(0, 120) + '...' : result;
             else
@@ -2856,11 +2870,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Gets the full execution result message for expanded view
      */
     public GetExecutionResultMessage(execution: MJAIAgentRunEntityExtended): string {
+        const resultJSON = this.executionResultJSON(execution);
         try {
-            if (!execution.Result) return 'No result';
+            if (!resultJSON) return 'No result';
             
             // Try to parse the result as JSON
-            const parsed = JSON.parse(execution.Result);
+            const parsed = JSON.parse(resultJSON);
             
             // Extract the user message if it exists
             if (parsed.returnValue?.nextStep?.userMessage) {
@@ -2871,7 +2886,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             return JSON.stringify(parsed, null, 2);
         } catch {
             // If not JSON, just return the string
-            return execution.Result || '';
+            return resultJSON || '';
         }
     }
 

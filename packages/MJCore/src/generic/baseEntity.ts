@@ -2110,7 +2110,26 @@ export abstract class BaseEntity<T = unknown> {
         return e instanceof Error ? e.message : String(e);
     }
 
-    private static _subtypeLookupCache = new Map<string, BaseEntity | null>();
+    /**
+     * The create path's SubtypeSelector lookup memo, partitioned by the provider that ran the lookup. A memo
+     * shared across providers would hand provider B a row loaded through provider A (another connection,
+     * another user's context) or a `null` miss recorded against A's database. Keyed weakly so a
+     * request-scoped provider's memo is collected with it.
+     */
+    private static _subtypeLookupCache = new WeakMap<object, Map<string, BaseEntity | null>>();
+
+    /** Partition key for lookups made by an entity that has no provider at all. */
+    private static readonly _noProviderSubtypeKey: object = {};
+
+    private static subtypeLookupCacheFor(provider: object | null | undefined): Map<string, BaseEntity | null> {
+        const partitionKey = provider ?? BaseEntity._noProviderSubtypeKey;
+        let cache = BaseEntity._subtypeLookupCache.get(partitionKey);
+        if (!cache) {
+            cache = new Map<string, BaseEntity | null>();
+            BaseEntity._subtypeLookupCache.set(partitionKey, cache);
+        }
+        return cache;
+    }
 
     /** Per entity (lowercased name): the resolver asked for load hints, decided once per registration. */
     private static _subtypeLoadHintResolvers = new Map<string, SubtypeLoadHintResolverEntry>();
@@ -2125,7 +2144,7 @@ export abstract class BaseEntity<T = unknown> {
      * reported again.
      */
     public static ClearSubtypeLookupCache(): void {
-        BaseEntity._subtypeLookupCache.clear();
+        BaseEntity._subtypeLookupCache = new WeakMap();
         BaseEntity._subtypeLoadHintResolvers.clear();
         BaseEntity._engineCachedRowIndexes = new WeakMap();
         BaseEntity._loggedSubtypeLoadHintMessages.clear();
@@ -2407,28 +2426,29 @@ export abstract class BaseEntity<T = unknown> {
 
     private async getSubtypePathTargetEntity(entityName: string, pkValue: unknown): Promise<BaseEntity | null> {
         const cacheKey = `${entityName.trim().toLowerCase()}|${String(pkValue).trim().toLowerCase()}`;
-        if (BaseEntity._subtypeLookupCache.has(cacheKey)) {
-            return BaseEntity._subtypeLookupCache.get(cacheKey) ?? null;
+        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const lookupCache = BaseEntity.subtypeLookupCacheFor(provider);
+        if (lookupCache.has(cacheKey)) {
+            return lookupCache.get(cacheKey) ?? null;
         }
 
         // 1. Check BaseEngineRegistry for loaded cached entities
         const cached = BaseEntity.findSubtypePathTargetInEngineCache(entityName, pkValue);
         if (cached) {
-            BaseEntity._subtypeLookupCache.set(cacheKey, cached);
+            lookupCache.set(cacheKey, cached);
             return cached;
         }
 
         // 2. Fall back to loading via provider
-        const provider = this.ProviderToUse as unknown as IMetadataProvider;
         if (!provider?.GetEntityObject) {
-            BaseEntity._subtypeLookupCache.set(cacheKey, null);
+            lookupCache.set(cacheKey, null);
             return null;
         }
 
         try {
             const targetObj = await provider.GetEntityObject<BaseEntity>(entityName, this._contextCurrentUser);
             if (!targetObj) {
-                BaseEntity._subtypeLookupCache.set(cacheKey, null);
+                lookupCache.set(cacheKey, null);
                 return null;
             }
 
@@ -2443,14 +2463,14 @@ export abstract class BaseEntity<T = unknown> {
 
             const loaded = await targetObj.InnerLoad(key);
             if (loaded) {
-                BaseEntity._subtypeLookupCache.set(cacheKey, targetObj);
+                lookupCache.set(cacheKey, targetObj);
                 return targetObj;
             }
         } catch {
             // On load failure, return null
         }
 
-        BaseEntity._subtypeLookupCache.set(cacheKey, null);
+        lookupCache.set(cacheKey, null);
         return null;
     }
 

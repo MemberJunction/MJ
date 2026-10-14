@@ -92,6 +92,29 @@ export function selectPrimaryArtifact(
  */
 export class AgentRunner {
     /**
+     * The status and message the agent's reply detail ends with, from the run's result.
+     *
+     * A run the user stopped is not an error: its reply is marked Complete with a short "stopped"
+     * message, so the chat shows a quiet end rather than a red failure, and the run row (Cancelled,
+     * with its reason and the payload as it stood) carries the detail. Every other outcome keeps the
+     * long-standing mapping: the run's message when it wrote one, else Completed or the error.
+     */
+    public static ResolveFinalDetailState(agentResult: ExecuteAgentResult): { Status: 'Complete' | 'Error'; Message: string } {
+        const run = agentResult.agentRun;
+        if (run?.Status === 'Cancelled') {
+            const byUser = run.CancellationReason === 'User Request';
+            return {
+                Status: 'Complete',
+                Message: byUser ? 'Stopped by user' : `Stopped: ${run.ErrorMessage || 'the run was cancelled'}`,
+            };
+        }
+        return {
+            Status: agentResult.success ? 'Complete' : 'Error',
+            Message: run?.Message || (agentResult.success ? '✅ Completed' : run?.ErrorMessage || '❌ Failed'),
+        };
+    }
+
+    /**
      * Why a conversation-detail `Save()` returned false, for an error or log line. The owner gate in
      * `MJConversationDetailEntityExtended` refuses a non-owner's write (e.g. the elevated System user
      * on a widget guest's conversation) and records the reason ONLY on `LatestResult` — it logs
@@ -426,6 +449,13 @@ export class AgentRunner {
             // Flag to prevent late progress callbacks from overwriting final status
             // Progress callbacks fire async and may complete AFTER agent returns
             let agentExecutionCompleted = false;
+            // Progress saves run one at a time on this chain, and the final update awaits it.
+            // EnsureSaveComplete() alone is not enough: it resolves on the entity's 'save' event,
+            // which BaseEntity raises before the save finishes committing, so a progress save
+            // can still be in flight when the final update calls Save(). BaseEntity.Save() hands
+            // a concurrent caller the in-flight save's promise, so the final status was dropped
+            // and the detail stayed 'In-Progress' with the last progress message.
+            let progressSaves: Promise<void> = Promise.resolve();
 
             // Wrap progress callback to update agent response detail
             const originalOnProgress = params.onProgress;
@@ -443,11 +473,20 @@ export class AgentRunner {
 
                     // Update the agent response detail with progress message
                     if (agentResponseDetail && progress.message) {
-                        agentResponseDetail.Message = progress.message;
-                        const saved = await agentResponseDetail.Save();
-                        if (!saved) {
-                            LogError(`Failed to save agent response detail progress update: ${AgentRunner.saveFailureReason(agentResponseDetail)}`);
-                        }
+                        const detail = agentResponseDetail;
+                        const message: string = progress.message;
+                        progressSaves = progressSaves.then(async () => {
+                            try {
+                                detail.Message = message;
+                                if (!(await detail.Save())) {
+                                    LogError(`Failed to save agent response detail progress update: ${AgentRunner.saveFailureReason(detail)}`);
+                                }
+                            } catch (error) {
+                                // A failed progress save must not break the chain the final update awaits
+                                LogError(`Failed to save agent response detail progress update: ${error}`, undefined, error);
+                            }
+                        });
+                        await progressSaves;
                     }
                     // Call original callback if provided
                     if (originalOnProgress) {
@@ -519,8 +558,9 @@ export class AgentRunner {
             // Step 5: Update agent response detail with final result.
             const updateDetail = async () => {
                 if (agentResponseDetail && agentResponseDetailId) {
-                    // Wait for any in-flight progress save to complete
-                    // EnsureSaveComplete() resolves immediately if no save in progress
+                    // Wait for every queued progress save (none can be added: the flag is set),
+                    // then for any other save still in flight on this entity
+                    await progressSaves;
                     await agentResponseDetail.EnsureSaveComplete();
 
                     LogStatus('Updating agent response detail with final result');
@@ -531,11 +571,9 @@ export class AgentRunner {
                         LogError(`Failed to reload agent response detail ${agentResponseDetailId}`);
                     }
 
-                    agentResponseDetail.Message = agentResult.agentRun?.Message ||
-                                                 (agentResult.success
-                                                     ? '✅ Completed'
-                                                     : agentResult.agentRun?.ErrorMessage || '❌ Failed');
-                    agentResponseDetail.Status = agentResult.success ? 'Complete' : 'Error';
+                    const finalState = AgentRunner.ResolveFinalDetailState(agentResult);
+                    agentResponseDetail.Message = finalState.Message;
+                    agentResponseDetail.Status = finalState.Status;
 
                     // Set response form and command fields
                     if (agentResult.responseForm) {

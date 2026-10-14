@@ -363,3 +363,54 @@ describe('ProviderBase Request Deduplication', () => {
         });
     });
 });
+
+describe('ProviderBase dedup is partitioned by RunViewDedupScope (#4786)', () => {
+    /** A provider whose dedup scope is set per call, the way a transaction-tracking provider reports its caller's. */
+    class ScopedDedupProvider extends DedupTestProvider {
+        public scope = '';
+        protected override get RunViewDedupScope(): string {
+            return this.scope;
+        }
+    }
+    const testConfig = new ProviderConfigDataBase({}, '__mj', [], [], true);
+    let provider: ScopedDedupProvider;
+
+    beforeEach(async () => {
+        provider = new ScopedDedupProvider();
+        provider.setMockDelay(10);
+        await provider.Config(testConfig);
+        provider.resetCounters();
+        ProviderBase.DedupLingerMs = 5000;
+        ProviderBase.CoalesceWindowMs = 0;
+    });
+
+    afterEach(() => {
+        ProviderBase.DedupLingerMs = 5000;
+        ProviderBase.CoalesceWindowMs = 10;
+    });
+
+    const params = (): RunViewParams => ({ EntityName: 'Test Entity 1', ExtraFilter: 'IsActive=1', ResultType: 'simple' });
+
+    it('a request in a different scope never shares another scope\'s in-flight execution', async () => {
+        provider.scope = '';
+        const outside = provider.RunViews([params()]);
+        provider.scope = 'tx:1';
+        const inside = provider.RunViews([params()]);
+        await Promise.all([outside, inside]);
+        expect(provider.internalRunViewsCallCount).toBe(2);
+    });
+
+    it('a request in a different scope never receives another scope\'s lingering result', async () => {
+        provider.scope = 'tx:1';
+        await provider.RunViews([params()]);
+        provider.scope = '';
+        await provider.RunViews([params()]);
+        expect(provider.internalRunViewsCallCount).toBe(2);
+    });
+
+    it('requests in the same scope still share one execution', async () => {
+        provider.scope = 'tx:1';
+        await Promise.all([provider.RunViews([params()]), provider.RunViews([params()])]);
+        expect(provider.internalRunViewsCallCount).toBe(1);
+    });
+});

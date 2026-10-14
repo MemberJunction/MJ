@@ -1558,13 +1558,13 @@ export class SQLServerDataProvider
                                                                                         @Source='Clone',
                                                                                         @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
-    const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entity.EntityInfo.Name}',
+    const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entity.EntityInfo.Name}',
                                                                                         @RecordID=@ID,
                                                                                         @UserID='${payload.userID}',
                                                                                         @Type='${payload.type}',
-                                                                                        @ChangesJSON='${payload.changesJSON}',
-                                                                                        @ChangesDescription='${payload.changesDescription}',
-                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
+                                                                                        @ChangesJSON=N'${payload.changesJSON}',
+                                                                                        @ChangesDescription=N'${payload.changesDescription}',
+                                                                                        @FullRecordJSON=N'${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
                                                                                         @Comments=null${lineageClause}`;
 
@@ -1802,7 +1802,6 @@ export class SQLServerDataProvider
     );
     if (!payload) return null;
 
-    const quotes = wrapRecordIdInQuotes ? "'" : '';
     const lineageClause = payload.source === 'Restore'
       ? `,
                                                                                         @Source='Restore',
@@ -1814,13 +1813,13 @@ export class SQLServerDataProvider
                                                                                         @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
 
-    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
-                                                                                        @RecordID=${quotes}${recordID}${quotes},
+    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entityName}',
+                                                                                        @RecordID=${wrapRecordIdInQuotes ? `N'${recordID}'` : recordID},
                                                                                         @UserID='${payload.userID}',
                                                                                         @Type='${payload.type}',
-                                                                                        @ChangesJSON='${payload.changesJSON}',
-                                                                                        @ChangesDescription='${payload.changesDescription}',
-                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
+                                                                                        @ChangesJSON=N'${payload.changesJSON}',
+                                                                                        @ChangesDescription=N'${payload.changesDescription}',
+                                                                                        @FullRecordJSON=N'${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
                                                                                         @Comments=null${lineageClause}`;
   }
@@ -2136,7 +2135,7 @@ export class SQLServerDataProvider
    * @remarks
    * - Always creates a new Request object for each query to avoid "EREQINPROG" errors
    * - Handles both positional (?) and named (@param) parameter styles
-   * - Automatically uses active transaction if one exists, otherwise uses connection pool
+   * - Uses the ambient transaction when the caller is part of it (#4786), otherwise uses connection pool
    * - Handles SQL logging in parallel with query execution
    * - Provides automatic retry with pool connection if transaction fails
    * 
@@ -2165,7 +2164,8 @@ export class SQLServerDataProvider
     
     if (connectionSource instanceof sql.Transaction) {
       transaction = connectionSource;
-    } else if (!connectionSource && !loggingOptions?.ignoreAmbientTransaction) {
+    } else if (!connectionSource && !loggingOptions?.ignoreAmbientTransaction && this.IsCallerInAmbientTransaction()) {
+      // A caller outside the open transaction's scope runs on the pool as if none were open (#4786).
       this.AssertAmbientTransactionUsable();
       transaction = this._transaction;
     }
@@ -2435,9 +2435,12 @@ export class SQLServerDataProvider
     contextUser?: UserInfo,
   ): Promise<any[][]> {
     try {
-      // A read that does not join the ambient transaction cannot autocommit anything on the pool,
-      // which is what the doomed-transaction assert protects; skip it for that case (#4514).
-      if (!options?.ignoreAmbientTransaction) {
+      // A batch joins the ambient transaction only when the caller opted in (default) AND is in
+      // its scope (#4786) — a caller outside that scope runs on the pool as if none were open. A
+      // read that does not join it cannot autocommit anything on the pool, which is what the
+      // doomed-transaction assert protects; skip the assert for that case too (#4514).
+      const joinsAmbient = !options?.ignoreAmbientTransaction && this.IsCallerInAmbientTransaction();
+      if (joinsAmbient) {
         this.AssertAmbientTransactionUsable();
       }
       // Build combined batch SQL and parameters (same as static method)
@@ -2493,7 +2496,7 @@ export class SQLServerDataProvider
       // Create execution context
       const context: SQLExecutionContext = {
         pool: this._pool,
-        transaction: options?.ignoreAmbientTransaction ? null : this._transaction,
+        transaction: joinsAmbient ? this._transaction : null,
         logSqlStatement: this._logSqlStatement.bind(this),
         clearTransaction: () => { 
           this._transaction = null;
@@ -2703,12 +2706,12 @@ DECLARE ${varName} NVARCHAR(MAX) = (
 );
 IF ${varName} IS NOT NULL
     EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal
-        @EntityName='${safeEntityName}',
-        @RecordID='${recordID}',
+        @EntityName=N'${safeEntityName}',
+        @RecordID=N'${recordID}',
         @UserID='${safeUserId}',
         @Type='Update',
-        @ChangesJSON='${safeChangesJSON}',
-        @ChangesDescription='${safeChangesDesc}',
+        @ChangesJSON=N'${safeChangesJSON}',
+        @ChangesDescription=N'${safeChangesDesc}',
         @FullRecordJSON=${varName},
         @Status='Complete',
         @Comments=NULL${lineageClause};`;

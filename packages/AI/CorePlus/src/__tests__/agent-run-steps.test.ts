@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
-import { InitAgentRunStep, FinalizeAgentRunStep } from '../agent-run-steps';
+import { UUIDMap } from '@memberjunction/global';
+import { InitAgentRunStep, FinalizeAgentRunStep, ResolvePayloadAtStart, ApplyResolvedPayloadAtStart } from '../agent-run-steps';
 
 /** A minimal mutable stand-in — the helpers only assign/read plain fields, so no BaseEntity machinery is needed. */
 function fakeStep(): MJAIAgentRunStepEntity {
@@ -70,6 +71,34 @@ describe('initAgentRunStep', () => {
         expect(withData.PayloadAtStart).toBe('{"p":0}');
         expect(withData.PayloadAtEnd).toBe('{"p":1}');
     });
+
+    it('sets PayloadAtStartSourceStepID when provided', () => {
+        const step = fakeStep();
+        InitAgentRunStep(step, {
+            AgentRunID: 'r',
+            StepNumber: 2,
+            StepType: 'Prompt',
+            StepName: 'x',
+            PayloadAtStartSourceStepID: UUID,
+        });
+        expect(step.PayloadAtStartSourceStepID).toBe(UUID);
+    });
+
+    it('leaves PayloadAtStartSourceStepID unset when it is null or undefined', () => {
+        const omitted = fakeStep();
+        InitAgentRunStep(omitted, { AgentRunID: 'r', StepNumber: 2, StepType: 'Prompt', StepName: 'x' });
+        expect(omitted.PayloadAtStartSourceStepID).toBeUndefined();
+
+        const explicitNull = fakeStep();
+        InitAgentRunStep(explicitNull, {
+            AgentRunID: 'r',
+            StepNumber: 2,
+            StepType: 'Prompt',
+            StepName: 'x',
+            PayloadAtStartSourceStepID: null,
+        });
+        expect(explicitNull.PayloadAtStartSourceStepID).toBeUndefined();
+    });
 });
 
 describe('finalizeAgentRunStep', () => {
@@ -122,5 +151,82 @@ describe('finalizeAgentRunStep', () => {
         const step = startedStep();
         FinalizeAgentRunStep(step, { success: true });
         expect(step.OutputData).toBeUndefined();
+    });
+});
+
+describe('ResolvePayloadAtStart', () => {
+    const SOURCE_ID = 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e';
+    const MISSING_ID = 'c3d4e5f6-a7b8-4c9d-8e0f-2a3b4c5d6e7f';
+    const stepsById = new UUIDMap<Pick<MJAIAgentRunStepEntity, 'PayloadAtEnd'>>([[SOURCE_ID, { PayloadAtEnd: '{"p":1}' }]]);
+
+    it('returns the stored PayloadAtStart even when a pointer is also set', () => {
+        const step = { PayloadAtStart: '{"p":0}', PayloadAtStartSourceStepID: SOURCE_ID };
+        expect(ResolvePayloadAtStart(step, stepsById)).toBe('{"p":0}');
+    });
+
+    it("returns the source step's PayloadAtEnd when PayloadAtStart is null", () => {
+        const step = { PayloadAtStart: null, PayloadAtStartSourceStepID: SOURCE_ID };
+        expect(ResolvePayloadAtStart(step, stepsById)).toBe('{"p":1}');
+    });
+
+    it('returns null when the pointer names a step that is not in the map', () => {
+        const step = { PayloadAtStart: null, PayloadAtStartSourceStepID: MISSING_ID };
+        expect(ResolvePayloadAtStart(step, stepsById)).toBeNull();
+    });
+
+    it('returns null when there is no stored start and no pointer', () => {
+        const step = { PayloadAtStart: null, PayloadAtStartSourceStepID: null };
+        expect(ResolvePayloadAtStart(step, stepsById)).toBeNull();
+    });
+
+    it('resolves a pointer whose letter case differs from the map key', () => {
+        const step = { PayloadAtStart: null, PayloadAtStartSourceStepID: SOURCE_ID.toUpperCase() };
+        expect(ResolvePayloadAtStart(step, stepsById)).toBe('{"p":1}');
+    });
+});
+
+describe('ApplyResolvedPayloadAtStart', () => {
+    type StepRow = Pick<MJAIAgentRunStepEntity, 'ID' | 'PayloadAtStart' | 'PayloadAtStartSourceStepID' | 'PayloadAtEnd'>;
+    // Uppercase, as SQL Server returns uniqueidentifier values.
+    const STEP_1 = 'D4E5F6A7-B8C9-4D0E-8F1A-3B4C5D6E7F80';
+    const STEP_2 = 'E5F6A7B8-C9D0-4E1F-9A2B-4C5D6E7F8091';
+    const STEP_3 = 'F6A7B8C9-D0E1-4F2A-8B3C-5D6E7F8091A2';
+    const MISSING_ID = '0718293A-4B5C-4D6E-9F80-91A2B3C4D5E6';
+
+    it('fills only rows whose start is null and whose pointer resolves', () => {
+        const steps: StepRow[] = [
+            { ID: STEP_1, PayloadAtStart: null, PayloadAtStartSourceStepID: null, PayloadAtEnd: '{"n":1}' },
+            { ID: STEP_2, PayloadAtStart: null, PayloadAtStartSourceStepID: STEP_1, PayloadAtEnd: '{"n":2}' },
+            { ID: STEP_3, PayloadAtStart: null, PayloadAtStartSourceStepID: STEP_2, PayloadAtEnd: '{"n":3}' },
+        ];
+        ApplyResolvedPayloadAtStart(steps);
+        expect(steps.map((s) => s.PayloadAtStart)).toEqual([null, '{"n":1}', '{"n":2}']);
+    });
+
+    it('leaves a stored PayloadAtStart untouched', () => {
+        const steps: StepRow[] = [
+            { ID: STEP_1, PayloadAtStart: null, PayloadAtStartSourceStepID: null, PayloadAtEnd: '{"n":1}' },
+            { ID: STEP_2, PayloadAtStart: '{"stored":true}', PayloadAtStartSourceStepID: STEP_1, PayloadAtEnd: '{"n":2}' },
+        ];
+        ApplyResolvedPayloadAtStart(steps);
+        expect(steps[1].PayloadAtStart).toBe('{"stored":true}');
+    });
+
+    it('leaves PayloadAtStart null when the pointer does not resolve', () => {
+        const steps: StepRow[] = [
+            { ID: STEP_1, PayloadAtStart: null, PayloadAtStartSourceStepID: null, PayloadAtEnd: '{"n":1}' },
+            { ID: STEP_2, PayloadAtStart: null, PayloadAtStartSourceStepID: MISSING_ID, PayloadAtEnd: '{"n":2}' },
+        ];
+        ApplyResolvedPayloadAtStart(steps);
+        expect(steps[1].PayloadAtStart).toBeNull();
+    });
+
+    it('resolves a pointer to a row that comes later in the array', () => {
+        const steps: StepRow[] = [
+            { ID: STEP_2, PayloadAtStart: null, PayloadAtStartSourceStepID: STEP_1, PayloadAtEnd: '{"n":2}' },
+            { ID: STEP_1, PayloadAtStart: null, PayloadAtStartSourceStepID: null, PayloadAtEnd: '{"n":1}' },
+        ];
+        ApplyResolvedPayloadAtStart(steps);
+        expect(steps[0].PayloadAtStart).toBe('{"n":1}');
     });
 });

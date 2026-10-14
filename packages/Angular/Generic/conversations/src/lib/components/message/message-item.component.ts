@@ -27,6 +27,7 @@ import { ConversationAgentService } from '../../services/conversation-agent.serv
 import {
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
+  BeforeStopClickedEventArgs,
 } from '../../events/chat-events';
 import { ExcludeByUUIDs, UUIDsEqual } from '@memberjunction/global';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
@@ -53,6 +54,13 @@ export type MessageLivenessState = 'live' | 'checking' | 'stalled';
  * Silence after which an in-flight run is no longer presented as healthy. Three missed heartbeats
  * (`AgentRunWatchdogConfig.heartbeatIntervalMs` is 30s), so ordinary jitter never trips it.
  */
+/**
+ * How long the Stop control stays in its "Stopping…" state before it is offered again. The
+ * server's cancellation poll runs every few seconds, so a stop that has not landed by now
+ * most likely did not take.
+ */
+export const STOP_RETRY_AFTER_MS = 15_000;
+
 export const LIVENESS_CHECKING_MS = 90_000;
 
 /**
@@ -483,6 +491,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
   /** Hides the response form and actionable commands on this message. */
   @Input() public ReadOnly = false;
+
+  /**
+   * Whether the Stop control is offered on an in-progress agent reply. A host can turn stopping
+   * off for a surface without making the conversation read-only. Default true.
+   */
+  @Input() public AllowStopRun = true;
+
+  /**
+   * How many agent replies are in flight in the open view. The per-reply Stop control is offered
+   * only above one: with a single run the composer's send slot is the stop control, so a pill here
+   * would be a second control for the same thing. With several runs the pill is the only way to
+   * say which one, and the composer stops them all.
+   */
+  @Input() public InFlightCount = 0;
   /** Host override for the AI message display name (white-label persona). Null = the agent record's name. */
   @Input() public AssistantDisplayName: string | null = null;
 
@@ -719,6 +741,30 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /** "Fork from here" was clicked. */
   @Output() public ForkRequested = new EventEmitter<MJConversationDetailEntity>();
 
+  /**
+   * Fired BEFORE a stop is requested, when the person clicks Stop on this in-progress agent
+   * reply. Listeners may set `event.Cancel = true` to keep the run going; the control then
+   * stays available and nothing else happens. Carries the reply's detail id and the run id
+   * when the chat has seen the run row.
+   */
+  @Output() public BeforeStopClicked = new EventEmitter<BeforeStopClickedEventArgs>();
+
+  /**
+   * Fired when a stop was requested and no `BeforeStopClicked` listener canceled it. Carries
+   * the reply's conversation detail; the host resolves the run behind it, stops it, and fires
+   * its `AfterStopClicked` with the outcome.
+   */
+  @Output() public StopRequested = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * True from the moment Stop was clicked until the message leaves In-Progress, so the button
+   * reads "Stopping…" and cannot be clicked twice while the server catches up. Falls back to
+   * false after {@link STOP_RETRY_AFTER_MS} if the run is still going, so a stop that did not
+   * take (the row write was refused, the owning process is gone) can be tried again.
+   */
+  public IsStopping = false;
+  private _stopRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
   public ElapsedTimeFormatted: string = '0:00';
@@ -871,6 +917,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // Update previous status for next check
     this._previousMessageStatus = currentStatus;
 
+    // Once the run has ended (stopped or otherwise) the Stop control is gone; clear the
+    // "stopping" state so a later in-progress message on this item starts clean.
+    if (currentStatus !== 'In-Progress' && this.IsStopping) {
+      this.IsStopping = false;
+      this.clearStopRetryTimer();
+    }
+
     // Rebuild cached values so they're stable during Angular's check/verify cycle.
     // ngDoCheck runs once per CD pass but NOT during the dev-mode verify pass, so
     // snapshotting here produces values that don't change between the two reads.
@@ -1021,6 +1074,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   ngOnDestroy() {
     this.stopElapsedTimeUpdater();
+    this.clearStopRetryTimer();
   }
 
   /**
@@ -1211,8 +1265,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const agentID = this.message.AgentID;
 
     // Look up agent from AIEngineBase cache
-    if (agentID && AIEngineBase.Instance?.Agents) {
-      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentID));
+    if (agentID) {
+      const agent = AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentID));
       if (agent) {
         return {
           name: agent.Name || 'AI Assistant',
@@ -1574,6 +1628,45 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this._stableIsInProgressAIMessage;
   }
 
+  /**
+   * Whether this message offers a Stop control: an AI reply still in progress, in a conversation
+   * the viewer may write to, while more than one reply is in flight (see {@link InFlightCount}).
+   * The server's permission check is the real gate; this only decides whether the control is shown.
+   */
+  public get CanStopRun(): boolean {
+    return this.IsInProgressAIMessage && !this.ReadOnly && this.AllowStopRun && this.InFlightCount > 1;
+  }
+
+  /** Stop button handler: marks the message as stopping and hands the request to the host. */
+  public OnStopClick(): void {
+    if (!this.CanStopRun || this.IsStopping) {
+      return;
+    }
+    // Listeners see the request first and may veto it. Cancel propagates synchronously through
+    // the message-list and chat-area re-emit bindings, so by the time emit() returns,
+    // event.Cancel reflects every subscriber's answer (same contract as the response-form pair).
+    const beforeEvent = new BeforeStopClickedEventArgs(this.message.ID, this.AgentRun?.ID ?? null);
+    this.BeforeStopClicked.emit(beforeEvent);
+    if (beforeEvent.Cancel) {
+      return;
+    }
+    this.IsStopping = true;
+    this.clearStopRetryTimer();
+    this._stopRetryTimer = setTimeout(() => {
+      this._stopRetryTimer = null;
+      this.IsStopping = false;
+      this.cdRef?.markForCheck?.();
+    }, STOP_RETRY_AFTER_MS);
+    this.StopRequested.emit(this.message);
+  }
+
+  private clearStopRetryTimer(): void {
+    if (this._stopRetryTimer) {
+      clearTimeout(this._stopRetryTimer);
+      this._stopRetryTimer = null;
+    }
+  }
+
   /** @deprecated Use {@link IsInProgressAIMessage}. */
   public get isInProgressAIMessage(): boolean {
     return this.IsInProgressAIMessage;
@@ -1828,6 +1921,45 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.calculateTimePillText();
   }
 
+  // ── A stopped reply ──────────────────────────────────────────────────────────────────────
+  /** The message the Continue control sends; the next turn then resumes the stopped run. */
+  public static readonly ContinueMessage = 'Continue where you left off';
+
+  /** True when the reply's run was cancelled, by the user or otherwise. */
+  public get IsStoppedRun(): boolean {
+    return this.AgentRun?.Status === MJAIAgentRunEntityExtended.CancelledStatus;
+  }
+
+  /** True when the user stopped the reply's run (the stopped reply, as against a timeout). */
+  public get WasStoppedByUser(): boolean {
+    return MJAIAgentRunEntityExtended.IsUserStopped(this.AgentRun?.Status, this.AgentRun?.CancellationReason);
+  }
+
+  /** The "N steps kept" line under a stopped reply; null when the run kept nothing or was not stopped. */
+  public get StoppedLineText(): string | null {
+    if (!this.IsStoppedRun) {
+      return null;
+    }
+    const steps = this.AgentRunStepCount;
+    return steps > 0 ? `${steps} ${steps === 1 ? 'step' : 'steps'} kept` : null;
+  }
+
+  /**
+   * Whether the Continue control is offered: the last message in the conversation is a reply the
+   * user stopped, and the viewer may write. Any message resumes the run; this one says so.
+   */
+  public get CanContinueStoppedRun(): boolean {
+    return this.WasStoppedByUser && this.IsLastMessageInConversation && !this.ReadOnly;
+  }
+
+  /** The Continue control: sends {@link ContinueMessage} the way a suggested response is sent. */
+  public OnContinueClick(): void {
+    if (!this.CanContinueStoppedRun) {
+      return;
+    }
+    this.SuggestedResponseSelected.emit({ text: MessageItemComponent.ContinueMessage });
+  }
+
   /** @deprecated Use {@link TimePillText}. */
   public get timePillText(): string | null {
     return this.TimePillText;
@@ -1836,6 +1968,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private calculateTimePillText(): string | null {
     if (this.IsUserMessage) {
       return null;
+    }
+
+    // A stopped run: neutral, named as such, with the time it ran before the stop.
+    if (this.IsStoppedRun) {
+      const duration = this.AgentRunDuration ?? this.FormattedGenerationTime;
+      return duration ? `Stopped · ${duration}` : 'Stopped';
     }
 
     // For temporary messages (in-progress), show live elapsed time

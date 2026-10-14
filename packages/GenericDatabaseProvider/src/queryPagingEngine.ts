@@ -1,6 +1,6 @@
 import { DatabasePlatform } from '@memberjunction/core';
-import { AnalyzeTopLevelOrderBy, AnalyzePagingShape, IsReadOnlyQuery } from '@memberjunction/sql-parser';
-import type { OwnRowCap, PagingShape } from '@memberjunction/sql-parser';
+import { AnalyzeTopLevelOrderBy, AnalyzePagingShape, IsReadOnlyQuery, LexSQL } from '@memberjunction/sql-parser';
+import type { OwnRowCap, PagingShape, SQLLexToken } from '@memberjunction/sql-parser';
 import { GetDialect, SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
@@ -194,8 +194,8 @@ export class QueryPagingEngine {
     /**
      * Caps the statement as a derived table, for shapes that cannot be capped in place. The
      * query's CTEs stay in front and its trailing clause stays last. Its ORDER BY stays inside,
-     * where SQL Server allows it beside the query's own TOP; a set operation's ORDER BY, which
-     * names output columns, moves outside.
+     * where SQL Server allows it beside the query's own TOP; a set operation's ORDER BY is
+     * repeated outside (see {@link derivedTableParts}).
      */
     private static capAsDerivedTable(shape: PagingShape, cap: number, dialect: SQLDialect): RowCapResult {
         const statement = shape.Statement;
@@ -203,14 +203,88 @@ export class QueryPagingEngine {
             return notCapped(statement, `the statement ends in FOR ${shape.ReturnsDocument.toUpperCase()}, which cannot appear inside a derived table`);
         }
         const prefix = statement.substring(0, shape.MainStart);
-        const moveOrderBy = shape.IsSetOperation && shape.OrderBy !== null;
-        const inner = statement.substring(shape.MainStart, moveOrderBy ? shape.OrderBy!.Start : shape.TailStart).trim();
-        const orderBy = moveOrderBy ? `\n${statement.substring(shape.OrderBy!.Start, shape.OrderBy!.End).trim()}` : '';
+        const { Inner: inner, OuterOrderBy: outerOrderBy } = QueryPagingEngine.derivedTableParts(shape, dialect);
+        const orderBy = outerOrderBy ? `\n${outerOrderBy}` : '';
         const limit = dialect.LimitClause(cap);
         const top = limit.prefix ? `${limit.prefix} ` : '';
         const suffix = limit.suffix ? `\n${limit.suffix}` : '';
         const sql = `${prefix}SELECT ${top}* FROM (\n${inner}\n) AS ${dialect.QuoteIdentifier('_mj_capped')}${orderBy}${suffix}${QueryPagingEngine.tail(shape)}`;
         return capped(sql, 'derived-table');
+    }
+
+    /**
+     * Splits the main statement into the body of a derived table and the ORDER BY to put outside it.
+     *
+     * Only a set operation's ORDER BY goes outside: it orders the combined result, which a derived
+     * table does not preserve. Outside, the set operation's table aliases are out of scope, so its
+     * column references lose their qualifiers (`a.Name` → `Name`) and name the derived table's
+     * output columns instead.
+     *
+     * The ORDER BY is cut from the inside, where SQL Server rejects it. When the set operation also
+     * has its own `OFFSET … FETCH` / `LIMIT` after that ORDER BY, that cap still has to pick the
+     * rows, so the inside becomes a second derived table that applies it with the same, unqualified,
+     * ORDER BY. Keeping the set operation's own text there instead would put its branches' `TOP`
+     * and its `OFFSET` in one subquery, which SQL Server refuses even though it accepts them as a
+     * whole statement.
+     */
+    private static derivedTableParts(shape: PagingShape, dialect: SQLDialect): { Inner: string; OuterOrderBy: string } {
+        const statement = shape.Statement;
+        const orderBy = shape.IsSetOperation ? shape.OrderBy : null;
+        if (!orderBy) {
+            return { Inner: statement.substring(shape.MainStart, shape.TailStart).trim(), OuterOrderBy: '' };
+        }
+        const body = statement.substring(shape.MainStart, orderBy.Start).trim();
+        const outerOrderBy = QueryPagingEngine.unqualifyColumnReferences(statement.substring(orderBy.Start, orderBy.End).trim(), dialect);
+        const ownClauseCap = statement.substring(orderBy.End, shape.TailStart).trim();
+        const inner = ownClauseCap
+            ? `SELECT * FROM (\n${body}\n) AS ${dialect.QuoteIdentifier('_mj_set')}\n${outerOrderBy}\n${ownClauseCap}`
+            : body;
+        return { Inner: inner, OuterOrderBy: outerOrderBy };
+    }
+
+    /**
+     * Drops the table or schema qualifier from every dotted column name in `sql`, keeping its last
+     * part: `a.Name` → `Name`, `[dbo].[A].[Name]` → `[Name]`. A dotted name followed by `(` is a
+     * function call such as `dbo.fnLen(Name)`, whose schema SQL Server requires, so it is kept.
+     * Whitespace, comments and every other token are kept as written.
+     */
+    private static unqualifyColumnReferences(sql: string, dialect: SQLDialect): string {
+        const tokens = LexSQL(sql, dialect);
+        let result = '';
+        let i = 0;
+        while (i < tokens.length) {
+            const end = QueryPagingEngine.dottedNameEnd(tokens, i);
+            if (end > i && !QueryPagingEngine.isFollowedByOpenParen(tokens, end)) {
+                result += tokens[end - 1].Text;
+            } else {
+                for (let k = i; k < Math.max(end, i + 1); k++) result += tokens[k].Text;
+            }
+            i = Math.max(end, i + 1);
+        }
+        return result;
+    }
+
+    /**
+     * The index just past the dotted name (`part.part[.part…]`) that starts at `start`, or `start`
+     * when no name of two or more parts starts there.
+     */
+    private static dottedNameEnd(tokens: SQLLexToken[], start: number): number {
+        if (!QueryPagingEngine.isNamePart(tokens[start])) return start;
+        let end = start + 1;
+        while (tokens[end]?.Kind === 'dot' && QueryPagingEngine.isNamePart(tokens[end + 1])) end += 2;
+        return end > start + 1 ? end : start;
+    }
+
+    /** Whether the next token at or after `index`, other than whitespace and comments, opens a parenthesis. */
+    private static isFollowedByOpenParen(tokens: SQLLexToken[], index: number): boolean {
+        let k = index;
+        while (tokens[k]?.Kind === 'whitespace' || tokens[k]?.Kind === 'comment') k++;
+        return tokens[k]?.Kind === 'open';
+    }
+
+    /** Whether a token can be one part of a dotted name: a bare word or a quoted identifier. */
+    private static isNamePart(token: SQLLexToken | undefined): boolean {
+        return token?.Kind === 'word' || token?.Kind === 'identifier';
     }
 
     /**
@@ -317,17 +391,14 @@ export class QueryPagingEngine {
      * Pages a query whose own cap cannot be reasoned about as a row count (`TOP … PERCENT`, `WITH
      * TIES`, an expression, or a cap on more than one branch of a set operation) by selecting the
      * page from it as a derived table. Its CTEs stay in front, its trailing clause stays last, and
-     * the ORDER BY of a set operation moves outside, where it is legal.
+     * the ORDER BY of a set operation is repeated outside (see {@link derivedTableParts}).
      */
     private static wrapAndPage(shape: PagingShape, startRow: number, maxRows: number, dialect: SQLDialect): string {
         const statement = shape.Statement;
         const prefix = statement.substring(0, shape.MainStart);
-        const moveOrderBy = shape.IsSetOperation && shape.OrderBy !== null;
-        const innerEnd = moveOrderBy ? shape.OrderBy!.Start : shape.TailStart;
-        const inner = statement.substring(shape.MainStart, innerEnd).trim();
-        const orderBy = moveOrderBy
-            ? statement.substring(shape.OrderBy!.Start, shape.OrderBy!.End).trim()
-            : dialect.PagingRequiresOrderBy ? `ORDER BY ${dialect.DefaultPagingOrderBy}` : '';
+        const { Inner: inner, OuterOrderBy: outerOrderBy } = QueryPagingEngine.derivedTableParts(shape, dialect);
+        const orderBy = outerOrderBy
+            || (dialect.PagingRequiresOrderBy ? `ORDER BY ${dialect.DefaultPagingOrderBy}` : '');
         const limit = dialect.LimitClause(maxRows, startRow);
         const page = `SELECT * FROM (\n${inner}\n) AS ${dialect.QuoteIdentifier('__mj_page')}${orderBy ? `\n${orderBy}` : ''}\n${limit.suffix}`;
         return `${prefix}${page}${QueryPagingEngine.tail(shape)}`;
@@ -350,7 +421,7 @@ export class QueryPagingEngine {
      */
     private static buildCountSQL(shape: PagingShape, dialect: SQLDialect): string {
         const countCTEName = dialect.QuoteIdentifier('__count');
-        const body = QueryPagingEngine.countBody(shape);
+        const body = QueryPagingEngine.countBody(shape, dialect);
         const ownCTEs = shape.CTEs ? shape.CTEs.Definitions.map(d => d.Text) : [];
         const recursive = shape.CTEs?.Recursive ? 'RECURSIVE ' : '';
         const allCTEs = [...ownCTEs, `${countCTEName} AS (\n${body}\n)`];
@@ -362,9 +433,16 @@ export class QueryPagingEngine {
      * The main statement as the count query sees it. With a cap of its own the statement is kept
      * whole (its ORDER BY picks the capped rows, and is legal in a CTE beside TOP or OFFSET),
      * except that a set operation's trailing ORDER BY is dropped; otherwise the ORDER BY is cut.
+     *
+     * A set operation with both branch `TOP`s and its own `OFFSET` / `LIMIT` cannot be kept whole:
+     * SQL Server refuses the two in one CTE. It is counted through the same second derived table
+     * the data query uses (see {@link derivedTableParts}).
      */
-    private static countBody(shape: PagingShape): string {
+    private static countBody(shape: PagingShape, dialect: SQLDialect): string {
         const statement = shape.Statement;
+        if (QueryPagingEngine.hasBranchTopAndOwnClauseCap(shape)) {
+            return QueryPagingEngine.derivedTableParts(shape, dialect).Inner;
+        }
         const capped = shape.OwnCaps.length > 0;
         const keepsOrderBy = capped && !(shape.IsSetOperation && shape.OwnCaps.every(c => c.Form === 'top'));
         const end = shape.OrderBy && !keepsOrderBy ? shape.OrderBy.Start : shape.TailStart;
@@ -374,6 +452,13 @@ export class QueryPagingEngine {
             return `${body} ${statement.substring(shape.OrderBy.End, shape.TailStart).trim()}`.trim();
         }
         return body;
+    }
+
+    /** Whether a set operation ordered by its own ORDER BY caps both its branches (`TOP`) and itself (`OFFSET` / `LIMIT`). */
+    private static hasBranchTopAndOwnClauseCap(shape: PagingShape): boolean {
+        return shape.IsSetOperation && shape.OrderBy !== null
+            && shape.OwnCaps.some(c => c.Form === 'top')
+            && shape.OwnCaps.some(c => c.Form === 'clause');
     }
 
     // ════════════════════════════════════════════════════════════════════
