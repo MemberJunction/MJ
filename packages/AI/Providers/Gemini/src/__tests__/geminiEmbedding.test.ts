@@ -18,14 +18,18 @@ vi.mock('@google/genai', () => ({
   Blob: class {},
 }));
 
-vi.mock('@memberjunction/global', () => ({
+// Partial: the real @memberjunction/ai (loaded below for its cancellation helpers) needs the rest.
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@memberjunction/global')>()),
   RegisterClass: () => (_target: unknown) => {},
 }));
 
 // The Gemini package's index.ts (loaded transitively when importing GeminiEmbedding) pulls in the
 // LLM/image/realtime classes, so the @memberjunction/ai mock must provide every base class they
 // extend. Mirrors the mock surface used by GeminiLLM.test.ts.
-vi.mock('@memberjunction/ai', () => {
+vi.mock('@memberjunction/ai', async (importOriginal) => {
+  // The real cancellation helpers, so the driver's abort handling runs as it does in production.
+  const actual = await importOriginal<typeof import('@memberjunction/ai')>();
   class MockBaseLLM {
     protected _apiKey: string;
     constructor(apiKey: string) { this._apiKey = apiKey; }
@@ -36,6 +40,12 @@ vi.mock('@memberjunction/ai', () => {
     protected _apiKey: string;
     constructor(apiKey: string) { this._apiKey = apiKey; }
     get apiKey() { return this._apiKey; }
+    /** Mirrors BaseEmbeddings.ThrowIfRequestAborted. */
+    protected ThrowIfRequestAborted(error: unknown, signal?: AbortSignal | null): void {
+      if (actual.IsRequestAborted(error, signal)) {
+        throw actual.CreateCancellationError({ signal });
+      }
+    }
   }
   class MockModelUsage {
     promptTokens: number;
@@ -68,6 +78,9 @@ vi.mock('@memberjunction/ai', () => {
     SummarizeResult: class {},
     ChatMessageRole: { user: 'user', assistant: 'assistant', system: 'system' },
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
+    AbortableDelay: actual.AbortableDelay,
+    IsRequestAborted: actual.IsRequestAborted,
+    ThrowIfAborted: actual.ThrowIfAborted,
     ImageGenerationParams: class {},
     ImageGenerationResult: class {},
     ImageEditParams: class {},
@@ -214,5 +227,84 @@ describe('GeminiEmbedding.EmbedTexts', () => {
 
     expect(result.vectors).toEqual([]);
     expect(embedContentMock).toHaveBeenCalledTimes(3); // 1 initial + 2 retries
+  });
+});
+
+/** Builds the error `fetch` rejects an aborted request with. */
+function abortError(): Error {
+  const error = new Error('This operation was aborted');
+  error.name = 'AbortError';
+  return error;
+}
+
+/** The classification a cancellation error carries, read from the error a call rejected with. */
+async function rejectionTypeOf(operation: Promise<unknown>): Promise<string | undefined> {
+  try {
+    await operation;
+  } catch (error) {
+    return (error as { errorInfo?: { errorType?: string } }).errorInfo?.errorType;
+  }
+  throw new Error('expected the call to reject');
+}
+
+/** A driver whose retry backoff the test would never outlive, so only an abort can end the wait. */
+class SlowBackoffGemini extends GeminiEmbedding {
+  protected override get embedRetryBaseDelayMs(): number {
+    return 60_000;
+  }
+}
+
+describe('GeminiEmbedding cancellation', () => {
+  beforeEach(() => {
+    embedContentMock.mockReset();
+  });
+
+  it('forwards the CancellationToken to embedContent as config.abortSignal', async () => {
+    embedContentMock.mockResolvedValue(embeddingResponse([1, 2]));
+    const controller = new AbortController();
+    const embedder = new TestGemini('k');
+    await embedder.EmbedTexts({ texts: ['a'], model: null, CancellationToken: controller.signal });
+    await embedder.EmbedText({ text: 'a', model: null, dimensions: 2, CancellationToken: controller.signal });
+
+    expect(embedContentMock.mock.calls[0][0].config).toEqual({ abortSignal: controller.signal });
+    expect(embedContentMock.mock.calls[1][0].config).toEqual({ outputDimensionality: 2, abortSignal: controller.signal });
+  });
+
+  it('stops the fan-out once aborted, never retries the abort, and reports it as cancelled', async () => {
+    const controller = new AbortController();
+    embedContentMock.mockImplementation(async () => {
+      controller.abort('stop');
+      throw abortError();
+    });
+    const texts = Array.from({ length: 12 }, (_, i) => `t${i}`);
+
+    const type = await rejectionTypeOf(new TestGemini('k').EmbedTexts({ texts, model: null, CancellationToken: controller.signal }));
+
+    expect(type).toBe('Cancelled');
+    // Only the requests already in flight when the abort fired (at most the concurrency cap of 4);
+    // without the abort they would be 12 texts x 3 attempts.
+    expect(embedContentMock.mock.calls.length).toBeLessThanOrEqual(4);
+  });
+
+  it('cuts the retry backoff short when the signal fires during the wait', async () => {
+    const controller = new AbortController();
+    embedContentMock.mockRejectedValue(new Error('429 rate limit'));
+    setTimeout(() => controller.abort('stop'), 20);
+
+    const started = Date.now();
+    const type = await rejectionTypeOf(new SlowBackoffGemini('k').EmbedTexts({ texts: ['a'], model: null, CancellationToken: controller.signal }));
+
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(type).toBe('Cancelled');
+    expect(embedContentMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports an aborted single-text request as cancelled rather than as an empty vector', async () => {
+    const controller = new AbortController();
+    embedContentMock.mockImplementation(async () => {
+      controller.abort('stop');
+      throw abortError();
+    });
+    expect(await rejectionTypeOf(new TestGemini('k').EmbedText({ text: 'a', model: null, CancellationToken: controller.signal }))).toBe('Cancelled');
   });
 });

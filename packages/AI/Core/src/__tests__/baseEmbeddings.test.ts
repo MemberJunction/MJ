@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BaseEmbeddings, Embeddings } from '../generic/baseEmbeddings';
 import { EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult } from '../generic/embed.types';
 import { ModelUsage } from '../generic/baseModel';
+import { AIErrorInfo } from '../generic/errorTypes';
 
 // Concrete test implementation
 class TestEmbeddings extends BaseEmbeddings {
@@ -385,5 +386,154 @@ describe('BaseEmbeddings.EmbedTexts dispatch on SupportsBatchEmbeddings', () => 
         }
         const e = new CollapsingBatch('k');
         await expect(e.EmbedTexts({ texts: ['a', 'b', 'c'], model: 'm' })).rejects.toThrow(/1:1 match|misaligned/i);
+    });
+});
+
+/** The classification a thrown cancellation error carries. */
+function errorTypeOf(error: Error & { errorInfo?: AIErrorInfo }): string | undefined {
+    return error.errorInfo?.errorType;
+}
+
+/** Captures the error an operation rejects with, failing the test if it resolves. */
+async function rejectionOf(operation: Promise<unknown>): Promise<Error & { errorInfo?: AIErrorInfo }> {
+    try {
+        await operation;
+    } catch (error) {
+        if (error instanceof Error) {
+            return error;
+        }
+        throw new Error(`rejected with a non-Error: ${String(error)}`);
+    }
+    throw new Error('expected the operation to reject');
+}
+
+// Per-text driver whose EmbedText can abort the caller's controller, or fail with a scripted error.
+class CancellableEmbeddings extends BaseEmbeddings {
+    public attempts = 0;
+    public seenSignals: Array<AbortSignal | undefined> = [];
+    public onAttempt: ((attempt: number) => void) | null = null;
+    public retryDelayMs = 0;
+
+    protected override get maxEmbedTextsConcurrency(): number {
+        return 1; // sequential, so "texts after the abort" is well defined
+    }
+    protected override get embedRetryBaseDelayMs(): number {
+        return this.retryDelayMs;
+    }
+    public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
+        this.attempts++;
+        this.seenSignals.push(params.CancellationToken);
+        this.onAttempt?.(this.attempts);
+        return { object: 'object', model: 'm', ModelUsage: new ModelUsage(1, 0), vector: [params.text.length] };
+    }
+    public async GetEmbeddingModels(): Promise<string[]> {
+        return [];
+    }
+}
+
+describe('BaseEmbeddings.EmbedTexts cancellation', () => {
+    it('refuses a pre-aborted call before any text or batch is sent', async () => {
+        const perText = new CancellableEmbeddings('k');
+        const batch = new BatchEmbeddings('k');
+        const controller = new AbortController();
+        controller.abort('stop');
+
+        const perTextError = await rejectionOf(perText.EmbedTexts({ texts: ['a', 'b'], model: 'm', CancellationToken: controller.signal }));
+        const batchError = await rejectionOf(batch.EmbedTexts({ texts: ['a', 'b'], model: 'm', CancellationToken: controller.signal }));
+
+        expect(perText.attempts).toBe(0);
+        expect(batch.batchCalls).toBe(0);
+        expect(errorTypeOf(perTextError)).toBe('Cancelled');
+        expect(errorTypeOf(batchError)).toBe('Cancelled');
+    });
+
+    it('forwards the signal to each per-text EmbedText call', async () => {
+        const e = new CancellableEmbeddings('k');
+        const controller = new AbortController();
+        await e.EmbedTexts({ texts: ['a', 'b'], model: 'm', CancellationToken: controller.signal });
+        expect(e.seenSignals).toEqual([controller.signal, controller.signal]);
+    });
+
+    it('stops before the next text once aborted, and throws a cancellation instead of degrading to []', async () => {
+        const e = new CancellableEmbeddings('k');
+        const controller = new AbortController();
+        e.onAttempt = (n) => {
+            if (n === 2) {
+                controller.abort('user pressed stop');
+            }
+        };
+
+        const error = await rejectionOf(e.EmbedTexts({ texts: ['a', 'b', 'c', 'd'], model: 'm', CancellationToken: controller.signal }));
+
+        expect(e.attempts).toBe(2); // texts 3 and 4 never sent
+        expect(errorTypeOf(error)).toBe('Cancelled');
+        expect(error.message).toContain('user pressed stop');
+    });
+
+    it('never retries a text whose call was aborted', async () => {
+        const e = new CancellableEmbeddings('k');
+        const controller = new AbortController();
+        e.onAttempt = () => {
+            controller.abort('stop');
+            const abort = new Error('This operation was aborted');
+            abort.name = 'AbortError';
+            throw abort;
+        };
+
+        const error = await rejectionOf(e.EmbedTexts({ texts: ['a'], model: 'm', CancellationToken: controller.signal }));
+
+        expect(e.attempts).toBe(1); // no retry, despite the default retry budget of 2
+        expect(errorTypeOf(error)).toBe('Cancelled');
+    });
+
+    it('does not retry an abort error even without a token', async () => {
+        const e = new CancellableEmbeddings('k');
+        e.onAttempt = () => {
+            const abort = new Error('This operation was aborted');
+            abort.name = 'AbortError';
+            throw abort;
+        };
+
+        const error = await rejectionOf(e.EmbedTexts({ texts: ['a'], model: 'm' }));
+
+        expect(e.attempts).toBe(1);
+        expect(errorTypeOf(error)).toBe('Cancelled');
+    });
+
+    it('cuts the retry backoff short when the signal fires during the wait', async () => {
+        const e = new CancellableEmbeddings('k');
+        e.retryDelayMs = 60_000; // a backoff the test would never outlive
+        const controller = new AbortController();
+        e.onAttempt = () => {
+            throw new Error('503 Service Unavailable'); // transient: the base backs off before retrying
+        };
+        setTimeout(() => controller.abort('stop'), 20);
+
+        const started = Date.now();
+        const error = await rejectionOf(e.EmbedTexts({ texts: ['a'], model: 'm', CancellationToken: controller.signal }));
+
+        expect(Date.now() - started).toBeLessThan(5_000);
+        expect(e.attempts).toBe(1); // the retry never started
+        expect(errorTypeOf(error)).toBe('Cancelled');
+    });
+
+    it('reports an abort caused by a timeout as a retriable network error, not a cancellation', async () => {
+        const e = new CancellableEmbeddings('k');
+        const controller = new AbortController();
+        e.onAttempt = () => controller.abort(new Error('the model call was aborted (timeout)'));
+
+        const error = await rejectionOf(e.EmbedTexts({ texts: ['a', 'b'], model: 'm', CancellationToken: controller.signal }));
+
+        expect(errorTypeOf(error)).toBe('NetworkError');
+        expect(error.errorInfo?.canFailover).toBe(true);
+    });
+
+    it('refuses a pre-aborted EmbedContent', async () => {
+        const e = new CancellableEmbeddings('k');
+        const controller = new AbortController();
+        controller.abort('stop');
+        const error = await rejectionOf(e.EmbedContent({ content: 'hello', model: 'm', CancellationToken: controller.signal }));
+        expect(e.attempts).toBe(0);
+        expect(errorTypeOf(error)).toBe('Cancelled');
     });
 });
