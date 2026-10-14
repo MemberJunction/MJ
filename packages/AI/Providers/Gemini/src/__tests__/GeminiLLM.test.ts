@@ -36,6 +36,8 @@ vi.mock('@memberjunction/ai', () => {
     constructor(apiKey: string) { this._apiKey = apiKey; }
     get apiKey() { return this._apiKey; }
     get SupportsStreaming() { return true; }
+    // Cancellation itself is covered against the real BaseLLM in GeminiLLM.cancellation.test.ts.
+    protected IsCancellationError(_error: unknown, signal?: AbortSignal | null): boolean { return signal?.aborted === true; }
   }
   class MockChatResult {
     success: boolean;
@@ -481,32 +483,6 @@ describe('GeminiLLM', () => {
       expect(config.abortSignal).toBe(controller.signal);
     });
 
-    it('returns a cancelled ChatResult without calling the SDK when pre-aborted', async () => {
-      const controller = new AbortController();
-      controller.abort();
-      const mocks = await getChatMocks();
-
-      const result = await callNonStreaming(controller.signal);
-
-      expect(mocks.sendMessage).not.toHaveBeenCalled();
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('Cancelled');
-    });
-
-    it('maps a mid-flight AbortError to a cancelled ChatResult (not a generic error)', async () => {
-      const controller = new AbortController();
-      const abortError = new Error('The operation was aborted');
-      abortError.name = 'AbortError';
-      const mocks = await getChatMocks();
-      mocks.sendMessage.mockRejectedValue(abortError);
-
-      const result = await callNonStreaming(controller.signal);
-
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('Cancelled');
-      expect(result.exception).toBe(abortError);
-    });
-
     it('still reports non-cancellation failures as normal errors', async () => {
       const mocks = await getChatMocks();
       mocks.sendMessage.mockRejectedValue(new Error('boom'));
@@ -515,18 +491,6 @@ describe('GeminiLLM', () => {
 
       expect(result.success).toBe(false);
       expect(result.statusText).toBe('boom');
-    });
-
-    it('finalizeStreamingResponse reports cancellation when the stream was aborted mid-flight', () => {
-      const controller = new AbortController();
-      (llm as unknown as Record<string, AbortSignal | null>)['_streamingCancellationToken'] = controller.signal;
-      controller.abort();
-
-      const fn = (llm as unknown as Record<string, (...a: unknown[]) => ChatResultLike>)['finalizeStreamingResponse'].bind(llm);
-      const result = fn('partial text', null, null);
-
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('Cancelled');
     });
   });
 });
