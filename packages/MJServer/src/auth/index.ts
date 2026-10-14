@@ -13,6 +13,7 @@ export * from './APIKeyScopeAuth.js';
 export * from './scopeLimitedPrincipal.js';
 export * from './actingContextResolver.js';
 export * from './AuthProviderEngine.js';
+export * from './LoginScreenEngine.js';
 export * from './AuthProviderCatalogRouter.js';
 export { InitializeAuthProviders, initializeAuthProviders, InitializeAuthProvidersFromMetadata, initializeAuthProvidersFromMetadata, RefreshAuthProviders, refreshAuthProviders, ValidateAuthProvidersRegistered, validateAuthProvidersRegistered } from './initializeProviders.js';
 

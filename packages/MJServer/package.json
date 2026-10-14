@@ -158,7 +158,8 @@
     "typedi": "^0.10.0",
     "uuid": "^13.0.0",
     "ws": "^8.19.0",
-    "zod": "^3.25.0"
+    "zod": "^3.25.0",
+    "@memberjunction/theme-engine": "6.2.0-edge.4"
   },
   "devDependencies": {
     "@memberjunction/conversations-runtime": "6.2.0-edge.4",
