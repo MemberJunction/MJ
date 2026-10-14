@@ -1,5 +1,6 @@
 export * from './model-run.types';
 export * from './prompt.types';
+export * from './prompt-run-messages.types';
 export * from './agent-types';
 export * from './agent-failure-message';
 export * from './agent-payload-change-request';
