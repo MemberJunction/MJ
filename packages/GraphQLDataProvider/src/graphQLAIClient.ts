@@ -931,9 +931,9 @@ export class GraphQLAIClient {
      * waiting); any other status means executeAIAgent already returned, so we resolve
      * from the record — recovering a completion event lost to a socket blip.
      *
-     * The recovered result rehydrates `payload` from the run's persisted Result so a
-     * programmatic caller still receives the agent's output. The interactive
-     * `responseForm` / actionable + automatic commands are intentionally NOT
+     * The recovered result rehydrates `payload` from the run's persisted FinalPayload
+     * (`Result` on older rows) so a programmatic caller still receives the agent's output.
+     * The interactive `responseForm` / actionable + automatic commands are intentionally NOT
      * reconstructed here: they live on the response ConversationDetail and the
      * conversation UI renders them from that record, independent of this return value.
      */
@@ -960,11 +960,13 @@ export class GraphQLAIClient {
         }
 
         const success = run.Status === 'Completed' || run.Status === 'Paused' || run.Status === 'AwaitingFeedback';
+        // A run that did not succeed (e.g. Cancelled) can carry a partial payload saved during the run.
+        const payloadJson = run.FinalPayload ?? run.Result;
         return {
             resolve: {
                 success,
                 agentRun: run,
-                payload: run.Result ? SafeJSONParse(run.Result) ?? undefined : undefined,
+                payload: payloadJson ? SafeJSONParse(payloadJson) ?? undefined : undefined,
                 errorMessage: run.ErrorMessage ?? undefined,
             } as ExecuteAgentResult,
         };

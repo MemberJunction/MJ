@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ConfigureRecordDataBroadcast,
   MayBroadcastRecordData,
+  ReadIsRowFiltered,
+  ShapeCacheInvalidationEvent,
 } from '../generic/CacheInvalidationResolver.js';
 
 /**
@@ -173,5 +175,67 @@ describe('cacheInvalidationFilter', () => {
   it('withholds an event with no entity name', async () => {
     const filter = await withEntities([{ Name: 'AI Models', CanRead: true }]);
     expect(filter({ payload: { ...event(''), entityName: '' } as never, context: session({ ID: 'u1' }) })).toBe(false);
+  });
+});
+
+/**
+ * Row-level narrowing (MJ#5241): a subscriber who reads the entity only through a row-level security filter learns that a
+ * row changed, not which one; a subscriber with an unfiltered read keeps the key; a subscriber with no read is the entity-level
+ * filter's business and gets nothing here to shape.
+ */
+describe('ReadIsRowFiltered and ShapeCacheInvalidationEvent', () => {
+  const FILTERED_ROLE = 'role-participant';
+  const OPEN_ROLE = 'role-staff';
+  const entity = {
+    Permissions: [
+      { RoleID: FILTERED_ROLE, CanRead: true, Type: 'Allow', ReadRLSFilterID: 'filter-1' },
+      { RoleID: OPEN_ROLE, CanRead: true, Type: 'Allow', ReadRLSFilterID: null },
+      { RoleID: 'role-denied', CanRead: true, Type: 'Deny', ReadRLSFilterID: null },
+    ],
+  };
+  const payload = {
+    entityName: 'Spaces',
+    primaryKeyValues: 'ID|abc',
+    action: 'save',
+    sourceServerId: 'srv',
+    timestamp: new Date('2026-10-07T00:00:00Z'),
+    originSessionId: 'sess',
+    recordData: '{"Name":"x"}',
+  };
+
+  it('is row-filtered when every read the user holds carries a filter', () => {
+    expect(ReadIsRowFiltered(entity, { UserRoles: [{ RoleID: FILTERED_ROLE }] })).toBe(true);
+  });
+
+  it('is not row-filtered when any read the user holds is unfiltered, whichever role brings it', () => {
+    expect(ReadIsRowFiltered(entity, { UserRoles: [{ RoleID: OPEN_ROLE }] })).toBe(false);
+    expect(ReadIsRowFiltered(entity, { UserRoles: [{ RoleID: FILTERED_ROLE }, { RoleID: OPEN_ROLE }] })).toBe(false);
+  });
+
+  it('is not row-filtered when the user holds no read at all (the entity-level filter owns that case), and a Deny row grants nothing', () => {
+    expect(ReadIsRowFiltered(entity, { UserRoles: [{ RoleID: 'role-stranger' }] })).toBe(false);
+    expect(ReadIsRowFiltered(entity, { UserRoles: [{ RoleID: 'role-denied' }] })).toBe(false);
+    expect(ReadIsRowFiltered(entity, { UserRoles: null })).toBe(false);
+  });
+
+  it('matches role ids without regard to case or whitespace', () => {
+    expect(ReadIsRowFiltered(entity, { UserRoles: [{ RoleID: ` ${FILTERED_ROLE.toUpperCase()} ` }] })).toBe(true);
+  });
+
+  it('withholds the key and the row from a row-filtered subscriber, and keeps the rest of the event', () => {
+    const shaped = ShapeCacheInvalidationEvent(payload, { UserRoles: [{ RoleID: FILTERED_ROLE }] }, entity);
+    expect(shaped.PrimaryKeyValues).toBeUndefined();
+    expect(shaped.RecordData).toBeUndefined();
+    expect(shaped.EntityName).toBe('Spaces');
+    expect(shaped.Action).toBe('save');
+    expect(shaped.SourceServerID).toBe('srv');
+    expect(shaped.OriginSessionID).toBe('sess');
+  });
+
+  it('delivers the event whole to an unfiltered reader, and when the entity or the user is unknown', () => {
+    expect(ShapeCacheInvalidationEvent(payload, { UserRoles: [{ RoleID: OPEN_ROLE }] }, entity).PrimaryKeyValues).toBe('ID|abc');
+    expect(ShapeCacheInvalidationEvent(payload, { UserRoles: [{ RoleID: OPEN_ROLE }] }, entity).RecordData).toBe('{"Name":"x"}');
+    expect(ShapeCacheInvalidationEvent(payload, { UserRoles: [{ RoleID: FILTERED_ROLE }] }, null).PrimaryKeyValues).toBe('ID|abc');
+    expect(ShapeCacheInvalidationEvent(payload, undefined, entity).PrimaryKeyValues).toBe('ID|abc');
   });
 });

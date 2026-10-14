@@ -89,3 +89,25 @@ describe('HeyGenVideoGenerator error classification', () => {
     expect(result.errorInfo).toMatchObject({ errorType: 'NetworkError', canFailover: true });
   });
 });
+
+describe('HeyGenVideoGenerator cancellation', () => {
+  beforeEach(() => {
+    mockHttpPost.mockReset();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  it('passes the CancellationToken to the request, and reports its abort as Cancelled', async () => {
+    const controller = new AbortController();
+    mockHttpPost.mockImplementationOnce((_url: string, _body: object, config?: { Signal?: AbortSignal }) => new Promise<never>((_resolve, reject) => {
+      config?.Signal?.addEventListener('abort', () => reject(new HttpError('Request was cancelled', { Url: GENERATE_URL, Method: 'POST', IsCancelled: true })), { once: true });
+    }));
+
+    const pending = new HeyGenVideoGenerator('test-key').CreateAvatarVideo({ ...params(), CancellationToken: controller.signal });
+    controller.abort();
+    const result = await pending;
+
+    expect(mockHttpPost.mock.calls[0][2]).toMatchObject({ Signal: controller.signal });
+    expect(result.success).toBe(false);
+    expect(result.errorInfo).toMatchObject({ errorType: 'Cancelled', severity: 'Fatal', canFailover: false });
+  });
+});

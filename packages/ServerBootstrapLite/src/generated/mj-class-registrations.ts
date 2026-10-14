@@ -121,9 +121,10 @@ import {
     OllamaLLM,
 } from '@memberjunction/ai-ollama';
 
-// @memberjunction/ai-openai (6 classes)
+// @memberjunction/ai-openai (7 classes)
 import {
     OpenAIAudioGenerator,
+    OpenAIDecision,
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
@@ -218,7 +219,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (450 classes)
+// @memberjunction/core-entities (451 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -634,6 +635,7 @@ import {
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
     MJThemeEntity,
+    MJThemeEntityExtended,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -1442,6 +1444,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OllamaEmbedding,
     OllamaLLM,
     OpenAIAudioGenerator,
+    OpenAIDecision,
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
@@ -1610,11 +1613,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
-    MJCompanyIntegrationRunDetailEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
@@ -1814,11 +1817,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
-    MJRecordMergeLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordMergeLogEntity,
     MJRecordProcessCategoryEntity,
     MJRecordProcessEntity,
     MJRecordProcessWatermarkEntity,
@@ -1892,6 +1895,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
     MJThemeEntity,
+    MJThemeEntityExtended,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -2017,12 +2021,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     WatchNewTypeformResponsesAction,
     AttachTagsAction,
     CreateUserAction_actions_bizapps_lms,
-    DetachTagsAction,
-    EnrollUserAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    DetachTagsAction,
+    EnrollUserAction,
     GetBundlesAction,
     GetCertificatesAction,
     GetCourseAnalyticsAction,
@@ -2221,12 +2225,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioScoreRecordSetServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
-    PredictiveStudioTrainModelServerOperation,
-    DurableTaskGraphSubmitter,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioTrainModelServerOperation,
+    DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
@@ -2425,12 +2429,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
-    RefreshListFromSourceAction,
-    RemoveRecordsFromListAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    RefreshListFromSourceAction,
+    RemoveRecordsFromListAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -2514,7 +2518,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1067;
+export const CLASS_REGISTRATIONS_COUNT = 1069;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

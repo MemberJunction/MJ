@@ -48,4 +48,14 @@ describe('UserMayWriteConversation', () => {
         expect(grantee.Allowed).toBe(true);
         expect(grantee.IsOwner).toBe(false);
     });
+    it('reports whether the conversation loaded, since one that did not (missing or hidden) is still allowed', async () => {
+        grants = [{ ResourceRecordID: 'c1', PermissionLevel: 'Edit' }];
+        expect((await UserMayWriteConversation(provider('other'), user, 'c1')).Loaded).toBe(true);
+        expect(await UserMayWriteConversation(provider('other', false), user, 'c1')).toEqual({
+            Allowed: true,
+            Reason: null,
+            IsOwner: false,
+            Loaded: false,
+        });
+    });
 });
