@@ -301,6 +301,9 @@ export abstract class BaseModelRunner {
    * runs INSIDE the post-INSERT task so a slow INSERT can never clobber the finalized row). Failures
    * stay in this runner's structured log stream via the queue's `onError` hook.
    */
+  /** Failover fields waiting to be re-applied after a prompt run's INSERT lands; see {@link recordFailoverFields}. */
+  private readonly _pendingFailoverFields = new WeakMap<MJAIPromptRunEntityExtended, (run: MJAIPromptRunEntityExtended) => void>();
+
   protected _promptRunQueue = new BaseEntitySaveQueue({
     onError: (message) => this.logError(message, { category: 'PromptRunSave' }),
   });
@@ -1636,23 +1639,16 @@ export abstract class BaseModelRunner {
     currentModel: MJAIModelEntityExtended,
     currentVendorId: string | null
   ): void {
-    promptRun.FailoverAttempts = failoverAttempts.length;
-    promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
-      model: a.modelId,
-      vendor: a.vendorId,
-      error: a.error.message,
-      errorType: a.errorType
-    })));
-    promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
-    promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
-
-    // Update ModelID if we ended up using a different model
-    if (!UUIDsEqual(currentModel.ID, promptRun.OriginalModelID)) {
-      promptRun.ModelID = currentModel.ID;
-    }
-    if (currentVendorId && !UUIDsEqual(currentVendorId, promptRun.VendorID)) {
-      promptRun.VendorID = currentVendorId;
-    }
+    this.recordFailoverFields(promptRun, run => {
+      this.applyFailoverAttempts(run, failoverAttempts);
+      // Update ModelID if we ended up using a different model
+      if (!UUIDsEqual(currentModel.ID, run.OriginalModelID)) {
+        run.ModelID = currentModel.ID;
+      }
+      if (currentVendorId && !UUIDsEqual(currentVendorId, run.VendorID)) {
+        run.VendorID = currentVendorId;
+      }
+    });
   }
 
   /**
@@ -1662,6 +1658,11 @@ export abstract class BaseModelRunner {
     promptRun: MJAIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[]
   ): void {
+    this.recordFailoverFields(promptRun, run => this.applyFailoverAttempts(run, failoverAttempts));
+  }
+
+  /** Writes the failover attempts onto a prompt run: their count, errors and durations. */
+  private applyFailoverAttempts(promptRun: MJAIPromptRunEntityExtended, failoverAttempts: FailoverAttempt[]): void {
     promptRun.FailoverAttempts = failoverAttempts.length;
     promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
       model: a.modelId,
@@ -1671,6 +1672,17 @@ export abstract class BaseModelRunner {
     })));
     promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
     promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+  }
+
+  /**
+   * Sets a prompt run's failover fields now, and again in {@link FinalizeRunRecord}'s queued update.
+   * The run's 'Running' INSERT is queued without being awaited, and when it lands the entity reloads
+   * from what was inserted — undoing any field set while it was in flight. Writing the fields inside
+   * the finalize task, which runs after that reload, is what makes them persist.
+   */
+  private recordFailoverFields(promptRun: MJAIPromptRunEntityExtended, apply: (run: MJAIPromptRunEntityExtended) => void): void {
+    apply(promptRun);
+    this._pendingFailoverFields.set(promptRun, apply);
   }
 
   /**
@@ -2385,10 +2397,12 @@ export abstract class BaseModelRunner {
         promptRun.Success = success;
         promptRun.Status = success ? 'Completed' : 'Failed';
 
-        applyResultFields(promptRun);
+        // The failover fields were set while the INSERT may still have been in flight, and its reload
+        // would have undone them: set them again here, after the reload.
+        this._pendingFailoverFields.get(promptRun)?.(promptRun);
+        this._pendingFailoverFields.delete(promptRun);
 
-        // Note: Failover tracking fields are now updated directly in executeModelWithFailover
-        // The promptRun entity already has the failover information set
+        applyResultFields(promptRun);
 
         // With template composition, we only execute once so rollup equals regular fields
         promptRun.TokensPromptRollup = promptRun.TokensPrompt;

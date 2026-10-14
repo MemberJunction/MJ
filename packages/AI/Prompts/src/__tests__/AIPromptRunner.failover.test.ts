@@ -204,12 +204,37 @@ async function runFailover(
 // ---------------------------------------------------------------------------
 let prSeq = 0;
 class FakePromptRun {
+  /**
+   * How long the first Save (the 'Running' INSERT) takes. When it lands, the run reloads from the
+   * fields it sent, as BaseEntity's finalizeSave does — undoing anything set while it was in flight.
+   */
+  public static InsertDelayMS = 0;
   public ID = '';
   public LatestResult: { CompleteMessage: string } | null = null;
   public saveCount = 0;
+  /** The fields as of the last Save: what the database holds. */
+  public Persisted: Record<string, unknown> = {};
+  /** The fields the first Save (the INSERT) sent. */
+  public Inserted: Record<string, unknown> = {};
   [k: string]: unknown;
   NewRecord(): boolean { this.ID = `pr-${++prSeq}`; return true; }
-  async Save(): Promise<boolean> { this.saveCount++; return true; }
+  async Save(): Promise<boolean> {
+    this.saveCount++;
+    const sent = this.fields();
+    if (this.saveCount === 1) {
+      this.Inserted = sent;
+    }
+    if (this.saveCount === 1 && FakePromptRun.InsertDelayMS > 0) {
+      await new Promise(resolve => setTimeout(resolve, FakePromptRun.InsertDelayMS));
+      Object.assign(this, sent);
+    }
+    this.Persisted = sent;
+    return true;
+  }
+  private fields(): Record<string, unknown> {
+    const { Persisted: _persisted, Inserted: _inserted, saveCount: _saves, LatestResult: _latest, ...fields } = this as Record<string, unknown>;
+    return { ...fields };
+  }
 }
 let lastPromptRun: FakePromptRun | null = null;
 const fakeProvider = {
@@ -259,7 +284,7 @@ const DIRECT_DRIVE_DRIVERS = ['AnthropicLLM', 'OpenAILLM', 'GroqLLM', 'DeepSeekL
 let runner: AIPromptRunner;
 beforeEach(() => {
   vi.restoreAllMocks();
-  testLLM.Reset(); lastPromptRun = null;
+  testLLM.Reset(); lastPromptRun = null; FakePromptRun.InsertDelayMS = 0;
   loadCatalog(buildRealisticCatalog(), [...DEFAULT_CONFIGURED_DRIVERS, ...DIRECT_DRIVE_DRIVERS]);
   vi.spyOn(AIEngineBase.Instance, 'EnsureLoaded').mockResolvedValue(undefined as never);
   vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockImplementation(() => testLLM as never);
@@ -642,6 +667,22 @@ describe('ExecutePrompt — failover through the full pipeline', () => {
     expect(lastPromptRun!.Status).toBe('Completed');
   });
 
+  it('keeps the failover attempt and the answering model on the saved run when the INSERT is slow', async () => {
+    FakePromptRun.InsertDelayMS = 100;
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'succeed', content: 'recovered after failover' },
+    );
+
+    const result = await runner.ExecutePrompt(makeE2EParams(makeE2EPrompt({ FailoverStrategy: 'NextBestModel' })) as never);
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(result.success).toBe(true);
+    expect(lastPromptRun!.Persisted.FailoverAttempts).toBe(1);
+    // The candidate that answered is the same model on another vendor: the saved run names that vendor.
+    expect(lastPromptRun!.Persisted.VendorID).not.toBe(lastPromptRun!.Inserted.VendorID);
+  });
+
   it('does NOT fail over when FailoverStrategy is unset (defaults to None), even for an eligible error', async () => {
     testLLM.Script(
       { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
@@ -743,6 +784,22 @@ describe('ExecutePrompt — caller cancellation stops failover', () => {
     await runner.WaitForPendingPromptRunSaves();
     expect(lastPromptRun!.FailoverAttempts).toBe(1);
     expect(lastPromptRun!.Status).toBe('Cancelled');
+  });
+
+  it('keeps the failover attempt on the saved run when the INSERT lands after the cancellation', async () => {
+    FakePromptRun.InsertDelayMS = 100;
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'hang' },
+    );
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 20);
+
+    await runner.ExecutePrompt(cancellableParams(makeE2EPrompt({ FailoverStrategy: 'NextBestModel' }), controller.signal) as never);
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(lastPromptRun!.Persisted.FailoverAttempts).toBe(1);
+    expect(lastPromptRun!.Persisted.Status).toBe('Cancelled');
   });
 
   it('treats a cancellation the driver reports as a cancellation', async () => {
