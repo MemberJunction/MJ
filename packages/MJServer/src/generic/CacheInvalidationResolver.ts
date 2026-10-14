@@ -1,4 +1,4 @@
-import { Field, ObjectType, Resolver, Root, Subscription } from 'type-graphql';
+import { Ctx, Field, ObjectType, Resolver, Root, Subscription } from 'type-graphql';
 import { Metadata, UserInfo } from '@memberjunction/core';
 
 export const CACHE_INVALIDATION_TOPIC = 'CACHE_INVALIDATION';
@@ -151,6 +151,64 @@ export function CacheInvalidationFilter(data: {
     return entity.GetUserPermisions(user).CanRead;
 }
 
+/** The part of a permission row and of a user this module reads, so the rule can be tested on plain objects. */
+export interface ReadPermissionRow {
+    RoleID: string;
+    CanRead: boolean | null;
+    /** `Deny` rows subtract; they never carry the read the rule looks at. */
+    IsDeny?: boolean;
+    Type?: string | null;
+    ReadRLSFilterID: string | null;
+}
+export interface RoleHolder {
+    UserRoles?: ReadonlyArray<{ RoleID: string }> | null;
+}
+
+/**
+ * Is this user's read of the entity row-filtered? True when every read the user holds on the entity comes through a permission
+ * row that carries a `ReadRLSFilterID`: there is a row-level security filter between them and the rows, so a record's key, its
+ * existence and when it changed are not theirs to learn unless the row passes the filter — which a subscription filter cannot
+ * evaluate per event. False when any of their read rows is unfiltered (they could read the row anyway), and false when they hold
+ * no read at all (the entity-level filter has already withheld the event).
+ *
+ * The same in-memory match `GetUserPermisions` does, with no I/O, so it can run per subscriber per event.
+ */
+export function ReadIsRowFiltered(entity: { Permissions: ReadonlyArray<ReadPermissionRow> }, user: RoleHolder): boolean {
+    const roles = new Set((user.UserRoles ?? []).map((role) => (role.RoleID ?? '').trim().toLowerCase()));
+    let filteredReads = 0;
+    for (const row of entity.Permissions) {
+        if (!row.CanRead) continue;
+        const isDeny = row.IsDeny ?? (row.Type ?? 'Allow').trim().toLowerCase() === 'deny';
+        if (isDeny) continue;
+        if (!roles.has((row.RoleID ?? '').trim().toLowerCase())) continue;
+        if (!row.ReadRLSFilterID) return false;
+        filteredReads += 1;
+    }
+    return filteredReads > 0;
+}
+
+/**
+ * The event as one subscriber may see it. A subscriber whose read of the entity is row-filtered gets the entity, the action and
+ * the time, and neither the key nor the row: "something in this entity changed", which the client already takes as a
+ * whole-entity invalidation (a null key on `remote-invalidate`). Everyone else gets the event as published.
+ */
+export function ShapeCacheInvalidationEvent(
+    payload: CacheInvalidationPayload,
+    user: RoleHolder | undefined,
+    entity: { Permissions: ReadonlyArray<ReadPermissionRow> } | null | undefined,
+): CacheInvalidationNotification {
+    const withholdKey = !!user && !!entity && ReadIsRowFiltered(entity, user);
+    return {
+        EntityName: payload.entityName,
+        PrimaryKeyValues: withholdKey ? undefined : (payload.primaryKeyValues ?? undefined),
+        Action: payload.action,
+        SourceServerID: payload.sourceServerId,
+        Timestamp: payload.timestamp,
+        OriginSessionID: payload.originSessionId ?? undefined,
+        RecordData: withholdKey ? undefined : (payload.recordData ?? undefined),
+    };
+}
+
 /** @deprecated Use {@link CacheInvalidationFilter}. */
 export function cacheInvalidationFilter(data: {
     payload: CacheInvalidationPayload;
@@ -181,13 +239,14 @@ export class CacheInvalidationResolver {
      * its stable key, and every time it changes; across entities it learns the cadence and volume
      * of another tenant's activity.
      *
-     * The key is kept deliberately, because consumers need it to re-read the record they were
-     * told about (see `ResolveEntityEventKey` in @memberjunction/core) and because the alternative
-     * — a coarse "something in this entity changed" — forces whole-entity invalidation on the
-     * hottest write paths. That is a trade, not an absence of cost. Narrowing it means filtering
-     * delivery per subscriber, which needs an authorization predicate cheap enough to run per
-     * subscriber per event; entity-level permissions (`EntityInfo.GetUserPermisions`, an in-memory
-     * role match) would cover part of it, row-level tenancy would not.
+     * The key is kept for a subscriber who could read the row anyway, because consumers need it to
+     * re-read the record they were told about (see `ResolveEntityEventKey` in @memberjunction/core),
+     * and the coarse "something in this entity changed" forces whole-entity invalidation on the
+     * hottest write paths. It is withheld, with the row, from a subscriber whose every read of the
+     * entity goes through a row-level security filter ({@link ReadIsRowFiltered}): a filter the
+     * subscription cannot evaluate per event stands between them and the row, so they learn only
+     * that a row of the entity changed, and their caches refresh the entity as a whole. That is the
+     * same in-memory role match as the entity-level filter, once more per subscriber per event.
      */
     @Subscription(() => CacheInvalidationNotification, {
         topics: CACHE_INVALIDATION_TOPIC,
@@ -195,16 +254,12 @@ export class CacheInvalidationResolver {
             CacheInvalidationFilter(data),
     })
     cacheInvalidation(  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
-        @Root() payload: CacheInvalidationPayload
+        @Root() payload: CacheInvalidationPayload,
+        @Ctx() context: CacheInvalidationFilterContext | undefined
     ): CacheInvalidationNotification {
-        return {
-            EntityName: payload.entityName,
-            PrimaryKeyValues: payload.primaryKeyValues ?? undefined,
-            Action: payload.action,
-            SourceServerID: payload.sourceServerId,
-            Timestamp: payload.timestamp,
-            OriginSessionID: payload.originSessionId ?? undefined,
-            RecordData: payload.recordData ?? undefined,
-        };
+        const user = context?.userPayload?.userRecord as UserInfo | undefined;
+        // The same server-wide metadata the filter read; an entity unknown here was delivered whole by the filter's own choice
+        const entity = payload?.entityName ? new Metadata().EntityByName(payload.entityName) : null; // global-provider-ok: subscription resolver — server-wide metadata, no request-scoped provider exists here
+        return ShapeCacheInvalidationEvent(payload, user, entity);
     }
 }
