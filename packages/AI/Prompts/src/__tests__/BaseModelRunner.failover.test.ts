@@ -305,4 +305,116 @@ describe('BaseModelRunner.ExecuteWithFailover', () => {
     expect(result.errorMessage).toBe('Prompt schema violation');
     expect(result.errorInfo?.canFailover).toBe(false);
   });
+
+  describe('caller cancellation', () => {
+    const networkError: AIErrorInfo = { canFailover: true, errorType: 'NetworkError', severity: 'Retriable' };
+    const driverCancelled: AIErrorInfo = { canFailover: false, errorType: 'Unknown', severity: 'Fatal', providerErrorCode: 'request_cancelled' };
+
+    function setup() {
+      const runner = new TestModelRunner();
+      const candidates = [
+        createCandidate('m-1', 'Model 1', 'Driver1', 'v-1', 'Vendor 1', 10),
+        createCandidate('m-2', 'Model 2', 'Driver2', 'v-2', 'Vendor 2', 5),
+        createCandidate('m-3', 'Model 3', 'Driver3', 'v-3', 'Vendor 3', 1),
+      ];
+      ['Driver1', 'Driver2', 'Driver3'].forEach(d => runner.availableDrivers.add(d));
+      const createErrorResult = vi.fn((lastError: Error | null, _attempts: FailoverAttempt[]): TestResult =>
+        new TestResult(false, undefined, (lastError as Error & { errorInfo?: AIErrorInfo } | null)?.errorInfo, lastError?.message));
+      const logError = vi.spyOn(runner as unknown as { logError: (e: Error | string) => void }, 'logError');
+      return { runner, candidates, createErrorResult, logError };
+    }
+
+    it('tries no candidate when the token is already aborted', async () => {
+      const { runner, candidates, createErrorResult } = setup();
+      const controller = new AbortController();
+      controller.abort();
+      const executeOnCandidate = vi.fn(async (): Promise<TestResult> => new TestResult(true, 'must not run'));
+
+      const result = await runner.invokeExecuteWithFailover(
+        createPrompt(), { ...params, cancellationToken: controller.signal }, candidates, failoverConfig, executeOnCandidate, createErrorResult);
+
+      expect(executeOnCandidate).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.errorInfo).toMatchObject({ canFailover: false, severity: 'Fatal', providerErrorCode: 'request_cancelled' });
+    });
+
+    it('stops after the candidate that was in flight when the caller aborted, even if that call reports a failover-eligible error', async () => {
+      const { runner, candidates, createErrorResult, logError } = setup();
+      const controller = new AbortController();
+      const executeOnCandidate = vi.fn(async (): Promise<TestResult> => {
+        controller.abort();
+        return new TestResult(false, undefined, networkError, 'socket hang up');
+      });
+
+      const result = await runner.invokeExecuteWithFailover(
+        createPrompt(), { ...params, cancellationToken: controller.signal }, candidates, failoverConfig, executeOnCandidate, createErrorResult);
+
+      expect(executeOnCandidate).toHaveBeenCalledTimes(1);
+      expect(result.errorMessage).toBe('Chat completion was cancelled');
+      expect(result.errorInfo?.providerErrorCode).toBe('request_cancelled');
+      expect(logError).not.toHaveBeenCalled();
+    });
+
+    it('stops when the in-flight candidate throws after the caller aborted', async () => {
+      const { runner, candidates, createErrorResult, logError } = setup();
+      const controller = new AbortController();
+      const executeOnCandidate = vi.fn(async (): Promise<TestResult> => {
+        controller.abort();
+        throw new Error('Chat completion was cancelled');
+      });
+
+      const result = await runner.invokeExecuteWithFailover(
+        createPrompt(), { ...params, cancellationToken: controller.signal }, candidates, failoverConfig, executeOnCandidate, createErrorResult);
+
+      expect(executeOnCandidate).toHaveBeenCalledTimes(1);
+      expect(result.errorInfo?.canFailover).toBe(false);
+      expect(logError).not.toHaveBeenCalled();
+    });
+
+    it('stops on a thrown cancellation error even when the loop was given no token', async () => {
+      const { runner, candidates, createErrorResult } = setup();
+      const executeOnCandidate = vi.fn(async (): Promise<TestResult> => {
+        throw (runner as unknown as { BuildCancellationError(): Error }).BuildCancellationError();
+      });
+
+      const result = await runner.invokeExecuteWithFailover(createPrompt(), params, candidates, failoverConfig, executeOnCandidate, createErrorResult);
+
+      expect(executeOnCandidate).toHaveBeenCalledTimes(1);
+      expect(result.errorInfo?.providerErrorCode).toBe('request_cancelled');
+    });
+
+    it('returns a driver-reported cancellation as a cancellation, without logging it as a failure that cannot fail over', async () => {
+      const { runner, candidates, createErrorResult, logError } = setup();
+      const executeOnCandidate = vi.fn(async (): Promise<TestResult> =>
+        new TestResult(false, undefined, driverCancelled, 'Request cancelled by caller'));
+
+      const result = await runner.invokeExecuteWithFailover(createPrompt(), params, candidates, failoverConfig, executeOnCandidate, createErrorResult);
+
+      expect(executeOnCandidate).toHaveBeenCalledTimes(1);
+      expect(result.errorMessage).toBe('Request cancelled by caller');
+      expect(result.errorInfo?.providerErrorCode).toBe('request_cancelled');
+      expect(logError).not.toHaveBeenCalled();
+    });
+
+    it('records the real failures before the cancellation on the prompt run, but not the cancellation itself', async () => {
+      const { runner, candidates, createErrorResult } = setup();
+      const controller = new AbortController();
+      const promptRun = new FakePromptRun() as unknown as MJAIPromptRunEntityExtended;
+      const executeOnCandidate = vi.fn(async (candidate: ModelVendorCandidate): Promise<TestResult> => {
+        if (candidate.model.ID === 'm-1') {
+          return new TestResult(false, undefined, networkError, 'Connection reset by peer');
+        }
+        controller.abort();
+        throw new Error('Chat completion was cancelled');
+      });
+
+      await runner.invokeExecuteWithFailover(
+        createPrompt(), { ...params, cancellationToken: controller.signal }, candidates, failoverConfig, executeOnCandidate, createErrorResult, promptRun);
+
+      expect(executeOnCandidate).toHaveBeenCalledTimes(2);
+      const rawRun = promptRun as unknown as FakePromptRun;
+      expect(rawRun.FailoverAttempts).toBe(1);
+      expect(JSON.parse(rawRun.FailoverErrors as string)[0].model).toBe('m-1');
+    });
+  });
 });

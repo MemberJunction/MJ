@@ -693,3 +693,84 @@ describe('ExecutePrompt — failover never crosses model types', () => {
     expect(testLLM.CalledModels).not.toContain(EMBEDDING_API_NAME);
   });
 });
+
+// ===========================================================================
+// (g) A caller cancellation ends the run — it is not a model failure to fail over from
+// ===========================================================================
+describe('ExecutePrompt — caller cancellation stops failover', () => {
+  function cancellableParams(prompt: Record<string, unknown>, signal: AbortSignal, o: Record<string, unknown> = {}): unknown {
+    return { ...(makeE2EParams(prompt) as Record<string, unknown>), cancellationToken: signal, ...o };
+  }
+  /** The console.error lines a run wrote — every logError / LogErrorEx ends there. */
+  function errorLines(spy: ReturnType<typeof vi.spyOn>): string[] {
+    return spy.mock.calls.map(call => String(call[0]));
+  }
+
+  it('calls one candidate when the caller aborts mid-call, and records the run as cancelled with no error logged', async () => {
+    testLLM.SetDefaultOutcome({ kind: 'hang' });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 20);
+
+    const result = await runner.ExecutePrompt(cancellableParams(makeE2EPrompt({ FailoverStrategy: 'NextBestModel' }), controller.signal) as never);
+
+    expect(testLLM.CalledModels).toHaveLength(1);
+    expect(result.success).toBe(false);
+    expect(result.cancelled).toBe(true);
+    expect(result.status).toBe('Cancelled');
+    expect(result.errorMessage).toBe('Chat completion was cancelled');
+    expect(errorLines(errorSpy)).toEqual([]);
+
+    await runner.WaitForPendingPromptRunSaves();
+    expect(lastPromptRun!.Status).toBe('Cancelled');
+    expect(lastPromptRun!.Cancelled).toBe(true);
+    expect(lastPromptRun!.CancellationReason).toBe('user_requested');
+  });
+
+  it('keeps the real failure that came before the cancellation, and still stops at the cancelled candidate', async () => {
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'hang' },
+      { kind: 'succeed', content: 'must never be reached' },
+    );
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 20);
+
+    const result = await runner.ExecutePrompt(cancellableParams(makeE2EPrompt({ FailoverStrategy: 'NextBestModel' }), controller.signal) as never);
+
+    expect(testLLM.CalledModels).toHaveLength(2);
+    expect(result.cancelled).toBe(true);
+    await runner.WaitForPendingPromptRunSaves();
+    expect(lastPromptRun!.FailoverAttempts).toBe(1);
+    expect(lastPromptRun!.Status).toBe('Cancelled');
+  });
+
+  it('treats a cancellation the driver reports as a cancellation', async () => {
+    testLLM.Script({
+      kind: 'failResult',
+      result: makeFailedChatResult({
+        errorMessage: 'Request cancelled by caller',
+        errorInfo: { errorType: 'Unknown', severity: 'Fatal', canFailover: false, providerErrorCode: 'request_cancelled' },
+      }),
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = await runner.ExecutePrompt(makeE2EParams(makeE2EPrompt({ FailoverStrategy: 'NextBestModel' })) as never);
+
+    expect(testLLM.CalledModels).toHaveLength(1);
+    expect(result.cancelled).toBe(true);
+    expect(errorLines(errorSpy)).toEqual([]);
+  });
+
+  it('still fails over from a prompt timeout, which is not a cancellation', async () => {
+    testLLM.Script({ kind: 'hang' }, { kind: 'succeed', content: 'answered after the timeout' });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const controller = new AbortController();
+
+    const result = await runner.ExecutePrompt(cancellableParams(makeE2EPrompt({ FailoverStrategy: 'NextBestModel' }), controller.signal, { timeoutMS: 20 }) as never);
+
+    expect(result.success).toBe(true);
+    expect(result.result).toBe('answered after the timeout');
+    expect(testLLM.CalledModels).toHaveLength(2);
+  });
+});
