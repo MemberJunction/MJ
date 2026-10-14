@@ -38,7 +38,8 @@ export class MJQueryEntityServer extends MJQueryEntityExtended implements ISaveE
      *  Parameters, fields, entities and dependencies are still extracted deterministically and
      *  described with heuristic text. Set it before `Save()` on callers that must not call a
      *  model, such as deterministic tests or bulk imports. Sticky: it stays set until cleared, so it
-     *  applies to every later save of this instance. Defaults to false. The host can also disable
+     *  applies to every later save of this instance. Defaults to false. A save whose options carry
+     *  `SkipEntityAIActions` skips it for that save only. The host can also disable
      *  this enrichment for every save it serves (`SaveTimeAISettings`, kind `QueryParameters`). */
     public SkipAIEnrichment?: boolean;
 
@@ -142,7 +143,9 @@ export class MJQueryEntityServer extends MJQueryEntityExtended implements ISaveE
 
             // Extract and sync parameters AFTER saving, outside of any transaction
             if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
-                await this.extractAndSyncDataAsync(this.resolveSkipAIEnrichment(undefined));
+                // A save that asks to skip AI actions skips this run's enrichment; otherwise the
+                // instance flag decides (undefined = no per-run override).
+                await this.extractAndSyncDataAsync(this.resolveSkipAIEnrichment(options?.SkipEntityAIActions === true ? true : undefined));
                 await this.autoConvertDialectsAsync();
             } else if (!this.SQL || this.SQL.trim().length === 0) {
                 this.UsesTemplate = false;
@@ -263,7 +266,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended implements ISaveE
             runViewProvider: this.RunViewProviderToUse,
             platform: this.currentPlatform,
             parameterHints: this.ParameterHints,
-            skipAIEnrichment,
+            SkipAIEnrichment: skipAIEnrichment,
         };
     }
 
@@ -274,7 +277,8 @@ export class MJQueryEntityServer extends MJQueryEntityExtended implements ISaveE
      * exist in the cache.
      *
      * @param skipAIEnrichment - Overrides this instance's `SkipAIEnrichment` for this run only;
-     *   omitted (or undefined), the instance flag applies. The host switch applies either way.
+     *   omitted (or undefined), the instance flag applies. `MJQuerySQLEntityServer`
+     *   passes `true` when its save carried `SkipEntityAIActions`. The host switch applies either way.
      */
     public async RerunExtraction(skipAIEnrichment?: boolean): Promise<void> {
         await this.extractAndSyncDataAsync(this.resolveSkipAIEnrichment(skipAIEnrichment));
@@ -283,6 +287,8 @@ export class MJQueryEntityServer extends MJQueryEntityExtended implements ISaveE
     /**
      * Runs the extraction pipeline and saves the UsesTemplate flag.
      * On error, sets UsesTemplate=false and attempts to save so the query remains usable.
+     *
+     * @param skipAIEnrichment Skip the AI enrichment stage — already resolved by {@link resolveSkipAIEnrichment}.
      */
     private async extractAndSyncDataAsync(skipAIEnrichment: boolean): Promise<void> {
         try {

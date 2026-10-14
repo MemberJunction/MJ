@@ -44,6 +44,7 @@ import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { DeterministicEntityFactory } from './deterministic-entity-factory';
+import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 /** Everything the bundle creates, held module-scoped so Teardown can clean up whatever Setup got to. */
 interface MaterializedReadFixtures {
@@ -104,7 +105,7 @@ export async function CreateMaterializedReadFixtures(ctx: IntegrationCheckContex
     query.SQL = `SELECT ID, Name FROM ${schema}.vwEntities WHERE Name = {{ marker | sqlString }}`;
     query.UsesTemplate = true;
     query.Status = 'Approved';
-    if (!await query.Save()) throw new Error(`Fixture query save failed: ${query.LatestResult?.CompleteMessage}`);
+    if (!await query.Save(FixtureQuerySaveOptions())) throw new Error(`Fixture query save failed: ${query.LatestResult?.CompleteMessage}`);
     fixtures.Query = query;
 
     await QueryEngine.Instance.Config(true, user);

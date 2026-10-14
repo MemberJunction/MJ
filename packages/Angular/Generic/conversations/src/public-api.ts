@@ -17,6 +17,9 @@ export * from './lib/utils/agent-turn-routing';
 // NOTE: the routing decision's builders and types, and IsAgentAllowed, live in
 // @memberjunction/ai-core-plus — import them from there directly.
 export * from './lib/utils/decision-routing';
+// Fork rules: the delete guard and the open view (Main or one fork)
+export * from './lib/utils/conversation-branching';
+export * from './lib/utils/conversation-forks';
 
 // Services - State
 export * from './lib/services/data-cache.service';
@@ -111,6 +114,7 @@ export * from './lib/components/collection/collection-form-modal.component';
 export * from './lib/components/conversation/conversation-agent-picker.component';
 export * from './lib/components/conversation/conversation-mode-picker.component';
 export * from './lib/components/conversation/pinned-messages-panel.component';
+export * from './lib/components/conversation/forks-popover.component';
 export * from './lib/components/dialogs/input-dialog.component';
 export * from './lib/components/dialogs/rating-dialog.component';
 export * from './lib/components/export/export-modal.component';
@@ -121,7 +125,6 @@ export * from './lib/components/message/workflow-plan-card.component';
 export * from './lib/components/search/search-panel.component';
 export * from './lib/components/shared/user-picker.component';
 export * from './lib/components/tasks/tasks-dropdown.component';
-export * from './lib/components/thread/thread-panel.component';
 export * from './lib/directives/search-shortcut.directive';
 // SearchResult / SearchResultType are the payload of SearchPanelComponent's
 // ResultSelected output, so consumers cannot type a handler without them.
@@ -145,11 +148,14 @@ export * from './lib/components/realtime/realtime-agent-picker.component';
 export * from './lib/components/realtime/realtime-session-overlay.component';
 export * from './lib/components/realtime/realtime-session-state';
 export * from './lib/components/realtime/realtime-agent-banner.component';
+export * from './lib/components/realtime/realtime-agent-orb.component';
 export * from './lib/components/realtime/realtime-session-thread.component';
 export * from './lib/components/realtime/realtime-delegation-card.component';
 export * from './lib/components/realtime/realtime-activity-rail.component';
 export * from './lib/components/realtime/realtime-surface-tabs.component';
 export * from './lib/components/realtime/realtime-surface-tabs.model';
+export * from './lib/components/realtime/realtime-surface-stage.model';
+export * from './lib/components/realtime/realtime-surface-placement-prefs';
 export * from './lib/components/realtime/realtime-surface-panel-prefs';
 export * from './lib/components/realtime/realtime-disclosure';
 export * from './lib/components/realtime/realtime-audio-visuals';
@@ -181,6 +187,13 @@ export * from './lib/components/realtime/media/realtime-media-surface.component'
 export * from './lib/components/realtime/identity-verification/identity-verification-channel';
 export * from './lib/components/realtime/identity-verification/identity-verification-model';
 export * from './lib/components/realtime/identity-verification/identity-verification-surface.component';
+// Camera and Screen Share channels (opt-in, on demand): the agent asks, the user turns the capture on. State + surface.
+export * from './lib/components/realtime/capture/realtime-capture-channel';
+export * from './lib/components/realtime/capture/realtime-capture-model';
+export * from './lib/components/realtime/capture/realtime-capture-surface.component';
+// The Avatar channel (in every call, inert without video): the agent's video on its surface.
+export * from './lib/components/realtime/avatar/realtime-avatar-channel';
+export * from './lib/components/realtime/avatar/realtime-avatar-surface.component';
 
 // Interactive Component channel: hosts any component artifact (mj-react-component) next to the call, with a
 // contract derived from the component's own spec. The pure parts (spec -> contract, config, data-state bounding,

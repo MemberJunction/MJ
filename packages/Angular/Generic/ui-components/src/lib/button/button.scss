@@ -212,6 +212,32 @@
   gap: 10px;
 }
 
+/* ========== Shapes ========== */
+
+/* A circle for an icon-only button, such as a call control: as wide as it is tall at each size.
+   After the sizes and variants, so its zero padding wins over theirs. */
+.mj-btn--circle {
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  padding: 0;
+  border-radius: var(--mj-radius-full);
+
+  &.mj-btn--sm {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  &.mj-btn--lg {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+  }
+}
+
 /* ========== Toggleable ========== */
 .mj-btn--selected {
   background: var(--mj-brand-primary);
@@ -250,5 +276,14 @@
   .mj-btn--sm {
     min-height: 44px;
     padding: 10px 12px;
+  }
+
+  /* A small circle grows to the same 44 px target and stays a circle. */
+  .mj-btn--circle.mj-btn--sm {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
   }
 }

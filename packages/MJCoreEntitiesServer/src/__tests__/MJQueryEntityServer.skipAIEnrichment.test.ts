@@ -62,33 +62,33 @@ describe('MJQueryEntityServer SkipAIEnrichment', () => {
         SaveTimeAISettings.Instance.Config = {};
     });
 
-    it('passes skipAIEnrichment=true to RunExtractionPipeline, on every re-run (sticky)', async () => {
+    it('passes SkipAIEnrichment=true to RunExtractionPipeline, on every re-run (sticky)', async () => {
         const query = newQuery();
         query.SkipAIEnrichment = true;
         await query.RerunExtraction();
-        expect(lastContext().skipAIEnrichment).toBe(true);
+        expect(lastContext().SkipAIEnrichment).toBe(true);
         await query.RerunExtraction();
-        expect(lastContext().skipAIEnrichment).toBe(true);
+        expect(lastContext().SkipAIEnrichment).toBe(true);
     });
 
     it('does not skip by default', async () => {
         await newQuery().RerunExtraction();
-        expect(lastContext().skipAIEnrichment).toBe(false);
+        expect(lastContext().SkipAIEnrichment).toBe(false);
     });
 
     it('an explicit RerunExtraction argument overrides the instance flag for that run only', async () => {
         const query = newQuery();
         await query.RerunExtraction(true);
-        expect(lastContext().skipAIEnrichment).toBe(true);
+        expect(lastContext().SkipAIEnrichment).toBe(true);
         await query.RerunExtraction();
-        expect(lastContext().skipAIEnrichment).toBe(false);
+        expect(lastContext().SkipAIEnrichment).toBe(false);
     });
 
     it('an explicit false override enriches that run even when the instance flag is set', async () => {
         const query = newQuery();
         query.SkipAIEnrichment = true;
         await query.RerunExtraction(false);
-        expect(lastContext().skipAIEnrichment).toBe(false);
+        expect(lastContext().SkipAIEnrichment).toBe(false);
     });
 
     it('Save() passes the instance flag to the extraction it runs', async () => {
@@ -96,23 +96,23 @@ describe('MJQueryEntityServer SkipAIEnrichment', () => {
         query.SkipAIEnrichment = true;
         expect(await query.Save()).toBe(true);
         expect(mockRunExtractionPipeline).toHaveBeenCalledTimes(1);
-        expect(lastContext().skipAIEnrichment).toBe(true);
+        expect(lastContext().SkipAIEnrichment).toBe(true);
     });
 
     it('skips when the host has disabled query enrichment, without any instance flag (Save and RerunExtraction)', async () => {
         SaveTimeAISettings.Instance.Config = { QueryParameters: false };
         await newQuery().RerunExtraction();
-        expect(lastContext().skipAIEnrichment).toBe(true);
+        expect(lastContext().SkipAIEnrichment).toBe(true);
         expect(await newQuery().Save()).toBe(true);
-        expect(lastContext().skipAIEnrichment).toBe(true);
+        expect(lastContext().SkipAIEnrichment).toBe(true);
         // the host switch wins over an explicit "enrich this run"
         await newQuery().RerunExtraction(false);
-        expect(lastContext().skipAIEnrichment).toBe(true);
+        expect(lastContext().SkipAIEnrichment).toBe(true);
     });
 
     it('another kind switched off does not skip query enrichment', async () => {
         SaveTimeAISettings.Instance.Config = { TemplateParameters: false, Embeddings: false };
         await newQuery().RerunExtraction();
-        expect(lastContext().skipAIEnrichment).toBe(false);
+        expect(lastContext().SkipAIEnrichment).toBe(false);
     });
 });

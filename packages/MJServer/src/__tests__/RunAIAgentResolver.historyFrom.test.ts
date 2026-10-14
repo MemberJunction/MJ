@@ -124,7 +124,7 @@ describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
         expect(loaderArgs[0]).toBe('conv-1');
         expect(loaderArgs[4]).toEqual(['detail-1']);
         expect((loaderArgs[5] as Date).toISOString()).toBe(FLOOR_ISO);
-        const runFloor = seams.executeAIAgent.mock.calls[0].at(-1) as Date;
+        const runFloor = seams.executeAIAgent.mock.calls[0].at(-2) as Date;
         expect(runFloor.toISOString()).toBe(FLOOR_ISO);
     });
 
@@ -133,7 +133,7 @@ describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
 
         expect(result.success).toBe(true);
         expect(seams.executeAIAgent).not.toHaveBeenCalled();
-        const runFloor = seams.executeAgentInBackground.mock.calls[0].at(-1) as Date;
+        const runFloor = seams.executeAgentInBackground.mock.calls[0].at(-2) as Date;
         expect(runFloor.toISOString()).toBe(FLOOR_ISO);
     });
 
@@ -141,7 +141,7 @@ describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
         await runMutation(resolver, {});
 
         expect(seams.loadConversationHistoryWithAttachments.mock.calls[0][5]).toBeUndefined();
-        expect(seams.executeAIAgent.mock.calls[0].at(-1)).toBeUndefined();
+        expect(seams.executeAIAgent.mock.calls[0].at(-2)).toBeUndefined();
     });
 
     it('fails the request on an unreadable floor, before loading or running anything', async () => {
@@ -178,7 +178,7 @@ describe('loadConversationHistoryWithAttachments — history floor', () => {
         }).loadConversationHistoryWithAttachments.bind(resolver);
         await load('conv-1', USER, 20, provider, ['detail-1'], floor);
 
-        expect(loadRows).toHaveBeenCalledWith('conv-1', USER, provider, floor);
+        expect(loadRows).toHaveBeenCalledWith('conv-1', USER, provider, floor, undefined);
         expect(assemble.mock.calls[0][1]).toEqual({ maxTailMessages: 20, excludeDetailIds: ['detail-1'], historyFrom: floor });
     });
 });

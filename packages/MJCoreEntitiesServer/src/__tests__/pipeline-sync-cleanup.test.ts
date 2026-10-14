@@ -89,7 +89,7 @@ function buildCtx(sqlOverride?: string): QuerySyncContext {
             SQLDialects: [],
         } as unknown as IMetadataProvider,
         runViewProvider: {} as IRunViewProvider,
-        skipAIEnrichment: false,
+        SkipAIEnrichment: false,
     };
 }
 
@@ -100,15 +100,15 @@ describe('Pipeline AI enrichment opt-out', () => {
         vi.clearAllMocks();
     });
 
-    it('skips RunAIEnrichment but still syncs deterministic fields when skipAIEnrichment is true', async () => {
-        const ctx: QuerySyncContext = { ...buildCtx('SELECT col1 FROM SomeTable WHERE x = 1'), skipAIEnrichment: true };
+    it('skips RunAIEnrichment but still syncs deterministic fields when SkipAIEnrichment is true', async () => {
+        const ctx: QuerySyncContext = { ...buildCtx('SELECT col1 FROM SomeTable WHERE x = 1'), SkipAIEnrichment: true };
         await RunExtractionPipeline(ctx);
 
         expect(mockRunAIEnrichment).not.toHaveBeenCalled();
         expect(mockSyncFields).toHaveBeenCalled();
     });
 
-    it('calls RunAIEnrichment when skipAIEnrichment is false', async () => {
+    it('calls RunAIEnrichment when SkipAIEnrichment is false', async () => {
         await RunExtractionPipeline(buildCtx('SELECT col1 FROM SomeTable WHERE x = 1'));
 
         expect(mockRunAIEnrichment).toHaveBeenCalledTimes(1);
@@ -258,5 +258,21 @@ describe('Pipeline sync stage — stale record cleanup', () => {
 
             expect(mockSyncDependencies).toHaveBeenCalled();
         });
+    });
+});
+
+describe('Pipeline enrich stage — SkipAIEnrichment', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('skips the AI enrichment call and still syncs the deterministic parameters', async () => {
+        const ctx: QuerySyncContext = { ...buildCtx('SELECT col1 FROM SomeTable WHERE x = {{ X }}'), SkipAIEnrichment: true };
+        const result = await RunExtractionPipeline(ctx);
+
+        expect(mockRunAIEnrichment).not.toHaveBeenCalled();
+        expect(mockSyncParameters).toHaveBeenCalled();
+        expect(mockSyncDependencies).toHaveBeenCalled();
+        expect(result.UsesTemplate).toBe(true);
     });
 });

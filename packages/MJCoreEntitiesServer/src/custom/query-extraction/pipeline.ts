@@ -27,7 +27,7 @@ export interface PipelineResult {
  *   1. PARSE — single-pass SQL analysis
  *   2. RESOLVE — deterministic composition, parameter, field, and entity resolution
  *   3. ENRICH — AI fills in descriptions and sample values (best-effort; skipped when
- *      `ctx.skipAIEnrichment` is set)
+ *      `ctx.SkipAIEnrichment` is set)
  *   4. MERGE — deterministic wins, AI fills gaps
  *   5. SYNC — parallel database writes
  *
@@ -40,8 +40,8 @@ export async function RunExtractionPipeline(ctx: QuerySyncContext): Promise<Pipe
     // ── STAGE 2: RESOLVE ──
     const resolveResult = resolve(ctx, parseResult);
 
-    // ── STAGE 3: ENRICH (best-effort, non-fatal) ──
-    const aiResult = ctx.skipAIEnrichment
+    // ── STAGE 3: ENRICH (best-effort, non-fatal; skipped on request, which merges like a failed call) ──
+    const aiResult = ctx.SkipAIEnrichment
         ? null
         : await QueryParameterEnricher.RunAIEnrichment(
               ctx.sql,

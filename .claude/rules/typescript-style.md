@@ -183,6 +183,22 @@ The guard lives at `.github/scripts/check-esm-imports.mjs`. Only `OWN_DIST_MISSI
 
 ---
 
+## 🚨 COMPARE UUIDs WITH THE `@memberjunction/global` HELPERS — NEVER `===`, NEVER A NESTED SCAN
+
+SQL Server returns UUIDs upper-case and PostgreSQL lower-case, so `===`, `.includes()`, and a plain `Set`/`Map` keyed by ID break when the database changes. And a `.find()`/`.filter()` with `UUIDsEqual` inside a loop is an `n × m` scan.
+
+| Need | Use |
+|---|---|
+| Compare two IDs | `UUIDsEqual(a, b)` |
+| A set or map keyed by ID | `UUIDSet` / `UUIDMap` (not `Set` / `Map`) |
+| Look items up by ID inside a loop | `const byID = IndexByUUID(items);` once, then `byID.Get(id)` |
+| Children by parent ID inside a loop | `const byParent = GroupByUUID(items, x => x.ParentID);` once, then `byParent.Get(id) ?? []` |
+| Items whose ID is / is not in a list | `FilterByUUIDs(items, ids)` / `ExcludeByUUIDs(items, ids)` |
+
+`UUIDCompliance.test.ts` (the Source guards CI check) fails a PR that adds either pattern. Full patterns: [`guides/UUID_COMPARISON_GUIDE.md`](../../guides/UUID_COMPARISON_GUIDE.md).
+
+---
+
 ## Code Style Guide
 
 - Use TypeScript strict mode and explicit typing

@@ -11,7 +11,7 @@ import { LogError } from "./logging";
 import { LocalCacheManager } from "./localCacheManager";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { EscapeSQLString, FormatBinaryChangeValue, SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
+import { FormatBinaryChangeValue, SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -204,10 +204,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Public nesting depth. 0 = no ambient TX. Join-TX callers (accounting
-     * CreateJournalEntries) must read this, not `IsInTransaction` (SQL Server
-     * leaves that false). Deprecated camelCase `transactionDepth` alias ships
-     * for one release.
+     * Public nesting depth of the transaction open on this instance; 0 = none. Read this, not
+     * `IsInTransaction` (SQL Server leaves that false), when you need to know whether a transaction
+     * is open at all. The depth is instance-wide: on a shared provider `TransactionDepth > 0` does
+     * NOT mean the caller's statements run in that transaction — only the async scope that began it
+     * is part of it (#4786). Code that needs to be inside a transaction should simply call
+     * {@link BeginTransaction} / {@link BeginEntityTransaction}: joining one the caller is already in
+     * is automatic. Deprecated camelCase `transactionDepth` alias ships for one release.
      */
     public get TransactionDepth(): number {
         return this.CurrentTransactionDepth;
@@ -259,15 +262,15 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Run `task` once the ambient transaction on this provider has committed, or now if there is
-     * no ambient transaction.
+     * Run `task` once the caller's transaction on this provider (the one its async scope belongs
+     * to) has committed, or now if the caller is in no transaction on this provider.
      *
      * Use it for side effects that must only happen for work that is actually durable — queueing
      * background jobs, firing deferred entity actions — and must not run *inside* the caller's
      * transaction. Providers that track transactions (see `GenericDatabaseProvider`) queue the task
-     * while a transaction is open, run queued tasks in registration order after the **outermost**
-     * commit succeeds (once the transaction lock is released, so a task may open its own
-     * transaction), and discard them — without running them — when the transaction rolls back,
+     * while the caller's transaction is open, run queued tasks in registration order after the
+     * **outermost** commit succeeds (once the transaction lock is released, so a task may open its
+     * own transaction), and discard them — without running them — when the transaction rolls back,
      * fails to commit, or is abandoned.
      *
      * This default is for providers that do not track transactions: the task starts immediately.
@@ -295,8 +298,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Snapshot of the transaction frames open right now, for a later {@link RunAfterCommit}.
-     * Synchronous by contract — call it before the first `await` of the code that causes the work.
+     * Snapshot of the caller's transaction frames on this provider (the transaction its async scope
+     * belongs to), for a later {@link RunAfterCommit}. Synchronous by contract — call it before the
+     * first `await` of the code that causes the work.
      *
      * @returns `undefined` when no transaction is open. This default never tracks transactions, so
      *          it always returns `undefined`.
@@ -340,6 +344,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * {@link EntityTransactionScope} — the previous `BeginISATransaction()` opened a *second*
      * physical transaction on the same pool, blind to any transaction the caller had already
      * started.
+     *
+     * The transaction belongs to the async scope that calls this: that code and everything it starts
+     * run on the transaction; unrelated callers on the same provider instance run on the pool
+     * (GenericDatabaseProvider, #4786). Call it from the function that performs the writes — a begin
+     * reached only after an `await` inside a helper does not include the helper's caller.
      *
      * The returned scope is **settle-once**: the first `Commit()` or `Rollback()` wins and later
      * calls are no-ops, so `try { ...; Commit() } catch { Rollback() }` is safe even when the work
@@ -1462,14 +1471,20 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Builds the SQL to retrieve the "name" field value for a specific entity record.
-     * Uses QuoteIdentifier/QuoteSchemaAndView for dialect-neutral SQL generation.
+     * Builds the query that reads a record's name fields by its primary key.
+     *
+     * Key columns are written from the entity's metadata and key values are bound as parameters,
+     * so nothing the caller supplies reaches the SQL text. When a user is given, their effective
+     * read row filter (role RLS and API-key row filters) is ANDed in. A caller that gives no user
+     * is trusted server code, as for a single-record Load.
      *
      * @param entityName The entity name
      * @param compositeKey The record's primary key
-     * @returns The SQL query string, or null if the entity has no name field
+     * @param contextUser The acting user, whose read row filter applies
+     * @returns The SQL and its parameter values, or null if the entity has no name field or the
+     * key does not name the entity's primary key fields
      */
-    protected BuildEntityRecordNameSQL(entityName: string, compositeKey: CompositeKey): string | null {
+    protected BuildEntityRecordNameSQL(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): { SQL: string; Parameters: unknown[] } | null {
         const e = this.EntityByName(entityName);
         if (!e) throw new Error('Entity ' + entityName + ' not found');
 
@@ -1479,30 +1494,47 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             return null;
         }
 
-        let where = '';
-        for (const pkv of compositeKey.KeyValuePairs) {
-            const pk = e.PrimaryKeys.find((pk) => pk.Name === pkv.FieldName);
-            if (where.length > 0) where += ' AND ';
-            if (pk && pk.NeedsQuotes) {
-                // Key values arrive from remote callers — escape so a quote in the value cannot
-                // break out of the literal (same discipline as CompositeKey.ToWhereClause).
-                where += this.QuoteIdentifier(pkv.FieldName) + "='" + EscapeSQLString(String(pkv.Value)) + "'";
-            }
-            else {
-                // Unquoted (numeric) key column: the value is spliced in bare, so refuse anything
-                // that is not a plain number rather than letting it reach the SQL text.
-                const raw = String(pkv.Value);
-                if (!/^-?\d+(\.\d+)?$/.test(raw)) {
-                    LogError(`BuildEntityRecordNameSQL: non-numeric value provided for numeric key field ${pkv.FieldName} on entity ${entityName}`);
-                    return null;
-                }
-                where += this.QuoteIdentifier(pkv.FieldName) + '=' + raw;
-            }
+        const keyFields = this.RecordNameKeyFieldsOf(e, compositeKey);
+        if (!keyFields) {
+            return null;
+        }
+
+        const conditions = keyFields.map((f, i) => this.QuoteIdentifier(f.Name) + '=' + this.BuildParameterPlaceholder(i));
+        const rowFilter = contextUser ? e.GetEffectiveRowFilterWhereClause(contextUser, EntityPermissionType.Read, '') : '';
+        if (rowFilter) {
+            conditions.push('(' + rowFilter + ')');
         }
 
         // SELECT all name fields so InternalGetEntityRecordName can concatenate them
         const selectFields = nameFields.map(f => this.QuoteIdentifier(f.Name)).join(', ');
-        return 'SELECT ' + selectFields + ' FROM ' + this.QuoteSchemaAndView(e.SchemaName, e.BaseView) + ' WHERE ' + where;
+        return {
+            SQL: 'SELECT ' + selectFields + ' FROM ' + this.QuoteSchemaAndView(e.SchemaName, e.BaseView) + ' WHERE ' + conditions.join(' AND '),
+            Parameters: compositeKey.KeyValuePairs.map(kv => kv.Value),
+        };
+    }
+
+    /**
+     * The primary key field each pair of a record-name key names, in key order. Names match
+     * case-insensitively. Null, after logging, when the key is empty or names a field that is not
+     * one of the entity's primary keys.
+     */
+    protected RecordNameKeyFieldsOf(entity: EntityInfo, compositeKey: CompositeKey): EntityFieldInfo[] | null {
+        const pairs = compositeKey?.KeyValuePairs ?? [];
+        if (pairs.length === 0) {
+            LogError(`Record name lookup on ${entity.Name}: the key names no fields`);
+            return null;
+        }
+        const keyFields: EntityFieldInfo[] = [];
+        for (const pair of pairs) {
+            const name = String(pair.FieldName ?? '').trim().toLowerCase();
+            const field = entity.PrimaryKeys.find(pk => pk.Name.trim().toLowerCase() === name);
+            if (!field) {
+                LogError(`Record name lookup on ${entity.Name}: ${JSON.stringify(pair.FieldName)} is not a primary key field`);
+                return null;
+            }
+            keyFields.push(field);
+        }
+        return keyFields;
     }
 
     /**
@@ -1538,7 +1570,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
     /**
      * Retrieves the display name for a single entity record.
-     * Uses BuildEntityRecordNameSQL for dialect-neutral SQL generation.
+     * Uses BuildEntityRecordNameSQL for dialect-neutral SQL generation, which limits the lookup to
+     * rows the acting user's read row filter allows.
      *
      * Answers with an empty string, without querying, when field-level security withholds any of
      * the name fields from the acting user — the same answer as a record that does not exist, so
@@ -1554,9 +1587,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             if (entity && !this.CanUserReadRecordName(entity, contextUser)) {
                 return '';
             }
-            const sql = this.BuildEntityRecordNameSQL(entityName, compositeKey);
-            if (sql) {
-                const data = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
+            const query = this.BuildEntityRecordNameSQL(entityName, compositeKey, contextUser);
+            if (query) {
+                const data = await this.ExecuteSQL<Record<string, unknown>>(query.SQL, query.Parameters, undefined, contextUser);
                 if (data && data.length === 1) {
                     // Concatenate all returned fields with spaces (supports multi-name entities)
                     const values = Object.values(data[0])

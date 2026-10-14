@@ -47,6 +47,13 @@ import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
 
+/**
+ * Entities whose update is always hydrated from the stored row, never from the client's `OldValues___`, though they
+ * do not track record changes: their server-side write rules compare against the prior state, which a client could
+ * otherwise supply itself (lower-case names). See `ResolverBase.MustLoadTruthFromDatabase`.
+ */
+const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set(['mj: record changes', 'mj: conversation details']);
+
 export class ResolverBase {
   private static _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
   private static _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
@@ -936,6 +943,7 @@ export class ResolverBase {
     label: string,
     provider?: IMetadataProvider,
     user?: UserInfo,
+    options?: { LeaveUnparseableToProvider?: boolean },
   ): void {
     if (!clause?.trim()) return;
 
@@ -949,6 +957,9 @@ export class ResolverBase {
         ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${clause}`
         : `SELECT 1 FROM __mj_clause_screen WHERE (${clause})`;
     const parser = new SQLParser(wrapped, dialect);
+    // A clause the provider checks again on its own (an aggregate expression) leaves text the parser
+    // cannot read to that per-item check instead of failing the whole request.
+    if (!parser.IsValid && options?.LeaveUnparseableToProvider) return;
     if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
       throw new Error(
         `Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`,
@@ -1066,6 +1077,11 @@ export class ResolverBase {
    * The single place that is not true is a field carrying `UserSearchParamFormatAPI`, whose
    * admin-authored format may splice the term in unquoted; `createViewUserSearchSQL` re-applies
    * `ValidateUserProvidedSQLClause` for exactly those entities.
+   *
+   * Each `Aggregates[].expression` gets the same screen, except that text the parser cannot read
+   * goes on to the provider, which refuses it per aggregate. The provider never runs the caller's
+   * aggregate text: it runs the SQL that `CheckAggregateExpression` rebuilds from a single
+   * aggregate call over the entity's columns, and refuses everything else per aggregate.
    */
   protected screenClientViewClauses(
     clauses: {
@@ -1073,6 +1089,7 @@ export class ResolverBase {
       orderBy?: string | null;
       userSearchString?: string | null;
       overrideExcludeFilter?: string | null;
+      aggregates?: AggregateExpression[] | null;
     },
     provider?: IMetadataProvider,
     user?: UserInfo,
@@ -1080,6 +1097,9 @@ export class ResolverBase {
     this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider, user);
     this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider, user);
     this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider, user);
+    for (const aggregate of clauses.aggregates ?? []) {
+      this.assertClientClauseUsesEntityBaseViews(aggregate?.expression, 'Aggregate', provider, user, { LeaveUnparseableToProvider: true });
+    }
   }
 
   /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */
@@ -1227,7 +1247,7 @@ export class ResolverBase {
       // Screen at this boundary: parse, reject writes, allow only entity BaseViews the
       // acting user can read (subqueries do not inherit the top entity's permission check).
       this.screenClientViewClauses(
-        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
+        { extraFilter, orderBy, userSearchString, overrideExcludeFilter, aggregates },
         provider as unknown as IMetadataProvider,
         user,
       );
@@ -1394,6 +1414,7 @@ export class ResolverBase {
             orderBy: param.orderBy,
             userSearchString: param.userSearchString,
             overrideExcludeFilter: param.overrideExcludeFilter,
+            aggregates: param.aggregates,
           },
           md,
           contextUser ?? undefined,
@@ -1931,6 +1952,11 @@ export class ResolverBase {
    * caller pin forged audit columns as both old and new values. It doesn't track its own changes, so
    * nothing else forces the load.
    *
+   * `MJ: Conversation Details` always loads for the same reason: its write gate decides from the stored
+   * row (who wrote a person's message, its role, the owner's rating), and an OldValues-hydrated entity
+   * would let a grantee claim to be a message's author while rewriting it. See
+   * {@link ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW}.
+   *
    * A caller under an Update row filter (a role's Update RLS filter or an API-key row filter) always
    * loads from the database too (#4919). The save's post-image check skips its query when no column
    * the filter reads is dirty, and dirtiness measured against client OldValues is the caller's to
@@ -1948,7 +1974,7 @@ export class ResolverBase {
   ): boolean {
     return (
       entityInfo.TrackRecordChanges ||
-      entityInfo.Name.trim().toLowerCase() === 'mj: record changes' ||
+      ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW.has(entityInfo.Name.trim().toLowerCase()) ||
       !input.OldValues___ ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||

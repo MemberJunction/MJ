@@ -22,8 +22,9 @@
  * ## What the adapter does for you
  *
  * - **Binding.** The overlay creates the component and hands it to {@link BindSurface}; the adapter subscribes to
- *   {@link SurfaceEvents}, applies anything that arrived early, and lets go cleanly on {@link UnbindSurface} (a panel that
- *   collapses and expands creates a NEW component instance, so durable state belongs to the channel, see below).
+ *   {@link SurfaceEvents}, applies anything that arrived early, and lets go cleanly on {@link UnbindSurface} (a host may
+ *   create a NEW component instance for the same channel, e.g. when the overlay is recreated, so durable state belongs
+ *   to the channel, see below).
  * - **Perception.** Every event the component emits, and every verb the agent runs, is recorded as a change: observers
  *   see a typed event, and the model gets ONE coalesced structured note carrying a delta of {@link ReadSurfaceState}
  *   (see `RecordChange` in the base class). Exposure policy gates it like any channel.

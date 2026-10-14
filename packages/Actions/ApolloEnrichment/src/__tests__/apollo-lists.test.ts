@@ -14,6 +14,8 @@
  * Nothing here may reach api.apollo.io. A real call would spend credits on the
  * read side and mutate a real account's lists on the write side, with no undo.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // The only BaseAction behaviour these tests need is that Run() delegates to
@@ -422,6 +424,21 @@ describe('ApolloRESTClient searches', () => {
     it('reports a null organization id rather than an empty string when absent', async () => {
         const { c } = client([{ body: { people: [{ id: 'p-1' }], pagination: {} } }]);
         expect((await c.searchPeople({ titles: ['CEO'] })).people[0].organizationId).toBeNull();
+    });
+
+    it('A-15: parses the 2026 api_search shape — top-level total_entries, obfuscated people, no pagination envelope', async () => {
+        const fixture = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/api-search.redacted.json', import.meta.url)), 'utf8')) as { body: unknown };
+        const { c } = client([{ body: fixture.body }]);
+        const page = await c.searchPeople({ titles: ['Policy Analyst'] }, { perPage: 25 });
+        expect(page.pagination).toEqual({ page: 1, perPage: 25, totalEntries: 8, totalPages: 1 });
+        expect(page.people).toHaveLength(1);
+        expect(page.people[0]).toMatchObject({ id: 'pdl-fixture-9', lastName: '', lastNameObfuscated: 'De***n', title: 'Policy Analyst', hasEmail: true, organizationName: 'Leonine Public Affairs', linkedinUrl: '' });
+    });
+
+    it('5.8: maps locations and keywords onto person_locations and q_keywords, and accepts a search with only them', async () => {
+        const { c, calls } = client([{ body: { total_entries: 0, people: [] } }]);
+        await c.searchPeople({ locations: ['Boston, Massachusetts, United States'], keywords: 'public policy' });
+        expect(calls[0].body).toEqual({ page: 1, per_page: 100, person_locations: ['Boston, Massachusetts, United States'], q_keywords: 'public policy' });
     });
 
     it('rejects a search response that is not an object', async () => {
@@ -937,7 +954,7 @@ describe('ApolloGetListContactsAction', () => {
 describe('ApolloSearchPeopleAction', () => {
     const page: ApolloPeoplePage = {
         people: [
-            { id: 'p-1', firstName: 'A', lastName: 'B', name: 'A B', title: 'VP', linkedinUrl: '', organizationId: 'org-1', organizationName: 'Acme' },
+            { id: 'p-1', firstName: 'A', lastName: 'B', lastNameObfuscated: '', name: 'A B', title: 'VP', linkedinUrl: '', hasEmail: null, organizationId: 'org-1', organizationName: 'Acme' },
         ],
         pagination: { page: 1, perPage: 100, totalEntries: 1, totalPages: 1 },
     };
@@ -958,6 +975,21 @@ describe('ApolloSearchPeopleAction', () => {
             fakeClient({ searchPeople }),
         );
         expect(searchPeople).toHaveBeenCalledWith({ titles: ['VP of Marketing', 'CMO'], seniorities: ['vp'] }, {});
+    });
+
+    it('accepts a search scoped only by Locations and Keywords, and passes them through', async () => {
+        const searchPeople = vi.fn(async () => page);
+        const { result } = await run(ApolloSearchPeopleAction, { Locations: '["Boston, Massachusetts, United States"]', Keywords: 'policy' }, fakeClient({ searchPeople }));
+        expect(result.Success).toBe(true);
+        expect(searchPeople).toHaveBeenCalledWith({ locations: ['Boston, Massachusetts, United States'], keywords: 'policy' }, {});
+    });
+
+    it('A-14: reports Count as the page size and TotalEntries as the total', async () => {
+        const big: ApolloPeoplePage = { ...page, pagination: { page: 1, perPage: 10, totalEntries: 1240, totalPages: 124 } };
+        const { result, params } = await run(ApolloSearchPeopleAction, { Titles: 'CEO' }, fakeClient({ searchPeople: async () => big }));
+        expect(result.Success).toBe(true);
+        expect(output(params, 'Count')).toBe(1);
+        expect(output(params, 'TotalEntries')).toBe(1240);
     });
 
     it('says in the message that emails are not part of this answer', async () => {

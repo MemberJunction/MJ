@@ -129,7 +129,8 @@ export interface QuerySyncContext {
     parameterHints?: Map<string, string>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** When true, the pipeline skips the AI enrichment stage and relies on the deterministic
      *  parse plus heuristic descriptions. Extraction of parameters, fields, entities and
-     *  dependencies still runs. Required: the caller resolves the per-instance flag and the host
-     *  switch once (`MJQueryEntityServer`), so the pipeline never re-derives it. */
-    skipAIEnrichment: boolean;  // case-violation-ok-legacy-back-compat: camelCase matches the other QuerySyncContext members
+     *  dependencies still runs. Required: the caller resolves the save's `SkipEntityAIActions`, the
+     *  per-instance flag and the host switch once (`MJQueryEntityServer`), so the pipeline never
+     *  re-derives it. */
+    SkipAIEnrichment: boolean;
 }

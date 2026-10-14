@@ -39,6 +39,7 @@ import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { DeterministicEntityFactory } from './deterministic-entity-factory';
+import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 /** The saved query the paging + cache checks (QF5/QF6/QF7) reuse. */
 interface RunQueryFeatureFixtures {
@@ -91,7 +92,7 @@ export async function CreateRunQueryFeatureFixtures(ctx: IntegrationCheckContext
     pageQuery.CategoryID = category.ID;
     pageQuery.SQL = `SELECT ID FROM ${schema}.vwEntities ORDER BY ID`;
     pageQuery.Status = 'Approved';
-    if (!await pageQuery.Save()) {
+    if (!await pageQuery.Save(FixtureQuerySaveOptions())) {
         throw new Error(`Fixture page query save failed: ${pageQuery.LatestResult?.CompleteMessage}`);
     }
     featureFixtures.PageQuery = pageQuery;
@@ -388,7 +389,7 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
                 twin.CategoryID = child.ID;
                 twin.SQL = 'SELECT 1 AS TwinMarker';
                 twin.Status = 'Approved';
-                Assert(await twin.Save(), `QF12 twin query save: ${twin.LatestResult?.CompleteMessage}`);
+                Assert(await twin.Save(FixtureQuerySaveOptions()), `QF12 twin query save: ${twin.LatestResult?.CompleteMessage}`);
                 await QueryEngine.Instance.Config(true, ctx.User);
 
                 const rq = new RunQuery();
@@ -426,7 +427,7 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
                 q.SQL = `SELECT COUNT(*) AS Cnt FROM ${schema}.vwEntities WHERE Name = {{ nameParam | sqlString }}`;
                 q.UsesTemplate = true;
                 q.Status = 'Approved';
-                Assert(await q.Save(), `QF13 query save: ${q.LatestResult?.CompleteMessage}`);
+                Assert(await q.Save(FixtureQuerySaveOptions()), `QF13 query save: ${q.LatestResult?.CompleteMessage}`);
                 // MJQueryEntityServer auto-extracts the Query Parameter row from the template on save.
                 await QueryEngine.Instance.Config(true, ctx.User);
 
@@ -463,7 +464,7 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
                 q.SQL = `SELECT COUNT(*) AS Cnt FROM ${schema}.vwEntities WHERE Name = {{ pat | sqlString }}`;
                 q.UsesTemplate = true;
                 q.Status = 'Approved';
-                Assert(await q.Save(), `QF14 query save: ${q.LatestResult?.CompleteMessage}`);
+                Assert(await q.Save(FixtureQuerySaveOptions()), `QF14 query save: ${q.LatestResult?.CompleteMessage}`);
                 // MJQueryEntityServer auto-extracts the Query Parameter row from the template on save.
                 await QueryEngine.Instance.Config(true, ctx.User);
 
@@ -495,7 +496,7 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
                 q.SQL = `SELECT {{ col | sqlIdentifier }} FROM ${schema}.vwEntities WHERE 1=0`;
                 q.UsesTemplate = true;
                 q.Status = 'Approved';
-                Assert(await q.Save(), `QF15 query save: ${q.LatestResult?.CompleteMessage}`);
+                Assert(await q.Save(FixtureQuerySaveOptions()), `QF15 query save: ${q.LatestResult?.CompleteMessage}`);
                 // MJQueryEntityServer auto-extracts the Query Parameter row from the template on save.
                 await QueryEngine.Instance.Config(true, ctx.User);
 
