@@ -2,9 +2,10 @@
  * Boot test for the API-root rule (MJ #5674): mounts every core route through the same functions
  * `serve()` calls, on a bare Express app, and checks where they landed.
  *
- * - `GRAPHQL_ROOT_PATH=/api/` → every registered path starts with `/api/`, and a real request to
+ * - `MJAPI_BASE_PATH=/api` → every registered path starts with `/api/`, and a real request to
  *   `/healthcheck` (origin root) 404s.
- * - `GRAPHQL_ROOT_PATH=/` → the paths are byte-identical to the root-mounted ones MJAPI always used.
+ * - `MJAPI_BASE_PATH=/` → the paths are byte-identical to the root-mounted ones MJAPI always used, whatever
+ *   `GRAPHQL_ROOT_PATH` is (it is only Apollo's path).
  *
  * The router factories are stubbed (they need keys, DB, providers); the MOUNT code is real.
  */
@@ -16,6 +17,7 @@ import type { ServerExtensionLoader } from '@memberjunction/server-extensions-co
 const mockConfig = vi.hoisted(() => ({
     configInfo: {
         graphqlRootPath: '/',
+        apiBasePath: '/',
         publicUrl: '',
         baseUrl: 'http://localhost',
         graphqlPort: 4000,
@@ -115,9 +117,9 @@ const ROOT_MOUNTS_BEFORE_5674 = [
     '/widget',
 ];
 
-describe('core routes under GRAPHQL_ROOT_PATH=/api/', () => {
+describe('core routes under MJAPI_BASE_PATH=/api', () => {
     beforeEach(() => {
-        mockConfig.configInfo.graphqlRootPath = '/api/';
+        mockConfig.configInfo.apiBasePath = '/api';
         mockConfig.configInfo.magicLink = { enabled: true };
     });
 
@@ -125,7 +127,7 @@ describe('core routes under GRAPHQL_ROOT_PATH=/api/', () => {
         const { paths } = bootCoreRoutes();
         expect(paths.length).toBe(ROOT_MOUNTS_BEFORE_5674.length);
         for (const path of paths) {
-            expect(path, `${path} is outside the API root`).toMatch(/^\/api\//);
+            expect(path, `${path} is outside MJAPI_BASE_PATH`).toMatch(/^\/api\//);
         }
     });
 
@@ -142,7 +144,7 @@ describe('core routes under GRAPHQL_ROOT_PATH=/api/', () => {
         expect(await statusOf(app, '/healthcheck')).toBe(404);
     });
 
-    it('reserves every mounted prefix for extensions (relative to the API root)', () => {
+    it('reserves every mounted prefix for extensions (relative to MJAPI_BASE_PATH)', () => {
         const reserved = CoreReservedServerExtensionRoots();
         for (const path of bootCoreRoutes().paths) {
             const relative = path.slice('/api'.length);
@@ -152,14 +154,20 @@ describe('core routes under GRAPHQL_ROOT_PATH=/api/', () => {
     });
 });
 
-describe('backward compatibility at GRAPHQL_ROOT_PATH=/', () => {
+describe('backward compatibility at MJAPI_BASE_PATH=/', () => {
     beforeEach(() => {
+        mockConfig.configInfo.apiBasePath = '/';
         mockConfig.configInfo.graphqlRootPath = '/';
         mockConfig.configInfo.publicUrl = '';
         mockConfig.configInfo.magicLink = { enabled: true };
     });
 
     it('mounts byte-identical paths', () => {
+        expect(bootCoreRoutes().paths).toEqual(ROOT_MOUNTS_BEFORE_5674);
+    });
+
+    it('ignores GRAPHQL_ROOT_PATH: it is only where Apollo listens', () => {
+        mockConfig.configInfo.graphqlRootPath = '/api/';
         expect(bootCoreRoutes().paths).toEqual(ROOT_MOUNTS_BEFORE_5674);
     });
 
@@ -172,16 +180,17 @@ describe('backward compatibility at GRAPHQL_ROOT_PATH=/', () => {
     });
 });
 
-describe('ApiRoute under a prefix', () => {
+describe('ApiRoute under a base path', () => {
     it('prefixes paths and appends to MJAPI_PUBLIC_URL without doubling the root', () => {
-        mockConfig.configInfo.graphqlRootPath = '/api/';
+        mockConfig.configInfo.apiBasePath = '/api/';
         mockConfig.configInfo.publicUrl = 'https://example.com/api/';
         expect(ApiRoute('/media')).toBe('/api/media');
         expect(ApiRoute('/media/abc', { absolute: true })).toBe('https://example.com/api/media/abc');
     });
 
-    it('falls back to baseUrl:port + root when MJAPI_PUBLIC_URL is unset', () => {
-        mockConfig.configInfo.graphqlRootPath = '/api/';
+    it('falls back to baseUrl:port + MJAPI_BASE_PATH when MJAPI_PUBLIC_URL is unset', () => {
+        mockConfig.configInfo.apiBasePath = '/api/';
+        mockConfig.configInfo.graphqlRootPath = '/';
         mockConfig.configInfo.publicUrl = '';
         expect(ApiRoute('/magic-link/redeem', { absolute: true })).toBe('http://localhost:4000/api/magic-link/redeem');
     });

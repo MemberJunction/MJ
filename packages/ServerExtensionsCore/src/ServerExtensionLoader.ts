@@ -58,7 +58,7 @@ export interface LoadExtensionsOptions {
 
     /** Canonical public base URL of the MJ server. */
     publicUrl?: string;
-    /** API root path (no trailing slash), passed through to {@link ServerExtensionInitContext.apiRootPath}. */
+    /** MJAPI's base path (no trailing slash), passed through to {@link ServerExtensionInitContext.apiRootPath}. */
     apiRootPath?: string; // case-violation-ok-legacy-back-compat: matches this options type's existing camelCase members
 
     /** Custom service registry if not using the loader's default. */

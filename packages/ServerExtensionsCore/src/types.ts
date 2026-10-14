@@ -139,17 +139,17 @@ export interface ServerExtensionInitContext {
     config: ServerExtensionConfig;
 
     /**
-     * Public URL of the API root (`MJAPI_PUBLIC_URL`), prefix included (e.g. 'https://example.com/api').
-     * Build outward URLs as `publicUrl` + a path relative to the API root — e.g. `config.RootPath` minus
-     * `apiRootPath` — never by appending the already-composed `config.RootPath` to it.
+     * Where the world reaches MJAPI (`MJAPI_PUBLIC_URL`), prefix included (e.g. 'https://example.com/api').
+     * Build outward URLs as `publicUrl` + a path relative to `apiRootPath` — never by appending the
+     * already-composed `config.RootPath` to it.
      */
     publicUrl?: string;
 
     /**
-     * The API root path every MJAPI route lives under (`GRAPHQL_ROOT_PATH` with no trailing slash; `''`
-     * when MJAPI owns the origin root). `config.RootPath` is already composed under it, so mount on
-     * `config.RootPath` as-is. Hand this to browser bundles; they must never derive it from
-     * `window.location` or by stripping `/graphql`.
+     * MJAPI's base path (`MJAPI_BASE_PATH`, no trailing slash; `''` at `/`): the prefix every MJAPI route is
+     * mounted under. `config.RootPath` is already composed under it, so mount on `config.RootPath` as-is.
+     * Not related to `GRAPHQL_ROOT_PATH`, which is only Apollo's path. Browser bundles are given the MJAPI
+     * URL explicitly; they never derive it from `window.location` or by stripping `/graphql`.
      */
     apiRootPath?: string; // case-violation-ok-legacy-back-compat: matches this context's existing camelCase members
 

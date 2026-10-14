@@ -16,7 +16,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider, ReadableFieldsTransportKey,
-         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress, ResolveAPIRootURL } from "@memberjunction/core";
+         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress, ResolveMJAPIURL } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -178,12 +178,12 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
     get WSURL(): string { return this.Data.WSURL }
 
     /**
-     * The public URL of the MJAPI API root, under which core routes such as `/oauth/*` and `/media/*` live
-     * (MJ #5674). Set it from the host's `API_ROOT_URI`; unset, it is {@link URL} minus a trailing `/graphql`.
+     * URL of the MJAPI server for routes other than GraphQL, such as `/oauth/*` and `/media/*` (MJ #5674).
+     * Set it from the host's `MJAPI_URI`; unset, it falls back to {@link URL} minus a trailing `/graphql`.
      * Never resolve those routes against the origin root.
      */
-    get APIRootURL(): string { return ResolveAPIRootURL(this.URL, this.Data.APIRootURL) }
-    set APIRootURL(url: string) { this.Data.APIRootURL = url }
+    get MJAPIURL(): string { return ResolveMJAPIURL(this.URL, this.Data.MJAPIURL) }
+    set MJAPIURL(url: string) { this.Data.MJAPIURL = url }
 
     /**
      * Opt in to logging the *values* of GraphQL variables when a request fails.

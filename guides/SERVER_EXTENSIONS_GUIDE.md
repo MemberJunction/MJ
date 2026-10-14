@@ -98,22 +98,22 @@ Server extensions are mounted during MJServer bootstrap. They are separated into
 
 ---
 
-## 3. The API Root, Reserved Roots & Route Safety (G2)
+## 3. MJAPI's Base Path, Reserved Roots & Route Safety (G2)
 
-### Every RootPath lives under the API root
+### Every RootPath lives under `MJAPI_BASE_PATH`
 
-MJAPI is often served under a prefix (`GRAPHQL_ROOT_PATH`, e.g. `/api/`). That prefix is the **API root**: GraphQL is served at it and every other route sits beneath it, so a CDN forwards one prefix instead of a patch per route.
+MJAPI does not know where it is exposed. When a proxy forwards a prefix without stripping it (MJ Central's CloudFront sends `/api/*` to MJAPI), the host sets `MJAPI_BASE_PATH=/api` and every route MJAPI serves moves under it, so the CDN forwards one prefix instead of a patch per route. The default is `/`.
 
-- A configured `RootPath` is **relative to the API root**. `prepareServerExtensionConfigs({ apiRootPath })` composes the mount path once, so `context.config.RootPath` is already `/api/telephony/twilio` at root `/api/` (and `/telephony/twilio` at root `/`). Mount on it as-is; never add the root again.
-- `context.publicUrl` is the full public API root (`MJAPI_PUBLIC_URL`, prefix included); `context.apiRootPath` is the root path (`''` at `/`). Build outward URLs as `publicUrl` + a path relative to the root. Appending the composed `RootPath` to `publicUrl` doubles the prefix.
+- A configured `RootPath` is **relative to the base path**. `prepareServerExtensionConfigs({ apiRootPath })` composes the mount path once, so `context.config.RootPath` is already `/api/telephony/twilio` at `MJAPI_BASE_PATH=/api` (and `/telephony/twilio` at `/`). Mount on it as-is; never add the base path again.
+- `GRAPHQL_ROOT_PATH` is only where Apollo listens. It is not a base for extension routes. Extensions take precedence over GraphQL because Apollo mounts last.
+- `context.publicUrl` is where the world reaches MJAPI (`MJAPI_PUBLIC_URL`, prefix included); `context.apiRootPath` is the base path (`''` at `/`). Build outward URLs as `publicUrl` + a path relative to the base path. Appending the composed `RootPath` to `publicUrl` doubles the prefix.
 - Never mount on the Express app at a root-relative literal (`app.use('/x', …)`). `pnpm run check:api-root` fails CI on it. Core code uses `ApiRoute()` from `@memberjunction/server`.
-- Extensions take precedence over GraphQL: they mount before Apollo, which mounts last.
 
 ### Reserved core roots
 
-To stop extensions colliding with or shadowing core routes, `MJServer` keeps a **Reserved Roots Registry** (`serverExtensionReservedRoots.ts`), relative to the API root like every `RootPath`: `/auth`, `/magic-link`, `/widget`, `/healthcheck`, `/esignature`, `/media`, `/oauth`, `/health`, `/realtime`, `/realtime-proxy`, plus the static baseline in `@memberjunction/server-extensions-core` (`/graphql`, …) and the exact root `/`. Matching is case-insensitive and bidirectional (claiming `/telephony` collides with `/telephony/twilio`).
+To stop extensions colliding with or shadowing core routes, `MJServer` keeps a **Reserved Roots Registry** (`serverExtensionReservedRoots.ts`), relative to the base path like every `RootPath`: `/auth`, `/magic-link`, `/widget`, `/healthcheck`, `/esignature`, `/media`, `/oauth`, `/health`, `/realtime`, `/realtime-proxy`, plus the static baseline in `@memberjunction/server-extensions-core` (`/graphql`, …) and the exact root `/`. Matching is case-insensitive and bidirectional (claiming `/telephony` collides with `/telephony/twilio`).
 
-`graphqlRootPath` itself is **no longer reserved** (it was until #5674); an extension may sit under it, and must.
+`graphqlRootPath` itself is **no longer reserved** (it was until #5674); an extension may sit beside or under it.
 
 An extension that claims a reserved root is dropped at startup with a descriptive error (fail closed).
 
@@ -189,7 +189,7 @@ export class MyCustomWebhookExtension extends BaseServerExtension {
      */
     async Initialize(context: ServerExtensionInitContext): Promise<ExtensionInitResult> {
         const { app, config, services } = context;
-        // Already composed under the API root by core — mount on it as-is.
+        // Already composed under MJAPI_BASE_PATH by core — mount on it as-is.
         const rootPath = config.RootPath || '/webhook/custom';
 
         // 1. Initialize internal services
@@ -285,7 +285,7 @@ module.exports = {
             Name: 'AuthenticatedReporting',
             DriverClass: 'ReportingApiExtension',
             PackagePath: '@my-org/reporting-extension',
-            RootPath: '/reporting',  // relative to the API root: served at /api/reporting when GRAPHQL_ROOT_PATH=/api/
+            RootPath: '/reporting',  // relative to MJAPI_BASE_PATH: served at /api/reporting when it is /api
             Phase: 'post-auth',      // Protected by MJ user auth
             Enabled: true,
             Settings: {

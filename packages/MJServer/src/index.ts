@@ -95,7 +95,7 @@ import {
 import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath, GetCorsOwningServerExtensionRoots } from '@memberjunction/server-extensions-core';
 import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
 import { CoreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
-import { ApiRootPath, PublicApiRootUrl } from './apiRoot.js';
+import { ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
 import { MountHealthcheckRoute, MountPublicCoreRoutes, MountExtensionHealthRoute, MountAuthCatalogRoute, MountAuthenticatedCoreRoutes } from './coreRoutes.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 import { CreateMetadataRefreshSignalHandler, METADATA_REFRESH_SIGNAL } from './metadataRefreshSignal.js';
@@ -134,7 +134,7 @@ export { Int, Float, ID } from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
 export { CreateIsolatedProvider } from './isolatedProvider.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
-export { ApiRoute, ApiRootPath, PublicApiRootUrl, JoinApiRoute, NormalizeApiRootPath, type ApiRouteOptions } from './apiRoot.js';
+export { ApiRoute, ApiRootPath, ConfiguredPublicUrl, JoinApiRoute, NormalizeApiRootPath, type ApiRouteOptions } from './apiRoot.js';
 export { ServerExtensionLoader, BaseServerExtension, DefaultServerExtensionServiceRegistry } from '@memberjunction/server-extensions-core';
 export type {
     ServerExtensionConfig,
@@ -1295,7 +1295,7 @@ const setupComplete$ = new ReplaySubject(1);
   }));
 
   // Health check — before every middleware contribution and the auth middleware, so cloud platform
-  // probes never generate auth noise. Every core route mounts under the API root (see apiRoot.ts).
+  // probes never generate auth noise. Every core route mounts under MJAPI_BASE_PATH (see apiRoot.ts).
   MountHealthcheckRoute(app);
 
   // Apply middleware-contributed pre-auth handlers (after compression, before routes)
@@ -1306,8 +1306,9 @@ const setupComplete$ = new ReplaySubject(1);
   // ─── Public core routes (unauthenticated, registered BEFORE auth) ─────
   // OAuth callback, eSignature, media, realtime SDP broker, magic-link, widget, realtime verify — see
   // coreRoutes.ts. New custom routes belong in Server Extensions, never in serve().
-  // oauthPublicUrl is the public API root URL; it is also the magic-link JWT issuer, so it stays untrimmed.
-  const oauthPublicUrl = PublicApiRootUrl();
+  // oauthPublicUrl is the configured public URL, derived as it always was; it is also the magic-link JWT
+  // issuer, so it stays untrimmed. Outward links use ApiRoute(…, { absolute: true }) instead.
+  const oauthPublicUrl = ConfiguredPublicUrl();
   startupLog.LogIf('verbose', `[OAuth] publicUrl: ${oauthPublicUrl}`);
   const coreAuthenticatedRouters = MountPublicCoreRoutes(app, oauthPublicUrl, startupLog);
 
@@ -1380,7 +1381,7 @@ const setupComplete$ = new ReplaySubject(1);
 
   // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
   // (and remains the only source for host-only extensions such as Slack/Teams).
-  // Every RootPath is relative to the API root: apiRootPath composes the real mount path, and
+  // Every RootPath is relative to MJAPI_BASE_PATH: apiRootPath composes the real mount path, and
   // extraReservedRoots (also relative) must list every core mount in coreRoutes.ts, otherwise an
   // Open App can claim it.
   const extensionConfigs = prepareServerExtensionConfigs(

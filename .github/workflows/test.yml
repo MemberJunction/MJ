@@ -319,8 +319,8 @@ jobs:
           PR_BASE_REF: ${{ github.base_ref || 'next' }}
         run: node .github/scripts/check-dynamic-replace.mjs --base "origin/$PR_BASE_REF"
 
-      # API-root guard (#5674). MJAPI is often served under a prefix (GRAPHQL_ROOT_PATH=/api/,
-      # with the CDN forwarding only /api/*), so an Express-app route mounted at a root-relative
+      # API-root guard (#5674). MJAPI is often served under a prefix (MJAPI_BASE_PATH=/api, with
+      # the CDN forwarding only /api/*), so an Express-app route mounted at a root-relative
       # literal works locally and 404s in every prefixed deployment. Flags `app.use('/x')` /
       # `context.app.get(`/x`)` in the server packages; mount through ApiRoute() instead. Its
       # runtime twin is MJServer's apiRootBoot.test.ts, which runs in the unit suite.

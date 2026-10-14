@@ -71,7 +71,7 @@ describe('coreReservedServerExtensionRoots', () => {
         expect(validateServerExtensionRootPath('/meetings/teams', extra)).toBeNull();
     });
 
-    it('lets extensions sit under the API root (#5674): RootPaths are relative to it', () => {
+    it('lets extensions sit under the GraphQL path (#5674): RootPaths are relative to MJAPI_BASE_PATH', () => {
         const extra = CoreReservedServerExtensionRoots();
         expect(validateServerExtensionRootPath('/api', extra)).toBeNull();
         expect(validateServerExtensionRootPath('/forms', extra)).toBeNull();

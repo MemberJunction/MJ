@@ -414,13 +414,13 @@ describe('prepareServerExtensionConfigs', () => {
     });
 });
 
-describe('API root composition (#5674)', () => {
+describe('MJAPI base-path composition (#5674)', () => {
     const configs: ServerExtensionConfig[] = [
         { Enabled: true, DriverClass: 'Twilio', RootPath: '/telephony/twilio', Settings: {} },
         { Enabled: true, DriverClass: 'Checkout', RootPath: '/checkout/', Settings: {} },
     ];
 
-    it('composes every RootPath under the API root', () => {
+    it('composes every RootPath under the base path', () => {
         const result = PrepareServerExtensionConfigs(configs, { apiRootPath: '/api/' });
         expect(result.map((c) => c.RootPath)).toEqual(['/api/telephony/twilio', '/api/checkout']);
     });
@@ -432,7 +432,7 @@ describe('API root composition (#5674)', () => {
         }
     });
 
-    it('checks reserved roots relative to the API root, before composing', () => {
+    it('checks reserved roots relative to the base path, before composing', () => {
         const onInvalid = vi.fn();
         const result = PrepareServerExtensionConfigs(
             [
@@ -458,7 +458,7 @@ describe('API root composition (#5674)', () => {
         expect(onOverlap).toHaveBeenCalledWith(expect.stringContaining('/api/webhooks'));
     });
 
-    it('rejects an API root without a leading slash', () => {
+    it('rejects a base path without a leading slash', () => {
         expect(() => ComposeServerExtensionMountPath('api', '/x')).toThrow(/must start with '\/'/);
     });
 });

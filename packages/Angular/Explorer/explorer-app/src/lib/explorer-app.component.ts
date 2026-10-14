@@ -13,7 +13,7 @@ import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
 import { filter, take, takeUntil } from 'rxjs/operators';
-import { CompositeKey, EntityInfo, LogError, Metadata, ResolveAPIRootURL, SetProductionStatus, type PublicAuthProviderInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, LogError, Metadata, ResolveMJAPIURL, SetProductionStatus, type PublicAuthProviderInfo } from '@memberjunction/core';
 import {
   MJAuthBase,
   StandardUserInfo,
@@ -450,7 +450,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       const result = await this.workspaceInit.initializeWorkspace(token, userInfo, {
         GRAPHQL_URI: this.environment.GRAPHQL_URI,
         GRAPHQL_WS_URI: this.environment.GRAPHQL_WS_URI,
-        API_ROOT_URI: this.environment.API_ROOT_URI,
+        MJAPI_URI: this.environment.MJAPI_URI,
         MJ_CORE_SCHEMA_NAME: this.environment.MJ_CORE_SCHEMA_NAME
       });
 
@@ -1238,10 +1238,10 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   }
 
   /**
-   * Derive the health check URL under the API root and start the connectivity polling service.
+   * Build the health check URL off the MJAPI URL and start the connectivity polling service.
    */
   private startConnectivityMonitoring(): void {
-    const healthUrl = `${ResolveAPIRootURL(this.environment.GRAPHQL_URI, this.environment.API_ROOT_URI)}/healthcheck`;
+    const healthUrl = `${ResolveMJAPIURL(this.environment.GRAPHQL_URI, this.environment.MJAPI_URI)}/healthcheck`;
     this.connectivityService.Start(healthUrl);
   }
 

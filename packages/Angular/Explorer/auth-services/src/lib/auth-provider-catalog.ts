@@ -8,7 +8,7 @@
  * @module @memberjunction/ng-auth-services
  */
 
-import { LogError, LogStatus, ResolveAPIRootURL, type PublicAuthProviderCatalog, type PublicAuthProviderInfo } from '@memberjunction/core';
+import { LogError, LogStatus, ResolveMJAPIURL, type PublicAuthProviderCatalog, type PublicAuthProviderInfo } from '@memberjunction/core';
 
 /**
  * Storage key holding the provider the user last chose from the login picker.
@@ -77,8 +77,8 @@ export class AuthProviderCatalog {
    * Fetches the catalog and stores it for {@link GetPreloaded}. Call this from the app's
    * bootstrap entry point BEFORE the root module is imported.
    */
-  public static async Preload(graphqlUri: string, timeoutMs?: number, apiRootUri?: string): Promise<PublicAuthProviderInfo[]> {
-    this._preloaded = await this.Fetch(graphqlUri, timeoutMs, apiRootUri);
+  public static async Preload(graphqlUri: string, timeoutMs?: number, mjapiUri?: string): Promise<PublicAuthProviderInfo[]> {
+    this._preloaded = await this.Fetch(graphqlUri, timeoutMs, mjapiUri);
     return this._preloaded;
   }
 
@@ -88,12 +88,12 @@ export class AuthProviderCatalog {
   }
 
   /**
-   * Builds the catalog URL under the API root (MJ #5674) — `apiRootUri` when given, else the
+   * Builds the catalog URL off the MJAPI URL (MJ #5674): `mjapiUri` when given, else the
    * GraphQL endpoint minus a trailing `/graphql`. The catalog is served by the same MJServer
    * instance, mounted ahead of the auth middleware.
    */
-  public static BuildCatalogUrl(graphqlUri: string, apiRootUri?: string): string {
-    return `${ResolveAPIRootURL(graphqlUri, apiRootUri)}/auth/providers`;
+  public static BuildCatalogUrl(graphqlUri: string, mjapiUri?: string): string {
+    return `${ResolveMJAPIURL(graphqlUri, mjapiUri)}/auth/providers`;
   }
 
   /**
@@ -103,8 +103,8 @@ export class AuthProviderCatalog {
    * whose network is briefly unavailable, must still reach its login screen through the
    * compiled `AUTH_TYPE` path. Failure is reported as an empty list.
    */
-  public static async Fetch(graphqlUri: string, timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS, apiRootUri?: string): Promise<PublicAuthProviderInfo[]> {
-    const url = this.BuildCatalogUrl(graphqlUri, apiRootUri);
+  public static async Fetch(graphqlUri: string, timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS, mjapiUri?: string): Promise<PublicAuthProviderInfo[]> {
+    const url = this.BuildCatalogUrl(graphqlUri, mjapiUri);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 

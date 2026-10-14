@@ -1,8 +1,8 @@
 /**
- * Core HTTP routes MJServer mounts itself, every one under the API root via {@link ApiRoute}.
+ * Core HTTP routes MJServer mounts itself, every one under MJAPI's base path (`MJAPI_BASE_PATH`) via {@link ApiRoute}.
  *
  * Extracted from `serve()` so `__tests__/apiRootBoot.test.ts` can mount them on a bare Express app with
- * `GRAPHQL_ROOT_PATH=/api/` and check every registered path. `serve()` still decides the ORDER (relative
+ * `MJAPI_BASE_PATH=/api` and check every registered path. `serve()` still decides the ORDER (relative
  * to compression, the auth middleware, server extensions and Apollo); these functions only mount.
  *
  * ALL new custom routes, webhooks and integrations belong in Server Extensions

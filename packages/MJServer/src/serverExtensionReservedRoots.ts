@@ -2,7 +2,7 @@
  * Core HTTP prefixes MJServer mounts — many of them PRE-AUTH — that an Open App
  * server extension must not claim.
  *
- * Every value is relative to the API root (`ApiRoute()` composes the real mount path).
+ * Every value is relative to MJAPI's base path (`ApiRoute()` composes the real mount path).
  *
  * Kept as literals (not imported `*_MOUNT_PATH` constants) so this module cannot
  * pull `config.ts` / telephony routers into every importer. Values MUST stay in
@@ -37,10 +37,10 @@ export const CORE_CONSTANT_RESERVED_SERVER_EXTENSION_ROOTS: readonly string[] = 
 ];
 
 /**
- * Reserved roots for the running process, relative to the API root like every extension RootPath.
- * `graphqlRootPath` is no longer reserved: the API root is where every route lives, so extensions sit
- * beneath it (`prepareServerExtensionConfigs({ apiRootPath })` composes the mount path). Extensions take
- * precedence over GraphQL because Apollo mounts last.
+ * Reserved roots for the running process, relative to MJAPI's base path like every extension RootPath.
+ * `graphqlRootPath` is no longer reserved: it is only Apollo's path, and Apollo mounts last, so an extension
+ * route registered before it always wins (`prepareServerExtensionConfigs({ apiRootPath })` composes the
+ * mount path).
  */
 export function CoreReservedServerExtensionRoots(): string[] {
     return [...CORE_CONSTANT_RESERVED_SERVER_EXTENSION_ROOTS, ...CORE_STATIC_RESERVED_SERVER_EXTENSION_ROOTS];

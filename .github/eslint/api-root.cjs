@@ -1,8 +1,8 @@
 /**
- * check:api-root — MJAPI is often served under a prefix (GRAPHQL_ROOT_PATH, e.g. `/api/`), so a route
+ * check:api-root — MJAPI is often served under a prefix (MJAPI_BASE_PATH, e.g. `/api`), so a route
  * mounted on the Express app with a root-relative literal is unreachable behind a CDN that forwards only
  * that prefix. Mount through `ApiRoute()` from @memberjunction/server (extensions: mount on
- * `context.config.RootPath`, which core already composes under the API root). See MJ #5674.
+ * `context.config.RootPath`, which core already composes under MJAPI_BASE_PATH). See MJ #5674.
  *
  * Only the APPLICATION object is checked (`app.*`, `context.app.*`, `this.app.*`). Paths on a sub-router
  * (`router.get('/:id')`) are relative to wherever that router is mounted, so they are fine.

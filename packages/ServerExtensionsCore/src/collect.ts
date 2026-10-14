@@ -363,24 +363,24 @@ export function serverExtensionRootsOverlap(a: string, b: string): boolean {
 export interface PrepareServerExtensionOptions extends NormalizeServerExtensionOptions {
     onOverlap?: (message: string) => void;
     /**
-     * Additional reserved roots from the running server (WIDGET_MOUNT_PATH, `/media`, …), relative to the
-     * API root like every RootPath. Compared case-insensitively and bidirectionally (an extension at
+     * Additional reserved roots from the running server (WIDGET_MOUNT_PATH, `/media`, …), relative to
+     * MJAPI's base path like every RootPath. Compared case-insensitively and bidirectionally (an extension at
      * `/telephony` collides with a core mount at `/telephony/twilio`).
      */
     extraReservedRoots?: readonly string[];
     /**
-     * The API root (`GRAPHQL_ROOT_PATH`, e.g. `/api/`). Every RootPath is relative to it: the returned
+     * MJAPI's base path (`MJAPI_BASE_PATH`, e.g. `/api`). Every RootPath is relative to it: the returned
      * configs carry the composed mount path (`/api` + `/telephony/twilio`). Omitted or `/` leaves RootPaths
      * unchanged.
      */
     apiRootPath?: string; // case-violation-ok-legacy-back-compat: matches this options type's existing camelCase members
 }
 
-/** Prefixes a validated, normalized RootPath with the API root (`''` / `/` leaves it unchanged). */
+/** Prefixes a validated, normalized RootPath with MJAPI's base path (`''` / `/` leaves it unchanged). */
 export function ComposeServerExtensionMountPath(apiRootPath: string | undefined, rootPath: string): string {
     const prefix = TrimTrailingSlashes((apiRootPath ?? '').trim());
     if (prefix && !prefix.startsWith('/')) {
-        throw new Error(`API root path must start with '/', got '${prefix}'`);
+        throw new Error(`MJAPI base path must start with '/', got '${prefix}'`);
     }
     return `${prefix}${rootPath}`;
 }
@@ -401,7 +401,7 @@ export function PrepareServerExtensionConfigs(
             invalid(options, `Dropping server extension '${entry.DriverClass}': ${rootError}`);
             continue;
         }
-        // Validated relative to the API root (as are the reserved roots), then composed: every RootPath
+        // Validated relative to the base path (as are the reserved roots), then composed: every RootPath
         // shares one prefix, so relative overlap and composed overlap are the same test.
         const mountPath = ComposeServerExtensionMountPath(options?.apiRootPath, normalizeRoot(entry.RootPath));
         kept.push(cloneConfig({ ...entry, RootPath: mountPath }));

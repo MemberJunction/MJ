@@ -242,8 +242,8 @@ export class OAuthCallbackComponent extends BaseAngularComponent implements OnIn
         const gqlProvider = this.ProviderToUse as GraphQLDataProvider;
         const configData = gqlProvider.ConfigData;
 
-        // The exchange endpoint lives under the API root (MJ #5674).
-        const apiUrl = `${configData.APIRootURL}/oauth/exchange`;
+        // The exchange endpoint hangs off the MJAPI URL, not the GraphQL URL (MJ #5674).
+        const apiUrl = `${configData.MJAPIURL}/oauth/exchange`;
 
         try {
             const response = await fetch(apiUrl, {

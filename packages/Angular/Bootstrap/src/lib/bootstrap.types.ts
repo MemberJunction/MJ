@@ -51,13 +51,13 @@ export interface MJEnvironmentConfig {
   GRAPHQL_WS_URI: string;
 
   /**
-   * Public URL of the MJAPI API root (`GRAPHQL_ROOT_PATH`), under which core routes such as
-   * `/auth/providers` and `/healthcheck` live. Optional: when unset it is `GRAPHQL_URI` minus a trailing
-   * `/graphql` (see `ResolveAPIRootURL` in `@memberjunction/core`). Set it when GraphQL is served anywhere
-   * else. MJ #5674.
+   * URL of the MJAPI server for everything other than GraphQL: `/auth/providers`, `/healthcheck`,
+   * `/oauth/*`, `/media/*`. MJAPI may live on its own host or port, or under a path such as `/api`;
+   * Explorer uses this value as given. Optional for older hosts: unset, it falls back to `GRAPHQL_URI`
+   * minus a trailing `/graphql` (see `ResolveMJAPIURL` in `@memberjunction/core`). MJ #5674.
    * @example 'https://example.com/api'
    */
-  API_ROOT_URI?: string;
+  MJAPI_URI?: string;
 
   /**
    * Authentication provider type — matches the key a provider registers with via

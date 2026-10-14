@@ -30,7 +30,7 @@ import {
     type VerificationOperationResult,
     type VerificationSettings,
 } from './verificationWorkflow.js';
-import { PublicApiRootUrl } from '../apiRoot.js';
+import { ConfiguredPublicUrl } from '../apiRoot.js';
 
 /** Purpose label for principal-resolution diagnostics. */
 const PRINCIPAL_PURPOSE = 'RealtimeVerification';
@@ -38,7 +38,7 @@ const PRINCIPAL_PURPOSE = 'RealtimeVerification';
 /** The base URL emailed links are built from: explicit setting, else the server's public URL (same derivation magic links use). */
 function resolvePublicBaseUrl(explicit: string | undefined): string | undefined {
     const candidate =
-        explicit?.trim() || PublicApiRootUrl();
+        explicit?.trim() || ConfiguredPublicUrl();
     return candidate ? TrimTrailingSlashes(candidate) : undefined;
 }
 

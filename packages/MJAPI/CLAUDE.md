@@ -100,14 +100,19 @@ test bootstraps — full model, scoping and troubleshooting:
 
 ## The API path isn't always at `/`
 
-MJAPI is often served under a prefix (`GRAPHQL_ROOT_PATH`, e.g. `/api/`, with the CDN forwarding only `/api/*` to it). That prefix is the **API root**: GraphQL is served at it, and every other route sits beneath it. Every HTTP route and every URL handed to a browser, email or webhook provider MUST go through `ApiRoute()` from `@memberjunction/server`.
+MJAPI does not know where it is exposed, and Apollo is just one of its routes. Three settings, three jobs. Never derive one from another:
 
-- Wrong: `app.use('/media', …)`, `` `${publicUrl}/media/${id}` `` built by hand. Right: `app.use(ApiRoute('/media'), …)`, ``ApiRoute(`/media/${id}`, { absolute: true })``.
-- Server extensions mount on `context.config.RootPath`, which core has already composed under the API root, and read the root itself from `context.apiRootPath`. Never re-add the root, and never append `RootPath` to `publicUrl` (that doubles it).
-- Browser code resolves core routes with `ResolveAPIRootURL()` from `@memberjunction/core` (the host's `API_ROOT_URI`, else `GRAPHQL_URI` minus a trailing `/graphql`, decided in that one place). Never `new URL('/x', graphqlUri)` (it drops the prefix), never `window.location`, `req.protocol`/`Host`, or a hand-rolled `/graphql` strip.
-- `MJAPI_PUBLIC_URL` is the full public API root, prefix included (`https://host/api`).
-- One known exception: REST stays at the origin-absolute `/api/v1` (`REST_API_BASE_PATH`).
-- CI enforces this (`pnpm run check:api-root` + `packages/MJServer/src/__tests__/apiRootBoot.test.ts`, which boots the core routes with `GRAPHQL_ROOT_PATH=/api/`). Do not disable either.
+| Setting | What it is | Default |
+|---|---|---|
+| `MJAPI_BASE_PATH` | The prefix MJAPI mounts **every** route under on its own listener: core routes and Open App server extensions alike. Set it only when a proxy forwards a prefix without stripping it (MJ Central's CloudFront sends `/api/*` to MJAPI, so it sets `/api`). | `/` |
+| `GRAPHQL_ROOT_PATH` | Only where Apollo listens (`/`, `/graphql`, anything). Never a base for any other route. | `/` |
+| `MJAPI_PUBLIC_URL` | Where the world reaches MJAPI (`https://host/api`, `https://api.host:4002`). The only base for a URL handed to a browser, an email or a webhook provider. | `baseUrl:port` |
+
+- **Server code:** every mount and every outward URL goes through `ApiRoute()` from `@memberjunction/server`. Wrong: `app.use('/media', …)`, `` `${publicUrl}/media/${id}` `` built by hand. Right: `app.use(ApiRoute('/media'), …)`, ``ApiRoute(`/media/${id}`, { absolute: true })``.
+- **Server extensions** mount on `context.config.RootPath`, which core has already composed under `MJAPI_BASE_PATH` (`context.apiRootPath`). Never add the base path again, and never append `RootPath` to `publicUrl` (that doubles the prefix).
+- **Browser code** uses the MJAPI URL it is told: `MJAPI_URI` in Explorer's environment, read through `ResolveMJAPIURL()` from `@memberjunction/core` or `GraphQLProviderConfigData.MJAPIURL`. GraphQL has its own URL (`GRAPHQL_URI`). Never `new URL('/x', graphqlUri)` (it drops `/api`), never `window.location`, never a hand-rolled `/graphql` strip.
+- **One known exception:** REST stays at the origin-absolute `/api/v1` (`REST_API_BASE_PATH`).
+- **CI enforces this:** `pnpm run check:api-root` plus `packages/MJServer/src/__tests__/apiRootBoot.test.ts`, which boots the core routes with `MJAPI_BASE_PATH=/api`. Do not disable either.
 
 ## MJAPI Public URL Configuration
 
@@ -127,9 +132,9 @@ configure a public URL.
 ngrok http 4000
 # Output: Forwarding https://abc123.ngrok.io -> http://localhost:4000
 
-# Set the environment variable to the public API ROOT (include GRAPHQL_ROOT_PATH when it is not '/')
+# Set the environment variable to wherever the world reaches MJAPI (include any path prefix)
 export MJAPI_PUBLIC_URL=https://abc123.ngrok.io
-# OR if GRAPHQL_ROOT_PATH is '/api/'
+# OR when a proxy exposes MJAPI under /api
 export MJAPI_PUBLIC_URL=https://abc123.ngrok.io/api
 
 # Start MJAPI
@@ -140,7 +145,7 @@ npm run start:api
 
 ```javascript
 module.exports = {
-  publicUrl: 'https://your-public-url.com',  // The public API root, including GRAPHQL_ROOT_PATH if not '/'
+  publicUrl: 'https://your-public-url.com',  // Where the world reaches MJAPI, including any path prefix
   // ... other configuration
 };
 ```
@@ -149,7 +154,7 @@ module.exports = {
 
 - When `publicUrl` is configured, MJAPI uses it as the `callingServerURL` when communicating with remote services
 - If `publicUrl` is not set, MJAPI constructs the URL as `${baseUrl}:${graphqlPort}${graphqlRootPath}`
-- `publicUrl` is the public **API root**: include `graphqlRootPath` when it is not `/` (e.g. `https://host/api`). Every core and extension route lives under it, so `ApiRoute(subpath, { absolute: true })` is simply `publicUrl` + subpath
+- `publicUrl` is where the world reaches MJAPI, prefix included (e.g. `https://host/api`). It is not derived from `graphqlRootPath` or `MJAPI_BASE_PATH`, because a proxy may strip or add a prefix. `ApiRoute(subpath, { absolute: true })` is `publicUrl` + subpath
 - This preserves backward compatibility while enabling hybrid development scenarios
 
 ### Use cases
