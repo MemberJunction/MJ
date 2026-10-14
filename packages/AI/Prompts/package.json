@@ -28,6 +28,7 @@
     "@memberjunction/global": "6.2.0-edge.4",
     "@memberjunction/templates": "6.2.0-edge.4",
     "@memberjunction/templates-base-types": "6.2.0-edge.4",
+    "cosmiconfig": "9.0.0",
     "date-fns": "^2.30.0",
     "date-fns-tz": "^2.0.0",
     "dotenv": "^17.2.4",
