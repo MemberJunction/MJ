@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
     AbortableDelay,
     BuildCancellationErrorInfo,
@@ -28,12 +28,37 @@ describe('cancellation helpers', () => {
         expect(IsAbortError(null)).toBe(false);
     });
 
-    it('IsTimeoutAbort tells a timeout reason from a caller reason', () => {
+    it('IsTimeoutAbort decides by the reason\'s type: a TimeoutError or a reason flagged IsTimeout', () => {
         expect(IsTimeoutAbort(aborted(Object.assign(new Error('signal timed out'), { name: 'TimeoutError' })))).toBe(true);
-        expect(IsTimeoutAbort(aborted(new Error('Prompt "X" timed out after 30000ms')))).toBe(true);
+        expect(IsTimeoutAbort(aborted(Object.assign(new Error('Prompt "X" exceeded its TimeoutMS'), { IsTimeout: true })))).toBe(true);
         expect(IsTimeoutAbort(aborted('user stopped'))).toBe(false);
         expect(IsTimeoutAbort(aborted())).toBe(false);
         expect(IsTimeoutAbort(new AbortController().signal)).toBe(false);
+    });
+
+    describe('a caller reason that mentions a timeout is still the caller cancelling', () => {
+        it.each([
+            ['a string', 'Cancel the request; it timed out on my side'],
+            ['an Error', new Error('The UI timed out; stop now')],
+        ])('a caller abort whose reason is %s saying "timed out" is Cancelled: Fatal, never failed over', (_kind, reason) => {
+            const signal = aborted(reason);
+
+            expect(IsTimeoutAbort(signal)).toBe(false);
+            expect(BuildCancellationErrorInfo({ signal })).toMatchObject({ errorType: 'Cancelled', severity: 'Fatal', canFailover: false, providerErrorCode: 'request_cancelled' });
+        });
+
+        it('a genuine AbortSignal.timeout() is a retriable NetworkError', async () => {
+            const deadline = AbortSignal.timeout(1);
+            await new Promise(resolve => setTimeout(resolve, 20));
+
+            expect(deadline.aborted).toBe(true);
+            expect(IsTimeoutAbort(deadline)).toBe(true);
+            expect(BuildCancellationErrorInfo({ signal: deadline })).toMatchObject({ errorType: 'NetworkError', severity: 'Retriable', canFailover: true, providerErrorCode: 'request_timeout' });
+        });
+
+        it('a plain caller cancel is Cancelled', () => {
+            expect(BuildCancellationErrorInfo({ signal: aborted('user stopped') })).toMatchObject({ errorType: 'Cancelled', canFailover: false });
+        });
     });
 
     it('BuildCancellationErrorInfo is Cancelled for a caller abort and a retriable NetworkError for a timeout', () => {
@@ -66,6 +91,19 @@ describe('cancellation helpers', () => {
         expect(() => ThrowIfAborted(aborted('stop'))).toThrow('Request was cancelled: stop');
         expect(() => ThrowIfAborted(new AbortController().signal)).not.toThrow();
         expect(() => ThrowIfAborted(undefined)).not.toThrow();
+    });
+
+    it('AbortableDelay leaves no abort listener on a token reused across delays', async () => {
+        const controller = new AbortController();
+        const added = vi.spyOn(controller.signal, 'addEventListener');
+        const removed = vi.spyOn(controller.signal, 'removeEventListener');
+
+        for (let i = 0; i < 50; i++) {
+            await AbortableDelay(0, controller.signal);
+        }
+
+        expect(added).toHaveBeenCalledTimes(50);
+        expect(removed).toHaveBeenCalledTimes(50);
     });
 
     it('AbortableDelay resolves after its time, and rejects as soon as the signal aborts', async () => {

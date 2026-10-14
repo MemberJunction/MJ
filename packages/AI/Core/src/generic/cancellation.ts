@@ -42,21 +42,26 @@ export function IsAbortError(error: unknown): boolean {
 }
 
 /**
- * Whether an aborted signal was aborted by a timeout rather than by its caller: its reason is a
- * `TimeoutError` (what `AbortSignal.timeout()` raises), or an error or string that says it timed out
- * (what a runner composing its own timeout into the signal raises).
+ * An abort reason that says it is a timeout by its type, not its wording. A timer that aborts a
+ * signal with its own error class sets this flag on it (the prompt runner's `AIPromptTimeoutError`
+ * does), so the abort is classified as a timeout wherever it surfaces.
+ */
+export interface TimeoutAbortReason {
+    readonly IsTimeout: true;
+}
+
+/**
+ * Whether an aborted signal was aborted by a timeout rather than by its caller. Decided by the
+ * reason's type: a `TimeoutError` (what `AbortSignal.timeout()` raises) or a reason flagged
+ * {@link TimeoutAbortReason}. The words of a reason never decide it: a caller is free to abort with
+ * "it timed out on my side", and that is still the caller cancelling.
  */
 export function IsTimeoutAbort(signal: AbortSignal | null | undefined): boolean {
     if (!signal?.aborted) {
         return false;
     }
-    const reason: unknown = signal.reason;
-    const e = asErrorLike(reason);
-    if (e && e.name === 'TimeoutError') {
-        return true;
-    }
-    const text = typeof reason === 'string' ? reason : typeof e?.message === 'string' ? e.message : '';
-    return /\btime(?:d)?\s?out\b/i.test(text);
+    const reason = asErrorLike(signal.reason) as (ErrorLike & { IsTimeout?: unknown }) | undefined;
+    return reason?.name === 'TimeoutError' || reason?.IsTimeout === true;
 }
 
 /**

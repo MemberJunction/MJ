@@ -520,7 +520,7 @@ describe('BaseEmbeddings.EmbedTexts cancellation', () => {
     it('reports an abort caused by a timeout as a retriable network error, not a cancellation', async () => {
         const e = new CancellableEmbeddings('k');
         const controller = new AbortController();
-        e.onAttempt = () => controller.abort(new Error('the model call was aborted (timeout)'));
+        e.onAttempt = () => controller.abort(Object.assign(new Error('the model call was aborted (timeout)'), { IsTimeout: true }));
 
         const error = await rejectionOf(e.EmbedTexts({ texts: ['a', 'b'], model: 'm', CancellationToken: controller.signal }));
 

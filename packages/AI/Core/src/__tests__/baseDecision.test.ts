@@ -128,7 +128,7 @@ describe('BaseDecision', () => {
 
         it("classifies an abort the runner's timeout caused as a retriable network error, so it fails over", async () => {
             const controller = new AbortController();
-            controller.abort(new Error("AI prompt 'Default Decision' exceeded its configured TimeoutMS (50ms) — the model call was aborted (timeout)"));
+            controller.abort(Object.assign(new Error("AI prompt 'Default Decision' exceeded its configured TimeoutMS (50ms) — the model call was aborted (timeout)"), { IsTimeout: true }));
             fake.decideHandler = async () => { throw abortError(); };
 
             const result = await fake.Decide({ ...createValidParams(), CancellationToken: controller.signal });

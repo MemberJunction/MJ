@@ -129,7 +129,7 @@ describe('OpenAIAudioGenerator cancellation', () => {
         speak.mockImplementationOnce(abortsWithSignal);
 
         const pending = makeGenerator().CreateSpeech({ text: 'Hello', voice: 'alloy', CancellationToken: controller.signal });
-        controller.abort(new Error('The model call was aborted (timeout)'));
+        controller.abort(Object.assign(new Error('The model call was aborted (timeout)'), { IsTimeout: true }));
         const result = await pending;
 
         expect(result.errorInfo).toMatchObject({ errorType: 'NetworkError', canFailover: true });
