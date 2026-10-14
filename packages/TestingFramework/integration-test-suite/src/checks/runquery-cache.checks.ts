@@ -23,7 +23,6 @@ import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, RunQueryFixtures } from '@memberjunction/testing-integration';
 import { DeterministicEntityFactory } from './deterministic-entity-factory';
-import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 /** All fixture-mutated settings share this prefix so teardown can sweep leftovers. */
 export const RUNQUERY_SETTING_PREFIX = 'mj.integrationtest.rq';
@@ -125,7 +124,7 @@ export async function CreateRunQueryFixtures(ctx: IntegrationCheckContext): Prom
     ttlQuery.CategoryID = category.ID;
     ttlQuery.SQL = countSQL;
     ttlQuery.Status = 'Approved';
-    if (!await ttlQuery.Save(FixtureQuerySaveOptions())) {
+    if (!await ttlQuery.Save()) {
         throw new Error(`TTL fixture query save failed: ${ttlQuery.LatestResult?.CompleteMessage}`);
     }
     fixtures.TtlQuery = ttlQuery;
@@ -150,7 +149,7 @@ export async function CreateRunQueryFixtures(ctx: IntegrationCheckContext): Prom
         `SELECT MAX(${q.QuoteIdentifier('__mj_UpdatedAt')}) AS ${q.QuoteIdentifier('MaxUpdatedAt')}, ` +
         `COUNT(*) AS ${q.QuoteIdentifier('RowCount')} ` +
         `FROM ${schema}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
-    if (!await validatedQuery.Save(FixtureQuerySaveOptions())) {
+    if (!await validatedQuery.Save()) {
         throw new Error(`Validated fixture query save failed: ${validatedQuery.LatestResult?.CompleteMessage}`);
     }
     fixtures.ValidatedQuery = validatedQuery;
@@ -364,7 +363,7 @@ export const RunQueryCacheChecks: NamedCheck[] = [
             broken.CategoryID = Category.ID;
             broken.SQL = 'SELECT FROM nowhere_at_all';
             broken.Status = 'Approved';
-            Assert(await broken.Save(FixtureQuerySaveOptions()), `broken fixture save failed: ${broken.LatestResult?.CompleteMessage}`);
+            Assert(await broken.Save(), `broken fixture save failed: ${broken.LatestResult?.CompleteMessage}`);
             try {
                 await QueryEngine.Instance.Config(true, ctx.User);
                 ctx.Storage.ResetCounts();
@@ -438,14 +437,14 @@ export const RunQueryCacheChecks: NamedCheck[] = [
                 queryA.CategoryID = Category.ID;
                 queryA.SQL = `SELECT 'A' AS Slot`;
                 queryA.Status = 'Approved';
-                Assert(await queryA.Save(FixtureQuerySaveOptions()), `query A save failed: ${queryA.LatestResult?.CompleteMessage}`);
+                Assert(await queryA.Save(), `query A save failed: ${queryA.LatestResult?.CompleteMessage}`);
 
                 queryB = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
                 queryB.Name = sharedName;
                 queryB.CategoryID = categoryB.ID;
                 queryB.SQL = `SELECT 'B' AS Slot`;
                 queryB.Status = 'Approved';
-                Assert(await queryB.Save(FixtureQuerySaveOptions()), `query B save failed: ${queryB.LatestResult?.CompleteMessage}`);
+                Assert(await queryB.Save(), `query B save failed: ${queryB.LatestResult?.CompleteMessage}`);
 
                 // resolveQuery reads the QueryEngine cache — refresh so both fixtures resolve,
                 // then take each query's CANONICAL CategoryPath from the engine (guarantees the
@@ -510,7 +509,7 @@ export const RunQueryCacheChecks: NamedCheck[] = [
                 query.CategoryID = Category.ID;
                 query.SQL = `SELECT COUNT(*) AS SettingCount FROM ${ctx.Schema ?? '__mj'}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
                 query.Status = 'Approved';
-                Assert(await query.Save(FixtureQuerySaveOptions()), `perm fixture query save failed: ${query.LatestResult?.CompleteMessage}`);
+                Assert(await query.Save(), `perm fixture query save failed: ${query.LatestResult?.CompleteMessage}`);
 
                 // The Query Entities bridge row is what makes the FULL check consult entity
                 // CanRead — without it both checks trivially allow and the check is vacuous.

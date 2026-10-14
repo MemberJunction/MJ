@@ -19,6 +19,12 @@
  *     honoured by the server entity subclasses). A deterministic client-transport run requires that
  *     host setting.
  *
+ * This factory is the one fixture path: checks save what it returns with plain `Save()`, not with
+ * `EntitySaveOptions.SkipEntityAIActions` as well. That save option is a third opt-out with the same
+ * effect (`SaveEnrichmentOptOut` in `@memberjunction/core-entities-server`); the tier's host switch
+ * masks it, so the tier cannot observe it — its precedence is pinned by the MJCoreEntitiesServer unit
+ * tests instead.
+ *
  * Callers pass the provider their fixture already runs on (normally `ctx.Provider`); nothing here
  * touches the process-global provider.
  */

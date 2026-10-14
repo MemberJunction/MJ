@@ -2,7 +2,7 @@ import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView, IMetadataPr
 import { MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity } from "@memberjunction/core-entities";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { RunTemplateExtractionPipeline } from "./template-extraction";
-import { SaveTimeAISettings } from "@memberjunction/ai";
+import { SaveEnrichmentOptOut } from "./saveEnrichmentOptOut";
 import type { ISaveEnrichmentOptOut } from "./saveEnrichmentOptOut";
 import type { MergedTemplateParameter } from "./template-extraction";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
@@ -13,8 +13,9 @@ export class MJTemplateContentEntityServer extends MJTemplateContentEntity imple
      *  extraction. Parameters are still extracted deterministically and keep heuristic descriptions.
      *  Set it before `Save()` on callers that must not call a model, such as deterministic tests or
      *  bulk imports. Sticky: it stays set until cleared, so it applies to every later save of this
-     *  instance. Defaults to false. The host can also disable this enrichment for every save it
-     *  serves (`SaveTimeAISettings`, kind `TemplateParameters`). */
+     *  instance. Defaults to false. A save whose options carry `SkipEntityAIActions` skips it for
+     *  that save only. The host can also disable this enrichment for every save it serves
+     *  (`SaveTimeAISettings`, kind `TemplateParameters`). Precedence: {@link SaveEnrichmentOptOut.ShouldSkip}. */
     public SkipAIEnrichment?: boolean;
 
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
@@ -38,7 +39,13 @@ export class MJTemplateContentEntityServer extends MJTemplateContentEntity imple
 
             // Extract and sync parameters if needed
             if (shouldExtractParams && this.TemplateText && this.TemplateText.trim().length > 0) {
-                await this.extractAndSyncParameters();
+                // Same rule as MJ: Queries: the save's SkipEntityAIActions, else the instance flag, or the host switch.
+                const skipAIEnrichment = SaveEnrichmentOptOut.ShouldSkip(
+                    'TemplateParameters',
+                    SaveEnrichmentOptOut.FromSaveOptions(options),
+                    this.SkipAIEnrichment,
+                );
+                await this.extractAndSyncParameters(skipAIEnrichment);
             }
 
             // Commit the transaction
@@ -52,7 +59,11 @@ export class MJTemplateContentEntityServer extends MJTemplateContentEntity imple
         }
     }
 
-    private async extractAndSyncParameters(): Promise<void> {
+    /**
+     * Extracts the template's parameters and syncs them, inside a nested transaction.
+     * @param skipAIEnrichment Skip the AI enrichment stage — already resolved by {@link SaveEnrichmentOptOut.ShouldSkip}.
+     */
+    private async extractAndSyncParameters(skipAIEnrichment: boolean): Promise<void> {
         // Nest the AI-driven extraction in its own transaction (a SAVEPOINT
         // on PG, a SAVE TRANSACTION on SS) so any failure inside this step
         // can't poison the parent `super.Save()`'s outer tx.
@@ -82,7 +93,7 @@ export class MJTemplateContentEntityServer extends MJTemplateContentEntity imple
                 this.TemplateText,
                 this.Template,
                 this.ContextCurrentUser,
-                this.SkipAIEnrichment === true || SaveTimeAISettings.Instance.IsDisabled('TemplateParameters'),
+                skipAIEnrichment,
             );
 
             if (result.Warnings.length > 0) {

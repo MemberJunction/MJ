@@ -132,7 +132,8 @@ the family:
 - Entity Actions and Entity AI Actions that metadata attaches to an entity (including the
   `Run Record Process` action a Record Process's on-change trigger owns). The provider fires them on
   save; attaching them is the request, and Entity AI Actions have a per-save opt-out
-  (`EntitySaveOptions.SkipEntityAIActions`).
+  (`EntitySaveOptions.SkipEntityAIActions`, which also skips the `QueryParameters` and
+  `TemplateParameters` enrichment of that save — and none of the other switches' work).
 - `MJ: Vector Indexes` (vector-database index creation, not a model call) and `MJ: AI Prompt Runs`
   (cost arithmetic).
 
@@ -203,8 +204,12 @@ module.exports = {
 Code that holds the entity can opt one instance out instead: `MJQueryEntityServer`,
 `MJQuerySQLEntityServer` and `MJTemplateContentEntityServer` implement `ISaveEnrichmentOptOut` —
 set `SkipAIEnrichment = true` before `Save()` and that instance's parameter enrichment is skipped on
-every later save too (it is sticky). On a query, `RerunExtraction(skipAIEnrichment)` overrides the
-instance flag for one run; the host switch applies either way.
+every later save too (it is sticky). A caller that does not hold the server subclass can skip one
+save instead: `EntitySaveOptions.SkipEntityAIActions = true` skips the parameter enrichment of that
+save on all three entities (it crosses GraphQL, unlike the instance flag). On a query,
+`RerunExtraction(skipAIEnrichment)` overrides the instance flag for one run. One rule resolves all of
+them — `SaveEnrichmentOptOut.ShouldSkip`: the save option, else the run override, else the instance
+flag; the host switch applies either way.
 
 **Re-extraction keeps declared sample values.** When a query's SQL changes, extraction updates each
 existing parameter's Type, IsRequired, DefaultValue and Description from the SQL, but a parameter

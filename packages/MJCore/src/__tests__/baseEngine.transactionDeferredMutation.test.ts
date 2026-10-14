@@ -50,7 +50,8 @@ function providerAtDepth(depth: number): { provider: DatabaseProviderBase; commi
     const queued: PostCommitTask[] = [];
     const provider = Object.create(DatabaseProviderBase.prototype) as DatabaseProviderBase;
     Object.defineProperty(provider, 'TransactionDepth', { get: () => depth });
-    provider.CapturePostCommitToken = () => (depth > 0 ? ({ frames: depth } as unknown as PostCommitToken) : undefined);
+    provider.CapturePostCommitToken = (): PostCommitToken =>
+        depth > 0 ? { Epoch: 1, FrameIds: Array.from({ length: depth }, (_, i) => i + 1) } : { Epoch: null, FrameIds: [] };
     provider.RunAfterCommit = (task: PostCommitTask) => {
         if (depth === 0) void task();
         else queued.push(task);

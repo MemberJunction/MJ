@@ -1,10 +1,12 @@
 /**
- * Verifies that MJTemplateContentEntityServer honours both AI opt-outs on save: the host-level
- * `saveTimeAI.TemplateParameters` switch (SaveTimeAISettings) and the per-instance
- * SkipAIEnrichment flag. Either one makes the save pass skipAIEnrichment=true to the template
- * extraction pipeline; with neither, the pipeline runs its AI stage.
+ * Verifies that MJTemplateContentEntityServer honours all three AI opt-outs on save: the host-level
+ * `saveTimeAI.TemplateParameters` switch (SaveTimeAISettings), the save's
+ * EntitySaveOptions.SkipEntityAIActions, and the per-instance SkipAIEnrichment flag — with the same
+ * precedence as MJ: Queries (SaveEnrichmentOptOut.ShouldSkip). Any of them makes the save pass
+ * skipAIEnrichment=true to the template extraction pipeline; with none, the pipeline runs its AI stage.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { EntitySaveOptions } from '@memberjunction/core';
 import type { EntityInfo } from '@memberjunction/core';
 
 const { mockRunTemplateExtractionPipeline } = vi.hoisted(() => ({
@@ -47,6 +49,13 @@ function newContent(): MJTemplateContentEntityServer {
     return new MJTemplateContentEntityServer({} as EntityInfo);
 }
 
+/** Save options with `SkipEntityAIActions` set as given. */
+function saveOptions(skipEntityAIActions: boolean): EntitySaveOptions {
+    const options = new EntitySaveOptions();
+    options.SkipEntityAIActions = skipEntityAIActions;
+    return options;
+}
+
 /** The skipAIEnrichment argument (4th) of the last RunTemplateExtractionPipeline call. */
 function lastSkipArgument(): boolean {
     const calls = mockRunTemplateExtractionPipeline.mock.calls;
@@ -84,5 +93,31 @@ describe('MJTemplateContentEntityServer save-time AI opt-outs', () => {
         content.SkipAIEnrichment = true;
         await content.Save();
         expect(lastSkipArgument()).toBe(true);
+    });
+
+    describe('the save option (EntitySaveOptions.SkipEntityAIActions), same rule as MJ: Queries', () => {
+        it('skips the AI stage on its own, with no instance flag', async () => {
+            await newContent().Save(saveOptions(true));
+            expect(lastSkipArgument()).toBe(true);
+        });
+
+        it('skips the AI stage even when the instance flag is explicitly false', async () => {
+            const content = newContent();
+            content.SkipAIEnrichment = false;
+            await content.Save(saveOptions(true));
+            expect(lastSkipArgument()).toBe(true);
+        });
+
+        it('an option of false (the default) keeps a sticky instance flag of true', async () => {
+            const content = newContent();
+            content.SkipAIEnrichment = true;
+            await content.Save(saveOptions(false));
+            expect(lastSkipArgument()).toBe(true);
+        });
+
+        it('an option of false with no instance flag runs the AI stage', async () => {
+            await newContent().Save(saveOptions(false));
+            expect(lastSkipArgument()).toBe(false);
+        });
     });
 });

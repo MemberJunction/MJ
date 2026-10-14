@@ -10,6 +10,7 @@ import { MJQuerySQLEntity, MJQueryEntityExtended, MJSQLDialectEntity, QueryEngin
 import { Float32VectorToBase64, RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { SaveTimeAISettings } from "@memberjunction/ai";
+import { SaveEnrichmentOptOut } from "./saveEnrichmentOptOut";
 import type { ISaveEnrichmentOptOut } from "./saveEnrichmentOptOut";
 import {
     RunExtractionPipeline,
@@ -144,8 +145,8 @@ export class MJQueryEntityServer extends MJQueryEntityExtended implements ISaveE
             // Extract and sync parameters AFTER saving, outside of any transaction
             if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
                 // A save that asks to skip AI actions skips this run's enrichment; otherwise the
-                // instance flag decides (undefined = no per-run override).
-                await this.extractAndSyncDataAsync(this.resolveSkipAIEnrichment(options?.SkipEntityAIActions === true ? true : undefined));
+                // instance flag decides (see SaveEnrichmentOptOut.FromSaveOptions).
+                await this.extractAndSyncDataAsync(this.resolveSkipAIEnrichment(SaveEnrichmentOptOut.FromSaveOptions(options)));
                 await this.autoConvertDialectsAsync();
             } else if (!this.SQL || this.SQL.trim().length === 0) {
                 this.UsesTemplate = false;
@@ -242,13 +243,12 @@ export class MJQueryEntityServer extends MJQueryEntityExtended implements ISaveE
     /**
      * Whether this extraction run skips AI enrichment: the run's own override when the caller gave
      * one, else this instance's {@link SkipAIEnrichment}; and always when the host has switched
-     * query-parameter enrichment off. Resolved once per run, so the pipeline only sees a boolean.
+     * query-parameter enrichment off ({@link SaveEnrichmentOptOut.ShouldSkip}). Resolved once per
+     * run, so the pipeline only sees a boolean. An explicit `false` override is a real answer
+     * ("enrich this run") and does not fall back to the instance flag.
      */
     private resolveSkipAIEnrichment(runOverride: boolean | undefined): boolean {
-        // ?? on purpose: an explicit `false` override is a real answer ("enrich this run") and must
-        // not fall back to the instance flag.
-        const requested = runOverride ?? this.SkipAIEnrichment;
-        return requested === true || SaveTimeAISettings.Instance.IsDisabled('QueryParameters');
+        return SaveEnrichmentOptOut.ShouldSkip('QueryParameters', runOverride, this.SkipAIEnrichment);
     }
 
     /**

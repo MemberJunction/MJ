@@ -21,7 +21,7 @@ import sql from 'mssql';
 import { UUIDSet } from '@memberjunction/global';
 import { RigCLI, RigExpectedFailure, RigUsageError } from '../lib/rig-cli';
 
-const MIGRATION = 'migrations/v6/V202610122200__v6.2.x__Feature_Value_Key_And_Versions.sql';
+const MIGRATION = 'migrations/v6/V202610140050__v6.2.x__Feature_Value_Key_And_Versions.sql';
 const PROTECTED_DATABASES = new Set(['mj_ps_pr1_claude', 'mj_ps_pr1_claude_clean']);
 
 

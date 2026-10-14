@@ -1134,16 +1134,24 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      *
      * Call it before the handler's first `await`: it runs synchronously inside the save that raised the event, which is
      * when the post-commit token of that save's transaction can still be captured.
+     *
+     * Whether the write is inside a transaction is decided by that token, not by the provider's depth: on a shared
+     * provider an open transaction belongs to the async scope that began it, and a save from any other scope ran on the
+     * pool and is already durable. Such a caller gets a token with a `null` epoch, and its update runs inline (awaited),
+     * so it can read the cache right after its own save — a depth check would hand it to the provider as detached,
+     * fire-and-forget work instead.
      * @param event - The entity event that asks for the update.
      * @param description - Names the task in the provider's post-commit diagnostics.
      * @param task - The update.
      */
     protected async RunAfterCommitOrNow(event: BaseEntityEvent, description: string, task: () => Promise<void>): Promise<void> {
         const provider = event.baseEntity?.ProviderToUse;
-        if (provider instanceof DatabaseProviderBase && provider.TransactionDepth > 0) {
+        if (provider instanceof DatabaseProviderBase) {
             const token = provider.CapturePostCommitToken();
-            provider.RunAfterCommit(task, description, token);
-            return;
+            if (token && token.Epoch !== null) {
+                provider.RunAfterCommit(task, description, token);
+                return;
+            }
         }
         await task();
     }

@@ -48,14 +48,23 @@ import { BaseSingleton } from '@memberjunction/global';
  * `AIEngine`, `TagEngine`, `QueryEngineServer`, `ComponentMetadataEngineServer`, the integration test suite) —
  * so one switch is read the same way everywhere.
  *
+ * Three switches can turn off the parameter enrichment of `MJ: Queries`, `MJ: Query SQLs` and `MJ: Template Contents`,
+ * resolved by one rule (`SaveEnrichmentOptOut.ShouldSkip` in `@memberjunction/core-entities-server`): the save's
+ * `EntitySaveOptions.SkipEntityAIActions` (that save only), else the instance's `SkipAIEnrichment`
+ * (`ISaveEnrichmentOptOut`, sticky), skips it; the host switch here (`QueryParameters` / `TemplateParameters`) skips
+ * it for every save regardless. `SkipEntityAIActions` reaches only those three entities' enrichment: the
+ * `ViewSmartFilters`, `CodeGeneration` and `Embeddings` work ignores it and is governed by its switch alone.
+ *
  * The four prompt switches are the ones a host that must make no live model call turns off
  * ({@link SaveTimeAISettings.PromptKinds}). `Embeddings` runs a local model: in-process, needs no
  * credentials, writes no AI Prompt Run, and returns the same vector for the same text.
  */
 export interface SaveTimeAIConfig {
-    /** `false` disables AI enrichment of query parameters and fields on `MJ: Queries` / `MJ: Query SQLs` saves. */
+    /** `false` disables AI enrichment of query parameters and fields on `MJ: Queries` / `MJ: Query SQLs` saves.
+     *  Per save, `EntitySaveOptions.SkipEntityAIActions` does the same for that save only. */
     QueryParameters?: boolean;
-    /** `false` disables AI enrichment of template parameters on `MJ: Template Contents` saves. */
+    /** `false` disables AI enrichment of template parameters on `MJ: Template Contents` saves.
+     *  Per save, `EntitySaveOptions.SkipEntityAIActions` does the same for that save only. */
     TemplateParameters?: boolean;
     /** `false` disables Smart Filter WHERE-clause generation on `MJ: User Views` saves. */
     ViewSmartFilters?: boolean;

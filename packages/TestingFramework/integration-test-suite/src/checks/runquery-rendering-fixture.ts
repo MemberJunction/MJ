@@ -23,7 +23,6 @@ import type {
 import { UUIDsEqual } from '@memberjunction/global';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { DeterministicEntityFactory } from './deterministic-entity-factory';
-import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 /** Schema that holds the fixture table. Created and dropped by the bundle. */
 export const RENDER_SCHEMA = 'mjit_render';
@@ -252,7 +251,7 @@ export async function CreateRenderQuery(
     query.SQL = definition.SQL;
     query.Status = 'Approved';
     query.Reusable = definition.Reusable ?? false;
-    if (!await query.Save(FixtureQuerySaveOptions())) {
+    if (!await query.Save()) {
         throw new Error(`Fixture query '${definition.Name}' save failed: ${query.LatestResult?.CompleteMessage}`);
     }
     fixtures.Queries.set(definition.Name, query);
@@ -270,7 +269,7 @@ async function createVariant(provider: IMetadataProvider, query: MJQueryEntity, 
     variant.QueryID = query.ID;
     variant.SQLDialectID = dialect.ID;
     variant.SQL = sql;
-    if (!await variant.Save(FixtureQuerySaveOptions())) {
+    if (!await variant.Save()) {
         throw new Error(`Variant for '${query.Name}' (${platformKey}) save failed: ${variant.LatestResult?.CompleteMessage}`);
     }
     return variant;

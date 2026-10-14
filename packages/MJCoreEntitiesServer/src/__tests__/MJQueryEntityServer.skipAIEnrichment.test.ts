@@ -1,11 +1,14 @@
 /**
  * Verifies that SkipAIEnrichment set on an MJQueryEntityServer instance reaches the extraction
  * pipeline context (so the AI enrichment prompt is never run), is sticky across saves, that an
- * explicit RerunExtraction override wins for that run only, and that the host switch
+ * explicit RerunExtraction override wins for that run only, that a save whose options carry
+ * SkipEntityAIActions skips that save's enrichment (and an option of false never clears a sticky
+ * instance flag), and that the host switch
  * (SaveTimeAISettings, QueryParameters) forces the skip for Save() and RerunExtraction alike.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { QuerySyncContext } from '../custom/query-extraction/types';
+import { EntitySaveOptions } from '@memberjunction/core';
 import type { EntityInfo } from '@memberjunction/core';
 
 const { mockRunExtractionPipeline } = vi.hoisted(() => ({
@@ -45,6 +48,13 @@ vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { EmbedTextLocalForEntity
 
 import { MJQueryEntityServer } from '../custom/MJQueryEntityServer.server';
 import { SaveTimeAISettings } from '@memberjunction/ai';
+
+/** Save options with `SkipEntityAIActions` set as given. */
+function saveOptions(skipEntityAIActions: boolean): EntitySaveOptions {
+    const options = new EntitySaveOptions();
+    options.SkipEntityAIActions = skipEntityAIActions;
+    return options;
+}
 
 /** The base class is mocked, so the EntityInfo the real constructor requires is never read. */
 function newQuery(): MJQueryEntityServer {
@@ -108,6 +118,39 @@ describe('MJQueryEntityServer SkipAIEnrichment', () => {
         // the host switch wins over an explicit "enrich this run"
         await newQuery().RerunExtraction(false);
         expect(lastContext().SkipAIEnrichment).toBe(true);
+    });
+
+    describe('the save option (EntitySaveOptions.SkipEntityAIActions)', () => {
+        it('skips enrichment on its own, with no instance flag', async () => {
+            expect(await newQuery().Save(saveOptions(true))).toBe(true);
+            expect(lastContext().SkipAIEnrichment).toBe(true);
+        });
+
+        it('skips enrichment even when the instance flag is explicitly false', async () => {
+            const query = newQuery();
+            query.SkipAIEnrichment = false;
+            await query.Save(saveOptions(true));
+            expect(lastContext().SkipAIEnrichment).toBe(true);
+        });
+
+        it('applies to that save only: the next default save enriches again', async () => {
+            const query = newQuery();
+            await query.Save(saveOptions(true));
+            await query.Save();
+            expect(lastContext().SkipAIEnrichment).toBe(false);
+        });
+
+        it('an option of false (the default) keeps a sticky instance flag of true', async () => {
+            const query = newQuery();
+            query.SkipAIEnrichment = true;
+            await query.Save(saveOptions(false));
+            expect(lastContext().SkipAIEnrichment).toBe(true);
+        });
+
+        it('an option of false with no instance flag enriches', async () => {
+            await newQuery().Save(saveOptions(false));
+            expect(lastContext().SkipAIEnrichment).toBe(false);
+        });
     });
 
     it('another kind switched off does not skip query enrichment', async () => {

@@ -97,15 +97,19 @@ function freshEngine(): DatasetEngine {
     return new DatasetEngine();
 }
 
-/** A database provider double at a given transaction depth, with a post-commit queue the test runs. */
-function providerAtDepth(depth: number): { provider: DatabaseProviderBase; commit: () => Promise<void> } {
+/**
+ * A database provider double at a given transaction depth, with a post-commit queue the test runs. `member` says
+ * whether the caller belongs to the open transaction: like GenericDatabaseProvider, a non-member (or a caller with no
+ * transaction open) gets a token whose epoch is null.
+ */
+function providerAtDepth(depth: number, member: boolean = true): { provider: DatabaseProviderBase; commit: () => Promise<void>; queuedCount: () => number } {
     const queued: PostCommitTask[] = [];
     const provider = Object.create(DatabaseProviderBase.prototype) as DatabaseProviderBase;
     Object.defineProperty(provider, 'TransactionDepth', { get: () => depth });
-    // the token's shape is the provider's business; the double only has to hand one back
-    provider.CapturePostCommitToken = () => (depth > 0 ? ({ frames: depth } as unknown as PostCommitToken) : undefined);
+    provider.CapturePostCommitToken = (): PostCommitToken =>
+        depth > 0 && member ? { Epoch: 1, FrameIds: Array.from({ length: depth }, (_, i) => i + 1) } : { Epoch: null, FrameIds: [] };
     provider.RunAfterCommit = (task: PostCommitTask) => { queued.push(task); };
-    return { provider, commit: async () => { for (const t of queued.splice(0)) await t(); } };
+    return { provider, commit: async () => { for (const t of queued.splice(0)) await t(); }, queuedCount: () => queued.length };
 }
 
 /** A save event raised by an entity on `provider` (the handler reads only baseEntity.ProviderToUse). */
@@ -175,6 +179,15 @@ describe('BaseEngine.RunAfterCommitOrNow', () => {
         const task = vi.fn().mockResolvedValue(undefined);
         await freshEngine().Defer(saveOn(provider), task);
         expect(task).toHaveBeenCalledTimes(1);
+    });
+
+    it('runs the task now, awaited, when a transaction is open but the caller is not a member of it', async () => {
+        // the caller's write ran on the pool and is durable; deferring it would leave the cache stale after its save
+        const { provider, queuedCount } = providerAtDepth(1, false);
+        const task = vi.fn().mockResolvedValue(undefined);
+        await freshEngine().Defer(saveOn(provider), task);
+        expect(task).toHaveBeenCalledTimes(1);
+        expect(queuedCount()).toBe(0);
     });
 
     it('runs the task only after the commit when the event\'s write is inside a transaction', async () => {

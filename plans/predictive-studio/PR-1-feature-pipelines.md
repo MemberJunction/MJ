@@ -211,9 +211,11 @@ recorded `not-run: budget` in §11 and in the PR description's test plan, and th
   every removed alias (an out-of-repo caller breaks at compile time). PR 6's last milestone removes whatever remains.
 - Commit and push only at a milestone checkpoint after its exit tests pass, only on `ps/pr-1-feature-pipelines`. Never
   `git checkout -- <file>`, `git restore <file>`, `git reset --hard`, force-push or rebase.
-- One migration, T-SQL only: `migrations/v6/V202610122200__v6.2.x__Feature_Value_Key_And_Versions.sql`. If a newer
-  migration than `V202610111907` exists on `origin/next` at kickoff, re-time the file name to now (same folder rule:
-  `v6.*` → `migrations/v6/`). Hand DDL, then ≥ 50 blank lines, then the CodeGen block. No literal `Sequence` in any
+- One migration, T-SQL only: `migrations/v6/V202610140050__v6.2.x__Feature_Value_Key_And_Versions.sql`. Its version
+  must sort after the newest versioned migration on `origin/next` whenever `next` is merged in; if it no longer does,
+  re-time the file name to now with byte-identical content (same folder rule: `v6.*` → `migrations/v6/`) and relabel the
+  old version's `flyway_schema_history` row on this PR's dev databases (re-timed from `V202610122200` after the
+  2026-10-14 `next` merge brought in `V202610122220` and `V202610130044`). Hand DDL, then ≥ 50 blank lines, then the CodeGen block. No literal `Sequence` in any
   `EntityField` INSERT (`node .github/scripts/check-migration-entityfield-sequence.mjs`). Never write `migrations-pg/**`.
 - New table → the generated entity tail must be committed (`npm run check:codegen-tail`).
 - Metadata (Test Type, tests, suite) as JSON with uuidgen keys and **no** `sync` blocks; never INSERT metadata in a
@@ -449,7 +451,7 @@ model is exercised by `fp-live-jobtitle` (§7).
 
 ### 5.1 Data model — one migration
 
-File: `migrations/v6/V202610122200__v6.2.x__Feature_Value_Key_And_Versions.sql`. Hand-written part (complete text, as
+File: `migrations/v6/V202610140050__v6.2.x__Feature_Value_Key_And_Versions.sql`. Hand-written part (complete text, as
 shipped — CQ-5 synced it to the file after the coding-standards waves: `AIModelID` throughout (D-036), the
 `ProcessRunDetail.Warnings` column (audit B40), the one-time orphan-cache DELETE (audit B21/B22) and the replaced
 `FeatureValue` table description were added during execution):
@@ -982,7 +984,7 @@ added during execution; they are recorded below in the same format. Later milest
 
 #### Task M1.1: Migration, CodeGen and the generated tail
 
-**Files:** Create `migrations/v6/V202610122200__v6.2.x__Feature_Value_Key_And_Versions.sql` · Modify (generated)
+**Files:** Create `migrations/v6/V202610140050__v6.2.x__Feature_Value_Key_And_Versions.sql` · Modify (generated)
 `packages/MJCoreEntities/src/generated/entities/__mj.ts`, `packages/MJServer/src/generated/graphql-schemas/__mj.ts`,
 `packages/Angular/Explorer/core-entity-forms/src/lib/generated/**` (new `Entities/MJFeaturePipelineVersion/` form;
 regenerated forms of the changed entities; `generated-forms.module.ts`), `packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts`,
@@ -9241,7 +9243,7 @@ Sequence 6, tier `live-model`).
     "Feature Pipeline Version Steward" scheduled job evaluates and backfills changed versions without a person; an
     Action scheduled job paused for a missing class resumes by itself once the class is loaded; Gemini, Vertex and
     Bedrock send temperature 0 as 0 and strict calls refuse a changed parameter. Migration
-    `V202610122200__v6.2.x__Feature_Value_Key_And_Versions.sql`.
+    `V202610140050__v6.2.x__Feature_Value_Key_And_Versions.sql`.
     ```
     Add any other package the branch touched that `npm run check:changeset` names (e.g. `@memberjunction/ai-vertex`
     if its tests changed); keep every entry `minor` (the `fixed` group makes one minor repo-wide either way).
@@ -9771,7 +9773,7 @@ PascalCase. `VendorCallParameters.VendorModelName` is the vendor's model name, `
 
 ### Migration
 
-`migrations/v6/V202610122200__v6.2.x__Feature_Value_Key_And_Versions.sql`: columns on `FeatureValue`
+`migrations/v6/V202610140050__v6.2.x__Feature_Value_Key_And_Versions.sql`: columns on `FeatureValue`
 (`PipelineVersion`, `AIModelID`, `ParametersHash`, `InputHash`, `ValueKeyHash`, `Source`), `FeatureValueCache`
 (`AIModelID`, `ParametersHash`, rebuilt unique indexes; cache rows that can never match the new key and that no
 Feature Value references are deleted), `ProcessRun.ResultSummary`, `ProcessRunDetail.Warnings`, new table
@@ -9820,7 +9822,7 @@ _(The agent opening the PR adds its own tool attribution line here, per its harn
 
 ### 2026-10-13 — M1 complete — Claude Opus 5.5 (controller, subagent-driven execution)
 
-- **Shipped (M1.1–M1.6, as planned):** the migration `V202610122200__v6.2.x__Feature_Value_Key_And_Versions.sql`
+- **Shipped (M1.1–M1.6, as planned):** the migration `V202610140050__v6.2.x__Feature_Value_Key_And_Versions.sql`
   (Feature Value key columns, `Source`, cache pin columns and rebuilt indexes, `ProcessRun.ResultSummary`,
   `ProcessRunDetail.Warnings`, `FeaturePipelineVersion`, the one-time orphan-cache DELETE) with its CodeGen tail;
   normalised cache keys (`FeatureValueKey.NormalizeValue`); the pin in every cache call, cache row, Feature Value key
@@ -9890,8 +9892,8 @@ _(The agent opening the PR adds its own tool attribution line here, per its harn
 - **Anchors:** `# ok 60 · moved 1 · changed 0 · missing 0 · skipped 6`; the six bizapps-common anchors checked with the
   checker's `classify()` against bizapps-common `next`: 6 ok.
 - **Assumptions:** A1 `c2f9f59900`; A2 2; A3 8; A4 1; A5 OPEN; A6 `V202610121900__v6.2.x__User_IsTemplate.sql` (newer
-  than written → this PR's migration re-timed to `V202610122200__v6.2.x__Feature_Value_Key_And_Versions.sql`
-  everywhere in this plan); A7 1; A8 1; A9 1; A10 1; A11 `V202610121154__v5.53.x__Person_Enrichment.sql` (newer than
+  than written → this PR's migration re-timed to `V202610122200`, and again to
+  `V202610140050__v6.2.x__Feature_Value_Key_And_Versions.sql` after the 2026-10-14 `next` merge); A7 1; A8 1; A9 1; A10 1; A11 `V202610121154__v5.53.x__Person_Enrichment.sql` (newer than
   written; the companion's `V202610121300__v5.53.x__Restamp_Pipeline_Job_Functions.sql` still sorts after it: no
   change); A12 0 / 1; A13 0 / 0; A14 IT112; A15 `[]`; A16 1; A17 `">=6.2.0-edge.3 <7.0.0"` (changed on `next`; M7.5
   recomputes `<V>` as written); A18 6; A19 0.
