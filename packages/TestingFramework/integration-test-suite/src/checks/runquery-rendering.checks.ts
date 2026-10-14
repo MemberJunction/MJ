@@ -350,8 +350,30 @@ const OWN_CAP_CASES: RenderCase[] = [
         Variants: { postgresql: `SELECT ID, Category || ':' || ID::text AS Tag, 'x:y'::text AS Lit FROM ${T} WHERE ID <= 15 ORDER BY ID` },
         Columns: ['ID', 'Tag', 'Lit'], Ordered: true,
         Expect: items => items.filter(i => i.ID <= 15).map(i => ({ ID: i.ID, Tag: `${i.Category}:${i.ID}`, Lit: 'x:y' }))
+    },
+    {
+        // TOP on two branches makes the cap a derived table, so the set operation's ORDER BY,
+        // which names a branch's alias, has to order it from outside. Each branch has exactly five
+        // rows, so its TOP 5 keeps all of them.
+        Name: 'RR Union Branch TOPs Aliased Order',
+        SQL: `SELECT TOP 5 a.ID FROM ${T} a WHERE a.ID <= 5 UNION ALL SELECT TOP 5 b.ID FROM ${T} b WHERE b.ID BETWEEN 101 AND 105 ORDER BY a.ID DESC`,
+        Platforms: ['sqlserver'],
+        Columns: ['ID'], Ordered: true,
+        Expect: items => unionBranchIds(items)
+    },
+    {
+        Name: 'RR Union Branch TOPs Own OFFSET FETCH',
+        SQL: `SELECT TOP 5 a.ID FROM ${T} a WHERE a.ID <= 5 UNION ALL SELECT TOP 5 b.ID FROM ${T} b WHERE b.ID BETWEEN 101 AND 105 ORDER BY a.ID DESC OFFSET 2 ROWS FETCH NEXT 5 ROWS ONLY`,
+        Platforms: ['sqlserver'],
+        Columns: ['ID'], Ordered: true,
+        Expect: items => unionBranchIds(items).slice(2, 7)
     }
 ];
+
+/** IDs 1–5 and 101–105, highest first: the rows of the two-branch UNION cases. */
+function unionBranchIds(items: RenderItem[]): ComparableRow[] {
+    return ids(items.filter(i => i.ID <= 5 || (i.ID >= 101 && i.ID <= 105)).sort((a, b) => b.ID - a.ID));
+}
 
 // ─── Parameters ────────────────────────────────────────────────────────────────
 

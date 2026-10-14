@@ -19,9 +19,10 @@ import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { Session as InspectorSession } from 'node:inspector';
-import { sep } from 'node:path';
+import { join, sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
 import { BuildSchemaOptions, buildSchemaSync, getMetadataStorage, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
@@ -34,7 +35,7 @@ import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, gra
 import { TranslateBracketsToPG } from './postgresqlCompat.js';
 import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig } from './postgresqlPoolSettings.js';
 import { default as jwt } from 'jsonwebtoken';
-import { contextFunction, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
+import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import { variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
@@ -50,6 +51,14 @@ import { createRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.j
 import { REALTIME_SDP_EXCHANGE_PATH } from '@memberjunction/ai';
 import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 import { createWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
+import {
+  CreateRealtimeVerifyRouter,
+  REALTIME_VERIFY_MOUNT_PATH,
+  RealtimeSessionEventService,
+  RealtimeSessionVerificationService,
+  ParseReplicatedRealtimeSessionEvent,
+  type RealtimeSessionEventTopicPayload,
+} from './realtimeSessions/index.js';
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
 
@@ -60,6 +69,8 @@ import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, Lo
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
 import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
+import { ActionEngineServer } from '@memberjunction/actions';
+import { CreateAdhocSQLAuthorizer } from './resolvers/AdhocQueryResolver.js';
 import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents } from './sharedCache.js';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { ReconcileOrphanedConversationDetails } from './generic/OrphanedConversationDetailReconciler.js';
@@ -77,7 +88,7 @@ import { IntegrationProgressEmitter } from '@memberjunction/integration-progress
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
-import { SessionJanitor } from './agentSessions/index.js';
+import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
@@ -92,7 +103,8 @@ import {
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
-import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath } from '@memberjunction/server-extensions-core';
+import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath, GetCorsOwningServerExtensionRoots } from '@memberjunction/server-extensions-core';
+import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
 import { coreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 import { CreateMetadataRefreshSignalHandler, METADATA_REFRESH_SIGNAL } from './metadataRefreshSignal.js';
@@ -129,6 +141,7 @@ export * from 'type-graphql';
 // later importers, which makes schema build fail on ViewResult.RowCount.
 export { Int, Float, ID } from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
+export { CreateIsolatedProvider } from './isolatedProvider.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export { ServerExtensionLoader, BaseServerExtension, DefaultServerExtensionServiceRegistry } from '@memberjunction/server-extensions-core';
 export type {
@@ -252,6 +265,9 @@ export * from './resolvers/CurrentUserContextResolver.js';
 export * from './resolvers/RSUResolver.js';
 export * from './resolvers/AgentSessionResolver.js';
 export * from './resolvers/RealtimeClientSessionResolver.js';
+export * from './resolvers/RealtimeSessionEventsResolver.js';
+export * from './resolvers/RealtimeSessionVerificationResolver.js';
+export * from './realtimeSessions/index.js';
 export * from './resolvers/MeetingResolver.js';
 export * from './resolvers/RemoteBrowserActionResolver.js';
 export * from './agentSessions/index.js';
@@ -288,7 +304,15 @@ const localPath = (p: string) => {
   return resolvedPath;
 };
 
-export const CreateApp = (): Application => express();
+/**
+ * Creates the Express application MJServer serves on. `X-Powered-By` is disabled: it only
+ * advertises the framework to scanners. {@link Serve} disables it again on a host-supplied app.
+ */
+export const CreateApp = (): Application => {
+  const app = express();
+  app.disable('x-powered-by');
+  return app;
+};
 
 /** @deprecated Use {@link CreateApp}. */
 export const createApp = CreateApp;
@@ -354,6 +378,43 @@ async function wireHandoffOfferFanOut(redisProvider: RedisLocalStorageProvider, 
   }
 }
 
+/** Redis channel carrying replicated realtime session events between server instances. */
+const REALTIME_SESSION_EVENTS_FANOUT_CHANNEL = 'realtime-session-events';
+
+/**
+ * Replicate realtime session events across server instances over Redis.
+ *
+ * Behind a load balancer the browser's WebSocket (the `RealtimeSessionEvents` subscription) lives on one
+ * replica while the request that raises the event — typically the public verify-link redemption — can be
+ * handled by another. The session-events topic is an in-process PubSub, so without this an
+ * `identity.verified` published on replica B never reaches the subscriber on replica A.
+ *
+ * Inbound messages are republished onto THIS instance's local topic only (never back through the
+ * replication hook, so there is no loop) and are still judged by the subscription filter against the
+ * connection's identity — a replica has no say in who sees what. The durable
+ * `RealtimeSessionVerificationStatus` query remains the backstop if Redis is down.
+ */
+async function wireRealtimeSessionEventFanOut(redisProvider: RedisLocalStorageProvider): Promise<void> {
+  try {
+    await redisProvider.SubscribeToChannel(REALTIME_SESSION_EVENTS_FANOUT_CHANNEL, (raw: string) => {
+      try {
+        const payload = ParseReplicatedRealtimeSessionEvent(raw, MJGlobal.Instance.ProcessUUID);
+        if (payload) {
+          RealtimeSessionEventService.Instance.PublishReplicated(payload);
+        }
+      } catch (err) {
+        LogError(`Realtime session event fan-out: dropping a malformed replicated event: ${(err as Error).message}`);
+      }
+    });
+    RealtimeSessionEventService.Instance.SetReplicationHook((payload: RealtimeSessionEventTopicPayload) => {
+      redisProvider.PublishMessage(REALTIME_SESSION_EVENTS_FANOUT_CHANNEL, JSON.stringify(payload));
+    });
+    console.log('[MJAPI] Realtime session events: cross-instance fan-out enabled via Redis');
+  } catch (err) {
+    // Single-instance delivery still works and the status query covers the rest: degraded, not broken.
+    console.warn(`Realtime session event fan-out unavailable: ${(err as Error).message}`);
+  }
+}
 
 // Bind MJStorage as the conversation-attachment blob store. The attachment service itself no longer
 // imports `@memberjunction/storage` — that dependency made it unusable from any browser or React
@@ -368,6 +429,12 @@ GetAttachmentService().BlobStore = new MJStorageBlobStore();
 
 export const Serve = async (resolverPaths: Array<string>, app: Application = CreateApp(), options?: MJServerOptions): Promise<void> => {
   const t0 = performance.now();
+  // Name this MJAPI instance by its port before anything stamps a session row with its identity, so the janitor's
+  // startup recovery closes only the sessions an earlier boot of this instance left, never those of another MJAPI on
+  // the same host (#5309).
+  SetHostInstancePort(graphqlPort);
+  // The realtime bridge engine stamps its bridge rows with the same identity and reconciles orphans by it (#5310).
+  BindBridgeEngineHostInstance();
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
   // operator knob). At `standard` (default), per-phase timings are collapsed into
   // the one-line summary; at `verbose`+ each phase prints inline as before.
@@ -403,11 +470,13 @@ const setupComplete$ = new ReplaySubject(1);
   const sharedCache = CreateSharedCacheFromEnvironment(configInfo.cacheSettings);
   if (sharedCache) {
     await WireSharedCacheEvents(sharedCache, () => (Metadata.Provider instanceof ProviderBase ? Metadata.Provider : undefined)); // global-provider-ok: bootstrap
-    // Both cross-instance fan-outs ride this connection. Push-status moved into sharedCache.ts
-    // with the rest of the Redis wiring; the handoff one stays here deliberately — it reaches into
-    // RoomHandoffEngine, and the cache module should not acquire a dependency on room handoffs.
+    // The cross-instance fan-outs ride this connection. Push-status moved into sharedCache.ts
+    // with the rest of the Redis wiring; the handoff and realtime-session ones stay here deliberately —
+    // they reach into RoomHandoffEngine and RealtimeSessionEventService, and the cache module should not
+    // acquire a dependency on either.
     await WirePushStatusFanOut(sharedCache);
     await wireHandoffOfferFanOut(sharedCache, startupLog);
+    await wireRealtimeSessionEventFanOut(sharedCache);
     startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
   }
   const cacheManagerConfig = CacheManagerConfigFromSettings(configInfo.cacheSettings);
@@ -791,6 +860,11 @@ const setupComplete$ = new ReplaySubject(1);
   // This must happen before any request handler calls GetAPIKeyEngine()
   GetAPIKeyEngine();
 
+  // Actions that run caller-supplied SQL (Run Ad-hoc Query) run only on the read-only login, with
+  // ExecuteAdhocQuery's table check and timeout limit.
+  ActionEngineServer.Instance.SetReadOnlyProviderFactory(() => CreateReadOnlyProvider(dataSources));
+  ActionEngineServer.Instance.SetAdhocSQLAuthorizer(CreateAdhocSQLAuthorizer(configInfo.databaseSettings.requestTimeout));
+
   setupComplete$.next(true);
   raiseEvent('setupComplete', dataSources, null,  this);
 
@@ -1038,7 +1112,7 @@ const setupComplete$ = new ReplaySubject(1);
     const profile = await new Promise<unknown>((res, rej) =>
       profSession!.post('Profiler.stop', (e, r) => (e ? rej(e) : res((r as { profile: unknown }).profile)))
     );
-    const outPath = `/tmp/mjapi_schema_build_${process.pid}.cpuprofile`;
+    const outPath = join(mkdtempSync(join(tmpdir(), 'mjapi-schema-')), `mjapi_schema_build_${process.pid}.cpuprofile`);
     writeFileSync(outPath, JSON.stringify(profile));
     profSession.disconnect();
     // eslint-disable-next-line no-console
@@ -1205,6 +1279,9 @@ const setupComplete$ = new ReplaySubject(1);
   await apolloServer.start();
   
   // Fix #8: Add compression for better throughput performance
+  // Never advertise the framework (`X-Powered-By: Express`) — the host may have passed its own app.
+  app.disable('x-powered-by');
+
   app.use(compression({
     // Don't compress responses smaller than 1KB
     threshold: 1024,
@@ -1321,6 +1398,19 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.LogIf('verbose', `[Widget] Public routes registered at ${WIDGET_MOUNT_PATH}/session and ${WIDGET_MOUNT_PATH}/session/refresh`);
   }
 
+  // ─── Realtime identity verification: PUBLIC verify-link routes (before auth mw) ───
+  // The person opening the emailed link holds no MJ token — the single-use token is the capability.
+  // GET only renders a confirm button; the POST redeems (mail scanners GET every link). Mounted only
+  // when verification is enabled AND able to send mail AND able to protect its codes (see
+  // realtime.identityVerification config: communicationProvider + hmacSecret).
+  if (configInfo.realtime?.identityVerification?.enabled && !RealtimeSessionVerificationService.Instance.IsEnabled) {
+    console.warn('[RealtimeVerify] realtime.identityVerification.enabled is true but verification is unavailable: it needs a communicationProvider and an hmacSecret of at least 16 characters.');
+  }
+  if (RealtimeSessionVerificationService.Instance.IsEnabled) {
+    app.use(REALTIME_VERIFY_MOUNT_PATH, cors<cors.CorsRequest>(), CreateRealtimeVerifyRouter());
+    startupLog.LogIf('verbose', `[RealtimeVerify] Public routes registered at ${REALTIME_VERIFY_MOUNT_PATH}/:token (GET) and ${REALTIME_VERIFY_MOUNT_PATH} (POST)`);
+  }
+
   // ─── Server extensions loader & shared service registry ───────────────────
   const extensionLoader = new ServerExtensionLoader();
   _currentExtensionLoader = extensionLoader;
@@ -1412,27 +1502,14 @@ const setupComplete$ = new ReplaySubject(1);
   // Without this, the browser blocks 401 responses from the auth middleware
   // because they lack Access-Control-Allow-Origin headers, preventing the
   // client from reading the error code and triggering token refresh.
-  const corsAllowed = configInfo.cors?.allowedOrigins ?? ['*'];
-  const corsWildcard = corsAllowed.includes('*');
-  // SECURITY: never combine credentials with a wildcard/reflect-any-origin policy. When
-  // allowedOrigins is ['*'] the origin callback reflects the caller's Origin, and pairing that
-  // with Access-Control-Allow-Credentials: true lets any site a signed-in user visits make
-  // credentialed cross-origin reads. MJ's primary auth is a Bearer token (not auto-sent
-  // cross-origin), so dropping credentials under the wildcard default is safe; deployments that
-  // genuinely need credentialed CORS must configure an explicit allowedOrigins list.
-  app.use(cors<cors.CorsRequest>({
-    origin: (origin, callback) => {
-      // Allow all origins when ['*'] (default/backward-compatible),
-      // or when no Origin header (server-to-server calls).
-      if (corsWildcard || !origin || corsAllowed.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`Origin ${origin} not allowed by CORS`));
-      }
-    },
-    credentials: corsWildcard ? false : (configInfo.cors?.allowCredentials ?? true),
-    maxAge: configInfo.cors?.maxAge ?? 86400,
-  }));
+  // Extensions that declare `OwnsCORS: true` (ServerExtensionConfig) are exempt: the global
+  // middleware skips their RootPaths so it neither reflects an origin onto their responses nor
+  // answers their preflights — the extension's own OPTIONS handling and origin policy run instead.
+  const corsOwnedExtensionRoots = GetCorsOwningServerExtensionRoots(extensionConfigs);
+  if (corsOwnedExtensionRoots.length > 0) {
+    LogStatus(`Global CORS skips extension-owned roots: ${corsOwnedExtensionRoots.join(', ')}`);
+  }
+  app.use(CreateGlobalCorsMiddleware(configInfo.cors, corsOwnedExtensionRoots));
 
   // ─── Pre-auth server extensions (before auth — extensions handle their own auth) ─────
   // Slack uses HMAC signature verification, Teams uses Bot Framework JWT validation.
@@ -1502,6 +1579,13 @@ const setupComplete$ = new ReplaySubject(1);
       httpServer,
       publicUrl: oauthPublicUrl,
     });
+  }
+
+  // Every extension has now had its chance at the request: a preflight under an extension-owned
+  // root that none of them answered is refused here, instead of falling through to the GraphQL
+  // mount's cors(), which would approve it for every origin.
+  if (corsOwnedExtensionRoots.length > 0) {
+    app.use(CreateExtensionOwnedPreflightFallback(corsOwnedExtensionRoots));
   }
 
   // ─── Cross-extension lifecycle hook: OnAllExtensionsMounted ───────────────
@@ -1664,12 +1748,16 @@ const setupComplete$ = new ReplaySubject(1);
     });
   }
 
-  // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then keep a
-  // periodic staleness sweep running. Self-registers with ShutdownRegistry, so its timer is cleared
-  // by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
+  // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then a periodic tick
+  // that closes stale and over-deadline sessions and rebuilds lost realtime recordings from their
+  // crash-recovery shards (storage reads and writes). Self-registers with ShutdownRegistry, so its timer
+  // is cleared by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
   if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
     SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
       .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
+    // The bridge engine's orphan reconcile likewise starts only now that this process holds its port, so it can't
+    // take the live bridges of another MJAPI still serving that port for its own orphans (#5310).
+    StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
   }
 
   // Launch the durable task-graph dispatcher: claim Pending tasks, execute them with a fresh
@@ -2198,3 +2286,13 @@ function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
   return wrapper as unknown as sql.ConnectionPool;
 }
 
+
+// Public-edge building blocks for Open Apps that run their own pre-auth edge and mint
+// scope-limited guest sessions (e.g. a ballot edge: verify a credential, then mint a short-lived
+// session scoped to one resource). They are the same pieces WidgetSessionService uses; a generic
+// public-widget session mint remains the long-term replacement.
+export { BuildSessionClaims, MagicLinkKeyManager, MagicLinkService, HashToken, GenerateRawToken } from './auth/magicLink/index.js';
+export type { MagicLinkJWTClaims } from './auth/magicLink/index.js';
+export { VerifyHostAssertion } from './realtimeWidget/host-identity.js';
+export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget/host-identity.js';
+export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';

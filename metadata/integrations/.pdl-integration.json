@@ -1,0 +1,28 @@
+[
+  {
+    "_comments": [
+      "PEOPLE DATA LABS as an MJ: Integrations row, so a company can hold its own PDL key on an MJ: Company",
+      "Integrations row linked to an MJ: Credentials record of type API Key ({ \"apiKey\": \"…\" }).",
+      "@memberjunction/actions-peopledatalabs resolves the key by this Integration's Name; with no company",
+      "credential it falls back to the PDL_API_KEY environment variable. ClassName is null on purpose:",
+      "this is a vendor API, not a sync connector, so the Integration engine has nothing to run for it",
+      "(MJCompanyIntegrationEntityServer logs 'No connector registered' and skips its pipeline).",
+      "No sync block: the release push writes that back. primaryKey from uuidgen."
+    ],
+    "fields": {
+      "Name": "People Data Labs",
+      "Description": "People Data Labs (peopledatalabs.com): person enrichment with education and employment history, person search, and school lookup. Used by the person-enrichment engine in BizApps Common and by the People Data Labs - Enrich People action.",
+      "NavigationBaseURL": "https://dashboard.peopledatalabs.com",
+      "ClassName": null,
+      "ImportPath": null,
+      "BatchMaxRequestCount": 100,
+      "BatchRequestWaitTime": 0,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key",
+      "Icon": "fa-solid fa-id-card",
+      "Configuration": null
+    },
+    "primaryKey": {
+      "ID": "C3451581-D04E-4D7E-902F-0D37CE0CE381"
+    }
+  }
+]

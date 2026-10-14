@@ -40,12 +40,23 @@ import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
 import { SQLParser } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
-import { EncryptionEngine } from '@memberjunction/encryption';
+import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
+
+/**
+ * Entities whose update is always hydrated from the stored row, never from the client's `OldValues___`, though they
+ * do not track record changes: their server-side write rules compare against the prior state, which a client could
+ * otherwise supply itself (lower-case names). See `ResolverBase.MustLoadTruthFromDatabase`.
+ */
+const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
+  'mj: record changes',
+  'mj: conversation details',
+  'mj: data context items',
+]);
 
 export class ResolverBase {
   private static _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
@@ -199,7 +210,11 @@ export class ResolverBase {
                   const decryptedValue = await engine.Decrypt(value, contextUser);
                   dataObject[fieldName] = decryptedValue;
                 } catch (err) {
-                  LogError(`Failed to decrypt field ${fieldName} for API response: ${err}`);
+                  if (IsEncryptionKeyUnavailable(err)) {
+                    ReportEncryptionKeyUnavailable(err);
+                  } else {
+                    LogError(`Failed to decrypt field ${fieldName} for API response: ${err}`);
+                  }
                   // On decryption failure, use sentinel for safety
                   dataObject[fieldName] = ENCRYPTED_SENTINEL;
                 }
@@ -362,13 +377,16 @@ export class ResolverBase {
    * @param dataObject - The data object containing field values
    * @param encryptionEngine - Optional encryption engine for re-encryption (lazy loaded if needed)
    * @param contextUser - User context for encryption operations
+   * @param fieldKey - What the object's keys are: field CodeNames (GraphQL transport rows, the
+   *   default) or field Names (raw provider rows, such as dataset item results)
    * @returns The filtered data object
    */
   protected async FilterEncryptedFieldsForAPI(
     entityName: string,
     dataObject: Record<string, unknown>,
     contextUser: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    fieldKey: 'CodeName' | 'Name' = 'CodeName'
   ): Promise<Record<string, unknown>> {
     if (!dataObject) return dataObject;
 
@@ -382,7 +400,7 @@ export class ResolverBase {
 
     // Process each encrypted field
     for (const field of encryptedFields) {
-      const fieldName = field.CodeName;
+      const fieldName = fieldKey === 'Name' ? field.Name : field.CodeName;
       const value = dataObject[fieldName];
 
       // Skip null/undefined values
@@ -423,13 +441,15 @@ export class ResolverBase {
   }
 
   /**
-   * Filters encrypted fields for an array of data objects
+   * Filters encrypted fields for an array of data objects. `fieldKey` is as for
+   * {@link FilterEncryptedFieldsForAPI}.
    */
   protected async ArrayFilterEncryptedFieldsForAPI(
     entityName: string,
     dataObjectArray: Record<string, unknown>[],
     contextUser: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    fieldKey: 'CodeName' | 'Name' = 'CodeName'
   ): Promise<Record<string, unknown>[]> {
     if (!dataObjectArray || dataObjectArray.length === 0) return dataObjectArray;
 
@@ -443,7 +463,7 @@ export class ResolverBase {
 
     // Process each element
     for (const element of dataObjectArray) {
-      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider);
+      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider, fieldKey);
     }
 
     return dataObjectArray;
@@ -932,6 +952,7 @@ export class ResolverBase {
     label: string,
     provider?: IMetadataProvider,
     user?: UserInfo,
+    options?: { LeaveUnparseableToProvider?: boolean },
   ): void {
     if (!clause?.trim()) return;
 
@@ -945,6 +966,9 @@ export class ResolverBase {
         ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${clause}`
         : `SELECT 1 FROM __mj_clause_screen WHERE (${clause})`;
     const parser = new SQLParser(wrapped, dialect);
+    // A clause the provider checks again on its own (an aggregate expression) leaves text the parser
+    // cannot read to that per-item check instead of failing the whole request.
+    if (!parser.IsValid && options?.LeaveUnparseableToProvider) return;
     if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
       throw new Error(
         `Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`,
@@ -1062,6 +1086,11 @@ export class ResolverBase {
    * The single place that is not true is a field carrying `UserSearchParamFormatAPI`, whose
    * admin-authored format may splice the term in unquoted; `createViewUserSearchSQL` re-applies
    * `ValidateUserProvidedSQLClause` for exactly those entities.
+   *
+   * Each `Aggregates[].expression` gets the same screen, except that text the parser cannot read
+   * goes on to the provider, which refuses it per aggregate. The provider never runs the caller's
+   * aggregate text: it runs the SQL that `CheckAggregateExpression` rebuilds from a single
+   * aggregate call over the entity's columns, and refuses everything else per aggregate.
    */
   protected screenClientViewClauses(
     clauses: {
@@ -1069,6 +1098,7 @@ export class ResolverBase {
       orderBy?: string | null;
       userSearchString?: string | null;
       overrideExcludeFilter?: string | null;
+      aggregates?: AggregateExpression[] | null;
     },
     provider?: IMetadataProvider,
     user?: UserInfo,
@@ -1076,6 +1106,9 @@ export class ResolverBase {
     this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider, user);
     this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider, user);
     this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider, user);
+    for (const aggregate of clauses.aggregates ?? []) {
+      this.assertClientClauseUsesEntityBaseViews(aggregate?.expression, 'Aggregate', provider, user, { LeaveUnparseableToProvider: true });
+    }
   }
 
   /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */
@@ -1223,7 +1256,7 @@ export class ResolverBase {
       // Screen at this boundary: parse, reject writes, allow only entity BaseViews the
       // acting user can read (subqueries do not inherit the top entity's permission check).
       this.screenClientViewClauses(
-        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
+        { extraFilter, orderBy, userSearchString, overrideExcludeFilter, aggregates },
         provider as unknown as IMetadataProvider,
         user,
       );
@@ -1390,6 +1423,7 @@ export class ResolverBase {
             orderBy: param.orderBy,
             userSearchString: param.userSearchString,
             overrideExcludeFilter: param.overrideExcludeFilter,
+            aggregates: param.aggregates,
           },
           md,
           contextUser ?? undefined,
@@ -1818,9 +1852,10 @@ export class ResolverBase {
       // that hydrates from those values — never loading what the database actually holds.
       const hasNarrowedAuditPayload = this.StripRecordChangePayloadFromClientInput(entityInfo, userInfo, input, clientNewValues);
 
-      if (this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload)) {
+      if (this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload, userInfo)) {
         // We get here because the entity tracks record changes, OR the client did not provide OldValues,
-        // OR field-level security is in play — in every case we need the true old values from the DB
+        // OR field-level security or an Update row filter is in play — in every case we need the true
+        // old values from the DB
         const cKey = new CompositeKey(
           entityInfo.PrimaryKeys.map((pk) => {
             return {
@@ -1918,8 +1953,8 @@ export class ResolverBase {
    * it never applies them to the entity. An update-denied field can then only become dirty by being
    * named in the mutation input itself, which is precisely the case that check does catch.
    *
-   * Ordered so the boolean flag is evaluated last: the extra load lands only on entities that have
-   * the feature switched on, which is almost none of them.
+   * The flag comes after the cheap terms, so the extra load lands only on entities that have the
+   * feature switched on, which is almost none of them.
    *
    * `MJ: Record Changes` always loads from the database: its server class allows an update only when
    * Comments is the one dirty field, and "dirty" compared against client-supplied OldValues lets a
@@ -1930,22 +1965,36 @@ export class ResolverBase {
    * lets only an administrator save an item that holds SQL, and decides that from the item's `Type`
    * and `SQL`. Hydrated from OldValues, a client could leave both out, and the stored procedure would
    * keep the stored SQL item while the rule saw none.
+   *
+   * `MJ: Conversation Details` always loads for the same reason: its write gate decides from the stored
+   * row (who wrote a person's message, its role, the owner's rating), and an OldValues-hydrated entity
+   * would let a grantee claim to be a message's author while rewriting it. See
+   * {@link ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW}.
+   *
+   * A caller under an Update row filter (a role's Update RLS filter or an API-key row filter) always
+   * loads from the database too (#4919). The save's post-image check skips its query when no column
+   * the filter reads is dirty, and dirtiness measured against client OldValues is the caller's to
+   * choose: claiming the new value of a filter column as its old value made it clean, so the update
+   * moved the row outside the caller's scope without the check ever running. Evaluated last: it
+   * builds the filter clause, and only callers with such a filter pay for the load. A missing user
+   * (a user-cache miss) also loads: with no user the filter can't be ruled out.
    */
   protected MustLoadTruthFromDatabase(
     entityInfo: EntityInfo,
     input: { OldValues___?: Array<{ Key: string; Value: unknown }> },
     hasDeniedReadFields: boolean,
-    hasNarrowedAuditPayload: boolean
+    hasNarrowedAuditPayload: boolean,
+    user: UserInfo | undefined
   ): boolean {
-    const entityName = entityInfo.Name.trim().toLowerCase();
     return (
       entityInfo.TrackRecordChanges ||
-      entityName === 'mj: record changes' ||
-      entityName === 'mj: data context items' ||
+      ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW.has(entityInfo.Name.trim().toLowerCase()) ||
       !input.OldValues___ ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
-      entityInfo.EnableFieldLevelSecurity
+      entityInfo.EnableFieldLevelSecurity ||
+      !user ||
+      entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Update, '').length > 0
     );
   }
 

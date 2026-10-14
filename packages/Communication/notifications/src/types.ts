@@ -1,3 +1,5 @@
+import type { NotificationScope } from './scoped-notification-config-resolver';
+
 /**
  * Individual channel settings for notification delivery.
  * Each channel can be independently enabled or disabled.
@@ -86,6 +88,13 @@ export interface SendNotificationParams {
    * which is the property that makes it safe to expose.
    */
   allowedDeliveryChannels?: Partial<DeliveryChannels>;
+
+  /**
+   * The scope the notice is sent in, for `MJ: Scoped Notification Configs`: the caller's primary record (its
+   * application, say) and named secondary dimensions such as `origin`. The engine adds the recipient and the
+   * recipient's roles as scopes itself. Omit it and only global rows apply.
+   */
+  scope?: NotificationScope;
 }
 
 /**

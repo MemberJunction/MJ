@@ -2,7 +2,7 @@ import {
     BaseEntity, CacheCategory, CacheChangedEvent, LocalCacheManager, LogError, LogStatusEx, LogWarning, UserInfo,
     type BaseEntityEvent, type DatabaseProviderBase,
 } from '@memberjunction/core';
-import { BaseSingleton, EscapeSQLString, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, GroupByUUID, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { IsSystemUser, SystemUserID } from './systemUser.js';
 
 /**
@@ -248,8 +248,9 @@ export class UserCache extends BaseSingleton<UserCache> {
         ? []
         : await provider.ExecuteSQL<UserRoleRow>(`SELECT * FROM ${this.viewFor(provider, USER_ROLES_ENTITY, 'vwUserRoles')}${rolesWhere}`);
 
+      const rolesByUser = GroupByUUID(roles ?? [], (role) => role.UserID);
       return users.map((user) => {
-        user.UserRoles = (roles ?? []).filter((role) => UUIDsEqual(role.UserID, user.ID));
+        user.UserRoles = rolesByUser.Get(user.ID) ?? [];
         return new UserInfo(provider, user);
       });
     }
