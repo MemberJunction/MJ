@@ -1,5 +1,5 @@
 import { RegisterClass } from "@memberjunction/global";
-import { AudioSplitter, BaseAudioGenerator, BaseSpeechToText, BaseTextToSpeech, TextToSpeechParams, SpeechResult, SpeechToTextParams, TranscriptionPiece, VoiceInfo, AudioModel, ModelUsage, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
+import { AIErrorInfo, AudioSplitter, BaseAudioGenerator, BaseSpeechToText, BaseTextToSpeech, BuildCancellationErrorInfo, IsRequestAborted, TextToSpeechParams, SpeechResult, SpeechToTextParams, TranscriptionPiece, VoiceInfo, AudioModel, ModelUsage, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
 import { OpenAI, toFile } from "openai";
 
 /**
@@ -34,6 +34,18 @@ function supportsVerboseJson(model: string): boolean {
 }
 
 /**
+ * Classifies a failed audio request. A request ended by its `CancellationToken` is a cancellation
+ * (never failed over), or a network error when the signal was aborted by a timeout; anything else is
+ * the analyzer's reading of the SDK's error, which keeps its HTTP status.
+ */
+function classifyAudioError(error: unknown, signal: AbortSignal | undefined, provider: string): AIErrorInfo {
+    if (IsRequestAborted(error, signal)) {
+        return BuildCancellationErrorInfo({ error, signal, provider });
+    }
+    return ErrorAnalyzer.analyzeError(error, provider);
+}
+
+/**
  * OpenAI audio: text-to-speech (`gpt-4o-mini-tts`) and speech-to-text (Whisper).
  *
  * It does both, so it is registered against {@link BaseTextToSpeech} and {@link BaseSpeechToText}
@@ -57,6 +69,10 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
      */
     public Splitter: AudioSplitter | null = null;
 
+    /**
+     * Speaks `params.text`. `params.CancellationToken` is passed to the request, so aborting it tears
+     * the request down; the failure is then classified as a cancellation.
+     */
     public async CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult> {
         const speechResult = new SpeechResult();
         try {
@@ -65,7 +81,7 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
                 voice: params.voice || (await this.GetVoices())[0].id,
                 input: params.text,
                 instructions: params.instructions || "Speak in a cheerful and positive tone"
-            });
+            }, { signal: params.CancellationToken });
 
             const arrayBuffer = await audio.arrayBuffer();
             const audioBuffer = Buffer.from(arrayBuffer);
@@ -73,7 +89,7 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
             speechResult.success = true;
             speechResult.content = audioBuffer.toString('base64');
         } catch (error) {
-            const errorInfo = ErrorAnalyzer.analyzeError(error, 'OpenAI TTS');
+            const errorInfo = classifyAudioError(error, params.CancellationToken, 'OpenAI TTS');
             speechResult.success = false;
             speechResult.errorMessage = error?.message || 'Unknown error occurred';
             // Kept so a caller can tell a rejected request (a 400) from an outage: the message alone
@@ -90,7 +106,8 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
      * Audio above the 25MB upload ceiling requires an {@link AudioSplitter} on {@link Splitter};
      * without one, oversized audio fails with a message naming the option rather than silently
      * transcribing a truncated prefix. Pieces are transcribed sequentially — see
-     * {@link BaseAudioGenerator.TranscribeWithSplitting}.
+     * {@link BaseAudioGenerator.TranscribeWithSplitting}. `params.CancellationToken` is passed to
+     * each piece's request, and no further piece is sent once it aborts.
      */
     public async SpeechToText(params: SpeechToTextParams): Promise<SpeechResult> {
         const result = new SpeechResult();
@@ -104,7 +121,8 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
                 SPLIT_TARGET_BYTES,
                 this.Splitter,
                 "OpenAI",
-                (piece) => this.transcribeOne(piece, model, params)
+                (piece, signal) => this.transcribeOne(piece, model, params, signal),
+                params.CancellationToken
             );
 
             if (transcription.text.trim().length === 0) {
@@ -122,7 +140,7 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
                 result.usage = ModelUsage.ForMedia("Seconds", transcription.durationSeconds);
             }
         } catch (error) {
-            const errorInfo = ErrorAnalyzer.analyzeError(error, 'OpenAI Whisper');
+            const errorInfo = classifyAudioError(error, params.CancellationToken, 'OpenAI Whisper');
             result.success = false;
             result.errorMessage = error?.message || 'Unknown error occurred';
             // Kept so a caller can tell a rejected upload (a 400 for an unsupported format) from an
@@ -146,7 +164,7 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
         throw new Error('SpeechToText requires either audioData (Buffer) or audioFile (base 64 string)');
     }
 
-    private async transcribeOne(audio: Buffer, model: string, params: SpeechToTextParams): Promise<TranscriptionPiece> {
+    private async transcribeOne(audio: Buffer, model: string, params: SpeechToTextParams, signal: AbortSignal | undefined): Promise<TranscriptionPiece> {
         // `verbose_json` rather than `json` purely for the `duration` field — the quantity OpenAI
         // bills by. The transcript text is identical between the two formats. Models that reject
         // verbose_json fall back to `json` and simply report no duration.
@@ -157,7 +175,7 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
             language: params.language,
             prompt: params.prompt,
             temperature: params.temperature
-        });
+        }, { signal });
 
         // `> 0`, not `>= 0`: a zero duration is not a billable quantity. Accepting it produces
         // `ForMedia('Seconds', 0)`, which the pricing layer then refuses as "a measure with no

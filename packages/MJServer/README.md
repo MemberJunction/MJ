@@ -987,6 +987,7 @@ For full architecture details, refer to the **[Server Extensions Guide](../../gu
 5. Core integrations (Twilio, Vonage, RingCentral, Teams meetings) register their management services directly into `loader.Services` under `'TwilioTelephonyService'`, `'VonageTelephonyService'`, `'RingCentralTelephonyService'`, and `'TeamsMeetingsService'`.
 6. Open App server packages listed in `dynamicPackages.server[]` declare their extensions (`MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`). The host `mj.config.cjs` `serverExtensions[]` overlays those by `DriverClass`.
 7. Core routes (`/graphql`, `/health`, `/auth`, `/media`, `/schema`, `/mcp`) are protected by a reserved roots registry; extensions attempting to claim a reserved root fail closed during bootstrap.
+8. MJServer's global CORS middleware runs before every extension. An extension with its own origin policy sets `OwnsCORS: true` in its config; global CORS then skips its `RootPath`, so its preflights reach the extension and no origin is reflected onto its responses. See the guide's "Owning CORS for Your RootPath" section. Express's `X-Powered-By` header is disabled app-wide.
 
 ### Configuration
 

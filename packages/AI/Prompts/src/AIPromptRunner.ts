@@ -442,14 +442,18 @@ export class AIPromptRunner extends BaseModelRunner {
       // Model selection info is now included in the result from both execution methods
       return result;
     } catch (error) {
-      this.logError(error, {
-        prompt: params.prompt,
-        metadata: {
-          executionPhase: 'main-execution',
-          hasChildPrompts: !!params.childPrompts?.length
-        },
-        maxErrorLength: params.maxErrorLength
-      });
+      if (this.isCancellation(error, params)) {
+        this.logStatus(`⏹️ Prompt "${params.prompt?.Name}" was cancelled: ${error.message}`, false, params);
+      } else {
+        this.logError(error, {
+          prompt: params.prompt,
+          metadata: {
+            executionPhase: 'main-execution',
+            hasChildPrompts: !!params.childPrompts?.length
+          },
+          maxErrorLength: params.maxErrorLength
+        });
+      }
 
       const endTime = new Date();
       const executionTimeMS = endTime.getTime() - startTime.getTime();
@@ -616,8 +620,11 @@ export class AIPromptRunner extends BaseModelRunner {
       errorMessage = `Validation failed: ${parsedResult.validationResult.Errors?.map(e => e.Message).join('; ')}`;
     }
 
+    const cancelled = !chatResult.success && this.IsCallerCancellation(chatResult.errorInfo);
+
     return {
       success: chatResult.success,
+      ...(cancelled ? { status: 'Cancelled' as const, cancelled: true, cancellationReason: 'user_requested' as const } : {}),
       rawResult: chatResult.data?.choices?.[0]?.message?.content,
       result: parsedResult?.result ? parsedResult.result as T : parsedResult as T,
       errorMessage, // Include error message for proper error propagation
@@ -1875,7 +1882,7 @@ export class AIPromptRunner extends BaseModelRunner {
       errorMessage: lastError?.message || 'Unknown error',
       exception: lastError,
       errorInfo: errorInfo,
-      statusText: `Failover failed after ${failoverAttempts.length} attempts`,
+      statusText: this.IsCallerCancellation(errorInfo) ? 'Cancelled' : `Failover failed after ${failoverAttempts.length} attempts`,
       timeElapsed: endTime.getTime() - startTime.getTime(),
       data: null
     };
@@ -2036,6 +2043,14 @@ export class AIPromptRunner extends BaseModelRunner {
   }
 
   /**
+   * Whether an error ended a prompt run because the caller cancelled it: the caller's token is aborted,
+   * or the error is classified as a cancellation.
+   */
+  private isCancellation(error: Error, params: AIPromptParams): boolean {
+    return params.cancellationToken?.aborted === true || this.IsCallerCancellation(ErrorAnalyzer.analyzeError(error));
+  }
+
+  /**
    * Whether a failed result failed for a TOOLS-specific reason, and so is worth one retry with the
    * declarations stripped.
    *
@@ -2051,7 +2066,7 @@ export class AIPromptRunner extends BaseModelRunner {
       return false;
     }
     // A cancellation is the caller's decision, never a tool problem.
-    if (result.errorInfo?.canFailover === false && result.errorInfo?.providerErrorCode === 'request_cancelled') {
+    if (this.IsCallerCancellation(result.errorInfo)) {
       return false;
     }
     return this.isToolSpecificFailureText(`${result.errorMessage ?? ''} ${result.statusText ?? ''}`);
@@ -2358,6 +2373,10 @@ export class AIPromptRunner extends BaseModelRunner {
       return chatResult;
     } catch (error) {
       const errorInfo = ErrorAnalyzer.analyzeError(error, driverClass)
+      // A caller cancellation is not a model failure. Whoever handles it logs it once, at info level.
+      if (this.IsCallerCancellation(errorInfo)) {
+        throw error;
+      }
       this.logError(error, {
         category: 'ModelExecution',
         model: model,
@@ -2381,9 +2400,9 @@ export class AIPromptRunner extends BaseModelRunner {
    * as a rejected promise the caller's failover/retry logic can act on.
    *
    * A timeout rejects with a typed {@link AIPromptTimeoutError} (classified by ErrorAnalyzer as a
-   * retriable NetworkError); a caller cancellation rejects with the same
-   * `'Chat completion was cancelled'` error the previous implementation produced, so cancellation
-   * semantics are unchanged.
+   * retriable NetworkError); a caller cancellation rejects with a `'Chat completion was cancelled'`
+   * error classified as a cancellation (see {@link BaseModelRunner.BuildCancellationError}), so
+   * failover stops instead of trying the next candidate.
    *
    * NOTE: `Promise.race` ignores the losing `ChatCompletion()` promise's eventual result, but the
    * underlying request IS torn down — the composed signal is on `ChatParams.cancellationToken`, and
@@ -2398,29 +2417,36 @@ export class AIPromptRunner extends BaseModelRunner {
       return await llm.ChatCompletion(chatParams);
     }
 
-    return await Promise.race([
-      llm.ChatCompletion(chatParams),
-      new Promise<never>((_, reject) => {
-        const fail = () => reject(this.buildAbortError(signal, bound));
-        if (signal.aborted) {
-          fail();
-        } else {
-          signal.addEventListener('abort', fail, { once: true });
-        }
-      }),
-    ]);
+    let fail: (() => void) | undefined;
+    const aborted = new Promise<never>((_, reject) => {
+      fail = () => reject(this.buildAbortError(signal, bound));
+      if (signal.aborted) {
+        fail();
+      } else {
+        signal.addEventListener('abort', fail, { once: true });
+      }
+    });
+    try {
+      return await Promise.race([llm.ChatCompletion(chatParams), aborted]);
+    } finally {
+      // With no prompt timeout the signal is the caller's own token, which outlives this call: a
+      // listener left on it would pile up across every prompt the caller runs.
+      if (fail) {
+        signal.removeEventListener('abort', fail);
+      }
+    }
   }
 
   /**
    * Builds the rejection error for an aborted model call — a typed {@link AIPromptTimeoutError} when
-   * the prompt's TimeoutMS fired, otherwise the legacy cancellation error.
+   * the prompt's TimeoutMS fired, otherwise a caller cancellation that is not eligible for failover.
    */
   private buildAbortError(signal: AbortSignal, bound: ExecutionBound): Error {
     if (bound.TimedOut()) {
       const reason = signal.reason;
       return reason instanceof AIPromptTimeoutError ? reason : new Error('Chat completion timed out');
     }
-    return new Error('Chat completion was cancelled');
+    return this.BuildCancellationError();
   }
 
   /**
@@ -3030,6 +3056,10 @@ export class AIPromptRunner extends BaseModelRunner {
           };
         }
       } catch (error) {
+        // A cancellation ends the retries; the caller logs it and records the run as cancelled.
+        if (this.isCancellation(error, params)) {
+          throw error;
+        }
         lastError = error;
         this.logError(error, {
           category: 'ExecutionRetry',
@@ -4292,6 +4322,13 @@ export class AIPromptRunner extends BaseModelRunner {
     }
 
     // Success and Status were set by FinalizeRunRecord from the outcome updatePromptRun passed it.
+    // A call the caller cancelled is recorded as cancelled, not as a failed model call.
+    if (!modelResult.success && this.IsCallerCancellation(modelResult.errorInfo)) {
+      promptRun.Status = 'Cancelled';
+      promptRun.Cancelled = true;
+      promptRun.CancellationReason = 'user_requested';
+    }
+
     // Set ErrorDetails if failed
     if (!promptRun.Success) {
       if (!modelResult.success && modelResult.errorMessage) {

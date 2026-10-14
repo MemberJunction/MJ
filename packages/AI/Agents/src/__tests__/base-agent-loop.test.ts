@@ -980,6 +980,75 @@ describe('BaseAgent.Execute — cancellation', () => {
         expect(harness.steps[2].Status).toBe('Completed');
     });
 
+    it('a prompt the caller cancels mid-call finalizes the run Cancelled, not Failed, though the prompt came back as a fatal failure', async () => {
+        const controller = new AbortController();
+        const { agent, runner, flushSteps } = makeAgent([
+            () => {
+                controller.abort('user stopped the request');
+                return {
+                    success: false,
+                    status: 'Cancelled',
+                    cancelled: true,
+                    cancellationReason: 'user_requested',
+                    errorMessage: 'Chat completion was cancelled',
+                    chatResult: {
+                        success: false,
+                        errorInfo: { errorType: 'Unknown', severity: 'Fatal', canFailover: false, providerErrorCode: 'request_cancelled' },
+                    } as AIPromptRunResult['chatResult'],
+                };
+            },
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ cancellationToken: controller.signal }));
+
+        expect(runner.Calls).toHaveLength(1);
+        expect(result.success).toBe(false);
+        expect(harness.run.Status).toBe('Cancelled');
+        expect(harness.run.ErrorMessage).toBe('user stopped the request');
+        await flushSteps();
+        expect(harness.steps[1].StepType).toBe('Prompt');
+        expect(harness.steps[1].ErrorMessage).toBe('Cancelled during prompt execution');
+    });
+
+    it('a cancellation that lands right after nine failed steps still ends the run Cancelled, not by the consecutive-failure limit', async () => {
+        const controller = new AbortController();
+        const failures = Array.from({ length: 9 }, () => () => llmFailure('Rate limit exceeded — 429'));
+        const { agent, runner } = makeAgent([
+            ...failures,
+            () => {
+                controller.abort('user stopped the request');
+                return llmFailure('Chat completion was cancelled');
+            },
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ cancellationToken: controller.signal }));
+
+        expect(runner.Calls).toHaveLength(10);
+        expect(result.success).toBe(false);
+        expect(harness.run.Status).toBe('Cancelled');
+        expect(harness.run.ErrorMessage).toBe('user stopped the request');
+    });
+
+    it('a Stop that lands while a final answer is being processed still completes the run: the work had finished', async () => {
+        const controller = new AbortController();
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const onProgress = (progress: { step: string }): void => {
+            // Fires right after the prompt step's own cancellation check, while its answer is processed.
+            if (progress.step === 'decision_processing') {
+                controller.abort('user stopped too late');
+            }
+        };
+
+        const result = await agent.Execute(makeParams({ cancellationToken: controller.signal, onProgress }));
+
+        expect(controller.signal.aborted).toBe(true);
+        expect(runner.Calls).toHaveLength(1);
+        expect(result.success).toBe(true);
+        expect(harness.run.Status).toBe('Completed');
+    });
+
     it('a token aborted before execution starts yields a cancelled result without creating a run or executing a prompt', async () => {
         const controller = new AbortController();
         controller.abort('cancelled before start');

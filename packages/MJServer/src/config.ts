@@ -226,10 +226,19 @@ const telemetrySchema = z.object({
   level: z.enum(['minimal', 'standard', 'verbose', 'debug']).optional().default('standard'),
 });
 
-const serverExtensionSchema = z.object({
-  Enabled: z.boolean().default(true),
+/**
+ * A host `mj.config.cjs` `serverExtensions[]` entry. Only `DriverClass` is required: an entry whose
+ * DriverClass an Open App package already publishes is an OVERLAY (MergeServerExtensionConfigs) and
+ * may set just the fields it overrides — `{ DriverClass: 'X', OwnsCORS: false }` — without repeating
+ * `RootPath`. `Enabled` has no schema default for the same reason: a defaulted `true` would silently
+ * re-enable an extension the package ships disabled. Whether the MERGED entry is complete (a valid
+ * `RootPath`; `Enabled` defaults to true) is validated after the merge, by prepareServerExtensionConfigs,
+ * which reports an incomplete host-only entry instead of mounting it.
+ */
+export const ServerExtensionSchema = z.object({
+  Enabled: z.boolean().optional(),
   DriverClass: z.string(),
-  RootPath: z.string(),
+  RootPath: z.string().optional(),
   Settings: z.record(z.unknown()).default({})
 }).passthrough();
 
@@ -839,7 +848,7 @@ const configInfoSchema = z.object({
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),
-  serverExtensions: z.array(serverExtensionSchema).optional().default([]),
+  serverExtensions: z.array(ServerExtensionSchema).optional().default([]),
   cacheSettings: cacheSettingsSchema.optional().default({}),
   loggingSettings: loggingSettingsSchema.optional().default({}),
   aiPromptRuns: aiPromptRunsSchema.optional(),
@@ -903,7 +912,7 @@ export type { WorkQueueConfig } from './services/workQueueConfig.js';
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
 export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
-export type ServerExtensionConfig = z.infer<typeof serverExtensionSchema>;
+export type ServerExtensionConfig = z.infer<typeof ServerExtensionSchema>;
 export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
 export type LoggingSettingsConfig = z.infer<typeof loggingSettingsSchema>;
 export type AIPromptRunsConfig = z.infer<typeof aiPromptRunsSchema>;
