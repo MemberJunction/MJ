@@ -15,7 +15,7 @@ vi.mock('openai', async (importOriginal) => {
     return { ...actual, OpenAI: StubOpenAI, toFile: async (_bytes: Buffer, name: string) => ({ name }) };
 });
 
-import { APIError } from 'openai';
+import { APIError, APIUserAbortError } from 'openai';
 import { OpenAIAudioGenerator } from '../models/tts';
 
 /** The error the SDK throws for an HTTP error response, built the way the SDK builds it. */
@@ -84,5 +84,54 @@ describe('OpenAIAudioGenerator error classification', () => {
         const result = await makeGenerator().CreateSpeech({ text: 'Hello', voice: 'bogus' });
 
         expect(result.errorInfo?.error).toBe(error);
+    });
+});
+
+/** A request that settles only when its signal aborts, rejecting as the SDK does then. */
+function abortsWithSignal(_body: object, options?: { signal?: AbortSignal }): Promise<never> {
+    return new Promise<never>((_resolve, reject) => {
+        if (options?.signal?.aborted) {
+            reject(new APIUserAbortError());
+            return;
+        }
+        options?.signal?.addEventListener('abort', () => reject(new APIUserAbortError()), { once: true });
+    });
+}
+
+describe('OpenAIAudioGenerator cancellation', () => {
+    it('passes the CancellationToken to the speech request, and reports its abort as Cancelled', async () => {
+        const controller = new AbortController();
+        speak.mockImplementationOnce(abortsWithSignal);
+
+        const pending = makeGenerator().CreateSpeech({ text: 'Hello', voice: 'alloy', model_id: 'gpt-4o-mini-tts', CancellationToken: controller.signal });
+        controller.abort();
+        const result = await pending;
+
+        expect(speak.mock.calls[0][1]).toEqual({ signal: controller.signal });
+        expect(result.success).toBe(false);
+        expect(result.errorInfo).toMatchObject({ errorType: 'Cancelled', severity: 'Fatal', canFailover: false });
+    });
+
+    it('passes the CancellationToken to the transcription request, and reports its abort as Cancelled', async () => {
+        const controller = new AbortController();
+        transcribe.mockImplementationOnce(abortsWithSignal);
+
+        const pending = makeGenerator().SpeechToText({ model: 'whisper-1', audioData: Buffer.from('audio'), audioFile: '', CancellationToken: controller.signal });
+        controller.abort();
+        const result = await pending;
+
+        expect(transcribe.mock.calls[0][1]).toEqual({ signal: controller.signal });
+        expect(result.errorInfo).toMatchObject({ errorType: 'Cancelled', canFailover: false });
+    });
+
+    it('reports an abort caused by a timeout as a network error, which may fail over', async () => {
+        const controller = new AbortController();
+        speak.mockImplementationOnce(abortsWithSignal);
+
+        const pending = makeGenerator().CreateSpeech({ text: 'Hello', voice: 'alloy', CancellationToken: controller.signal });
+        controller.abort(new Error('The model call was aborted (timeout)'));
+        const result = await pending;
+
+        expect(result.errorInfo).toMatchObject({ errorType: 'NetworkError', canFailover: true });
     });
 });
