@@ -2384,7 +2384,7 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
 
             function projectSession(service: TestableService, sessionID: string): void {
                 service.TargetActions = [mockEmailAction];
-                const tools = service.BuildDirectActionTools('target-1', allowAll, 'OpenAIRealtime', sessionID);
+                const tools = service.buildDirectActionTools('target-1', allowAll, 'OpenAIRealtime', sessionID);
                 expect(tools.map(t => t.Name)).toEqual(['SendEmail']);
             }
 
@@ -2416,7 +2416,7 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
                 const service = new TestableService();
                 service.TargetActions = [mockEmailAction];
                 // The driver takes no dynamic tool set, so the start projects nothing for the session.
-                expect(service.BuildDirectActionTools('target-1', allowAll, 'ElevenLabsRealtime', 'sess-projected-3')).toEqual([]);
+                expect(service.buildDirectActionTools('target-1', allowAll, 'ElevenLabsRealtime', 'sess-projected-3')).toEqual([]);
                 const targetAgent = { ID: 'target-1', Name: 'Sales Agent', TypeConfiguration: JSON.stringify(allowAll) } as unknown as MJAIAgentEntityExtended;
                 vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
                 const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(okResult());
