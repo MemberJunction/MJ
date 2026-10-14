@@ -7,7 +7,7 @@ import { LogError } from "./logging";
 // class-field initialisation time), so the modules are fully
 // evaluated before any getter is invoked.  This is the same
 // pattern already used by queryInfo.ts ↔ metadata.ts.
-import { Metadata } from "./metadata";
+import { MetadataProviderFor } from "./infoProviderResolution";
 import { DatabasePlatform } from "./platformSQL";
 import { ParsePlatformVariants, PlatformVariantsJSON, ResolvePlatformVariant } from "./platformVariants";
 import { UUIDsEqual } from "@memberjunction/global";
@@ -387,6 +387,7 @@ export class UserInfo extends BaseInfo {
      */
     constructor (md: IMetadataProvider = null, initData: any = null) {
         super();
+        this.SetOwningProvider(md);
         this.copyInitData(initData);
         if (initData){
             this._UserRoles = initData.UserRoles || initData._UserRoles;
@@ -709,13 +710,13 @@ export class AuthorizationInfo extends BaseInfo {
     /**
      * Returns the role assignments for this authorization.
      *
-     * **Lazy resolution** — filters from the global `Metadata.Provider.AuthorizationRoles`
-     * collection on every call, like `QueryInfo.Permissions` filters from
-     * `Metadata.Provider.QueryPermissions`.  No result caching is applied because
+     * **Lazy resolution** — filters the owning provider's `AuthorizationRoles` collection
+     * (see {@link BaseInfo.OwningProvider}; the global provider only when there is no owner) on
+     * every call, like `QueryInfo.Permissions` filters `QueryPermissions`.  No result caching is applied because
      * `AuthorizationRoleInfo` objects are lightweight and the collection is small.
      */
     public get Roles(): AuthorizationRoleInfo[] {
-        return Metadata.Provider?.AuthorizationRoles?.filter( // global-provider-ok: AuthorizationInfo is a metadata DTO — resolves roles from the global provider like QueryInfo.Permissions
+        return MetadataProviderFor(this)?.AuthorizationRoles?.filter(
             ar => UUIDsEqual(ar.AuthorizationID, this.ID)
         ) ?? [];
     }
@@ -723,12 +724,13 @@ export class AuthorizationInfo extends BaseInfo {
     /**
      * @param initData - Raw data row from the metadata dataset / database view.
      *   `copyInitData` maps this into the typed properties (ID, Name, ParentID, etc.).
-     * @param _md - Accepted but unused; retained so the signature matches the universal
+     * @param md - The provider that owns this metadata (the universal
      *   `new m.class(dataRow, metadataProvider)` convention used by
-     *   `MetadataFromSimpleObjectWithoutUser`.
+     *   `MetadataFromSimpleObjectWithoutUser`); {@link Roles} resolves through it.
      */
-    constructor (initData: any = null, _md?: IMetadataProvider) {
+    constructor (initData: any = null, md?: IMetadataProvider) {
         super()
+        this.SetOwningProvider(md)
         this.copyInitData(initData)
     }
 
