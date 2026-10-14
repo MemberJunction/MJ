@@ -4,6 +4,7 @@ import { ElevenLabs, ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 // MemberJunction AI core contract
 import {
     BaseRealtimeModel,
+    RealtimeDroppedInputReporter,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
@@ -16,6 +17,7 @@ import {
     type JSONValue,
     type RealtimeTurnDetectionSettings,
     type RealtimeVoiceOption,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -1061,6 +1063,9 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
      */
     private connectTimeToolsFingerprint = ElevenLabsRealtime.ToolSetFingerprint([]);
 
+    /** Reports the frames {@link SendInput} drops, once per kind and type. */
+    private readonly droppedInput = new RealtimeDroppedInputReporter('ElevenLabsRealtime', 'this session sends audio only');
+
     constructor() {
         this.metadataPromise = new Promise<void>((resolve, reject) => {
             this.resolveMetadata = resolve;
@@ -1109,9 +1114,18 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
         return this.metadataPromise;
     }
 
-    /** @inheritdoc — streams one PCM16 mic frame as a base64 `user_audio_chunk`. */
-    public SendInput(chunk: ArrayBuffer): void {
-        this.sendFrame({ user_audio_chunk: Buffer.from(new Uint8Array(chunk)).toString('base64') });
+    /**
+     * @inheritdoc
+     *
+     * Streams one PCM16 audio frame as a base64 `user_audio_chunk`. The session sends audio only, so a frame of another
+     * kind (a camera or screen frame) is dropped, never sent as audio, and reported once per kind and type.
+     */
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind !== 'audio') {
+            this.droppedInput.Report(frame);
+            return;
+        }
+        this.sendFrame({ user_audio_chunk: Buffer.from(new Uint8Array(frame.Data)).toString('base64') });
     }
 
     /**

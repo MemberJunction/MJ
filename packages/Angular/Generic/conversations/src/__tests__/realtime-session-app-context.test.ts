@@ -69,7 +69,9 @@ describe('RealtimeSessionService — RegisterAppClientTools / executeAppClientTo
     const out = await internals(service).executeAppClientTool('Bogus', {});
     expect(out.Success).toBe(false);
     expect(out.ErrorMessage).toContain('Bogus');
-    expect(out.ErrorMessage).toContain('export'); // available tool listed for self-correction
+    // The available list now shows each tool as it was REGISTERED ('Export'), not lower-cased — the
+    // model needs the real name to self-correct (matching is case-insensitive either way).
+    expect(out.ErrorMessage).toContain('Export');
   });
 
   it('catches a throwing handler and returns a structured error (never throws)', async () => {

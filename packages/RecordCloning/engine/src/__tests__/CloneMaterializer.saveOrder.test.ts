@@ -28,12 +28,17 @@ const entity = (ID: string, Name: string, fields: string[]) =>
 const AGENT = entity('e-agent', 'Agents', ['Name', 'ParentID']);
 const STEP = entity('e-step', 'Steps', ['AgentID', 'Name', 'SubAgentID']);
 const PATH = entity('e-path', 'Paths', ['OriginStepID', 'DestinationStepID']);
-const INFOS = [AGENT, STEP, PATH];
+const USER = entity('e-user', 'Users', ['Name']);
+const CONVERSATION = entity('e-conv', 'Conversations', ['UserID', 'Name']);
+const MESSAGE = entity('e-msg', 'Messages', ['ConversationID', 'UserID', 'Role']);
+const INFOS = [AGENT, STEP, PATH, USER, CONVERSATION, MESSAGE];
 /** Foreign keys the fake database enforces: column -> entity it must already hold. */
 const FKS: Record<string, Record<string, string>> = {
     Agents: { ParentID: 'Agents' },
     Steps: { AgentID: 'Agents', SubAgentID: 'Agents' },
     Paths: { OriginStepID: 'Steps', DestinationStepID: 'Steps' },
+    Conversations: { UserID: 'Users' },
+    Messages: { ConversationID: 'Conversations', UserID: 'Users' },
 };
 
 function database() {
@@ -136,5 +141,28 @@ describe('CloneMaterializer save order against a database that enforces foreign 
         plan.Edges = plan.Edges.filter((e) => e.ToKey !== 'p12');
         const graph = await new CloneMaterializer(md).Materialize(plan, { ID: 'u-1' } as UserInfo);
         expect(graph.SidecarEntities).toEqual([]);
+    });
+
+    it("keeps a copied user's messages in order: a message naming the new user saves in the graph, not after it", async () => {
+        const { md, order } = database();
+        const plan = {
+            RootEntityName: 'Users', RootSourceKey: 'u', RootTargetKey: 'u2', Blocked: false, Warnings: [], Excluded: [],
+            Nodes: [
+                node('user', 'Users', 0, 'u2', [['Name', 'Demo', 'Jane', 'Copy']]),
+                node('conv', 'Conversations', 1, 'c2', [['UserID', 'u', 'u2', 'Remap']]),
+                node('ask', 'Messages', 2, 'm1-new', [['ConversationID', 'c', 'c2', 'Remap'], ['UserID', 'u', 'u2', 'Remap'], ['Role', 'User', 'User', 'Copy']]),
+                node('reply', 'Messages', 2, 'm2-new', [['ConversationID', 'c', 'c2', 'Remap'], ['Role', 'AI', 'AI', 'Copy']]),
+            ],
+            Edges: [
+                { FromKey: 'user', ToKey: 'conv', JoinField: 'UserID', Policy: 'Deep', Kind: 'Collection' },
+                { FromKey: 'conv', ToKey: 'ask', JoinField: 'ConversationID', Policy: 'Deep', Kind: 'Collection' },
+                { FromKey: 'conv', ToKey: 'reply', JoinField: 'ConversationID', Policy: 'Deep', Kind: 'Collection' },
+            ],
+        } as unknown as ClonePlan;
+        const graph = await new CloneMaterializer(md).Materialize(plan, { ID: 'u-1' } as UserInfo);
+
+        expect(graph.SidecarEntities).toEqual([]);
+        expect(await graph.RootEntity.Save(), graph.RootEntity.LatestResult?.CompleteMessage).toBe(true);
+        expect(order).toEqual(['Users:u2', 'Conversations:c2', 'Messages:m1-new', 'Messages:m2-new']);
     });
 });

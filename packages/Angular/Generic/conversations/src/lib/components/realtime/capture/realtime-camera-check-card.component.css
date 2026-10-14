@@ -1,0 +1,6 @@
+/* Lines up with the check's own padding below it. */
+.camera-check__note {
+  margin: 0 20px;
+  font-size: 0.9rem;
+  color: var(--mj-text-secondary);
+}

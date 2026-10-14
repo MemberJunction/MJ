@@ -289,7 +289,10 @@ export class AutotagEntity extends AutotagBase {
             ExtraFilter: `ID='${erdID}'`,
             Fields: ['ID', 'EntityID', 'RecordID'],
             ResultType: 'simple',
-            MaxRows: 1
+            MaxRows: 1,
+            // A one-off lookup by ID. A cached RunView reads every column (DocumentText, VectorJSON) and
+            // keeps a single-use slot, so bypass the cache and let Fields apply.
+            BypassCache: true,
         }, contextUser);
 
         if (!erdResult.Success || erdResult.Results.length === 0) return;
@@ -549,7 +552,10 @@ export class AutotagEntity extends AutotagBase {
         const result = await rv.RunView<MJEntityRecordDocumentEntity>({
             EntityName: 'MJ: Entity Record Documents',
             ExtraFilter: `EntityDocumentID='${entityDocumentID}' AND EntityID='${entityID}'`,
-            ResultType: 'entity_object'
+            ResultType: 'entity_object',
+            // A find-or-create read: it must see the database, and the saves that follow drop a cached
+            // copy anyway. Caching it would hold every DocumentText and VectorJSON for the document.
+            BypassCache: true,
         }, this.contextUser);
 
         const map = new Map<string, MJEntityRecordDocumentEntity>();

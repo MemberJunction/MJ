@@ -28,14 +28,17 @@ flowchart TB
     subgraph Apollo["@memberjunction/actions-apollo"]
         AccAction["ApolloEnrichmentAccountsAction"]
         ConAction["ApolloEnrichmentContactsAction"]
-        Config["Configuration\n(API key, batch sizes)"]
+        PeopleClient["ApolloPeopleClient\n(bulk_match, organizations/enrich)"]
+        RESTClient["ApolloRESTClient\n(lists, api_search)"]
+        Http["ApolloHttp\n(header auth, typed errors)"]
+        Config["Configuration\n(batch sizes, endpoints)"]
         Types["Apollo Type Definitions"]
     end
 
     subgraph ApolloAPI["Apollo.io REST API"]
         OrgEnrich["/organizations/enrich"]
         BulkMatch["/people/bulk_match"]
-        PeopleSearch["/mixed_people/search"]
+        PeopleSearch["/mixed_people/api_search"]
     end
 
     subgraph MJCore["MemberJunction Core"]
@@ -50,10 +53,14 @@ flowchart TB
     ConAction --> Config
     AccAction --> Types
     ConAction --> Types
-    AccAction -->|HTTP via axios| OrgEnrich
-    AccAction -->|HTTP via axios| PeopleSearch
-    ConAction -->|HTTP via axios| BulkMatch
-    ConAction -->|HTTP via axios| PeopleSearch
+    AccAction --> PeopleClient
+    AccAction --> RESTClient
+    ConAction --> PeopleClient
+    PeopleClient --> Http
+    RESTClient --> Http
+    Http --> OrgEnrich
+    Http --> BulkMatch
+    Http --> PeopleSearch
     AccAction -->|read/write entities| MJCore
     ConAction -->|read/write entities| MJCore
 
@@ -70,8 +77,9 @@ flowchart LR
     Start["Load accounts\nmatching filter"] --> OrgAPI["Call /organizations/enrich\nper domain"]
     OrgAPI --> UpdateAcct["Update account\nfields"]
     OrgAPI --> TechRec["Create/update\ntechnology records"]
-    OrgAPI --> PeopleAPI["Call /mixed_people/search\nfor domain contacts"]
-    PeopleAPI --> CreateContact["Create/update\ncontact records"]
+    OrgAPI --> PeopleAPI["Call /mixed_people/api_search\nfor the ids at the domain (free)"]
+    PeopleAPI --> Match["Call /people/bulk_match\nby id, 10 at a time (1 credit per match)"]
+    Match --> CreateContact["Create/update\ncontact records"]
     CreateContact --> History["Create education\nhistory records"]
     UpdateAcct --> Next["Next account"]
     TechRec --> Next
@@ -82,6 +90,7 @@ flowchart LR
     style UpdateAcct fill:#2d8659,stroke:#1a5c3a,color:#fff
     style TechRec fill:#2d8659,stroke:#1a5c3a,color:#fff
     style PeopleAPI fill:#b8762f,stroke:#8a5722,color:#fff
+    style Match fill:#b8762f,stroke:#8a5722,color:#fff
     style CreateContact fill:#2d8659,stroke:#1a5c3a,color:#fff
     style History fill:#2d8659,stroke:#1a5c3a,color:#fff
     style Next fill:#64748b,stroke:#475569,color:#fff
@@ -91,9 +100,9 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Start["Page contacts\nmatching filter"] --> Batch["Batch into groups\nof 10"]
+    Start["Keyset-page contacts\nmatching filter"] --> Batch["Batch into groups\nof 10"]
     Batch --> BulkAPI["Call /people/bulk_match\nper batch"]
-    BulkAPI --> Update["Update contact\nfields from matches"]
+    BulkAPI --> Update["Update matched fields;\nstamp EnrichedAt on every row sent"]
     Update --> EmpHist["Upsert employment\nhistory"]
     Update --> EduHist["Upsert education\nhistory"]
     EmpHist --> NextBatch["Next batch"]
@@ -117,7 +126,7 @@ npm install @memberjunction/actions-apollo
 ## Prerequisites
 
 1. An active Apollo.io account with API access
-2. Apollo.io API key set as the environment variable `APOLLO_API_KEY`
+2. An Apollo.io API key, either as the environment variable `APOLLO_API_KEY` or on a company's **MJ: Company Integrations** row for the `Apollo` Integration (passed as the `CompanyID` param; see [Credentials](#credentials))
 3. MemberJunction framework properly configured with server-side action engine
 4. Target entities configured for storing enriched data (accounts, contacts, technologies, etc.)
 
@@ -135,10 +144,11 @@ The package defines the following defaults in `config.ts`:
 
 | Constant | Default | Description |
 |---|---|---|
-| `ApolloAPIEndpoint` | `https://api.apollo.io/v1` | Apollo.io API base URL |
+| `ApolloRESTEndpoint` | `https://api.apollo.io/api/v1` | Apollo.io API base URL used by every client in this package |
+| `ApolloAPIEndpoint` | `https://api.apollo.io/v1` | Legacy enrichment base URL; kept for consumers, no longer called |
 | `EmailSourceName` | `Apollo.io` | Source label applied to enriched emails |
 | `GroupSize` | `10` | Records per API batch request (Apollo max is 10) |
-| `ConcurrentGroups` | `1` | Number of concurrent API request groups |
+| `ConcurrentGroups` | `1` | Kept for consumers; groups are sent one at a time |
 | `MaxPeopleToEnrichPerOrg` | `500` | Maximum contacts to enrich per organization |
 | `ApolloAPIKey` | `process.env.APOLLO_API_KEY` | Read from environment at startup |
 
@@ -157,6 +167,7 @@ The `ApolloEnrichmentAccountsAction` enriches account/organization records by lo
 | `TechnologyCategoryEntityFieldMappings` | No | JSON string | Maps technology category fields |
 | `ContactEntityFieldMappings` | No | JSON string | Maps contact entity fields for discovered contacts |
 | `ContactEducationHistoryEntityFieldMappings` | No | JSON string | Maps education history fields |
+| `CompanyID` | No | string | Resolve the key from this company's `Apollo` credential; falls back to `APOLLO_API_KEY` |
 
 #### AccountEntityFields Structure
 
@@ -258,26 +269,39 @@ The `ApolloEnrichmentContactsAction` enriches existing contact records by matchi
 | `FacebookField` | No | string | Field for Facebook profile URLs |
 | `EmploymentHistoryFieldMappings` | No | JSON string | Employment history entity field mappings |
 | `EducationHistoryFieldMappings` | No | JSON string | Education history entity field mappings |
+| `CompanyID` | No | string | Resolve the key from this company's `Apollo` credential; falls back to `APOLLO_API_KEY` |
+
+Every record the action sends to Apollo is stamped with `EnrichedAtField`, whether or not Apollo matched it, so a `Filter` on that stamp (as in the example) never re-sends, and never pays for, the same miss. Records nothing identifies (no email, and not a first and last name with a domain or account name) are stamped without a lookup.
 
 #### EmploymentHistoryFieldMappings Structure
 
+Keys are matched case-insensitively. Only the columns named here are ever written.
+
 ```typescript
 {
-    EmploymentHistoryEntityName: string;             // Employment history entity
-    EmploymentHistoryContactIDFieldName: string;     // Foreign key to contact
-    EmploymentHistoryOrganizationFieldName: string;  // Organization name field
-    EmploymentHistoryTitleFieldName: string;          // Job title field
+    EntityName: string;             // Employment history entity
+    ContactIDFieldName: string;     // Foreign key to contact (the contact entity must have a single-column key)
+    OrganizationFieldName: string;  // Organization name field
+    TitleFieldName: string;         // Job title field
+    StartDateFieldName?: string;    // Optional: start date
+    EndDateFieldName?: string;      // Optional: end date
+    IsCurrentFieldName?: string;    // Optional: current-position flag
 }
 ```
 
 #### EducationHistoryFieldMappings Structure
 
+Education is written whenever this mapping is present, independently of the employment mapping. Apollo returns education as `employment_history` entries that carry a degree or an education `kind`; the client files those under education and everything else (a trustee seat at a university, say) under employment.
+
 ```typescript
 {
-    EducationHistoryEntityName: string;              // Education history entity
-    EducationHistoryContactIDFieldName: string;      // Foreign key to contact
-    EducationHistoryInstitutionFieldName: string;    // Institution name field
-    EducationHistoryDegreeFieldName: string;         // Degree field
+    EntityName: string;             // Education history entity
+    ContactIDFieldName: string;     // Foreign key to contact
+    InstitutionFieldName: string;   // Institution name field
+    DegreeFieldName: string;        // Degree field
+    GradeLevelFieldName?: string;   // Optional: grade level
+    StartDateFieldName?: string;    // Optional: start date
+    EndDateFieldName?: string;      // Optional: end date
 }
 ```
 
@@ -303,19 +327,22 @@ const result = await engine.RunAction({
         {
             Name: 'EmploymentHistoryFieldMappings',
             Value: JSON.stringify({
-                EmploymentHistoryEntityName: 'Contact Employment Histories',
-                EmploymentHistoryContactIDFieldName: 'ContactID',
-                EmploymentHistoryOrganizationFieldName: 'Organization',
-                EmploymentHistoryTitleFieldName: 'Title'
+                EntityName: 'Contact Employment Histories',
+                ContactIDFieldName: 'ContactID',
+                OrganizationFieldName: 'Organization',
+                TitleFieldName: 'Title',
+                StartDateFieldName: 'StartedAt',
+                EndDateFieldName: 'EndedAt',
+                IsCurrentFieldName: 'IsCurrent'
             })
         },
         {
             Name: 'EducationHistoryFieldMappings',
             Value: JSON.stringify({
-                EducationHistoryEntityName: 'Contact Education Histories',
-                EducationHistoryContactIDFieldName: 'ContactID',
-                EducationHistoryInstitutionFieldName: 'Institution',
-                EducationHistoryDegreeFieldName: 'Degree'
+                EntityName: 'Contact Education Histories',
+                ContactIDFieldName: 'ContactID',
+                InstitutionFieldName: 'Institution',
+                DegreeFieldName: 'Degree'
             })
         }
     ],
@@ -327,7 +354,7 @@ const result = await engine.RunAction({
 
 Seven actions cover the other half of Apollo: which records are on which list, and moving them between lists. They are the outbound-campaign surface — build a list, drain it through a sequence of stages, and see what is where.
 
-These talk to a **different Apollo base path** from enrichment: `api.apollo.io/api/v1` rather than `api.apollo.io/v1`. The paths are not interchangeable; the same path under the wrong prefix returns 404. Both are declared side by side in `src/config.ts`.
+Every client in this package now talks to `api.apollo.io/api/v1` (`ApolloRESTEndpoint`), which serves enrichment, search and lists alike; the older `api.apollo.io/v1` constant remains exported but unused. All HTTP goes through `src/http/ApolloHttp.ts`: `X-Api-Key` header auth, JSON handling, and typed errors (`ApolloAuthError` for 401/403, `ApolloRateLimitError` with the window for 429, `ApolloRequestError` otherwise).
 
 | Action | Purpose | Key required |
 |---|---|---|
@@ -335,7 +362,7 @@ These talk to a **different Apollo base path** from enrichment: `api.apollo.io/a
 | `ApolloCreateListAction` | Create a list, idempotently. A same-named label is returned as-is with `AlreadyExisted: true` | MASTER |
 | `ApolloGetListAccountsAction` | One page of a list's accounts, with each one's current label names | MASTER |
 | `ApolloGetListContactsAction` | One page of a list's contacts, same shape | MASTER |
-| `ApolloSearchPeopleAction` | Search Apollo's people database by organization, title and seniority. At least one filter is required | scoped is fine |
+| `ApolloSearchPeopleAction` | Search Apollo's people database by organization, title, seniority, location and keywords. At least one filter is required. Outputs `Count` (this page) and `TotalEntries` (all pages). Since 2026 the results are obfuscated (`lastNameObfuscated`, no LinkedIn URL, no email); details need a paid `bulk_match` by id | scoped is fine |
 | `ApolloMoveListAccountsAction` | Move accounts between lists, preserving every other membership | MASTER |
 | `ApolloMoveListContactsAction` | The same for contacts | MASTER |
 
@@ -414,20 +441,20 @@ Registered as `"ApolloEnrichmentAccountsAction"` via `@RegisterClass(BaseAction)
 - For each account, calls `/organizations/enrich` with the domain
 - Updates account fields with enriched organization data
 - Optionally creates/updates technology stack records with historical tracking (marks ended technologies)
-- Optionally discovers and creates contact records via `/mixed_people/search`
-- Processes recursively up to 5 times to handle remaining records
-- Supports concurrent domain processing (configurable via `ConcurrentGroups`)
+- Optionally discovers contacts: `/mixed_people/api_search` for the ids at the domain (free), then `/people/bulk_match` by id (one credit per match, up to `MaxPeopleToEnrichPerOrg`), creating or updating a contact for each in-domain email
+- Looks contacts up by their real primary keys, quoted per column type, so UUID and integer keys both work
+- Processes recursively up to 5 times to handle remaining records; every save runs even after an earlier one fails
 
 #### `ApolloEnrichmentContactsAction`
 
 Registered as `"ApolloEnrichmentContactsAction"` via `@RegisterClass(BaseAction)`. Extends `BaseAction`.
 
 **Processing behavior:**
-- Pages through contact records matching the configured filter (500 per page)
-- Batches contacts into groups of 10 for Apollo's `/people/bulk_match` endpoint
-- Updates matching contacts with enriched social profiles and company data
-- Optionally creates/updates employment and education history records
-- Supports secondary enrichment via `/mixed_people/search` for organization-level lookups
+- Pages through contact records matching the configured filter (500 per page) by keyset on a single-column key, so a filter that drains as rows are stamped cannot skip rows; a composite-key entity re-reads the first page excluding rows stamped this run
+- Batches contacts into groups of 10 for Apollo's `/people/bulk_match` endpoint through `ApolloPeopleClient`
+- Updates matching contacts with enriched social profiles and company data, and stamps every row sent
+- Optionally creates/updates employment and education history records, each from its own mapping, writing only the columns the mapping names and storing values as Apollo sent them
+- Returns `RATE_LIMIT_EXCEEDED` at once on an hourly or daily Apollo limit (the client retries a per-minute limit once, after at most 60 seconds)
 
 ### Exported Types
 
@@ -450,19 +477,27 @@ All types are exported from `src/generic/apollo.types.ts`:
 | `OrganizationEnrichmentOrganization` | Detailed organization data from Apollo |
 | `OrganizationEnrichmentOrganizationAccount` | Account data within organization response |
 | `TechnologyMap` | Technology record with name, category, and UID |
-| `SearchPeopleResponse` | Response from `/mixed_people/search` |
-| `SearchPeopleResponsePerson` | Individual person data from search response |
+| `SearchPeopleResponse` | Legacy: the deprecated `/mixed_people/search` response (Apollo answers 422 now) |
+| `SearchPeopleResponsePerson` | Legacy: individual person data from that response |
 | `EmploymentHistory` | Employment/education history entry |
+
+### `ApolloPeopleClient`
+
+`src/people/ApolloPeopleClient.ts`. The table-agnostic enrichment client both actions use, and the one the BizApps Common person-enrichment engine wraps. It returns normalized data and writes nothing.
+
+- `BulkMatch(inputs, { RevealPersonalEmails?, IncludeRaw? })`: up to `MaxBatchSize` (10) people per call; each input needs an Apollo id, an email, a LinkedIn URL, or a first and last name with an organization. Results come back in input order with the caller's `Key`; a miss is `Matched: false`. `CreditsConsumed` is Apollo's count (one per match, misses free). The education split described above lives here.
+- `EnrichOrganization(domain)`: `organizations/enrich`, null on a miss.
+- `ForCompany(companyID, contextUser)`: resolves the key through the credentials path (company credential, then `APOLLO_API_KEY`).
+- A per-minute 429 waits at most 60 seconds and retries once; an hourly or daily 429 throws `ApolloRateLimitError` immediately. The client never sleeps longer than a minute.
 
 ## Rate Limiting and Error Handling
 
-Both action classes include a `WrapApolloCall` method that provides:
+All HTTP goes through `src/http/ApolloHttp.ts`, which maps failures onto typed errors:
 
-- **Automatic retry** on HTTP 429 (Too Many Requests) responses
-- **Per-minute backoff**: 60-second wait on standard rate limit responses
-- **Hourly backoff**: 60-minute wait when Apollo's hourly rate limit is detected (contact action only)
-- **Exception handling**: Catches both Axios response errors and thrown exceptions for 429 status codes
-- **Comprehensive logging** via MemberJunction's `LogError` and `LogStatus` utilities
+- `ApolloRateLimitError` (429) carries `Window` (`minute`, `hour`, `day`, `unknown`) and `RetryAfterSeconds`. The people client retries a per-minute limit once after at most 60 seconds; the actions return `RATE_LIMIT_EXCEEDED` immediately on any other window, so a scheduled job never holds its lock through an hour-long sleep.
+- `ApolloAuthError` (401, 403) becomes `CONFIGURATION_ERROR`; a 403 on a master-key operation says so.
+- `ApolloRequestError` for anything else, with the status and the body Apollo sent.
+- Everything is logged via MemberJunction's `LogError` and `LogStatus` utilities.
 
 ### Title Filtering
 
@@ -476,9 +511,9 @@ Both actions automatically exclude contacts with the following job titles to mai
 
 | Endpoint | HTTP Method | Used By | Purpose |
 |---|---|---|---|
-| `/organizations/enrich` | GET | Accounts action | Organization data by domain |
-| `/people/bulk_match` | POST | Contacts action | Bulk contact matching (up to 10 per request) |
-| `/mixed_people/search` | POST | Both actions | People search by organization domain |
+| `/organizations/enrich` | GET | Accounts action | Organization data by domain (header auth) |
+| `/people/bulk_match` | POST | Both actions | Bulk people matching, up to 10 per request, one credit per match |
+| `/mixed_people/api_search` | POST | Accounts action, Search People action | Prospecting search: ids, first names, titles and employers only (obfuscated). `/mixed_people/search` is deprecated and answers 422 |
 
 ## Dependencies
 
@@ -494,10 +529,10 @@ Both actions automatically exclude contacts with the following job titles to mai
 ## Limitations
 
 - Maximum 10 records per bulk API request (Apollo.io API limitation)
-- Rate limits apply based on your Apollo.io subscription tier (handled automatically with retries)
+- Rate limits apply based on your Apollo.io subscription tier; a per-minute limit is retried once, an hourly or daily limit ends the run with `RATE_LIMIT_EXCEEDED`
 - Personal emails may not be revealed in GDPR-compliant regions
-- Account enrichment processes domains sequentially within each concurrent group
-- Contact enrichment paginates with a maximum of 500 contacts per organization
+- Account enrichment processes domains one at a time and discovers at most `MaxPeopleToEnrichPerOrg` (500) people per organization, each matched person costing one credit
+- Contact enrichment on a composite-key entity pages by re-reading the first page of rows not yet stamped this run; a row whose save fails is skipped for the rest of the run
 - Account enrichment recurses up to 5 times to prevent infinite loops
 - Excluded job titles (member, student member, student, volunteer) are automatically skipped
 
