@@ -8,7 +8,9 @@ import {
     ImageVariationParams,
     ImageModelInfo,
     GeneratedImage,
-    ErrorAnalyzer
+    ErrorAnalyzer,
+    IsRequestAborted,
+    ThrowIfAborted
 } from "@memberjunction/ai";
 
 /**
@@ -19,6 +21,10 @@ import {
  * - Native multimodal image generation
  * - High resolution output (up to 4K)
  * - Advanced style control and prompt understanding
+ *
+ * A request's `CancellationToken` is handed to the SDK as `config.abortSignal`, so cancelling it tears
+ * the HTTP request down, and no further image of an `n`-image request is asked for. The call then
+ * resolves as cancelled, never as a failure to fail over.
  */
 @RegisterClass(BaseImageGenerator, 'GeminiImageGenerator')
 export class GeminiImageGenerator extends BaseImageGenerator {
@@ -60,6 +66,7 @@ export class GeminiImageGenerator extends BaseImageGenerator {
         const startTime = new Date();
 
         try {
+            ThrowIfAborted(params.CancellationToken, 'Gemini');
             const client = await this.ensureGeminiClient();
             const modelName = params.model || 'gemini-3-pro-image-preview';
 
@@ -72,6 +79,7 @@ export class GeminiImageGenerator extends BaseImageGenerator {
 
             // Generate images one at a time for consistency
             for (let i = 0; i < numImages; i++) {
+                ThrowIfAborted(params.CancellationToken, 'Gemini');
                 const response = await client.models.generateContent({
                     model: modelName,
                     contents: params.prompt,
@@ -90,7 +98,7 @@ export class GeminiImageGenerator extends BaseImageGenerator {
 
             return this.createSuccessResult(startTime, images);
         } catch (error) {
-            return this.handleError(error, startTime);
+            return this.handleError(error, startTime, params.CancellationToken);
         }
     }
 
@@ -102,6 +110,7 @@ export class GeminiImageGenerator extends BaseImageGenerator {
         const startTime = new Date();
 
         try {
+            ThrowIfAborted(params.CancellationToken, 'Gemini');
             const client = await this.ensureGeminiClient();
             const modelName = params.model || 'gemini-3-pro-image-preview';
 
@@ -139,7 +148,7 @@ export class GeminiImageGenerator extends BaseImageGenerator {
 
             return this.createSuccessResult(startTime, [generatedImage]);
         } catch (error) {
-            return this.handleError(error, startTime);
+            return this.handleError(error, startTime, params.CancellationToken);
         }
     }
 
@@ -151,6 +160,7 @@ export class GeminiImageGenerator extends BaseImageGenerator {
         const startTime = new Date();
 
         try {
+            ThrowIfAborted(params.CancellationToken, 'Gemini');
             const client = await this.ensureGeminiClient();
             const modelName = params.model || 'gemini-3-pro-image-preview';
 
@@ -181,6 +191,7 @@ export class GeminiImageGenerator extends BaseImageGenerator {
             const numVariations = params.n || 1;
 
             for (let i = 0; i < numVariations; i++) {
+                ThrowIfAborted(params.CancellationToken, 'Gemini');
                 const response = await client.models.generateContent({
                     model: modelName,
                     contents: content,
@@ -199,7 +210,7 @@ export class GeminiImageGenerator extends BaseImageGenerator {
 
             return this.createSuccessResult(startTime, images);
         } catch (error) {
-            return this.handleError(error, startTime);
+            return this.handleError(error, startTime, params.CancellationToken);
         }
     }
 
@@ -285,6 +296,11 @@ export class GeminiImageGenerator extends BaseImageGenerator {
             Object.assign(config, params.providerOptions);
         }
 
+        // The caller's signal, set last so no provider option replaces it
+        if (params.CancellationToken) {
+            config.abortSignal = params.CancellationToken;
+        }
+
         return config;
     }
 
@@ -358,9 +374,13 @@ export class GeminiImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Handle errors and create error result.
+     * Handle errors and create error result. A request its signal aborted is reported as cancelled,
+     * not classified as a provider error.
      */
-    private handleError(error: unknown, startTime: Date): ImageGenerationResult {
+    private handleError(error: unknown, startTime: Date, signal?: AbortSignal): ImageGenerationResult {
+        if (IsRequestAborted(error, signal)) {
+            return this.CancelledResult(signal, error);
+        }
         const errorInfo = ErrorAnalyzer.analyzeError(error, 'Gemini');
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
 
