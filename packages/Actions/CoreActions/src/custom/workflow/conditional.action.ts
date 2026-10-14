@@ -95,7 +95,7 @@ export class ConditionalAction extends BaseAction {
             // The condition is parsed and checked against an allowlist before it is evaluated; see
             // SafeExpressionEvaluator. It is never run as unscreened JavaScript.
             const evaluator = new SafeExpressionEvaluator();
-            const syntax = evaluator.ValidateSyntax(condition);
+            const syntax = evaluator.validateSyntax(condition);
             if (!syntax.Valid) {
                 return {
                     Success: false,
@@ -104,7 +104,7 @@ export class ConditionalAction extends BaseAction {
                 };
             }
 
-            const evaluation = evaluator.Evaluate(condition, context);
+            const evaluation = evaluator.evaluate(condition, context);
             if (!evaluation.success) {
                 return {
                     Success: false,
