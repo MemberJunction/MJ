@@ -92,6 +92,8 @@ export interface RecordResult {
     Outcome?: RecordWriteOutcome;
     /** Feature Pipelines: the pipeline version (MJ: Feature Pipeline Versions.Version) that computed the result. */
     PipelineVersion?: number | null;
+    /** Feature Pipelines: how many human-entered values this record's write-back left in place. */
+    HumanValuesPreserved?: number;
 }
 
 /** Running tallies for a process run. */

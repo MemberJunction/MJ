@@ -32,6 +32,7 @@ export class RecordProcessScheduledJobDriver extends BaseScheduledJob {
         void context.heartbeat?.();
         const result = await new RecordProcessExecutor().RunByID(config.RecordProcessID, {
             contextUser: context.ContextUser,
+            provider: context.Provider,
             triggeredBy: 'Schedule',
             // Link the Process Run back to this ScheduledJobRun so the scheduling UI can join them.
             scheduledJobRunID: context.Run?.ID,

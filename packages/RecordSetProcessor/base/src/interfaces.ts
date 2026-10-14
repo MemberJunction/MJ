@@ -62,6 +62,8 @@ export interface RecordProcessorContext {
     recordProcessID?: string;
     /** Target entity ID, when applicable. */
     entityID?: string;
+    /** When true, write-back overwrites values a person entered and retires their Human values (default false). */
+    overwriteHumanValues?: boolean;
 }
 
 /**
@@ -79,7 +81,7 @@ export interface IRecordProcessor {
     ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult>;
 
     /**
-     * Optional batch execution seam (P1-7c). Enables two-phase distinct-key execution:
+     * Optional batch execution seam. Enables two-phase distinct-key execution:
      * deduplicating across the batch before execution, executing once per distinct key,
      * and fanning results back to all matching records.
      *
@@ -217,6 +219,8 @@ export interface RecordSetProcessOptions {
     watermarkStrategy?: WatermarkStrategyValue;
     /** Timestamp of the last run, used for 'UpdatedAt' strategy. */
     lastRunAt?: Date | null;
+    /** When true, write-back overwrites values a person entered and retires their Human values (default false). Handed to every record's context. */
+    overwriteHumanValues?: boolean;
 }
 
 /** Strategy used to detect unchanged records when skipUnchanged is enabled. */

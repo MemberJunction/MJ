@@ -63,6 +63,7 @@ export class PredictiveStudioRunFeaturePipelineServerOperation extends Predictiv
       triggeredBy: 'OnDemand',
       singleRecordID: input.singleRecordID,
       dryRun: input.dryRun,
+      overwriteHumanValues: input.overwriteHumanValues === true,
       // The wire scope shape IS the substrate's RecordProcessScopeOverride (both are
       // the CodeGen-emitted `{ Kind: 'records' | 'view' | 'list' | 'filter'; … }`).
       scope: input.scope as RecordProcessScopeOverride | undefined,

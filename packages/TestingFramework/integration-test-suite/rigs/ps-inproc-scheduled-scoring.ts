@@ -470,7 +470,7 @@ async function main(): Promise<void> {
     // path now (we can't wait a month) and assert the column was written back.
     banner('6. RUN THE RECORD PROCESS NOW (RecordProcessExecutor.RunByID)');
     const runStart = Date.now();
-    const runResult = await new RecordProcessExecutor().RunByID(rp.ID, { contextUser: user, triggeredBy: 'OnDemand' });
+    const runResult = await new RecordProcessExecutor().RunByID(rp.ID, { contextUser: user, provider: md, triggeredBy: 'OnDemand' });
     console.log(`  Run: Status=${runResult.Status} Processed=${runResult.Processed} Success=${runResult.Success} Error=${runResult.Error} Skipped=${runResult.Skipped} (${Date.now() - runStart}ms)`);
     check(runResult.Status === 'Completed', `run Status = 'Completed' (got '${runResult.Status}')`);
     check(runResult.Success > 0, `run scored > 0 records (Success=${runResult.Success})`);

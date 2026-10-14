@@ -15,4 +15,6 @@ export interface RecordProcessRunNowInput {
     dryRun?: boolean;
     /** Runtime scope override (selected rows / a view / list / filter), used instead of the stored Scope. */
     scope?: RecordProcessScopeOverride;
+    /** Overwrite values a person entered on the process's write-back targets, and retire their Human values (default false: they are kept). */
+    overwriteHumanValues?: boolean;
 }

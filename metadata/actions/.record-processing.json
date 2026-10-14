@@ -69,6 +69,21 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "OverwriteHumanValues",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "DefaultValue": "false",
+            "Description": "When true, the run's write-back overwrites values a person entered and retires their Human Feature Values. Defaults to false: values a person entered are kept."
+          },
+          "primaryKey": {
+            "ID": "58A9A967-570D-4B0C-8890-7E27E33BF680"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "ProcessRunID",
             "Type": "Output",
             "ValueType": "Scalar",

@@ -40,6 +40,7 @@ export class RecordProcessRunNowServerOperation extends RecordProcessRunNowOpera
             singleRecordID: input.singleRecordID,
             dryRun: input.dryRun,
             scope: input.scope,
+            overwriteHumanValues: input.overwriteHumanValues === true,
             // RO-3: forward the executor's per-batch progress as typed RemoteOpProgress, so an `attached`
             // caller's onProgress (and, over the wire, the progress channel) sees live run progress.
             onProgress: (p) =>

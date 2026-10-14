@@ -942,6 +942,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                 Schedule: job,
                 Run: run,
                 ContextUser: contextUser,
+                Provider: this.Base.ProviderToUse,
                 heartbeat
             };
 

@@ -459,7 +459,7 @@ async function main(): Promise<void> {
     // ── 3b. Run the GENERIC RP — predictions persist in run history, NOT the column ──
     banner('3b. RUN GENERIC RP (RecordProcessExecutor.RunByID) — run-history-only predictions');
     const genRunStart = Date.now();
-    const genRun = await new RecordProcessExecutor().RunByID(genericRP.ID, { contextUser: user, triggeredBy: 'OnDemand' });
+    const genRun = await new RecordProcessExecutor().RunByID(genericRP.ID, { contextUser: user, provider: md, triggeredBy: 'OnDemand' });
     console.log(`  Run: Status=${genRun.Status} Processed=${genRun.Processed} Success=${genRun.Success} Error=${genRun.Error} Skipped=${genRun.Skipped} ProcessRunID=${genRun.ProcessRunID} (${Date.now() - genRunStart}ms)`);
     check(genRun.Status === 'Completed', `generic run Status = 'Completed' (got '${genRun.Status}')`);
     check(genRun.Success > 0, `generic run scored > 0 records (Success=${genRun.Success})`);
@@ -526,7 +526,7 @@ async function main(): Promise<void> {
     // ── 4b. Run the WRITE-BACK RP — run history AND the column land ───────────
     banner('4b. RUN WRITE-BACK RP (RecordProcessExecutor.RunByID) — predictions + column write-back');
     const wbRunStart = Date.now();
-    const wbRun = await new RecordProcessExecutor().RunByID(wbRP.ID, { contextUser: user, triggeredBy: 'OnDemand' });
+    const wbRun = await new RecordProcessExecutor().RunByID(wbRP.ID, { contextUser: user, provider: md, triggeredBy: 'OnDemand' });
     console.log(`  Run: Status=${wbRun.Status} Processed=${wbRun.Processed} Success=${wbRun.Success} Error=${wbRun.Error} Skipped=${wbRun.Skipped} ProcessRunID=${wbRun.ProcessRunID} (${Date.now() - wbRunStart}ms)`);
     check(wbRun.Status === 'Completed', `write-back run Status = 'Completed' (got '${wbRun.Status}')`);
     check(wbRun.Success > 0, `write-back run scored > 0 records (Success=${wbRun.Success})`);

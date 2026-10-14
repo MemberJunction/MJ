@@ -5,7 +5,7 @@
  * @module @memberjunction/record-set-processor
  */
 
-import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, SafeJSONParse, type FieldRuleSet } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import {
@@ -36,8 +36,11 @@ import { type DataFeatureSpec } from '@memberjunction/feature-pipelines';
 export interface RunRecordProcessOptions {
     /** The acting user. */
     contextUser: UserInfo;
-    /** The owning provider (defaults to the active provider). */
-    provider?: IMetadataProvider;
+    /**
+     * The provider every read and write of the run uses — the caller's (its request's connection), never the
+     * process-global default. Required, so a caller that drops it fails to compile.
+     */
+    provider: IMetadataProvider;
     /** What triggered the run (default `OnDemand`). */
     triggeredBy?: TriggeredByValue;
     /** Process a single record (the on-change / on-demand single-record case) instead of the scope. */
@@ -58,14 +61,15 @@ export interface RunRecordProcessOptions {
     lastRunAt?: Date | null;
     /** Progress callback. */
     onProgress?: (progress: ProgressInfo) => void;
+    /** Overwrite values a person entered, and retire their Human values (default false). */
+    overwriteHumanValues?: boolean;
 }
 
 /** Builds and runs a RecordSetProcessor pass from a Record Process definition. */
 export class RecordProcessExecutor {
     /** Loads the Record Process by ID and runs it. */
     public async RunByID(recordProcessID: string, options: RunRecordProcessOptions): Promise<ProcessRunResult> {
-        const provider = options.provider ?? Metadata.Provider;
-        const rp = await provider.GetEntityObject<MJRecordProcessEntity>('MJ: Record Processes', options.contextUser);
+        const rp = await options.provider.GetEntityObject<MJRecordProcessEntity>('MJ: Record Processes', options.contextUser);
         const loaded = await rp.Load(recordProcessID);
         if (!loaded) {
             throw new Error(`Record Process '${recordProcessID}' not found`);
@@ -75,7 +79,7 @@ export class RecordProcessExecutor {
 
     /** Runs an already-loaded Record Process. */
     public async Run(rp: MJRecordProcessEntity, options: RunRecordProcessOptions): Promise<ProcessRunResult> {
-        const provider = options.provider ?? Metadata.Provider;
+        const provider = options.provider;
         let lastRunAt = options.lastRunAt;
         if (!lastRunAt && rp.SkipUnchanged && rp.WatermarkStrategy === 'UpdatedAt') {
             try {
@@ -110,6 +114,7 @@ export class RecordProcessExecutor {
             watermarkStrategy: rp.WatermarkStrategy ?? 'Checksum',
             lastRunAt,
             onProgress: options.onProgress,
+            overwriteHumanValues: options.overwriteHumanValues,
             configuration: { recordProcessName: rp.Name, workType: rp.WorkType, scopeType: rp.ScopeType },
         });
     }

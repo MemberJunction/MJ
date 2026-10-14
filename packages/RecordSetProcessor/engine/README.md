@@ -60,6 +60,65 @@ that produced them and dropped when the next `ProcessBatch` starts. The Record P
 constructor argument (`new InferProcessor(promptID, inputMapping, spec, outputMappingText)`), so every construction path
 hashes the same spec.
 
+## Output-mapping write-back
+
+A Record Process's `OutputMapping` (applied by `WriteBackProcessor` through `ApplyOutputMapping`) writes a result's
+`fields` onto the processed record and its `childRecord`/`childRecords` as child rows. An `OutputMappingWriter` writes
+both inside one entity transaction on a unit provider minted from the caller's provider (below), **children first**: a
+failed child write rolls back and leaves the record's fields unwritten. A mapped field is saved only when its value
+differs from the stored one, compared
+by the field's type (`OutputMappingWriter.ValuesEqual`): text exactly (case and whitespace count), dates by instant,
+decimal/numeric/money rounded to the column's scale, other numbers numerically, uniqueidentifiers case-insensitively.
+
+Each write-back transaction runs on its own provider instance (`OutputMappingWriter.RunIsolated`:
+`CreateIndependentInstance()` on the caller's database provider — same connection pool, its own transaction stack —
+released afterwards). An MJ entity transaction belongs to the provider instance, so opened on the shared provider it
+would take in every other statement run through it meanwhile (other records' write-backs, the run tracker's detail
+rows, watermark updates) and roll them back with it. Isolated, records can write back concurrently
+(`MaxConcurrency > 1`) with no lock. The minted instance's metadata comes from the process-global `Metadata.Provider`
+(not from the caller's provider; `CreateIndependentInstance` takes no argument), which on every server host serves the
+same database.
+
+When the caller already holds a transaction on its provider (`TransactionDepth > 0`), the write-back runs on that
+provider and joins the caller's transaction as a savepoint instead: the caller owns atomicity, and nothing the
+write-back wrote is durable until the caller commits. A separate connection would wait on rows the caller's open
+transaction holds locked until the request timed out.
+
+Two writes sit outside the transaction on purpose:
+
+- a lookup row created by `onLookupMiss: 'create'` is saved while the fields resolve. A rollback leaves it unreferenced
+  (a re-run reuses it by its match field). It stays outside because the run-wide `lookupCache` holds its ID: rolled back,
+  that cached ID would point at a row that no longer exists;
+- tags are linked after the commit, so a tag failure fails the record while its fields and child rows stay committed.
+
+A child mapping with `reconcile` is matched to the parent's existing rows on its key instead of always inserted, so a
+re-run is idempotent (an always-insert mapping hits a unique key on its second run):
+
+```json
+{ "entity": "MJ_BizApps_Common: Person Job Functions", "parentField": "PersonID", "fanOutRef": "$.Functions",
+  "map": { "JobFunctionID": "$.JobFunctionID", "Sequence": "$.Sequence", "Source": "static:Derived" },
+  "reconcile": { "keyFields": ["JobFunctionID"], "sourceField": "Source", "derivedSourceValue": "Derived", "deleteStale": true } }
+```
+
+| Existing row with the proposed key | Outcome (`WriteBackResult` list) |
+|---|---|
+| none | inserted (`createdChildIDs`) |
+| pipeline row (`sourceField` = `derivedSourceValue`), same values | left as is (`unchangedChildIDs`) |
+| pipeline row, different values | the differing fields saved (`updatedChildIDs`) |
+| human row (any other `sourceField` value) | left as is (`preservedHumanChildIDs`), unless the call sets `overwriteHumanValues` |
+| pipeline row whose key the result no longer proposes | deleted when `deleteStale` (default true) (`deletedChildIDs`); human rows are never deleted |
+
+An explicit empty answer (the fan-out value is `[]`) proposes no rows, so it deletes every pipeline row of the mapping;
+a missing or null fan-out value is no answer and changes nothing. With `deleteStale` on, `sourceField` and
+`derivedSourceValue` are required (without them no row can be told apart as human, so the config is refused). An
+answer that proposes one key twice, or a `keyFields` entry the `map` does not set, fails the record before any write.
+
+Keys match as the database's unique index on them would (`OutputMappingWriter.NormalizeKeyPart`): a uniqueidentifier
+via `NormalizeUUID`; other values with trailing whitespace removed (SQL Server ignores it) and lower-cased, which
+assumes a case-insensitive (`_CI_`, SQL Server's default) collation on the key column. `WriteBackResult.changed` is false when nothing
+was written. Rows an older mapping wrote without the `sourceField` stamp keep the column's default value and therefore
+count as human rows until they are restamped.
+
 ## Exports
 
 | Export | Purpose |
@@ -68,6 +127,7 @@ hashes the same spec.
 | `GenericProcessRunTracker` | default tracker writing the generic Process Run tables |
 | `NoOpTracker` | a tracker that persists nothing |
 | `FunctionRecordProcessor` | a processor backed by a function |
+| `ApplyOutputMapping` / `OutputMappingWriter` | the output-mapping write-back and the class that writes its child rows and fields on an isolated provider instance (see above) |
 | `RateLimiter` | the token-bucket limiter used when `rateLimit` is configured |
 
 Source adapters, the seam interfaces, and all shared types are re-exported from

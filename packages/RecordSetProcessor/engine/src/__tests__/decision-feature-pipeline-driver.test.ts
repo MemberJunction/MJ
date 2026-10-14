@@ -697,7 +697,7 @@ describe('DecisionFeaturePipelineDriver', () => {
             const [urgent, status] = featureValues[0];
             expect(urgent).toEqual(expect.objectContaining({ FeatureName: 'IsUrgent', Value: true, Confidence: 0.8 }));
             expect(status).toEqual(expect.objectContaining({ FeatureName: 'Status', Value: null }));
-            expect(status.confidence).toBeUndefined();
+            expect(status.Confidence).toBeUndefined();
         });
 
         it('writes an answer along a nested Ref, so its Feature Values row carries the value with its confidence', async () => {
@@ -719,7 +719,7 @@ describe('DecisionFeaturePipelineDriver', () => {
             expect(result.Confidence).toBeUndefined();
             const [status] = featureValues[0];
             expect(status).toEqual(expect.objectContaining({ FeatureName: 'Status', Value: 'Other' }));
-            expect(status.confidence).toBeUndefined();
+            expect(status.Confidence).toBeUndefined();
         });
     });
 

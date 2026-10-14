@@ -159,8 +159,9 @@ vi.mock('@memberjunction/scheduling-base-types', () => ({
     NotificationChannel: {}
 }));
 
-vi.mock('@memberjunction/scheduling-engine-base', () => {
-    const fakeBase = {
+/** The scheduling engine base the engine reads jobs and its provider from (the mocked module's Instance). */
+const { fakeBase } = vi.hoisted(() => ({
+    fakeBase: {
         ScheduledJobs: [] as Array<Record<string, unknown>>,
         ScheduledJobTypes: [{ ID: 'type-1', DriverClass: 'TestDriver' }] as Array<Record<string, unknown>>,
         ScheduledJobRuns: [] as Array<Record<string, unknown>>,
@@ -192,14 +193,14 @@ vi.mock('@memberjunction/scheduling-engine-base', () => {
             })
         },
         RunViewProviderToUse: {}
-    };
+    },
+}));
 
-    return {
-        SchedulingEngineBase: {
-            get Instance() { return fakeBase; }
-        }
-    };
-});
+vi.mock('@memberjunction/scheduling-engine-base', () => ({
+    SchedulingEngineBase: {
+        get Instance() { return fakeBase; }
+    }
+}));
 
 vi.mock('../CronExpressionHelper', () => ({
     CronExpressionHelper: {
@@ -223,13 +224,10 @@ const mockRunViewQueue: Array<{ Success: boolean; Results: unknown[] }> = [];
 
 import { SchedulingEngine } from '../ScheduledJobEngine';
 import type { ScheduledJobExecutionContext } from '../BaseScheduledJob';
-import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
+import { UserInfo, type IMetadataProvider } from '@memberjunction/core';
 
-const mockUser = { ID: 'user-1' };
-const mockBase = SchedulingEngineBase.Instance as Record<string, unknown> & {
-    ScheduledJobs: Array<Record<string, unknown>>;
-    ProviderToUse: { ExecuteSQL: ReturnType<typeof vi.fn>; MJCoreSchemaName: string };
-};
+const mockUser = new UserInfo();
+const mockBase = fakeBase;
 
 function makeJob(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
     return {
@@ -276,7 +274,7 @@ async function captureHeartbeat(job: Record<string, unknown>): Promise<() => Pro
     mockExecuteSQLQueue.push([{ Acquired: 1 }]);
     mockExecuteSQLQueue.push([{ Released: 1 }]);
 
-    await engine.ExecuteScheduledJobs(mockUser as never);
+    await engine.ExecuteScheduledJobs(mockUser);
     if (!captured) {
         throw new Error('Plugin did not receive a heartbeat closure');
     }
@@ -334,6 +332,23 @@ function lastSprocCall(name: string): unknown[] | undefined {
 // ============================================================================
 // H1: Heartbeat extends the lease
 // ============================================================================
+
+describe('H0: the plugin runs on the provider the engine read the job with', () => {
+    it('hands the plugin the engine\'s provider in its context', async () => {
+        mockBase.ScheduledJobs = [makeJob()];
+        let provider: IMetadataProvider | undefined;
+        createInstanceImpl = () => ({
+            Execute: async (context: ScheduledJobExecutionContext) => {
+                provider = context.Provider;
+                return { Success: true, Details: {} };
+            }
+        });
+        mockExecuteSQLQueue.push([{ Acquired: 1 }]);
+        mockExecuteSQLQueue.push([{ Released: 1 }]);
+        await SchedulingEngine.Instance.ExecuteScheduledJobs(mockUser);
+        expect(provider).toBe(mockBase.ProviderToUse);
+    });
+});
 
 describe('H1: heartbeat extends the lease via spExtendScheduledJobLease', () => {
     it('calls the extend sproc with the live token and a now+HEARTBEAT_LEASE_MS expectation', async () => {
@@ -417,7 +432,7 @@ describe('H3: heartbeat is a no-op in Concurrent mode', () => {
         // path). Queue an acquire=0 so it takes the no-lock branch.
         mockExecuteSQLQueue.push([{ Acquired: 0 }]);
 
-        await engine.ExecuteScheduledJobs(mockUser as never);
+        await engine.ExecuteScheduledJobs(mockUser);
         expect(captured).toBeDefined();
 
         const callsBefore = mockBase.ProviderToUse.ExecuteSQL.mock.calls.length;

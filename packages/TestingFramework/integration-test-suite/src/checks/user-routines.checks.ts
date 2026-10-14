@@ -1,6 +1,6 @@
 /**
  * user-routines.checks.ts — the 'user-routines' bundle (UR1–UR16): live, deterministic integration
- * checks for the User Routines feature (P1.5) — the entity servers + the UserRoutineDispatcherDriver,
+ * checks for the User Routines feature — the entity servers + the UserRoutineDispatcherDriver,
  * end to end against the real DB. Graduated VERBATIM from integration-test-scripts/user-routines-tests.ts
  * (check bodies unchanged; the shared closure state moved onto ctx.UserRoutinesFixture and the
  * create/cleanup became a BundleLifecycle).
@@ -119,7 +119,7 @@ async function makeDispatcherContext(ctx: IntegrationCheckContext): Promise<Sche
     schedule.Configuration = JSON.stringify({ MaxConcurrentRoutines: 2 });
     const run = await provider.GetEntityObject<MJScheduledJobRunEntity>('MJ: Scheduled Job Runs', user);
     run.NewRecord();
-    return { Schedule: schedule, Run: run, ContextUser: user };
+    return { Schedule: schedule, Run: run, ContextUser: user, Provider: provider };
 }
 
 export const UserRoutinesChecks: NamedCheck[] = [

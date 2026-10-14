@@ -49,7 +49,9 @@ import {
     type TypedFeatureValue,
 } from '@memberjunction/feature-pipelines';
 import { EntityDocumentCache, EntityDocumentTemplateParser } from '@memberjunction/entity-documents';
-import type { OutputMappingConfig } from '../writeBack';
+import type { HumanValueGuard, HumanValueGuardSource, OutputMappingConfig } from '../writeBack';
+import { FeaturePipelineHumanValueGuard } from './FeaturePipelineHumanValueGuard';
+import type { DeferredFeatureValueSource } from './WriteBackProcessor';
 import {
     BaseFeaturePipelineDriver,
     type FeaturePipelineComputeHooks,
@@ -137,7 +139,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
  * path does not call {@link ProcessRecord} once per record: an extension that overrides `ProcessRecord`
  * does not see those records.
  */
-export class InferProcessor implements IRecordProcessor {
+export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, DeferredFeatureValueSource {
     /** The driver resolution, started on first use and shared by every record this processor runs. */
     private driverResolution?: Promise<BaseFeaturePipelineDriver>;
 
@@ -174,6 +176,15 @@ export class InferProcessor implements IRecordProcessor {
 
     /** The last pin resolved, and the inputs it was computed from (see {@link ResolvePin}). */
     private resolvedPin?: { Fingerprint: string; Pin: FeaturePipelinePinData };
+
+    /**
+     * Whether this processor's Feature Value writes wait for the record's write-back ({@link DeferFeatureValuesToWriteBack}):
+     * a pipeline with write-back saves them inside the write-back unit, so they commit or roll back with it.
+     */
+    private deferFeatureValues = false;
+
+    /** Each record's Feature Value writes waiting for its write-back, in order, by record ID (deferred mode only). */
+    private pendingFeatureValues = new Map<string, FeatureValueWriteParams[]>();
 
     /**
      * @param promptID - The `MJ: AI Prompts` ID to run for each record.
@@ -277,6 +288,69 @@ export class InferProcessor implements IRecordProcessor {
      */
     public PreviousFeatureValues(recordID: string): Readonly<Record<string, TypedFeatureValue | null>> | undefined {
         return this.previousFeatureValues.get(recordID);
+    }
+
+    /**
+     * The guard write-back uses to keep values a person entered; undefined when the run has no pipeline, entity or
+     * spec. It reads the record's {@link PreviousFeatureValues} when asked, which is after the record's Feature Values
+     * were written inside the write-back unit ({@link WriteDeferredFeatureValues}).
+     */
+    public CreateHumanValueGuard(record: RecordRef, context: RecordProcessorContext): HumanValueGuard | undefined {
+        if (!context.recordProcessID || !context.entityID || !this.spec) {
+            return undefined;
+        }
+        return new FeaturePipelineHumanValueGuard({
+            RecordProcessID: context.recordProcessID, EntityID: context.entityID, Record: record, Context: context, Spec: this.spec,
+            PreviousValues: () => this.PreviousFeatureValues(record.RecordID),
+        });
+    }
+
+    /**
+     * Hands this processor's Feature Value writes to the write-back that wraps it: from now on they are queued per
+     * record and saved by {@link WriteDeferredFeatureValues} inside the record's write-back unit. So a failed
+     * write-back leaves the previous Feature Values in place (what the pipeline last wrote stays what it last
+     * committed), and a dry run writes none.
+     */
+    public DeferFeatureValuesToWriteBack(): void {
+        this.deferFeatureValues = true;
+    }
+
+    /**
+     * Saves a record's queued Feature Value writes, in order, on `provider` (the write-back unit's), and keeps the
+     * values they replaced as the record's {@link PreviousFeatureValues}; null when none were queued.
+     * @throws Error naming the record when a write fails (the write-back unit then rolls back)
+     */
+    public async WriteDeferredFeatureValues(recordID: string, provider: IMetadataProvider): Promise<RecordFeatureValuesOutcome | null> {
+        const queued = this.pendingFeatureValues.get(recordID);
+        this.pendingFeatureValues.delete(recordID);
+        if (!queued || queued.length === 0) {
+            return null;
+        }
+        // The capture belongs to this unit's first write, not to an earlier pass over the same record.
+        this.previousFeatureValues.delete(recordID);
+        const total: RecordFeatureValuesOutcome = { Upserted: 0, Unchanged: 0, Previous: {} };
+        for (const params of queued) {
+            const outcome = await this.WriteFeatureValuesOn(params, provider);
+            total.Upserted += outcome.Upserted;
+            total.Unchanged += outcome.Unchanged;
+        }
+        total.Previous = { ...this.previousFeatureValues.get(recordID) };
+        return total;
+    }
+
+    /** Drops a record's queued Feature Value writes: its result failed, so it gets no write-back. */
+    public DiscardDeferredFeatureValues(recordID: string): void {
+        this.pendingFeatureValues.delete(recordID);
+    }
+
+    /** One queued write on the unit's provider; a failure names the record. */
+    protected async WriteFeatureValuesOn(params: FeatureValueWriteParams, provider: IMetadataProvider): Promise<RecordFeatureValuesOutcome> {
+        try {
+            return await this.WriteFeatureValues({ ...params, Context: { ...params.Context, provider } });
+        } catch (e) {
+            // The typed error (a FeatureValueSaveError carries the feature, record and provider message) stays reachable as `cause`.
+            throw new Error(`Feature Value write failed for record '${params.Record.RecordID}': ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+        }
     }
 
     /**
@@ -656,6 +730,7 @@ export class InferProcessor implements IRecordProcessor {
     protected ResetBatchState(): void {
         this.previousFeatureValues.clear();
         this.featureValueKeys.clear();
+        this.pendingFeatureValues.clear();
     }
 
     /**
@@ -1050,6 +1125,9 @@ export class InferProcessor implements IRecordProcessor {
             return { ...result, Status: 'Failed', ErrorMessage: this.FeatureValueWriteFailure(e, featureValues.Record) };
         }
         this.featureValueKeys.set(featureValues.Record.RecordID, { Pin: featureValues.Pin, InputHash: featureValues.InputHash });
+        if (this.deferFeatureValues) {
+            return { ...result, PipelineVersion: this.PipelineVersion }; // the write-back sets Outcome once it wrote them
+        }
         const unchanged = outcome !== null && outcome.Upserted === 0 && outcome.Unchanged > 0;
         return { ...result, Outcome: unchanged ? 'Unchanged' : 'Upserted', PipelineVersion: this.PipelineVersion };
     }
@@ -1071,19 +1149,41 @@ export class InferProcessor implements IRecordProcessor {
      * of the single `confidence`. `omitValues` writes every output's value as null, whatever the payload holds (a
      * superseded decision's row). Keeps, per record, each feature's value from before this processor first wrote it
      * (see {@link PreviousFeatureValues}).
-     * @returns What the upsert did; null when nothing is written ({@link WritesHistory} off, no outputs, or no
-     * pipeline or entity in the context).
+     * When the processor defers to its write-back ({@link DeferFeatureValuesToWriteBack}) the write is queued for the
+     * record's write-back unit instead, and null is returned.
+     * @returns What the upsert did; null when nothing is written now ({@link WritesHistory} off, no outputs, no
+     * pipeline or entity in the context, or the write is deferred).
      * @throws Error when a value cannot be written (the caller decides what fails).
      */
     protected async UpsertFeatureValues(params: FeatureValueWriteParams): Promise<RecordFeatureValuesOutcome | null> {
         if (!this.WritesHistory || !this.spec?.Outputs || this.spec.Outputs.length === 0 || !params.Context.recordProcessID || !params.Context.entityID) {
             return null;
         }
+        if (this.deferFeatureValues) {
+            const queued = this.pendingFeatureValues.get(params.Record.RecordID) || [];
+            queued.push(params);
+            this.pendingFeatureValues.set(params.Record.RecordID, queued);
+            return null;
+        }
+        return this.WriteFeatureValues(params);
+    }
+
+    /**
+     * Writes one record's Feature Values now, on `params.Context.provider` (see {@link UpsertFeatureValues}), and keeps
+     * the values they replaced. Callers check {@link WritesHistory}, the outputs and the context first.
+     */
+    protected async WriteFeatureValues(params: FeatureValueWriteParams): Promise<RecordFeatureValuesOutcome> {
+        const outputs = this.spec?.Outputs || [];
+        const recordProcessID = params.Context.recordProcessID;
+        const entityID = params.Context.entityID;
+        if (!recordProcessID || !entityID) {
+            throw new Error('InferProcessor: a Feature Value write needs the run\'s pipeline and entity');
+        }
 
         const outputsList: FeatureValueOutputItem[] = [];
         const sources = { $: params.Payload };
 
-        for (const output of this.spec.Outputs) {
+        for (const output of outputs) {
             const val = params.OmitValues ? null : resolveMappingRef(output.Ref, sources);
             outputsList.push({
                 FeatureName: output.Name,
@@ -1095,8 +1195,8 @@ export class InferProcessor implements IRecordProcessor {
         }
 
         const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues({
-            RecordProcessID: params.Context.recordProcessID,
-            EntityID: params.Context.entityID,
+            RecordProcessID: recordProcessID,
+            EntityID: entityID,
             RecordID: params.Record.RecordID,
             Outputs: outputsList,
             PromptID: params.PromptID,

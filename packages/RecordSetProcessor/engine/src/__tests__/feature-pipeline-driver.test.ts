@@ -472,7 +472,7 @@ describe('Feature Pipeline driver seam', () => {
             expect(result.Status).toBe('Succeeded');
             expect('OutputConfidence' in processor.HistoryParams[0]).toBe(false);
             const outputs = recordFeatureValues.mock.calls[0][0].Outputs;
-            expect(outputs[0].confidence).toBeUndefined();
+            expect(outputs[0].Confidence).toBeUndefined();
         });
     });
 

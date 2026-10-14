@@ -16,6 +16,7 @@ import {
     ProcessRunResult,
     ProcessRunStatusValue,
     ProcessRunSummary,
+    RecordProcessorContext,
     RecordRef,
     RecordResult,
     RecordSetProcessOptions,
@@ -199,15 +200,16 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
     /** Processes one batch with bounded concurrency, isolating per-record failures. */
     private async processBatch(records: RecordRef[], ctx: BatchLoopContext): Promise<void> {
         const { options, counts } = ctx;
-        const recordContext = {
+        const recordContext: RecordProcessorContext = {
             contextUser: options.contextUser,
             provider: ctx.provider,
             processRunID: ctx.handle.ProcessRunID,
             recordProcessID: options.recordProcessID,
             entityID: options.entityID,
+            overwriteHumanValues: options.overwriteHumanValues,
         };
 
-        // P1-7b Watermark check: batch-evaluate unchanged records when skipUnchanged is active
+        // Watermark check: batch-evaluate unchanged records when skipUnchanged is active
         let watermarkDecisions: Map<string, WatermarkDecision> | undefined;
         if (options.skipUnchanged && options.recordProcessID && options.entityID) {
             try {
@@ -252,7 +254,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             return;
         }
 
-        // P1-7c Two-phase batch execution seam (e.g. InferProcessor dedup across distinct keys)
+        // Two-phase batch execution seam (e.g. InferProcessor dedup across distinct keys)
         if (typeof options.processor.ProcessBatch === 'function') {
             const batchStarted = Date.now();
             let batchResults: Map<string, RecordResult>;

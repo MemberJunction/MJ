@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest';
 import { createHash } from 'node:crypto';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import {
     KnowledgeHubMetadataEngine,
@@ -423,8 +423,8 @@ describe('Decision pipeline escalation', () => {
             decisionAnswers.set('r1', BELOW_FLOOR);
             llmResults.set('r1', { Success: false, ErrorMessage: 'model unavailable', AIPromptRunID: 'LLM-RUN-FAILED' });
             const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec({ Caching: { Cacheable: true, KeyFields: ['Title'] } }), null);
-            const writeBack = new WriteBackProcessor(processor, { fields: { Seniority: '$.seniority', IsVIP: '$.isVip' } }, true);
-            const result = await writeBack.ProcessRecord(makeRecord('r1'), context);
+            // On the pipeline itself, not through a write-back: without one its writes are immediate, so a stray write shows.
+            const result = await processor.ProcessRecord(makeRecord('r1'), context);
 
             expect(result).toEqual({
                 Status: 'Failed',
@@ -482,8 +482,8 @@ describe('Decision pipeline escalation', () => {
                 escalateToDirector(target.seniority);
                 const log = vi.spyOn(console, 'log');
                 const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null);
-                const writeBack = new WriteBackProcessor(processor, { fields: { Seniority: '$.seniority', IsVIP: '$.isVip' } }, true);
-                const result = await writeBack.ProcessRecord(makeRecord('r1'), context);
+                // On the pipeline itself, not through a write-back: without one its writes are immediate, so a stray write shows.
+                const result = await processor.ProcessRecord(makeRecord('r1'), context);
 
                 expect(result).toEqual({
                     Status: 'Failed',
@@ -622,6 +622,9 @@ describe('Decision pipeline escalation', () => {
 
             const { writeBack: applied } = result.ResultPayload as { output: unknown; writeBack: WriteBackResult };
             expect(applied.previewFields).toEqual({ Seniority: 'Staff', IsVIP: true });
+            // A dry-run write-back writes no Feature Value: the pipeline's values commit only with a real write-back.
+            expect(answersFor('r1')).toEqual([]);
+            await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
             expect(valuesOf(answersFor('r1')[0])).toEqual({ Seniority: 'Staff', IsVIP: true });
         });
     });
@@ -709,6 +712,48 @@ describe('Decision pipeline escalation', () => {
     // ================================================================
 
     describe('history', () => {
+        it('through a real write-back, writes the superseded row, then the answer, then the field; the guard compares with the value from before both', async () => {
+            const order: string[] = [];
+            const empty = { ValueText: null, ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null };
+            // What each write replaced: the superseded row replaced the pipeline's earlier Manager; the answer replaced the superseded (null) row.
+            vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockImplementation(async (params) => {
+                historyCalls.push(params);
+                const superseded = isSuperseded(params);
+                order.push(superseded ? 'fv:superseded' : 'fv:answer');
+                return { Upserted: params.Outputs.length, Unchanged: 0, Previous: { Seniority: superseded ? { ...empty, ValueText: 'Manager' } : empty } };
+            });
+            vi.spyOn(FeatureValueCacheService.Instance, 'GetLatestValue').mockResolvedValue(null);
+            const recordHuman = vi.spyOn(FeatureValueCacheService.Instance, 'RecordHumanValue').mockResolvedValue();
+            llmResults.set('r1', { Success: true, RawResult: { seniority: 'Staff', isVip: true }, AIPromptRunID: 'LLM-RUN-r1' });
+            decisionAnswers.set('r1', BELOW_FLOOR);
+
+            // The contact's Seniority holds Manager, what the pipeline last wrote: no person changed it.
+            const contacts = new EntityInfo({ ...CONTACTS });
+            const contact = {
+                Values: { Seniority: 'Manager' } as Record<string, unknown>, LatestResult: null, PrimaryKey: CompositeKey.FromKeyValuePair('ID', 'r1'),
+                Get(f: string) { return this.Values[f]; },
+                Set(f: string, v: unknown) { this.Values[f] = v; },
+                async InnerLoad() { return true; },
+                async Save() { order.push('field'); return true; },
+            };
+            const provider: ProviderDouble = {
+                GetEntityObject: vi.fn().mockImplementation(async (name: string) => (name === 'Contacts' ? contact : targetRow)),
+                EntityByID: vi.fn().mockImplementation((id: string) => (id === ENTITY_ID ? contacts : undefined)),
+                EntityByName: vi.fn().mockImplementation((name: string) => (name === 'Contacts' ? contacts : undefined)),
+            };
+            const realContext: RecordProcessorContext = { ...context, provider: provider as IMetadataProvider };
+            const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null);
+            const result = await new WriteBackProcessor(processor, { fields: { Seniority: '$.seniority' } }).ProcessRecord(makeRecord('r1'), realContext);
+
+            expect(result.Status).toBe('Succeeded');
+            expect(order).toEqual(['fv:superseded', 'fv:answer', 'field']);
+            expect(historyFor('r1').every((h) => h.Provider === realContext.provider)).toBe(true); // the unit's provider (a client provider runs it on itself)
+            // The guard compared Manager with Manager (the first write's capture), not with the superseded null row.
+            expect(result.HumanValuesPreserved).toBe(0);
+            expect(contact.Values.Seniority).toBe('Staff');
+            expect(recordHuman).not.toHaveBeenCalled();
+        });
+
         it('names the LLM prompt, its prompt run and its hashes, and notes the escalation and its confidence', async () => {
             // The target's constraints differ from the Decision pipeline's, so the two constraint hashes differ
             const [seniority, isVip] = outputs();

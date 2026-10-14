@@ -200,6 +200,8 @@ export interface PredictiveStudioRunFeaturePipelineInput {
     dryRun?: boolean;
     /** Runtime scope override (selected rows / a view / list / filter), used instead of the stored scope. */
     scope?: PredictiveStudioFeaturePipelineScope;
+    /** Overwrite values a person entered on the pipeline's write-back targets, and retire their Human values (default false: they are kept). */
+    overwriteHumanValues?: boolean;
 }
 
 /** Output of `PredictiveStudio.RunFeaturePipeline` — the underlying Record Process run summary. */
@@ -856,6 +858,8 @@ export interface RecordProcessRunNowInput {
     dryRun?: boolean;
     /** Runtime scope override (selected rows / a view / list / filter), used instead of the stored Scope. */
     scope?: RecordProcessScopeOverride;
+    /** Overwrite values a person entered on the process's write-back targets, and retire their Human values (default false: they are kept). */
+    overwriteHumanValues?: boolean;
 }
 
 /** Output of `RecordProcess.RunNow` — the run summary. */

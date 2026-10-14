@@ -459,4 +459,78 @@ describe('FeatureValueCacheService', () => {
             await expect(FeatureValueCacheService.Instance.Store({ ...base, Provider: provider })).rejects.toThrow(/UQ violation/);
         });
     });
+
+    describe('Human values', () => {
+        it('upserts a Human row keyed without a pin', async () => {
+            MockRunView.mockResults = [];
+            const saved: Array<Record<string, unknown>> = [];
+            const provider = stubProvider(vi.fn().mockImplementation(async () => {
+                const row: Record<string, unknown> = { NewRecord: vi.fn(), Save: vi.fn().mockImplementation(async () => { saved.push({ ...row }); return true; }) };
+                return row;
+            }));
+            await FeatureValueCacheService.Instance.RecordHumanValue({ RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordID: 'person-1',
+                FeatureName: 'SeniorityLevel', Value: 'board-id', ProcessRunID: 'run-9', ContextUser: mockUser, Provider: provider });
+            expect(saved[0].Source).toBe('Human');
+            expect(saved[0].PipelineVersion).toBeNull();
+            expect(saved[0].AIModelID).toBeNull();
+            expect(saved[0].ParametersHash).toBeNull();
+            expect(saved[0].PromptVersionHash).toBeNull();
+            expect(saved[0].InputHash).toBeNull();
+            expect(saved[0].ValueText).toBe('board-id');
+            expect(saved[0].ProcessRunID).toBe('run-9');
+        });
+
+        it('reads the newest row of one source, excluding the current run, as its typed columns', async () => {
+            MockRunView.mockResults = [{ ValueText: null, ValueNumeric: 0, ValueBoolean: null, ValueDate: null, ValueJSON: null }];
+            const latest = await FeatureValueCacheService.Instance.GetLatestValue({ RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordID: 'person-1',
+                FeatureName: 'SeniorityLevel', Source: 'Pipeline', ExcludeProcessRunID: 'run-9', ContextUser: mockUser, Provider: lookupProvider });
+            expect(latest).toEqual({ ValueText: null, ValueNumeric: 0, ValueBoolean: null, ValueDate: null, ValueJSON: null });
+            const view = MockRunView.lastParams;
+            expect(view?.ExtraFilter).toContain("RecordProcessID = 'rp-1' AND EntityID = 'ENT-P'");
+            expect(view?.ExtraFilter).toContain("RecordID = 'person-1' AND FeatureName = 'SeniorityLevel'");
+            expect(view?.ExtraFilter).toContain("Source = 'Pipeline'");
+            expect(view?.ExtraFilter).toContain("(ProcessRunID IS NULL OR ProcessRunID <> 'run-9')");
+            expect(view?.OrderBy).toBe('ComputedAt DESC');
+            expect(view?.MaxRows).toBe(1);
+            expect(view?.BypassCache).toBe(true);
+        });
+
+        it('GetLatestValue returns null when the source never wrote the feature, and adds no run filter without one', async () => {
+            MockRunView.mockResults = [];
+            const latest = await FeatureValueCacheService.Instance.GetLatestValue({ RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordID: 'person-1',
+                FeatureName: 'SeniorityLevel', Source: 'Human', ContextUser: mockUser, Provider: lookupProvider });
+            expect(latest).toBeNull();
+            expect(MockRunView.lastParams?.ExtraFilter).not.toContain('ProcessRunID');
+        });
+
+        const humanRef = { RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordID: 'person-1', FeatureName: 'SeniorityLevel', ContextUser: mockUser, Provider: lookupProvider };
+
+        it('retires the record\'s Human rows of a feature through the entity layer', async () => {
+            const rows = [{ Delete: vi.fn().mockResolvedValue(true), LatestResult: null }];
+            MockRunView.mockResults = rows;
+            expect(await FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).toBe(1);
+            expect(rows[0].Delete).toHaveBeenCalledTimes(1);
+            const view = MockRunView.lastParams;
+            expect(view?.ExtraFilter).toContain("RecordID = 'person-1' AND FeatureName = 'SeniorityLevel'");
+            expect(view?.ExtraFilter).toContain("Source = 'Human'");
+            expect(view?.ResultType).toBe('entity_object');
+            expect(view?.BypassCache).toBe(true);
+        });
+
+        it('RetireHumanValue returns 0 without a Human row, and throws when a row cannot be deleted', async () => {
+            MockRunView.mockResults = [];
+            expect(await FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).toBe(0);
+            MockRunView.mockResults = [{ Delete: vi.fn().mockResolvedValue(false), LatestResult: { CompleteMessage: 'FK violation' } }];
+            await expect(FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).rejects.toThrow(/failed retiring the Human 'SeniorityLevel' value of record 'person-1': FK violation/);
+        });
+
+        it('NativeValueOf returns the typed column that holds the value', () => {
+            const empty = { ValueText: null, ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null };
+            expect(FeatureValueCacheService.NativeValueOf({ ...empty, ValueNumeric: 0 })).toBe(0);
+            expect(FeatureValueCacheService.NativeValueOf({ ...empty, ValueBoolean: false })).toBe(false);
+            expect(FeatureValueCacheService.NativeValueOf({ ...empty, ValueText: '' })).toBe('');
+            expect(FeatureValueCacheService.NativeValueOf({ ...empty, ValueJSON: '["a"]' })).toEqual(['a']);
+            expect(FeatureValueCacheService.NativeValueOf(empty)).toBeNull();
+        });
+    });
 });

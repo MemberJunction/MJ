@@ -3204,7 +3204,9 @@ B2's name for today's module-level `typedValueOf`).
 #### Task M2.3: One owner for the job-title prompt (F-ENV-6)
 
 **Files:** Delete `metadata/prompts/.job-function-seniority-prompt.json`,
-`metadata/templates/.job-function-seniority-template.json` · Test: runtime check below
+`metadata/templates/.job-function-seniority-template.json` · Modify (owner-approved edit of a shipped migration, M2.3b)
+`migrations/v6/V202610022141__v6.2.x__Metadata_Sync.sql`, `migrations/v6/V202609221852__v6.2.x__Metadata_Sync.sql`,
+`guides/BUILDING_APPS_ON_MJ.md`, `guides/FRAMEWORK_COMPARISON.md` · Test: runtime check below
 
 **Interfaces:** Consumes `PushService` deleteRecord behaviour (`packages/MetadataSync/src/services/PushService.ts`:
 a record marked deleted that still exists is "Re-deleting…") · Produces: MJ core metadata no longer names
@@ -3221,8 +3223,34 @@ a record marked deleted that still exists is "Re-deleting…") · Produces: MJ c
   through, or the push exits non-zero. Either outcome is F-ENV-6. If the prompt was deleted, re-push bizapps-common
   (`pnpm mj sync push --dir ~/repos/bizapps-common/metadata --ci`) before Step 3.
 - [ ] Step 3: Implement: `git rm metadata/prompts/.job-function-seniority-prompt.json metadata/templates/.job-function-seniority-template.json`.
-  The deletion of MJ core's copy remains in `migrations/v6/V202610022141__v6.2.x__Metadata_Sync.sql` (anchor
-  `pr1-env6-migration-delete`), so databases that had it lose it exactly once, by migration.
+  The deletion of MJ core's copy stays in `migrations/v6/V202610022141__v6.2.x__Metadata_Sync.sql` (anchor
+  `pr1-env6-migration-delete`), now guarded (M2.3b). The unguarded `spDeleteAIPrompt` failed the migration with
+  Msg 547 on any database whose Feature Value caches or Feature Values referenced the prompt. Where it did succeed
+  with bizapps-common installed, it deleted bizapps-common's prompt. The guarded block deletes prompt `7C46041F` only
+  when bizapps-common does not own the row and no foreign key outside `AIPromptModel` references it, and no foreign
+  key into `AIPromptModel` (for example `AICredentialBinding`) references one of the prompt's bindings. bizapps-common
+  owns the row when its schema `__mj_BizAppsCommon` exists and either the prompt's `TemplateID` is bizapps-common's
+  `B8221E1A-…` or bizapps-common's `flyway_schema_history` has version `202609282100` (the migration that creates the
+  prompt) or later applied. The `TemplateContent 00AAECBA-…`, `TemplateParam A6FE72EC-…` and
+  `Template FE0A363B-…` deletes, all MJ core's own former rows, run only when no foreign key outside `TemplateContent`
+  and `TemplateParam` references template `FE0A363B`, no foreign key references that content or param, and the
+  template has no other contents or params (the delete procedures do not cascade). Before that check, when bizapps-common owns the prompt, the
+  prompt still points at `FE0A363B` (the original `V202609221852` overwrote it) and bizapps-common's template
+  `B8221E1A` exists with content, the prompt is pointed back at `B8221E1A`, so MJ core's template is never left as an
+  unreferenced orphan. Every other statement in the file is byte-identical.
+  `V202609221852` gets the same guard: its `AIPrompt` save for `7C46041F` and its two `AIPromptModel` saves
+  (`29E25958`, `EBCD12BB`) are skipped when bizapps-common owns the prompt (same test as above), and each binding is
+  also skipped when a binding with the same prompt, model, vendor and NULL configuration already exists under another
+  ID. The original failed with Msg 2627 `UQ_AIPromptModel_Prompt_Model_Vendor_ConfigID` on any database where
+  bizapps-common had installed its prompt and binding. Every other batch in that file is byte-identical.
+  Companion (M2.3b-5): bizapps-common's shipped `migrations/V202609282100__v5.47.x__Metadata_Sync.sql` is edited in
+  place the same way. Its prompt batch creates `7C46041F` only when it is missing and otherwise updates it to
+  bizapps-common's values, its binding `FE550867` is skipped when an equivalent binding exists under another ID, and
+  MJ core's `FE0A363B` trio is removed under the same reference guard. Without this, a database whose MJ core copy
+  was referenced (and therefore kept) fails bizapps-common's install on the primary key. The bizapps-common PR
+  needs the `migration-immutability-exempt` label. Skyway's
+  `Migrate()` does not validate checksums of applied versioned migrations, so the edit does not affect databases that
+  already applied this migration. It applies only where the migration has not run yet.
 - [ ] Step 4: Run Step 1 again; expected: grep prints nothing; the push log has no line for `7C46041F` or `FE0A363B`
   and exits 0; the count is 1; `sq "SELECT COUNT(*) FROM __mj.AIPromptModel WHERE PromptID='7C46041F-0412-4C2E-9B9E-3ED61D32210C'"` → 1.
 - [ ] Step 5: Runtime verification: run the core push a second time and repeat the two counts (1 and 1); restore any
@@ -9538,7 +9566,9 @@ Assumption checks (run from the MJ repo unless a path says otherwise):
   reaches them through a `body` bridge that runs each row with the MJ CLI; whichever PR merges second adds the bridge.
   Adopted as program decision D-025. The canonical bridge code is PR 2's plan M-final.5 Step 2, copied verbatim into
   M7.5.
-- **D-PR1-11** · F-ENV-6: the fix is in MJ (remove core's delete markers; the deletion lives in the migration).
+- **D-PR1-11** · F-ENV-6: the fix is in MJ (remove core's delete markers; the deletion lives in the migration,
+  guarded so it never deletes bizapps-common's row or a referenced row; `V202609221852` guarded so it never overwrites
+  bizapps-common's prompt or duplicates its model binding — M2.3b).
   F-ENV-11: the fix is in MJ (`ActionScheduledJobDriver` pauses a job whose action class is not loaded) — it covers
   every app, not only bizapps-common — plus a companion README note.
 - **D-PR1-12** · The companion restamps `PersonJobFunction` rows `Manual` → `Derived` where `Confidence IS NOT NULL` (the
@@ -9708,7 +9738,17 @@ assessment and turns 5 Phase 7 gates green.
   with `Unattended`.
 - **Vendor fidelity.** Gemini, Vertex and Bedrock send a configured temperature of 0 as 0; `DescribeSentParameters` on
   every driver; strict calls (Feature Pipelines) throw `ParameterFidelityError` instead of sending a changed parameter.
-- **Install hygiene.** MJ core no longer carries delete markers for bizapps-common's job-title prompt (F-ENV-6). An
+- **Install hygiene.** MJ core no longer carries delete markers for bizapps-common's job-title prompt (F-ENV-6). The
+  v6.2.x metadata-sync migration `V202610022141` no longer fails on, or deletes, bizapps-common's job-title prompt
+  when upgrading. It removes MJ core's former copy only when bizapps-common does not own the row and nothing
+  references it, points bizapps-common's prompt back at its own template where an earlier migration had changed it,
+  and removes MJ core's former template when nothing references it. `V202609221852` no longer fails with Msg 2627
+  (`UQ_AIPromptModel_Prompt_Model_Vendor_ConfigID`) and no longer overwrites bizapps-common's prompt when bizapps-common
+  is installed first (F-ENV-6). Both migration files were edited in place. `mj migrate` (Skyway) does not re-validate
+  checksums of applied migrations, so databases that already applied them are unaffected. The Docker workbench's
+  `mjmig` alias (`docker/workbench/.zshrc`) runs Java `flyway migrate`, which validates checksums by default and stops
+  on a workbench database that already applied either file; run `flyway repair` there once.
+  (`docker/workbench/baseline-roundtrip.sh` drops and recreates its database first, so it is unaffected.) An
   Action scheduled job whose class is not loaded pauses with one message instead of failing every run, and resumes by
   itself on the first server start where the class is loaded (F-ENV-11).
 

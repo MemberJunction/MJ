@@ -109,6 +109,17 @@ describe('PredictiveStudioRunFeaturePipelineServerOperation — happy path', () 
   });
 });
 
+describe('PredictiveStudioRunFeaturePipelineServerOperation — human values', () => {
+  it('keeps human values by default, and overwrites them only when the input asks', async () => {
+    const facade = new MockFacade(fakeRunResult());
+    const op = new TestableRunFeatureOp(facade);
+    await op.ExecuteServer({ featurePipelineID: 'fp-1' }, new CapturingContext());
+    expect(facade.LastOptions?.overwriteHumanValues).toBe(false);
+    await op.ExecuteServer({ featurePipelineID: 'fp-1', overwriteHumanValues: true }, new CapturingContext());
+    expect(facade.LastOptions?.overwriteHumanValues).toBe(true);
+  });
+});
+
 describe('PredictiveStudioRunFeaturePipelineServerOperation — validation/errors', () => {
   it('fails when featurePipelineID is missing', async () => {
     const facade = new MockFacade(fakeRunResult());

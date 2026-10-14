@@ -108,6 +108,36 @@ export interface RecordFeatureValuesParams {
     Provider: IMetadataProvider;
 }
 
+/**
+ * One record's Feature Values of one feature in one pipeline, and the user and provider to read or write them with.
+ * PascalCase members, like the `MJ: Feature Values` columns they filter on (the module's older param interfaces
+ * predate the casing standard).
+ */
+export interface FeatureValueRecordRef {
+    RecordProcessID: string;
+    EntityID: string;
+    RecordID: string;
+    FeatureName: string;
+    ContextUser: UserInfo;
+    /** The provider the reads and writes run on — the caller's, never the process-wide default. */
+    Provider: IMetadataProvider;
+}
+
+/** Parameters for reading the latest Feature Value of one record and feature from one source. */
+export interface LatestFeatureValueParams extends FeatureValueRecordRef {
+    Source: FeatureValueSource;
+    /** Ignore values this run wrote: they are not "what the pipeline last wrote". */
+    ExcludeProcessRunID?: string | null;
+}
+
+/** Parameters for recording a value a person entered on a pipeline's target. */
+export interface RecordHumanValueParams extends FeatureValueRecordRef {
+    /** The field's current value. `unknown` on purpose: a field value of any entity, the type `BaseEntity.Get` returns. */
+    Value: unknown;
+    /** The run that observed the value; null when there is none. */
+    ProcessRunID?: string | null;
+}
+
 /** The typed value columns of a Feature Value. */
 export type TypedFeatureValue = Pick<MJFeatureValueEntity, 'ValueText' | 'ValueNumeric' | 'ValueBoolean' | 'ValueDate' | 'ValueJSON'>;
 
@@ -146,7 +176,7 @@ export class FeatureValueSaveError extends Error {
 /** One write attempt: what it did, or the provider's message when the save failed. */
 type FeatureValueWriteAttempt = { Result: FeatureValueWriteResult } | { Message: string };
 
-/** The columns {@link FeatureValueCacheService.LoadLatestPipelineValues} reads. */
+/** The columns {@link FeatureValueCacheService.LoadLatestPipelineValues} and {@link FeatureValueCacheService.GetLatestValue} read. */
 type LatestFeatureValueRow = TypedFeatureValue & Pick<MJFeatureValueEntity, 'FeatureName'>;
 
 /**
@@ -505,6 +535,97 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             }
         }
         return map;
+    }
+
+    /**
+     * The most recent Feature Value of a record and feature from one source, as its typed columns; null when there is
+     * none. Read fresh (`BypassCache`): the human-value guard decides from it whether a field may be overwritten.
+     * @throws Error when the read fails (a guard that cannot read must not guess "pipeline-owned").
+     */
+    public async GetLatestValue(p: LatestFeatureValueParams): Promise<TypedFeatureValue | null> {
+        const exclude = p.ExcludeProcessRunID
+            ? ` AND (ProcessRunID IS NULL OR ProcessRunID <> '${EscapeSQLString(p.ExcludeProcessRunID)}')`
+            : '';
+        const res = await RunView.FromMetadataProvider(p.Provider).RunView<LatestFeatureValueRow>({
+            EntityName: 'MJ: Feature Values',
+            ExtraFilter: `${FeatureValueCacheService.RecordFeatureFilter(p)} AND Source = '${EscapeSQLString(p.Source)}'${exclude}`,
+            OrderBy: 'ComputedAt DESC',
+            Fields: ['FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON'],
+            MaxRows: 1,
+            BypassCache: true,
+        }, p.ContextUser);
+        if (!res.Success) {
+            throw new Error(`FeatureValueCacheService: reading the latest '${p.FeatureName}' value of record '${p.RecordID}' failed: ${res.ErrorMessage}`);
+        }
+        const row = res.Results?.[0];
+        return row ? FeatureValueCacheService.TypedValueOf(row) : null;
+    }
+
+    /**
+     * Upserts the record's Human Feature Value for a feature. One per record and feature: the key carries no pin
+     * (pipeline version, prompt version, model, parameters and input are all null), so a later observation of
+     * the same feature updates the row in place.
+     * @throws FeatureValueSaveError when the row cannot be saved.
+     */
+    public async RecordHumanValue(p: RecordHumanValueParams): Promise<void> {
+        await this.RecordFeatureValues({
+            RecordProcessID: p.RecordProcessID, EntityID: p.EntityID, RecordID: p.RecordID,
+            Outputs: [{ FeatureName: p.FeatureName, Value: p.Value }], ProcessRunID: p.ProcessRunID || null,
+            PromptVersionHash: null, PipelineVersion: null, AIModelID: null, ParametersHash: null, InputHash: null, Source: 'Human',
+            ContextUser: p.ContextUser, Provider: p.Provider,
+        });
+    }
+
+    /**
+     * Deletes the record's Human Feature Values of a feature, through the entity layer (Record Changes keeps the
+     * history): a run that overwrote the person's value made the field the pipeline's again. Sequential: the deletes
+     * share the caller's transaction when it holds one.
+     * @returns how many rows were deleted (0 when there was none)
+     * @throws Error when the rows cannot be read or one cannot be deleted
+     */
+    public async RetireHumanValue(p: FeatureValueRecordRef): Promise<number> {
+        const res = await RunView.FromMetadataProvider(p.Provider).RunView<MJFeatureValueEntity>({
+            EntityName: 'MJ: Feature Values',
+            ExtraFilter: `${FeatureValueCacheService.RecordFeatureFilter(p)} AND Source = 'Human'`,
+            ResultType: 'entity_object', // the rows are deleted
+            BypassCache: true,
+        }, p.ContextUser);
+        if (!res.Success) {
+            throw new Error(`FeatureValueCacheService: reading the Human '${p.FeatureName}' value of record '${p.RecordID}' failed: ${res.ErrorMessage}`);
+        }
+        const rows = res.Results || [];
+        for (const row of rows) {
+            if (!(await row.Delete())) {
+                throw new Error(`FeatureValueCacheService: failed retiring the Human '${p.FeatureName}' value of record '${p.RecordID}': ${row.LatestResult?.CompleteMessage || 'unknown error'}`);
+            }
+        }
+        return rows.length;
+    }
+
+    /** The SQL filter selecting one record's Feature Values of one feature in one pipeline. */
+    protected static RecordFeatureFilter(p: FeatureValueRecordRef): string {
+        return `RecordProcessID = '${EscapeSQLString(p.RecordProcessID)}' AND EntityID = '${EscapeSQLString(p.EntityID)}'`
+            + ` AND RecordID = '${EscapeSQLString(p.RecordID)}' AND FeatureName = '${EscapeSQLString(p.FeatureName)}'`;
+    }
+
+    /**
+     * A typed Feature Value as the native value write-back compares: the text, number, boolean, date or parsed JSON
+     * column that holds it; null when every column is empty. Checks `=== null` (not falsiness): 0, false and '' are values.
+     */
+    public static NativeValueOf(v: TypedFeatureValue): FeatureValueOutputItem['Value'] {
+        if (v.ValueText !== null) {
+            return v.ValueText;
+        }
+        if (v.ValueNumeric !== null) {
+            return v.ValueNumeric;
+        }
+        if (v.ValueBoolean !== null) {
+            return v.ValueBoolean;
+        }
+        if (v.ValueDate !== null) {
+            return v.ValueDate;
+        }
+        return v.ValueJSON !== null ? JSON.parse(v.ValueJSON) : null;
     }
 
     /**

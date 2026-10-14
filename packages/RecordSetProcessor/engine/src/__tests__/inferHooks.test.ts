@@ -67,7 +67,7 @@ describe('InferProcessor Lifecycle Hooks', () => {
         const result = await writeBackProc.ProcessRecord(record, context);
         expect(processor.beforeWriteBackCalled).toBe(true);
         expect(result.Status).toBe('Succeeded');
-        expect(result.ResultPayload).toEqual({ output: { foo: 'bar' }, writeBack: { updatedRecord: false, dryRun: true, previewFields: { TargetField: 'bar' } } });
+        expect(result.ResultPayload).toEqual({ output: { foo: 'bar' }, writeBack: { updatedRecord: false, changed: false, dryRun: true, previewFields: { TargetField: 'bar' } } });
     });
 
     it('resolves custom subclass via ClassFactory using DataFeatureSpec.ProcessorExtensionKey', () => {
