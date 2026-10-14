@@ -377,7 +377,7 @@ export class SQLServerDriver extends BaseAutoDocDriver {
   ): Promise<number> {
     const query = `
       SELECT COUNT(DISTINCT ${this.escapeIdentifier(columnName)}) as distinct_count
-      FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)}
+      FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)} WITH (NOLOCK)
     `;
 
     const result = await this.executeQuery<{ distinct_count: number }>(query);
@@ -394,7 +394,7 @@ export class SQLServerDriver extends BaseAutoDocDriver {
       SELECT TOP ${limit}
         ${this.escapeIdentifier(columnName)} as value,
         COUNT(*) as frequency
-      FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)}
+      FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)} WITH (NOLOCK)
       WHERE ${this.escapeIdentifier(columnName)} IS NOT NULL
       GROUP BY ${this.escapeIdentifier(columnName)}
       ORDER BY COUNT(*) DESC
@@ -414,10 +414,15 @@ export class SQLServerDriver extends BaseAutoDocDriver {
     // User requested: "narrow that down to maybe 10-20 values randomly selected from each col"
     const limitedSampleSize = Math.min(sampleSize, 20);
 
+    // Fast random sampling: sample from at most 1,000 non-null rows using WITH (NOLOCK)
+    // rather than sorting the entire table with ORDER BY NEWID() (which stalls on multi-million row tables).
     const query = `
       SELECT TOP ${limitedSampleSize} ${this.escapeIdentifier(columnName)} as value
-      FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)}
-      WHERE ${this.escapeIdentifier(columnName)} IS NOT NULL
+      FROM (
+        SELECT TOP 1000 ${this.escapeIdentifier(columnName)}
+        FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)} WITH (NOLOCK)
+        WHERE ${this.escapeIdentifier(columnName)} IS NOT NULL
+      ) as sample_pool
       ORDER BY NEWID()
     `;
 
@@ -600,7 +605,7 @@ export class SQLServerDriver extends BaseAutoDocDriver {
         COUNT(DISTINCT ${this.escapeIdentifier(columnName)}) as distinct_count,
         COUNT(*) as total_count,
         SUM(CASE WHEN ${this.escapeIdentifier(columnName)} IS NULL THEN 1 ELSE 0 END) as null_count
-      FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)}
+      FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)} WITH (NOLOCK)
     `;
 
     const result = await this.executeQuery<{
@@ -641,7 +646,7 @@ export class SQLServerDriver extends BaseAutoDocDriver {
         MAX(${this.escapeIdentifier(columnName)}) as max_value,
         AVG(CAST(${this.escapeIdentifier(columnName)} AS FLOAT)) as avg_value,
         STDEV(${this.escapeIdentifier(columnName)}) as std_dev
-      FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)}
+      FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)} WITH (NOLOCK)
       WHERE ${this.escapeIdentifier(columnName)} IS NOT NULL
     `;
 
@@ -674,7 +679,7 @@ export class SQLServerDriver extends BaseAutoDocDriver {
       SELECT
         MIN(${this.escapeIdentifier(columnName)}) as min_value,
         MAX(${this.escapeIdentifier(columnName)}) as max_value
-      FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)}
+      FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)} WITH (NOLOCK)
       WHERE ${this.escapeIdentifier(columnName)} IS NOT NULL
     `;
 
@@ -704,7 +709,7 @@ export class SQLServerDriver extends BaseAutoDocDriver {
         AVG(LEN(${this.escapeIdentifier(columnName)})) as avg_length,
         MAX(LEN(${this.escapeIdentifier(columnName)})) as max_length,
         MIN(LEN(${this.escapeIdentifier(columnName)})) as min_length
-      FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)}
+      FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)} WITH (NOLOCK)
       WHERE ${this.escapeIdentifier(columnName)} IS NOT NULL
     `;
 
@@ -802,12 +807,12 @@ export class SQLServerDriver extends BaseAutoDocDriver {
         WITH SourceSample AS (
           SELECT DISTINCT TOP ${sampleSize}
             ${this.escapeIdentifier(sourceColumn)} as value
-          FROM ${this.escapeIdentifier(sourceSchema)}.${this.escapeIdentifier(sourceTableName)}
+          FROM ${this.escapeIdentifier(sourceSchema)}.${this.escapeIdentifier(sourceTableName)} WITH (NOLOCK)
           WHERE ${this.escapeIdentifier(sourceColumn)} IS NOT NULL
         ),
         TargetValues AS (
           SELECT DISTINCT ${this.escapeIdentifier(targetColumn)} as value
-          FROM ${this.escapeIdentifier(targetSchema)}.${this.escapeIdentifier(targetTableName)}
+          FROM ${this.escapeIdentifier(targetSchema)}.${this.escapeIdentifier(targetTableName)} WITH (NOLOCK)
           WHERE ${this.escapeIdentifier(targetColumn)} IS NOT NULL
         )
         SELECT
@@ -858,7 +863,7 @@ export class SQLServerDriver extends BaseAutoDocDriver {
         WITH SampledData AS (
           SELECT TOP ${sampleSize}
             ${columnList}
-          FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)}
+          FROM ${this.escapeIdentifier(schemaName)}.${this.escapeIdentifier(tableName)} WITH (NOLOCK)
           WHERE ${escapedColumns.map(col => `${col} IS NOT NULL`).join(' AND ')}
         ),
         GroupedData AS (

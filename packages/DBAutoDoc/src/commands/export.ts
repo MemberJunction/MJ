@@ -15,8 +15,15 @@ import { ReportGenerator } from '../generators/ReportGenerator.js';
 import { HTMLGenerator } from '../generators/HTMLGenerator.js';
 import { CSVGenerator } from '../generators/CSVGenerator.js';
 import { MermaidGenerator } from '../generators/MermaidGenerator.js';
+import { ErdClusterer } from '../generators/ErdClusterer.js';
+import { ErdClusterGenerator, ErdColumnMode } from '../generators/ErdClusterGenerator.js';
+import { ErdClusterPlan } from '../generators/ErdClusterer.js';
+import { ErdConfig } from '../types/config.js';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
 // DatabaseConnection is lazy-imported only when --apply is used (requires DB credentials)
+
+/** Sub-directory of the output directory that holds the subject-area diagrams. */
+const ERD_CLUSTER_DIR = 'erd';
 
 export default class Export extends Command {
   static description = 'Export documentation in multiple formats (SQL, Markdown, HTML, CSV, Mermaid)';
@@ -28,7 +35,9 @@ export default class Export extends Command {
     '$ db-auto-doc export --html',
     '$ db-auto-doc export --csv',
     '$ db-auto-doc export --mermaid',
-    '$ db-auto-doc export --sql --markdown --html --csv --mermaid --apply'
+    '$ db-auto-doc export --sql --markdown --html --csv --mermaid --apply',
+    '$ db-auto-doc export --mermaid --erd-mode clusters',
+    '$ db-auto-doc export --html --mermaid --erd-mode clusters --erd-hub-min-inbound 12 --erd-page-size 40'
   ];
 
   static flags = {
@@ -45,7 +54,13 @@ export default class Export extends Command {
     'schema-info-confirmed-only': Flags.boolean({ description: 'Only include confirmed candidates in schema info', default: false }),
     apply: Flags.boolean({ description: 'Apply SQL to database', default: false }),
     'approved-only': Flags.boolean({ description: 'Only export approved items', default: false }),
-    'confidence-threshold': Flags.string({ description: 'Minimum confidence threshold', default: '0' })
+    'confidence-threshold': Flags.string({ description: 'Minimum confidence threshold', default: '0' }),
+    'erd-mode': Flags.string({ description: 'ERD layout: full (one diagram), clusters (one per subject area), both. Overrides output.erd.mode', options: ['full', 'clusters', 'both'] }),
+    'erd-columns': Flags.string({ description: 'Columns drawn per entity: all, keys (PK/FK only), none. Overrides output.erd.columns', options: ['all', 'keys', 'none'] }),
+    'erd-hub-min-inbound': Flags.integer({ description: 'A table referenced by at least this many tables is a subject-area hub (default 8)' }),
+    'erd-lookup-max-rows': Flags.integer({ description: 'A table that references nothing and has fewer rows than this is a reference table, listed not drawn (default 5000)' }),
+    'erd-page-size': Flags.integer({ description: 'Tables per diagram page beyond the hub (default 50)' }),
+    'erd-min-cluster-size': Flags.integer({ description: 'Subject areas smaller than this fold into a neighbour (default 4)' })
   };
 
   async run(): Promise<void> {
@@ -157,11 +172,17 @@ export default class Export extends Command {
         spinner.succeed(`Markdown documentation saved to ${mdPath}`);
       }
 
+      // ERD options: export flags override config.output.erd, which overrides the defaults.
+      const erd = this.resolveErdConfig(config?.output?.erd, flags);
+      const clusterPlan: ErdClusterPlan | undefined = generateMermaid && erd.mode !== 'full'
+        ? new ErdClusterer().Plan(state, erd)
+        : undefined;
+
       // Generate HTML
       if (generateHTML) {
         spinner.start('Generating HTML documentation');
         const htmlGen = new HTMLGenerator();
-        const html = htmlGen.generate(state, generatorOptions);
+        const html = htmlGen.generate(state, { ...generatorOptions, clusterPlan, clusterDir: ERD_CLUSTER_DIR });
 
         const htmlPath = path.join(outputDir, 'documentation.html');
         await fs.writeFile(htmlPath, html, 'utf-8');
@@ -183,20 +204,38 @@ export default class Export extends Command {
         spinner.succeed(`CSV exports saved to ${tablesPath} and ${columnsPath}`);
       }
 
-      // Generate Mermaid
+      // Generate Mermaid: the schema-wide diagram, the clustered subject areas, or both
       if (generateMermaid) {
-        spinner.start('Generating Mermaid diagram');
-        const mermaidGen = new MermaidGenerator();
-        const mermaidDiagram = mermaidGen.generate(state, generatorOptions);
-        const mermaidHtml = mermaidGen.generateHtml(state, generatorOptions);
+        if (erd.mode === 'full' || erd.mode === 'both') {
+          spinner.start('Generating Mermaid diagram');
+          const mermaidGen = new MermaidGenerator();
+          const fullOptions = { ...generatorOptions, columns: erd.columns === 'keys' || erd.columns === 'none' ? erd.columns : 'all' as const };
+          const mermaidDiagram = mermaidGen.generate(state, fullOptions);
+          const mermaidHtml = mermaidGen.generateHtml(state, fullOptions);
 
-        const mermaidPath = path.join(outputDir, 'erd.mmd');
-        const mermaidHtmlPath = path.join(outputDir, 'erd.html');
+          const mermaidPath = path.join(outputDir, 'erd.mmd');
+          const mermaidHtmlPath = path.join(outputDir, 'erd.html');
 
-        await fs.writeFile(mermaidPath, mermaidDiagram, 'utf-8');
-        await fs.writeFile(mermaidHtmlPath, mermaidHtml, 'utf-8');
+          await fs.writeFile(mermaidPath, mermaidDiagram, 'utf-8');
+          await fs.writeFile(mermaidHtmlPath, mermaidHtml, 'utf-8');
 
-        spinner.succeed(`Mermaid diagram saved to ${mermaidPath} and ${mermaidHtmlPath}`);
+          spinner.succeed(`Mermaid diagram saved to ${mermaidPath} and ${mermaidHtmlPath}`);
+        }
+        if (clusterPlan) {
+          spinner.start('Generating subject-area diagrams');
+          const clusterGen = new ErdClusterGenerator();
+          const output = clusterGen.Generate(state, clusterPlan, { columns: erd.columns ?? 'keys' });
+          const clusterDir = path.join(outputDir, ERD_CLUSTER_DIR);
+          await fs.mkdir(clusterDir, { recursive: true });
+          for (const file of output.Files) {
+            await fs.writeFile(path.join(clusterDir, `${file.BaseName}.mmd`), file.Mermaid, 'utf-8');
+            await fs.writeFile(path.join(clusterDir, `${file.BaseName}.html`), file.Html, 'utf-8');
+          }
+          await fs.writeFile(path.join(clusterDir, 'index.html'), output.IndexHtml, 'utf-8');
+          await fs.writeFile(path.join(clusterDir, 'index.md'), output.IndexMarkdown, 'utf-8');
+          const largest = output.Files.reduce((n, f) => Math.max(n, f.Mermaid.length), 0);
+          spinner.succeed(`${clusterPlan.Clusters.length} subject areas (${output.Files.length} diagram pages, largest ${largest.toLocaleString()} chars) saved to ${clusterDir}`);
+        }
       }
 
       // Generate Report
@@ -232,5 +271,20 @@ export default class Export extends Command {
       spinner.fail('Export failed');
       this.error((error as Error).message);
     }
+  }
+
+  /** Merge the ERD settings: defaults, then config.output.erd, then the export flags. */
+  private resolveErdConfig(configured: ErdConfig | undefined, flags: Record<string, unknown>): ErdConfig & { mode: 'full' | 'clusters' | 'both' } {
+    const mode = (flags['erd-mode'] as ErdConfig['mode']) ?? configured?.mode ?? 'full';
+    const columns = (flags['erd-columns'] as ErdColumnMode | undefined) ?? configured?.columns;
+    return {
+      ...configured,
+      mode,
+      columns,
+      hubMinInbound: (flags['erd-hub-min-inbound'] as number | undefined) ?? configured?.hubMinInbound,
+      lookupMaxRows: (flags['erd-lookup-max-rows'] as number | undefined) ?? configured?.lookupMaxRows,
+      pageSize: (flags['erd-page-size'] as number | undefined) ?? configured?.pageSize,
+      minClusterSize: (flags['erd-min-cluster-size'] as number | undefined) ?? configured?.minClusterSize,
+    };
   }
 }

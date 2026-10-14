@@ -155,4 +155,39 @@ describe('ConfigLoader - applyDefaults', () => {
     expect(config.groundTruth!.tables!['dbo.Users'].description).toBe('User accounts');
     expect(config.seedContext!.overallPurpose).toBe('E-commerce platform');
   });
+
+  it('should resolve seedContext.file into customInstructions', async () => {
+    const configWithSeedFile = {
+      version: '1.0.0',
+      database: { server: 'localhost', database: 'TestDB', user: 'sa', password: 'pass' },
+      ai: { provider: 'gemini', model: '  gemini-3.8-flash  ', apiKey: 'key' },
+      analysis: {
+        cardinalityThreshold: 20,
+        sampleSize: 10,
+        includeStatistics: true,
+        includePatternAnalysis: true,
+      },
+      output: { stateFile: './s.json', sqlFile: './o.sql', markdownFile: './o.md' },
+      seedContext: {
+        file: './context.md',
+        overallPurpose: 'AQHA System'
+      }
+    };
+
+    mockedFs.readFile.mockImplementation(async (filePath) => {
+      if (String(filePath).endsWith('config.json')) {
+        return JSON.stringify(configWithSeedFile);
+      }
+      if (String(filePath).endsWith('context.md')) {
+        return '# Detailed AQHA Markdown Documentation';
+      }
+      throw new Error(`File not found: ${filePath}`);
+    });
+
+    const config = await ConfigLoader.load('/tmp/config.json');
+    expect(config.ai.model).toBe('gemini-3.8-flash');
+    expect(config.seedContext?.customInstructions).toBe('# Detailed AQHA Markdown Documentation');
+    expect(config.seedContext?.overallPurpose).toBe('AQHA System');
+  });
 });
+

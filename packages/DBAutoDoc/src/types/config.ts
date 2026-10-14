@@ -19,6 +19,8 @@ export interface DBAutoDocConfig {
  * This is injected into prompts to guide analysis but does NOT override AI output.
  */
 export interface SeedContextConfig {
+  file?: string;
+  files?: string[];
   overallPurpose?: string;
   businessDomains?: string[];
   customInstructions?: string;
@@ -151,6 +153,7 @@ export interface AnalysisConfig {
   sampleSize: number;
   includeStatistics: boolean;
   includePatternAnalysis: boolean;
+  skipSampling?: boolean;
   convergence: ConvergenceConfig;
   backpropagation: BackpropagationConfig;
   sanityChecks: SanityCheckConfig;
@@ -360,6 +363,34 @@ export interface OutputConfig {
   outputDir?: string; // Base output directory for numbered runs
   sqlFile: string;
   markdownFile: string;
+  /** Entity-relationship diagram options for `export --mermaid` (see ErdConfig). */
+  erd?: ErdConfig;
+}
+
+/**
+ * How `export --mermaid` draws the schema. The default (`full`) is one diagram of every table,
+ * which Mermaid refuses above ~50,000 characters of source; `clusters` splits the FK graph into
+ * hub-centred subject areas that each fit. Every value can be overridden per run by an export flag.
+ */
+export interface ErdConfig {
+  /** `full` (default): one diagram. `clusters`: one diagram per subject area. `both`: write both. */
+  mode?: 'full' | 'clusters' | 'both';
+  /** Columns drawn in each entity: every column (`all`, the default for `full`), primary and foreign keys only (`keys`, the default for clusters), or none. */
+  columns?: 'all' | 'keys' | 'none';
+  /** A table referenced by at least this many other tables becomes a cluster hub (default 8). */
+  hubMinInbound?: number;
+  /** A table that references nothing and has fewer rows than this is a reference (lookup) table, listed rather than drawn (default 5000). */
+  lookupMaxRows?: number;
+  /** Tables per diagram page beyond the hub; a larger cluster is paginated (default 50). */
+  pageSize?: number;
+  /** A hub whose cluster is smaller than this is folded into the neighbouring cluster it links to most (default 4). */
+  minClusterSize?: number;
+  /** Table names always treated as hubs, in addition to those found by hubMinInbound. */
+  hubs?: string[];
+  /** Table names left out of every diagram (still listed on the index). */
+  excludeTables?: string[];
+  /** Table names always treated as reference tables regardless of row count. */
+  lookupTables?: string[];
 }
 
 export interface SchemaFilterConfig {

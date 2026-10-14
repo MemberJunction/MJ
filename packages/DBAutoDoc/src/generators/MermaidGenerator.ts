@@ -8,6 +8,8 @@ export interface MermaidGeneratorOptions {
   approvedOnly?: boolean;
   confidenceThreshold?: number;
   includeComments?: boolean;
+  /** Columns drawn per entity: every column (default), primary/foreign keys only, or none. */
+  columns?: 'all' | 'keys' | 'none';
 }
 
 export class MermaidGenerator {
@@ -95,6 +97,8 @@ export class MermaidGenerator {
       lines.push(`    ${table.name} {`);
 
       for (const column of table.columns) {
+        if (options.columns === 'none') continue;
+        if (options.columns === 'keys' && !column.isPrimaryKey && !column.isForeignKey) continue;
         const type = column.dataType.replace(/\s+/g, '_');
         const constraints = [];
 

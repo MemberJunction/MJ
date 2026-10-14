@@ -1,4 +1,5 @@
 import { Command, Flags } from '@oclif/core';
+import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
 
 export default class DbDocAnalyze extends Command {
   static description = 'Analyze database and generate documentation (delegates to db-auto-doc analyze)';
@@ -19,6 +20,10 @@ export default class DbDocAnalyze extends Command {
       char: 'c',
       description: 'Path to config file',
       default: './config.json'
+    }),
+    'skip-sampling': Flags.boolean({
+      description: 'Skip table data sampling pass (useful for large databases or when schema/dictionary is already provided)',
+      default: false
     })
   };
 
@@ -35,6 +40,9 @@ export default class DbDocAnalyze extends Command {
     }
     if (flags.config) {
       args.push('--config', flags.config);
+    }
+    if (flags['skip-sampling']) {
+      args.push('--skip-sampling');
     }
 
     // Execute the DBAutoDoc analyze command

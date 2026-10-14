@@ -319,6 +319,59 @@ Export only AI-discovered relationships (exclude hard DB constraints):
 db-auto-doc export --schema-info --schema-info-discovered-only --confidence-threshold 70
 ```
 
+#### Subject-area diagrams for large schemas
+
+Mermaid refuses a diagram whose source exceeds ~50,000 characters, and a schema of a few hundred tables
+passes that long before it becomes readable. `--erd-mode clusters` splits the foreign-key graph into
+hub-centred subject areas and writes one diagram per area to `erd/`, with an index and a "Subject Areas"
+section in `documentation.html`:
+
+```bash
+db-auto-doc export --html --mermaid --erd-mode clusters
+db-auto-doc export --mermaid --erd-mode both --erd-columns keys     # keep the full diagram too
+```
+
+How the areas are chosen:
+
+1. **Reference tables** — tables that reference nothing and hold fewer than `lookupMaxRows` rows
+   (status codes, types, flags) — are listed beside each diagram rather than drawn. Left in, a flag table
+   referenced by sixty others links every area to every other.
+2. **Hubs** are tables referenced by at least `hubMinInbound` other tables.
+3. Every other connected table joins its nearest hub; an area smaller than `minClusterSize` folds into
+   the neighbour it links to most.
+4. An area larger than `pageSize` is paginated, with the hub on every page.
+
+Defaults live in `config.json` and any of them can be overridden per run:
+
+```json
+"output": {
+  "erd": {
+    "mode": "clusters",
+    "columns": "keys",
+    "hubMinInbound": 8,
+    "lookupMaxRows": 5000,
+    "pageSize": 50,
+    "minClusterSize": 4,
+    "hubs": ["Invoice"],
+    "lookupTables": ["AuditFlag"],
+    "excludeTables": ["Customer.bak"]
+  }
+}
+```
+
+| Flag | Overrides |
+|------|-----------|
+| `--erd-mode full\|clusters\|both` | `erd.mode` |
+| `--erd-columns all\|keys\|none` | `erd.columns` (clusters default to `keys`) |
+| `--erd-hub-min-inbound N` | `erd.hubMinInbound` |
+| `--erd-lookup-max-rows N` | `erd.lookupMaxRows` |
+| `--erd-page-size N` | `erd.pageSize` |
+| `--erd-min-cluster-size N` | `erd.minClusterSize` |
+
+`erd/index.md` names every area's members, the reference tables, the tables with no foreign keys and any
+connected tables that reached no hub, so a wrong-looking split can be traced to a threshold or pinned with
+`hubs` / `lookupTables` / `excludeTables`.
+
 ### 5. Export Sample Queries to Metadata (Optional)
 
 Transform generated sample queries into MemberJunction metadata format for syncing to the database:

@@ -20,6 +20,9 @@ export class ConfigLoader {
 
       const config = JSON.parse(expandedContent) as DBAutoDocConfig;
 
+      // Resolve seedContext.file or seedContext.files if specified
+      await this.resolveSeedContextFiles(config, path.dirname(configPath));
+
       // Validate required fields
       this.validate(config);
 
@@ -182,9 +185,42 @@ export class ConfigLoader {
     if (!config.ai.model) {
       throw new Error('Missing ai.model');
     }
+    config.ai.model = config.ai.model.trim();
 
     if (!config.ai.apiKey) {
       throw new Error('Missing ai.apiKey');
     }
+  }
+
+  /**
+   * Resolve seedContext.file or seedContext.files if specified,
+   * reading contents and appending to customInstructions.
+   */
+  private static async resolveSeedContextFiles(config: DBAutoDocConfig, baseDir: string): Promise<void> {
+    if (!config.seedContext) return;
+
+    const filesToLoad: string[] = [];
+    if (config.seedContext.file) {
+      filesToLoad.push(config.seedContext.file);
+    }
+    if (Array.isArray(config.seedContext.files)) {
+      filesToLoad.push(...config.seedContext.files);
+    }
+
+    if (filesToLoad.length === 0) return;
+
+    const contents: string[] = [];
+    for (const relOrAbsPath of filesToLoad) {
+      const resolvedPath = path.isAbsolute(relOrAbsPath)
+        ? relOrAbsPath
+        : path.resolve(baseDir, relOrAbsPath);
+      const content = await fs.readFile(resolvedPath, 'utf-8');
+      contents.push(content);
+    }
+
+    const loadedText = contents.join('\n\n---\n\n');
+    config.seedContext.customInstructions = config.seedContext.customInstructions
+      ? `${config.seedContext.customInstructions}\n\n${loadedText}`
+      : loadedText;
   }
 }
