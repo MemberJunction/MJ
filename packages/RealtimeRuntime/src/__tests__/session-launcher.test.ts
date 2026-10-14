@@ -175,6 +175,7 @@ function request(overrides: Partial<RealtimeSessionLaunchRequest> = {}): Realtim
         ApplicationId: null,
         AppContext: null,
         ChannelCandidatesJson: null,
+        ConversationBranchId: null,
         ...overrides,
     };
 }
@@ -217,6 +218,7 @@ describe('DefaultRealtimeSessionLauncher', () => {
                 MediaCollectionId: 'kit',
                 ApplicationId: 'app',
                 AppContext: { Route: '/x' } as never,
+                ConversationBranchId: 'fork-1',
             }),
             { Provider: provider as unknown as IMetadataProvider }
         );
@@ -233,7 +235,9 @@ describe('DefaultRealtimeSessionLauncher', () => {
             recordingStartedAt: '2030-01-01T00:00:00Z',
             mediaCollectionId: 'kit',
             applicationId: 'app',
+            conversationBranchId: 'fork-1',
         });
+        expect(mint.query).toContain('conversationBranchId: $conversationBranchId');
         expect(JSON.parse(String(mint.variables['clientToolsJson']))).toHaveLength(1);
         expect(JSON.parse(String(mint.variables['appContextJson']))).toEqual({ Route: '/x' });
     });

@@ -1050,6 +1050,19 @@ export interface InputArtifact {
 }
 
 /**
+ * How a run carries forward the work of a predecessor the user stopped.
+ * - `'full_stack'`: the stopped run's own message stack (its prompts' turns, its action invocations and
+ *   results, delegations) is resumed into this run in the same shape the loop builds while running, so
+ *   the agent picks up where it left off. Falls back to `'summary'` when the stack cannot be resumed.
+ * - `'summary'`: the stopped run's completed action and tool results are rendered into one
+ *   carried-forward message.
+ *
+ * The default is `'full_stack'` (`BaseAgent.DefaultStopContinuationMode`); a caller sets
+ * `ExecuteAgentParams.stopContinuationMode` only to choose `'summary'`.
+ */
+export type StopContinuationMode = 'full_stack' | 'summary';
+
+/**
  * Parameters required to execute an AI Agent.
  *
  * @template TContext - Type of the context object passed through agent and action execution.
@@ -1327,6 +1340,14 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     ConversationHistoryFrom?: Date;
 
     /**
+     * The conversation branch this run belongs to. Meaningful only with {@link conversationId}.
+     * The framework reads the conversation on the run's behalf only along that branch's path:
+     * history retrieval tools, offered artifacts, cross-turn compaction and the previous
+     * turn's tool results. Omitted, the run reads the trunk (rows with no branch).
+     */
+    ConversationBranchID?: string;
+
+    /**
      * Optional flag to automatically populate the payload from the last run.
      * When true and lastRunId is provided, the framework will:
      * 1. Load the last run's FinalPayload
@@ -1336,6 +1357,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * bandwidth by avoiding passing large payloads back and forth.
      */
     autoPopulateLastRunPayload?: boolean;
+
+    /**
+     * How this run carries forward a predecessor the user stopped (see {@link StopContinuationMode}).
+     * Defaults to `'full_stack'`: the stopped run's message stack is resumed so the agent continues
+     * where it left off. `'summary'` carries only its completed results, for callers that want that.
+     */
+    stopContinuationMode?: StopContinuationMode;
 
     /**
      * Per-request Plan Mode toggle. Defaults OFF (undefined/false) — no behavior change unless
