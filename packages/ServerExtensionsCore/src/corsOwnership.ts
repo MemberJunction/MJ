@@ -11,10 +11,20 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { ServerExtensionConfig } from './types.js';
 
-/** Trim, drop trailing slashes, and case-fold, matching Express's default (case-insensitive) routing. */
+const SLASH = 0x2f;
+
+/**
+ * Trim, drop trailing slashes, and case-fold, matching Express's default (case-insensitive) routing.
+ * The trailing slashes are dropped with a scan rather than `/\/+$/`, which backtracks
+ * quadratically on a long run of slashes that does not end the string.
+ */
 function foldPath(path: string): string {
     const trimmed = path.trim();
-    const withoutTrailing = trimmed === '/' ? '/' : trimmed.replace(/\/+$/, '') || '/';
+    let end = trimmed.length;
+    while (end > 1 && trimmed.charCodeAt(end - 1) === SLASH) {
+        end--;
+    }
+    const withoutTrailing = trimmed.slice(0, end) || '/';
     return withoutTrailing.toLowerCase();
 }
 

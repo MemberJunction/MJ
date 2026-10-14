@@ -29,6 +29,18 @@ describe('GetCorsOwningServerExtensionRoots', () => {
         expect(roots).toEqual(['/ballot']);
     });
 
+    it('folds a RootPath with a long run of slashes in linear time', () => {
+        // A long run of '/' that does NOT end the string is the worst case for a trailing-slash
+        // regex (each start position rescans the run): quadratic, minutes at this length.
+        const pathological = `/a${'/'.repeat(100_000)}b`;
+        const started = Date.now();
+        const roots = GetCorsOwningServerExtensionRoots([cfg({ RootPath: pathological, OwnsCORS: true })]);
+        expect(Date.now() - started).toBeLessThan(1000);
+        expect(roots).toEqual([pathological.toLowerCase()]);
+        expect(GetCorsOwningServerExtensionRoots([cfg({ RootPath: `/a${'/'.repeat(100_000)}`, OwnsCORS: true })])).toEqual(['/a']);
+        expect(GetCorsOwningServerExtensionRoots([cfg({ RootPath: '///', OwnsCORS: true })])).toEqual([]);
+    });
+
     it('never returns the bare root or a relative path, and de-duplicates', () => {
         const roots = GetCorsOwningServerExtensionRoots([
             cfg({ RootPath: '/', OwnsCORS: true }),
