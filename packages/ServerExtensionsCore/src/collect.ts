@@ -189,7 +189,8 @@ export function extractServerExtensionsFromPackageJson(
  *
  * - Identity is `DriverClass`.
  * - Later discovered entries replace earlier ones (ClassFactory last-wins).
- * - Host overlay wins `Enabled` and `RootPath` when the host provides them;
+ * - Host overlay wins `Enabled` and `RootPath` when the host provides them; an `Enabled`
+ *   left unset inherits the discovered value, and a host-only entry without one is enabled;
  *   `Settings` is `{ ...discovered, ...host }`.
  * - Host-only DriverClasses append after discovered ones.
  * - A host `Enabled: false` entry is kept so the loader skips that DriverClass
@@ -224,13 +225,15 @@ export function MergeServerExtensionConfigs(
         }
         const existing = byClass.get(key);
         if (!existing) {
-            remember(key, cloneConfig({ ...entry, DriverClass: key }));
+            // A host entry may omit Enabled (the host schema no longer defaults it, so an overlay can
+            // inherit a published entry's value); a host-only entry has nothing to inherit — enabled.
+            remember(key, cloneConfig({ ...entry, DriverClass: key, Enabled: entry.Enabled ?? true }));
             continue;
         }
         const hostRoot = typeof entry.RootPath === 'string' ? entry.RootPath.trim() : '';
         const ownsCORS = entry.OwnsCORS ?? existing.OwnsCORS;
         remember(key, {
-            Enabled: entry.Enabled ?? existing.Enabled,
+            Enabled: entry.Enabled ?? existing.Enabled ?? true,
             DriverClass: key,
             RootPath: hostRoot || existing.RootPath,
             Phase: entry.Phase ?? existing.Phase,

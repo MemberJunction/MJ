@@ -117,6 +117,16 @@ describe('UserInfoEngine — permission-constrained (magic-link) session', () =>
         expect(logStatus).toHaveBeenCalledTimes(2);
     });
 
+    it('read-only display collections (favorites, notification preferences and types) read empty instead of throwing', () => {
+        denied = new Set(['_userFavorites', '_userNotificationPreferences', '_notificationTypes']);
+        const engine = freshEngine();
+        expect(engine.UserFavorites).toEqual([]);
+        expect(engine.IsRecordFavorite('entity-1', 'record-1')).toBe(false);
+        expect(engine.NotificationPreferences).toEqual([]);
+        expect(engine.NotificationTypes).toEqual([]);
+        expect(logStatus).toHaveBeenCalledTimes(3);
+    });
+
     it('raw collection getters still throw — "empty" must not read as "new user"', () => {
         const engine = freshEngine();
         expect(() => engine.Workspaces).toThrow(FakePermissionConstrainedError);

@@ -178,6 +178,19 @@ describe('mergeServerExtensionConfigs', () => {
         expect(MergeServerExtensionConfigs([], [slack])).toEqual([slack]);
     });
 
+    it('a host entry without Enabled is enabled when host-only, and inherits Enabled when it overlays', () => {
+        type HostEntry = Omit<ServerExtensionConfig, 'Enabled'> & { Enabled?: boolean };
+        const hostOnly: HostEntry = { DriverClass: 'HostOnlyExtension', RootPath: '/host-only', Settings: {} };
+        const [merged] = MergeServerExtensionConfigs([], [hostOnly as ServerExtensionConfig]);
+        expect(merged.Enabled).toBe(true);
+
+        const overlay: HostEntry = { DriverClass: webhook.DriverClass, RootPath: '', Settings: {} };
+        const [inheritedOff] = MergeServerExtensionConfigs([{ ...webhook, Enabled: false }], [overlay as ServerExtensionConfig]);
+        expect(inheritedOff.Enabled).toBe(false);
+        const [inheritedOn] = MergeServerExtensionConfigs([webhook], [overlay as ServerExtensionConfig]);
+        expect(inheritedOn.Enabled).toBe(webhook.Enabled);
+    });
+
     it('host overlays Settings per-key and RootPath when provided', () => {
         const discovered: ServerExtensionConfig[] = [
             {

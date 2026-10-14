@@ -90,12 +90,12 @@ export class QuerySQLInfo extends BaseInfo {
 
     /** Gets the parent query info */
     get QueryInfo(): QueryInfo {
-        return MetadataProviderFor(this).Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return MetadataProviderFor(this)?.Queries?.find(q => UUIDsEqual(q.ID, this.QueryID));
     }
 
     /** Gets the SQL dialect info */
     get SQLDialectInfo(): SQLDialectInfo {
-        return MetadataProviderFor(this).SQLDialects.find(d => UUIDsEqual(d.ID, this.SQLDialectID));
+        return MetadataProviderFor(this)?.SQLDialects?.find(d => UUIDsEqual(d.ID, this.SQLDialectID));
     }
 }
 
@@ -395,7 +395,9 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Fields(): QueryFieldInfo[] {
         if (this._fields === null) {
-            this._fields = MetadataProviderFor(this).QueryFields.filter(f => UUIDsEqual(f.QueryID, this.ID));
+            const provider = MetadataProviderFor(this);
+            if (!provider?.QueryFields) return [];
+            this._fields = provider.QueryFields.filter(f => UUIDsEqual(f.QueryID, this.ID));
         }
         return this._fields;
     }
@@ -405,7 +407,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @returns {QueryPermissionInfo[]} Array of permission settings for the query
      */
     public get Permissions(): QueryPermissionInfo[] {
-        return MetadataProviderFor(this).QueryPermissions.filter(p => UUIDsEqual(p.QueryID, this.ID));
+        return MetadataProviderFor(this)?.QueryPermissions?.filter(p => UUIDsEqual(p.QueryID, this.ID)) ?? [];
     }
 
     private _parameters: QueryParameterInfo[] = null;
@@ -416,7 +418,9 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Parameters(): QueryParameterInfo[] {
         if (this._parameters === null) {
-            this._parameters = MetadataProviderFor(this).QueryParameters.filter(p => UUIDsEqual(p.QueryID, this.ID));
+            const provider = MetadataProviderFor(this);
+            if (!provider?.QueryParameters) return [];
+            this._parameters = provider.QueryParameters.filter(p => UUIDsEqual(p.QueryID, this.ID));
         }
         return this._parameters;
     }
@@ -428,7 +432,9 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Entities(): QueryEntityInfo[] {
         if (this._entities === null) {
-            this._entities = MetadataProviderFor(this).QueryEntities.filter(e => UUIDsEqual(e.QueryID, this.ID));
+            const provider = MetadataProviderFor(this);
+            if (!provider?.QueryEntities) return [];
+            this._entities = provider.QueryEntities.filter(e => UUIDsEqual(e.QueryID, this.ID));
         }
         return this._entities;
     }
@@ -456,7 +462,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @returns {QueryCategoryInfo} The category this query belongs to, or undefined if not categorized
      */
     get CategoryInfo(): QueryCategoryInfo {
-        return MetadataProviderFor(this).QueryCategories.find(c => UUIDsEqual(c.ID, this.CategoryID));
+        return MetadataProviderFor(this)?.QueryCategories?.find(c => UUIDsEqual(c.ID, this.CategoryID));
     }
 
     /**
@@ -541,7 +547,9 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Dependencies(): QueryDependencyInfo[] {
         if (this._dependencies === null) {
-            this._dependencies = MetadataProviderFor(this).QueryDependencies.filter(d => UUIDsEqual(d.QueryID, this.ID));
+            const provider = MetadataProviderFor(this);
+            if (!provider?.QueryDependencies) return [];
+            this._dependencies = provider.QueryDependencies.filter(d => UUIDsEqual(d.QueryID, this.ID));
         }
         return this._dependencies;
     }
@@ -552,7 +560,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @returns {QueryDependencyInfo[]} Array of dependency records where this query is the referenced query
      */
     public get Dependents(): QueryDependencyInfo[] {
-        return MetadataProviderFor(this).QueryDependencies.filter(d => UUIDsEqual(d.DependsOnQueryID, this.ID));
+        return MetadataProviderFor(this)?.QueryDependencies?.filter(d => UUIDsEqual(d.DependsOnQueryID, this.ID)) ?? [];
     }
 
     private _parsedVariants: PlatformVariantsJSON | null | undefined = undefined;
@@ -682,7 +690,7 @@ export class QueryCategoryInfo extends BaseInfo {
      * @returns {QueryCategoryInfo} The parent category, or undefined if this is a top-level category
      */
     get ParentCategoryInfo(): QueryCategoryInfo {
-        return MetadataProviderFor(this).QueryCategories.find(c => UUIDsEqual(c.ID, this.ParentID));
+        return MetadataProviderFor(this)?.QueryCategories?.find(c => UUIDsEqual(c.ID, this.ParentID));
     }
 
     /**
@@ -690,7 +698,7 @@ export class QueryCategoryInfo extends BaseInfo {
      * @returns {QueryInfo[]} Array of queries in this category
      */
     get Queries(): QueryInfo[] {
-        return MetadataProviderFor(this).Queries.filter(q => UUIDsEqual(q.CategoryID, this.ID));
+        return MetadataProviderFor(this)?.Queries?.filter(q => UUIDsEqual(q.CategoryID, this.ID)) ?? [];
     }
 }
 
@@ -784,10 +792,13 @@ export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
      */
     get SourceEntityInfo(): EntityInfo {
         const p = MetadataProviderFor(this);
+        if (!p) {
+            return undefined;
+        }
         if (p.EntityByID) {
             return p.EntityByID(this.SourceEntityID);
         }
-        return p.Entities.find(e => UUIDsEqual(e.ID, this.SourceEntityID));
+        return p.Entities?.find(e => UUIDsEqual(e.ID, this.SourceEntityID));
     }
 
     /**
@@ -795,7 +806,7 @@ export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return MetadataProviderFor(this).Queries.find(q => UUIDsEqual(q.ID, this.ID));
+        return MetadataProviderFor(this)?.Queries?.find(q => UUIDsEqual(q.ID, this.QueryID));
     }
 }
 
@@ -837,7 +848,7 @@ export class QueryPermissionInfo extends BaseInfo implements IQueryPermissionInf
      * @returns {QueryInfo} The query metadata this permission controls
      */
     get QueryInfo(): QueryInfo {
-        return MetadataProviderFor(this).Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return MetadataProviderFor(this)?.Queries?.find(q => UUIDsEqual(q.ID, this.QueryID));
     }
 }
 
@@ -895,7 +906,7 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return MetadataProviderFor(this).Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return MetadataProviderFor(this)?.Queries?.find(q => UUIDsEqual(q.ID, this.QueryID));
     }
 
     /**
@@ -904,10 +915,13 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
      */
     get EntityInfo(): EntityInfo {
         const p = MetadataProviderFor(this);
+        if (!p) {
+            return undefined;
+        }
         if (p.EntityByID) {
             return p.EntityByID(this.EntityID);
         }
-        return p.Entities.find(e => UUIDsEqual(e.ID, this.EntityID));
+        return p.Entities?.find(e => UUIDsEqual(e.ID, this.EntityID));
     }
 }
 
@@ -987,7 +1001,7 @@ export class QueryParameterInfo extends BaseInfo implements IQueryParameterInfoB
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return MetadataProviderFor(this).Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return MetadataProviderFor(this)?.Queries?.find(q => UUIDsEqual(q.ID, this.QueryID));
     }
     
     /**
@@ -1071,14 +1085,14 @@ export class QueryDependencyInfo extends BaseInfo {
      * Gets the query that contains the {{query:"..."}} reference.
      */
     get QueryInfo(): QueryInfo {
-        return MetadataProviderFor(this).Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return MetadataProviderFor(this)?.Queries?.find(q => UUIDsEqual(q.ID, this.QueryID));
     }
 
     /**
      * Gets the referenced (depended-on) query.
      */
     get DependsOnQueryInfo(): QueryInfo {
-        return MetadataProviderFor(this).Queries.find(q => UUIDsEqual(q.ID, this.DependsOnQueryID));
+        return MetadataProviderFor(this)?.Queries?.find(q => UUIDsEqual(q.ID, this.DependsOnQueryID));
     }
 
     /**

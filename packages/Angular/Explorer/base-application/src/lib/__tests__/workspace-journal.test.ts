@@ -98,6 +98,12 @@ describe('ShouldUseWorkspaceJournal', () => {
     expect(ShouldUseWorkspaceJournal(entry(null), 'WS-1', new Date('2026-10-01T09:00:00.000Z'))).toBe(false);
     expect(ShouldUseWorkspaceJournal(null, 'WS-1', null)).toBe(false);
   });
+  it('wins over a later row that is exactly its own in-flight save (landed after the page unloaded)', () => {
+    const inFlight = JSON.stringify(config(['a', 'b'], 'b'));
+    const e = { ...entry('2026-10-01T10:00:00.000Z'), InFlightConfiguration: inFlight };
+    expect(ShouldUseWorkspaceJournal(e, 'WS-1', new Date('2026-10-01T10:01:00.000Z'), inFlight)).toBe(true);
+    expect(ShouldUseWorkspaceJournal(e, 'WS-1', new Date('2026-10-01T10:01:00.000Z'), JSON.stringify(config(['z'], 'z'))), 'another device\'s row still wins').toBe(false);
+  });
   it('is used for a session with no workspace row only when the entry has none either', () => {
     expect(ShouldUseWorkspaceJournal(entry(null, null), null, null)).toBe(true);
     expect(ShouldUseWorkspaceJournal(entry(null, 'WS-1'), null, null)).toBe(false);
@@ -204,6 +210,68 @@ describe('WorkspaceStateManager — refresh inside the save window', () => {
     }
   });
 
+  it('a change made while a save is in flight survives that save landing after the page unloaded', async () => {
+    const storage = new MemoryStorage();
+    const ws1 = new FakeWorkspace();
+    ws1.Configuration = JSON.stringify(config(['a', 'b', 'c'], 'a'));
+    engineState.workspaces = [ws1];
+    let landSave: () => void = () => undefined;
+    ws1.Save.mockImplementationOnce(() => new Promise<boolean>(resolve => { landSave = () => resolve(true); }));
+    const first = managerWith(storage);
+    await first.Initialize('user-1');
+
+    first.SetActiveTab('b');
+    const saving = first.FlushPendingSave(); // save of B is now in flight
+    first.SetActiveTab('c');                  // change C journaled while it flies
+    const unloadSnapshot = new Map(storage.data); // the page unloads here; B still lands on the server
+    landSave();
+    await saving;
+
+    const ws2 = new FakeWorkspace();
+    ws2.Configuration = ws1.Configuration; // the server row holds exactly what the save of B sent ...
+    ws2.__mj_UpdatedAt = new Date('2026-10-01T10:01:00.000Z');        // ... stamped after the journal's base
+    engineState.workspaces = [ws2];
+    const reloaded = new MemoryStorage();
+    reloaded.data = unloadSnapshot;
+    const second = managerWith(reloaded);
+    await second.Initialize('user-1');
+    expect(second.GetConfiguration()?.activeTabId, 'C was not discarded in favour of the older B').toBe('c');
+  });
+
+  it('runs one save at a time: a flush during an in-flight save waits for it, then saves the newest change', async () => {
+    const storage = new MemoryStorage();
+    const ws = new FakeWorkspace();
+    ws.Configuration = JSON.stringify(config(['a', 'b', 'c'], 'a'));
+    engineState.workspaces = [ws];
+    let landFirst: () => void = () => undefined;
+    let concurrent = 0;
+    let maxConcurrent = 0;
+    const original = ws.Save.getMockImplementation();
+    ws.Save.mockImplementation(async () => {
+      concurrent++;
+      maxConcurrent = Math.max(maxConcurrent, concurrent);
+      if (ws.saves.length === 0) {
+        await new Promise<void>(resolve => { landFirst = resolve; });
+      }
+      const ok = await original!();
+      concurrent--;
+      return ok;
+    });
+    const m = managerWith(storage);
+    await m.Initialize('user-1');
+
+    m.SetActiveTab('b');
+    const firstSave = m.FlushPendingSave();
+    m.SetActiveTab('c');
+    const secondFlush = m.FlushPendingSave(); // e.g. pagehide while the debounced save flies
+    await Promise.resolve();
+    expect(ws.Save, 'the second save waits for the first').toHaveBeenCalledTimes(1);
+    landFirst();
+    await Promise.all([firstSave, secondFlush]);
+    expect(maxConcurrent).toBe(1);
+    expect(ws.saves.map(c => JSON.parse(c).activeTabId)).toEqual(['b', 'c']);
+  });
+
   it('flushes on pagehide', async () => {
     const listeners = new Map<string, () => void>();
     vi.stubGlobal('window', { addEventListener: (name: string, fn: () => void) => listeners.set(name, fn) });
@@ -255,6 +323,20 @@ describe('WorkspaceStateManager.Initialize — PrepareConfiguration', () => {
     const m = managerWith(new MemoryStorage());
     await m.Initialize('user-1', { PrepareConfiguration: c => c });
     expect(m.HasPendingSave).toBe(false);
+  });
+
+  it('a brand-new user (no workspace row yet) gets the hook too, and a journal seeded on the new row', async () => {
+    const created = new FakeWorkspace();
+    const m = managerWith(new MemoryStorage());
+    m.Provider = {
+      CurrentUser: { ID: 'user-1' },
+      GetEntityObject: async () => created,
+    } as unknown as WorkspaceStateManager['Provider'];
+    await m.Initialize('user-1', {
+      PrepareConfiguration: c => ({ ...c, activeTabId: 'deep-linked' })
+    });
+    expect(m.GetConfiguration()?.activeTabId).toBe('deep-linked');
+    expect(m.Journal.Read('user-1')?.WorkspaceID).toBe('WS-1');
   });
 
   it('a throwing hook never blocks startup', async () => {

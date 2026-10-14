@@ -358,10 +358,15 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * magic-link users hold only 'Magic Link Baseline' plus a granted role), so these
    * lookups run at every boot for such users and must not throw.
    *
-   * Deliberately NOT used by the raw collection getters (`UserSettings`, `Workspaces`,
-   * `UserApplications`, ...): those keep throwing, because a caller that treats "empty"
-   * as "brand-new user" would otherwise auto-create records for a user who simply cannot
-   * see them. Such callers must check {@link IsPermissionConstrained} first.
+   * Also used by the read-only display collections whose empty answer is equally safe —
+   * {@link UserFavorites}, {@link NotificationPreferences} and {@link NotificationTypes}: no
+   * caller treats an empty one as a cue to create records, and their consumers (Home,
+   * profile, notification settings, Data Explorer) run inside a restricted session too.
+   *
+   * Deliberately NOT used by the raw collection getters whose emptiness means "brand-new
+   * user" (`UserSettings`, `Workspaces`, `UserApplications`, ...): those keep throwing,
+   * because such a caller would otherwise auto-create records for a user who simply cannot
+   * see them. Those callers must check {@link IsPermissionConstrained} first.
    */
   private readIfPermitted<E>(propertyName: string, read: () => E[]): E[] {
     if (!this.IsPropertyPermissionConstrained(propertyName)) {
@@ -695,11 +700,12 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
-   * Get all favorites for the current user, ordered by creation date (newest first)
+   * Get all favorites for the current user, ordered by creation date (newest first).
+   * Empty (not a thrown `PermissionConstrainedError`) for a session that cannot read them.
    */
   public get UserFavorites(): MJUserFavoriteEntity[] {
     if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJUserFavoriteEntity>('_userFavorites')
+    return this.readIfPermitted('_userFavorites', () => this.GetConfigData<MJUserFavoriteEntity>('_userFavorites'))
       .filter((f) => UUIDsEqual(f.UserID, this._loadedForUserId))
       .sort((a, b) => new Date(b.Get('__mj_CreatedAt')).getTime() - new Date(a.Get('__mj_CreatedAt')).getTime());
   }
@@ -1399,11 +1405,12 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
-   * Get all notification preferences for the current user
+   * Get all notification preferences for the current user.
+   * Empty (not a thrown `PermissionConstrainedError`) for a session that cannot read them.
    */
   public get NotificationPreferences(): MJUserNotificationPreferenceEntity[] {
     if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJUserNotificationPreferenceEntity>('_userNotificationPreferences')
+    return this.readIfPermitted('_userNotificationPreferences', () => this.GetConfigData<MJUserNotificationPreferenceEntity>('_userNotificationPreferences'))
       .filter((p) => UUIDsEqual(p.UserID, this._loadedForUserId));
   }
 
@@ -1422,8 +1429,9 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   /**
    * Get all notification types.
    * Notification types are global (not user-specific) and define the available notification categories.
+   * Empty (not a thrown `PermissionConstrainedError`) for a session that cannot read them.
    */
   public get NotificationTypes(): MJUserNotificationTypeEntity[] {
-    return this.GetConfigData<MJUserNotificationTypeEntity>('_notificationTypes');
+    return this.readIfPermitted('_notificationTypes', () => this.GetConfigData<MJUserNotificationTypeEntity>('_notificationTypes'));
   }
 }

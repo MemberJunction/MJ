@@ -226,10 +226,19 @@ const telemetrySchema = z.object({
   level: z.enum(['minimal', 'standard', 'verbose', 'debug']).optional().default('standard'),
 });
 
-const serverExtensionSchema = z.object({
-  Enabled: z.boolean().default(true),
+/**
+ * A host `mj.config.cjs` `serverExtensions[]` entry. Only `DriverClass` is required: an entry whose
+ * DriverClass an Open App package already publishes is an OVERLAY (MergeServerExtensionConfigs) and
+ * may set just the fields it overrides — `{ DriverClass: 'X', OwnsCORS: false }` — without repeating
+ * `RootPath`. `Enabled` has no schema default for the same reason: a defaulted `true` would silently
+ * re-enable an extension the package ships disabled. Whether the MERGED entry is complete (a valid
+ * `RootPath`; `Enabled` defaults to true) is validated after the merge, by prepareServerExtensionConfigs,
+ * which reports an incomplete host-only entry instead of mounting it.
+ */
+export const serverExtensionSchema = z.object({
+  Enabled: z.boolean().optional(),
   DriverClass: z.string(),
-  RootPath: z.string(),
+  RootPath: z.string().optional(),
   Settings: z.record(z.unknown()).default({})
 }).passthrough();
 

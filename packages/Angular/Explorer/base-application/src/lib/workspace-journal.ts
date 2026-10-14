@@ -21,6 +21,14 @@ export interface WorkspaceJournalEntry {
      * SERVER stamp, never with this browser's clock, so client clock skew cannot pick the wrong side.
      */
     BaseUpdatedAt: string | null;
+    /**
+     * The serialized configuration of a save this browser started but has not yet seen complete,
+     * or null/absent when no save is in flight. A save that lands on the server while the page is
+     * unloading advances the row's stamp past {@link BaseUpdatedAt} without this browser ever
+     * re-basing; matching the row against this value is how the next load recognises that newer
+     * row as its OWN write (which the snapshot already supersedes) rather than another device's.
+     */
+    InFlightConfiguration?: string | null;
     /** The configuration itself. */
     Configuration: WorkspaceConfiguration;
 }
@@ -51,14 +59,21 @@ export function WorkspaceStampToEpoch(value: Date | string | null | undefined): 
  * including a stale locally-cached copy of the row — so the journal, which holds every change
  * made since, wins.
  *
+ * One exception to "later row wins": the row is this browser's OWN save that landed after the
+ * page unloaded (its stamp moved past the base, but the browser never saw the response). The row's
+ * configuration then equals the snapshot's {@link WorkspaceJournalEntry.InFlightConfiguration},
+ * and the snapshot, which holds every change made after that save started, still wins.
+ *
  * @param entry the journal snapshot, if any.
  * @param workspaceId the loaded workspace row's ID, or null when the user has none.
  * @param serverUpdatedAt the loaded row's `__mj_UpdatedAt`, or null when there is no row.
+ * @param serverConfiguration the loaded row's raw `Configuration` text, when there is a row.
  */
 export function ShouldUseWorkspaceJournal(
     entry: WorkspaceJournalEntry | null,
     workspaceId: string | null,
-    serverUpdatedAt: Date | string | null | undefined
+    serverUpdatedAt: Date | string | null | undefined,
+    serverConfiguration?: string | null
 ): boolean {
     if (!entry) {
         return false;
@@ -78,10 +93,13 @@ export function ShouldUseWorkspaceJournal(
     if (server === null) {
         return true;
     }
-    if (base === null) {
-        return false; // can't prove the snapshot is newer — trust the server
+    if (base !== null && server <= base) {
+        return true;
     }
-    return server <= base;
+    // The row is newer than the base (or there is no base): the snapshot still wins when that row
+    // is exactly the save this browser had in flight — its own write, already superseded.
+    const inFlight = entry.InFlightConfiguration;
+    return inFlight != null && serverConfiguration != null && inFlight === serverConfiguration;
 }
 
 /**

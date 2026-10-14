@@ -57,6 +57,16 @@ export class WorkspaceStateManager {
   private savePending = false;
 
   /**
+   * The database save currently running, if any. Saves run one at a time: they share one
+   * `MJ: Workspaces` entity instance, and a flush on page hide must not start a second
+   * `Save()` on it while the debounced one is still in flight.
+   */
+  private saveInFlight: Promise<void> | null = null;
+
+  /** The serialized configuration the in-flight save is writing (journaled — see WorkspaceJournalEntry.InFlightConfiguration). */
+  private inFlightConfiguration: string | null = null;
+
+  /**
    * Synchronous browser-local snapshot of the newest configuration — see {@link WorkspaceJournal}.
    * Replaceable for tests.
    */
@@ -298,7 +308,7 @@ export class WorkspaceStateManager {
       // the row we just read (or the row came from a stale local cache): the journal wins,
       // and is pushed to the database.
       const journal = this.Journal.Read(userId);
-      const useJournal = ShouldUseWorkspaceJournal(journal, workspace.ID, workspace.__mj_UpdatedAt) && journal != null
+      const useJournal = ShouldUseWorkspaceJournal(journal, workspace.ID, workspace.__mj_UpdatedAt, configJson) && journal != null
         && JSON.stringify(journal.Configuration) !== JSON.stringify(serverConfig);
       if (useJournal) {
         LogStatus('[WorkspaceStateManager] Restoring workspace from the local journal (newer than the saved row)');
@@ -318,7 +328,9 @@ export class WorkspaceStateManager {
 
       if (saveResult) {
         this.workspace$.next(workspace);
-        this.configuration$.next(CreateDefaultWorkspaceConfiguration());
+        // Through the same path as a loaded row, so a brand-new user's first boot also gets the
+        // PrepareConfiguration hook (deep-link precedence) and a journal seeded on the new row.
+        await this.publishInitialConfiguration(CreateDefaultWorkspaceConfiguration(), options, false);
       } else {
         console.error('[WorkspaceStateManager.loadWorkspace] Failed to save workspace');
         throw new Error('Failed to create default workspace');
@@ -350,6 +362,9 @@ export class WorkspaceStateManager {
     if (alreadyDiffersFromServer || prepared !== config) {
       this.requestSave();
     }
+    else {
+      this.writeJournal(); // seed / re-base the snapshot on the row as loaded
+    }
   }
 
   /**
@@ -365,24 +380,48 @@ export class WorkspaceStateManager {
     const config = this.configuration$.value;
 
     if (workspace && config) {
-      workspace.Configuration = JSON.stringify(config);
-      const saved = await workspace.Save();
-      if (saved) {
-        // Re-base the journal on the stamp this save produced. The CURRENT configuration is
-        // written (not the one just saved): any change made while the save was in flight is
-        // newer still, and must keep winning over this row on the next load.
+      const json = JSON.stringify(config);
+      workspace.Configuration = json;
+      // Journal what this save writes BEFORE it is sent: if the page unloads while it is in flight
+      // and the write still lands, the next load recognises the newer row as this browser's own.
+      this.inFlightConfiguration = json;
+      this.writeJournal();
+      try {
+        await workspace.Save();
+      } finally {
+        this.inFlightConfiguration = null;
+        // Re-base the journal on the stamp this save produced (a failed save leaves the stamp, and
+        // so the base, unchanged). The CURRENT configuration is written, not the one just saved:
+        // any change made while the save was in flight is newer still, and must keep winning.
         this.writeJournal();
       }
     }
   }
 
-  /** Runs the debounced save if one is still pending (a flush may already have run it). */
+  /**
+   * Runs the debounced save if one is still pending (a flush may already have run it). Saves are
+   * serialised: a call while one is in flight waits for it, then saves whatever is still pending.
+   */
   private runPendingSave(): Promise<void> {
+    if (this.saveInFlight) {
+      return this.saveInFlight.then(() => this.runPendingSave());
+    }
     if (!this.savePending) {
       return Promise.resolve();
     }
     this.savePending = false;
-    return this.persistConfiguration();
+    const run: Promise<void> = this.persistConfiguration()
+      .catch((e: unknown) => {
+        // A failed save leaves the change in the journal; the next change (or load) retries it.
+        console.error('[WorkspaceStateManager] Workspace save failed', e);
+      })
+      .finally(() => {
+        if (this.saveInFlight === run) {
+          this.saveInFlight = null;
+        }
+      });
+    this.saveInFlight = run;
+    return run;
   }
 
   /**
@@ -422,6 +461,7 @@ export class WorkspaceStateManager {
       UserID: this.userId,
       WorkspaceID: workspace?.ID ?? null,
       BaseUpdatedAt: base instanceof Date ? base.toISOString() : (base ?? null),
+      InFlightConfiguration: this.inFlightConfiguration,
       Configuration: config
     });
   }
@@ -441,9 +481,9 @@ export class WorkspaceStateManager {
   async ResetConfiguration(): Promise<void> {
     const defaultConfig = CreateDefaultWorkspaceConfiguration();
     this.configuration$.next(defaultConfig);
-    this.savePending = false;
+    this.savePending = true;
     this.writeJournal(); // the reset must also replace a (possibly corrupt) local snapshot
-    await this.persistConfiguration();
+    await this.runPendingSave(); // serialised with any save already in flight
   }
 
   /**

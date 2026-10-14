@@ -64,12 +64,31 @@ describe('ApplyDeepLinkToRestoredWorkspace', () => {
 describe('ShellComponent.applyStartupDeepLink — the PrepareConfiguration hook', () => {
     type Hook = { applyStartupDeepLink(config: WorkspaceConfiguration, url: string): Promise<WorkspaceConfiguration> };
 
-    function shellMatching(match: WorkspaceTab | null): Hook {
+    function shellMatching(match: WorkspaceTab | null, appsReady: Promise<void> = Promise.resolve()): Hook {
         const shell = Object.create(ShellComponent.prototype) as ShellComponent;
         // findTabForUrl has its own coverage; fixing its answer keeps this about precedence alone.
         (shell as unknown as Record<string, unknown>)['findTabForUrl'] = async () => match;
+        (shell as unknown as Record<string, unknown>)['appManager'] = { WhenReady: () => appsReady };
         return shell as unknown as Hook;
     }
+
+    it('waits for the app list before resolving the URL (workspace init runs while apps still load)', async () => {
+        const ballots = tab('Ballots', { ballot: 'B1' });
+        let appsLoaded = false;
+        let finishLoading: () => void = () => undefined;
+        const appsReady = new Promise<void>(resolve => { finishLoading = () => { appsLoaded = true; resolve(); }; });
+        const shell = Object.create(ShellComponent.prototype) as ShellComponent;
+        // The real findTabForUrl returns null for every /app/... URL while the app list is empty.
+        (shell as unknown as Record<string, unknown>)['findTabForUrl'] = async () => (appsLoaded ? ballots : null);
+        (shell as unknown as Record<string, unknown>)['appManager'] = { WhenReady: () => appsReady };
+
+        const pending = (shell as unknown as Hook).applyStartupDeepLink(config([ballots, tab('Results')], 'Results'), '/app/Voting/Ballots?ballot=B2');
+        await Promise.resolve();
+        finishLoading();
+        const out = await pending;
+        expect(out.activeTabId).toBe('Ballots');
+        expect(out.tabs[0].configuration['queryParams']).toEqual({ ballot: 'B2' });
+    });
 
     it('writes the URL\'s params into the tab the URL resolves to', async () => {
         const ballots = tab('Ballots', { ballot: 'B1' });

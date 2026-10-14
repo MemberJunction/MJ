@@ -365,9 +365,10 @@ export class ApplicationManager {
     // If the engine can't read user application data, skip the self-healing path —
     // a permission-denied user is NOT the same as a new user with no records.
     if (engine.IsPermissionConstrained) {
-      LogStatus(`${this.constructor.name}: UserInfoEngine is permission-constrained, skipping application config load`);
+      const sessionApps = this.permissionConstrainedSessionApps(allApps);
+      LogStatus(`${this.constructor.name}: UserInfoEngine is permission-constrained, skipping application config load; ${sessionApps.length} default app(s) offered for this session`);
       this.userAppConfigs$.next([]);
-      this.applications$.next([]);
+      this.applications$.next(sessionApps);
       return;
     }
 
@@ -398,6 +399,50 @@ export class ApplicationManager {
 
     this.userAppConfigs$.next(userAppConfigs);
     this.applications$.next(activeApps);
+  }
+
+  /**
+   * The apps a permission-constrained session (e.g. an external magic-link user) is offered when it
+   * cannot read its own `MJ: User Applications` rows: what a brand-new user would get —
+   * DefaultForNewUser apps the user may access, in DefaultSequence order — but held in memory
+   * only, never saved as records. When the session cannot read application roles either, access
+   * cannot be judged (an unreadable role list reads as "open to everyone"), so nothing is offered;
+   * an app-locked session still reaches its scoped app through {@link AdoptSessionApplication}.
+   */
+  private permissionConstrainedSessionApps(allApps: readonly BaseApplication[]): BaseApplication[] {
+    const engine = UserInfoEngine.Instance;
+    if (engine.IsPropertyPermissionConstrained('_applicationRoles')) {
+      return [];
+    }
+    const defaults = this.Provider.Applications
+      .filter(a => a.DefaultForNewUser && a.Status === 'Active' && engine.UserHasApplicationAccess(a.ID))
+      .sort((a, b) => (a.DefaultSequence ?? 100) - (b.DefaultSequence ?? 100));
+    return defaults
+      .map(info => allApps.find(app => UUIDsEqual(app.ID, info.ID)))
+      .filter((app): app is BaseApplication => !!app);
+  }
+
+  /**
+   * Makes an application the SESSION is scoped to available in {@link Applications} when the
+   * user's own app list does not include it — an app-locked session (a magic-link invite scoped
+   * to one app) whose user cannot read, or has no, `MJ: User Applications` rows. In memory only:
+   * no record is created. The scope comes from the server-signed session, and the server still
+   * enforces every entity permission inside the app.
+   *
+   * @param appId - the application the session is restricted to
+   * @returns true when the app was added (so {@link Applications} re-emits); false when it was
+   *   already available or is not an active application at all
+   */
+  AdoptSessionApplication(appId: string): boolean {
+    if (!appId || this.GetAppById(appId)) {
+      return false;
+    }
+    const app = this.allApplications$.value.find(a => UUIDsEqual(a.ID, appId));
+    if (!app) {
+      return false;
+    }
+    this.applications$.next([...this.applications$.value, app]);
+    return true;
   }
 
   /**

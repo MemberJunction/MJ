@@ -975,6 +975,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         // bound in the header template.
         this.recomputeNavBarApps();
 
+        // An app-locked session (magic link) whose user cannot read, or has no, User Application rows
+        // still gets its scoped app: adopt it before deciding there are no apps. Adopting re-emits
+        // Applications, which re-enters this handler with the app present.
+        const sessionLockedId = this.authBase.GetSessionScope()?.restrictedToApplicationId;
+        if (sessionLockedId && this.appManager.AdoptSessionApplication(sessionLockedId)) {
+          return;
+        }
+
         // Handle the case where user has no apps at all (only after loading is complete)
         if (apps.length === 0) {
           await this.handleNoAppsAvailable();
@@ -1202,6 +1210,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (Object.keys(urlParams).length === 0 || !config.tabs?.length) {
       return config;
     }
+    // findTabForUrl resolves /app/... URLs through the user's app list, which ApplicationManager
+    // is still loading when workspace initialization calls this hook; resolving now would match no
+    // app and drop the deep link. Waiting is cheap (the app list loads in parallel with the
+    // workspace) and resolves even when loading fails.
+    await this.appManager.WhenReady();
     const tab = await this.findTabForUrl(url, config.tabs);
     return tab ? ApplyDeepLinkToRestoredWorkspace(config, tab.id, urlParams, new Date().toISOString()) : config;
   }
