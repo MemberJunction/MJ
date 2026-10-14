@@ -8,6 +8,7 @@
  */
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { Canonicalize } from '@memberjunction/global';
 
 interface TestCase {
     Name: string;
@@ -131,6 +132,21 @@ export const settle = Settle;
 export function AssertEqual<T>(actual: T, expected: T, message: string): void {
     if (actual !== expected) {
         throw new Error(`${message} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    }
+}
+
+/**
+ * Structural equality for objects and arrays, where {@link AssertEqual}'s `!==` compares identity: the two values'
+ * canonical JSON must match (object keys in any order, arrays in order, `undefined` properties ignored, numbers and
+ * strings kept distinct). Like JSON, it does not tell `undefined` from `null` for a whole value or an array entry
+ * (`AssertDeepEqual(undefined, null)` passes); compare those with {@link AssertEqual}. The message shows both canonical
+ * forms.
+ */
+export function AssertDeepEqual<T>(actual: T, expected: T, message: string): void {
+    const a = Canonicalize(actual);
+    const e = Canonicalize(expected);
+    if (a !== e) {
+        throw new Error(`${message} — expected ${e}, got ${a}`);
     }
 }
 

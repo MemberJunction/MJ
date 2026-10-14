@@ -25,6 +25,7 @@ vi.mock('../generated/entity_subclasses', () => ({
 }));
 
 import { MJTemplateEntityExtended } from '../custom/MJTemplateEntityExtended';
+import { MJTemplateContentEntity } from '../generated/entity_subclasses';
 
 // Helper to create a mock content object with the required properties
 function createContent(type: string, priority: number): { Type: string; Priority: number } {
@@ -55,6 +56,11 @@ function createParam(
  */
 function bare<T>(ctor: new (...args: never[]) => T): T {
     return new (ctor as unknown as new () => T)();
+}
+
+/** A Template Content row (this file mocks the entity class) carrying the fields the content selection reads. */
+function contentRow(fields: Pick<MJTemplateContentEntity, 'ID' | 'Type' | 'Priority' | '__mj_CreatedAt'>): MJTemplateContentEntity {
+    return Object.assign(bare(MJTemplateContentEntity), fields);
 }
 
 describe('MJTemplateEntityExtended', () => {
@@ -157,7 +163,7 @@ describe('MJTemplateEntityExtended', () => {
 
             const result = template.GetHighestPriorityContent();
             expect(result).toBeDefined();
-            expect(result.Priority).toBe(1);
+            expect(result?.Priority).toBe(1);
         });
 
         it('should filter by type when type is provided', () => {
@@ -169,8 +175,8 @@ describe('MJTemplateEntityExtended', () => {
 
             const result = template.GetHighestPriorityContent('HTML');
             expect(result).toBeDefined();
-            expect(result.Priority).toBe(3);
-            expect(result.Type).toBe('HTML');
+            expect(result?.Priority).toBe(3);
+            expect(result?.Type).toBe('HTML');
         });
 
         it('should match type case-insensitively when filtering', () => {
@@ -182,7 +188,7 @@ describe('MJTemplateEntityExtended', () => {
 
             const result = template.GetHighestPriorityContent('html');
             expect(result).toBeDefined();
-            expect(result.Priority).toBe(2);
+            expect(result?.Priority).toBe(2);
         });
 
         it('should handle whitespace in type filter', () => {
@@ -193,7 +199,7 @@ describe('MJTemplateEntityExtended', () => {
 
             const result = template.GetHighestPriorityContent('  HTML  ');
             expect(result).toBeDefined();
-            expect(result.Priority).toBe(5);
+            expect(result?.Priority).toBe(5);
         });
 
         it('should return undefined when Content is empty', () => {
@@ -219,18 +225,18 @@ describe('MJTemplateEntityExtended', () => {
 
             const result = template.GetHighestPriorityContent();
             expect(result).toBeDefined();
-            expect(result.Priority).toBe(2);
+            expect(result?.Priority).toBe(2);
         });
 
         it('breaks a priority tie by the oldest row, then the lowest ID, whatever order the rows arrived in', () => {
-            const newer = { ID: 'b', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-02-01') };
-            const older = { ID: 'c', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-01-01') };
-            const olderLowerID = { ID: 'a', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-01-01') };
-            template.Content = [newer, older] as never[];
+            const newer = contentRow({ ID: 'b', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-02-01') });
+            const older = contentRow({ ID: 'c', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-01-01') });
+            const olderLowerID = contentRow({ ID: 'a', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-01-01') });
+            template.Content = [newer, older];
             expect(template.GetHighestPriorityContent()).toBe(older);
-            template.Content = [older, newer] as never[];
+            template.Content = [older, newer];
             expect(template.GetHighestPriorityContent()).toBe(older);
-            template.Content = [older, olderLowerID] as never[];
+            template.Content = [older, olderLowerID];
             expect(template.GetHighestPriorityContent()).toBe(olderLowerID);
         });
 
@@ -250,8 +256,11 @@ describe('MJTemplateEntityExtended', () => {
         });
 
         it('does not reorder Content', () => {
-            const rows = [createContent('HTML', 5), createContent('HTML', 1)];
-            template.Content = rows as never[];
+            const at = new Date('2026-01-01');
+            template.Content = [
+                contentRow({ ID: 'r1', Type: 'HTML', Priority: 5, __mj_CreatedAt: at }),
+                contentRow({ ID: 'r2', Type: 'HTML', Priority: 1, __mj_CreatedAt: at }),
+            ];
             template.GetHighestPriorityContent();
             expect(template.Content.map((c) => c.Priority)).toEqual([5, 1]);
         });
@@ -260,10 +269,10 @@ describe('MJTemplateEntityExtended', () => {
     describe('SelectHighestPriorityContent', () => {
         it('selects the same row as GetHighestPriorityContent', () => {
             const rows = [
-                { ID: 'x', Type: 'Text', Priority: 2, __mj_CreatedAt: new Date('2026-01-01') },
-                { ID: 'y', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-03-01') },
+                contentRow({ ID: 'x', Type: 'Text', Priority: 2, __mj_CreatedAt: new Date('2026-01-01') }),
+                contentRow({ ID: 'y', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-03-01') }),
             ];
-            template.Content = rows as never[];
+            template.Content = rows;
             expect(MJTemplateEntityExtended.SelectHighestPriorityContent(rows)).toBe(template.GetHighestPriorityContent());
             expect(MJTemplateEntityExtended.SelectHighestPriorityContent(rows)?.ID).toBe('y');
         });

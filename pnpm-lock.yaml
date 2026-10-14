@@ -12428,6 +12428,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.2.0-edge.3
+        version: link:../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -16079,6 +16082,9 @@ importers:
 
   packages/TestingFramework/integration-test-suite:
     dependencies:
+      '@google/genai':
+        specifier: ^2.16.0
+        version: 2.16.0(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))
       '@memberjunction/actions':
         specifier: 6.2.0-edge.3
         version: link:../../Actions/Engine
@@ -16097,6 +16103,9 @@ importers:
       '@memberjunction/ai-anthropic':
         specifier: 6.2.0-edge.3
         version: link:../../AI/Providers/Anthropic
+      '@memberjunction/ai-bedrock':
+        specifier: 6.2.0-edge.3
+        version: link:../../AI/Providers/Bedrock
       '@memberjunction/ai-bridge-base':
         specifier: 6.2.0-edge.3
         version: link:../../AI/RealtimeBridge/Base
@@ -16130,6 +16139,9 @@ importers:
       '@memberjunction/ai-vector-dupe':
         specifier: 6.2.0-edge.3
         version: link:../../AI/Vectors/Dupe
+      '@memberjunction/ai-vertex':
+        specifier: 6.2.0-edge.3
+        version: link:../../AI/Providers/Vertex
       '@memberjunction/aiengine':
         specifier: 6.2.0-edge.3
         version: link:../../AI/Engine
@@ -16184,6 +16196,9 @@ importers:
       '@memberjunction/encryption':
         specifier: 6.2.0-edge.3
         version: link:../../Encryption
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0-edge.3
+        version: link:../../AI/Knowledge/FeaturePipelines
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.3
         version: link:../../GenericDatabaseProvider

@@ -89,7 +89,9 @@ covered in [§4](#4-the-four-work-types); `FunctionRecordProcessor` wraps an arb
 
 ### What the engine owns (so no consumer re-invents it)
 Batching · bounded concurrency within a batch (`maxConcurrency`) · optional token-bucket **rate limiting** ·
-an **error-rate circuit breaker** · a **budget gate** (`onAfterBatch`) · **progress events** per batch · a
+an **error-rate circuit breaker** (the error rate over *attempted* records: processed minus skipped, so a record
+skipped on its watermark neither helps nor hurts the rate; a record the processor itself returns as `Skipped`, such as
+a FieldRules no-change, is attempted) · a **budget gate** (`onAfterBatch`) · **progress events** per batch · a
 **pause/cancel handshake** (the tracker re-reads its cancellation flag at each checkpoint) · **resume** from an
 offset or keyset cursor · and **per-record error isolation** — one bad record never aborts its batch.
 
@@ -232,6 +234,22 @@ await new RecordProcessExecutor().RunByID(id, { contextUser, dryRun: true,  scop
 await new RecordProcessExecutor().RunByID(id, { contextUser, dryRun: false, scope });
 ```
 
+### Infer (Feature Pipeline) dry runs
+
+An `Infer` run on a Feature Pipeline previews just as `FieldRules` does, with the same guarantee that nothing is
+written: no Dedup Cache store, no Feature Values, no watermarks, and no target or child writes. The model **is** still
+called, so its `MJ: AI Prompt Runs` are recorded and the preview costs what a real run of those records would.
+
+- **Sample size.** A dry run with no scope and no single record previews at most **25** records (`DryRunSampleSize`
+  overrides it), because every previewed record still calls the model. A scope, or one record, previews exactly what
+  it names.
+- **Honest failures.** A record whose real write would fail is reported `Failed` with
+  `Dry run: the real write would fail: …` (the write-back validates the change without applying it), so a clean
+  preview means the real run will not fail on those records.
+- **Preflight.** A dry run reports the version the real run would use and, in `WouldRefuse`, why a real run would be
+  refused (a version that has not passed its golden set); it never registers or activates a version.
+- **Tally.** A previewed record counts as `Previewed` in the run's `ResultSummary`, never as `Upserted` or `Unchanged`.
+
 ---
 
 ## 7. Triggers — three ways a Record Process runs
@@ -300,6 +318,13 @@ graph LR
 - The **run header** tracks status (`Running → Completed / Failed / Paused / Cancelled`), the counts
   (`Processed / Success / Error / Skipped`), the `DryRun` flag, the resume cursor (`LastProcessedOffset` /
   `LastProcessedKey`), and `CancellationRequested`.
+- For a Feature Pipeline, `ResultSummary` holds the **`FeaturePipelineRunResult`** JSON: the pin the run used
+  (`Pin`), the `ParameterFidelity` of the vendor call, and the tallies `Attempted` (every processed record except
+  those skipped on their watermark), `Upserted`, `Unchanged`, `Previewed` (dry runs), `RejectedInvalid` (output failed
+  its constraints), `Failed`, `Skipped` and `HumanValuesPreserved`, plus `Status`. **A Feature Pipeline run with any
+  failed or rejected record ends `Failed`** (the run's status is the honest summary, not "Completed with errors"). A run is a Feature
+  Pipeline run when the processor options carry `FeaturePipeline: true` (the executor sets it for every `Infer` Record
+  Process); other work types keep their existing status rules. The breaker still stops a runaway rate early.
 - Each **detail** is one terminal record outcome plus its `ResultPayload` (for FieldRules, the field diff that
   was — or would be — applied). Details are written **fire-and-forget** by the tracker's `BaseEntitySaveQueue`
   and flushed before the run finalizes.

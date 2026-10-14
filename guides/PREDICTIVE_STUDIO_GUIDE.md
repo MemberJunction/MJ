@@ -632,6 +632,84 @@ flowchart LR
 - **Run path** — `RunFeaturePipeline` (the only op with no PS-specific logic) delegates straight to `RecordProcessExecutor.RunByID(featurePipelineID, …)`. Running a feature pipeline is *exactly* running the underlying Record Process — full batching/resume/audit + true forwarded per-batch progress.
 - **Knowledge Hub UI** — `FeaturePipelinesResourceComponent` (`@RegisterClass(BaseResourceComponent, 'FeaturePipelinesResource')`, `packages/Angular/Explorer/dashboards/src/KnowledgeHub/components/feature-pipelines/`) lists pipelines from the engine, shows target/written-attribute/freshness, offers **Run** (via the provider's `RouteOperation` seam → `RunFeaturePipeline`), and an **authoring** entry that opens the reusable `mj-record-process-editor` rather than rebuilding authoring.
 
+### Feature Value key and versions
+
+A Feature Pipeline's output is only worth reading if a value can be traced to exactly what produced it and re-running
+the same inputs gives the same row. Feature Values are therefore **upserted on a key**, and every run is bound to a
+registered **pipeline version**.
+
+**The key.** One `MJ: Feature Values` row is identified by the record, the feature (output) name, the pipeline version,
+the prompt version hash, the primary AI model, the parameters hash and the input hash. `ValueKeyHash` is the SHA-256 of
+that key (UUIDs normalised by case, feature name case-insensitive) and is **unique per pipeline**. The prompt version
+hash covers the template text, outputs, constraint block, pipeline type and escalation settings; the parameters hash
+covers the prompt's inference parameters and the primary prompt model's `ModelParameters`; the input hash is the
+record's normalised inputs (the Dedup Cache key). Change any of them and the value is a new row under a new key; leave
+them unchanged and a re-run finds the existing row.
+
+**Upsert semantics.** A run looks the key up before it writes: an existing value that is unchanged is counted
+`Unchanged` and not re-saved; a changed value updates the row; the Dedup Cache refreshes an expired entry in place
+and normalises keys, and edits to the prompt template apply on the next run without restarting the server. The
+latest value of a feature for a record is the row with the newest `ComputedAt`.
+
+**`Source` and human values.** `Source` is `Pipeline` (computed) or `Human` (a value a person entered on the target
+record, recorded when write-back found it and left it in place). Write-back never overwrites a `Human` value unless
+the run sets `overwriteHumanValues` (an input of the Record Process run-now operation); the run's
+`HumanValuesPreserved` tally counts the ones it left alone.
+
+**`MJ: Feature Pipeline Versions`.** Each distinct pin (prompt version hash, primary model, parameters hash, spec
+hash) is registered as the next numbered version of its pipeline, with a `Status` of Candidate, Active, Retired or
+Refused. Rules:
+
+- A pipeline **without** an `Activation` block (ungated): a changed pin becomes a Candidate; an **on-demand or manual
+  run activates it** (and retires the previous Active version); a **scheduled or on-change run of a changed pipeline
+  is refused** until that happens, so a prompt edit never silently changes what an unattended job writes.
+- A pipeline **with** `Activation` (`GoldenSetTestID`, `Metric`, `Threshold`): a version runs only when its
+  golden-set result meets the threshold. Passing the golden-set test activates the version; failing it marks the
+  version Refused, and the refusal stands until the pin or the Activation settings change. Dry runs only report
+  this (`WouldRefuse`); they never register or activate.
+- **On-demand backfill.** When a version changes, values already written under the old version are stale. The
+  records whose latest value is under another version (or has no version: rows written before versions existed) are
+  re-derived once, and the version is stamped `BackfilledAt`. Re-activating an older version re-derives from the cache
+  at no model cost; the latest value by `ComputedAt` decides which records need work.
+
+**The Feature Pipeline Version Steward.** The scheduled job **"Feature Pipeline Version Steward"** (shipped Active,
+every 15 minutes) does that evaluation and backfill **without a person**: for every Active `Infer` Record Process it
+runs the golden-set evaluation of a gated pipeline's unevaluated version, then the one backfill of a changed version,
+under the pipeline's version lock. Each decision (`evaluated`, `backfilled`, `held`, `refused`, `error`, `none`) is
+stored in the job run's `Details.Outcomes`. A threshold change re-evaluates; a failed backfill is marked when every
+named record was attempted, so it is not retried every 15 minutes with spend. A pipeline opts out per step with
+`Unattended: { AutoEvaluate: false }` and/or `{ AutoBackfill: false }`, in which case the steward reports `held` and
+the step waits for a person (`mj test run` of the golden set; an on-demand run).
+
+**The golden set's label quality.** A golden-set test (`Feature Pipeline Golden Set` test type) scores a pipeline's
+answers against labelled cases. When the labels were made by models rather than a person, the set carries a stored
+**label-quality record** and the driver refuses a set that fails it, before any model call. The procedure: the existing
+labels (A) and two new labelers from two different vendors (B, C) label every case under the same written guide;
+per output, the A-B and A-C agreement must reach a Wilson 95% lower bound (default 0.70); C **adjudicates** an A-B
+disagreement; a case all three disagree on is **excluded** and listed (at most 5 of 52 by default). The record is tied
+to the cases by hash and re-checked before every evaluation, so an edited case invalidates it.
+
+**Output constraints.** Each output can declare a `Constraint`: `enum`, `lookup`, `numeric`, `money`, `date`,
+`boolean` or `freetext`, with an `OnViolation` policy. A `lookup` constraint reads its allowed rows from the named
+entity and **renders them in the prompt as the taxonomy** (a stable order, so the hash does not churn); an
+array output uses `ItemRef` to name the field of each item the constraint applies to, so it is checked item by item. A
+violating answer is reported `RejectedInvalid` (counted apart from `Failed`) and nothing is written for it; the run
+still ends `Failed` (see the Record Set Processing guide).
+
+**Strict vendor parameters.** A call sends the prompt's parameters as configured: Gemini, Vertex and Bedrock send
+`temperature: 0` as `0` (not as "unset"), and the OpenAI/Azure reasoning-model rule is by model family, dropping the
+parameters those models reject. The driver reports what it actually sent (`ParameterFidelity` on the result). With
+`strictParameters` (set by every Feature Pipeline call), a changed or dropped parameter is **refused**, and a refusal
+**stops the prompt**: it does not fail over to another model, because a Feature Pipeline pins its model. The run's
+`ResultSummary.ParameterFidelity` carries the refusal.
+
+**Embedding templates render raw.** Entity-document and duplicate-detection templates that feed embeddings render
+their values as written (no HTML escaping, so `&` stays `&`). Existing vectors escaped under the old rule are
+re-vectorized automatically, and Content Autotagging heals its entity documents once per document.
+
+**Planned.** PR 5 adds `EffectiveAsOf` to the Feature Value key and Predictive Studio reads values as of decision
+dates.
+
 ---
 
 ## 12. The Model Development Agent + artifact + viewer

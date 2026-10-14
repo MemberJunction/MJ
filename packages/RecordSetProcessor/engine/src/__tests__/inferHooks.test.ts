@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { IRecordProcessor, RecordProcessorContext, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import { InferProcessor } from '../processors/InferProcessor';
@@ -47,9 +47,8 @@ describe('InferProcessor Lifecycle Hooks', () => {
         });
 
         const writeBackProc = new WriteBackProcessor(processor, { fields: { TargetField: '$.foo' } }, true);
-        // A dry-run write-back reads only the processed record's entity metadata: Name and Fields[].Name. EntityInfo is
-        // a class with a constructor and many required members, so this partial double needs the widening cast.
-        const widgets = { Name: 'Widgets', Fields: [{ Name: 'TargetField' }] } as unknown as EntityInfo;
+        // A dry-run write-back reads only the processed record's entity metadata: Name and Fields[].Name.
+        const widgets = new EntityInfo({ ID: 'ent-1', Name: 'Widgets', Fields: [{ Name: 'TargetField' }] });
         const provider: Pick<IMetadataProvider, 'EntityByID'> = {
             EntityByID: (id: string) => (id === 'ent-1' ? widgets : undefined),
         };

@@ -18,12 +18,13 @@ import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProvid
 import type { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '../saveTypes.js';
 import {
     CompositeKey,
+    EntityInfo,
+    EntityUserPermissionInfo,
     UserInfo,
     type DatasetResultType,
     type DatasetStatusResultType,
     type DeleteSQLResult,
     type ExecuteSQLOptions,
-    type EntityInfo,
     type EntityRecordNameResult,
     type ILocalStorageProvider,
     type IMetadataProvider,
@@ -55,10 +56,9 @@ class PoolReadTestProvider extends GenericDatabaseProviderTestBase {
 
     public override get Entities(): EntityInfo[] { return this.testEntities; }
 
-    /** Records each statement and its options; answers a count statement with one count row per branch, data with none. */
-    public override async ExecuteSQL<T>(sql: string, _params?: unknown, options?: ExecuteSQLOptions): Promise<Array<T>> {
-        this.Executed.push({ SQL: sql, Options: options });
-        return (sql.includes('TotalRowCount') ? sql.split('\nUNION ALL\n').map((_, i) => ({ BatchIndex: i, TotalRowCount: 1 })) : []) as unknown as T[];
+    /** Answers with no rows; {@link poolReadProvider} replaces it with the recording spy every test uses. */
+    public override async ExecuteSQL<T>(): Promise<Array<T>> {
+        return [];
     }
 
     public RunViewsAs(params: RunViewParams[], user: UserInfo): Promise<RunViewResult[]> {
@@ -93,12 +93,12 @@ class PoolReadTestProvider extends GenericDatabaseProviderTestBase {
     protected async InternalGetEntityRecordNames(): Promise<EntityRecordNameResult[]> { return []; }
     public async GetRecordFavoriteStatus(): Promise<boolean> { return false; }
     public async SetRecordFavoriteStatus(): Promise<void> {}
-    protected async InternalRunQuery(): Promise<RunQueryResult> { return { Success: true, Results: [] } as unknown as RunQueryResult; }
+    protected async InternalRunQuery(): Promise<RunQueryResult> { throw new Error('Not supported'); }
     protected async InternalRunQueries(): Promise<RunQueryResult[]> { return []; }
     protected async InternalExecuteQueryFromSpec(_spec: QueryExecutionSpec, _user?: UserInfo): Promise<RunQueryResult> {
         throw new Error('Not supported');
     }
-    protected async GetCurrentUser(): Promise<UserInfo> { return new UserInfo(null as unknown as IMetadataProvider, {}); }
+    protected async GetCurrentUser(): Promise<UserInfo> { return new UserInfo(); }
     public async GetRecordDependencies(): Promise<{ EntityName: string; RelatedEntityName: string; FieldName: string; PrimaryKey: CompositeKey }[]> { return []; }
     public async GetRecordDuplicates(): Promise<PotentialDuplicateResponse> { return {} as PotentialDuplicateResponse; }
     public async MergeRecords(): Promise<RecordMergeResult> { return {} as RecordMergeResult; }
@@ -106,52 +106,67 @@ class PoolReadTestProvider extends GenericDatabaseProviderTestBase {
     public async GetDatasetStatusByName(): Promise<DatasetStatusResultType> { return {} as DatasetStatusResultType; }
     public get InstanceConnectionString(): string { return 'count-batch-test'; }
     public async CreateTransactionGroup(): Promise<TransactionGroupBase> { return {} as TransactionGroupBase; }
-    public get LocalStorageProvider(): ILocalStorageProvider {
-        return { GetItem: async () => null, SetItem: async () => {}, Remove: async () => {} } as unknown as ILocalStorageProvider;
+    public get LocalStorageProvider(): ILocalStorageProvider { throw new Error('Not supported in this test double'); }
+    protected get Metadata(): IMetadataProvider { return this; }
+}
+
+/** An entity every user may read, with no row-level security. */
+class ReadableEntityInfo extends EntityInfo {
+    public override GetUserPermisions(user: UserInfo): EntityUserPermissionInfo {
+        return Object.assign(new EntityUserPermissionInfo(), { Entity: this, User: user, CanCreate: false, CanRead: true, CanUpdate: false, CanDelete: false });
     }
-    protected get Metadata(): IMetadataProvider { return this as unknown as IMetadataProvider; }
+    public override GetEffectiveRowFilterWhereClause(): string {
+        return '';
+    }
 }
 
 /** An entity the user may read, with no row-level security and no external data source. */
 function readableEntity(name: string): EntityInfo {
-    const id = { Name: 'ID', CodeName: 'ID' };
-    return {
+    return new ReadableEntityInfo({
         ID: `ENT-${name}`,
         Name: name,
         SchemaName: '__mj',
         BaseView: `vw${name}`,
-        Fields: [id],
-        PrimaryKeys: [id],
-        FirstPrimaryKey: id,
-        FieldByName: (n: string) => (n.trim().toLowerCase() === 'id' ? id : undefined),
-        DatetimeFields: [],
+        Fields: [{ Name: 'ID', CodeName: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier', EntityID: `ENT-${name}`, Entity: name }],
         ExternalDataSourceID: null,
         UserViewMaxRows: 0,
         EnableFieldLevelSecurity: false,
-        GetUserPermisions: () => ({ CanRead: true }),
-        GetEffectiveRowFilterWhereClause: () => '',
-    } as unknown as EntityInfo;
+    });
+}
+
+/**
+ * A provider over `entities` whose `ExecuteSQL` records each statement and its options, and answers a count statement
+ * with one count row per `UNION ALL` branch and a data statement with none. A spy, because `ExecuteSQL` is generic: the
+ * spy's implementation returns plain rows where an override would have to produce a `T`.
+ */
+function poolReadProvider(entities: EntityInfo[]): PoolReadTestProvider {
+    const provider = new PoolReadTestProvider(entities);
+    vi.spyOn(provider, 'ExecuteSQL').mockImplementation(async (sql: string, _params?: unknown[], options?: ExecuteSQLOptions) => {
+        provider.Executed.push({ SQL: sql, Options: options });
+        return sql.includes('TotalRowCount') ? sql.split('\nUNION ALL\n').map((_, i) => ({ BatchIndex: i, TotalRowCount: 1 })) : [];
+    });
+    return provider;
 }
 
 describe('GenericDatabaseProvider.RunViewCore — RunViewParams.ReadOnPool', () => {
-    const user = new UserInfo(null as unknown as IMetadataProvider, { ID: 'U1', Email: 'u1@example.com' });
+    const user = new UserInfo(undefined, { ID: 'U1', Email: 'u1@example.com' });
 
     it('issues every statement of a ReadOnPool view on the pool (ignoreAmbientTransaction)', async () => {
-        const provider = new PoolReadTestProvider([readableEntity('A')]);
+        const provider = poolReadProvider([readableEntity('A')]);
         await provider.RunViewsAs([{ EntityName: 'A', ResultType: 'simple', ReadOnPool: true }], user);
         expect(provider.Executed.length).toBeGreaterThan(0);
         expect(provider.Executed.every((e) => e.Options?.ignoreAmbientTransaction === true)).toBe(true);
     });
 
     it('leaves an ordinary view on the ambient transaction', async () => {
-        const provider = new PoolReadTestProvider([readableEntity('A')]);
+        const provider = poolReadProvider([readableEntity('A')]);
         await provider.RunViewsAs([{ EntityName: 'A', ResultType: 'simple' }], user);
         expect(provider.Executed.length).toBeGreaterThan(0);
         expect(provider.Executed.every((e) => e.Options?.ignoreAmbientTransaction !== true)).toBe(true);
     });
 
     it('keeps a count_only batch that mixes pool and ambient views on the per-view path, each on its own connection', async () => {
-        const provider = new PoolReadTestProvider([readableEntity('A'), readableEntity('B')]);
+        const provider = poolReadProvider([readableEntity('A'), readableEntity('B')]);
         await provider.RunViewsAs([
             { EntityName: 'A', ResultType: 'count_only', ReadOnPool: true },
             { EntityName: 'B', ResultType: 'count_only' },
@@ -161,7 +176,7 @@ describe('GenericDatabaseProvider.RunViewCore — RunViewParams.ReadOnPool', () 
     });
 
     it('runs an all-ReadOnPool count_only batch as one statement on the pool', async () => {
-        const provider = new PoolReadTestProvider([readableEntity('A'), readableEntity('B')]);
+        const provider = poolReadProvider([readableEntity('A'), readableEntity('B')]);
         await provider.RunViewsAs([
             { EntityName: 'A', ResultType: 'count_only', ReadOnPool: true },
             { EntityName: 'B', ResultType: 'count_only', ReadOnPool: true },

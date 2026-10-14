@@ -82,7 +82,7 @@ describe('a reload rebuilds derived state before it emits', () => {
     let engine: OrderEngine;
 
     beforeEach(() => {
-        delete GetGlobalObjectStore()['___SINGLETON__LocalCacheManager'];
+        delete GetGlobalObjectStore()?.['___SINGLETON__LocalCacheManager'];
         engine = new OrderEngine();
     });
 

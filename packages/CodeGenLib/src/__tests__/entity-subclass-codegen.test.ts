@@ -113,12 +113,15 @@ vi.mock('../Misc/util', () => {
     return { MakeDir, makeDir: MakeDir, SortBySequenceAndCreatedAt, sortBySequenceAndCreatedAt: SortBySequenceAndCreatedAt };
 });
 
-import type { EntityInfo } from '@memberjunction/core';
+import { EntityInfo } from '@memberjunction/core';
 import { EntitySubClassGeneratorBase } from '../Misc/entity_subclasses_codegen';
 
-/** A partial entity-metadata test double: the generator reads only the members each fixture sets. */
+/**
+ * An entity-metadata test double: an `EntityInfo` (this file's mock of it) carrying the members a fixture sets — the
+ * generator reads only those.
+ */
 function entityDouble(partial: object): EntityInfo {
-    return partial as unknown as EntityInfo;
+    return Object.assign(new EntityInfo(), partial);
 }
 
 describe('EntitySubClassGeneratorBase', () => {

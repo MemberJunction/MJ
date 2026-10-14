@@ -1,13 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { MakeSuccessChatResult } from '@memberjunction/unit-testing';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, type AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import { DataFeatureSpec } from '@memberjunction/feature-pipelines';
-import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
+import { KnowledgeHubMetadataEngine, MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { InferProcessor, SetNestedValue } from '../processors/InferProcessor';
 
+
+/** Enough of `MJ: AI Prompt Runs` for a real prompt-run entity to hold its ID. */
+const PROMPT_RUN_ENTITY = new EntityInfo({
+    ID: 'ent-ai-prompt-runs', Name: 'MJ: AI Prompt Runs',
+    Fields: [{ ID: 'apr-ID', EntityID: 'ent-ai-prompt-runs', Entity: 'MJ: AI Prompt Runs', Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1 }],
+});
 describe('InferProcessor constraint enforcement', () => {
     const USER = {} as UserInfo;
     const record: RecordRef = {
@@ -30,16 +37,19 @@ describe('InferProcessor constraint enforcement', () => {
     let mockErrorMessage: string | undefined;
 
     /**
-     * The runner's result as a partial test double: the processor reads only success, errorMessage, result and
-     * promptRun.ID, so the model's chatResult and the full prompt-run entity are left out.
+     * The runner's result: the processor reads success, errorMessage, result and the prompt run's ID; the run is a
+     * real entity holding only its ID, and the chat result a plain successful one.
      */
     function promptRunResult(): AIPromptRunResult<unknown> {
+        const promptRun = new MJAIPromptRunEntity(PROMPT_RUN_ENTITY);
+        promptRun.Hydrate({ ID: 'RUN-AI-1' });
         return {
             success: mockSuccess,
             errorMessage: mockErrorMessage,
             result: mockResult,
-            promptRun: { ID: 'RUN-AI-1' },
-        } as unknown as AIPromptRunResult<unknown>;
+            promptRun,
+            chatResult: MakeSuccessChatResult(),
+        };
     }
 
     beforeEach(() => {

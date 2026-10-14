@@ -3,8 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock dependencies before importing the module under test
 vi.mock('@memberjunction/core', () => ({
     BaseEntity: class BaseEntity {
-        ContextCurrentUser: null;
-        Fields: [];
+        ContextCurrentUser = null;
+        Fields = [];
         Get(_fieldName: string) { return ''; }
         Set(_fieldName: string, _value: unknown) {}
         get Dirty() { return false; }

@@ -24,8 +24,24 @@ export interface StoredVectorColumns {
     ModelID: string | null;
 }
 
+/** A local embedding result (`AIEngine.EmbedTextLocal`) that came back. */
+type LocalEmbedding = NonNullable<Awaited<ReturnType<AIEngine['EmbedTextLocal']>>>;
+
+/**
+ * A local embedding result as {@link EmbeddingBackfill.RequireLocalVector} checks it: each part of
+ * {@link LocalEmbedding}, any of which may be missing or partial when a driver answers without it — exactly what that
+ * check refuses.
+ */
+export type LocalEmbeddingParts = { [K in keyof LocalEmbedding]?: Partial<LocalEmbedding[K]> | null };
+
+/**
+ * What a backfill uses of a record: its key and entity (log lines, the in-flight set), `Save`, and the save's result.
+ * Every `BaseEntity` is one; the backfill asks for no more, so a test can hand it a record double without a cast.
+ */
+export type VectorBackfillRecord = Pick<BaseEntity, 'PrimaryKey' | 'EntityInfo' | 'Save' | 'LatestResult'>;
+
 /** One vector of a record: the text it is computed from, and how its stored columns are read and written. */
-export interface EmbeddingVectorSlot<T extends BaseEntity> {
+export interface EmbeddingVectorSlot<T extends VectorBackfillRecord> {
     /** The text the vector is computed from. */
     Text(record: T): string | null;
     /** The stored columns as the record holds them now. */
@@ -35,14 +51,14 @@ export interface EmbeddingVectorSlot<T extends BaseEntity> {
 }
 
 /** A record whose vector lives in the usual three columns (`EmbeddingVector`, `EmbeddingVectorBinary`, `EmbeddingModelID`). */
-export interface StandardVectorRecord extends BaseEntity {
+export interface StandardVectorRecord extends VectorBackfillRecord {
     EmbeddingVector: string | null;
     EmbeddingVectorBinary: string | null;
     EmbeddingModelID: string | null;
 }
 
 /** What the engine that owns a backfill tells it, apart from how it embeds ({@link EmbeddingBackfillEmbedder}). */
-export interface EmbeddingBackfillBaseOptions<T extends BaseEntity> {
+export interface EmbeddingBackfillBaseOptions<T extends VectorBackfillRecord> {
     /** Prefix of every log line, e.g. `QueryEngineServer`. */
     Name: string;
     /** The vectors of one record. */
@@ -73,12 +89,12 @@ export interface EmbeddingBackfillBaseOptions<T extends BaseEntity> {
  * through `AIEngine.EmbedTextLocalForEntity` or `AIEngine.EmbedTextLocal`), or a pass's texts at once (`EmbedTexts`, in order,
  * `null` for a text that got no vector — TagEngine, which embeds in batches with its own model).
  */
-export type EmbeddingBackfillEmbedder<T extends BaseEntity> =
+export type EmbeddingBackfillEmbedder<T extends VectorBackfillRecord> =
     | { EmbedText(text: string, record: T): Promise<SimpleEmbeddingResult>; EmbedTexts?: never }
     | { EmbedTexts(texts: string[]): Promise<Array<SimpleEmbeddingResult | null>>; EmbedText?: never };
 
 /** Everything the engine that owns a backfill tells it. */
-export type EmbeddingBackfillOptions<T extends BaseEntity> = EmbeddingBackfillBaseOptions<T> & EmbeddingBackfillEmbedder<T>;
+export type EmbeddingBackfillOptions<T extends VectorBackfillRecord> = EmbeddingBackfillBaseOptions<T> & EmbeddingBackfillEmbedder<T>;
 
 /** What one pass did. */
 export interface EmbeddingBackfillPassResult {
@@ -101,7 +117,7 @@ interface UnsavedVectors {
 }
 
 /** A record of the current pass and the slots of it that need a vector. */
-interface PendingRecord<T extends BaseEntity> {
+interface PendingRecord<T extends VectorBackfillRecord> {
     Record: T;
     Slots: ReadonlyArray<EmbeddingVectorSlot<T>>;
 }
@@ -135,7 +151,7 @@ interface PendingRecord<T extends BaseEntity> {
  * waits for a backfill. {@link RunUntilDone} is the awaited mode for an engine whose load must wait for every vector
  * (TagEngine): the same batches, run back to back instead of `PassDelayMs` apart.
  */
-export class EmbeddingBackfill<T extends BaseEntity> {
+export class EmbeddingBackfill<T extends VectorBackfillRecord> {
     private _loop: Promise<number> | null = null;
     private _rerun = false;
     /** Set by {@link RunUntilDone}: the running loop drains instead of scheduling later passes. */
@@ -161,7 +177,7 @@ export class EmbeddingBackfill<T extends BaseEntity> {
      * @throws EmbeddingUnavailableError when there is no result (no local embedding model)
      * @throws Error when the result has no vector or no model
      */
-    public static RequireLocalVector(embedding: Awaited<ReturnType<AIEngine['EmbedTextLocal']>>): SimpleEmbeddingResult {
+    public static RequireLocalVector(embedding: LocalEmbeddingParts | null): SimpleEmbeddingResult {
         if (!embedding) {
             // `EmbedTextLocal` returns null only when no local embedding model is configured.
             throw new EmbeddingUnavailableError('Failed to generate embedding - no local embedding model');
@@ -407,7 +423,7 @@ export class EmbeddingBackfill<T extends BaseEntity> {
     }
 
     /** The key a run's skip sets hold a record under: its primary key (a database read returns new objects each pass). */
-    protected static KeyOf(record: BaseEntity): string {
+    protected static KeyOf(record: VectorBackfillRecord): string {
         return record.PrimaryKey.ToConcatenatedString();
     }
 

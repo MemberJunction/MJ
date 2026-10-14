@@ -110,7 +110,7 @@ describe('BaseEngine.SweepAgainstDatabase', () => {
     let storage: MockCacheStorageProvider;
 
     beforeEach(async () => {
-        delete GetGlobalObjectStore()['___SINGLETON__LocalCacheManager'];
+        delete GetGlobalObjectStore()?.['___SINGLETON__LocalCacheManager'];
         storage = new MockCacheStorageProvider();
         await LocalCacheManager.Instance.Initialize(storage);
     });
@@ -206,7 +206,7 @@ describe('BaseEngine.SweepAgainstDatabase', () => {
 
 describe('BaseEngineSweeper', () => {
     beforeEach(async () => {
-        delete GetGlobalObjectStore()['___SINGLETON__LocalCacheManager'];
+        delete GetGlobalObjectStore()?.['___SINGLETON__LocalCacheManager'];
         await LocalCacheManager.Instance.Initialize(new MockCacheStorageProvider());
     });
 
@@ -232,7 +232,7 @@ describe('BaseEngineSweeper', () => {
         expect(await LocalCacheManager.Instance.TryAcquireSharedLease('x', 1000)).toBe(true);
         const shared = new MockCacheStorageProvider() as MockCacheStorageProvider & { TryAcquireLease: (n: string, t: number) => Promise<boolean> };
         shared.TryAcquireLease = async () => { throw new Error('redis down'); };
-        delete GetGlobalObjectStore()['___SINGLETON__LocalCacheManager'];
+        delete GetGlobalObjectStore()?.['___SINGLETON__LocalCacheManager'];
         await LocalCacheManager.Instance.Initialize(shared);
         expect(await LocalCacheManager.Instance.TryAcquireSharedLease('x', 1000)).toBe(false);
     });
@@ -273,7 +273,7 @@ describe('the sweep only visits entities that declare they can drift', () => {
     let storage: MockCacheStorageProvider;
 
     beforeEach(async () => {
-        delete GetGlobalObjectStore()['___SINGLETON__LocalCacheManager'];
+        delete GetGlobalObjectStore()?.['___SINGLETON__LocalCacheManager'];
         storage = new MockCacheStorageProvider();
         await LocalCacheManager.Instance.Initialize(storage);
     });

@@ -223,6 +223,11 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
     MJAIPromptCategoryEntityExtended: class MJAIPromptCategoryEntityExtended {},
 }));
 
+/** A cached agent note/example row as the tests below seed it; each test's row type adds the fields it reads. */
+interface CachedAgentRow {
+    ID: string;
+}
+
 const { mockBaseInstance } = vi.hoisted(() => ({ mockBaseInstance: {
     Loaded: true,
     Agents: [],
@@ -233,8 +238,8 @@ const { mockBaseInstance } = vi.hoisted(() => ({ mockBaseInstance: {
     AgentConfigurations: [],
     AgentNoteTypes: [],
     AgentPermissions: [],
-    AgentNotes: [],
-    AgentExamples: [],
+    AgentNotes: new Array<CachedAgentRow>(),
+    AgentExamples: new Array<CachedAgentRow>(),
     VendorTypeDefinitions: [],
     Vendors: [],
     ModelVendors: [],
@@ -369,6 +374,7 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 import { SaveTimeAISettings } from '@memberjunction/ai';
 import { AIEngine, AIActionParams, EntityAIActionParams } from '../AIEngine';
 import { EmbeddingUnavailableError } from '../services/EmbeddingBackfill';
+import { UserInfo, type BaseEntity } from '@memberjunction/core';
 import { MJGlobal, Float32VectorToBase64 } from '@memberjunction/global';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import type { ChatMessageContent } from '@memberjunction/ai';
@@ -1959,13 +1965,14 @@ describe('AIEngine', () => {
             };
         }
 
-        /** The base engine's cached rows, typed for these tests (the pattern of the stored-vector tests above). */
-        const backfillState = mockBaseInstance as unknown as { AgentNotes: VectorRow[]; AgentExamples: VectorRow[] };
+        /** The base engine's cached rows. */
+        const backfillState = mockBaseInstance;
 
         let embedSpy: ReturnType<typeof vi.spyOn>;
 
         beforeEach(() => {
-            embedSpy = vi.spyOn(engine, 'EmbedTextLocal').mockResolvedValue({ result: { vector: VECTOR }, model: { ID: 'model-local' } } as never);
+            embedSpy = vi.spyOn(engine, 'EmbedTextLocal');
+            embedSpy.mockResolvedValue({ result: { vector: VECTOR }, model: { ID: 'model-local' } });
         });
 
         afterEach(() => {
@@ -2059,8 +2066,9 @@ describe('AIEngine', () => {
         let engine: TestableAIEngine;
         let configSpy: ReturnType<typeof vi.spyOn>;
         let embedSpy: ReturnType<typeof vi.spyOn>;
-        /** A partial BaseEntity: the call reads only the entity's current user. */
-        const entity = (userID: string) => ({ ContextCurrentUser: { ID: userID } }) as never;
+        /** The entity's current user, the only part of the entity the call reads. */
+        const userOf = (userID: string): UserInfo => Object.assign(new UserInfo(), { ID: userID });
+        const entity = (userID: string): Pick<BaseEntity, 'ContextCurrentUser'> => ({ ContextCurrentUser: userOf(userID) });
 
         beforeEach(() => {
             engine = TestableAIEngine.CreateForTest();
@@ -2073,7 +2081,7 @@ describe('AIEngine', () => {
         });
 
         it('loads the engine as the entity\'s current user, then embeds the text locally', async () => {
-            embedSpy.mockResolvedValue({ result: { vector: [0.1, 0.2] }, model: { ID: 'model-1' } } as never);
+            embedSpy.mockResolvedValue({ result: { vector: [0.1, 0.2] }, model: { ID: 'model-1' } });
 
             await AIEngine.EmbedTextLocalForEntity(entity('user-123'), 'hello world');
 
@@ -2084,7 +2092,7 @@ describe('AIEngine', () => {
 
         it('returns the vector and the model it came from', async () => {
             const vector = [0.1, 0.2, 0.3, 0.4];
-            embedSpy.mockResolvedValue({ result: { vector }, model: { ID: 'embed-model-42' } } as never);
+            embedSpy.mockResolvedValue({ result: { vector }, model: { ID: 'embed-model-42' } });
 
             expect(await AIEngine.EmbedTextLocalForEntity(entity('user-1'), 'some text')).toEqual({ vector, modelID: 'embed-model-42' });
         });
@@ -2102,7 +2110,7 @@ describe('AIEngine', () => {
             ['no model ID', { result: { vector: [0.1] }, model: { ID: null } }],
             ['no result property', { model: { ID: 'model-1' } }],
         ])('throws when the local model returns %s', async (_label, value) => {
-            embedSpy.mockResolvedValue(value as never);
+            embedSpy.mockResolvedValue(value);
 
             await expect(AIEngine.EmbedTextLocalForEntity(entity('user-1'), 'text')).rejects.toThrow('Failed to generate embedding');
         });

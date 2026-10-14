@@ -13,7 +13,7 @@
  * components and the form and panel rows that use them.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { EntityInfo, PlatformSQL } from '@memberjunction/core';
+import { EntityInfo, type PlatformSQL } from '@memberjunction/core';
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -58,7 +58,9 @@ function sqlServerFilter(filter: string | PlatformSQL): string {
     return typeof filter === 'string' ? filter : filter.sqlserver ?? filter.default;
 }
 
-const { db } = vi.hoisted(() => ({
+const { db, stubViews } = vi.hoisted(() => ({
+    /** Each stub entity, by the instance the server class built on it: the test's typed view of the stub's members. */
+    stubViews: new WeakMap<object, StubHooks>(),
     db: {
         components: [] as StoredComponent[],
         uses: [] as StoredUse[],
@@ -138,6 +140,11 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public SuperDeleteCalled = false;
         public EmbeddingsGenerated = false;
         public Recorded: { Success: boolean; Type: string; Message: string } | null = null;
+
+        constructor() {
+            stubViews.set(this, this);
+        }
+
         /** No authorization metadata: only an `Owner`-type caller holds the grant. */
         public ProviderToUse = { Authorizations: [], EntityByName: () => ({ ID: 'ENT-COMPONENTS' }) };
 
@@ -218,8 +225,11 @@ function use(componentID: string, scope: string, userID: string | null, entity: 
 
 /** The component as loaded, for a caller, matching the stored COMP-1 until a test changes it. */
 function make(caller: StubCaller | null, over: Partial<StubHooks> = {}): StubHooks {
-    // The generated base is stubbed below, so the EntityInfo its constructor takes is never read.
-    const e = new MJComponentEntityServer({} as EntityInfo) as unknown as StubHooks;
+    // The generated base is stubbed above, so the EntityInfo its constructor takes is never read.
+    const e = stubViews.get(new MJComponentEntityServer(new EntityInfo()));
+    if (!e) {
+        throw new Error('the component entity was not built on the stub');
+    }
     e.ContextCurrentUser = caller;
     Object.assign(e, over);
     return e;

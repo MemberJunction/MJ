@@ -78,6 +78,14 @@ export * from './checks/binary-fields.checks';
 export * from './checks/scheduling-concurrency.checks';
 export * from './checks/communication.checks';
 export * from './checks/ai-cost.checks';
+export * from './checks/fp-gate-c2-1.checks';
+export * from './checks/fp-gate-c2-2.checks';
+export * from './checks/fp-gate-c2-3.checks';
+export * from './checks/fp-gate-c2-5.checks';
+export * from './checks/fp-gate-c3-3.checks';
+export * from './checks/feature-pipeline-core.checks';
+export * from './checks/fp-live-jobtitle.checks';
+export * from './checks/fp-gates/feature-pipeline-gate-stub-driver'; // registers FeaturePipelineGateStubDriver (@RegisterClass)
 export * from './checks/ai-permissions.checks';
 export * from './checks/ai-embeddings.checks';
 export * from './checks/agent-loop-standin.checks';

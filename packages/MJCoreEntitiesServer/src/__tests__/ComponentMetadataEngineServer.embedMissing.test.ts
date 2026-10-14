@@ -8,7 +8,8 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MJGlobal, MJEventType, Base64ToFloat32Vector } from '@memberjunction/global';
-import { BaseEntity, StartupManager, type RunViewParams } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, StartupManager, type RunViewParams } from '@memberjunction/core';
+import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
 
 const { state, embedTextLocal, baseConfig, BASE_PROVIDER } = vi.hoisted(() => ({
     /** The base engine's provider (ProviderToUse), the fallback when no provider is passed. */
@@ -82,10 +83,10 @@ import { SaveTimeAISettings } from '@memberjunction/ai';
 
 const VECTOR = [0.5, -0.25, 3];
 /** The provider HandleStartup is given; the fake RunView ignores it. */
-const PROVIDER = {} as never;
+const PROVIDER = new EntitiesOnlyProvider([]);
 
 function component(id: string, functional: string | null, technical: string | null, fVector: string | null = null): MJComponentEntityExtended {
-    const c = new MJComponentEntityExtended({} as never);
+    const c = new MJComponentEntityExtended(new EntityInfo({ Name: 'MJ: Components' }));
     c.ID = id;
     c.Name = id;
     c.FunctionalRequirements = functional;
@@ -199,8 +200,8 @@ describe('ComponentMetadataEngineServer — embedding components saved without v
     it('Config bulk-loads through the passed provider, else the base engine\'s — never a bare RunView', async () => {
         state.components = [];
         state.providers = [];
-        const passed = { name: 'passed provider' };
-        await ComponentMetadataEngineServer.Instance.Config(true, undefined, passed as never);
+        const passed = new EntitiesOnlyProvider([]);
+        await ComponentMetadataEngineServer.Instance.Config(true, undefined, passed);
         await ComponentMetadataEngineServer.Instance.Config(true, undefined);
 
         expect(state.providers).toEqual([passed, BASE_PROVIDER]);

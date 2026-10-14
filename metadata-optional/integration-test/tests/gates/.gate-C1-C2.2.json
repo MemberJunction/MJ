@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 → C2.2",
+    "Description": "Gate G7.2 (owner PR 1, phase 7, dataset C1, criterion C2.2): on the MoreCheese people behind scenario C1, forced out-of-taxonomy job-title outputs are rejected and counted on the run, with 0 stored as feature values. Runs the installed job-title pipeline cloned onto a deterministic stub driver over the 52 golden-title fixture people plus 3 whose titles the stub answers outside the taxonomy (an unknown seniority, a non-existent job function ID, both); a supplementary check dry-runs an unconstrained clone and expects the foreign-key failure its real write would hit to be reported, with nothing written; no model calls.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G7.2\",\"owner:PR1\",\"phase:7\",\"dataset:C1\",\"criterion:C2.2\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The run ends Failed with RejectedInvalid 3 and the other 52 records written; 0 Feature Values, cache rows, seniority values or job-function rows are stored for the 3 rejected people; the dry run of an unconstrained clone reports 'Dry run: the real write would fail: …' and writes nothing."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "fp-gate-c2-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "812573F0-ADFF-4C27-ADB4-EDCC53FBAAD2"
+  }
+}

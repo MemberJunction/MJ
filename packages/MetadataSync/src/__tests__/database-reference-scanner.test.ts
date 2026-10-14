@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { RunView } from '@memberjunction/core';
-import type { Metadata, UserInfo, RunViewParams, RunViewResult } from '@memberjunction/core';
+import { RunView, UserInfo } from '@memberjunction/core';
+import type { Metadata, RunViewParams, RunViewResult } from '@memberjunction/core';
 import { DatabaseReferenceScanner } from '../lib/database-reference-scanner';
 import type { FlattenedRecord } from '../lib/record-dependency-analyzer';
 import type { ReverseFKInfo } from '../lib/entity-foreign-key-helper';
@@ -42,7 +42,8 @@ function makeDeleteRecord(id: string): FlattenedRecord {
     path: `test/${id}`,
     dependencies: new Set<string>(),
     id,
-    originalIndex: 0
+    originalIndex: 0,
+    graphId: 'g1'
   };
 }
 
@@ -77,6 +78,16 @@ describe('DatabaseReferenceScanner.scanForReferences', () => {
     for (const id of ['AAAA', 'BBBB', 'CCCC']) {
       expect(runViewCalls[0].ExtraFilter).toContain(`'${id}'`);
     }
+  });
+
+  it('writes a key outside ASCII as a Unicode literal on SQL Server, quotes escaped', async () => {
+    vi.stubEnv('DB_PLATFORM', 'sqlserver');
+    const scanner = new DatabaseReferenceScanner(metadataStub, new UserInfo());
+
+    await scanner.scanForReferences(["C1 → O'Brien", 'AAAA'].map(makeDeleteRecord), reverseFKMap, []);
+
+    expect(runViewCalls[0].ExtraFilter).toBe(`${FK_FIELD} IN (N'C1 → O''Brien', 'AAAA')`);
+    vi.unstubAllEnvs();
   });
 
   it('passes IgnoreMaxRows: true so the batched query is not truncated by UserViewMaxRows', async () => {

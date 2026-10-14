@@ -540,9 +540,9 @@ describe("GraphQLDataProvider rehydrates a refusal's validationErrors extension"
         expect(entity.LatestResult.Success).toBe(false);
         expect(entity.LatestResult.Message).toBe(REFUSAL_PROSE);
         expect(entity.LatestResult.Errors).toHaveLength(2);
-        expect(entity.LatestResult.Errors.every((e: unknown) => e instanceof ValidationErrorInfo)).toBe(true);
-        expect(entity.LatestResult.Errors[0]).toMatchObject({ Source: 'Tier', Message: REFUSAL_PROSE, Value: 'Platinum', Type: 'Failure' });
-        expect(entity.LatestResult.Errors[1]).toMatchObject({ Source: '', Message: 'Reviewed by the tier policy', Type: 'Warning' });
+        expect(entity.LatestResult.Errors?.every((e: unknown) => e instanceof ValidationErrorInfo)).toBe(true);
+        expect(entity.LatestResult.Errors?.[0]).toMatchObject({ Source: 'Tier', Message: REFUSAL_PROSE, Value: 'Platinum', Type: 'Failure' });
+        expect(entity.LatestResult.Errors?.[1]).toMatchObject({ Source: '', Message: 'Reviewed by the tier policy', Type: 'Warning' });
     });
 
     it('Save: CompleteMessage carries the refusal text ONCE — Message is the server\'s CompleteMessage, Errors are the same entries', async () => {
@@ -622,8 +622,8 @@ describe("GraphQLDataProvider rehydrates a refusal's validationErrors extension"
         expect(ok).toBe(false);
         expect(entity.LatestResult.Message).toBe('Customer has open orders.');
         expect(entity.LatestResult.Errors).toHaveLength(1);
-        expect(entity.LatestResult.Errors[0]).toBeInstanceOf(ValidationErrorInfo);
-        expect(entity.LatestResult.Errors[0]).toMatchObject({ Source: 'ID', Message: 'Customer has open orders.' });
+        expect(entity.LatestResult.Errors?.[0]).toBeInstanceOf(ValidationErrorInfo);
+        expect(entity.LatestResult.Errors?.[0]).toMatchObject({ Source: 'ID', Message: 'Customer has open orders.' });
         expect(entity.LatestResult.CompleteMessage, 'once, not twice').toBe('Customer has open orders.');
     });
 });

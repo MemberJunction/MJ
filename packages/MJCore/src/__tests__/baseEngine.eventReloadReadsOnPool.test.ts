@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { GetGlobalObjectStore } from '@memberjunction/global';
 import { BaseEngine, BaseEnginePropertyConfig } from '../generic/baseEngine';
-import { BaseEntityEvent } from '../generic/baseEntity';
+import { BaseEntity, BaseEntityEvent } from '../generic/baseEntity';
+import { EntityInfo } from '../generic/entityInfo';
 import { DatabaseProviderBase } from '../generic/databaseProviderBase';
 import type { PostCommitTask, PostCommitToken } from '../generic/databaseProviderBase';
 import { UserInfo } from '../generic/securityInfo';
-import { DatasetReadOptions, DatasetResultType, IMetadataProvider, ProviderType } from '../generic/interfaces';
+import { DatasetReadOptions, DatasetResultType, IEntityDataProvider, IMetadataProvider, ProviderType } from '../generic/interfaces';
 
 /**
  * An event-driven engine reload runs detached from the write that raised the event. A transaction another unit of
@@ -72,6 +73,9 @@ class DatasetEngine extends BaseEngine<DatasetEngine> {
     public static readonly CONFIGS = [new BaseEnginePropertyConfig({ Type: 'dataset', DatasetName: 'Template_Metadata', PropertyName: '_metadata' })];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        if (!provider) {
+            throw new Error('DatasetEngine loads through the provider each test passes');
+        }
         await this.Load(DatasetEngine.CONFIGS, provider, forceRefresh, contextUser);
     }
 
@@ -97,14 +101,23 @@ function freshEngine(): DatasetEngine {
     return new DatasetEngine();
 }
 
+/** A database provider that records can be bound to (what `GenericDatabaseProvider` is). */
+type EntityDatabaseProvider = DatabaseProviderBase & IEntityDataProvider;
+
 /**
  * A database provider double at a given transaction depth, with a post-commit queue the test runs. `member` says
  * whether the caller belongs to the open transaction: like GenericDatabaseProvider, a non-member (or a caller with no
  * transaction open) gets a token whose epoch is null.
  */
-function providerAtDepth(depth: number, member: boolean = true): { provider: DatabaseProviderBase; commit: () => Promise<void>; queuedCount: () => number } {
+function providerAtDepth(depth: number, member: boolean = true): { provider: EntityDatabaseProvider; commit: () => Promise<void>; queuedCount: () => number } {
     const queued: PostCommitTask[] = [];
-    const provider = Object.create(DatabaseProviderBase.prototype) as DatabaseProviderBase;
+    const provider: EntityDatabaseProvider = Object.create(DatabaseProviderBase.prototype);
+    // the entity-data members a record bound to the provider could call; the handler under test never does
+    const notUsed = async (): Promise<never> => { throw new Error('not used by these tests'); };
+    provider.Load = notUsed;
+    provider.Save = notUsed;
+    provider.Delete = notUsed;
+    provider.GetRecordChanges = notUsed;
     Object.defineProperty(provider, 'TransactionDepth', { get: () => depth });
     provider.CapturePostCommitToken = (): PostCommitToken =>
         depth > 0 && member ? { Epoch: 1, FrameIds: Array.from({ length: depth }, (_, i) => i + 1) } : { Epoch: null, FrameIds: [] };
@@ -112,10 +125,15 @@ function providerAtDepth(depth: number, member: boolean = true): { provider: Dat
     return { provider, commit: async () => { for (const t of queued.splice(0)) await t(); }, queuedCount: () => queued.length };
 }
 
-/** A save event raised by an entity on `provider` (the handler reads only baseEntity.ProviderToUse). */
-function saveOn(provider: DatabaseProviderBase): BaseEntityEvent {
-    // a partial event double carrying the one field RunAfterCommitOrNow reads
-    return { type: 'save', baseEntity: { ProviderToUse: provider } } as unknown as BaseEntityEvent;
+/** The entity of the saves below; the handler reads only the saving record's provider. */
+const RECORDS = new EntityInfo({ ID: 'ent-records', Name: 'Records', Fields: [] });
+
+/** A record of {@link RECORDS}. */
+class SavedRecord extends BaseEntity {}
+
+/** A save event raised by a record bound to `provider`. */
+function saveOn(provider: EntityDatabaseProvider): BaseEntityEvent {
+    return { type: 'save', baseEntity: new SavedRecord(RECORDS, provider), payload: null };
 }
 
 describe('BaseEngine: event-driven reloads read on the pool', () => {

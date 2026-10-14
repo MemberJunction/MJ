@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 → C2.3",
+    "Description": "Gate G7.3 (owner PR 1, phase 7, dataset C1, criterion C2.3): on the MoreCheese people behind scenario C1, a second run of the same pipeline version on the same inputs leaves identical value checksums and 0 duplicate rows, and 0 human-entered values are overwritten. Runs the installed job-title pipeline cloned onto a deterministic stub driver over 52 fixture people carrying the 52 golden titles, edits three values by hand between the runs (two seniorities, one job function), and re-runs with the watermark skip off; no model calls.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G7.3\",\"owner:PR1\",\"phase:7\",\"dataset:C1\",\"criterion:C2.3\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Run 2 completes under the same pipeline version with 0 failures, identical people / job-function / Feature Value checksums, 0 duplicate Feature Values, and the 3 hand-entered values preserved (HumanValuesPreserved 3)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "fp-gate-c2-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "6C893578-36CC-4CC7-AFD6-483470E4D51B"
+  }
+}

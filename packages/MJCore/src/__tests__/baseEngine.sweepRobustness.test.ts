@@ -99,7 +99,7 @@ class SweepEngine extends BaseEngine<SweepEngine> {
 
 describe('the sweep compares the way the database does', () => {
     beforeEach(() => {
-        delete GetGlobalObjectStore()['___SINGLETON__LocalCacheManager'];
+        delete GetGlobalObjectStore()?.['___SINGLETON__LocalCacheManager'];
     });
 
     it('does not call a config stale forever because one held row has no timestamp', async () => {
@@ -144,7 +144,7 @@ describe('the sweep compares the way the database does', () => {
 
 describe('the sweep emits after the rebuild', () => {
     beforeEach(() => {
-        delete GetGlobalObjectStore()['___SINGLETON__LocalCacheManager'];
+        delete GetGlobalObjectStore()?.['___SINGLETON__LocalCacheManager'];
     });
 
     it('never lets a subscriber see the property before its derived state is rebuilt', async () => {
@@ -160,7 +160,7 @@ describe('the sweep emits after the rebuild', () => {
 
 describe('the sweep writes the shared slot under its lock', () => {
     beforeEach(() => {
-        delete GetGlobalObjectStore()['___SINGLETON__LocalCacheManager'];
+        delete GetGlobalObjectStore()?.['___SINGLETON__LocalCacheManager'];
     });
 
     it('routes the refreshed rows through the cross-process lock, not a bare write', async () => {

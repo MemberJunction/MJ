@@ -1,7 +1,7 @@
 import { BaseEntity, CompositeKey } from "@memberjunction/core";
 import { MJEntityDocumentEntity, MJTemplateContentEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
-import { LinkedTemplateText } from "./LinkedTemplateText";
+import { LinkedTemplateText, type TemplateContentVersion } from "./LinkedTemplateText";
 
 /**
  * Extended client-side subclass for `MJ: Entity Documents` that exposes a
@@ -101,7 +101,7 @@ export class MJEntityDocumentEntityExtended extends MJEntityDocumentEntity {
      * Records the content row the template text now matches — the server subclass calls it after saving the text into
      * `content`, so the document does not take the engine's older cached copy of that row for an edit.
      */
-    protected RecordTemplateTextSource(content: MJTemplateContentEntity): void {
+    protected RecordTemplateTextSource(content: TemplateContentVersion): void {
         this.linkedTemplateText.RecordSource(content);
     }
 

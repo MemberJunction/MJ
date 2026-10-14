@@ -91,6 +91,9 @@ interface EmbeddingModelInfo {
     APIName: string;
 }
 
+/** The fields of a tag its embedding is built from and indexed under: the text (name, description) and the index metadata. */
+export type TagEmbeddingSource = Pick<MJTagEntity, 'ID' | 'Name' | 'Description' | 'ParentID'>;
+
 /**
  * Server-only Tag Engine that wraps TagEngineBase via composition and adds
  * semantic embedding support for tag resolution.
@@ -631,7 +634,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      * Build the text string to embed for a given tag.
      * Combines name and description for richer semantic representation.
      */
-    private buildTagEmbeddingText(tag: MJTagEntity): string {
+    private buildTagEmbeddingText(tag: TagEmbeddingSource): string {
         if (tag.Description && tag.Description.trim().length > 0) {
             return `${tag.Name}: ${tag.Description}`;
         }
@@ -1207,7 +1210,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      * Uses AIEmbeddingRunner for tracked runs, pinned to the model the other tag vectors came from.
      * No-op if no vector service available.
      */
-    private async addTagToVectorService(tag: MJTagEntity): Promise<void> {
+    private async addTagToVectorService(tag: TagEmbeddingSource): Promise<void> {
         const modelInfo = this._tagEmbeddingModel;
         // A tag created or renamed through the engine is save-time work: skipped while embeddings are off.
         if (!this._tagVectorService || !this._contextUser || !modelInfo || SaveTimeAISettings.Instance.IsDisabled('Embeddings')) {
@@ -1246,7 +1249,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      *
      * @param tag - The tag entity with the updated name/description already saved
      */
-    public async ReEmbedTag(tag: MJTagEntity): Promise<void> {
+    public async ReEmbedTag(tag: TagEmbeddingSource): Promise<void> {
         await this.addTagToVectorService(tag);
     }
 

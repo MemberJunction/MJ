@@ -1,7 +1,7 @@
 import { BaseEntity, CompositeKey } from "@memberjunction/core";
 import { MJAIPromptEntity, MJTemplateContentEntity, MJTemplateParamEntity } from "@memberjunction/core-entities";
 import { compareStringsByLine, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { LinkedTemplateText } from "./LinkedTemplateText";
+import { LinkedTemplateText, type TemplateContentVersion } from "./LinkedTemplateText";
 
 @RegisterClass(BaseEntity, "MJ: AI Prompts")
 export class MJAIPromptEntityExtended extends MJAIPromptEntity {
@@ -53,7 +53,7 @@ export class MJAIPromptEntityExtended extends MJAIPromptEntity {
      * Records the content row the template text now matches — call after saving the text into `content`, so the
      * prompt does not take the engine's older cached copy of that row for an edit.
      */
-    protected RecordTemplateTextSource(content: MJTemplateContentEntity): void {
+    protected RecordTemplateTextSource(content: TemplateContentVersion): void {
         this.linkedTemplateText.RecordSource(content);
     }
 

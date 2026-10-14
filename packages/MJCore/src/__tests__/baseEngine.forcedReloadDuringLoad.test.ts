@@ -23,10 +23,12 @@ function gate(): Gate {
 }
 
 /** A client-side provider, so the load needs no context user and resolves no system user. */
-const PROVIDER = {
+const PROVIDER_MEMBERS: Pick<IMetadataProvider, 'ProviderType' | 'InstanceConnectionString'> = {
     ProviderType: ProviderType.Network,
     InstanceConnectionString: 'test://forced-reload',
-} as unknown as IMetadataProvider;
+};
+// a Pick double: the load path reads only the members picked above (LoadConfigs is overridden)
+const PROVIDER = PROVIDER_MEMBERS as IMetadataProvider;
 
 /** Counts loads and holds each one on a gate the test releases. */
 class GatedEngine extends BaseEngine<GatedEngine> {

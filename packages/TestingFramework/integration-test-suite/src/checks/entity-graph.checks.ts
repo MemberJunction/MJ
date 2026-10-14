@@ -19,7 +19,11 @@
  * ON REGISTERING A SUBCLASS FOR A CORE ENTITY. `DeclareRelatedRecords` is `protected` — a
  * declaration can only live on a subclass — so this bundle registers {@link GraphTestListEntity}
  * for `MJ: Lists` process-wide, and every other bundle in the same `mj test` process therefore
- * gets it too. That is deliberate and safe: the collection is `Load: 'explicit'`, so it is empty
+ * gets it too. It extends the server class `MJListEntityServer` rather than the generated
+ * `MJListEntity`, so it sits in the registered inheritance chain: the ClassFactory treats it as a
+ * subclass override (no collision), and every other bundle keeps the server class's row-level Delete
+ * authorization instead of losing it to a sibling registration. Adding the collection is deliberate and
+ * safe: the collection is `Load: 'explicit'`, so it is empty
  * unless a check fills it, an empty collection contributes nothing to `Dirty`, and a save plan
  * with one node takes the ordinary single-row path byte-for-byte. EG1 asserts exactly that
  * inertness rather than assuming it — if declaring a collection ever started charging entities
@@ -31,7 +35,8 @@
  */
 import { BaseEntity, RunView } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { MJListEntity, MJListDetailEntity, MJActionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
+import { MJListDetailEntity, MJActionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
+import { MJListEntityServer } from '@memberjunction/core-entities-server';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -49,7 +54,7 @@ interface MJActionParamLike { ID: string }
  * bundle proves is what an adopter would actually write.
  */
 @RegisterClass(BaseEntity, LIST_ENTITY)
-export class GraphTestListEntity extends MJListEntity {
+export class GraphTestListEntity extends MJListEntityServer {
     public readonly Details = this.DeclareRelatedRecords<MJListDetailEntity>({
         Name: 'Details',
         RelatedEntity: LIST_DETAIL_ENTITY,
@@ -473,7 +478,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('entity-graph', {
         // FK-safe: details reference lists, so they go first. Rows a check already deleted simply
         // fail their Load and are skipped — the accumulators deliberately over-approximate.
         await sweepEntityIds<MJListDetailEntity>(ctx, LIST_DETAIL_ENTITY, f.ListDetailIds);
-        await sweepEntityIds<MJListEntity>(ctx, LIST_ENTITY, f.ListIds);
+        await sweepEntityIds<MJListEntityServer>(ctx, LIST_ENTITY, f.ListIds);
         fixture = undefined;
     }
 });

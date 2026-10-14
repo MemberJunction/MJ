@@ -7,6 +7,7 @@ import {
 import { DatabaseReference, DatabaseReferenceScanner } from './database-reference-scanner';
 import { EntityForeignKeyHelper } from './entity-foreign-key-helper';
 import { SyncEngine } from './sync-engine';
+import { SQLTextLiteral } from './sql-text-literal';
 /**
  * Complete audit result for deletion operations
  */
@@ -287,7 +288,7 @@ export class DeletionAuditor {
 
         for (let i = 0; i < keys.length; i += DeletionAuditor.MAX_IN_CLAUSE) {
             const chunk = keys.slice(i, i + DeletionAuditor.MAX_IN_CLAUSE);
-            const inList = chunk.map(v => `'${v.replace(/'/g, "''")}'`).join(', ');
+            const inList = SQLTextLiteral.List(chunk);
             try {
                 const result = await rv.RunView({
                     EntityName: entityName,

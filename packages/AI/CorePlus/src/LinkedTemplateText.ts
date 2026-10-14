@@ -6,6 +6,9 @@ import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 /** The Template Content fields {@link LinkedTemplateText.ReadRenderedText} reads: the selection's fields and the text. */
 type RenderedContentRow = Pick<MJTemplateContentEntity, 'ID' | 'Type' | 'Priority' | '__mj_CreatedAt' | 'TemplateText'>;
 
+/** The Template Content fields that identify a version of a row: its ID and its `__mj_UpdatedAt`. */
+export type TemplateContentVersion = Pick<MJTemplateContentEntity, 'ID' | '__mj_UpdatedAt'>;
+
 /** The content row a template text came from, and that row's `__mj_UpdatedAt` (epoch ms) at the time. */
 interface TemplateTextSource {
     ContentID: string;
@@ -83,12 +86,12 @@ export class LinkedTemplateText {
      * Records the content row the text now matches — call after saving the text into `content`, so the entity does not
      * take the engine's older cached copy of that row for an edit.
      */
-    public RecordSource(content: MJTemplateContentEntity): void {
+    public RecordSource(content: TemplateContentVersion): void {
         this.source = { ContentID: content.ID, UpdatedAt: LinkedTemplateText.updatedAt(content) };
     }
 
     /** True when `content` is not the row the text came from, or is a later version of it. */
-    protected IsNewerThanSource(content: MJTemplateContentEntity): boolean {
+    protected IsNewerThanSource(content: TemplateContentVersion): boolean {
         if (!this.source || !UUIDsEqual(this.source.ContentID, content.ID)) {
             return true;
         }
@@ -159,7 +162,7 @@ export class LinkedTemplateText {
         return entity.ProviderToUse as unknown as IMetadataProvider | undefined;
     }
 
-    private static updatedAt(content: MJTemplateContentEntity): number {
+    private static updatedAt(content: TemplateContentVersion): number {
         return content.__mj_UpdatedAt ? new Date(content.__mj_UpdatedAt).getTime() : 0;
     }
 }

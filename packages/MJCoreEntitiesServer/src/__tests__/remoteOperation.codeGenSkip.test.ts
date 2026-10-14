@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+const { stubViews } = vi.hoisted(() => ({
+    /** Each stub base, by the instance the server class built on it: the test's typed view of the stub's members. */
+    stubViews: new WeakMap<object, MockedBaseStub>(),
+}));
+
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
     return {
@@ -65,6 +70,10 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
             ['Description', { Name: 'Description', Dirty: false }],
         ]);
 
+        constructor() {
+            stubViews.set(this, this);
+        }
+
         public GetFieldByName(name: string): StubField | undefined {
             return this.fields.get(name);
         }
@@ -96,14 +105,23 @@ interface MockedBaseStub {
     IsSaved: boolean;
 }
 
+/** The mocked base under `entity`, through which a test sets what the stub records. */
+function stubOf(entity: MJRemoteOperationEntityServer): MockedBaseStub {
+    const stub = stubViews.get(entity);
+    if (!stub) {
+        throw new Error('the entity was not built on the mocked base');
+    }
+    return stub;
+}
+
 /** Marks a field dirty (or clean) on the mocked base. */
 function setFieldDirty(entity: MJRemoteOperationEntityServer, name: string, dirty: boolean): void {
-    (entity as unknown as MockedBaseStub).SetFieldDirty(name, dirty);
+    stubOf(entity).SetFieldDirty(name, dirty);
 }
 
 /** Sets whether the mocked base counts as already saved (an update) or not (a create). */
 function setSaved(entity: MJRemoteOperationEntityServer, saved: boolean): void {
-    (entity as unknown as MockedBaseStub).IsSaved = saved;
+    stubOf(entity).IsSaved = saved;
 }
 
 

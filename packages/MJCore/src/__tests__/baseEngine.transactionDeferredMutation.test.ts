@@ -82,6 +82,14 @@ function createdItem(id: string, provider: DatabaseProviderBase): BaseEntityEven
 }
 
 /** What BaseEntity.NewRecord() does to the deleted object: same reference, new primary key. */
+/** The record an event was raised for; every event these tests raise carries one. */
+function recordOf(event: BaseEntityEvent): BaseEntity {
+    if (!event.baseEntity) {
+        throw new Error('the event carries no record');
+    }
+    return event.baseEntity;
+}
+
 function resetToNewRecord(entity: BaseEntity, newId: string): void {
     const mutable = entity as unknown as { ID: string; PrimaryKey: { KeyValuePairs: { FieldName: string; Value: unknown }[] } };
     mutable.ID = newId;
@@ -123,11 +131,11 @@ describe('BaseEngine — cache mutations follow the saving transaction', () => {
     // matched on the live entity found nothing, so every committed delete left its row cached.
     it('removes a row deleted inside a transaction once it commits, though the entity was reset since', async () => {
         const engine = engineCachingItems();
-        const cached = createdItem('deleted-row', providerAtDepth(0).provider).baseEntity;
+        const cached = recordOf(createdItem('deleted-row', providerAtDepth(0).provider));
         engine._items = [cached];
         const tx = providerAtDepth(1);
 
-        const deleting = createdItem('deleted-row', tx.provider).baseEntity;
+        const deleting = recordOf(createdItem('deleted-row', tx.provider));
         await engine.Handle({ type: 'delete', baseEntity: deleting, payload: { OldValues: { ID: 'deleted-row' } } } as BaseEntityEvent);
         resetToNewRecord(deleting, 'regenerated-by-NewRecord');
         await tx.commit();
@@ -144,7 +152,7 @@ describe('BaseEngine — cache mutations follow the saving transaction', () => {
         const created = createdItem('short-lived', tx.provider);
         await engine.Handle(created);
         await engine.Handle({ type: 'delete', baseEntity: created.baseEntity, payload: { OldValues: { ID: 'short-lived' } } } as BaseEntityEvent);
-        resetToNewRecord(created.baseEntity, 'regenerated-by-NewRecord');
+        resetToNewRecord(recordOf(created), 'regenerated-by-NewRecord');
         await tx.commit();
 
         expect(ids(engine)).toEqual([]);

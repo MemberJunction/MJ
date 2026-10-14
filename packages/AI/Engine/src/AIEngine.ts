@@ -1113,7 +1113,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      * @throws EmbeddingUnavailableError when no local embedding model is configured
      * @throws Error when no vector or model comes back ({@link EmbeddingBackfill.RequireLocalVector})
      */
-    public static async EmbedTextLocalForEntity(entity: BaseEntity, textToEmbed: string): Promise<SimpleEmbeddingResult> {
+    public static async EmbedTextLocalForEntity(entity: Pick<BaseEntity, 'ContextCurrentUser'>, textToEmbed: string): Promise<SimpleEmbeddingResult> {
         const engine = AIEngine.Instance;
         await engine.Config(false, entity.ContextCurrentUser);
         return engine.embedTextLocalRequired(textToEmbed);

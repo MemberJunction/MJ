@@ -257,12 +257,12 @@ fixes testable by the five Phase 7 gates.
 | F-FP-2 | S2 | Re-classifying anyone who already has job functions fails (`UQ_PersonJobFunction_Person_JobFunction`), and every later run fails (run 12: 27/27 failed, 26 unique-key + 1 FK) until the hash reverts or rows are cleaned (Exp 86). | A2: idempotent write-back — reconcile child rows on (Person, JobFunction) in one transaction with the field write, parent field saved only after the children succeed. | M2.1 unit tests; gate C1 → C2.3 (run 2: 0 duplicate rows, identical checksums). |
 | F-FP-3 | S2 | AI-derived job functions are stamped `Manual` (39/39), and a human seniority edit is overwritten by the next re-derivation even when the record fails (person `FBAF4471…` Board Member → Manager in a failed run, Exp 86). | A3 + A2 overwrite half: stamp AI rows `Derived`; record human values as `Source='Human'` Feature Values and never overwrite them unless the run is told to (D-017). | M2.1, M2.2 unit tests; gate C1 → C2.3 (0 human values overwritten). |
 | F-FP-4 | S2 | An expired cache entry is never refreshed: `BatchLookup` skips it, `Store` always inserts and hits `UQ_FeatureValueCache_Scoped`, the error is logged and swallowed, the record reports Succeeded, and each new person with that title pays another call (3 prompt runs for "Owner", `FeatureValueCacheID` NULL; Exp 87). | A4: `Store` upserts on the key (refreshing an expired row in place), a failed store is surfaced as a record warning, the Feature Value links its cache row. | M1.4 unit tests; gate C1 → C2.1 (an expired entry is recomputed and refreshed in place). |
-| F-FP-5 | S3 | The same title with different case or spaces gets its own cache key and LLM call ("Director of Sales" `f4eb334b…` vs " director of sales " `0efbf5b5…`; 2 calls, cache 13 → 15; wrong-case KeyFields give `null` for every title; Exp 88). | A4: normalise the key (NFC, trim, collapse whitespace, case-fold) and resolve key-field names case-insensitively. | M1.2 unit tests; IT113 check FP3. |
+| F-FP-5 | S3 | The same title with different case or spaces gets its own cache key and LLM call ("Director of Sales" `f4eb334b…` vs " director of sales " `0efbf5b5…`; 2 calls, cache 13 → 15; wrong-case KeyFields give `null` for every title; Exp 88). | A4: normalise the key (NFC, trim, collapse whitespace, case-fold) and resolve key-field names case-insensitively. | M1.2 unit tests; IT123 check FP3. |
 | F-FP-6 | S2 | A prompt-template edit does nothing until MJAPI restarts (run 8 skipped on the old hash; `MJAIPromptEntityExtended` loads `TemplateText` once; the AI engine never sees `MJ: Template Contents` saves), then re-runs every person, who then fail (runs 11–13; Exp 89). | A5: reload template text on save (Template engine refresh + prompt read-through + compiled-template cache keyed by text); a version change triggers a controlled backfill (version registry, M6.1), not a surprise re-derivation. | M1.6 unit tests + runtime; M6.1 tests; gate C1 → C2.1 (template edit, no restart, 100% recomputed). |
 | F-FP-7 | S2 | Nothing checks the classifier's answer: an injected title returned `"SeniorityLevel": "Grand Poobah"` and a non-existent function ID; it was stored in Feature Values and cache, the person's seniority went NULL, and run 14 served the poisoned cache row (Exp 90). | A6: constraints on both outputs (seniority in the taxonomy, every function ID exists) enforced by `validateOutputs`; a violation fails the record with nothing written or cached, and is counted as rejected. | M3.1 unit tests; gate C1 → C2.2. |
 | F-FP-8 | S3 | The classifier's reasoning never reaches the Reasoning columns (64 Feature Value and 17 cache rows have none although 19/19 results carry `"Reasoning"`; the code reads lowercase `reasoning`; `CaptureReasoning` is never read), and Confidence is always NULL (Exp 90). | A7: read reasoning case-insensitively, honour `CaptureReasoning`, read per-output confidence from `ConfidenceRef`. | M3.4 unit tests; §7 runtime query (0 NULL Reasoning/Confidence on processed rows). |
-| F-FP-9 | S2 | A dry-run "preview" calls the LLM, writes cache and history rows (cache 32 → 33, Feature Values 178 → 182) and reports success for a record whose real write fails on a foreign key (Exp 91). | A8: thread the dry-run flag into the processor context; no cache, history, watermark, person or child writes; cap the preview sample; report what the real write would do, including FK failures. | M4.1, M4.2 unit tests; IT113 check FP6 (counters identical); `fp-gate-c2-2` check C2.2.d (FK preview); M4.1 runtime counters. |
-| F-FP-10 | S2 | The circuit breaker counts skipped records as processed (`errorRate = Error / Processed`), so runs 9, 10 and 14 with every attempted record failed reported Completed (27/0/2/25; Exp 93). | A9: compute the error rate and the terminal status over attempted records (processed − skipped); a Feature Pipeline run with failed or rejected records ends Failed. | M4.3 unit tests (27 people, 25 skipped, 2 failed → Failed); IT113 check FP7. |
+| F-FP-9 | S2 | A dry-run "preview" calls the LLM, writes cache and history rows (cache 32 → 33, Feature Values 178 → 182) and reports success for a record whose real write fails on a foreign key (Exp 91). | A8: thread the dry-run flag into the processor context; no cache, history, watermark, person or child writes; cap the preview sample; report what the real write would do, including FK failures. | M4.1, M4.2 unit tests; IT123 check FP6 (counters identical); `fp-gate-c2-2` check C2.2.d (FK preview); M4.1 runtime counters. |
+| F-FP-10 | S2 | The circuit breaker counts skipped records as processed (`errorRate = Error / Processed`), so runs 9, 10 and 14 with every attempted record failed reported Completed (27/0/2/25; Exp 93). | A9: compute the error rate and the terminal status over attempted records (processed − skipped); a Feature Pipeline run with failed or rejected records ends Failed. | M4.3 unit tests (27 people, 25 skipped, 2 failed → Failed); IT123 check FP7. |
 | F-FP-12 | S2 | The classifier ships with no accuracy eval or change gate: function strict 39/52 = 0.7500 [0.6179, 0.8477] vs the labeler band 41/52 = 0.7885; seniority 48/52; 0 eval assets, 0 `MJ: Tests` rows mention the prompt (Exp 95–96). | A12: golden set evaluated under `MJ: Tests` (`FeaturePipelineGoldenSetDriver`); a stored result at or above the declared threshold is required before a version goes live (`MJ: Feature Pipeline Versions`). | M6.1, M6.2 unit tests; gate C1 → C2.5. |
 | F-FP-13 | S2 | The Gemini driver turns temperature 0 into 0.5 (`params.temperature \|\| 0.5`, `Gemini/src/index.ts:325,820`); Vertex inherits; Bedrock uses `\|\| 0.7` (8 sites), so MJ's two temperature-0 prompts never run at 0 on those routes (probe: 0 → 0.5; Exp 99). | A11: pass temperature through (`??`); a strict call refuses a parameter the driver would change or drop (`ParameterFidelity`). | M5.1–M5.3 unit tests; gate C1 → C3.3. |
 | F-FP-14 | S3 | Job titles are HTML-escaped before the model sees them: 6/156 rendered prompts contain `&amp;` ("Affineur & Owner"); `TemplateEngine.ts` `autoescape: true` (Exp 100). | A10: render prompt templates without HTML auto-escaping. | M3.3 unit tests (156/156-equivalent: `&` survives). |
@@ -8193,7 +8193,7 @@ label-quality record (M6.4 Step 3f) and the golden-set run are recorded.
 
 **Outcome:** the five gates exist as `MJ: Tests` rows named exactly as in `reference/gates.json`, run by deterministic
 check bundles against the installed job-title pipeline (cloned onto a stub driver and 52 fixture people), and pass; an
-MJ-core-only deterministic bundle (IT113) joins the blocking integration suite; a live bundle measures the classifier's
+MJ-core-only deterministic bundle (IT123) joins the blocking integration suite; a live bundle measures the classifier's
 3-run consistency; the guides describe the new behaviour; the PR is reconciled with PR 2's gate registry.
 
 **Prerequisites for the gate bundles:** bizapps-common installed with the companion branch through M6 (§2.4); MJ
@@ -8216,7 +8216,7 @@ singleton, `FeaturePipelineGateFixtures.{Setup, Teardown, Run, Summary, Checksum
 DeleteWhere, SaveBizAppsRow, UpdateBizAppsRows, LookupID}` (bizapps-common rows through the entity layer, ruling P1-5), bundle `fp-gate-c2-1`, test `C1 → C2.1`
 (`8787F740-F086-4BB7-862E-DE23B9317374`), suite `Predictive Studio Gates — Feature Pipelines` (`226B334D-3CC1-4424-91D4-3B8A5425BD9C`).
 
-- [ ] Step 1: Write the failing test — the gate row and an empty bundle registration so the run fails for the right
+- [x] Step 1: Write the failing test — the gate row and an empty bundle registration so the run fails for the right
   reason. Add the metadata row `.gate-C1-C2.1.json`:
   ```json
   {
@@ -8252,14 +8252,14 @@ DeleteWhere, SaveBizAppsRow, UpdateBizAppsRows, LookupID}` (bizapps-common rows 
   ]
   ```
   Push: `pnpm mj sync push --dir=metadata-optional/integration-test --ci` (restore sync blocks).
-- [ ] Step 2: Run: `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "C1 → C2.1"`; expected: `Failed` with
+- [x] Step 2: Run: `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "C1 → C2.1"`; expected: `Failed` with
   `Unknown integration check bundle 'fp-gate-c2-1'`.
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
   1. `testing-integration/src/check.ts` — add next to the other fixture types and slots:
      ```ts
-     /** Fixture of the Feature Pipeline gate bundles (fp-gate-*) and IT113. */
+     /** Fixture of the Feature Pipeline gate bundles (fp-gate-*) and IT123. */
      export interface FeaturePipelineGateFixture {
-         /** The fixture Record Process (a clone of the job-title pipeline on the stub driver, or IT113's core pipeline). */
+         /** The fixture Record Process (a clone of the job-title pipeline on the stub driver, or IT123's core pipeline). */
          RecordProcessID: string;
          PromptID: string;
          PromptModelID: string;
@@ -8368,7 +8368,7 @@ DeleteWhere, SaveBizAppsRow, UpdateBizAppsRows, LookupID}` (bizapps-common rows 
          /** Normalised inputs answered wrongly in 'degraded' mode (C2.5). */
          public Degraded = new Map<string, StubAnswer>();
          public Mode: 'golden' | 'degraded' = 'golden';
-         /** Answer for inputs with no table entry (IT113). Undefined = fail the record. */
+         /** Answer for inputs with no table entry (IT123). Undefined = fail the record. */
          public Fallback: StubAnswer | undefined;
          /** The inputs the driver was asked about, in order. */
          public Calls: string[] = [];
@@ -9022,14 +9022,14 @@ DeleteWhere, SaveBizAppsRow, UpdateBizAppsRows, LookupID}` (bizapps-common rows 
      paste-ready `EXPECTED_BUNDLE_COUNTS` and `EXPECTED_MUTATION_GATED`; confirm the only differences are the new
      bundle(s) and their check IDs, paste, and bump the bundle-count assertion (`toHaveLength(<n>)`) by the number of
      bundles added.
-- [ ] Step 4: Run: `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "C1 → C2.1"` → `Passed`, 5/5 checks;
+- [x] Step 4: Run: `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "C1 → C2.1"` → `Passed`, 5/5 checks;
   the log shows `recomputed 52/52 (100%)` three times. `cd packages/TestingFramework/integration-test-suite && pnpm test` → all pass.
   Mutation check (§13, S1; live-DB checks are the only way to expose these guards, so the gate run is the test),
   recorded in §11: (a) make the cache lookup ignore `PromptVersionHash` (M1.3) → G2 fails (`Calls` 0); (b) ignore
   `AIModelID` → G3 fails; (c) ignore `ParametersHash` → G4 fails; (d) make `Store` insert instead of refreshing an
   expired row (M1.4) → G5 fails ("no duplicate cache row"). Each mutation is applied to the M1 code, run once, and
   reverted with a targeted edit.
-- [ ] Step 5: Runtime verification (teardown left nothing behind):
+- [x] Step 5: Runtime verification (teardown left nothing behind):
   ```bash
   sq "SELECT (SELECT COUNT(*) FROM __mj_BizAppsCommon.Person WHERE ID LIKE '0F1A7E00-0000-4000-8001-%'), (SELECT COUNT(*) FROM __mj.RecordProcess WHERE Name LIKE N'FP Gate%'), (SELECT COUNT(*) FROM __mj.AIPrompt WHERE Name LIKE N'FP Gate%'), (SELECT COUNT(*) FROM __mj.FeaturePipelineType WHERE Name IN (N'Feature Pipeline Gate Stub', N'FP IT Stub'))"   # 0|0|0|0
   sq "SELECT TOP 1 Status, PassedChecks, TotalChecks FROM __mj.TestRun r JOIN __mj.Test t ON t.ID=r.TestID WHERE t.Name=N'C1 → C2.1' ORDER BY r.StartedAt DESC"   # Passed|5|5
@@ -9046,12 +9046,12 @@ DeleteWhere, SaveBizAppsRow, UpdateBizAppsRows, LookupID}` (bizapps-common rows 
 `C1 → C2.3` (`6C893578-36CC-4CC7-AFD6-483470E4D51B`); suite members `7311A216-EE5B-4BE7-BCA4-4DB22AE6D5EA` (seq 2),
 `C149F05C-405E-42E9-878E-4F4E2DB165B6` (seq 3).
 
-- [ ] Step 1: Write the failing tests — the two gate rows (same shape as `.gate-C1-C2.1.json`; descriptions carry the
+- [x] Step 1: Write the failing tests — the two gate rows (same shape as `.gate-C1-C2.1.json`; descriptions carry the
   verbatim thresholds of §4.1; `Tags` `G7.2`/`criterion:C2.2` and `G7.3`/`criterion:C2.3`; `checks` `fp-gate-c2-2` and
   `fp-gate-c2-3`), and the two suite members (`Sequence` 2 and 3). Push them.
-- [ ] Step 2: Run `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "C1 → C2.2"` and `"C1 → C2.3"`; expected:
+- [x] Step 2: Run `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "C1 → C2.2"` and `"C1 → C2.3"`; expected:
   `Unknown integration check bundle`.
-- [ ] Step 3: Implement `fp-gate-c2-2.checks.ts`:
+- [x] Step 3: Implement `fp-gate-c2-2.checks.ts`:
   ```ts
   /**
    * Gate G7.2 "C1 → C2.2": forced out-of-taxonomy job-title outputs are rejected and counted on the run, with 0 stored
@@ -9216,12 +9216,13 @@ DeleteWhere, SaveBizAppsRow, UpdateBizAppsRows, LookupID}` (bizapps-common rows 
   ```
   (`?? null` on `PipelineVersion` is deliberate: it is a number, and only an absent pin means "no version".)
   Export both from `src/index.ts`; rebuild; update the registry count test as in M7.1.
-- [ ] Step 4: Run both gates → `Passed` (C2.2: 3/3 checks; C2.3: 3/3 checks); integration-suite unit tests pass.
+- [x] Step 4: Run both gates → `Passed` (C2.2: 3/3 checks; C2.3: 3/3 checks); integration-suite unit tests pass.
   Mutation check (§13, S1; the gate run is the test), recorded in §11: (a) drop M4.3's `FeaturePipeline` → `Failed`
   rule → C2.2.G1 fails; (b) store the cache entry before validation (M3.1) → C2.2.G2 fails (`Cache`); (c) drop M4.2's
-  dry-run branch in `ApplyWriteBack` → C2.2.d fails; (d) drop M2.1's unchanged short-circuit → C2.3.G3 fails
-  (checksums or duplicates); (e) drop M2.2's human guard → C2.3.G3 fails (`B: 2, M: 1`).
-- [ ] Step 5: Runtime verification: the M7.1 Step 5 leftover query returns `0|0|0|0` after each gate; record the
+  dry-run branch in `ApplyWriteBack` → C2.2.d fails; (d) drop M2.1's unchanged Feature Value short-circuit → C2.3.G3 fails (Record Changes, ruling M7.2-RC; the
+  child-row and field short-circuits are equivalent mutants: BaseEntity does not save an unchanged row); (d3) stop matching
+  child rows by their reconcile key → C2.3.G3 fails (run 2 unique-key failures); (e) drop M2.2's human guard → C2.3.G3 fails (`B: 2, M: 1`).
+- [x] Step 5: Runtime verification: the M7.1 Step 5 leftover query returns `0|0|0|0` after each gate; record the
   C2.2 run's `ResultSummary` (`RejectedInvalid: 3`) and C2.3's checksums in §11.
 
 #### Task M7.3: Gates C1 → C2.5 and C1 → C3.3
@@ -9234,10 +9235,10 @@ DeleteWhere, SaveBizAppsRow, UpdateBizAppsRows, LookupID}` (bizapps-common rows 
 **Interfaces:** Produces bundles `fp-gate-c2-5` (mutation), `fp-gate-c3-3` (deterministic, no DB writes); tests
 `C1 → C2.5` (`5903A7DA-BEFA-4312-ADA0-613DE32A11C8`), `C1 → C3.3` (`C5D27151-E57A-404D-9B72-61F0134C65E3`).
 
-- [ ] Step 1: Write the failing tests — the two gate rows (`C1 → C2.5`: tier `mutation`; `C1 → C3.3`: tier
+- [x] Step 1: Write the failing tests — the two gate rows (`C1 → C2.5`: tier `mutation`; `C1 → C3.3`: tier
   `deterministic`) and suite members; push.
-- [ ] Step 2: Run both → `Unknown integration check bundle`.
-- [ ] Step 3: Implement `fp-gate-c2-5.checks.ts`:
+- [x] Step 2: Run both → `Unknown integration check bundle`.
+- [x] Step 3: Implement `fp-gate-c2-5.checks.ts`:
   ```ts
   /**
    * Gate G7.5 "C1 → C2.5": every active pipeline version has a stored golden-set result at or above its declared
@@ -9483,39 +9484,39 @@ DeleteWhere, SaveBizAppsRow, UpdateBizAppsRows, LookupID}` (bizapps-common rows 
   If `gh pr view 5185 --json state` is `MERGED`, add check `G5`: a strict call to `gemini-3.8-flash` with
   `temperature: 0` raises `ParameterFidelityError` (the driver no longer sends temperature to 3.6+), and update the
   registry count. Export both bundles from `src/index.ts`; rebuild; update the count table.
-- [ ] Step 4: Run both gates → `Passed` (C2.5: 3/3, C3.3: 4/4); integration-suite unit tests pass. Mutation check
+- [x] Step 4: Run both gates → `Passed` (C2.5: 3/3, C3.3: 4/4); integration-suite unit tests pass. Mutation check
   (§13, S1; the gate run is the test), recorded in §11: (a) `ResolveGated` activates without a result → C2.5.G1 fails
   ("refused"); (b) `GetActivationProblems` returns `[]` → C2.5.G2 fails ("refused by the save check"); (c) Gemini's
   `ResolveTemperature` back to `|| 0.5` → C3.3.G1 and G2 fail; (d) Bedrock back to `|| 0.7` → C3.3.G3 fails; (e) drop
   the strict throw → C3.3.G4 fails.
-- [ ] Step 5: Runtime verification:
+- [x] Step 5: Runtime verification:
   ```bash
   sq "SELECT COUNT(*) FROM __mj.FeaturePipelineVersion WHERE Status='Active' AND Gated=1 AND (GoldenSetTestRunID IS NULL OR ResultValue < Threshold)"   # 0
   sq "SELECT t.Name, r.Status, r.PassedChecks, r.TotalChecks FROM __mj.TestRun r JOIN __mj.Test t ON t.ID=r.TestID WHERE t.Name IN (N'C1 → C2.5', N'C1 → C3.3') AND r.StartedAt > DATEADD(hour,-1,SYSDATETIMEOFFSET())"
   #   C1 → C2.5|Passed|3|3 ; C1 → C3.3|Passed|4|4
   ```
 
-#### Task M7.4: IT113 (MJ-core deterministic), the live consistency bundle, the full suite
+#### Task M7.4: IT123 (MJ-core deterministic), the live consistency bundle, the full suite
 
 **Files:** Create `.../integration-test-suite/src/checks/feature-pipeline-core.checks.ts`,
 `.../src/checks/fp-live-jobtitle.checks.ts`,
-`metadata-optional/integration-test/tests/integration/.IT113-feature-pipeline-core.json`,
-`metadata-optional/integration-test/tests/gates/.IT114-job-title-consistency-live.json` · Modify
-`metadata-optional/integration-test/test-suites/.integration-suite.json` (IT113 member), the PR 1 suite (IT114 member),
+`metadata-optional/integration-test/tests/integration/.IT123-feature-pipeline-core.json`,
+`metadata-optional/integration-test/tests/gates/.IT124-job-title-consistency-live.json` · Modify
+`metadata-optional/integration-test/test-suites/.integration-suite.json` (IT123 member), the PR 1 suite (IT124 member),
 `.../src/index.ts`, `.../src/__tests__/check-registry.test.ts`
 
-**Interfaces:** Produces bundle `feature-pipeline-core` (IT113, `0F283596-E1C9-4CF1-B55D-17CDCD446CE9`, deterministic
+**Interfaces:** Produces bundle `feature-pipeline-core` (IT123, `0F283596-E1C9-4CF1-B55D-17CDCD446CE9`, deterministic
 suite member `CB5BABC8-DCD5-412A-9F6B-29ABF1D9B320`, Sequence 49, server transport, tier `mutation`) and
-`fp-live-jobtitle` (IT114, `123CB01B-B7EE-4135-97B6-DBA73322FE46`, PR 1 suite member `86797EFC-29B6-4ABC-BC7F-BFA1FF6A096E`,
+`fp-live-jobtitle` (IT124, `123CB01B-B7EE-4135-97B6-DBA73322FE46`, PR 1 suite member `86797EFC-29B6-4ABC-BC7F-BFA1FF6A096E`,
 Sequence 6, tier `live-model`).
 
-- [ ] Step 1: Write the failing tests — the IT113 and IT114 rows and memberships; push; run
-  `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "IT113 - Feature Pipeline Key, Cache and Versions (core)"`.
-- [ ] Step 2: Expected: `Unknown integration check bundle 'feature-pipeline-core'`.
-- [ ] Step 3: Implement `feature-pipeline-core.checks.ts` (MJ core only; every check `RequiresMutation: true`):
+- [x] Step 1: Write the failing tests — the IT123 and IT124 rows and memberships; push; run
+  `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "IT123 - Feature Pipeline Key, Cache and Versions (core)"`.
+- [x] Step 2: Expected: `Unknown integration check bundle 'feature-pipeline-core'`.
+- [x] Step 3: Implement `feature-pipeline-core.checks.ts` (MJ core only; every check `RequiresMutation: true`):
   ```ts
   /**
-   * IT113 'feature-pipeline-core': the Feature Value key, Dedup Cache, version gate, dry run and breaker against MJ core
+   * IT123 'feature-pipeline-core': the Feature Value key, Dedup Cache, version gate, dry run and breaker against MJ core
    * tables only (no bizapps-common), with the stub driver — deterministic, self-cleaning, no model calls.
    */
   import { RunView } from '@memberjunction/core';
@@ -9528,18 +9529,19 @@ Sequence 6, tier `live-model`).
   import { InferProcessor, RecordSetProcessor } from '@memberjunction/record-set-processor';
   import { ArraySource, type ProcessRunResult, type RecordRef, type TriggeredByValue } from '@memberjunction/record-set-processor-base';
   import { Assert, AssertEqual, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration';
-  import { FeaturePipelineGateFixtures as F, FIXTURE_NAME_PREFIX } from './fp-gates/fp-gate-fixture';
+  import { FeaturePipelineGateFixtures as F } from './fp-gates/fp-gate-fixture';
   import { FeaturePipelineGateStubTable } from './fp-gates/feature-pipeline-gate-stub-driver';
 
-  const NAME = `${FIXTURE_NAME_PREFIX}IT113`;
-  const TYPE = 'FP IT Stub';
+  /** Every row the bundle creates is named from `it123-` (records, prompt, template, Record Process, stub type). */
+  const NAME = 'it123-feature-pipeline-core';
+  const TYPE = 'it123-stub';
   const stub = (): FeaturePipelineGateStubTable => FeaturePipelineGateStubTable.Instance;
 
   /** One row of an MJ core read the checks need. */
   async function firstRow<T>(ctx: IntegrationCheckContext, entity: string, filter: string, fields: string[]): Promise<T> {
       const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<T>({ EntityName: entity, ExtraFilter: filter, Fields: fields, ResultType: 'simple', MaxRows: 1, OrderBy: 'Name' }, ctx.User);
       const row = res.Success ? res.Results?.[0] : undefined;
-      if (!row) throw new Error(`IT113 setup: no ${entity} row for ${filter}${res.Success ? '' : `: ${res.ErrorMessage}`}`);
+      if (!row) throw new Error(`IT123 setup: no ${entity} row for ${filter}${res.Success ? '' : `: ${res.ErrorMessage}`}`);
       return row;
   }
 
@@ -9547,14 +9549,14 @@ Sequence 6, tier `live-model`).
       Assert(await e.Save(), `${what}: ${e.LatestResult?.CompleteMessage}`);
   }
 
-  /** The IT113 pipeline: a stub type, a prompt bound to one active LLM, and a Record Process on `MJ: Entities`. */
+  /** The IT123 pipeline: a stub type, a prompt bound to one active LLM, and a Record Process on `MJ: Entities`. */
   async function setup(ctx: IntegrationCheckContext): Promise<void> {
       await teardown(ctx);
       const md = ctx.Provider;
       const entity = md.EntityByName('MJ: Entities');
-      if (!entity) throw new Error('IT113 setup: MJ: Entities is not in metadata');
+      if (!entity) throw new Error('IT123 setup: MJ: Entities is not in metadata');
       const type = await md.GetEntityObject<MJFeaturePipelineTypeEntity>('MJ: Feature Pipeline Types', ctx.User);
-      type.NewRecord(); type.Name = TYPE; type.DriverClass = 'FeaturePipelineGateStubDriver'; type.Status = 'Active'; type.Description = 'IT113 stub';
+      type.NewRecord(); type.Name = TYPE; type.DriverClass = 'FeaturePipelineGateStubDriver'; type.Status = 'Active'; type.Description = 'IT123 stub';
       await save(type, 'type');
       await AIEngine.Instance.Config(false, ctx.User);
       const llm = await firstRow<{ ID: string }>(ctx, 'MJ: AI Models', `AIModelType = 'LLM' AND IsActive = 1`, ['ID', 'Name']);
@@ -9567,7 +9569,7 @@ Sequence 6, tier `live-model`).
       pm.NewRecord(); pm.PromptID = prompt.ID; pm.ModelID = llm.ID; pm.Priority = 1; pm.Status = 'Active';
       await save(pm, 'prompt model');
       const spec: DataFeatureSpec = {
-          Name: NAME, Description: 'IT113', PromptID: prompt.ID, PipelineType: TYPE, Context: { Fields: ['Name'] },
+          Name: NAME, Description: 'IT123', PromptID: prompt.ID, PipelineType: TYPE, Context: { Fields: ['Name'] },
           Unattended: { AutoEvaluate: false, AutoBackfill: false },   // FP5 asserts the hold; the version steward must not act between its steps
           Caching: { Cacheable: true, KeyFields: ['Name'], TTLSeconds: 3600, Scope: 'pipeline' },
           Outputs: [{ Name: 'Label', Ref: '$.Label', Constraint: { Type: 'enum', Values: ['A', 'B'], OnViolation: 'fail' }, Target: { Mode: 'field', EntityFieldName: 'Description' } }],
@@ -9584,7 +9586,7 @@ Sequence 6, tier `live-model`).
       await AIEngine.Instance.Config(true, ctx.User);
   }
 
-  /** Deletes the IT113 rows through BaseEntity (the fixture's DeleteWhere), children first. Best-effort. */
+  /** Deletes the IT123 rows through BaseEntity (the fixture's DeleteWhere), children first. Best-effort. */
   async function teardown(ctx: IntegrationCheckContext): Promise<void> {
       try {
           const rp = `RecordProcessID IN (SELECT ID FROM [__mj].[vwRecordProcesses] WHERE Name = N'${NAME}')`;
@@ -9606,19 +9608,19 @@ Sequence 6, tier `live-model`).
           stub().Clear();
           await AIEngine.Instance.Config(true, ctx.User);
           await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
-          if (problems.length > 0) console.warn(`IT113 teardown: ${problems.join('; ')}`);
+          if (problems.length > 0) console.warn(`IT123 teardown: ${problems.join('; ')}`);
       } catch (e) {
-          console.warn(`IT113 teardown: ${e instanceof Error ? e.message : String(e)}`);
+          console.warn(`IT123 teardown: ${e instanceof Error ? e.message : String(e)}`);
       }
   }
 
   const ref = (ctx: IntegrationCheckContext, n: number | string, name: string): RecordRef =>
-      ({ EntityID: F.Require(ctx).EntityID, RecordID: `it113-${n}`, Record: { ID: `it113-${n}`, Name: name } });
+      ({ EntityID: F.Require(ctx).EntityID, RecordID: `it123-${n}`, Record: { ID: `it123-${n}`, Name: name } });
 
   async function run(ctx: IntegrationCheckContext, refs: RecordRef[], opts: { trigger?: TriggeredByValue; dryRun?: boolean; skipUnchanged?: boolean } = {}): Promise<ProcessRunResult> {
       const fx = F.Require(ctx);
       const rp = await ctx.Provider.GetEntityObject<MJRecordProcessEntity>('MJ: Record Processes', ctx.User);
-      Assert(await rp.Load(fx.RecordProcessID), 'load IT113 pipeline');
+      Assert(await rp.Load(fx.RecordProcessID), 'load IT123 pipeline');
       return RecordSetProcessor.Instance.Process({
           source: new ArraySource(refs, fx.EntityID), processor: InferProcessor.FromRecordProcess(rp, ctx.Provider),
           contextUser: ctx.User, provider: ctx.Provider, recordProcessID: fx.RecordProcessID, entityID: fx.EntityID,
@@ -9627,7 +9629,7 @@ Sequence 6, tier `live-model`).
       });
   }
 
-  /** Rows of an MJ core entity that belong to the IT113 pipeline. */
+  /** Rows of an MJ core entity that belong to the IT123 pipeline. */
   async function count(ctx: IntegrationCheckContext, entity: string): Promise<number> {
       const res = await RunView.FromMetadataProvider(ctx.Provider).RunView({
           EntityName: entity, ExtraFilter: `RecordProcessID = '${F.Require(ctx).RecordProcessID}'`, ResultType: 'count_only', BypassCache: true,
@@ -9636,7 +9638,7 @@ Sequence 6, tier `live-model`).
       return res.TotalRowCount;
   }
 
-  /** The IT113 cache rows of the "director of sales" key (any spelling normalises to it). */
+  /** The IT123 cache rows of the "director of sales" key (any spelling normalises to it). */
   async function directorCacheRows(ctx: IntegrationCheckContext): Promise<MJFeatureValueCacheEntity[]> {
       const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJFeatureValueCacheEntity>({
           EntityName: 'MJ: Feature Value Caches', ResultType: 'entity_object', BypassCache: true, // FP4 expires one through Save
@@ -9724,12 +9726,12 @@ Sequence 6, tier `live-model`).
   for (const c of FeaturePipelineCoreChecks) IntegrationCheckRegistry.Instance.Register(c);
   IntegrationCheckRegistry.Instance.RegisterLifecycle('feature-pipeline-core', { Setup: setup, Teardown: teardown });
   ```
-  (`F.Query` is used only for physical-state reads; IT113 needs the server transport like the gates.)
+  (`F.Query` is used only for physical-state reads; IT123 needs the server transport like the gates.)
 
   `fp-live-jobtitle.checks.ts` (`RequiresLiveModel: true`; writes only AI Prompt Runs):
   ```ts
   /**
-   * IT114 'fp-live-jobtitle' (F-FP-18): the installed job-title pipeline, at temperature 0 with seed 42, answers the 52
+   * IT124 'fp-live-jobtitle' (F-FP-18): the installed job-title pipeline, at temperature 0 with seed 42, answers the 52
    * golden titles identically over three runs (dry run, cache bypassed — the model answers every time).
    */
   import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
@@ -9788,21 +9790,21 @@ Sequence 6, tier `live-model`).
 
   for (const c of FpLiveJobTitleChecks) IntegrationCheckRegistry.Instance.Register(c);
   ```
-  The two metadata rows: `.IT113-feature-pipeline-core.json` (Name `IT113 - Feature Pipeline Key, Cache and Versions (core)`,
+  The two metadata rows: `.IT123-feature-pipeline-core.json` (Name `IT123 - Feature Pipeline Key, Cache and Versions (core)`,
   `Configuration { "tier": "mutation", "transport": "server", "checks": [ { "type": "feature-pipeline-core" } ] }`) and
-  `.IT114-job-title-consistency-live.json` (Name `IT114 - Job-title classifier consistency (live)`,
+  `.IT124-job-title-consistency-live.json` (Name `IT124 - Job-title classifier consistency (live)`,
   `Configuration { "tier": "live-model", "transport": "server", "checks": [ { "type": "fp-live-jobtitle" } ] }`,
   `EstimatedCostUSD` 0.09), shaped like `.gate-C1-C2.1.json` without gate tags.
   Register both bundles, export them from `src/index.ts`, rebuild, update the count table and the mutation/live gated
   lists; run `pnpm exec vitest run src/__tests__/suite-sequencing.test.ts src/__tests__/sibling-parity.test.ts` and fix
-  any ordering complaint (IT113 is a server member at Sequence 49).
-- [ ] Step 4: Run:
+  any ordering complaint (IT123 is a server member at Sequence 49).
+- [x] Step 4: Run:
   ```bash
-  MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "IT113 - Feature Pipeline Key, Cache and Versions (core)"   # Passed 7/7
-  MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Feature Pipelines"                         # 6 passed / 0 failed / 0 skipped (IT114 live: needs the Gemini key)
+  MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "IT123 - Feature Pipeline Key, Cache and Versions (core)"   # Passed 7/7
+  MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Feature Pipelines"                         # 6 passed / 0 failed / 0 skipped (IT124 live: needs the Gemini key)
   cd packages/TestingFramework/integration-test-suite && pnpm test                                                       # all pass
   ```
-- [ ] Step 5: Runtime verification: record the suite's summary line, the IT114 consistency counts (52/52 seniority,
+- [x] Step 5: Runtime verification: record the suite's summary line, the IT124 consistency counts (52/52 seniority,
   52/52 primary function, `<k>`/52 full list) and spend
   (`sq "SELECT SUM(TotalCost) FROM __mj.AIPromptRun WHERE PromptID='7C46041F-0412-4C2E-9B9E-3ED61D32210C' AND RunAt > DATEADD(hour,-1,SYSDATETIMEOFFSET())"`) in §11.
 
@@ -9810,13 +9812,13 @@ Sequence 6, tier `live-model`).
 
 **Files:** Modify `guides/RECORD_SET_PROCESSING_GUIDE.md` (§6 Dry-run, the circuit-breaker and counts text, the
 `MJ: Process Runs` section), `guides/PREDICTIVE_STUDIO_GUIDE.md` (§11 Feature Pipelines),
-`guides/INTEGRATION_TESTING_QUICKSTART.md` (§2.7 suite list: IT113; the PR 1 gate suite) · Create
+`guides/INTEGRATION_TESTING_QUICKSTART.md` (§2.7 suite list: IT123; the PR 1 gate suite) · Create
 `.changeset/ps-feature-pipelines.md` · Test: §7
 
-- [ ] Step 1: Failing checks: `npm run check:changeset` and
+- [x] Step 1: Failing checks: `npm run check:changeset` and
   `grep -c "Infer (Feature Pipeline) dry runs" guides/RECORD_SET_PROCESSING_GUIDE.md` and
   `grep -c "Feature Value key and versions" guides/PREDICTIVE_STUDIO_GUIDE.md`.
-- [ ] Step 2: Expected: the changeset check reports the touched packages as missing a changeset; both greps print `0`.
+- [x] Step 2: Expected: the changeset check reports the touched packages as missing a changeset; both greps print `0`.
 - [ ] Step 3: Implement.
   - `RECORD_SET_PROCESSING_GUIDE.md` §6: a paragraph "Infer (Feature Pipeline) dry runs": no Dedup Cache store, no
     Feature Values, no watermarks, no target or child writes; at most 25 records unless a scope is given; a record
@@ -9833,7 +9835,7 @@ Sequence 6, tier `live-model`).
     fails it), output constraints (lookup rows rendered as the
     taxonomy, `ItemRef`), strict vendor parameters; and "PR 5 adds `EffectiveAsOf` and PS reads values as of decision
     dates" (no forward claims beyond that).
-  - `INTEGRATION_TESTING_QUICKSTART.md` §2.7: IT113 in the deterministic list; the `Predictive Studio Gates — Feature Pipelines`
+  - `INTEGRATION_TESTING_QUICKSTART.md` §2.7: IT123 in the deterministic list; the `Predictive Studio Gates — Feature Pipelines`
     suite (needs bizapps-common; `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Feature Pipelines"`).
   - `.changeset/ps-feature-pipelines.md` (hand-written; `minor` because the branch has a migration and metadata):
     ```markdown
@@ -10036,11 +10038,11 @@ Sequence 6, tier `live-model`).
       dispatch the nightly lane once more.
 - [ ] Step 4: `npm run check:changeset` passes; `npm run check:ui` and `npm run check:standards` pass;
   `npm run check:claude-md` passes (guides only reference files that exist).
-- [ ] Step 5: Run the full §7 verification and append the final §11 entry.
+- [x] Step 5: Run the full §7 verification and append the final §11 entry.
 
 **Exit tests:** §7 in full.
 
-**Checkpoint commit:** `test(ps): PR 1 M7 — the five Phase 7 gates, IT113, live consistency; guides and changeset`
+**Checkpoint commit:** `test(ps): PR 1 M7 — the five Phase 7 gates, IT123, live consistency; guides and changeset`
 
 ---
 ## 7. Verification
@@ -10070,14 +10072,14 @@ done
 **Integration — deterministic tier (blocking)**
 
 ```bash
-MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"     # all members pass, incl. IT113 (7/7)
+MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"     # all members pass, incl. IT123 (7/7)
 ```
 
 **Gates (this PR's five, plus the live consistency measurement)** — bizapps-common installed with the companion branch:
 
 ```bash
 MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Feature Pipelines"
-#   C1 → C2.1 Passed 5/5 · C1 → C2.2 Passed 3/3 · C1 → C2.3 Passed 3/3 · C1 → C2.5 Passed 3/3 · C1 → C3.3 Passed 4/4 · IT114 Passed 1/1
+#   C1 → C2.1 Passed 6/6 · C1 → C2.2 Passed 3/3 · C1 → C2.3 Passed 3/3 · C1 → C2.5 Passed 3/3 · C1 → C3.3 Passed 5/5 · IT124 Passed 1/1
 ```
 
 **Golden set on the real classifier** (live; ≈ $0.03): `pnpm mj test run "Job Function and Seniority — Golden Set"` →
@@ -10144,7 +10146,7 @@ Assumption checks (run from the MJ repo unless a path says otherwise):
 - [ ] A11 `gh api 'repos/MemberJunction/bizapps-common/contents/migrations?ref=next' --jq '.[].name' | sort | tail -1` → `V202610091200__v5.52.x__Restore_Person_PhotoURL_SP_Width.sql` (re-time the companion migration if newer).
 - [ ] A12 `grep -c "HandleIndividualBaseEntityEvent" packages/Templates/base-types/src/TemplateEngineBase.ts` → `0` and `grep -c "DatasetName: 'Template_Metadata'" packages/Templates/base-types/src/TemplateEngineBase.ts` → `1` (template saves still do not refresh the dataset).
 - [ ] A13 `grep -c '"@memberjunction/testing-engine"' packages/RecordSetProcessor/engine/package.json` → `0` and `grep -rc '"@memberjunction/record-set-processor"' packages/TestingFramework/Engine/package.json` → `0` (the M6.2 edge is new and acyclic).
-- [ ] A14 `ls -a metadata-optional/integration-test/tests/integration | grep -oE "IT[0-9]+" | sort -t T -k2 -n | tail -1` → `IT112`; higher → renumber IT113/IT114 to the next free numbers everywhere in this plan.
+- [ ] A14 `ls -a metadata-optional/integration-test/tests/integration | grep -oE "IT[0-9]+" | sort -t T -k2 -n | tail -1` → at most `IT122` (IT115 locally; `origin/next` holds IT113–IT115 and IT122 as of 2026-10-14); higher → renumber IT123/IT124 to the next free numbers everywhere in this plan.
 - [ ] A15 `gh pr list --repo MemberJunction/MJ --search "head:ps/pr-2-truth-suite-containment" --state all --json number,state` → `[]` or a state; `MERGED` → trigger (b).
 - [ ] A16 `grep -c "const errorRate = (counts.Error / counts.Processed) \* 100;" packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts` → `1` (F-FP-10 still present).
 - [ ] A17 `gh api 'repos/MemberJunction/bizapps-common/contents/mj-app.json?ref=next' --jq .content | base64 -d | grep mjVersionRange` → `">=6.1.5 <7.0.0"` on `next`; on the companion branch after M7.5 it is `">=<V> <7.0.0"` with `<V>` recomputed by M7.5's `mjVersionRange` bullet (a different value → apply the new one).
@@ -10177,10 +10179,10 @@ Assumption checks (run from the MJ repo unless a path says otherwise):
 - **D-PR1-6** · The gates' "MoreCheese people behind scenario C1" are represented by 52 fixture people carrying the 52
   golden titles (the 34 distinct MoreCheese titles + 18 hard titles) under the installed bizapps-common schema, and the
   installed job-title pipeline cloned onto a stub driver. The gates prove the mechanics deterministically without model
-  cost; the live model is measured by IT114 and the golden-set test. · Alternative rejected: running gates on a full
+  cost; the live model is measured by IT124 and the golden-set test. · Alternative rejected: running gates on a full
   MoreCheese install (7+ minutes, F-ENV-4 blocks part of it, model cost and non-determinism).
 - **D-PR1-7** · The gate suite is separate from the blocking deterministic suite because MJ's CI has no bizapps-common;
-  IT113 gives CI the same mechanics on MJ core tables. PR 2's CI host is where the gate suite runs nightly.
+  IT123 gives CI the same mechanics on MJ core tables. PR 2's CI host is where the gate suite runs nightly.
 - **D-PR1-8** · `strictParameters` is set only by Feature Pipeline prompts; other MJ callers keep today's behaviour
   (with the `??` fixes, which change only the configured-0 case). Fidelity covers the contract's fields (temperature,
   max tokens, seed).
@@ -10329,12 +10331,12 @@ Assumption checks (run from the MJ repo unless a path says otherwise):
 | R-3 The version gate holds scheduled runs after any prompt/model/parameter edit. | The steward (M6.5) runs the backfill or the golden-set evaluation within 15 minutes, once per version; the message names it; guide section; D-PR1-5, D-PR1-18. |
 | R-4 One-time recomputation of every distinct key after upgrade (new cache key). | Cost bounded by distinct inputs (job-title: ≈ $0.02 on 1,679 people). |
 | R-5 The live golden set lands below threshold, or its labels fail the label-quality check → the job-title pipeline stops writing. | M6.4 Step 5's bounded loop (≤ 3 revisions, leak guard) runs first; if it still fails, the refusal is the shipped, recorded outcome (D-PR1-19, PR description, companion README): no unvalidated values are written. The threshold and label policy stay configuration (Q-1, D-PR1-17); the agent never lowers them to pass. |
-| R-6 Gates need bizapps-common; MJ CI cannot run them. | IT113 in CI; gates in PR 2's CI host (D-PR1-7). |
+| R-6 Gates need bizapps-common; MJ CI cannot run them. | IT123 in CI; gates in PR 2's CI host (D-PR1-7). |
 | R-7 Prompt templates now render raw (no HTML escaping). | Only prompts (sent to models); stored-template default unchanged; IT38 keeps covering the default. |
 | R-8 `MJ: Feature Values` changes from one row per run to one row per key. | Run history stays in `MJ: Process Run Details`; each value row keeps the run, prompt run and cache links of its last computation; PR 5's effective dating adds history over time. |
 | R-9 testing-engine gains a dependency on record-set-processor. | Acyclic (A13); the driver lives with the other test drivers so `mj test` loads it. |
 | R-10 The steward spends model calls on every install. | Only on a version change: one golden-set evaluation per (version, golden-set content) (≈ $0.03 for the job-title set) and one backfill per activation, bounded by distinct inputs through the Dedup Cache; a pass with no change reads one row set per pipeline. |
-| R-11 The steward acts on a pipeline while a test drives it. | Fixtures set `Unattended` off (IT113, gate fixture); D-PR1-18. |
+| R-11 The steward acts on a pipeline while a test drives it. | Fixtures set `Unattended` off (IT123, gate fixture); D-PR1-18. |
 
 ## 10. PR description draft
 
@@ -10424,21 +10426,22 @@ F-FP-16, F-FP-17, F-FP-18, F-ENV-5, F-ENV-6, F-ENV-11 (details: plan §3.2).
 
 | Gate | Result |
 |---|---|
-| C1 → C2.1 | _fill: Passed 5/5_ |
-| C1 → C2.2 | _fill: Passed 3/3_ |
-| C1 → C2.3 | _fill: Passed 3/3_ |
-| C1 → C2.5 | _fill: Passed 3/3_ |
-| C1 → C3.3 | _fill: Passed 4/4_ |
+| C1 → C2.1 | Passed 6/6 |
+| C1 → C2.2 | Passed 3/3 |
+| C1 → C2.3 | Passed 3/3 |
+| C1 → C2.5 | Passed 3/3 |
+| C1 → C3.3 | Passed 5/5 |
+| IT124 (live consistency) | Passed 1/1 (52/52 seniority, primary function and full list identical over 3 runs) |
 
 ### Test plan
 
 - [ ] Unit tests of every touched package (counts per package)
-- [ ] `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"` (counts; IT113 7/7)
+- [ ] `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"` (counts; IT123 7/7)
 - [ ] `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Feature Pipelines"` (counts)
 - [ ] Golden-set label-quality record (A–B and A–C agreement per output with intervals, consensus / adjudicated / excluded counts, labeler models)
 - [ ] Golden set on the live classifier (version, per-output accuracy with intervals, label sources; or the recorded refusal, D-PR1-19)
 - [ ] Feature Pipeline Version Steward through the real scheduler (M6.5 Step 5 outcome lists)
-- [ ] IT114 live consistency (seniority / primary function / full list identical over 3 runs)
+- [ ] IT124 live consistency (seniority / primary function / full list identical over 3 runs)
 - [ ] Clean-database build: migrate → codegen --skipfiles → sync push → codegen --skipdb → build; regenerated diff empty
 - [ ] `check:changeset`, `check:ui`, `check:standards`, `check:esm`, `check:claude-md`, `check:browser-manifest`, `check:codegen-tail`, `check-migration-entityfield-sequence`
 - [ ] PR 2 reconciliation recorded (plan §9 D-PR1-10, M7.5)
@@ -10505,7 +10508,7 @@ _(The agent opening the PR adds its own tool attribution line here, per its harn
 
 - **Shipped, M3 to M6 (ledger: complete):** M3.1 to M3.5 (lookup and per-item constraints resolved by one `OutputConstraintResolver`, the template constraint-block check at save and in `Preflight`, raw rendering of model-bound templates and then of the four embedding renders with an automated re-vectorization in M3.3b, reasoning and confidence), M4.1 to M4.3 (a dry run that writes nothing and a preview that mirrors what the database enforces, the attempted-record breaker that excludes only watermark skips, `FeaturePipelineRunResult` with a `Previewed` tally), M5.1 to M5.5 (a driver-by-driver `DescribeSentParameters`, strict calls that stop at the first refusal with no failover, temperature 0 and seed 42 on the job-title prompt), M6.1 (the version registry under a per-pipeline lock on an isolated provider), M6.2 (the golden-set driver, which runs `Preflight` first and re-checks the pin after the batch), M6.3 (an Action job whose class is missing pauses and resumes itself) and M6.5 (the version steward). M6.4 and M7 are not done. Three user rulings shaped the execution: the milestones ran in parallel (superseding P16), members this PR adds to exported interfaces are PascalCase (CASE-1, incl. `RecordProcessorContext.DryRun`, `TriggeredBy`, `BypassCache`, `RecordSetProcessOptions.FeaturePipeline`, `RunRecordProcessOptions.DryRunSampleSize`, `WriteBackResult.PreviewErrors` and the golden-set JSON members), and every agent builds on Node 24. The migration was re-timed to `V202610140050` after the `next` merge.
 - **Checkpoint (integration tree, 2026-10-14):** the root build and the unit suites of every touched package pass on Node 24 (e.g. MJCore 3318, FeaturePipelines 255, RecordSetProcessor engine 396, Scheduling 318, testing-engine 668); the deterministic tier on the integration database is 83 passed / 0 failed / 13 skipped; live checks cost under $0.01 in total (a version gate that refuses then activates after a 3-case golden set at accuracy 1.0, a steward pass that re-evaluates and activates, a strict run sent unchanged at temperature 0 and seed 42, a forced mismatch refused with no failover). All verification was run by AI agents (ruling S1).
-- **Carried forward:** M6.4 (the live labelers and evaluation; blocked on a working Claude route and a Bedrock inference-profile fix), M7 (gate tests, IT113, guides, PR 2 reconciliation), the single M3–M6 commit on the PR branch (ruling COMMIT-1), and the open user decisions (an abandoned-ProcessRun sweep, Gemini Live thinking tokens, xAI reasoning accounting, the rejected Anthropic API key).
+- **Carried forward:** M6.4 (the live labelers and evaluation; blocked on a working Claude route and a Bedrock inference-profile fix), M7 (gate tests, IT123, guides, PR 2 reconciliation), the single M3–M6 commit on the PR branch (ruling COMMIT-1), and the open user decisions (an abandoned-ProcessRun sweep, Gemini Live thinking tokens, xAI reasoning accounting, the rejected Anthropic API key).
 
 ### 2026-10-14 — M6.4 golden set, labelers, activation — Claude Opus 5.5 (implementer, controller rulings M6.4-L1..L5)
 
@@ -10520,13 +10523,38 @@ _(The agent opening the PR adds its own tool attribution line here, per its harn
 - **Fix round:** the rig's checkpoint is bound to labeler A's case inputs as well as the instructions and models; the
   golden-set driver reports the evaluation's prompt-run cost as the test run's `CostUSD`.
 
+### 2026-10-14 — M7 merged onto the branch, full verification — Claude Opus 5.5 (implementer, merge brief M7)
+
+- **Shipped (M7.1–M7.4, merged):** the gate fixture and stub driver, the five gate bundles (`fp-gate-c2-1` 6 checks,
+  `-c2-2` 3, `-c2-3` 3, `-c2-5` 3, `-c3-3` 5) in the suite "Predictive Studio Gates — Feature Pipelines", IT123
+  (`feature-pipeline-core`, 7 checks, deterministic suite member at Sequence 49) and IT124 (`fp-live-jobtitle`, the
+  live consistency measurement, gate-suite member). IT123/IT124 were confirmed free on `origin/next` (highest IT122).
+  Merge cleanups: `GraphTestListEntity` now extends `MJListEntityServer`, so it is a subclass override (no ClassFactory
+  collision) and every bundle keeps the server class's Delete authorization; the integration-test-suite declares
+  `@google/genai`, `@memberjunction/ai-vertex`, `@memberjunction/ai-bedrock` (C3.3) and `@memberjunction/feature-pipelines`.
+- **M7.5 (partial):** the three guides and the changeset are in (placeholders resolved to IT123/IT124;
+  `@memberjunction/db-auto-doc` added to the changeset). PR 2 is not merged (`gates.json` absent on `origin/next`), so
+  PR 2's M-final.5 adds the bridge when it merges second. Not done here: the companion `mjVersionRange` bump (companion
+  commit) and the #5185 guard comment.
+- **Verification (Node 24, DB `MJ_PS_PR1_claude_int`, MJAPI :4016 with `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1` and the
+  guide's `saveTimeAI` block):** root build exit 0; `pnpm install --frozen-lockfile` exit 0; unit tests of the 56
+  packages changed vs `origin/next` (PostgreSQLDataProvider excluded, S5) and the 10 OpenAI-derived providers, 0 failed; strict tsc over the 197 touched test
+  files 0 errors; `check:standards` 0 errors / 12,946 warnings; `check:codegen-tail`, `check:rigs`,
+  `check:browser-manifest`, `check:esm`, `check:ui`, `check:changeset`, the EntityField sequence gate pass;
+  deterministic tier 83 passed / 0 failed / 16 skipped (mutation-gated), with `RUN_MUTATION_TESTS=1` 98 / 0 / 1 (IT52),
+  IT123 7/7; gate suite 6 / 0 / 0 (C2.1 6/6, C2.2 3/3, C2.3 3/3, C2.5 3/3, C3.3 5/5, IT124 1/1: 52/52 seniority,
+  primary function and full list identical over 3 runs). The branch adds no `as unknown as` / `as any` / `: any` /
+  `as never` outside generated code except the ruled `RenderTemplate` `data: any`, the `ProviderToUse` bridge (S3) and
+  four PostgreSQL test-double casts (S5). AI spend $0.093 (IT124 $0.091).
+- **Verification disclosure (ruling S1):** all of the above was run by AI agents.
+
 ## 12. Refresh log (append-only)
 
 ### 2026-10-12 — refresh (a, written) — Claude Opus 5.5 (plan author)
 
 - **Checked against:** `origin/next` @ `ac24ffeb8a` (plan anchored at `c92d4a47f9`; of the 65 commits between them, the
   only change to an anchored file is two new exports in `integration-test-suite/src/index.ts`; they also added IT111 and
-  IT112, so this plan's new tests are IT113 and IT114)
+  IT112; `next` has since taken IT113–IT115 and IT122, so this plan's new tests are IT123 and IT124)
 - **Anchors:** ok 61 · moved 0 · changed 0 · missing 0 · skipped 6. The six skipped are the `repo: "bizapps-common"`
   anchors; each was checked with the checker's own `classify()` against the files on bizapps-common `next` @
   `339c6f5570` (fetched with `gh api`): 6 ok. Checker output:

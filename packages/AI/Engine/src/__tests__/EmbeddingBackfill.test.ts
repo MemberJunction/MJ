@@ -5,9 +5,9 @@
  * how it puts a record back after a failure, one pass at a time plus one rerun, the per-pass bound with automatic
  * later passes, the host switch, and the local-embedding helper the entity saves share.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { Base64ToFloat32Vector } from '@memberjunction/global';
-import type { SimpleEmbeddingResult } from '@memberjunction/core';
+import { BaseEntityResult, CompositeKey, EntityInfo, type EntitySaveOptions, type SimpleEmbeddingResult } from '@memberjunction/core';
 
 const { logError, logStatus } = vi.hoisted(() => ({
     logError: vi.fn(),
@@ -20,38 +20,30 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 import { SaveTimeAISettings } from '@memberjunction/ai';
-import { EmbeddingBackfill, EmbeddingUnavailableError, type EmbeddingBackfillBaseOptions, type EmbeddingBackfillEmbedder, type StandardVectorRecord } from '../services/EmbeddingBackfill';
+import { EmbeddingBackfill, EmbeddingUnavailableError, type EmbeddingBackfillBaseOptions, type EmbeddingBackfillEmbedder, type LocalEmbeddingParts, type StandardVectorRecord } from '../services/EmbeddingBackfill';
 import { EmbeddingBackfillSettings } from '../services/EmbeddingBackfillSettings';
 
-/** A record double: the three standard vector columns, a text, a primary key and a spied Save. */
-interface FakeRow {
+/** The save a record double answers with: a spy, so a test can count calls or swap the answer. */
+type SaveSpy = Mock<(options?: EntitySaveOptions) => Promise<boolean>>;
+
+/**
+ * A record double: the three standard vector columns, a text, and the record members the backfill uses (a real
+ * primary key, entity and save result, and a spied Save).
+ */
+interface FakeRecord extends StandardVectorRecord {
     ID: string;
     Text: string | null;
-    EmbeddingVector: string | null;
-    EmbeddingVectorBinary: string | null;
-    EmbeddingModelID: string | null;
-    EntityInfo: { Name: string };
-    PrimaryKey: { ToConcatenatedString(): string; ToString(): string };
-    LatestResult: { CompleteMessage: string } | null;
-    Save: ReturnType<typeof vi.fn>;
+    Save: SaveSpy;
 }
 
-/** The record type the backfill under test works on: a standard vector record that also carries its text. */
-interface FakeRecord extends StandardVectorRecord {
-    Text: string | null;
-}
+const FAKE_ENTITY = new EntityInfo({ ID: 'entity-fake-rows', Name: 'Fake Rows', Fields: [] });
 
-/** The test double typed as the record the backfill works on — the one cast this file needs (a partial BaseEntity). */
-function asRecord(row: FakeRow): FakeRecord {
-    return row as unknown as FakeRecord;
-}
-
-function row(id: string, text: string | null, vector: string | null = null, saveResult = true): FakeRow {
+function row(id: string, text: string | null, vector: string | null = null, saveResult = true): FakeRecord {
     return {
         ID: id, Text: text, EmbeddingVector: vector, EmbeddingVectorBinary: null, EmbeddingModelID: vector ? 'model-old' : null,
-        EntityInfo: { Name: 'Fake Rows' }, PrimaryKey: { ToConcatenatedString: () => `ID|${id}`, ToString: () => `ID=${id}` },
-        LatestResult: saveResult ? null : { CompleteMessage: 'save refused' },
-        Save: vi.fn().mockResolvedValue(saveResult),
+        EntityInfo: FAKE_ENTITY, PrimaryKey: new CompositeKey([{ FieldName: 'ID', Value: id }]),
+        LatestResult: saveResult ? new BaseEntityResult(true) : new BaseEntityResult(false, 'save refused'),
+        Save: vi.fn<(options?: EntitySaveOptions) => Promise<boolean>>().mockResolvedValue(saveResult),
     };
 }
 
@@ -64,13 +56,13 @@ const RUNAWAY_LOADS = 50;
  * A backfill over `rows`, embedding every text as VECTOR (one text at a time) unless `embedder` says otherwise.
  */
 function backfillOver(
-    rows: FakeRow[],
+    rows: FakeRecord[],
     overrides: Partial<EmbeddingBackfillBaseOptions<FakeRecord>> = {},
     embedder?: EmbeddingBackfillEmbedder<FakeRecord>,
 ) {
     const loadCandidates = vi.fn(async (_limit: number) => {
         if (loadCandidates.mock.calls.length > RUNAWAY_LOADS) throw new Error('runaway loop');
-        return rows.map(asRecord);
+        return rows;
     });
     const embedText = vi.fn(async (_text: string, _record: FakeRecord): Promise<SimpleEmbeddingResult> => ({ vector: VECTOR, modelID: 'model-local' }));
     const onEmbedded = vi.fn();
@@ -89,15 +81,14 @@ function backfillOver(
  * A database-backed loader over `rows`: like a `MaxRows`-limited read filtered on `text <> '' AND vector IS NULL`,
  * which on PostgreSQL lets whitespace-only text through. Records every limit it was asked for.
  */
-function databaseLoader(rows: FakeRow[]) {
+function databaseLoader(rows: FakeRecord[]) {
     const limits: number[] = [];
     const load = async (limit: number): Promise<FakeRecord[]> => {
         limits.push(limit);
         if (limits.length > RUNAWAY_LOADS) throw new Error('runaway loop');
         return rows
             .filter(r => r.Text !== null && r.Text !== '' && !r.EmbeddingVector && !r.EmbeddingVectorBinary)
-            .slice(0, limit)
-            .map(asRecord);
+            .slice(0, limit);
     };
     return { load, limits };
 }
@@ -206,9 +197,9 @@ describe('EmbeddingBackfill', () => {
 
         it('NeedsAnyVector applies the same test as a pass', () => {
             const { backfill } = backfillOver([]);
-            expect(backfill.NeedsAnyVector(asRecord(row('a', 'text')))).toBe(true);
-            expect(backfill.NeedsAnyVector(asRecord(row('b', 'text', JSON.stringify(VECTOR))))).toBe(false);
-            expect(backfill.NeedsAnyVector(asRecord(row('c', ' ')))).toBe(false);
+            expect(backfill.NeedsAnyVector(row('a', 'text'))).toBe(true);
+            expect(backfill.NeedsAnyVector(row('b', 'text', JSON.stringify(VECTOR)))).toBe(false);
+            expect(backfill.NeedsAnyVector(row('c', ' '))).toBe(false);
         });
     });
 
@@ -224,7 +215,7 @@ describe('EmbeddingBackfill', () => {
                 maxActive = Math.max(maxActive, active);
                 await gate;
                 active--;
-                return [asRecord(missing)];
+                return [missing];
             });
             const { backfill } = backfillOver([missing], { LoadCandidates: gatedLoader });
 
@@ -278,7 +269,7 @@ describe('EmbeddingBackfill', () => {
             const gatedLoader = vi.fn(async (_limit: number) => {
                 if (gatedLoader.mock.calls.length === 1) await gate;
                 if (gatedLoader.mock.calls.length > RUNAWAY_LOADS) throw new Error('runaway loop');
-                return rows.map(asRecord);
+                return rows;
             });
             const { backfill } = backfillOver(rows, { LoadCandidates: gatedLoader });
 
@@ -487,7 +478,7 @@ describe('EmbeddingBackfill', () => {
             await backfill.Run();
             onEmbedded.mockClear();
 
-            expect(backfill.ReplayUnsavedVectors([failing, fine].map(asRecord))).toBe(1);
+            expect(backfill.ReplayUnsavedVectors([failing, fine])).toBe(1);
             expect(onEmbedded).toHaveBeenCalledWith(failing, [{ vector: VECTOR, modelID: 'model-local' }]);
         });
 
@@ -502,10 +493,10 @@ describe('EmbeddingBackfill', () => {
             a.EmbeddingVector = JSON.stringify(VECTOR); // saved since
             b.Text = 'edited';                           // text changed: the kept vector is stale
             // c deleted: not in the owner's list
-            expect(backfill.ReplayUnsavedVectors([a, b].map(asRecord))).toBe(0);
+            expect(backfill.ReplayUnsavedVectors([a, b])).toBe(0);
             expect(onEmbedded).not.toHaveBeenCalled();
             b.Text = 'text b';
-            expect(backfill.ReplayUnsavedVectors([a, b, c].map(asRecord))).toBe(0); // all three were dropped
+            expect(backfill.ReplayUnsavedVectors([a, b, c])).toBe(0); // all three were dropped
         });
     });
 
@@ -520,7 +511,7 @@ describe('EmbeddingBackfill', () => {
 
     describe('RequireLocalVector', () => {
         it('returns the vector and model of a local embedding result', () => {
-            expect(EmbeddingBackfill.RequireLocalVector({ result: { vector: VECTOR }, model: { ID: 'model-local' } } as never))
+            expect(EmbeddingBackfill.RequireLocalVector({ result: { vector: VECTOR }, model: { ID: 'model-local' } }))
                 .toEqual({ vector: VECTOR, modelID: 'model-local' });
         });
 
@@ -528,11 +519,11 @@ describe('EmbeddingBackfill', () => {
             expect(() => EmbeddingBackfill.RequireLocalVector(null)).toThrow(EmbeddingUnavailableError);
         });
 
-        it.each([
+        it.each<[string, LocalEmbeddingParts]>([
             ['an empty vector', { result: { vector: [] }, model: { ID: 'model-local' } }],
             ['no model', { result: { vector: VECTOR }, model: null }],
         ])('throws when the local model returns %s', (_label, value) => {
-            expect(() => EmbeddingBackfill.RequireLocalVector(value as never)).toThrow('Failed to generate embedding - no vector or model ID returned');
+            expect(() => EmbeddingBackfill.RequireLocalVector(value)).toThrow('Failed to generate embedding - no vector or model ID returned');
         });
     });
 

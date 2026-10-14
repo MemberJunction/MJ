@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+const { stubViews } = vi.hoisted(() => ({
+    /** Each stub base, by the instance the server class built on it: the test's typed view of the stub's members. */
+    stubViews: new WeakMap<object, MockedBaseStub>(),
+}));
+
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
     return {
@@ -52,6 +57,10 @@ vi.mock('@memberjunction/actions-base', () => {
             ['UserPrompt', { Name: 'UserPrompt', Dirty: false }],
         ]);
 
+        constructor() {
+            stubViews.set(this, this);
+        }
+
         public GetFieldByName(name: string): StubField | undefined {
             return this.fields.get(name);
         }
@@ -91,27 +100,33 @@ import { SaveTimeAISettings } from '@memberjunction/ai';
 
 /**
  * The mocked base class's test-only surface: it records field dirtiness through SetFieldDirty and holds IsSaved as a
- * plain field. The server class's type declares neither (IsSaved is a read-only getter on the real BaseEntity).
+ * plain field, and its post-save helpers (protected on the real base class) are stubbed so a save has no dependencies.
+ * The server class's type declares none of these (IsSaved is a read-only getter on the real BaseEntity).
  */
 interface MockedBaseStub {
     SetFieldDirty(name: string, dirty: boolean): void;
     IsSaved: boolean;
-}
-
-/** Marks a field dirty (or clean) on the mocked base. */
-function setFieldDirty(entity: MJActionEntityServer, name: string, dirty: boolean): void {
-    (entity as unknown as MockedBaseStub).SetFieldDirty(name, dirty);
-}
-
-/** The mocked base's post-save helpers (protected on the real base class), stubbed so a save has no dependencies. */
-interface PostSaveStub {
     PostSaveProcessLibraries(): Promise<void>;
     PostSaveProcessParamsAndResults(): Promise<void>;
 }
 
+/** The mocked base under `entity`, through which a test sets what the stub records. */
+function stubOf(entity: MJActionEntityServer): MockedBaseStub {
+    const stub = stubViews.get(entity);
+    if (!stub) {
+        throw new Error('the entity was not built on the mocked base');
+    }
+    return stub;
+}
+
+/** Marks a field dirty (or clean) on the mocked base. */
+function setFieldDirty(entity: MJActionEntityServer, name: string, dirty: boolean): void {
+    stubOf(entity).SetFieldDirty(name, dirty);
+}
+
 /** Sets whether the mocked base counts as already saved (an update) or not (a create). */
 function setSaved(entity: MJActionEntityServer, saved: boolean): void {
-    (entity as unknown as MockedBaseStub).IsSaved = saved;
+    stubOf(entity).IsSaved = saved;
 }
 
 
@@ -137,7 +152,7 @@ describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated A
         });
 
         // Mock post-save helpers to avoid dependencies
-        const postSave = action as unknown as PostSaveStub;
+        const postSave = stubOf(action);
         vi.spyOn(postSave, 'PostSaveProcessLibraries').mockResolvedValue(undefined);
         vi.spyOn(postSave, 'PostSaveProcessParamsAndResults').mockResolvedValue(undefined);
     });

@@ -587,7 +587,7 @@ describe('TagEngine reads and writes the binary embedding column', () => {
             h.embedCalls.length = 0;
             SaveTimeAISettings.Instance.Config = { Embeddings: false };
 
-            await engine.ReEmbedTag(h.state.tags[0] as never);
+            await engine.ReEmbedTag(h.state.tags[0]);
 
             expect(h.embedCalls).toHaveLength(0);
         });

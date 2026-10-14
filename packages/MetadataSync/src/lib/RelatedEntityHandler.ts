@@ -1,6 +1,7 @@
 import { BaseEntity, RunView, UserInfo } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { RelatedEntityConfig, EntityConfig } from '../config';
+import { SQLTextLiteral } from './sql-text-literal';
 
 /**
  * Handles loading and processing of related entities for records
@@ -111,7 +112,7 @@ export class RelatedEntityHandler {
 
     for (let i = 0; i < parentPrimaryKeys.length; i += CHUNK_SIZE) {
       const chunk = parentPrimaryKeys.slice(i, i + CHUNK_SIZE);
-      const inClause = chunk.map(id => `'${id.replace(/'/g, "''")}'`).join(', ');
+      const inClause = SQLTextLiteral.List(chunk);
       let filter = `${relationConfig.foreignKey} IN (${inClause})`;
       if (relationConfig.filter) {
         filter += ` AND (${relationConfig.filter})`;
@@ -251,7 +252,7 @@ export class RelatedEntityHandler {
     relationConfig: RelatedEntityConfig,
     verbose?: boolean
   ): Promise<BaseEntity[] | null> {
-    const filter = this.buildRelatedEntityFilter(parentPrimaryKey, relationConfig);
+    const filter = RelatedEntityHandler.BuildRelatedEntityFilter(parentPrimaryKey, relationConfig);
     
     if (verbose) {
       console.log(`Loading related entities: ${relationConfig.entity} with filter: ${filter}`);
@@ -277,10 +278,11 @@ export class RelatedEntityHandler {
   }
 
   /**
-   * Builds the filter for querying related entities
+   * The filter selecting one parent's related records: its foreign key equal to the parent key (a text literal, quotes
+   * escaped, Unicode-prefixed where the platform needs it — see {@link SQLTextLiteral}), ANDed with the relation's filter.
    */
-  private buildRelatedEntityFilter(parentPrimaryKey: string, relationConfig: RelatedEntityConfig): string {
-    let filter = `${relationConfig.foreignKey} = '${parentPrimaryKey}'`;
+  public static BuildRelatedEntityFilter(parentPrimaryKey: string, relationConfig: RelatedEntityConfig): string {
+    let filter = `${relationConfig.foreignKey} = ${SQLTextLiteral.For(parentPrimaryKey)}`;
     if (relationConfig.filter) {
       filter += ` AND (${relationConfig.filter})`;
     }

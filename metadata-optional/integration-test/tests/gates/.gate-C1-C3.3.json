@@ -1,0 +1,13 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 → C3.3",
+    "Description": "Gate G7.8 (owner PR 1, phase 7, dataset C1, criterion C3.3): a prompt configured at temperature 0 reaches the Gemini, Vertex and Bedrock clients as 0, 3 of 3 (0.5, 0.5 and 0.7 today), and a rejected parameter raises instead of being replaced. Captures the real request bodies without network (Gemini and Vertex at fetch, Bedrock at an SDK middleware); a strict call whose seed Bedrock drops, and a strict temperature-0 call to a Gemini model that no longer takes temperature (3.6 and later), each raise ParameterFidelityError before any request; no model calls, no database writes.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G7.8\",\"owner:PR1\",\"phase:7\",\"dataset:C1\",\"criterion:C3.3\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": { "summary": "Temperature 0 is sent as 0 by Gemini, Vertex and Bedrock (3 of 3); a strict call Bedrock would send without its seed, and a strict temperature-0 call to gemini-3.8-flash, raise ParameterFidelityError with no request sent." },
+    "Configuration": { "tier": "deterministic", "transport": "server", "checks": [ { "type": "fp-gate-c3-3" } ] }
+  },
+  "primaryKey": { "ID": "C5D27151-E57A-404D-9B72-61F0134C65E3" }
+}

@@ -2,7 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BaseEngine, BaseEnginePropertyConfig } from '../generic/baseEngine';
 import { BaseEntity, BaseEntityEvent } from '../generic/baseEntity';
 import { UserInfo } from '../generic/securityInfo';
-import { IRunViewProvider, RunViewResult } from '../generic/interfaces';
+import { IRunViewProvider, RunViewResult, type EntitySearchResult, type FullTextSearchResult } from '../generic/interfaces';
+import { EntityInfo } from '../generic/entityInfo';
 import { RunViewParams } from '../views/runView';
 
 /**
@@ -12,8 +13,8 @@ import { RunViewParams } from '../views/runView';
  * work opened on the same provider while the reload is in flight. A caller-driven load keeps the ambient transaction.
  */
 
-/** The run-view provider double: records every RunViewParams the engine sends. */
-class RecordingRunViewProvider {
+/** The run-view provider double: records every RunViewParams the engine sends; the members the load path never calls throw. */
+class RecordingRunViewProvider implements IRunViewProvider {
     public readonly Params: RunViewParams[] = [];
     /** Outcome per call (shifted); defaults to success. */
     public Outcomes: boolean[] = [];
@@ -24,6 +25,18 @@ class RecordingRunViewProvider {
     }
     public async RunViews<T>(params: RunViewParams[]): Promise<RunViewResult<T>[]> {
         return Promise.all(params.map((p) => this.RunView<T>(p)));
+    }
+    public async Config(): Promise<boolean> {
+        throw new Error('not used by these tests');
+    }
+    public async FullTextSearch(): Promise<FullTextSearchResult> {
+        throw new Error('not used by these tests');
+    }
+    public async SearchEntity(): Promise<EntitySearchResult[]> {
+        throw new Error('not used by these tests');
+    }
+    public async SearchEntities(): Promise<EntitySearchResult[][]> {
+        throw new Error('not used by these tests');
     }
 }
 
@@ -40,8 +53,7 @@ class EntityConfigEngine extends BaseEngine<EntityConfigEngine> {
     }
 
     public override get RunViewProviderToUse(): IRunViewProvider {
-        // the recording double implements the two members the load path calls
-        return this.Views as unknown as IRunViewProvider;
+        return this.Views;
     }
 
     public ProcessForTest(events: BaseEntityEvent[]): Promise<void> {
@@ -54,14 +66,20 @@ class EntityConfigEngine extends BaseEngine<EntityConfigEngine> {
     }
 }
 
-function itemEvent(id: string): BaseEntityEvent {
-    // a partial event double carrying the fields the refresh path reads
-    const entity = {
-        EntityInfo: { Name: 'Items', PrimaryKeys: [{ Name: 'ID' }] },
-        PrimaryKey: { ToString: () => id, KeyValuePairs: [{ FieldName: 'ID', Value: id }] },
-        ID: id,
-    } as unknown as BaseEntity;
-    return { type: 'save', saveSubType: 'update', baseEntity: entity } as BaseEntityEvent;
+/** The `Items` entity of the engine's config: an ID primary key. */
+const ITEMS = new EntityInfo({
+    ID: 'ent-items', Name: 'Items',
+    Fields: [{ ID: 'fld-items-id', EntityID: 'ent-items', Entity: 'Items', Name: 'ID', CodeName: 'ID', Type: 'nvarchar', IsPrimaryKey: true, Sequence: 1 }],
+});
+
+/** A record of {@link ITEMS}. */
+class ItemRecord extends BaseEntity {}
+
+/** An update event raised by the `Items` record `id`. */
+async function itemEvent(id: string): Promise<BaseEntityEvent> {
+    const entity = new ItemRecord(ITEMS);
+    await entity.LoadFromData({ ID: id });
+    return { type: 'save', saveSubType: 'update', baseEntity: entity, payload: null };
 }
 
 /** A filtered config: forces the full-refresh (RunView) path instead of an in-memory mutation. */
@@ -77,7 +95,7 @@ describe('BaseEngine background entity-config reloads read on the pool', () => {
     it('the event-driven full refresh asks for pool reads', async () => {
         const engine = new EntityConfigEngine();
         engine.UseConfigs([filteredConfig()]);
-        await engine.ProcessForTest([itemEvent('a')]);
+        await engine.ProcessForTest([await itemEvent('a')]);
         expect(engine.Views.Params).toHaveLength(1);
         expect(engine.Views.Params[0].ReadOnPool).toBe(true);
     });
@@ -88,7 +106,7 @@ describe('BaseEngine background entity-config reloads read on the pool', () => {
         const engine = new EntityConfigEngine();
         engine.UseConfigs([filteredConfig()]);
         engine.Views.Outcomes = [false, true];
-        await engine.ProcessForTest([itemEvent('a')]);
+        await engine.ProcessForTest([await itemEvent('a')]);
         await vi.advanceTimersByTimeAsync(2000);
         expect(engine.Views.Params.map((p) => p.ReadOnPool)).toEqual([true, true]);
         expect(logged.mock.calls.flat().map(String).join(' ')).toContain('Failed to load Items into _items: transient');

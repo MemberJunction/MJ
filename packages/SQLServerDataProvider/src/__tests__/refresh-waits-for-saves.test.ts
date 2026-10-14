@@ -117,7 +117,7 @@ describe('SQLServerDataProvider.Refresh while a save is in flight', () => {
  * Refresh()'s extra SQL Server work itself: wait for in-flight saves and rescan the view column order.
  */
 describe('SQLServerDataProvider.RefreshWithinTransaction', () => {
-  function makeInTransactionProvider(): { provider: RefreshTestProvider; passSpy: ReturnType<typeof vi.spyOn> } {
+  function makeInTransactionProvider() {
     const provider = new RefreshTestProvider();
     const passSpy = vi.spyOn(GenericDatabaseProvider.prototype, 'RefreshWithinTransaction').mockResolvedValue(true);
     return { provider, passSpy };

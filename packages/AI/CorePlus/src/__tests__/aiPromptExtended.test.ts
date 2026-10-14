@@ -7,8 +7,8 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return {
         ...actual,
         BaseEntity: class BaseEntity {
-            ContextCurrentUser: null;
-            Fields: [];
+            ContextCurrentUser = null;
+            Fields = [];
             Get(fieldName: string) { return ''; }
             Set(fieldName: string, value: unknown) {}
             get Dirty() { return false; }
@@ -74,7 +74,6 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 }));
 
 import { MJAIPromptEntityExtended } from '../MJAIPromptEntityExtended';
-import type { MJTemplateContentEntity } from '@memberjunction/core-entities';
 import { EntityInfo, ValidationResult } from '@memberjunction/core';
 
 /** A minimal `MJ: AI Prompts` definition, so the prompt is constructed the way the entity requires. */
@@ -89,8 +88,7 @@ const PROMPT_ENTITY = new EntityInfo({
 /** Exposes what the server subclass does after saving the text into a content row. */
 class SavingPrompt extends MJAIPromptEntityExtended {
     public MarkSaved(row: ContentRow): void {
-        // a ContentRow carries every field the source record reads (ID, __mj_UpdatedAt); it is a partial entity double
-        this.RecordTemplateTextSource(row as unknown as MJTemplateContentEntity);
+        this.RecordTemplateTextSource(row);
         this._originalTemplateText = this.TemplateText;
     }
 }
@@ -195,8 +193,8 @@ describe('MJAIPromptEntityExtended', () => {
             expect(result.Errors).toHaveLength(1);
         });
 
-        it('should not add error when both IDs are null (new record)', () => {
-            prompt.ID = null;
+        it('should not add error for an unsaved record (no ID yet) with no result selector', () => {
+            prompt.ID = '';
             prompt.ResultSelectorPromptID = null;
             const result = new ValidationResult();
 

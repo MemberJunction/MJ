@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { InferProcessor } from '../processors/InferProcessor';
 import { WriteBackProcessor } from '../processors/WriteBackProcessor';
 import { RecordRef, RecordProcessorContext } from '@memberjunction/record-set-processor-base';
-import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { EntityInfo, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { KnowledgeHubMetadataEngine, MJFeatureValueCacheEntity } from '@memberjunction/core-entities';
 import { DataFeatureSpec, FeaturePipelinePin, FeaturePipelineVersionService, FeatureValueCacheService, type RecordFeatureValuesOutcome } from '@memberjunction/feature-pipelines';
 import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
@@ -45,6 +45,26 @@ vi.mock('@memberjunction/ai-prompts', () => {
 
 /** What a history write that inserted both outputs returns. */
 const UPSERTED: RecordFeatureValuesOutcome = { Upserted: 2, Unchanged: 0, Previous: { StandardTitle: null, Department: null } };
+
+
+/** The `MJ: Feature Value Caches` fields the processor reads from a cache row. */
+type CacheRowFields = Partial<Pick<MJFeatureValueCacheEntity, 'ID' | 'OutputsJSON' | 'Reasoning' | 'AIPromptRunID'>>;
+
+/** Enough of `MJ: Feature Value Caches` for a real cache row to hold the fields in {@link CacheRowFields}. */
+const CACHE_ENTITY = new EntityInfo({
+    ID: 'ent-feature-value-caches', Name: 'MJ: Feature Value Caches',
+    Fields: (['ID', 'OutputsJSON', 'Reasoning', 'AIPromptRunID'] as const).map((Name, i) => ({
+        ID: `fvc-${Name}`, EntityID: 'ent-feature-value-caches', Entity: 'MJ: Feature Value Caches', Name, CodeName: Name, Sequence: i + 1,
+        Type: Name === 'ID' || Name === 'AIPromptRunID' ? 'uniqueidentifier' : 'nvarchar', IsPrimaryKey: Name === 'ID', AllowsNull: Name !== 'ID',
+    })),
+});
+
+/** A cache row (a real entity, loaded from `fields`) as the cache service would return it. */
+async function cacheRow(fields: CacheRowFields): Promise<MJFeatureValueCacheEntity> {
+    const row = new MJFeatureValueCacheEntity(CACHE_ENTITY);
+    await row.LoadFromData(fields);
+    return row;
+}
 
 describe('InferProcessor dedup cache & two-phase execution', () => {
     const mockUser = { ID: 'u1' } as unknown as UserInfo;
@@ -186,7 +206,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
     it('looks the cache up under the primary model and the parameters hash, which a temperature change alters', async () => {
         const records: RecordRef[] = [{ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Software Engineer' } }];
         const lookup = vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
-        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async (p) => ({ ID: 'c1', ...p } as unknown as MJFeatureValueCacheEntity));
+        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async () => cacheRow({ ID: 'c1' }));
         vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
 
         await new InferProcessor('prompt-1', undefined, spec, null).ProcessBatch(records, context);
@@ -265,7 +285,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
     it('marks a record Unchanged when every Feature Value already existed with the same value', async () => {
         const records: RecordRef[] = [{ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }];
         vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
-        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async (p) => ({ ID: 'c1', ...p } as unknown as MJFeatureValueCacheEntity));
+        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async () => cacheRow({ ID: 'c1' }));
         vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue({ Upserted: 0, Unchanged: 2, Previous: { StandardTitle: null, Department: null } });
         const results = await new InferProcessor('prompt-1', undefined, spec, null).ProcessBatch(records, context);
         expect(results.get('r1')?.Outcome).toBe('Unchanged');
@@ -274,7 +294,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
     it('marks a record Upserted and keys its Feature Values on the pin and the input hash', async () => {
         const records: RecordRef[] = [{ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }];
         vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
-        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async (p) => ({ ID: 'c1', ...p } as unknown as MJFeatureValueCacheEntity));
+        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async () => cacheRow({ ID: 'c1' }));
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
         const key = await FeatureValueCacheService.Instance.ComputeCacheKey({ KeyFields: ['Title'], RecordData: { Title: 'Owner' } });
         const results = await new InferProcessor('prompt-1', undefined, spec, null).ProcessBatch(records, context);
@@ -312,7 +332,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
     it('keys a cache hit\'s Feature Values on the pin and the input hash, and reports an unchanged hit Unchanged', async () => {
         const records: RecordRef[] = [{ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }];
         vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockImplementation(async (p) => new Map([[p.KeyHashes[0],
-            { ID: 'cache-1', OutputsJSON: '{"StandardTitle":"OWNER","Department":"Sales"}', Reasoning: null, AIPromptRunID: 'run-0' } as unknown as MJFeatureValueCacheEntity]]));
+            await cacheRow({ ID: 'cache-1', OutputsJSON: '{"StandardTitle":"OWNER","Department":"Sales"}', Reasoning: null, AIPromptRunID: 'run-0' })]]));
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues')
             .mockResolvedValue({ Upserted: 0, Unchanged: 2, Previous: { StandardTitle: null, Department: null } });
         const key = await FeatureValueCacheService.Instance.ComputeCacheKey({ KeyFields: ['Title'], RecordData: { Title: 'Owner' } });
@@ -336,7 +356,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         ];
         const before = { ValueText: 'MANAGER', ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null };
         vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
-        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async (p) => ({ ID: 'c1', ...p } as unknown as MJFeatureValueCacheEntity));
+        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async () => cacheRow({ ID: 'c1' }));
         vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockImplementation(async (p) => ({
             Upserted: 2, Unchanged: 0, Previous: { StandardTitle: p.RecordID === 'r1' ? before : null, Department: null },
         }));
@@ -351,7 +371,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const records: RecordRef[] = [{ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }];
         vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
-        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async (p) => ({ ID: 'c1', ...p } as unknown as MJFeatureValueCacheEntity));
+        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async () => cacheRow({ ID: 'c1' }));
         vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockRejectedValue(new Error('FK_FeatureValue_Entity'));
         const results = await new InferProcessor('prompt-1', undefined, spec, null).ProcessBatch(records, context);
         expect(results.get('r1')?.Status).toBe('Failed');
@@ -366,7 +386,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
             { EntityID: 'ent-1', RecordID: 'r2', Record: { Title: 'Owner' } },
         ];
         vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
-        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async (p) => ({ ID: 'c1', ...p } as unknown as MJFeatureValueCacheEntity));
+        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async () => cacheRow({ ID: 'c1' }));
         vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockImplementation(async (p) => {
             if (p.RecordID === 'r2') {
                 throw new Error('FK_FeatureValue_Entity');
@@ -384,7 +404,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const records: RecordRef[] = [{ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }];
         vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
-        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async (p) => ({ ID: 'c1', ...p } as unknown as MJFeatureValueCacheEntity));
+        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async () => cacheRow({ ID: 'c1' }));
         const write = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockRejectedValueOnce(new Error('FK_FeatureValue_Entity'));
         const processor = new InferProcessor('prompt-1', undefined, spec, null);
         await processor.ProcessBatch(records, context);
@@ -397,7 +417,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
 
     it('drops the previous batch\'s per-record state when the next batch starts', async () => {
         vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
-        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async (p) => ({ ID: 'c1', ...p } as unknown as MJFeatureValueCacheEntity));
+        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async () => cacheRow({ ID: 'c1' }));
         vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
         const processor = new InferProcessor('prompt-1', undefined, spec, null);
         await processor.ProcessBatch([{ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }], context);
