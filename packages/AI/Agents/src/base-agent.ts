@@ -3721,9 +3721,11 @@ export class BaseAgent {
             const nextStep = await this.executeNextStep<P>(params, config, currentNextStep, stepCount);
             stepCount++;
 
-            // A step cut short by a cancellation is not a failure: end the run as cancelled before
-            // the step is counted toward the consecutive-failure limit, which would end it as Failed.
-            if (params.cancellationToken?.aborted) {
+            // A failed step cut short by a cancellation is not a failure: end the run as cancelled
+            // before the step is counted toward the consecutive-failure limit, which would end it as
+            // Failed. A step that finished is kept: a final answer the user stopped too late to
+            // prevent still completes the run.
+            if (nextStep.step === 'Failed' && params.cancellationToken?.aborted) {
                 throw new Error('Cancelled during execution');
             }
 

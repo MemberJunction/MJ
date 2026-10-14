@@ -1025,6 +1025,24 @@ describe('BaseAgent.Execute — cancellation', () => {
         expect(harness.run.ErrorMessage).toBe('user stopped the request');
     });
 
+    it('a Stop that lands while a final answer is being processed still completes the run: the work had finished', async () => {
+        const controller = new AbortController();
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const onProgress = (progress: { step: string }): void => {
+            // Fires right after the prompt step's own cancellation check, while its answer is processed.
+            if (progress.step === 'decision_processing') {
+                controller.abort('user stopped too late');
+            }
+        };
+
+        const result = await agent.Execute(makeParams({ cancellationToken: controller.signal, onProgress }));
+
+        expect(controller.signal.aborted).toBe(true);
+        expect(runner.Calls).toHaveLength(1);
+        expect(result.success).toBe(true);
+        expect(harness.run.Status).toBe('Completed');
+    });
+
     it('a token aborted before execution starts yields a cancelled result without creating a run or executing a prompt', async () => {
         const controller = new AbortController();
         controller.abort('cancelled before start');
