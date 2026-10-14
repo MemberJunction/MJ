@@ -11,10 +11,11 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (7 classes)
+// @memberjunction/ai-realtime-client (8 classes)
 import {
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
     OpenAILiveClient,
@@ -34,7 +35,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (448 classes)
+// @memberjunction/core-entities (451 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -203,6 +204,8 @@ import {
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -448,6 +451,7 @@ import {
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
     MJThemeEntity,
+    MJThemeEntityExtended,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -559,13 +563,16 @@ import {
     MJWorkOSProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (10 classes)
+// @memberjunction/ng-conversations (13 classes)
 import {
     AgentMentionProvider,
     ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
+    RealtimeAvatarChannel,
+    RealtimeCameraChannel,
     RealtimeMediaChannel,
+    RealtimeScreenShareChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
     RemoteBrowserChannel,
@@ -704,7 +711,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (109 classes)
+// @memberjunction/ng-dashboards (110 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -767,6 +774,7 @@ import {
     ListsMyListsResource,
     ListsOperationsResource,
     ListsSharedWithMeResource,
+    LoginStudioResourceComponent,
     MCPDashboardComponent,
     MCPResourceComponent,
     MappingWorkspaceComponent,
@@ -846,6 +854,7 @@ import {
 const CLASS_REGISTRATIONS_0: any[] = [
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
     OpenAILiveClient,
@@ -1022,6 +1031,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -1041,13 +1052,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardEntity,
     MJDashboardEntityExtended,
     MJDashboardPartTypeEntity,
-    MJDashboardPermissionEntity,
-    MJDashboardPermissionEntityExtended,
-    MJDashboardUserPreferenceEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardPermissionEntity,
+    MJDashboardPermissionEntityExtended,
+    MJDashboardUserPreferenceEntity,
     MJDashboardUserStateEntity,
     MJDataContextEntity,
     MJDataContextItemEntity,
@@ -1245,13 +1256,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
-    MJTagCoOccurrenceEntity,
-    MJTagEntity,
-    MJTagScopeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJTagCoOccurrenceEntity,
+    MJTagEntity,
+    MJTagScopeEntity,
     MJTagSuggestionEntity,
     MJTagSynonymEntity,
     MJTaggedItemEntity,
@@ -1275,6 +1286,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
     MJThemeEntity,
+    MJThemeEntityExtended,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -1356,7 +1368,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
+    RealtimeAvatarChannel,
+    RealtimeCameraChannel,
     RealtimeMediaChannel,
+    RealtimeScreenShareChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
     RemoteBrowserChannel,
@@ -1445,6 +1460,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RubricFormPolicy,
     RubricPublishPanel,
     RubricScaleFormPolicy,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     RubricScaleLevelsPanel,
     RubricVersionFormPolicy,
     RubricVersionSummaryPanel,
@@ -1452,10 +1471,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     SkillHierarchyPanel,
     TagHierarchyPanel,
     TemplateCategoryHierarchyPanel,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     TestSuiteHierarchyPanel,
     UserHeaderPanel,
     UserOverviewPanel,
@@ -1522,6 +1537,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ListsMyListsResource,
     ListsOperationsResource,
     ListsSharedWithMeResource,
+    LoginStudioResourceComponent,
     MCPDashboardComponent,
     MCPResourceComponent,
     MappingWorkspaceComponent,
@@ -1598,7 +1614,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 728;
+export const CLASS_REGISTRATIONS_COUNT = 736;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

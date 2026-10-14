@@ -24,8 +24,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Model Types&Name=ModelConfiguration"
           },
           "sync": {
-            "lastModified": "2026-10-07T00:07:57.508Z",
-            "checksum": "b0655fd2116a623d3265e3865e9a5277cc0706bfa373718d7e0379b0af8decaa"
+            "lastModified": "2026-10-13T19:00:08.840Z",
+            "checksum": "a557dc4c561c5ddba6a527c68f568215ee97b5d50cdee167d4018e037f301418"
           }
         }
       ]
@@ -58,8 +58,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Models&Name=ModelConfiguration"
           },
           "sync": {
-            "lastModified": "2026-10-07T00:07:57.537Z",
-            "checksum": "b0655fd2116a623d3265e3865e9a5277cc0706bfa373718d7e0379b0af8decaa"
+            "lastModified": "2026-10-13T19:00:08.860Z",
+            "checksum": "a557dc4c561c5ddba6a527c68f568215ee97b5d50cdee167d4018e037f301418"
           }
         }
       ]
@@ -91,8 +91,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Model Vendors&Name=ModelConfiguration"
           },
           "sync": {
-            "lastModified": "2026-10-07T00:07:57.572Z",
-            "checksum": "b0655fd2116a623d3265e3865e9a5277cc0706bfa373718d7e0379b0af8decaa"
+            "lastModified": "2026-10-13T19:00:08.882Z",
+            "checksum": "a557dc4c561c5ddba6a527c68f568215ee97b5d50cdee167d4018e037f301418"
           }
         }
       ]
@@ -124,8 +124,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Prompts&Name=PromptConfiguration"
           },
           "sync": {
-            "lastModified": "2026-10-07T00:07:57.601Z",
-            "checksum": "c1341d29df3c273e06b2fa84a3abd3a585350930066d142af9bc8e82766d44e8"
+            "lastModified": "2026-10-13T19:00:08.903Z",
+            "checksum": "9a423a6034b88ed3de0d6da9b308305ff870f322be0dd450c080f49cc4744c21"
           }
         }
       ]
@@ -157,8 +157,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Prompt Models&Name=PromptConfiguration"
           },
           "sync": {
-            "lastModified": "2026-10-07T00:07:57.630Z",
-            "checksum": "470936ed21cdd729ab7a48132f1527b572be0b10c45b57257394bfd302402be2"
+            "lastModified": "2026-10-13T19:00:08.926Z",
+            "checksum": "b308b365d5f9144d6789035152d8e2d4c2be181fbb0892bbf1c0ae11f41991d7"
           }
         }
       ]
@@ -192,8 +192,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Vendors&Name=Configuration"
           },
           "sync": {
-            "lastModified": "2026-10-07T00:07:57.658Z",
-            "checksum": "749a1aa8606715034adf2d1ca89a0f1a7e4421ab6b284039a716e4b0c81805ca"
+            "lastModified": "2026-10-13T19:00:08.949Z",
+            "checksum": "7e4538655800bd876b8efb63b7a697ab92f716009f7b43fd2701f735e4c2bde9"
           }
         }
       ]

@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ViewChild } from '@angular/core';
 import { Subject } from 'rxjs';
 import { ResourceData, MJCredentialEntity, MJCredentialTypeEntity } from '@memberjunction/core-entities';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -572,9 +572,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         });
         if (!confirmed) return;
 
-        const toDelete = Array.from(this.SelectedCredentials)
-            .map(id => this.Credentials.find(c => UUIDsEqual(c.ID, id)))
-            .filter((c): c is MJCredentialEntity => c != null);
+        const toDelete = this.selectedCredentialEntities();
 
         if (toDelete.length === 0) return;
 
@@ -1005,13 +1003,20 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
 
     // === Bulk Operations ===
 
+    /** The loaded credentials that are selected, in selection order; a selected ID no longer loaded is skipped. */
+    private selectedCredentialEntities(): MJCredentialEntity[] {
+        const credentialsByID = IndexByUUID(this.Credentials);
+        return Array.from(this.SelectedCredentials)
+            .map(id => credentialsByID.Get(id))
+            .filter((c): c is MJCredentialEntity => c != null);
+    }
+
     public async BulkToggleActive(active: boolean): Promise<void> {
         if (!this.UserCanUpdate || this.SelectedCredentials.size === 0) return;
 
         const toUpdate: MJCredentialEntity[] = [];
-        for (const credId of this.SelectedCredentials) {
-            const credential = this.Credentials.find(c => UUIDsEqual(c.ID, credId));
-            if (credential && credential.IsActive !== active) {
+        for (const credential of this.selectedCredentialEntities()) {
+            if (credential.IsActive !== active) {
                 toUpdate.push(credential);
             }
         }
@@ -1069,9 +1074,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         });
         if (!confirmed) return;
 
-        const toDelete = Array.from(this.SelectedCredentials)
-            .map(id => this.Credentials.find(c => UUIDsEqual(c.ID, id)))
-            .filter((c): c is MJCredentialEntity => c != null);
+        const toDelete = this.selectedCredentialEntities();
 
         if (toDelete.length === 0) return;
 

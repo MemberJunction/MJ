@@ -21,12 +21,14 @@ import { ApiKeysChecks } from '../checks/api-keys.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
+import { AiVendorEffortChecks } from '../checks/ai-vendor-effort.checks';
 import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
 import { ConversationCompactionChecks } from '../checks/conversation-compaction.checks';
 import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.checks';
 import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.checks';
+import { AgentPromptCancellationChecks } from '../checks/agent-prompt-cancellation.checks';
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
@@ -60,6 +62,7 @@ import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 import { JSONTypeLiveSyncChecks, JSONTypeLiveSyncClientChecks } from '../checks/jsontype-live-sync.checks';
 import { SelfAvatarClientChecks } from '../checks/self-avatar-client.checks';
+import { ConversationAuthorshipClientChecks } from '../checks/conversation-authorship-client.checks';
 import { RecordCloningChecks } from '../checks/record-cloning.checks';
 import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
@@ -135,6 +138,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['predictive-studio', PredictiveStudioChecks, 5],
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
+        ['ai-vendor-effort', AiVendorEffortChecks, 2],
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
@@ -142,9 +146,10 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
         ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
-        ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
+        ['conversation-compaction', ConversationCompactionChecks, 23], // CC1-CC23
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
         ['agent-decisions-switch', AgentDecisionsSwitchChecks, 9], // DS1-DS9 the decisionsEnabled master switch, scripted chat and decision drivers (IT97)
+        ['agent-prompt-cancellation', AgentPromptCancellationChecks, 2], // APC1-APC2 a run cancelled mid-call stops there and is recorded cancelled (IT122)
         ['agent-loop-live', AgentLoopLiveChecks, 7],
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
@@ -186,6 +191,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
+        ['conversation-authorship-client', ConversationAuthorshipClientChecks, 10], // CA1-CA10 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message (IT115)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
@@ -241,6 +247,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
         'agent-decisions-switch': 9,
+        'agent-prompt-cancellation': 2,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
         'agent-loop-standin': 11,
@@ -274,7 +281,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'communication': 5,
         'concurrent': 2,
         'content-vectorization': 10,
-        'conversation-compaction': 18,
+        'conversation-authorship-client': 10,
+        'conversation-compaction': 23,
         'trailing-runtime-state': 6,
         'dataset-cache': 4,
         'entity-actions': 8,
@@ -284,7 +292,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
         'entity-server-invariants': 9,
-        'entity-writes': 9,
+        'entity-writes': 10,
         'field-rules-bulk-update': 3,
         'fls-enforcement': 24,
         'fls-enforcement-client': 6,
@@ -292,6 +300,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'form-contributions': 17,
         'layered-base-views': 6,
         'lists': 3,
+        'livekit-room': 1,
         'materialized-entity-read': 2,
         'materialized-read': 3,
         'metadata-consistency': 7,
@@ -303,8 +312,9 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'perplexity-decider': 5,
         'predictive-studio': 5,
         'prompt-runner': 1,
+        'ai-vendor-effort': 2,
         'queue': 7,
-        'realtime-deterministic': 12,
+        'realtime-deterministic': 18,
         'realtime-session-guard': 2,
         'realtime-session-verification': 6,
         'record-cloning': 13,
@@ -371,7 +381,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(112);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(116);
     });
 });
 
@@ -443,6 +453,16 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'content-vectorization.CV7',
         'content-vectorization.CV8',
         'content-vectorization.CV9',
+        'conversation-authorship-client.CA1',
+        'conversation-authorship-client.CA10',
+        'conversation-authorship-client.CA2',
+        'conversation-authorship-client.CA3',
+        'conversation-authorship-client.CA4',
+        'conversation-authorship-client.CA5',
+        'conversation-authorship-client.CA6',
+        'conversation-authorship-client.CA7',
+        'conversation-authorship-client.CA8',
+        'conversation-authorship-client.CA9',
         'entity-actions.EA1',
         'entity-actions.EA2',
         'entity-actions.EA3',
@@ -477,6 +497,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'entity-server-invariants.ESI4',
         'entity-server-invariants.ESI9',
         'entity-writes.EW1',
+        'entity-writes.EW10',
         'entity-writes.EW2',
         'entity-writes.EW3',
         'entity-writes.EW5',
@@ -510,6 +531,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'jsontype-live-sync.JL7',
         'jsontype-live-sync.JL8',
         'jsontype-live-sync.JL9',
+        'livekit-room.LKR1',
         'metadata-sync-push.MSP1',
         'metadata-sync-push.MSP10',
         'metadata-sync-push.MSP2',

@@ -1,5 +1,5 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
+import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal } from "@memberjunction/global";
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
@@ -294,7 +294,7 @@ export class GetEntityDetailsAction extends BaseAction {
                 }
             });
             return results
-                .map(r => md.Entities.find(e => UUIDsEqual(e.ID, r.recordId)))
+                .map(r => md.EntityByID(r.recordId))
                 .filter(e => e != null)
                 .map(e => `'${e.Name}'`);
         } catch (error) {

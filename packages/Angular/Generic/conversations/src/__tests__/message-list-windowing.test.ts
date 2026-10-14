@@ -269,6 +269,7 @@ describe('MessageListComponent — prepend reuses existing views', () => {
     h.open['agentRunMap'] = new Map();
     h.open['ratingsMap'] = new Map();
     h.open['attachmentsMap'] = new Map();
+    h.open['_branchSwitcherMap'] = new Map();
     h.open['userAvatarMap'] = new Map();
     h.open['conversation'] = null;
     h.open['currentUser'] = { Name: 'Tester' };

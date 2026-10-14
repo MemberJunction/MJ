@@ -74,3 +74,8 @@
   color: var(--mj-status-success-text, var(--mj-status-success));
   font-weight: 600;
 }
+
+/* "Let the call choose", under the list. */
+.perception-chip__auto {
+  margin-top: 8px;
+}

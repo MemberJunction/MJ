@@ -7,8 +7,8 @@
  *
  * The collections here normalize on every insert and every lookup (via {@link NormalizeUUID}), so
  * they can be used exactly like a native `Set` / `Map` without anyone having to remember to
- * normalize both sides. The helpers cover the four operations those nested scans actually perform:
- * keep matches, drop matches, count per ID, and look up by ID.
+ * normalize both sides. The helpers cover the five operations those nested scans actually perform:
+ * keep matches, drop matches, count per ID, group per ID, and look up by ID.
  *
  * Normalization follows `NormalizeUUID` exactly, including its handling of `null` / `undefined`
  * (both normalize to `''`).
@@ -191,6 +191,29 @@ export function CountByUUID<T>(items: Iterable<T>, getId?: UUIDSelector<T>): UUI
         counts.Set(id, (counts.Get(id) ?? 0) + 1);
     }
     return counts;
+}
+
+/**
+ * The items grouped by ID, each group in `items` order. Look a group up with `.Get(id) ?? []`;
+ * any casing works. Linear, where `items.filter(x => UUIDsEqual(x.ParentID, id))` run once per
+ * `id` scans the whole list every time.
+ *
+ * @example
+ * const rolesByUser = GroupByUUID(userRoles, r => r.UserID);
+ * const roles = rolesByUser.Get(user.ID) ?? [];
+ */
+export function GroupByUUID<T extends { ID: UUIDInput }>(items: Iterable<T>): UUIDMap<T[]>;
+export function GroupByUUID<T>(items: Iterable<T>, getId: UUIDSelector<T>): UUIDMap<T[]>;
+export function GroupByUUID<T>(items: Iterable<T>, getId?: UUIDSelector<T>): UUIDMap<T[]> {
+    const idOf = getId ?? readID;
+    const groups = new UUIDMap<T[]>();
+    for (const item of items) {
+        const id = idOf(item);
+        const group = groups.Get(id);
+        if (group) group.push(item);
+        else groups.Set(id, [item]);
+    }
+    return groups;
 }
 
 /**
