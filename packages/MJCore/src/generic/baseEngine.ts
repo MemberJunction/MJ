@@ -2394,6 +2394,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                         LogStatusEx({ message: `BaseEngine.OnExternalCacheChange: '${config.PropertyName}' already holds the payload's rows — skipped`, verboseOnly: true });
                         return;
                     }
+                    // Rows written under a different field list (a server on the other side of a
+                    // migration) lack columns this process has, or carry ones it does not. Loading
+                    // them would blank the missing columns on every row, so read the rows instead.
+                    if (this.payloadSchemaDiffers(config, parsed.schemaHash)) {
+                        LogStatusEx({ message: `BaseEngine.OnExternalCacheChange: payload for '${config.PropertyName}' was written under a different schema — reloading instead`, verboseOnly: true });
+                        await this.reloadAfterExternalChange(config);
+                        return;
+                    }
                     // Claim a refresh generation BEFORE the awaited materialization — the same
                     // protocol LoadSingleConfig uses around its awaited RunView. Without it, two
                     // overlapping cache events (or an event racing a full reload) can resolve out
@@ -2446,6 +2454,19 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             }
         }
         await this.reloadAfterExternalChange(config);
+    }
+
+    /**
+     * True when a cache-change payload carries a schema hash and it differs from this engine's
+     * hash for the config's entity. A payload without a hash, or an entity this process cannot
+     * resolve, does not count as differing.
+     */
+    private payloadSchemaDiffers(config: BaseEnginePropertyConfig, payloadSchemaHash: unknown): boolean {
+        if (typeof payloadSchemaHash !== 'string' || !payloadSchemaHash || !config.EntityName) {
+            return false;
+        }
+        const ownHash = LocalCacheManager.Instance.ComputeSchemaHash(this.ProviderToUse, config.EntityName);
+        return ownHash !== undefined && ownHash !== payloadSchemaHash;
     }
 
     /**
