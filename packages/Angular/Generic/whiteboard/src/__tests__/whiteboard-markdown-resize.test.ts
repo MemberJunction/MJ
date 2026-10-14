@@ -197,3 +197,40 @@ describe('markdown panel resize — press and release without dragging', () => {
     expect(state.GetItem(md.ID)).toBeUndefined();
   });
 });
+
+describe('markdown panel resize — gestures that never moved the cap', () => {
+  it('a 1px jitter on the bottom handle keeps a cap taller than the content', () => {
+    const { board, state } = makeBoard();
+    const md = state.AddItem({ Kind: 'markdown', X: 0, Y: 0, W: 280, H: 400, Markdown: 'short answer' }, 'agent');
+    // a real mouse or trackpad click often delivers one pixel of travel before pointerup
+    drag(board, state, md.ID, 's', 0, 1, 80);
+    expect((state.GetItem(md.ID) as WhiteboardMarkdownItem).H).toBe(400);
+  });
+
+  it('a jitter under the click threshold records no undo step', () => {
+    const { board, state } = makeBoard();
+    const md = state.AddItem({ Kind: 'markdown', X: 0, Y: 0, W: 280, H: 400, Markdown: 'short answer' }, 'agent');
+    drag(board, state, md.ID, 'se', 2, 2, 80);
+    state.Undo();
+    expect(state.GetItem(md.ID)).toBeUndefined();
+  });
+
+  it('a corner handle dragged only sideways widens the panel and keeps its cap', () => {
+    const { board, state } = makeBoard();
+    const md = state.AddItem({ Kind: 'markdown', X: 0, Y: 0, W: 280, H: 400, Markdown: 'short answer' }, 'agent');
+    drag(board, state, md.ID, 'se', 100, 0, 80);
+    const after = state.GetItem(md.ID) as WhiteboardMarkdownItem;
+    expect(after.W).toBe(380);
+    expect(after.H).toBe(400);
+  });
+
+  it('a corner handle dragged only sideways leaves an uncapped panel uncapped', () => {
+    const { board, state } = makeBoard();
+    const md = state.AddItem({ Kind: 'markdown', X: 100, Y: 0, W: 280, Markdown: LONG_MD }, 'agent');
+    drag(board, state, md.ID, 'sw', -60, 0, 300);
+    const after = state.GetItem(md.ID) as WhiteboardMarkdownItem;
+    expect(after.X).toBe(40);
+    expect(after.W).toBe(340);
+    expect(after.H).toBeUndefined();
+  });
+});

@@ -102,7 +102,7 @@ function renderedMarkdownBodyHeight(handleEl: EventTarget | null): number | null
 
 type BoardInteraction =
   | { Type: 'move'; ItemID: string; StartX: number; StartY: number; OrigBounds: WhiteboardBounds; DX: number; DY: number; Moved: boolean; Group: boolean }
-  | { Type: 'resize'; ItemID: string; Handle: ResizeHandle; StartX: number; StartY: number; OrigBounds: WhiteboardBounds; CurBounds: WhiteboardBounds; MinH: number }
+  | { Type: 'resize'; ItemID: string; Handle: ResizeHandle; StartX: number; StartY: number; OrigBounds: WhiteboardBounds; CurBounds: WhiteboardBounds; MinH: number; Moved: boolean }
   | { Type: 'pen'; Points: WhiteboardPoint[] }
   | { Type: 'shape'; StartX: number; StartY: number; CurX: number; CurY: number }
   | { Type: 'marquee'; StartX: number; StartY: number; CurX: number; CurY: number; Additive: boolean }
@@ -916,7 +916,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     const bounds = this.resizeStartBounds(item, event);
     // a markdown panel can't be dragged below its minimum, unless its content is already shorter
     const minH = item.Kind === 'markdown' ? Math.min(WHITEBOARD_DEFAULTS.MarkdownMinH, bounds.H) : RESIZE_MIN_SIZE;
-    this.Interaction = { Type: 'resize', ItemID: item.ID, Handle: handle, StartX: p.X, StartY: p.Y, OrigBounds: bounds, CurBounds: { ...bounds }, MinH: minH };
+    this.Interaction = { Type: 'resize', ItemID: item.ID, Handle: handle, StartX: p.X, StartY: p.Y, OrigBounds: bounds, CurBounds: { ...bounds }, MinH: minH, Moved: false };
   }
 
   /**
@@ -959,9 +959,18 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
         }
         break;
       }
-      case 'resize':
-        i.CurBounds = this.resizeBounds(i.OrigBounds, i.Handle, p.X - i.StartX, p.Y - i.StartY, i.MinH);
+      case 'resize': {
+        const dx = p.X - i.StartX;
+        const dy = p.Y - i.StartY;
+        // same click threshold as a move: a press often carries a pixel of travel before pointerup
+        if (!i.Moved && Math.hypot(dx, dy) > 3) {
+          i.Moved = true;
+        }
+        if (i.Moved) {
+          i.CurBounds = this.resizeBounds(i.OrigBounds, i.Handle, dx, dy, i.MinH);
+        }
         break;
+      }
       case 'pen': {
         const last = i.Points[i.Points.length - 1];
         if (Math.hypot(p.X - last.X, p.Y - last.Y) > 2.2) {
@@ -1027,17 +1036,19 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
         break;
       }
       case 'resize': {
-        // a press and release with no drag commits nothing: a markdown gesture starts from the
-        // rendered height, so committing it would lower a cap the content doesn't fill
-        if (sameBounds(i.CurBounds, i.OrigBounds)) {
+        // a click (no travel past the threshold) or a drag back to the start commits nothing,
+        // and so records no undo step
+        if (!i.Moved || sameBounds(i.CurBounds, i.OrigBounds)) {
           break;
         }
         const item = this.State.GetItem(i.ItemID);
         // per-kind commit: full-box kinds and markdown take X/Y/W/H; content-driven-height
         // kinds (sticky/text/image) take X/Y/W only — see BuildResizeCommitPatch. A markdown
-        // panel's H is its max-height cap, so only a top/bottom handle moves it.
+        // panel's H is its max-height cap, and the gesture starts from the rendered height, so H
+        // is committed only when a top/bottom handle actually moved it: otherwise a corner
+        // dragged sideways would lower a cap the content doesn't fill (or cap an uncapped panel).
         const patch = item ? BuildResizeCommitPatch(item.Kind, i.CurBounds) : null;
-        if (patch && item?.Kind === 'markdown' && !touchesVerticalEdge(i.Handle)) {
+        if (patch && item?.Kind === 'markdown' && (!touchesVerticalEdge(i.Handle) || i.CurBounds.H === i.OrigBounds.H)) {
           delete patch.H;
         }
         if (patch) {
