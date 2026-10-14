@@ -21,7 +21,7 @@ import {
     MJTemplateContentEntity,
     KnowledgeHubMetadataEngine
 } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, NormalizeUUID, EscapeSQLString } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 import { KPICardData } from '../widgets/kpi-card.component';
@@ -1679,7 +1679,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
      * Matched on Name, because that is the identity the database itself enforces.
      *
      * An existing document is adopted only when this dialog created it — its TemplateID points
-     * at the template named `Template for <document name>`. A collision with a document
+     * at the template named `Template for <document name>` — and only for the same entity, so a
+     * retry never moves another entity's document. A collision with a document
      * authored anywhere else is refused, because silently overwriting somebody's configured
      * document is worse than asking for a different name.
      */
@@ -1688,7 +1689,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         const rv = RunView.FromMetadataProvider(md);
         const existing = await rv.RunView<MJEntityDocumentEntity>({
             EntityName: 'MJ: Entity Documents',
-            ExtraFilter: `Name='${this.escapeForFilter(this.SaveDocumentName)}'`,
+            ExtraFilter: `Name='${EscapeSQLString(this.SaveDocumentName)}'`,
             ResultType: 'entity_object',
             MaxRows: 1,
         });
@@ -1702,6 +1703,14 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 throw new Error(
                     `An Entity Document named "${this.SaveDocumentName}" already exists and was not ` +
                     `created here, so it will not be overwritten. Choose a different name.`
+                );
+            }
+            // Adopting a document for another entity would move it to this one.
+            const entity = md.Entities.find(e => e.Name === this.SuggestEntityName);
+            if (entity && priorDoc.EntityID && !UUIDsEqual(priorDoc.EntityID, entity.ID)) {
+                throw new Error(
+                    `An Entity Document named "${this.SaveDocumentName}" already exists for ` +
+                    `${priorDoc.Entity || 'another entity'}, so it will not be reused. Choose a different name.`
                 );
             }
             return priorDoc;
@@ -1730,8 +1739,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         const existing = await rv.RunView<MJTemplateEntity>({
             EntityName: 'MJ: Templates',
             ExtraFilter: adoptedTemplateId
-                ? `ID='${this.escapeForFilter(adoptedTemplateId)}'`
-                : `Name='${this.escapeForFilter(templateName)}' AND UserID='${md.CurrentUser.ID}'`,
+                ? `ID='${EscapeSQLString(adoptedTemplateId)}'`
+                : `Name='${EscapeSQLString(templateName)}' AND UserID='${md.CurrentUser.ID}'`,
             ResultType: 'entity_object',
             MaxRows: 1,
         });
@@ -1781,10 +1790,6 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         return result.Success && result.Results.length > 0 && result.Results[0].Name === name;
     }
 
-    /** Escapes a value for use inside a single-quoted ExtraFilter literal. */
-    private escapeForFilter(value: string): string {
-        return value.replace(/'/g, "''");
-    }
 
     /** Build grouped entity list from metadata, grouped by SchemaName */
     private loadEntityGroups(): void {

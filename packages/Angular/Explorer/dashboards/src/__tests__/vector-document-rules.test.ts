@@ -43,6 +43,7 @@ vi.mock('@memberjunction/global', () => ({
     UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) =>
         !!a && !!b && a.toLowerCase() === b.toLowerCase(),
     NormalizeUUID: (v: string) => v.toLowerCase(),
+    EscapeSQLString: (v: string | null | undefined) => (v ?? '').replace(/\0/g, '').replace(/'/g, "''"),
 }));
 
 vi.mock('@memberjunction/ng-shared', () => ({
@@ -559,6 +560,25 @@ describe('the save path writes what the user chose', () => {
         seedRow(activeStore, 'MJ: Templates', { ID: 'their-template', Name: 'Hand-built template' });
 
         await expect(component['findOrCreateEntityDocument']()).rejects.toThrow(/already exists/);
+    });
+
+    it('refuses to adopt a same-named document that belongs to another entity', async () => {
+        // The adoption guard checked only the template name, so a document this dialog made for
+        // Orders was adopted when the user typed its name while vectorizing Members, and the
+        // save then moved it to Members. Before adoption existed, the name collision failed.
+        component.SuggestUseCase = 'search';
+        component.SuggestEntityName = 'Members';
+        seedRow(activeStore, 'MJ: Templates', {
+            ID: 'tpl-orders', Name: 'Template for Members - search', UserID: 'user-1',
+        });
+        const ordersDoc = seedRow(activeStore, 'MJ: Entity Documents', {
+            ID: 'doc-orders', Name: 'Members - search', TemplateID: 'tpl-orders', EntityID: 'e3', Entity: 'Orders',
+        });
+
+        await expect(component['findOrCreateEntityDocument']()).rejects.toThrow(/Orders/);
+        await component.SaveAsEntityDocument();
+        expect(ordersDoc['EntityID']).toBe('e3');
+        expect(activeStore.saves.filter((s) => s.entityName === 'MJ: Entity Documents')).toHaveLength(0);
     });
 
     it('an adopted document keeps the template it already points at, even when another user made it', async () => {
