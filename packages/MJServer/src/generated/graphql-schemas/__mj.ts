@@ -92367,6 +92367,12 @@ export class MJTheme_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "The published sign-in page design as JSON (the LoginDesign shape from @memberjunction/theme-engine): layout, background, colors and the blocks in each login-screen region. The default Active theme's value is served unauthenticated to draw the Explorer login screen. NULL means the stock login screen."}) 
+    LoginScreen?: string;
+        
+    @Field({nullable: true, description: "The sign-in page design being edited in Login Studio, as JSON in the same shape as LoginScreen. Never served publicly; publishing copies it to LoginScreen. NULL means no draft."}) 
+    LoginScreenDraft?: string;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         
@@ -92413,6 +92419,12 @@ export class CreateMJThemeInput {
     @Field({ nullable: true })
     CustomCSS: string | null;
 
+    @Field({ nullable: true })
+    LoginScreen: string | null;
+
+    @Field({ nullable: true })
+    LoginScreenDraft: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -92458,6 +92470,12 @@ export class UpdateMJThemeInput {
 
     @Field({ nullable: true })
     CustomCSS?: string | null;
+
+    @Field({ nullable: true })
+    LoginScreen?: string | null;
+
+    @Field({ nullable: true })
+    LoginScreenDraft?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
