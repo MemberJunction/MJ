@@ -1,5 +1,5 @@
 import { RegisterClass } from "@memberjunction/global";
-import { AIErrorInfo, AvatarInfo, AvatarVideoParams, BaseVideoGenerator, VideoResult, ErrorAnalyzer } from "@memberjunction/ai";
+import { AIErrorInfo, AvatarInfo, AvatarVideoParams, BaseVideoGenerator, BuildCancellationErrorInfo, IsRequestAborted, VideoResult, ErrorAnalyzer } from "@memberjunction/ai";
 import { HttpGet, HttpPost, IsHttpError } from "@memberjunction/network-utils";
 
 
@@ -30,6 +30,10 @@ export class HeyGenVideoGenerator extends BaseVideoGenerator {
         super(apiKey);
     }
 
+    /**
+     * Requests an avatar video. `params.CancellationToken` is passed to the request, so aborting it
+     * tears the request down; the failure is then classified as a cancellation.
+     */
     public async CreateAvatarVideo(params: AvatarVideoParams): Promise<VideoResult> {
         const videoResult = new VideoResult();
         try {
@@ -60,14 +64,15 @@ export class HeyGenVideoGenerator extends BaseVideoGenerator {
                     }
                 },
                 {
-                    Headers: { Accept: 'application/json', 'X-Api-Key': this.apiKey }
+                    Headers: { Accept: 'application/json', 'X-Api-Key': this.apiKey },
+                    Signal: params.CancellationToken,
                 }
             );
 
             videoResult.videoId = response.Data.data.video_id;
             videoResult.success = true;
         } catch (error) {
-            const errorInfo = this.classifyError(error);
+            const errorInfo = this.classifyError(error, params.CancellationToken);
             videoResult.success = false;
             videoResult.errorMessage = error?.message || 'Unknown error occurred';
             // Kept so a caller can tell a rejected request (a 400) from an outage: the message,
@@ -82,9 +87,14 @@ export class HeyGenVideoGenerator extends BaseVideoGenerator {
      * Classifies a failed request. `HttpError` carries the response's status as `Status`, which
      * `ErrorAnalyzer` does not read, so the analyzer is given the status, and the `retry-after`
      * header, under the names it reads. The original error stays on the result. A request that got
-     * no response (status 0: a timeout or a network failure) is classified from its message.
+     * no response (status 0: a timeout or a network failure) is classified from its message. A
+     * request ended by its `CancellationToken` is a cancellation, never failed over, or a network
+     * error when the signal was aborted by a timeout.
      */
-    private classifyError(error: unknown): AIErrorInfo {
+    private classifyError(error: unknown, signal: AbortSignal | undefined): AIErrorInfo {
+        if (IsRequestAborted(error, signal) || (IsHttpError(error) && error.IsCancelled)) {
+            return BuildCancellationErrorInfo({ error, signal, provider: 'HeyGen' });
+        }
         if (IsHttpError(error) && error.Status > 0) {
             const withStatus = { name: error.name, message: error.message, status: error.Status, headers: error.Headers };
             return { ...ErrorAnalyzer.AnalyzeError(withStatus, 'HeyGen'), error };
