@@ -15,6 +15,7 @@ export * from './ThemeStudio/theme-studio-dashboard.component';
 export * from './ThemeStudio/theme-studio-resource.component';
 export * from './ThemeStudio/theme-manager-dashboard.component';
 export * from './ThemeStudio/theme-manager-resource.component';
+export * from './LoginStudio/login-studio-resource.component';
 export * from './DevTools';
 export * from './Admin';
 export * from './Lists';

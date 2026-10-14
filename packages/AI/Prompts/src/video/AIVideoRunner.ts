@@ -56,7 +56,7 @@ export class AIVideoRunner extends BaseMediaRunner<AIAvatarVideoRunParams, BaseV
     const outcome = await this.RunMediaOperation(params, {
       Name: 'CreateAvatarVideo',
       Validate: p => (p.avatarId && p.avatarId.trim().length > 0 ? undefined : 'An avatar is required (params.avatarId)'),
-      Invoke: driver => driver.CreateAvatarVideo(this.DriverParams<AvatarVideoParams>(params)),
+      Invoke: (driver, _apiName, signal) => driver.CreateAvatarVideo(this.DriverParams<AvatarVideoParams>(params, signal)),
       DescribeRequest: p => this.describeRequest(p),
       DescribeOutput: output => this.describeVideo(output),
     });
