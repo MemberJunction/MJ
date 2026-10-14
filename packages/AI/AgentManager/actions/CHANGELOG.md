@@ -1,5 +1,55 @@
 # @memberjunction/ai-agent-manager-actions
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [51c469d]
+- Updated dependencies [432cb73]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [822ed69]
+- Updated dependencies [0dbd455]
+- Updated dependencies [49f26d9]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [7316ac3]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [aee2d53]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [25f7b82]
+- Updated dependencies [02bb563]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [a28ce42]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/ai-core-plus@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/ai-engine-base@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/actions@6.2.0-edge.4
+  - @memberjunction/ai-agent-manager@6.2.0-edge.4
+  - @memberjunction/actions-base@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes

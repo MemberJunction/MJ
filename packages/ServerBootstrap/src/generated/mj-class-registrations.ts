@@ -121,9 +121,10 @@ import {
     OllamaLLM,
 } from '@memberjunction/ai-ollama';
 
-// @memberjunction/ai-openai (6 classes)
+// @memberjunction/ai-openai (7 classes)
 import {
     OpenAIAudioGenerator,
+    OpenAIDecision,
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
@@ -1710,6 +1711,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OllamaEmbedding,
     OllamaLLM,
     OpenAIAudioGenerator,
+    OpenAIDecision,
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
@@ -1878,11 +1880,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCollectionPermissionEntity,
     MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
-    MJCommunicationLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCommunicationLogEntity,
     MJCommunicationProviderEntity,
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
@@ -2082,11 +2084,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueueTypeEntity,
     MJRSUPendingWorkEntity,
     MJRecommendationEntity,
-    MJRecommendationItemEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
@@ -2286,11 +2288,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetJotFormStatisticsAction,
     GetJotFormSubmissionsAction,
     GetSingleGoogleFormsResponseAction,
-    GetSingleJotFormSubmissionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetSingleJotFormSubmissionAction,
     GetSingleSurveyMonkeyResponseAction,
     GetSingleTypeformResponseAction,
     GetSurveyMonkeyDetailsAction,
@@ -2490,11 +2492,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     VectorSearchProvider,
     VoyageReRanker,
     AISkillExportMarkdownServerOperation,
-    AISkillImportMarkdownServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
     ClientOnlyChannelServer,
@@ -2694,11 +2696,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
-    CloneRecordAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
     ComposeListsAction,
@@ -2874,7 +2876,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1159;
+export const CLASS_REGISTRATIONS_COUNT = 1160;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
