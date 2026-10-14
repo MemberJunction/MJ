@@ -119,10 +119,18 @@ export function QuotedLiteralText(literal: string): string {
 
 type DriverTypeFactory = (length?: number) => sql.ISqlType;
 
-/** The driver's types keyed by lower-cased SQL Server type name (`nvarchar` → `NVarChar`, …). */
-const driverTypesByName = new Map<string, DriverTypeFactory>(
-  Object.entries(sql.TYPES).map(([name, factory]: [string, DriverTypeFactory]) => [name.toLowerCase(), factory]),
-);
+let driverTypesByNameCache: Map<string, DriverTypeFactory> | undefined;
+
+/**
+ * The driver's types keyed by lower-cased SQL Server type name (`nvarchar` → `NVarChar`, …). Built
+ * on first use, not at import: loading this module must not depend on the driver's type table.
+ */
+function driverTypesByName(): Map<string, DriverTypeFactory> {
+  driverTypesByNameCache ??= new Map<string, DriverTypeFactory>(
+    Object.entries(sql.TYPES).map(([name, factory]: [string, DriverTypeFactory]) => [name.toLowerCase(), factory]),
+  );
+  return driverTypesByNameCache;
+}
 
 /**
  * Exact numeric types. The driver encodes these through a JavaScript double (`parseFloat`, then
@@ -154,10 +162,10 @@ export function SaveParameterType(field: EntityFieldInfo): sql.ISqlType {
   switch (name) {
     case 'varchar':
     case 'char':
-      return driverTypesByName.get(name)(length);
+      return driverTypesByName().get(name)(length);
     case 'nvarchar':
     case 'nchar':
-      return driverTypesByName.get(name)(field.Length > 0 ? field.Length / 2 : sql.MAX);
+      return driverTypesByName().get(name)(field.Length > 0 ? field.Length / 2 : sql.MAX);
     case 'binary':
     case 'varbinary':
       // The literal is a `0x…` varbinary; a binary(n) variable pads it the same way.
@@ -168,7 +176,7 @@ export function SaveParameterType(field: EntityFieldInfo): sql.ISqlType {
   if (EXACT_NUMERIC_TYPES.has(name) || SENT_AS_LITERAL_TEXT.has(name)) {
     return sql.VarChar(sql.MAX);
   }
-  const factory = NEVER_WRITTEN.has(name) ? undefined : driverTypesByName.get(name);
+  const factory = NEVER_WRITTEN.has(name) ? undefined : driverTypesByName().get(name);
   if (!factory) {
     throw new Error(`Field "${field.Name}" has SQL type "${field.Type}", which SQLServerDataProvider cannot send as a save parameter`);
   }
