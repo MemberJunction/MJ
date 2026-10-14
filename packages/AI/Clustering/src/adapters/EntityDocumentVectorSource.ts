@@ -178,6 +178,12 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
                 // VectorBinary is a binary field, omitted from RunView unless asked for. Over the wire it is
                 // base64 (~5.3 chars per dimension), still far smaller than VectorJSON's decimal text.
                 IncludeBinaryFields: true,
+                // Only the columns toInputVectors reads, so DocumentText is never loaded.
+                Fields: ['ID', 'RecordID', 'EntityID', 'Entity', 'EntityDocumentID', 'VectorBinary', 'VectorJSON'],
+                // A cached RunView fetches every column so its slot can serve any field set, which would
+                // pull each record's DocumentText here and hold every vector in the cache. Bypass it so
+                // Fields is honoured.
+                BypassCache: true,
             },
             this.contextUser,
         );
