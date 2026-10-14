@@ -250,7 +250,7 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
    * nor re-sent from the next user's session.
    */
   protected async clearClientCaches(): Promise<void> {
-    await ReleaseRecordingShardsAtLogout(Metadata.Provider);
+    await ReleaseRecordingShardsAtLogout(Metadata.Provider); // global-provider-ok: logout ends the single signed-in Explorer session, whose provider is the global one
 
     const preserved = this.preservedLocalStorageKeys;
     const keysToRemove: string[] = [];

@@ -704,7 +704,7 @@ export class RealtimeSessionRuntime {
    * that holds a recorder until that teardown settles — which includes waiting (at most
    * {@link RECORDING_TERMINAL_ACK_TIMEOUT_MS}) for the server to acknowledge the recording's terminal
    * request. False at construction and for unrecorded sessions. Exists for #5195; the runtime is
-   * platform-free, so hosts own the reaction (a browser `beforeunload` guard, a "saving" indicator,
+   * platform-free, so hosts own the reaction (a "saving" indicator, a disabled navigation button,
    * etc.).
    */
   public readonly SavingRecording$: Observable<boolean> = this._savingRecording$.asObservable();
