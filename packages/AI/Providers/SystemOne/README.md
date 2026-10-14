@@ -217,5 +217,5 @@ Registered as `SubQDecision` via `@RegisterClass(BaseDecision, 'SubQDecision')`.
 
 ## Dependencies
 
-- `@memberjunction/ai` - Core AI abstractions, including `BaseSystemOneDecision`
+- `@memberjunction/ai` - Core AI abstractions, including `BaseSystemOneDecision` and `BaseHostedSystemOneDecision`
 - `@memberjunction/global` - Class registration

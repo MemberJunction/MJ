@@ -240,10 +240,12 @@ describe('SubQDecision', () => {
       expect(result.errorInfo).toMatchObject({ errorType: 'ModelError', severity: 'Retriable', canFailover: true });
     });
 
+    // The message is hypothetical and names no billing word, so ErrorAnalyzer's keyword check cannot
+    // classify it: only the driver's 402 mapping makes it NoCredit.
     it('makes a 402 (no credits) a NoCredit error that allows failover', async () => {
-      const result = await run({ detail: { error_type: 'insufficient_credits', message: 'Insufficient credits.' } }, 402);
+      const result = await run({ detail: { error_type: 'account_error', message: 'Account access is unavailable.' } }, 402);
 
-      expect(result.errorMessage).toBe('SubQ Decisions API returned HTTP 402: insufficient_credits: Insufficient credits.');
+      expect(result.errorMessage).toBe('SubQ Decisions API returned HTTP 402: account_error: Account access is unavailable.');
       expect(result.errorInfo).toMatchObject({ errorType: 'NoCredit', severity: 'Retriable', canFailover: true, httpStatusCode: 402 });
     });
 

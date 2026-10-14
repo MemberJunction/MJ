@@ -69,6 +69,6 @@ Existing credentials can be enough to reach it: an Inception key bound to the `I
 
 ## Dependencies
 
-- `@memberjunction/ai` - Core AI abstractions, including `BaseSystemOneDecision`
+- `@memberjunction/ai` - Core AI abstractions, including `BaseHostedSystemOneDecision`
 - `@memberjunction/ai-openai` - `OpenAILLM`, which `InceptionLLM` extends
 - `@memberjunction/global` - Class registration
