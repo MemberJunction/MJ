@@ -513,8 +513,15 @@ export class ToolArgumentsError extends Error {
  * reaches for the global default provider, so it is safe in multi-provider/multi-tenant servers.
  */
 export class RealtimeClientSessionService {
-    /** Maps session id -> (wireName -> MJActionEntityExtended) built during tool projection. */
-    protected readonly sessionWireActionMaps = new Map<string, Map<string, MJActionEntityExtended>>();
+    /**
+     * Maps session id -> (wireName -> MJActionEntityExtended) built during tool projection. Every
+     * prepared session records an entry, even an empty one, and the service has no session-ended
+     * hook, so it is bounded. An evicted session falls back to the target agent's own metadata.
+     */
+    protected readonly sessionWireActionMaps = new MJLruCache<string, Map<string, MJActionEntityExtended>>({
+        maxSize: 5_000,
+        ttlMs: 4 * 60 * 60 * 1000, // 4h, generous vs. any realistic voice-session duration
+    });
 
     /** Maps targetAgentID -> (wireName -> MJActionEntityExtended) fallback built during tool projection. */
     protected readonly targetWireActionMaps = new Map<string, Map<string, MJActionEntityExtended>>();
@@ -2778,7 +2785,7 @@ export class RealtimeClientSessionService {
 
         const wireMap = this.buildWireActionMap(allowedActions);
         if (agentSessionID) {
-            this.sessionWireActionMaps.set(agentSessionID, wireMap);
+            this.sessionWireActionMaps.Set(agentSessionID, wireMap);
             if (directConfig) {
                 this.sessionDirectConfigs.set(agentSessionID, directConfig);
             }
@@ -2795,7 +2802,7 @@ export class RealtimeClientSessionService {
     /** Records that a session projected no direct actions, so its relays run none. */
     private recordEmptyProjection(agentSessionID: string | undefined): void {
         if (agentSessionID) {
-            this.sessionWireActionMaps.set(agentSessionID, new Map<string, MJActionEntityExtended>());
+            this.sessionWireActionMaps.Set(agentSessionID, new Map<string, MJActionEntityExtended>());
         }
     }
 
@@ -2889,7 +2896,7 @@ export class RealtimeClientSessionService {
             };
         }
 
-        const projection = input?.AgentSessionID ? this.sessionWireActionMaps.get(input.AgentSessionID) : undefined;
+        const projection = input?.AgentSessionID ? this.sessionWireActionMaps.Get(input.AgentSessionID) : undefined;
         const candidateWireMap = this.buildWireActionMap(this.getTargetAgentActions(target.ID));
         const action = this.findWireAction(projection, call.ToolName) ?? this.findWireAction(candidateWireMap, call.ToolName);
 
