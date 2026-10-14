@@ -1,5 +1,54 @@
 # @memberjunction/encryption
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- fcf8e1c: A value encrypted with a key this install doesn't have now logs one warning per key instead of an error on every load.
+
+  An app can ship values already encrypted with its own key, an MJ Encryption Key whose material only some installs are given (say, an environment variable). On an install without that key, every load of every such row logged `Failed to decrypt field …`, at MJAPI startup too, because the credential engine loads all credentials.
+  - **`EncryptionKeyUnavailableError`** (code `ENCRYPTION_KEY_UNAVAILABLE`). `EncryptionEngine` throws it when reading a key fails and the key's source reports it doesn't hold the key (`KeyExists` is false), for example an unset environment variable. Any other failure is thrown as before. The check runs only after a failed read, so a remote key source costs nothing extra on the normal path.
+  - **`IsEncryptionKeyUnavailable(err)`** checks the code rather than the class, so it still works when two copies of the package are loaded. **`ReportEncryptionKeyUnavailable(err)`** logs one warning per key per process, naming where the key is looked for.
+  - **Decrypt on load** (`GenericDatabaseProvider`) and **API decryption** (`ResolverBase`) report an unavailable key once and leave the value as it was: still encrypted on load, the encrypted sentinel in an API response. Other decrypt failures are still logged as errors.
+
+- be3dae0: Startup no longer raises an alarm for an encryption key that no entity field encrypts with.
+
+  The startup validator printed `ENCRYPTION KEY VALIDATION FAILED`, and failed validation, for every active key whose material was missing. It told the operator to generate a random key. That is right for a key fields encrypt with, because saves through those fields fail without it. It is wrong for a key that only decrypts values encrypted elsewhere, such as an app's own key that ships pre-encrypted credentials and is given only to some installs: the app works without it, and a random key can never decrypt those values.
+  - **Keys entity fields encrypt with** are unchanged: a missing or unusable one still prints the box and fails validation.
+  - **Any other key**, when not configured on this install, logs the same single "not configured on this install" warning that decryption gives, deduplicated with it. When it is configured but unusable, it logs a warning with the source's own error. Neither fails validation.
+  - `ValidateAllKeys` results gain `IsConfigured` on a failure: whether the source holds the key at all. It is asked only after a failure, so remote sources cost nothing extra.
+
+- Updated dependencies [a709bb6]
+- Updated dependencies [432cb73]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [49f26d9]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [7316ac3]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/actions-base@6.2.0-edge.4
+  - @memberjunction/credentials@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes

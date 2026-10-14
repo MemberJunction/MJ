@@ -121,9 +121,10 @@ import {
     OllamaLLM,
 } from '@memberjunction/ai-ollama';
 
-// @memberjunction/ai-openai (6 classes)
+// @memberjunction/ai-openai (7 classes)
 import {
     OpenAIAudioGenerator,
+    OpenAIDecision,
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
@@ -1442,6 +1443,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OllamaEmbedding,
     OllamaLLM,
     OpenAIAudioGenerator,
+    OpenAIDecision,
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
