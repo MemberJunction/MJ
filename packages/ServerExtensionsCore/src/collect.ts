@@ -9,6 +9,7 @@
  * `dynamicPackages` is stripped from MJServer's Zod-parsed `configInfo`.
  */
 
+import { TrimTrailingSlashes } from '@memberjunction/global';
 import { ServerExtensionConfig } from './types.js';
 
 /** Named export Open App server packages use to publish their extension configs. */
@@ -277,7 +278,7 @@ function normalizeRoot(rootPath: string): string {
     if (trimmed === '/') {
         return '/';
     }
-    return trimmed.replace(/\/+$/, '') || '/';
+    return TrimTrailingSlashes(trimmed) || '/';
 }
 
 /** Case-folded root for comparison. Express routing is case-insensitive by default. */
@@ -377,7 +378,7 @@ export interface PrepareServerExtensionOptions extends NormalizeServerExtensionO
 
 /** Prefixes a validated, normalized RootPath with the API root (`''` / `/` leaves it unchanged). */
 export function ComposeServerExtensionMountPath(apiRootPath: string | undefined, rootPath: string): string {
-    const prefix = (apiRootPath ?? '').trim().replace(/\/+$/, '');
+    const prefix = TrimTrailingSlashes((apiRootPath ?? '').trim());
     if (prefix && !prefix.startsWith('/')) {
         throw new Error(`API root path must start with '/', got '${prefix}'`);
     }

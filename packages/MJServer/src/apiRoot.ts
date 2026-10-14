@@ -28,7 +28,7 @@ export function NormalizeApiRootPath(rootPath: string | undefined): string {
     if (trimmed && !trimmed.startsWith('/')) {
         throw new Error(`GRAPHQL_ROOT_PATH must start with '/', got '${trimmed}'`);
     }
-    return trimmed.replace(/\/+$/, '');
+    return TrimTrailingSlashes(trimmed);
 }
 
 function assertSubpath(subpath: string): void {

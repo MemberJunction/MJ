@@ -18,4 +18,11 @@ describe('ResolveAPIRootURL', () => {
         expect(ResolveAPIRootURL('https://host/api/graphql', '  ')).toBe('https://host/api');
         expect(ResolveAPIRootURL('https://host/api/graphql', null)).toBe('https://host/api');
     });
+
+    it('handles a long run of slashes (linear trim, no polynomial regex)', () => {
+        const slashes = '/'.repeat(100_000);
+        expect(ResolveAPIRootURL(`https://host/api${slashes}graphql${slashes}`)).toBe('https://host/api');
+        expect(ResolveAPIRootURL(`https://host/api/graphql${slashes}`)).toBe('https://host/api');
+        expect(ResolveAPIRootURL('x', `https://host/api${slashes}`)).toBe('https://host/api');
+    });
 });

@@ -1,3 +1,7 @@
+import { TrimTrailingSlashes } from '@memberjunction/global';
+
+const GRAPHQL_SUFFIX = '/graphql';
+
 /**
  * The public URL of the MJAPI API root, for browser code (MJ #5674).
  *
@@ -22,7 +26,10 @@
 export function ResolveAPIRootURL(graphqlUrl: string, explicitApiRootUrl?: string | null): string {
     const explicit = explicitApiRootUrl?.trim();
     if (explicit) {
-        return explicit.replace(/\/+$/, '');
+        return TrimTrailingSlashes(explicit);
     }
-    return (graphqlUrl ?? '').trim().replace(/\/+$/, '').replace(/\/graphql$/i, '').replace(/\/+$/, '');
+    // No regex here: these are host-supplied strings, and /\/+$/ is polynomial on long runs of '/'.
+    const url = TrimTrailingSlashes((graphqlUrl ?? '').trim());
+    const withoutGraphQL = url.toLowerCase().endsWith(GRAPHQL_SUFFIX) ? url.slice(0, -GRAPHQL_SUFFIX.length) : url;
+    return TrimTrailingSlashes(withoutGraphQL);
 }
