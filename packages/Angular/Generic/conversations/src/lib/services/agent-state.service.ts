@@ -243,9 +243,8 @@ export class AgentStateService implements OnDestroy {
         return 'acknowledging';
       }
 
-      // Check if nearing completion (has results or output)
-      if (run.Result || run.Status === 'Completed') {
-        // If there's output, likely completing
+      // A run that is no longer Running has reached its final block
+      if (run.Status !== 'Running') {
         return 'completing';
       }
 
@@ -261,13 +260,14 @@ export class AgentStateService implements OnDestroy {
    * Extracts confidence score from agent run if available
    */
   private extractConfidence(run: MJAIAgentRunEntity): number | null {
-    // Try to parse confidence from Result or other fields
+    // Try to parse confidence from the run payload (FinalPayload, or Result on older rows)
     // This is a placeholder - adjust based on actual data structure
     try {
-      if (run.Result) {
-        const result = typeof run.Result === 'string' ? JSON.parse(run.Result) : run.Result;
-        if (result.confidence != null) {
-          return parseFloat(result.confidence);
+      const payload = run.FinalPayload ?? run.Result;
+      if (payload) {
+        const result: { confidence?: number | string } | null = JSON.parse(payload);
+        if (result?.confidence != null) {
+          return parseFloat(String(result.confidence));
         }
       }
     } catch {
