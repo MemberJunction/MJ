@@ -24,6 +24,8 @@ import {
     RecordProcessExecutor,
     WriteBackProcessor,
     ApplyOutputMapping,
+    RecordSetProcessor,
+    type WriteBackResult,
 } from '../index';
 
 const USER = {} as UserInfo;
@@ -70,6 +72,50 @@ describe('RecordProcessExecutor.buildSource', () => {
             // stored scope is View (would need ScopeViewID), but the override wins so no throw
             expect(exec.buildSource(rp({ ScopeType: 'View' }), provider, undefined, { Kind: 'view', ViewID: 'V9' })).toBeInstanceOf(ViewSource);
         });
+    });
+});
+
+describe('RecordProcessExecutor dry-run sample', () => {
+    afterEach(() => vi.restoreAllMocks());
+    it('caps an Infer dry run at 25 records unless a scope is given', async () => {
+        const process = vi.spyOn(RecordSetProcessor.Instance, 'Process').mockResolvedValue({ Status: 'Completed', Total: 0, Processed: 0, Success: 0, Error: 0, Skipped: 0 });
+        const exec = new RecordProcessExecutor();
+        vi.spyOn(exec, 'BuildProcessor').mockReturnValue({ ProcessRecord: async () => ({ Status: 'Succeeded' as const }) });
+        vi.spyOn(exec, 'BuildSource').mockReturnValue(new ArraySource([], 'ENT-1'));
+        const infer = rp({ WorkType: 'Infer', ScopeType: 'Filter' });
+        await exec.Run(infer, { contextUser: USER, provider: providerWithEntity(), dryRun: true });
+        expect(process.mock.calls[0][0].maxRecords).toBe(25);
+        await exec.Run(infer, { contextUser: USER, provider: providerWithEntity(), dryRun: true, scope: { Kind: 'records', RecordIDs: ['a'] } });
+        expect(process.mock.calls[1][0].maxRecords).toBeUndefined();
+        await exec.Run(infer, { contextUser: USER, provider: providerWithEntity(), dryRun: false });
+        expect(process.mock.calls[2][0].maxRecords).toBeUndefined();
+    });
+
+    it('fails an Infer run on any failed record, and leaves other work types to the breaker', async () => {
+        const process = vi.spyOn(RecordSetProcessor.Instance, 'Process').mockResolvedValue({ Status: 'Completed', Total: 0, Processed: 0, Success: 0, Error: 0, Skipped: 0 });
+        const exec = new RecordProcessExecutor();
+        vi.spyOn(exec, 'BuildProcessor').mockReturnValue({ ProcessRecord: async () => ({ Status: 'Succeeded' as const }) });
+        vi.spyOn(exec, 'BuildSource').mockReturnValue(new ArraySource([], 'ENT-1'));
+        await exec.Run(rp({ WorkType: 'Infer', ScopeType: 'Filter' }), { contextUser: USER, provider: providerWithEntity() });
+        await exec.Run(rp({ WorkType: 'Action', ScopeType: 'Filter' }), { contextUser: USER, provider: providerWithEntity() });
+        expect(process.mock.calls[0][0]).toMatchObject({ FeaturePipeline: true, recordProcessID: 'RP-1' });
+        expect(process.mock.calls[1][0].FeaturePipeline).toBe(false);
+    });
+});
+
+describe('RecordProcessExecutor watermark skip', () => {
+    afterEach(() => vi.restoreAllMocks());
+    it('skips unchanged records as the Record Process says, unless the caller turns the skip off', async () => {
+        const process = vi.spyOn(RecordSetProcessor.Instance, 'Process').mockResolvedValue({ Status: 'Completed', Total: 0, Processed: 0, Success: 0, Error: 0, Skipped: 0 });
+        const exec = new RecordProcessExecutor();
+        vi.spyOn(exec, 'BuildProcessor').mockReturnValue({ ProcessRecord: async () => ({ Status: 'Succeeded' as const }) });
+        vi.spyOn(exec, 'BuildSource').mockReturnValue(new ArraySource([], 'ENT-1'));
+        const watermarked = rp({ WorkType: 'Infer', ScopeType: 'Filter', SkipUnchanged: true, WatermarkStrategy: 'UpdatedAt' });
+        const lastRunAt = new Date('2026-10-01T00:00:00Z');
+        await exec.Run(watermarked, { contextUser: USER, provider: providerWithEntity(), lastRunAt });
+        expect(process.mock.calls[0][0]).toMatchObject({ skipUnchanged: true, lastRunAt });
+        await exec.Run(watermarked, { contextUser: USER, provider: providerWithEntity(), SkipUnchanged: false });
+        expect(process.mock.calls[1][0]).toMatchObject({ skipUnchanged: false, lastRunAt: undefined });
     });
 });
 
@@ -366,10 +412,26 @@ describe('ApplyOutputMapping', () => {
         const result = await proc.ProcessRecord(record, { contextUser: USER, provider });
         expect(result.Status).toBe('Succeeded');
         // The write-back payload carries the dry-run preview; the entity was never created/saved.
-        const writeBack = (result.ResultPayload as { writeBack: { dryRun?: boolean; previewFields?: Record<string, unknown> } }).writeBack;
+        const writeBack = (result.ResultPayload as { writeBack: WriteBackResult }).writeBack;
         expect(writeBack.dryRun).toBe(true);
         expect(writeBack.previewFields).toEqual({ Satisfaction: 'High' });
         expect(created.length).toBe(0);
+    });
+
+    it('WriteBackProcessor previews when the run is a dry run, whatever it was built with', async () => {
+        const { provider, created } = fakeProvider();
+        const inner: IRecordProcessor = {
+            ProcessRecord: async () => ({ Status: 'Succeeded', ResultPayload: { satisfaction: 'High' } }),
+        };
+        const proc = new WriteBackProcessor(inner, { fields: { Satisfaction: '$.satisfaction' } });
+        const result = await proc.ProcessRecord(record, { contextUser: USER, provider, DryRun: true });
+        const writeBack = (result.ResultPayload as { writeBack: WriteBackResult }).writeBack;
+        expect(writeBack.dryRun).toBe(true);
+        expect(writeBack.previewFields).toEqual({ Satisfaction: 'High' });
+        expect(created.length).toBe(0);
+        // A previewed write-back claims no write
+        expect(result).toMatchObject({ DryRun: true });
+        expect(result.Outcome).toBeUndefined();
     });
 
     it('updates fields on a composite-keyed record without throwing', async () => {
@@ -582,6 +644,8 @@ describe('ApplyOutputMapping', () => {
             depth: 1,
             error: undefined,
         });
+        // Only the depth overrun is what the real write would fail on.
+        expect(out.PreviewErrors).toEqual([`tag 'Deep Tag': Match exceeds maxDepth (2 > 1)`]);
         expect(created.length).toBe(0);
         expect(mockResolveTag).toHaveBeenCalledWith(
             'Existing Tag',
@@ -647,6 +711,23 @@ describe('ApplyOutputMapping', () => {
         mockConfig.mockRestore();
     });
 
+    it('reports an auto-grown tag that would exceed maxDepth as what the real write would fail on', async () => {
+        const mockResolveTag = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockResolvedValue(null);
+        const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
+        const { provider } = fakeProvider();
+        const out = await ApplyOutputMapping({
+            outputMapping: { tags: [{ ref: '$.tag', rootTagId: 'root-1', growth: 'auto-grow', maxDepth: 0 }] },
+            result: { tag: 'Brand New Tag' },
+            record,
+            contextUser: USER,
+            provider,
+            dryRun: true,
+        });
+        expect(out.PreviewErrors).toEqual([`tag 'Brand New Tag': Created tag exceeds maxDepth (1 > 0)`]);
+        mockResolveTag.mockRestore();
+        mockConfig.mockRestore();
+    });
+
     it('marks non-descendant tags as error in previewTags during dry-run', async () => {
         const mockResolveTag = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockResolvedValue({
             ID: 'tag-unrelated',
@@ -681,6 +762,8 @@ describe('ApplyOutputMapping', () => {
         expect(out.previewTags?.length).toBe(1);
         expect(out.previewTags?.[0].depth).toBe(-1);
         expect(out.previewTags?.[0].error).toContain('is not a descendant of root tag');
+        // The real write throws on it, so the dry run reports it as what the real write would fail on.
+        expect(out.PreviewErrors).toEqual([`tag 'Unrelated Tag': Matched tag 'Unrelated Tag' is not a descendant of root tag 'root-1'`]);
 
         mockResolveTag.mockRestore();
         mockGetTagByID.mockRestore();

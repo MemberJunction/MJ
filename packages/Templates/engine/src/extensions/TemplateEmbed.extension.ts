@@ -27,6 +27,12 @@ export type TemplateEmbedConfig = {
 };
 
 /**
+ * The part of the nunjucks render context that holds the outer render's escape mode. nunjucks keeps an environment's
+ * options at `env.opts` (`@types/nunjucks` calls them `options`, which does not exist at runtime).
+ */
+type RenderEnvironmentView = { env?: { opts?: { autoescape?: boolean } } };
+
+/**
  * Context tracking for cycle detection during template rendering.
  * Tracks the chain of templates being rendered to prevent infinite recursion.
  */
@@ -198,8 +204,8 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
             const originalContentType = renderContext.currentContentType;
             renderContext.currentContentType = templateContent.Type;
 
-            // Render the embedded template asynchronously
-            this.renderEmbeddedTemplate(templateEngine, templateContent, embeddedData)
+            // Render the embedded template asynchronously, in the outer render's escape mode
+            this.renderEmbeddedTemplate(templateEngine, targetTemplate, templateContent, embeddedData, TemplateEmbedExtension.RendersEscaped(context))
                 .then((result) => {
                     // Remove template from stack after successful rendering
                     renderContext.templateStack.pop();
@@ -280,11 +286,32 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
     }
 
     /**
-     * Renders the embedded template content with the provided data context.
+     * Whether the render that reached this tag HTML-escapes its output. A stored template rendered for a model runs in
+     * the engine's raw environment, and its embeds must render raw too, or an embedded `&` still arrives as `&amp;`.
+     * @param context the nunjucks render context the tag was called with
      */
-    private async renderEmbeddedTemplate(templateEngine: any, templateContent: MJTemplateContentEntity, data: any): Promise<string> {
-        // Use the template engine's simple rendering method which handles Nunjucks environment setup
-        const result = await templateEngine.RenderTemplateSimple(templateContent.TemplateText, data);
+    protected static RendersEscaped(context: RenderEnvironmentView): boolean {
+        return context.env?.opts?.autoescape !== false;
+    }
+
+    /**
+     * Renders the embedded template content with the provided data context, in the outer render's escape mode.
+     *
+     * An escaping render keeps the ad-hoc {@link TemplateEngineServer.RenderTemplateSimple} path. A raw render goes
+     * through {@link TemplateEngineServer.RenderTemplate} with `autoescape: false`, because that is the raw environment
+     * that carries the template extensions (so an embed inside a raw embed still works); unlike the escaping path it
+     * also applies the embedded template's parameter defaults to data the caller left out.
+     */
+    private async renderEmbeddedTemplate(
+        templateEngine: TemplateEngineServer,
+        template: MJTemplateEntityExtended,
+        templateContent: MJTemplateContentEntity,
+        data: Record<string, unknown>,
+        autoescape: boolean
+    ): Promise<string> {
+        const result = autoescape
+            ? await templateEngine.RenderTemplateSimple(templateContent.TemplateText, data)
+            : await templateEngine.RenderTemplate(template, templateContent, data, true, true, { autoescape: false });
         
         if (!result.Success) {
             throw new Error(`Failed to render embedded template: ${result.Message}`);

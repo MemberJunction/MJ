@@ -759,7 +759,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             let recordID: string;
 
             // Load the content item to determine source type
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const ciResult = await rv.RunView<{
                 ID: string;
                 EntityRecordDocumentID: string | null;
@@ -772,7 +772,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 MaxRows: 1,
             }, contextUser);
 
-            if (!ciResult.Success || ciResult.Results.length === 0) return;
+            if (!ciResult.Success) {
+                throw new Error(`could not read content item ${contentItemTag.ItemID}: ${ciResult.ErrorMessage}`);
+            }
+            if (ciResult.Results.length === 0) return;
             const ci = ciResult.Results[0];
 
             if (ci.EntityRecordDocumentID) {
@@ -791,7 +794,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                     BypassCache: true,
                 }, contextUser);
 
-                if (!erdResult.Success || erdResult.Results.length === 0) return;
+                if (!erdResult.Success) {
+                    throw new Error(`could not read Entity Record Document ${ci.EntityRecordDocumentID}: ${erdResult.ErrorMessage}`);
+                }
+                if (erdResult.Results.length === 0) return;
                 entityID = erdResult.Results[0].EntityID;
                 recordID = erdResult.Results[0].RecordID;
             } else {
@@ -811,7 +817,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 MaxRows: 1,
             }, contextUser);
 
-            if (existingResult.Success && existingResult.Results.length > 0) return; // Already exists
+            if (!existingResult.Success) {
+                // Unknown, not "absent": creating it anyway could duplicate the TaggedItem
+                throw new Error(`could not check for an existing TaggedItem: ${existingResult.ErrorMessage}`);
+            }
+            if (existingResult.Results.length > 0) return; // Already exists
 
             // Create the TaggedItem
             const taggedItem = await md.GetEntityObject<MJTaggedItemEntity>('MJ: Tagged Items', contextUser);
@@ -1321,14 +1331,18 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     public async GetContentSourceParams(contentSource: MJContentSourceEntity, contextUser: UserInfo): Promise<Map<string, ContentSourceTypeParamValue>> {
         const contentSourceParams = new Map<string, ContentSourceTypeParamValue>();
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const results = await rv.RunView<MJContentSourceParamEntity>({
             EntityName: 'MJ: Content Source Params',
             ExtraFilter: `ContentSourceID='${contentSource.ID}'`,
             ResultType: 'entity_object'
         }, contextUser);
 
-        if (results.Success && results.Results.length) {
+        if (!results.Success) {
+            // Unknown, not "no params": running with defaults could ignore the source's own settings
+            throw new Error(`could not read the params of content source ${contentSource.ID}: ${results.ErrorMessage}`);
+        }
+        if (results.Results.length) {
             for (const contentSourceParam of results.Results) {
                 const params: ContentSourceTypeParams = this.GetDefaultContentSourceTypeParams(contentSourceParam.ContentSourceTypeParamID);
                 params.contentSourceID = contentSource.ID;
@@ -1420,7 +1434,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Retrieves the last run date for a content source. Returns epoch date if no runs exist.
      */
     public async GetContentSourceLastRunDate(contentSourceID: string, contextUser: UserInfo): Promise<Date> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         // Exclude 'Running' status to avoid using the current in-progress run's
         // start time as the cutoff — that would cause the provider to skip all records.
         const results = await rv.RunView<MJContentProcessRunEntity>({
@@ -1521,14 +1535,17 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     public async GetContentItemIDFromURL(contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<string> {
         const url = contentSourceParams.URL;
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const results = await rv.RunView<MJContentItemEntity>({
             EntityName: 'MJ: Content Items',
             ExtraFilter: `URL='${url}' AND ContentSourceID='${contentSourceParams.contentSourceID}'`,
             ResultType: 'entity_object'
         }, contextUser);
 
-        if (results.Success && results.Results.length) {
+        if (!results.Success) {
+            throw new Error(`could not read the content item with URL ${url}: ${results.ErrorMessage}`);
+        }
+        if (results.Results.length) {
             return results.Results[0].ID;
         }
 
@@ -1760,7 +1777,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const groups = this.groupItemsByInfrastructure(eligible, sourceMap, typeMap);
 
         // Load tags for all items in one query
-        const tagMap = await this.loadTagsForItems(eligible, contextUser);
+        const tagMap = await this.LoadTagsForItems(eligible, contextUser);
 
         let vectorized = 0;
         let processed = 0;
@@ -2535,7 +2552,15 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const itemById = new Map(items.map(i => [NormalizeUUID(i.ID), i]));
         const { sourceMap, typeMap } = await this.loadContentSourceAndTypeMaps(items, contextUser);
         const itemGroups = this.groupItemsByInfrastructure(items, sourceMap, typeMap);
-        const tagMap = await this.loadTagsForItems(items, contextUser);
+        let tagMap: Map<string, string[]>;
+        try {
+            tagMap = await this.LoadTagsForItems(items, contextUser);
+        } catch (e) {
+            // The chunks stay 'Pending' and are embedded on a later pass, with their tags
+            LogError(`EmbedPendingChunks: ${e instanceof Error ? e.message : String(e)}`);
+            stats.failed += chunks.length;
+            return;
+        }
         const pathResolver = new FieldPathResolver(this.ProviderToUse, contextUser, 'MJ: Content Items');
 
         for (const [groupKey, groupItems] of itemGroups) {
@@ -3523,13 +3548,16 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         if (include) meta['Tags'] = tags;
     }
 
-    /** Load all tags for the given items in a single RunView call */
-    private async loadTagsForItems(
+    /**
+     * Load all tags for the given items in a single RunView call.
+     * @throws when the tags cannot be read: vectors written without them would carry no tags in their metadata
+     */
+    protected async LoadTagsForItems(
         items: MJContentItemEntity[],
         contextUser: UserInfo
     ): Promise<Map<string, string[]>> {
         const tagMap = new Map<string, string[]>();
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const ids = items.map(i => `'${i.ID}'`).join(',');
         const result = await rv.RunView<MJContentItemTagEntity>({
             EntityName: 'MJ: Content Item Tags',
@@ -3537,12 +3565,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             ResultType: 'entity_object'
         }, contextUser);
 
-        if (result.Success) {
-            for (const tag of result.Results) {
-                const existing = tagMap.get(tag.ItemID) ?? [];
-                existing.push(tag.Tag);
-                tagMap.set(tag.ItemID, existing);
-            }
+        if (!result.Success) {
+            // Unknown, not "no tags": vectors written now would carry no tags in their metadata
+            throw new Error(`could not read the tags of the content items being vectorized: ${result.ErrorMessage}`);
+        }
+        for (const tag of result.Results) {
+            const existing = tagMap.get(tag.ItemID) || [];
+            existing.push(tag.Tag);
+            tagMap.set(tag.ItemID, existing);
         }
         return tagMap;
     }
@@ -3765,7 +3795,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             if (!matchItemID || UUIDsEqual(matchItemID, contentItem.ID)) continue;
 
             // Check if the match is from a different source
-            const isDifferentSource = await this.isFromDifferentSource(matchItemID, contentItem.ContentSourceID, contextUser);
+            const isDifferentSource = await this.IsFromDifferentSource(matchItemID, contentItem.ContentSourceID, contextUser);
             if (!isDifferentSource) continue;
 
             await this.createDuplicateRecordIfNotExists(contentItem.ID, matchItemID, matchScore, 'Vector', contextUser);
@@ -3779,9 +3809,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     /**
      * Check if a content item belongs to a different source than the given sourceID.
+     * @throws when the item cannot be read: a failed read is not "same source"
      */
-    private async isFromDifferentSource(itemID: string, excludeSourceID: string, contextUser: UserInfo): Promise<boolean> {
-        const rv = new RunView();
+    protected async IsFromDifferentSource(itemID: string, excludeSourceID: string, contextUser: UserInfo): Promise<boolean> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ ContentSourceID: string }>({
             EntityName: 'MJ: Content Items',
             Fields: ['ContentSourceID'],
@@ -3790,7 +3821,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             MaxRows: 1,
         }, contextUser);
 
-        if (!result.Success || result.Results.length === 0) return false;
+        if (!result.Success) {
+            throw new Error(`could not read content item ${itemID}: ${result.ErrorMessage}`);
+        }
+        if (result.Results.length === 0) return false;
         return result.Results[0].ContentSourceID !== excludeSourceID;
     }
 
@@ -3864,7 +3898,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         excludeItemID: string,
         contextUser: UserInfo
     ): Promise<{ ID: string }[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: Content Items',
             Fields: ['ID'],
@@ -3894,7 +3928,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         excludeItemID: string,
         contextUser: UserInfo
     ): Promise<{ ID: string }[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const escapedTitle = title.replace(/'/g, "''");
         const result = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: Content Items',
@@ -3975,7 +4009,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         detectionMethod: 'Checksum' | 'Title' | 'URL' | 'Vector',
         contextUser: UserInfo
     ): Promise<boolean> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: Content Item Duplicates',
             Fields: ['ID'],
@@ -3983,6 +4017,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             ResultType: 'simple'
         }, contextUser);
 
-        return result.Success && result.Results.length > 0;
+        if (!result.Success) {
+            // Unknown, not "absent": creating the pair anyway could duplicate it
+            throw new Error(`could not check for an existing duplicate pair: ${result.ErrorMessage}`);
+        }
+        return result.Results.length > 0;
     }
 }

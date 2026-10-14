@@ -8,7 +8,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { Subscription } from 'rxjs';
 import {
     UserInfo,
-    Metadata,
     IMetadataProvider,
     LogError,
     LogStatusEx,
@@ -25,6 +24,13 @@ import { BaseScheduledJob, ScheduledJobExecutionContext } from './BaseScheduledJ
 import { DecideMissedRun } from './MissedRunPolicy';
 import { CronExpressionHelper } from './CronExpressionHelper';
 import { NotificationManager } from './NotificationManager';
+import { ActionScheduledJobDriver } from './drivers/ActionScheduledJobDriver';
+
+/**
+ * Default for {@link SchedulingEngine.PausedJobResumeIntervalMs}: one hour, the cadence of the hourly jobs this pause
+ * most often hits, so a job paused by a server without its action class misses at most about one run.
+ */
+export const DEFAULT_PAUSED_JOB_RESUME_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
  * Engine for managing scheduled job execution
@@ -66,6 +72,21 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private pollingTimer?: NodeJS.Timeout;
     private isPolling: boolean = false;
     private hasInitialized: boolean = false;
+
+    /**
+     * True while {@link StartPolling} is running its upfront work. A job-change event raised by that work (the saves
+     * of a resumed job or of initializeNextRunTimes) re-enters StartPolling through {@link onBaseJobsChanged} before
+     * `isPolling` is set; this flag turns that re-entry into a no-op so only one poll timer is armed.
+     */
+    private startingPolling: boolean = false;
+
+    /**
+     * Repeating timer that resumes jobs paused because their action class was not loaded (see
+     * {@link PausedJobResumeIntervalMs}). Armed once by StartPolling and kept through the internal "all jobs removed"
+     * stop — the paused job may be the only one, so dispatch polling is suspended — and cleared only on full service
+     * shutdown.
+     */
+    private pausedJobResumeTimer?: NodeJS.Timeout;
 
     /**
      * Subscription to the base engine's {@link SchedulingEngineBase.JobsChanged$}. Created
@@ -140,6 +161,13 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * low causes healthy long jobs to be reclaimed and re-dispatched.
      */
     private _leaseTimeoutMs: number = 10 * 60 * 1000;
+
+    /**
+     * How often this server re-checks jobs paused because their action class was not loaded. Default
+     * {@link DEFAULT_PAUSED_JOB_RESUME_INTERVAL_MS}. Configurable via MJServer's
+     * `scheduledJobs.pausedJobResumeInterval` config.
+     */
+    private _pausedJobResumeIntervalMs: number = DEFAULT_PAUSED_JOB_RESUME_INTERVAL_MS;
 
     /**
      * Promises for jobs currently dispatched but not yet settled. Keyed by job ID.
@@ -230,6 +258,28 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
+     * How often, in milliseconds, this server re-checks jobs that a server without their action's class paused, and
+     * resumes those whose class this server loads. Besides the check at StartPolling, this bounds how long such a job
+     * stays paused in a mixed fleet (e.g. during a rolling deploy of the app's server package, an old instance that
+     * lacks the class pauses it; a new instance resumes it within one interval). Default one hour; matches the ms unit
+     * of MJServer's `scheduledJobs.pausedJobResumeInterval` config. Set before StartPolling — the timer is armed with
+     * the value current at that point.
+     */
+    public get PausedJobResumeIntervalMs(): number {
+        return this._pausedJobResumeIntervalMs;
+    }
+    public set PausedJobResumeIntervalMs(value: number) {
+        if (!Number.isFinite(value) || value <= 0) {
+            throw new Error(`PausedJobResumeIntervalMs must be a positive number, got ${value}`);
+        }
+        const old = this._pausedJobResumeIntervalMs;
+        this._pausedJobResumeIntervalMs = value;
+        if (old !== value) {
+            this.log(`PausedJobResumeIntervalMs changed from ${old} to ${value}`);
+        }
+    }
+
+    /**
      * Convenience accessor — lease duration as integer minutes. Production
      * code may use either this or `LeaseTimeoutMs`. The setter validates
      * positive integer minutes (no fractional minutes via this path; use
@@ -307,14 +357,29 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * @param contextUser - User context for execution
      */
     public async StartPolling(contextUser: UserInfo): Promise<void> {
-        if (this.isPolling) {
+        if (this.isPolling || this.startingPolling) {
             this.log('Polling already started');
             return;
         }
+        this.startingPolling = true;
+        try {
+            await this.startPollingOnce(contextUser);
+        } finally {
+            this.startingPolling = false;
+        }
+    }
+
+    /**
+     * The body of {@link StartPolling}, run by at most one caller at a time.
+     * @private
+     */
+    private async startPollingOnce(contextUser: UserInfo): Promise<void> {
 
         // Upfront work — done ONCE before any poll fires.
-        // Order: Config first (so this.ScheduledJobs is populated), then
-        // initializeNextRunTimes / cleanupStaleLocks / permission probe.
+        // Order: resume jobs paused for a missing action class whose class is now loaded (so Config loads them as
+        // Active), then Config (so this.ScheduledJobs is populated), then initializeNextRunTimes / cleanupStaleLocks /
+        // permission probe.
+        await this.resumeJobsPausedForMissingClass(contextUser);
         await this.Config(false, contextUser);
 
         // Retain the context user and subscribe to job-change notifications BEFORE the
@@ -322,6 +387,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // jobs), a later activation still fires JobsChanged$ and wakes the timer.
         this._pollingContextUser = contextUser;
         this.ensureJobChangeSubscription();
+        this.ensurePausedJobResumeTimer(contextUser);
 
         await this.initializeNextRunTimes(contextUser);
         await this.cleanupStaleLocks(contextUser);
@@ -380,6 +446,46 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
+     * Arms the repeating resume check ({@link PausedJobResumeIntervalMs}) once per engine lifetime, so a job paused by
+     * another server that lacks the class is resumed here without a restart.
+     * @private
+     */
+    private ensurePausedJobResumeTimer(contextUser: UserInfo): void {
+        if (this.pausedJobResumeTimer) {
+            return;
+        }
+        this.pausedJobResumeTimer = setInterval(() => {
+            // resumeJobsPausedForMissingClass logs its own failures and never throws.
+            void this.resumeJobsPausedForMissingClass(contextUser);
+        }, this._pausedJobResumeIntervalMs);
+    }
+
+    /** Clears the repeating resume check. Called only on full service shutdown. @private */
+    private releasePausedJobResumeTimer(): void {
+        if (this.pausedJobResumeTimer) {
+            clearInterval(this.pausedJobResumeTimer);
+            this.pausedJobResumeTimer = undefined;
+        }
+    }
+
+    /**
+     * Sets jobs that were paused because their action's class was not loaded back to Active once this server loads
+     * the class, so no person has to re-enable them. A failed read is logged and never stops polling: the other jobs
+     * must still run.
+     * @private
+     */
+    private async resumeJobsPausedForMissingClass(contextUser: UserInfo): Promise<void> {
+        try {
+            const resumed = await ActionScheduledJobDriver.ResumeJobsPausedForMissingClass(contextUser, this.Base.ProviderToUse);
+            if (resumed.length > 0) {
+                console.log(`📅 Scheduled Jobs: resumed ${resumed.length} job(s) whose action class is now loaded: ${resumed.join(', ')}`);
+            }
+        } catch (error) {
+            this.logError('Resuming jobs paused for a missing action class failed (polling continues)', error);
+        }
+    }
+
+    /**
      * Stop continuous polling.
      *
      * Async (changed in v5.39). With opts.waitForInflight=true, awaits all
@@ -399,6 +505,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // This runs before the isPolling guard so an already-suspended engine still tears down.
         if (opts?.waitForInflight) {
             this.releaseJobChangeSubscription();
+            this.releasePausedJobResumeTimer();
         }
 
         if (!this.isPolling) return;
@@ -499,8 +606,9 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * it has reconciled and Active-filtered {@link ScheduledJobs}). Recomputes the polling
      * cadence and — if polling is currently suspended but active jobs now exist — restarts it.
      *
-     * Cannot recurse: {@link StartPolling} calls `Config(false)`, a no-op once metadata is
-     * loaded, so it emits no further change events; and it short-circuits when already polling.
+     * Re-entry is safe: saves made during {@link StartPolling}'s upfront work (resumed jobs,
+     * initializeNextRunTimes) emit change events that call back into StartPolling, which returns
+     * at once while `startingPolling` is set — and also once polling is running.
      */
     private async onBaseJobsChanged(): Promise<void> {
         try {
@@ -1023,11 +1131,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      */
     private async createJobRun(
         job: MJScheduledJobEntity,
-        contextUser: UserInfo,
-        provider?: IMetadataProvider
+        contextUser: UserInfo
     ): Promise<MJScheduledJobRunEntity> {
-        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
-        const run = await md.GetEntityObject<MJScheduledJobRunEntity>(
+        // The same provider the job's execution context gets.
+        const run = await this.Base.ProviderToUse.GetEntityObject<MJScheduledJobRunEntity>(
             'MJ: Scheduled Job Runs',
             contextUser
         );
@@ -1678,11 +1785,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      */
     private async createQueuedJobRun(
         job: MJScheduledJobEntity,
-        contextUser: UserInfo,
-        provider?: IMetadataProvider
+        contextUser: UserInfo
     ): Promise<MJScheduledJobRunEntity> {
-        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
-        const run = await md.GetEntityObject<MJScheduledJobRunEntity>(
+        // The same provider the job's execution context gets.
+        const run = await this.Base.ProviderToUse.GetEntityObject<MJScheduledJobRunEntity>(
             'MJ: Scheduled Job Runs',
             contextUser
         );

@@ -652,7 +652,8 @@ export class AIDecisionRunner extends BaseModelRunner {
       }
       const systemPlaceholders = await SystemPlaceholderManager.resolveAllPlaceholders(params);
       const mergedData = { ...systemPlaceholders, ...params.data, ...params.templateData };
-      const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, mergedData, true, false);
+      // The state is plain text for the decision model, not HTML, so it renders without HTML escaping.
+      const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, mergedData, true, false, { autoescape: false });
       if (!rendered?.Success) {
         return { success: false, errorMessage: `Failed to render the template for prompt '${prompt.Name}': ${rendered?.Message ?? 'unknown error'}` };
       }

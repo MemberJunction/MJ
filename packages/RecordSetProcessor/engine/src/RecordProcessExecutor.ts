@@ -51,10 +51,13 @@ export interface RunRecordProcessOptions {
      */
     scope?: RecordProcessScopeOverride;
     /**
-     * Compute-only: for work types that support it (currently `FieldRules`), produce the per-record diff
-     * WITHOUT writing. Powers the preview step of the bulk-update UX.
+     * Compute-only: produce each record's result and the write-back preview WITHOUT writing (see
+     * {@link RecordProcessExecutor.BuildProcessor} for what each work type does). Powers the preview step of the
+     * bulk-update UX.
      */
     dryRun?: boolean;
+    /** Infer dry runs preview at most this many records when no scope or single record is given (default 25). */
+    DryRunSampleSize?: number;
     /** FK to the owning `ScheduledJobRun` when launched by the scheduler (links the Process Run back). */
     scheduledJobRunID?: string;
     /** Optional timestamp of the previous run, used for 'UpdatedAt' watermark strategy. */
@@ -63,6 +66,12 @@ export interface RunRecordProcessOptions {
     onProgress?: (progress: ProgressInfo) => void;
     /** Overwrite values a person entered, and retire their Human values (default false). */
     overwriteHumanValues?: boolean;
+    /**
+     * Whether the run skips records its watermark says are unchanged (default: the Record Process's `SkipUnchanged`).
+     * A run that must re-derive the records it names, such as a version backfill, passes false: the watermark would
+     * otherwise skip a record whose source row did not change, which is exactly the record a backfill is for.
+     */
+    SkipUnchanged?: boolean;
 }
 
 /** Builds and runs a RecordSetProcessor pass from a Record Process definition. */
@@ -80,8 +89,10 @@ export class RecordProcessExecutor {
     /** Runs an already-loaded Record Process. */
     public async Run(rp: MJRecordProcessEntity, options: RunRecordProcessOptions): Promise<ProcessRunResult> {
         const provider = options.provider;
+        // `??`: false is a deliberate override of the Record Process's setting, not an absent one
+        const skipUnchanged = options.SkipUnchanged ?? rp.SkipUnchanged;
         let lastRunAt = options.lastRunAt;
-        if (!lastRunAt && rp.SkipUnchanged && rp.WatermarkStrategy === 'UpdatedAt') {
+        if (!lastRunAt && skipUnchanged && rp.WatermarkStrategy === 'UpdatedAt') {
             try {
                 const rv = RunView.FromMetadataProvider(provider);
                 const lastRunRes = await rv.RunView<{ StartedAt?: Date }>({
@@ -104,19 +115,32 @@ export class RecordProcessExecutor {
             contextUser: options.contextUser,
             provider,
             dryRun: options.dryRun,
+            maxRecords: this.DryRunSampleCap(rp, options),
             recordProcessID: rp.ID,
             scheduledJobRunID: options.scheduledJobRunID,
             entityID: rp.EntityID,
             triggeredBy: options.triggeredBy ?? 'OnDemand',
             batchSize: rp.BatchSize ?? undefined,
             maxConcurrency: rp.MaxConcurrency ?? undefined,
-            skipUnchanged: rp.SkipUnchanged,
+            skipUnchanged,
             watermarkStrategy: rp.WatermarkStrategy ?? 'Checksum',
             lastRunAt,
             onProgress: options.onProgress,
             overwriteHumanValues: options.overwriteHumanValues,
+            FeaturePipeline: rp.WorkType === 'Infer',
             configuration: { recordProcessName: rp.Name, workType: rp.WorkType, scopeType: rp.ScopeType },
         });
+    }
+
+    /**
+     * The record cap of an Infer dry run over the stored scope: a preview of the first `DryRunSampleSize` records
+     * (default 25), because every previewed record still calls the model. Undefined (no cap) for a real run, another
+     * work type, or a dry run given a runtime scope or a single record (the caller chose those records).
+     */
+    protected DryRunSampleCap(rp: MJRecordProcessEntity, options: RunRecordProcessOptions): number | undefined {
+        return options.dryRun === true && rp.WorkType === 'Infer' && !options.scope && !options.singleRecordID
+            ? (options.DryRunSampleSize || 25)
+            : undefined;
     }
 
     /** Builds the record-set source from a single-record override, a runtime scope override, or the process's stored Scope. */
@@ -179,9 +203,10 @@ export class RecordProcessExecutor {
     /**
      * Builds the processor from the process's Work. `FieldRules` reads its rule set from `Configuration`
      * and writes itself (honoring `dryRun`); the other work types build a base processor wrapped with
-     * output-mapping write-back when configured. The write-back wrapper also honors `dryRun` — on a
-     * dry-run the inner work runs but the mapping only previews (nothing is saved), so EVERY work type's
-     * dry-run is side-effect-free, not just FieldRules.
+     * output-mapping write-back when configured. On a dry run the write-back wrapper only previews. Infer
+     * processors also skip the Dedup Cache store, Feature Value history and watermark writes; they still call
+     * the model, whose AI Prompt Runs are recorded (their cost is real). Action and Agent work runs as it would
+     * for real: their own side effects are theirs.
      */
     public BuildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean, provider?: IMetadataProvider): IRecordProcessor {
         if (rp.WorkType === 'FieldRules') {
@@ -193,7 +218,8 @@ export class RecordProcessExecutor {
             return new FieldRulesProcessor({ RuleSet: ruleSet, DryRun: dryRun });
         }
 
-        const inputMapping = rp.InputMapping ? SafeJSONParse<Record<string, string>>(rp.InputMapping) : undefined;
+        // unparseable mapping JSON (SafeJSONParse answers null) falls back to the default mapping, as an absent one does
+        const inputMapping = (rp.InputMapping ? SafeJSONParse<Record<string, string>>(rp.InputMapping) : null) || undefined;
         let base: IRecordProcessor;
         let spec: DataFeatureSpec | undefined;
         if (rp.WorkType === 'Action') {

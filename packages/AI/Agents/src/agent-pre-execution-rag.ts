@@ -18,7 +18,7 @@
  * @module @memberjunction/ai-agents
  */
 
-import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentEntity,
     MJAIAgentSearchScopeEntity,
@@ -196,7 +196,7 @@ export class AgentPreExecutionRAG {
                     SearchContext: hasContext ? searchContext : undefined,
                     FusionWeightsOverride: fusionWeights,
                     Mode: 'full',
-                    // P3.2 — thread AIAgentID so SearchExecutionLog rows
+                    // Thread AIAgentID so SearchExecutionLog rows
                     // attribute pre-execution RAG searches to the calling
                     // agent. Without this, the analytics dashboard's "top
                     // searches by agent" view is blind to the RAG path.
@@ -371,7 +371,7 @@ export class AgentPreExecutionRAG {
             const tmpl = await this.loadTemplate(row.QueryTemplateID, params.contextUser);
             if (!tmpl) return params.lastUserMessage;
 
-            const content = tmpl.template.GetHighestPriorityContent?.() ?? tmpl.content;
+            const content = tmpl.content;
             if (!content) return params.lastUserMessage;
 
             const data = {
@@ -385,7 +385,8 @@ export class AgentPreExecutionRAG {
                 scopeDescription: scope.Description ?? ''
             };
 
-            const rendered = await TemplateEngineServer.Instance.RenderTemplate(tmpl.template, content, data);
+            // The query is plain text for the search providers, not HTML, so it renders without HTML escaping.
+            const rendered = await TemplateEngineServer.Instance.RenderTemplate(tmpl.template, content, data, undefined, undefined, { autoescape: false });
             if (rendered?.Success && rendered.Output) {
                 return rendered.Output.trim();
             }
@@ -399,44 +400,19 @@ export class AgentPreExecutionRAG {
     }
 
     /**
-     * Load a Template entity + its highest-priority content row.
-     * Uses the cached `TemplateEngineServer.FindTemplate` when available; falls back to a
-     * direct RunView when not.
+     * Loads a scope's query template and the content row it renders, by the template's ID, from the template engine's
+     * cache (which holds every template with its content rows). Returns null when the cache does not know the ID.
      */
     private async loadTemplate(
         templateID: string,
         contextUser: UserInfo
     ): Promise<{ template: MJTemplateEntityExtended; content: MJTemplateContentEntity | null } | null> {
-        try {
-            await TemplateEngineServer.Instance.Config(false, contextUser);
-            const t = TemplateEngineServer.Instance.FindTemplate?.(templateID);
-            if (t) {
-                const content = t.GetHighestPriorityContent?.() ?? null;
-                return { template: t, content };
-            }
-        } catch {
-            // fall through to RunView
+        await TemplateEngineServer.Instance.Config(false, contextUser);
+        const template = TemplateEngineServer.Instance.FindTemplateByID(templateID);
+        if (!template) {
+            return null;
         }
-
-        const rv = new RunView();
-        const tResult = await rv.RunView<MJTemplateEntityExtended>({
-            EntityName: 'Templates',
-            ExtraFilter: `ID='${templateID}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
-        if (!tResult.Success || tResult.Results.length === 0) return null;
-        const template = tResult.Results[0];
-
-        const cResult = await rv.RunView<MJTemplateContentEntity>({
-            EntityName: 'Template Contents',
-            ExtraFilter: `TemplateID='${templateID}'`,
-            OrderBy: 'Priority DESC, __mj_CreatedAt ASC',
-            MaxRows: 1,
-            ResultType: 'entity_object'
-        }, contextUser);
-        const content = cResult.Success && cResult.Results.length > 0 ? cResult.Results[0] : null;
-
-        return { template, content };
+        return { template, content: template.GetHighestPriorityContent() || null };
     }
 
     private parseFusionWeights(raw: string | null): FusionWeightsByProvider | undefined {

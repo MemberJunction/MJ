@@ -24,7 +24,7 @@ const { mockEngineInstance, mockHttpGet } = vi.hoisted(() => ({
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     class MockMetadata { Entities: unknown[] = []; }
-    class MockRunView { RunView = vi.fn(); RunViews = vi.fn(); }
+    class MockRunView { RunView = vi.fn(); RunViews = vi.fn(); static FromMetadataProvider(): MockRunView { return new MockRunView(); } }
     return {
         ...actual,
         RunView: MockRunView,
@@ -77,8 +77,8 @@ class TestableAutotagWebsite extends AutotagWebsite {
     public get $MaxDepth(): number { return this.MaxDepth; }
     public get $CrawlSitesInLowerLevelDomain(): boolean { return this.CrawlSitesInLowerLevelDomain; }
     public get $CrawlOtherSitesInTopLevelDomain(): boolean { return this.CrawlOtherSitesInTopLevelDomain; }
-    public get $URLPattern(): string { return this.URLPattern; }
-    public get $RootURL(): string { return this.RootURL; }
+    public get $URLPattern(): string | undefined { return this.URLPattern; }
+    public get $RootURL(): string | undefined { return this.RootURL; }
 
     public $normalizeURL(href: string): string { return this.normalizeURL(href); }
     public $extractTextFromHTML(html: string): string { return this.extractTextFromHTML(html); }

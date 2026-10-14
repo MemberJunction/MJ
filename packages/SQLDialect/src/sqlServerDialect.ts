@@ -314,6 +314,10 @@ export class SQLServerDialect extends SQLDialect {
         return `CAST(${expr} AS UNIQUEIDENTIFIER)`;
     }
 
+    TryConvert(expr: string, sqlType: string): string {
+        return `TRY_CONVERT(${sqlType}, ${expr})`;
+    }
+
     // ─── INSERT/UPDATE Return Patterns ───────────────────────────────
 
     ReturnInsertedClause(columns?: string[]): string {

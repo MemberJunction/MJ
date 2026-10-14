@@ -50,26 +50,6 @@ vi.mock('@memberjunction/core', () => {
     // via `mockRunViewQueue.push(...)`. Calls consume from the queue head.
     return {
         UserInfo: class UserInfo { ID = 'user-1' },
-        // Class mock so it survives vi.clearAllMocks(). GetEntityObject returns
-        // a fresh entity-like object each call.
-        Metadata: class MockMetadata {
-            async GetEntityObject(): Promise<Record<string, unknown>> {
-                return {
-                    ScheduledJobID: '',
-                    ExecutedByUserID: '',
-                    Status: 'Running',
-                    StartedAt: null,
-                    CompletedAt: null,
-                    QueuedAt: null,
-                    Success: false,
-                    ErrorMessage: null,
-                    Save: async () => true,
-                    Load: async () => true,
-                    LatestResult: { CompleteMessage: '' },
-                    ID: 'run-from-md-' + Math.random().toString(36).slice(2)
-                };
-            }
-        },
         IMetadataProvider: class {},
         LogError: (...args: unknown[]) => logErrorMock(...args),
         LogStatusEx: (entry: { message: string }) => logStatusMock(entry?.message ?? ''),
@@ -200,7 +180,8 @@ vi.mock('@memberjunction/scheduling-base-types', () => ({
 
 // Mocks for the Base singleton — extended with ProviderToUse/RunViewProviderToUse/ContextUser
 // that the new decoupling code reads.
-vi.mock('@memberjunction/scheduling-engine-base', () => {
+// Hoisted so the tests read the same typed object the mocked module hands the engine.
+const { fakeBase } = vi.hoisted(() => {
     const fakeBase = {
         ScheduledJobs: [] as Array<Record<string, unknown>>,
         ScheduledJobTypes: [{ ID: 'type-1', DriverClass: 'TestDriver' }] as Array<Record<string, unknown>>,
@@ -217,6 +198,23 @@ vi.mock('@memberjunction/scheduling-engine-base', () => {
         // The engine accesses .MJCoreSchemaName and .ExecuteSQL on it.
         ProviderToUse: {
             MJCoreSchemaName: '__mj',
+            // Run records the engine creates — it uses the base's provider, the one the job's context gets.
+            GetEntityObject: async (): Promise<Record<string, unknown>> => {
+                return {
+                    ScheduledJobID: '',
+                    ExecutedByUserID: '',
+                    Status: 'Running',
+                    StartedAt: null,
+                    CompletedAt: null,
+                    QueuedAt: null,
+                    Success: false,
+                    ErrorMessage: null,
+                    Save: async () => true,
+                    Load: async () => true,
+                    LatestResult: { CompleteMessage: '' },
+                    ID: 'run-from-md-' + Math.random().toString(36).slice(2)
+                };
+            },
             // PlatformKey + Dialect feed ScheduledJobEngine.buildLockSprocCall, which
             // builds the dialect-appropriate sproc call. Mimic the SQL Server dialect
             // here so the engine exercises its default (EXEC) path under test.
@@ -237,12 +235,20 @@ vi.mock('@memberjunction/scheduling-engine-base', () => {
         RunViewProviderToUse: {} // unused by mock RunView (which reads from queue)
     };
 
-    return {
-        SchedulingEngineBase: {
-            get Instance() { return fakeBase; }
-        }
-    };
+    return { fakeBase };
 });
+
+vi.mock('@memberjunction/scheduling-engine-base', () => ({
+    SchedulingEngineBase: {
+        get Instance() { return fakeBase; }
+    }
+}));
+
+// The engine resumes jobs paused for a missing action class at StartPolling; the real driver pulls in the action
+// engine, which this suite does not mock.
+vi.mock('../drivers/ActionScheduledJobDriver', () => ({
+    ActionScheduledJobDriver: { ResumeJobsPausedForMissingClass: vi.fn().mockResolvedValue([]) }
+}));
 
 vi.mock('../CronExpressionHelper', () => ({
     CronExpressionHelper: {
@@ -278,7 +284,6 @@ let mockPluginFactory: () => { Execute: (...args: unknown[]) => Promise<unknown>
 // ---------------------------------------------------------------------------
 
 import { SchedulingEngine } from '../ScheduledJobEngine';
-import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
 
 // Helpers ====================================================================
 
@@ -331,15 +336,7 @@ function makeJob(overrides: Partial<Record<string, unknown>> = {}): Record<strin
 }
 
 const mockUser = { ID: 'user-1' };
-const mockBase = SchedulingEngineBase.Instance as Record<string, unknown> & {
-    ScheduledJobs: Array<Record<string, unknown>>;
-    ProviderToUse: {
-        ExecuteSQL: ReturnType<typeof vi.fn>;
-        MJCoreSchemaName: string;
-        PlatformKey: string;
-        Dialect: { ProcedureCallSyntax: (schema: string, name: string, params: string[]) => string };
-    };
-};
+const mockBase = fakeBase;
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -1107,7 +1104,6 @@ describe('T18: Sweep is a single RunView call', () => {
         engine.MaxConcurrentJobs = 10;
 
         // Manually pre-populate inflightJobPromises to simulate "in-flight from prior tick"
-        // @ts-expect-error: internal
         for (let i = 0; i < 5; i++) {
             // @ts-expect-error
             engine.inflightJobPromises.set(`job-${i}`, new Promise(() => {}));

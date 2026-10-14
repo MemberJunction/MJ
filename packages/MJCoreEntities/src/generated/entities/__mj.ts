@@ -21251,7 +21251,7 @@ export const MJFeaturePipelineVersionSchema = z.object({
         * * Field Name: BackfilledAt
         * * Display Name: Backfilled At
         * * SQL Data Type: datetimeoffset
-        * * Description: When the Feature Pipeline Version Steward finished the one backfill run of this version (records whose values were written under an earlier version and have none under this one). NULL until then; the steward never backfills a version twice.`),
+        * * Description: When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version (the records whose latest Pipeline value was written under another version, or under none). NULL until then; cleared when the version is retired or becomes Active again, so each activation is backfilled once.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -27276,7 +27276,7 @@ export const MJProcessRunSchema = z.object({
         * * Field Name: ResultSummary
         * * Display Name: Result Summary
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types.`),
+        * * Description: JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, previewed, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process Name
@@ -99228,7 +99228,7 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
     * * Field Name: BackfilledAt
     * * Display Name: Backfilled At
     * * SQL Data Type: datetimeoffset
-    * * Description: When the Feature Pipeline Version Steward finished the one backfill run of this version (records whose values were written under an earlier version and have none under this one). NULL until then; the steward never backfills a version twice.
+    * * Description: When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version (the records whose latest Pipeline value was written under another version, or under none). NULL until then; cleared when the version is retired or becomes Active again, so each activation is backfilled once.
     */
     get BackfilledAt(): Date | null {
         return this.Get('BackfilledAt');
@@ -114672,7 +114672,7 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
     * * Field Name: ResultSummary
     * * Display Name: Result Summary
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types.
+    * * Description: JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, previewed, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types.
     */
     get ResultSummary(): string | null {
         return this.Get('ResultSummary');

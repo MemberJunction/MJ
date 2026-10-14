@@ -33,24 +33,6 @@ const logStatusMock = vi.fn();
 vi.mock('@memberjunction/core', () => {
     return {
         UserInfo: class UserInfo { ID = 'user-1' },
-        Metadata: class MockMetadata {
-            async GetEntityObject(): Promise<Record<string, unknown>> {
-                return {
-                    ScheduledJobID: '',
-                    ExecutedByUserID: '',
-                    Status: 'Running',
-                    StartedAt: null,
-                    CompletedAt: null,
-                    QueuedAt: null,
-                    Success: false,
-                    ErrorMessage: null,
-                    Save: async () => true,
-                    Load: async () => true,
-                    LatestResult: { CompleteMessage: '' },
-                    ID: 'run-from-md-' + Math.random().toString(36).slice(2)
-                };
-            }
-        },
         IMetadataProvider: class {},
         LogError: (...args: unknown[]) => logErrorMock(...args),
         LogStatusEx: (entry: { message: string }) => logStatusMock(entry?.message ?? ''),
@@ -175,6 +157,23 @@ const { fakeBase } = vi.hoisted(() => ({
         ContextUser: { ID: 'user-1' },
         ProviderToUse: {
             MJCoreSchemaName: '__mj',
+            // Run records the engine creates — it uses the base's provider, the one the job's context gets.
+            GetEntityObject: async (): Promise<Record<string, unknown>> => {
+                return {
+                    ScheduledJobID: '',
+                    ExecutedByUserID: '',
+                    Status: 'Running',
+                    StartedAt: null,
+                    CompletedAt: null,
+                    QueuedAt: null,
+                    Success: false,
+                    ErrorMessage: null,
+                    Save: async () => true,
+                    Load: async () => true,
+                    LatestResult: { CompleteMessage: '' },
+                    ID: 'run-from-md-' + Math.random().toString(36).slice(2)
+                };
+            },
             // PlatformKey + Dialect feed ScheduledJobEngine.buildLockSprocCall, which
             // builds the dialect-appropriate sproc call (used by tryAcquireLock /
             // releaseLockIfTokenMatches). Mimic the SQL Server dialect so the engine
@@ -200,6 +199,12 @@ vi.mock('@memberjunction/scheduling-engine-base', () => ({
     SchedulingEngineBase: {
         get Instance() { return fakeBase; }
     }
+}));
+
+// The engine resumes jobs paused for a missing action class at StartPolling; the real driver pulls in the action
+// engine, which this suite does not mock.
+vi.mock('../drivers/ActionScheduledJobDriver', () => ({
+    ActionScheduledJobDriver: { ResumeJobsPausedForMissingClass: vi.fn().mockResolvedValue([]) }
 }));
 
 vi.mock('../CronExpressionHelper', () => ({

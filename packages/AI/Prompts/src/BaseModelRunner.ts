@@ -1747,8 +1747,9 @@ export abstract class BaseModelRunner {
         const result = await executeOnCandidate(candidate);
 
         // CRITICAL FIX: Check if result failed but is retriable (network errors, rate limits, etc.)
-        // Provider drivers (GeminiLLM, OpenAILLM, etc.) catch errors internally and return ChatResult{success: false}
-        // instead of throwing, so we must check result.success here.
+        // Drivers report a vendor failure one of two ways: some return ChatResult{success: false} (AnthropicLLM,
+        // GeminiLLM, BedrockLLM, AzureLLM, ...), others throw (OpenAILLM and its subclasses, GroqLLM, ...). A throw is
+        // handled by the catch below; a failed result must be caught here by checking result.success.
         if (!result.success && result.errorInfo?.canFailover) {
           lastError = result.exception || new Error(result.errorMessage || 'Model execution failed');
 

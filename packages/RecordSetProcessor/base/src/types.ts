@@ -5,6 +5,8 @@
  * @module @memberjunction/record-set-processor-base
  */
 
+import type { ParameterFidelity } from '@memberjunction/ai';
+
 /** A reference to a single record to be processed. */
 export interface RecordRef {
     /** ID of the entity this record belongs to. */
@@ -56,6 +58,9 @@ export type SourceTypeValue = 'View' | 'List' | 'Filter' | 'Array' | 'Keyset' | 
  */
 export type RecordWriteOutcome = 'Upserted' | 'Unchanged';
 
+/** Why a record failed, when it is a kind the run counts separately. */
+export type RecordFailureKind = 'RejectedInvalid';
+
 /** The outcome of processing a single record, returned by an {@link IRecordProcessor}. */
 export interface RecordResult {
     /** Whether the record succeeded, failed, or was skipped. */
@@ -64,6 +69,8 @@ export interface RecordResult {
     ResultPayload?: unknown;
     /** Error detail when `Status` is `Failed`. */
     ErrorMessage?: string;
+    /** Set when the output failed its constraints: the run counts the record as rejected, apart from other failures. */
+    FailureKind?: RecordFailureKind;
     /** Non-fatal problems with this record's processing (e.g. its cache entry could not be stored). */
     Warnings?: string[];
     /** Processing duration in milliseconds (the engine fills this in if the processor does not). */
@@ -86,14 +93,63 @@ export interface RecordResult {
     PromptVersionHash?: string;
     /** Reference to the FeatureValueCache entry when served from or saved to the cache. */
     FeatureValueCacheID?: string;
-    /** Per-output confidence scores keyed by output Name, when produced by the driver. */
+    /** Per-output confidence scores keyed by output Name: the driver's own, else the answer's at each ConfidenceRef. */
     Confidence?: Record<string, number>;
-    /** Feature Pipelines: whether this record's values and write-back changed anything. */
+    /** Feature Pipelines: whether this record's values and write-back changed anything. Absent on a dry run. */
     Outcome?: RecordWriteOutcome;
+    /**
+     * Feature Pipelines: true when the record was computed by a dry run, which writes nothing. Such a result has no
+     * `Outcome` (it changed nothing); a run summary counts it as a record the real run would have written.
+     */
+    DryRun?: boolean;
     /** Feature Pipelines: the pipeline version (MJ: Feature Pipeline Versions.Version) that computed the result. */
     PipelineVersion?: number | null;
     /** Feature Pipelines: how many human-entered values this record's write-back left in place. */
     HumanValuesPreserved?: number;
+    /** Feature Pipelines: the pin the record was computed under; the run result reports it. */
+    PipelinePin?: FeaturePipelineRunPin;
+    /** Feature Pipelines: whether the record's model call sent the configured parameters (a refusal on any record is the run's). */
+    ParameterFidelity?: ParameterFidelity;
+}
+
+/** The pin a Feature Pipeline run computed under: its pipeline version and the Feature Value key hashes. */
+export interface FeaturePipelineRunPin {
+    /** `MJ: Feature Pipeline Versions.Version` the run computed under; null when no version was resolved. */
+    PipelineVersion: number | null;
+    /** Hash of the prompt version (template text with its rendered constraints) the values were computed with. */
+    PromptVersionHash: string | null;
+    /** The primary `MJ: AI Models` ID the prompt ran on; null when the prompt has no primary model. */
+    AIModelID: string | null;
+    /** Hash of the prompt's inference parameters (temperature, seed, ...). */
+    ParametersHash: string | null;
+}
+
+/** Result of one Feature Pipeline run; persisted as `MJ: Process Runs.ResultSummary`. */
+export interface FeaturePipelineRunResult {
+    /** The `MJ: Record Processes` ID of the pipeline that ran. */
+    RecordProcessID: string;
+    /** The run's pin: the first record's, else the processor's run-level pin (a run whose records were all skipped). */
+    Pin: FeaturePipelineRunPin | null;
+    /** A refused fidelity when any record had one, else the first record's; null when no record reported one. */
+    ParameterFidelity: ParameterFidelity | null;
+    /** Records the run handed to the processor: every processed record except those skipped on their watermark. */
+    Attempted: number;
+    /** Records whose Feature Values or write-back changed something. */
+    Upserted: number;
+    /** Records whose Feature Values all held their values and whose write-back changed nothing. */
+    Unchanged: number;
+    /** Records a dry run computed: it writes nothing, so they are neither Upserted nor Unchanged. */
+    Previewed: number;
+    /** Records whose output failed its constraints (counted apart from {@link Failed}). */
+    RejectedInvalid: number;
+    /** Records that failed for any other reason. */
+    Failed: number;
+    /** Records skipped, on their watermark or by the processor. */
+    Skipped: number;
+    /** Human-entered values the run's write-backs left in place. */
+    HumanValuesPreserved: number;
+    /** `completed` only when the run completed with no failed record; else `failed`. */
+    Status: 'completed' | 'failed';
 }
 
 /** Running tallies for a process run. */
@@ -128,6 +184,8 @@ export interface ProcessRunSummary extends RunCounts {
     EndTime?: Date;
     /** Run-level error message when `Status` is `Failed`. */
     ErrorMessage?: string;
+    /** A Feature Pipeline run's result (runs with `FeaturePipeline`); the default tracker persists it as `ResultSummary`. */
+    FeaturePipeline?: FeaturePipelineRunResult;
 }
 
 /** Result returned by `RecordSetProcessor.Process()` — a run summary plus the persisted run ID. */

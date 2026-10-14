@@ -40,6 +40,14 @@ export class InceptionLLM extends OpenAILLM {
     }
 
     /**
+     * Inception sends the configured temperature as given: OpenAILLM's reasoning-model temperature rule does not apply to Mercury.
+     * Both request builders and the inherited `DescribeSentParameters` read this, so they cannot drift.
+     */
+    protected override ResolveTemperature(params: ChatParams): number | undefined {
+        return params.temperature;
+    }
+
+    /**
      * Inception does NOT support native tool calling, so this overrides `OpenAILLM`'s `true` back
      * to false. Mercury Edit is a next-edit-prediction model served from a custom
      * `/v1/edit/completions` endpoint that takes no `tools` parameter — OpenAI-compatible at the
@@ -110,7 +118,7 @@ export class InceptionLLM extends OpenAILLM {
         const openAIParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
             model: params.model,
             messages: formattedMessages,
-            temperature: params.temperature,
+            temperature: this.ResolveTemperature(params),
             max_completion_tokens: params.maxOutputTokens,
         };
 
@@ -208,7 +216,7 @@ export class InceptionLLM extends OpenAILLM {
         const openAIParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
             model: params.model,
             messages: formattedMessages,
-            temperature: params.temperature,
+            temperature: this.ResolveTemperature(params),
             max_completion_tokens: params.maxOutputTokens,
             stream: true,
         };

@@ -98,9 +98,10 @@ export class MaterializationRefreshScheduledJobDriver extends BaseScheduledJob {
 
     public FormatNotification(_context: ScheduledJobExecutionContext, result: ScheduledJobResult): NotificationContent {
         const d = result.Details ?? {};
+        const failed = typeof d.Failed === 'number' ? d.Failed : 0;
         return {
             Subject: `Materialization refresh — ${result.Success ? 'OK' : 'errors'}`,
-            Body: `Refreshed ${d.Refreshed ?? 0} of ${d.DueCount ?? 0} due materialization(s)${(d.Failed ?? 0) > 0 ? `; ${d.Failed} failed` : ''}.`,
+            Body: `Refreshed ${d.Refreshed ?? 0} of ${d.DueCount ?? 0} due materialization(s)${failed > 0 ? `; ${failed} failed` : ''}.`,
             Priority: result.Success ? 'Normal' : 'High',
         };
     }

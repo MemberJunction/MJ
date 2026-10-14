@@ -6,11 +6,12 @@
  * @module @memberjunction/record-set-processor
  */
 
-import { BaseEntity, CompositeKey, DatabaseProviderBase, type EntityFieldInfo, EntityFieldTSType, type EntityInfo, type IEntityDataProvider, IMetadataProvider, type IRunViewProvider, LogStatus, RunInEntityTransaction, RunView, UserInfo, LogError } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, DatabaseProviderBase, type EntityFieldInfo, EntityFieldTSType, type EntityInfo, IMetadataProvider, type IRunViewProvider, LogStatus, RunInEntityTransaction, RunView, UserInfo, LogError } from '@memberjunction/core';
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual, resolveMappingRef } from '@memberjunction/global';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import { TagEngine, TaxonomyMode } from '@memberjunction/tag-engine';
 import type { MJTagEntity } from '@memberjunction/core-entities';
+import { MetadataProviderCapabilities } from '@memberjunction/feature-pipelines';
 
 /** Provenance information about the executing process run, passed down to write-back and mapped via `$run.*`. */
 export interface RunProvenance {
@@ -186,6 +187,11 @@ export interface WriteBackResult {
     previewChildren?: Array<Record<string, unknown>>;
     /** On a dry-run with tag mappings, the resolved tag previews. */
     previewTags?: TagWriteBackPreview[];
+    /**
+     * On a dry run: what the real write would fail on (a foreign-key value with no row in its related entity, a
+     * reconcile key proposed twice, a tag outside its root or depth). Absent when the real write would go through.
+     */
+    PreviewErrors?: string[];
 }
 
 /** One resolved child row to write, and the mapping it came from. */
@@ -216,13 +222,13 @@ export interface ChildMappingAnswer {
 export interface OutputMappingWriterOptions {
     /** The processed record. */
     Record: RecordRef;
-    /** The unit provider `RunIsolated` picked for this write-back (an instance minted from the caller's provider, or the caller's provider when it holds a transaction or cannot mint one): every read, save and the transaction run on it. */
+    /** The unit provider `MetadataProviderCapabilities.RunIsolated` picked for this write-back (an instance minted from the caller's provider, or the caller's provider when it holds a transaction or cannot mint one): every read, save and the transaction run on it. */
     Provider: IMetadataProvider;
     /**
      * The caller's provider. Foreign-key lookups, and a lookup row created on a miss, run on it, including the lookups
      * the human-value guard's `Resolve` makes while the unit is open. That keeps them outside the write transaction
      * (for the reason {@link ApplyOutputMapping} gives) except when the caller holds a transaction on it: then
-     * `RunIsolated` joins that transaction, these lookups run inside it too, and the lookup cache is not used
+     * `MetadataProviderCapabilities.RunIsolated` joins that transaction, these lookups run inside it too, and the lookup cache is not used
      * ({@link CanCacheLookups}).
      */
     LookupProvider: IMetadataProvider;
@@ -251,6 +257,55 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 /** SQL types whose values are stored rounded to the column's scale. */
 const SCALED_DECIMAL_TYPES: ReadonlySet<string> = new Set(['decimal', 'numeric', 'money', 'smallmoney']);
 
+/** A value the real write stores in a foreign-key field, so it must exist as a row of the related entity. */
+interface ForeignKeyRef {
+    /** The entity being written (the processed record's, or a child's). */
+    Entity: string;
+    /** The foreign-key field. */
+    Field: string;
+    /** The value written to it, as the write sends it. */
+    Value: string | number;
+}
+
+/** The related column a database foreign-key constraint checks, and the written values it must find there. */
+interface ForeignKeyTarget {
+    /** The related entity. */
+    Related: EntityInfo;
+    /** The related column the constraint references (`RelatedEntityFieldName`, else the related primary key). */
+    Column: string;
+    /** The values written to fields that reference that column. */
+    Refs: ForeignKeyRef[];
+}
+
+/** One child row's values the real write stores: every value of an inserted row, the differing ones of an updated row. */
+interface PlannedChildWrite {
+    /** The proposal the row comes from. */
+    Item: ChildToWrite;
+    /** The values written. */
+    Values: Record<string, unknown>;
+}
+
+/** The database's judgement of one sent foreign-key value ({@link OutputMappingWriter.JudgeKeyValues}). */
+interface KeyValueJudgement {
+    /** The related column's type converts the value. */
+    Converts: boolean;
+    /** A row of the related column holds it. */
+    Found: boolean;
+}
+
+/** One row of the judgement read: the value as sent, and 1/0 flags. */
+interface KeyValueJudgementRow {
+    Value: string;
+    Converts: number;
+    Found: number;
+}
+
+/** What the write does with an existing child row a proposal matches ({@link OutputMappingWriter.RowDecision}). */
+type ChildRowDecision = { Kind: 'human' } | { Kind: 'unchanged' } | { Kind: 'update'; Changes: Array<[string, unknown]> };
+
+/** SQL character types, whose `MaxLength` limits a value's length. */
+const CHARACTER_TYPES: ReadonlySet<string> = new Set(['char', 'varchar', 'nchar', 'nvarchar']);
+
 /**
  * Writes one record's resolved output mapping: child rows (inserted, or reconciled on their key) and the record's
  * own fields. `ApplyOutputMapping` runs both inside one entity transaction, children first, so a failed child write
@@ -266,56 +321,6 @@ export class OutputMappingWriter {
      */
     public static IsRunViewProvider(p: IMetadataProvider): p is IMetadataProvider & IRunViewProvider {
         return 'RunView' in p && typeof p.RunView === 'function';
-    }
-
-    /**
-     * Whether the provider exposes the entity-transaction members (`IEntityDataProvider`'s `SupportsEntityTransactions`
-     * and `BeginEntityTransaction`). `RunInEntityTransaction` then decides from `SupportsEntityTransactions` whether a
-     * transaction is actually opened; a provider without the members runs the work untransacted.
-     * @param p - the provider a write-back unit runs on
-     */
-    public static IsTransactionalProvider(p: IMetadataProvider): p is IMetadataProvider & Pick<IEntityDataProvider, 'SupportsEntityTransactions' | 'BeginEntityTransaction'> {
-        return 'BeginEntityTransaction' in p && typeof p.BeginEntityTransaction === 'function';
-    }
-
-    /**
-     * Picks the provider one write-back unit runs on, and runs it:
-     *
-     * - **A `DatabaseProviderBase` on which the caller holds a transaction** (`TransactionDepth > 0`): the unit runs on
-     *   `provider` and its transaction joins the caller's as a savepoint, as `RunInWorkQueueTransaction` does with a
-     *   caller executor. The caller then owns atomicity: the unit's failure rolls back to its savepoint and rethrows, and nothing it wrote is
-     *   durable until the caller commits. Joining is required, not a preference: on a separate connection the unit
-     *   would wait on rows the caller's open transaction has locked (the record the caller wrote, a lookup row created
-     *   on `provider`) until the request timeout, since the caller cannot commit while it awaits the unit.
-     * - **Any other `DatabaseProviderBase`**: the unit runs on its own instance from
-     *   `DatabaseProviderBase.CreateIndependentInstance()` — same connection pool, its own transaction stack — released
-     *   afterwards (`ReleaseIndependentInstance`, which rolls back anything left open and never closes the pool). Why:
-     *   MJ's ambient transaction is a field of the provider instance. Opened on the caller's shared provider, it would
-     *   take in every statement anyone else runs through that instance while it is open — another record's
-     *   write-back, the run tracker's detail rows, watermark updates — and a rollback would undo them too, after they
-     *   were reported done. On its own instance nothing else can join it, so concurrent records need no lock.
-     *   The instance's metadata is NOT taken from `provider`: `CreateIndependentInstance` takes no argument and the new
-     *   instance's `Config` adopts the process-global `Metadata.Provider`'s loaded metadata (or loads it in full when no
-     *   global provider is registered). Every server host registers a global provider on the same database, so this is
-     *   the same metadata there.
-     *   A `DatabaseProviderBase` subclass that has not implemented `CreateIndependentInstance` throws from the base
-     *   class; that error propagates — a loud failure, never a silent fallback to the shared transaction.
-     * - **A provider that is not a `DatabaseProviderBase`** (a client provider such as `GraphQLDataProvider`, which has
-     *   no local transaction to protect): the unit runs on `provider`.
-     * @param provider - the caller's provider
-     * @param work - the unit, given the provider every read, save and the transaction must use
-     */
-    public static async RunIsolated<T>(provider: IMetadataProvider, work: (unitProvider: IMetadataProvider) => Promise<T>): Promise<T> {
-        // The transaction members live on DatabaseProviderBase; any other provider (a client provider) runs the unit on itself.
-        if (!(provider instanceof DatabaseProviderBase) || provider.TransactionDepth > 0) {
-            return work(provider);
-        }
-        const unit = await provider.CreateIndependentInstance();
-        try {
-            return await work(unit);
-        } finally {
-            await unit.ReleaseIndependentInstance();
-        }
     }
 
     /**
@@ -429,12 +434,11 @@ export class OutputMappingWriter {
      * @param fields - the resolved field values (foreign keys already resolved)
      */
     public async WriteRecordFields(entity: EntityInfo, fields: Record<string, unknown>): Promise<void> {
-        const obj = await this.Options.Provider.GetEntityObject<BaseEntity>(entity.Name, this.Options.ContextUser);
-        // RecordID is the compact CompositeKey segment (bare value for a single column, "F1|v1||F2|v2" for composite).
-        if (!(await obj.InnerLoad(CompositeKey.FromURLSegment(entity, this.Options.Record.RecordID)))) {
+        const obj = await this.LoadRecord(entity);
+        if (!obj) {
             throw new Error(`applyOutputMapping: record '${this.Options.Record.RecordID}' of '${entity.Name}' not found`);
         }
-        const changes = await this.FieldChanges(entity, obj, fields);
+        const changes = await this.FieldChanges(entity, obj, fields, true);
         if (changes.length > 0) {
             for (const [field, value] of changes) {
                 obj.Set(field, value); // config-driven field names: no compile-time property exists
@@ -446,6 +450,13 @@ export class OutputMappingWriter {
             this.Options.Result.changed = true;
         }
         await this.RetireHumanValues(Object.keys(fields));
+    }
+
+    /** The processed record, loaded on the writer's provider; null when it does not exist. */
+    protected async LoadRecord(entity: EntityInfo): Promise<BaseEntity | null> {
+        const obj = await this.Options.Provider.GetEntityObject<BaseEntity>(entity.Name, this.Options.ContextUser);
+        // RecordID is the compact CompositeKey segment (bare value for a single column, "F1|v1||F2|v2" for composite).
+        return (await obj.InnerLoad(CompositeKey.FromURLSegment(entity, this.Options.Record.RecordID))) ? obj : null;
     }
 
     /**
@@ -468,15 +479,18 @@ export class OutputMappingWriter {
     /**
      * The mapped fields whose value differs from the record's current value ({@link ValuesEqual}) and that do not hold
      * a value a person entered ({@link PreservesHumanValue}). Sequential: each guard question reads the database.
+     * The one decision both the real write and the dry-run preview ({@link PreviewFieldProblems}) use.
+     * @param recordPreserved - record each preserved human value (the real write); false for the preview, which writes nothing
      */
-    protected async FieldChanges(entity: EntityInfo, obj: BaseEntity, fields: Record<string, unknown>): Promise<Array<[string, unknown]>> {
+    protected async FieldChanges(entity: EntityInfo, obj: BaseEntity, fields: Record<string, unknown>,
+        recordPreserved: boolean): Promise<Array<[string, unknown]>> {
         const changes: Array<[string, unknown]> = [];
         for (const [field, value] of Object.entries(fields)) {
             const current = obj.Get(field); // config-driven field name
             if (OutputMappingWriter.ValuesEqual(this.FieldInfoOf(entity, field), current, value)) {
                 continue;
             }
-            if (await this.PreservesHumanValue(entity, field, current)) {
+            if (await this.PreservesHumanValue(entity, field, current, recordPreserved)) {
                 continue;
             }
             changes.push([field, value]);
@@ -485,12 +499,12 @@ export class OutputMappingWriter {
     }
 
     /**
-     * True when the field holds a value a person entered and the run does not overwrite it; the preserved value is
-     * recorded through the guard. An empty field holds no human value, so the guard is not asked. The guard resolves
+     * True when the field holds a value a person entered and the run does not overwrite it; with `recordPreserved`,
+     * the preserved value is recorded through the guard and reported on the result. An empty field holds no human value, so the guard is not asked. The guard resolves
      * the pipeline's earlier answer read-only ({@link ResolveStoredForm}) and compares by the field's type
      * ({@link OwnedValuesEqual}).
      */
-    protected async PreservesHumanValue(entity: EntityInfo, field: string, current: unknown): Promise<boolean> {
+    protected async PreservesHumanValue(entity: EntityInfo, field: string, current: unknown, recordPreserved: boolean): Promise<boolean> {
         const guard = this.Options.HumanGuard;
         const fieldInfo = this.FieldInfoOf(entity, field);
         if (!guard || this.Options.OverwriteHumanValues || OutputMappingWriter.NormalizeKeyPart(fieldInfo, current) === '') {
@@ -504,8 +518,10 @@ export class OutputMappingWriter {
         if (!owned) {
             return false;
         }
-        (this.Options.Result.preservedHumanFields ||= []).push(field);
-        await guard.RecordPreserved(field, current, this.Options.Provider);
+        if (recordPreserved) {
+            (this.Options.Result.preservedHumanFields ||= []).push(field);
+            await guard.RecordPreserved(field, current, this.Options.Provider);
+        }
         return true;
     }
 
@@ -650,7 +666,7 @@ export class OutputMappingWriter {
     protected async LookupRelatedKey(field: string, related: string, matchField: string, text: string,
         onMiss: NonNullable<FieldLookupConfig['onLookupMiss']>): Promise<string | number | null> {
         const provider = this.Options.LookupProvider;
-        // Lookups run on the caller's provider only (coding standards §6): one that cannot run views fails loudly
+        // Lookups run on the caller's provider only: one that cannot run views fails loudly
         // rather than falling back to the process-global connection.
         if (!OutputMappingWriter.IsRunViewProvider(provider)) {
             throw new Error(`applyOutputMapping: cannot resolve foreign key for field '${field}': RunView provider is unavailable`);
@@ -751,19 +767,29 @@ export class OutputMappingWriter {
         this.ValidateReconcileConfig(config, rc);
         const childEntity = this.Options.Provider.EntityByName(config.entity);
         const keyed = this.KeyProposals(config, rc, childEntity, items);
-        const existing = await this.LoadExistingChildren(config);
-        const byKey = new Map(existing.map((row) => [this.KeyOfRow(rc, childEntity, row), row] as const));
-        for (const [key, item] of keyed) {
-            const row = byKey.get(key);
-            if (row) {
-                await this.ReconcileRow(config, rc, childEntity, row, item.Data);
+        const { Existing, Matches } = await this.MatchExisting(config, rc, childEntity, keyed);
+        for (const { Item, Row } of Matches) {
+            if (Row) {
+                await this.ReconcileRow(config, Row, this.RowDecision(rc, childEntity, Row, Item.Data));
             } else {
-                created.set(item, await this.InsertChild(item));
+                created.set(Item, await this.InsertChild(Item));
             }
         }
         if (rc.deleteStale !== false) {
-            await this.DeleteStaleChildren(config, rc, childEntity, existing, new Set(keyed.keys()));
+            await this.DeleteStaleChildren(config, rc, childEntity, Existing, new Set(keyed.keys()));
         }
+    }
+
+    /**
+     * The parent's existing rows of a mapping, and each keyed proposal paired with the existing row of its key (none:
+     * the proposal is inserted). Shared by the real write ({@link ReconcileChildren}) and the dry-run preview
+     * ({@link PlannedChildWrites}).
+     */
+    protected async MatchExisting(config: ChildRecordMapping, rc: ChildReconcileConfig, childEntity: EntityInfo | undefined,
+        keyed: Map<string, ChildToWrite>): Promise<{ Existing: BaseEntity[]; Matches: Array<{ Item: ChildToWrite; Row: BaseEntity | undefined }> }> {
+        const existing = await this.LoadExistingChildren(config);
+        const byKey = new Map(existing.map((row) => [this.KeyOfRow(rc, childEntity, row), row] as const));
+        return { Existing: existing, Matches: [...keyed].map(([key, item]) => ({ Item: item, Row: byKey.get(key) })) };
     }
 
     /**
@@ -787,15 +813,31 @@ export class OutputMappingWriter {
     /** The proposals keyed by their reconcile key; throws when the answer proposes one key twice (it would hit the unique key). */
     protected KeyProposals(config: ChildRecordMapping, rc: ChildReconcileConfig, childEntity: EntityInfo | undefined,
         items: ChildToWrite[]): Map<string, ChildToWrite> {
+        const { Keyed, Repeated } = this.KeyedProposals(rc, childEntity, items);
+        if (Repeated.length > 0) {
+            throw new Error(`applyOutputMapping: the answer for '${config.entity}' proposes the reconcile key '${Repeated[0]}' more than once`);
+        }
+        return Keyed;
+    }
+
+    /**
+     * The proposals keyed by their reconcile key (the first proposal of a key kept), and each key proposed more than
+     * once, in result order. Shared by the real write ({@link KeyProposals}, which refuses a repeated key) and the
+     * dry-run preview ({@link DuplicateKeyProblems}, which reports it), so the two judge a repeat the same way.
+     */
+    protected KeyedProposals(rc: ChildReconcileConfig, childEntity: EntityInfo | undefined,
+        items: ChildToWrite[]): { Keyed: Map<string, ChildToWrite>; Repeated: string[] } {
         const keyed = new Map<string, ChildToWrite>();
+        const repeated = new Set<string>();
         for (const item of items) {
             const key = this.KeyOfData(rc, childEntity, item.Data);
             if (keyed.has(key)) {
-                throw new Error(`applyOutputMapping: the answer for '${config.entity}' proposes the reconcile key '${key}' more than once`);
+                repeated.add(key);
+                continue;
             }
             keyed.set(key, item);
         }
-        return keyed;
+        return { Keyed: keyed, Repeated: [...repeated] };
     }
 
     /** The parent's existing rows of a child mapping, read fresh (they are updated or deleted in this transaction). */
@@ -831,22 +873,34 @@ export class OutputMappingWriter {
             && !OutputMappingWriter.ValuesEqual(this.FieldInfoOf(childEntity, rc.sourceField), row.Get(rc.sourceField), rc.derivedSourceValue); // config-driven field name
     }
 
-    /** Leaves a human row alone (unless overwriting), keeps an identical row, and saves only the fields that differ. */
-    protected async ReconcileRow(config: ChildRecordMapping, rc: ChildReconcileConfig, childEntity: EntityInfo | undefined,
-        row: BaseEntity, data: Record<string, unknown>): Promise<void> {
-        const id = row.PrimaryKey.ToCompactURLSegment();
-        const result = this.Options.Result;
+    /**
+     * What the write does with an existing row a proposal matches: leaves a human row alone (unless overwriting),
+     * keeps an identical row, or updates only the fields that differ. The one decision both the real write
+     * ({@link ReconcileRow}) and the dry-run preview ({@link PlannedChildWrites}) use.
+     */
+    protected RowDecision(rc: ChildReconcileConfig, childEntity: EntityInfo | undefined, row: BaseEntity,
+        data: Record<string, unknown>): ChildRowDecision {
         if (this.IsHumanRow(rc, childEntity, row) && !this.Options.OverwriteHumanValues) {
-            (result.preservedHumanChildIDs ||= []).push(id);
-            return;
+            return { Kind: 'human' };
         }
         const differing = Object.entries(data).filter(([f, v]) =>
             !OutputMappingWriter.ValuesEqual(this.FieldInfoOf(childEntity, f), row.Get(f), v)); // config-driven field names
-        if (differing.length === 0) {
+        return differing.length === 0 ? { Kind: 'unchanged' } : { Kind: 'update', Changes: differing };
+    }
+
+    /** Applies a {@link RowDecision}: records a preserved human row or an unchanged row, or saves the differing fields. */
+    protected async ReconcileRow(config: ChildRecordMapping, row: BaseEntity, decision: ChildRowDecision): Promise<void> {
+        const id = row.PrimaryKey.ToCompactURLSegment();
+        const result = this.Options.Result;
+        if (decision.Kind === 'human') {
+            (result.preservedHumanChildIDs ||= []).push(id);
+            return;
+        }
+        if (decision.Kind === 'unchanged') {
             (result.unchangedChildIDs ||= []).push(id);
             return;
         }
-        for (const [f, v] of differing) {
+        for (const [f, v] of decision.Changes) {
             row.Set(f, v); // config-driven field names
         }
         if (!(await row.Save())) {
@@ -858,7 +912,7 @@ export class OutputMappingWriter {
 
     /**
      * Deletes the pipeline's rows the new result no longer proposes; human rows are never deleted. Sequential on
-     * purpose: the deletes share the unit provider's open transaction (coding standards §6).
+     * purpose: the deletes share the unit provider's open transaction.
      */
     protected async DeleteStaleChildren(config: ChildRecordMapping, rc: ChildReconcileConfig, childEntity: EntityInfo | undefined,
         existing: BaseEntity[], proposed: Set<string>): Promise<void> {
@@ -871,6 +925,248 @@ export class OutputMappingWriter {
             (this.Options.Result.deletedChildIDs ||= []).push(id);
             this.Options.Result.changed = true;
         }
+    }
+
+    /**
+     * What the real child writes would fail on, found without writing: the same reconcile key proposed twice, and
+     * written values a database foreign-key constraint would reject (one read per related column, never one per
+     * value — `.claude/rules/data-access.md`). Only the values the real write stores are checked
+     * ({@link PlannedChildWrites}). A reconcile config the real write refuses throws here as it does there.
+     * @param answers - every answered child mapping, as {@link WriteChildren} would receive them
+     * @returns one message per problem; empty when the real child writes would go through
+     */
+    public async PreviewChildProblems(answers: ChildMappingAnswer[]): Promise<string[]> {
+        const problems = this.DuplicateKeyProblems(answers);
+        const targets = this.CollectForeignKeyRefs(await this.PlannedChildWrites(answers), problems);
+        problems.push(...(await this.MissingForeignKeyProblems(targets)));
+        return problems;
+    }
+
+    /**
+     * What the real write of the record's own fields would fail on: a value passed through as a key (a UUID, which
+     * {@link ResolveFieldValue} writes without a lookup) that a database foreign-key constraint would reject. A value
+     * a lookup resolved came from a row; a lookup miss is null or (`create`) a preview key, so neither is checked.
+     * That is every value a constraint could reject here: {@link ResolveKey} passes only a UUID through unchanged and
+     * resolves any other value (a name, a number) through a lookup. Only a value the real write stores is checked: the record is loaded and the write's own decision
+     * ({@link FieldChanges}, without recording anything) drops unchanged fields and human values the run keeps.
+     * @param entity - the processed record's entity
+     * @param fields - the resolved field values, as the real write would store them
+     */
+    public async PreviewFieldProblems(entity: EntityInfo, fields: Record<string, unknown>): Promise<string[]> {
+        const candidates = Object.fromEntries(Object.entries(fields).filter(([field, value]) =>
+            typeof value === 'string' && UUID_PATTERN.test(value.trim()) && this.IsConstrainedForeignKey(this.FieldInfoOf(entity, field))));
+        if (Object.keys(candidates).length === 0) {
+            return []; // nothing a constraint checks: the record is not even loaded
+        }
+        const obj = await this.LoadRecord(entity);
+        if (!obj) {
+            return [`record '${this.Options.Record.RecordID}' of '${entity.Name}' not found (the real write fails loading it)`];
+        }
+        const problems: string[] = [];
+        const targets = new Map<string, ForeignKeyTarget>();
+        for (const [field, value] of await this.FieldChanges(entity, obj, candidates, false)) {
+            // candidates are constrained foreign keys, so each has field metadata; the check keeps the type honest
+            const fieldInfo = this.FieldInfoOf(entity, field);
+            if (typeof value === 'string' && fieldInfo) {
+                this.AddForeignKeyRef(targets, problems, fieldInfo, { Entity: entity.Name, Field: field, Value: value });
+            }
+        }
+        problems.push(...(await this.MissingForeignKeyProblems(targets)));
+        return problems;
+    }
+
+    /**
+     * Reconcile keys a mapping's answer proposes more than once ({@link KeyedProposals}): the real write refuses
+     * them, since the second row would hit the unique key. Checked per mapping, as {@link ReconcileChildren} is, after
+     * {@link ValidateReconcileConfig} (which throws, as in the real write).
+     */
+    protected DuplicateKeyProblems(answers: ChildMappingAnswer[]): string[] {
+        const problems: string[] = [];
+        for (const { Config: config, Rows: rows } of answers) {
+            const rc = config.reconcile;
+            if (!rc) {
+                continue;
+            }
+            this.ValidateReconcileConfig(config, rc);
+            const { Repeated } = this.KeyedProposals(rc, this.Options.Provider.EntityByName(config.entity), rows);
+            for (const key of Repeated) {
+                problems.push(`'${config.entity}' would receive the reconcile key (${rc.keyFields.join(', ')}) = '${key}' twice (the real write fails on its unique key)`);
+            }
+        }
+        return problems;
+    }
+
+    /**
+     * The child values the real write stores, by the write's own decisions: every row of a plain mapping is inserted;
+     * a reconciled proposal is inserted when no existing row has its key, otherwise {@link RowDecision} says whether
+     * it writes nothing (a human row kept, an identical row) or only the differing fields. Reads the existing rows as
+     * the real write does ({@link MatchExisting}); a repeated key keeps its first proposal (the preview reports it).
+     */
+    protected async PlannedChildWrites(answers: ChildMappingAnswer[]): Promise<PlannedChildWrite[]> {
+        const writes: PlannedChildWrite[] = [];
+        for (const { Config: config, Rows: rows } of answers) {
+            const rc = config.reconcile;
+            if (!rc) {
+                writes.push(...rows.map((item) => ({ Item: item, Values: item.Data })));
+                continue;
+            }
+            const childEntity = this.Options.Provider.EntityByName(config.entity);
+            const { Matches } = await this.MatchExisting(config, rc, childEntity, this.KeyedProposals(rc, childEntity, rows).Keyed);
+            for (const { Item, Row } of Matches) {
+                const decision = Row ? this.RowDecision(rc, childEntity, Row, Item.Data) : undefined;
+                if (!decision) {
+                    writes.push({ Item, Values: Item.Data });
+                } else if (decision.Kind === 'update') {
+                    writes.push({ Item, Values: Object.fromEntries(decision.Changes) });
+                }
+            }
+        }
+        return writes;
+    }
+
+    /**
+     * Every non-null written child value of a constrained foreign-key field (the parent key excepted: it is the
+     * record being processed), grouped by the related column. A child entity missing from metadata, and a value that
+     * cannot be a key (not a string or number), are reported to `problems` directly.
+     */
+    protected CollectForeignKeyRefs(writes: PlannedChildWrite[], problems: string[]): Map<string, ForeignKeyTarget> {
+        const targets = new Map<string, ForeignKeyTarget>();
+        const unknownEntities = new Set<string>();
+        for (const { Item: item, Values: values } of writes) {
+            const info = this.Options.Provider.EntityByName(item.Entity);
+            if (!info) {
+                unknownEntities.add(item.Entity);
+                continue;
+            }
+            for (const [field, value] of Object.entries(values)) {
+                const fieldInfo = this.FieldInfoOf(info, field);
+                if (value === null || value === undefined || field === item.Config.parentField || !this.IsConstrainedForeignKey(fieldInfo)) {
+                    continue;
+                }
+                if (typeof value !== 'string' && typeof value !== 'number') {
+                    problems.push(`'${item.Entity}.${field}' holds a value of type ${Array.isArray(value) ? 'array' : typeof value}, which cannot be a key of '${this.RelatedEntityNameOf(fieldInfo, undefined)}'`);
+                    continue;
+                }
+                this.AddForeignKeyRef(targets, problems, fieldInfo, { Entity: item.Entity, Field: field, Value: value });
+            }
+        }
+        problems.push(...[...unknownEntities].map((e) => `child entity '${e}' is not in metadata`));
+        return targets;
+    }
+
+    /**
+     * Whether the database checks the field with a foreign-key constraint: it relates to an entity in metadata and is
+     * not a soft foreign key (a metadata-only relation, `IsSoftForeignKey`). A relation only a mapping's
+     * `fieldLookups.relatedEntity` names is not a constraint either, so field metadata alone decides.
+     */
+    protected IsConstrainedForeignKey(fieldInfo: EntityFieldInfo | undefined): fieldInfo is EntityFieldInfo {
+        return !!fieldInfo && fieldInfo.IsSoftForeignKey !== true && !!this.RelatedEntityNameOf(fieldInfo, undefined);
+    }
+
+    /**
+     * Adds a written value to the group of the related column its constraint references: the field's
+     * `RelatedEntityFieldName`, else the related entity's primary key. A related entity or column missing from
+     * metadata is reported instead.
+     */
+    protected AddForeignKeyRef(targets: Map<string, ForeignKeyTarget>, problems: string[], fieldInfo: EntityFieldInfo, ref: ForeignKeyRef): void {
+        const relatedName = this.RelatedEntityNameOf(fieldInfo, undefined) || '';
+        const related = this.Options.LookupProvider.EntityByName(relatedName);
+        const column = fieldInfo.RelatedEntityFieldName || related?.FirstPrimaryKey?.Name; // first-pk-ok: a foreign key without a named related column references the related primary key (one column)
+        if (!related || !column) {
+            problems.push(`'${ref.Entity}.${ref.Field}' references '${relatedName}', which is not in metadata or has no key column`);
+            return;
+        }
+        const groupKey = `${related.Name}|${column}`;
+        const target = targets.get(groupKey) || { Related: related, Column: column, Refs: [] };
+        target.Refs.push(ref);
+        targets.set(groupKey, target);
+    }
+
+    /** {@link MissingForeignKeys} of every related column; the reads are independent, so they run in parallel. */
+    protected async MissingForeignKeyProblems(targets: Map<string, ForeignKeyTarget>): Promise<string[]> {
+        const perTarget = await Promise.all([...targets.values()].map((t) => this.MissingForeignKeys(t)));
+        return perTarget.flat();
+    }
+
+    /**
+     * The written values a foreign-key constraint would reject, in one read of the related column
+     * ({@link JudgeKeyValues}): a value the column's type does not convert, and a value with no row. Text longer than
+     * a character column holds is reported without being sent (the database would compare a truncated value). The
+     * read runs through the provider's own SQL execution against the related base table, so — like the constraint —
+     * it sees every row: no user view filter or row-level permission applies. A failed read is itself reported.
+     * Latent asymmetry: a provider that does not execute SQL itself (a client provider, whose server enforces the
+     * constraint) is not checked, so its dry run cannot report a missing row.
+     */
+    protected async MissingForeignKeys(target: ForeignKeyTarget): Promise<string[]> {
+        const provider = this.Options.LookupProvider;
+        if (!(provider instanceof DatabaseProviderBase)) {
+            return [];
+        }
+        const columnInfo = this.FieldInfoOf(target.Related, target.Column);
+        const related = target.Related.Name;
+        const problems: string[] = [];
+        const sendable: ForeignKeyRef[] = [];
+        for (const ref of target.Refs) {
+            if (OutputMappingWriter.ExceedsColumnLength(columnInfo, String(ref.Value))) {
+                problems.push(`'${ref.Entity}.${ref.Field}' = '${ref.Value}' is longer than '${related}.${target.Column}' holds (the real write fails truncating it)`);
+            } else {
+                sendable.push(ref);
+            }
+        }
+        if (sendable.length === 0) {
+            return problems;
+        }
+        let judged: Map<string, KeyValueJudgement>;
+        try {
+            judged = await this.JudgeKeyValues(provider, target, columnInfo, [...new Set(sendable.map((r) => String(r.Value)))]);
+        } catch (e) {
+            return [...problems, `checking '${related}' for the written values failed: ${e instanceof Error ? e.message : String(e)}`];
+        }
+        for (const ref of sendable) {
+            const judgement = judged.get(String(ref.Value));
+            if (!judgement?.Converts) {
+                problems.push(`'${ref.Entity}.${ref.Field}' = '${ref.Value}' is not a valid ${columnInfo?.SQLFullType || 'key'} value for '${related}.${target.Column}' (the real write fails converting it)`);
+            } else if (!judgement.Found) {
+                problems.push(`'${ref.Entity}.${ref.Field}' = '${ref.Value}' does not exist in '${related}' (the real write fails on its foreign key)`);
+            }
+        }
+        return problems;
+    }
+
+    /**
+     * The database's judgement of each sent value, in one statement: whether the related column's type converts it,
+     * and whether a row holds it. Each value is sent exactly as the write sends it, never normalised, as
+     * a literal the dialect keeps intact (`StringLiteralPrefix`: `N'…'` for text outside ASCII). A value of a
+     * non-character column goes through the dialect's `TryConvert`, so one that does not convert is judged rather
+     * than failing the statement; a character column compares the text as sent (converting would silently truncate
+     * it). The comparison is `=` against the column, so its own type and collation decide a match, as they do for the
+     * constraint. Values come back exactly as sent.
+     * @param values - distinct values as the write sends them
+     */
+    protected async JudgeKeyValues(provider: DatabaseProviderBase, target: ForeignKeyTarget, columnInfo: EntityFieldInfo | undefined,
+        values: string[]): Promise<Map<string, KeyValueJudgement>> {
+        const dialect = provider.Dialect;
+        const sentValue = `${provider.QuoteIdentifier('Sent')}.${provider.QuoteIdentifier('Value')}`;
+        const type = columnInfo?.Type?.trim().toLowerCase() || '';
+        const typed = columnInfo && !CHARACTER_TYPES.has(type) ? dialect.TryConvert(sentValue, columnInfo.SQLFullType) : sentValue;
+        const literals = values.map((v) => `(${dialect.StringLiteralPrefix(v)}${dialect.QuoteStringLiteral(v)})`).join(', ');
+        const rows = await provider.ExecuteSQL<KeyValueJudgementRow>(
+            `SELECT ${sentValue}, CASE WHEN ${typed} IS NULL THEN 0 ELSE 1 END AS ${provider.QuoteIdentifier('Converts')}, `
+            + `CASE WHEN EXISTS (SELECT 1 FROM ${provider.QuoteSchemaAndView(target.Related.SchemaName, target.Related.BaseTable)} `
+            + `WHERE ${provider.QuoteIdentifier(target.Column)} = ${typed}) THEN 1 ELSE 0 END AS ${provider.QuoteIdentifier('Found')} `
+            + `FROM (VALUES ${literals}) AS ${provider.QuoteIdentifier('Sent')}(${provider.QuoteIdentifier('Value')})`,
+            undefined, undefined, this.Options.ContextUser);
+        return new Map(rows.map((row) => [row.Value, { Converts: row.Converts === 1, Found: row.Found === 1 }]));
+    }
+
+    /**
+     * Whether text is longer than a character column holds (`MaxLength`, in characters); false for any other type and
+     * for a column without a declared limit (MAX).
+     * @param column - the related column's metadata, when the related entity declares it
+     */
+    public static ExceedsColumnLength(column: EntityFieldInfo | undefined, text: string): boolean {
+        const max = column && CHARACTER_TYPES.has(column.Type.trim().toLowerCase()) ? column.MaxLength : 0;
+        return max > 0 && text.length > max;
     }
 }
 
@@ -913,7 +1209,7 @@ function computeTagDepth(
  * is idempotent), and linking/creating tags via TagEngine. Child rows and fields are written by an
  * {@link OutputMappingWriter} inside one entity transaction on `provider`, children first: a failed
  * child write rolls back and leaves the parent's fields unwritten. The transaction runs on its own
- * provider instance (see {@link OutputMappingWriter.RunIsolated}), so concurrent records never share it
+ * provider instance (see {@link MetadataProviderCapabilities.RunIsolated}), so concurrent records never share it
  * and no other statement on `provider` can land inside it. Exception: when the caller already holds a
  * transaction on `provider`, the write-back joins it (as a savepoint) and the caller owns atomicity —
  * nothing is durable until the caller commits.
@@ -925,7 +1221,7 @@ function computeTagDepth(
  * retires the Human value of each mapped field.
  *
  * Two writes deliberately sit outside that transaction (latent asymmetries), except when the caller
- * holds a transaction on `provider` — then `RunIsolated` joins it, both run inside it, and the run-wide
+ * holds a transaction on `provider` — then `MetadataProviderCapabilities.RunIsolated` joins it, both run inside it, and the run-wide
  * lookup cache is neither read nor written (`OutputMappingWriter.CanCacheLookups`):
  * - A lookup row created by `onLookupMiss: 'create'` is saved on `provider` while the fields resolve,
  *   before the unit. A later rollback of the unit leaves it in place, unreferenced; a re-run finds and
@@ -942,7 +1238,7 @@ export async function ApplyOutputMapping(opts: {
     result: unknown;
     record: RecordRef;
     contextUser: UserInfo;
-    /** The caller's provider. FK lookups, a lookup row created on a miss, and tags run on it; the unit (`unitWork`, child and field writes, the human-value guard) runs on the unit provider `OutputMappingWriter.RunIsolated` picks from it (its own instance, or this provider when it holds a transaction). Never the process-global provider by default. */
+    /** The caller's provider. FK lookups, a lookup row created on a miss, and tags run on it; the unit (`unitWork`, child and field writes, the human-value guard) runs on the unit provider `MetadataProviderCapabilities.RunIsolated` picks from it (its own instance, or this provider when it holds a transaction). Never the process-global provider by default. */
     provider: IMetadataProvider;
     /** When true, compute + validate the mapping but do NOT save anything (returns a preview instead). */
     dryRun?: boolean;
@@ -989,6 +1285,8 @@ export async function ApplyOutputMapping(opts: {
     // Set when there are field mappings: the processed record's entity and its resolved values, written in step 3.
     let fieldEntity: EntityInfo | undefined;
     let fieldsToWrite: Record<string, unknown> | undefined;
+    // On a dry run: what the real write would fail on (WriteBackResult.PreviewErrors).
+    const previewErrors: string[] = [];
 
     // 1) Resolve the fields of the processed record.
     if (outputMapping.fields && Object.keys(outputMapping.fields).length > 0) {
@@ -1007,8 +1305,9 @@ export async function ApplyOutputMapping(opts: {
             resolved[field] = await writer.ResolveFieldValue(entity, field, val);
         }
         if (dryRun) {
-            // Compute-only: surface what an apply WOULD write, persist nothing.
+            // Compute-only: surface what an apply WOULD write, and what it would fail on; persist nothing.
             out.previewFields = resolved;
+            previewErrors.push(...(await writer.PreviewFieldProblems(entity, resolved)));
         } else {
             fieldEntity = entity;
             fieldsToWrite = resolved;
@@ -1078,17 +1377,21 @@ export async function ApplyOutputMapping(opts: {
                 out.previewChild = singleChild.Data;
             }
         }
+        if (dryRun) {
+            // An empty answer is checked too: its reconcile config is validated as the real write validates it.
+            previewErrors.push(...(await writer.PreviewChildProblems(childAnswers)));
+        }
     }
 
     // 3) Write the unit work, children, then the record's fields, as one unit of work: a failed write rolls back and
     //    leaves the parent field (and the Feature Values) unwritten, so a half-written record never looks complete.
     //    The unit runs on its own provider instance so its transaction is its alone.
     if (!dryRun) {
-        await OutputMappingWriter.RunIsolated(provider, async (unitProvider) => {
+        await MetadataProviderCapabilities.RunIsolated(provider, async (unitProvider) => {
             const unitWriter = new OutputMappingWriter({ ...writerOptions, Provider: unitProvider });
             // A provider without the transaction capability (a client provider) runs the work untransacted, per
             // RunInEntityTransaction's contract for a null provider.
-            await RunInEntityTransaction(OutputMappingWriter.IsTransactionalProvider(unitProvider) ? unitProvider : null, async () => {
+            await RunInEntityTransaction(MetadataProviderCapabilities.IsTransactionalProvider(unitProvider) ? unitProvider : null, async () => {
                 if (opts.unitWork) {
                     await opts.unitWork(unitProvider);
                 }
@@ -1124,6 +1427,11 @@ export async function ApplyOutputMapping(opts: {
                 }
             }
 
+            if (dryRun && tagMapping.taggedEntityName && !provider.EntityByName(tagMapping.taggedEntityName)
+                && tagNames.some((t) => t.trim().length > 0)) {
+                // The real write refuses it when it links this mapping's first tag.
+                previewErrors.push(`taggedEntityName '${tagMapping.taggedEntityName}' not found in metadata`);
+            }
             const growthMode = (tagMapping.growth ?? 'constrained') as TaxonomyMode;
             const matchThreshold = tagMapping.matchThreshold ?? 0.8;
 
@@ -1153,7 +1461,6 @@ export async function ApplyOutputMapping(opts: {
                     if (matchedTag) {
                         const depth = computeTagDepth(matchedTag.ID, tagMapping.rootTagId, TagEngine.Instance);
                         const isNonDescendant = depth < 0;
-                        const exceedsMaxDepth = isNonDescendant || (tagMapping.maxDepth !== undefined && depth > tagMapping.maxDepth);
                         const errorMsg = isNonDescendant
                             ? `Matched tag '${matchedTag.Name}' is not a descendant of root tag '${tagMapping.rootTagId}'`
                             : (tagMapping.maxDepth !== undefined && depth > tagMapping.maxDepth)
@@ -1169,18 +1476,25 @@ export async function ApplyOutputMapping(opts: {
                             depth,
                             error: errorMsg,
                         });
+                        if (errorMsg) {
+                            previewErrors.push(`tag '${trimmedName}': ${errorMsg}`); // the real write throws on both
+                        }
                     } else {
                         if (growthMode === 'auto-grow') {
                             const depth = 1;
                             const exceedsMaxDepth = tagMapping.maxDepth !== undefined && depth > tagMapping.maxDepth;
+                            const createdError = exceedsMaxDepth ? `Created tag exceeds maxDepth (${depth} > ${tagMapping.maxDepth})` : undefined;
                             previewTags.push({
                                 tagText: trimmedName,
                                 matched: false,
                                 created: true,
                                 rootTagID: tagMapping.rootTagId,
                                 depth,
-                                error: exceedsMaxDepth ? `Created tag exceeds maxDepth (${depth} > ${tagMapping.maxDepth})` : undefined,
+                                error: createdError,
                             });
+                            if (createdError) {
+                                previewErrors.push(`tag '${trimmedName}': ${createdError}`); // the real write throws on it
+                            }
                         } else {
                             previewTags.push({
                                 tagText: trimmedName,
@@ -1252,6 +1566,9 @@ export async function ApplyOutputMapping(opts: {
         }
     }
 
+    if (previewErrors.length > 0) {
+        out.PreviewErrors = previewErrors;
+    }
     return out;
 }
 

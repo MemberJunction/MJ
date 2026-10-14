@@ -794,7 +794,8 @@ export class HarnessAgentBase extends BaseAgent {
 
     /**
      * Renders the agent type's system prompt through the same template engine AIPromptRunner uses,
-     * so the harness receives exactly what a Loop model would — including the output example.
+     * so the harness receives exactly what a Loop model would — including the output example, and
+     * without HTML escaping (the prompt is plain text, so `&` must not arrive as `&amp;`).
      *
      * Falls back to the raw template text if rendering fails. A partially-substituted prompt still
      * carries the envelope shape and lets the run proceed; throwing here would fail a run over a
@@ -821,6 +822,8 @@ export class HarnessAgentBase extends BaseAgent {
                     { ...(promptParams.data ?? {}), ...(promptParams.templateData ?? {}) },
                     true,
                     true,
+                    // plain text for a model, not HTML — the same raw render AIPromptRunner makes
+                    { autoescape: false },
                 );
                 if (rendered.Success && rendered.Output?.trim()) {
                     return rendered.Output;

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { HttpPost, HttpError } from '@memberjunction/network-utils';
-import { ChatParams, ChatMessageRole, ChatMessageContent } from '@memberjunction/ai';
+import { HttpPost, HttpError, type HttpResponse } from '@memberjunction/network-utils';
+import { ChatParams, ChatMessageRole, ChatMessageContent, ParameterFidelityError } from '@memberjunction/ai';
 import { BettyLLM } from '../models/BettyLLM';
 import { BettyEndpoint } from '../config';
 
@@ -29,8 +29,11 @@ function paramsWith(messages: Array<{ role: ChatMessageRole; content: ChatMessag
     return p;
 }
 
-function reply(overrides: Record<string, unknown> = {}) {
-    return { Data: { conversationId: 'c1', response: 'An answer.', references: [], requestId: 'r1', ...overrides } };
+function reply(overrides: Record<string, unknown> = {}): HttpResponse {
+    return {
+        Data: { conversationId: 'c1', response: 'An answer.', references: [], requestId: 'r1', ...overrides },
+        Status: 200, StatusText: 'OK', Headers: {}, Url: BASE, Ok: true,
+    };
 }
 
 describe('BettyLLM', () => {
@@ -440,5 +443,30 @@ describe('BettyEndpoint', () => {
     it('keeps the version segment — the trap new URL() falls into', () => {
         // new URL('messages', 'https://h/betty/v1') resolves to https://h/betty/messages.
         expect(BettyEndpoint('https://h/betty/v1', 'messages')).not.toContain('/betty/messages');
+    });
+});
+
+describe('BettyLLM parameter fidelity', () => {
+    beforeEach(() => {
+        vi.resetAllMocks();
+        process.env.BETTY_API_BASE_URL = BASE;
+    });
+
+    const configured = (): ChatParams =>
+        Object.assign(paramsWith([{ role: ChatMessageRole.user, content: 'Hi' }]), { temperature: 0.2, maxOutputTokens: 100, seed: 7 });
+
+    it('describes temperature, max tokens and seed as not sent, matching a request body that carries none of them', async () => {
+        vi.mocked(HttpPost).mockResolvedValue(reply());
+        const llm = new BettyLLM('key');
+        const r = await llm.ChatCompletion(configured());
+        const body = vi.mocked(HttpPost).mock.calls[0][1] as Record<string, unknown>;
+        expect(['temperature', 'maxOutputTokens', 'max_tokens', 'seed'].filter((k) => k in body)).toEqual([]);
+        expect(llm.DescribeSentParameters(configured())).toEqual({ VendorModelName: 'betty', Temperature: null, MaxTokens: null, Seed: null });
+        expect(r.parameterFidelity?.Status).toBe('refused');
+    });
+
+    it('refuses a strict call that configures them, before any request', async () => {
+        await expect(new BettyLLM('key').ChatCompletion(Object.assign(configured(), { strictParameters: true }))).rejects.toBeInstanceOf(ParameterFidelityError);
+        expect(HttpPost).not.toHaveBeenCalled();
     });
 });

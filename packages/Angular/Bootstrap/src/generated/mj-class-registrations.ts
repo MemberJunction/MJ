@@ -530,8 +530,9 @@ import {
     MJEntityCommunicationMessageTypeEntityExtended,
 } from '@memberjunction/entity-communications-base';
 
-// @memberjunction/feature-pipelines (1 classes)
+// @memberjunction/feature-pipelines (2 classes)
 import {
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
 } from '@memberjunction/feature-pipelines';
 
@@ -1342,6 +1343,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     TimePerMinutePriceUnitType,
     MJCommunicationProviderEntityExtended,
     MJEntityCommunicationMessageTypeEntityExtended,
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
     AudioArtifactViewerComponent,
     CodeArtifactViewerComponent,
@@ -1458,11 +1460,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RubricEvaluationResultPanel,
     RubricFormPolicy,
     RubricPublishPanel,
-    RubricScaleFormPolicy,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RubricScaleFormPolicy,
     RubricScaleLevelsPanel,
     RubricVersionFormPolicy,
     RubricVersionSummaryPanel,
@@ -1612,7 +1614,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 735;
+export const CLASS_REGISTRATIONS_COUNT = 736;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

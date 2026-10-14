@@ -3,6 +3,19 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { TemplateEngineServer } from '@memberjunction/templates';
 
 /**
+ * Thrown when an entity document cannot be rendered in full: a read it depends on failed (a related-records read, the
+ * record's own load, a child document's template text) or its Nunjucks pass failed. A document missing that data
+ * describes a different record than the stored one, so callers skip it, report it, and keep what they stored before.
+ * A relationship that genuinely has no rows is not an error; it renders as such.
+ */
+export class EntityDocumentIncompleteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EntityDocumentIncompleteError';
+  }
+}
+
+/**
  * Abstract base class for entity document template parsing.
  * Use EntityDocumentTemplateParser or a subclass thereof.
  */
@@ -19,6 +32,13 @@ export abstract class EntityDocumentTemplateParserBase {
   protected static get _cache(): Record<string, string> {
     return EntityDocumentTemplateParserBase.__cache;
   }
+
+  /**
+   * The HTML entities an escaping render writes for the characters it escapes (`&`, `"`, `'`, `<`, `>`, `\`). Text
+   * stored before a renderer stopped escaping holds them where the record holds the plain character, which is how such
+   * text is found and re-rendered.
+   */
+  public static readonly ESCAPED_ENTITIES: readonly string[] = ['&amp;', '&quot;', '&#39;', '&lt;', '&gt;', '&#92;'];
 
   /** Optional provider override; falls back to Metadata.Provider when not set. */
   protected _provider?: IMetadataProvider;
@@ -38,7 +58,9 @@ export abstract class EntityDocumentTemplateParserBase {
 
   /**
    * Parses an entity document template and replaces values within ${} placeholders with actual values from the entity record.
-   * If template uses Nunjucks {{ }} syntax, it is pre-rendered with the MJ TemplateEngine first.
+   * If template uses Nunjucks {{ }} syntax, it is pre-rendered with the MJ TemplateEngine first, raw: the parsed text goes to a
+   * model as plain text, to be read (a feature pipeline's prompt context, content tagging) or embedded, so `Affineur & Owner`
+   * must not become `Affineur &amp; Owner`. Child documents a `Relationship()` placeholder renders are parsed the same way.
    *
    * @param Template - the document template to parse
    * @param EntityID - the ID of the entity
@@ -67,10 +89,13 @@ export abstract class EntityDocumentTemplateParserBase {
     let processedTemplate = Template;
     if (Template.includes('{{') || Template.includes('{%')) {
       await TemplateEngineServer.Instance.Config(false, ContextUser);
-      const renderResult = await TemplateEngineServer.Instance.RenderTemplateSimple(Template, EntityRecord);
-      if (renderResult.Success && renderResult.Output) {
-        processedTemplate = renderResult.Output;
+      const renderResult = await TemplateEngineServer.Instance.RenderTemplateSimple(Template, EntityRecord, { autoescape: false });
+      if (!renderResult.Success) {
+        // The unrendered template text ({{ ... }}) must not be stored or embedded as the record's document
+        throw new EntityDocumentIncompleteError(`the template of entity ${EntityID} could not be rendered: ${renderResult.Message}`);
       }
+      processedTemplate = renderResult.Output || ''; // a template can legitimately render to nothing
+
     }
 
     const compositeKey = new CompositeKey();

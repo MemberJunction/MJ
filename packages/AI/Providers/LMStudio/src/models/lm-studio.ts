@@ -1,4 +1,4 @@
-import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer } from '@memberjunction/ai';
+import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, type VendorCallParameters } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { LMStudioClient, LLMPredictionFragment } from '@lmstudio/sdk';
 
@@ -17,6 +17,20 @@ export class LMStudioLLM extends BaseLLM {
     constructor(apiKey?: string) {
         super(apiKey || ''); // LM Studio doesn't require API key for local usage
         this._client = new LMStudioClient();
+    }
+
+    /** The `maxPredictedTokens` both paths send: a positive configured cap; any other value is not sent. */
+    private resolveMaxPredictedTokens(params: ChatParams): number | undefined {
+        return params.maxOutputTokens != null && params.maxOutputTokens > 0 ? params.maxOutputTokens : undefined;
+    }
+
+    /**
+     * Both paths send the configured temperature and seed, and the output cap only when it is positive
+     * ({@link resolveMaxPredictedTokens}), so a configured cap of 0 or less is described as not sent.
+     */
+    public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
+        // `??`: 0 is a sent value; only an unsent one becomes null.
+        return { VendorModelName: params.model, Temperature: params.temperature ?? null, MaxTokens: this.resolveMaxPredictedTokens(params) ?? null, Seed: params.seed ?? null };
     }
 
     /**
@@ -183,8 +197,9 @@ export class LMStudioLLM extends BaseLLM {
             if (params.temperature != null) {
                 respondOptions.temperature = params.temperature;
             }
-            if (params.maxOutputTokens != null && params.maxOutputTokens > 0) {
-                respondOptions.maxPredictedTokens = params.maxOutputTokens;
+            const maxPredictedTokens = this.resolveMaxPredictedTokens(params);
+            if (maxPredictedTokens !== undefined) {
+                respondOptions.maxPredictedTokens = maxPredictedTokens;
             }
             if (params.topP != null) {
                 respondOptions.topP = params.topP;
@@ -340,8 +355,9 @@ export class LMStudioLLM extends BaseLLM {
         if (params.temperature != null) {
             respondOptions.temperature = params.temperature;
         }
-        if (params.maxOutputTokens != null && params.maxOutputTokens > 0) {
-            respondOptions.maxPredictedTokens = params.maxOutputTokens;
+        const maxPredictedTokens = this.resolveMaxPredictedTokens(params);
+        if (maxPredictedTokens !== undefined) {
+            respondOptions.maxPredictedTokens = maxPredictedTokens;
         }
         if (params.topP != null) {
             respondOptions.topP = params.topP;

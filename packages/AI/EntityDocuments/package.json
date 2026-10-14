@@ -23,6 +23,7 @@
     "@memberjunction/templates": "6.2.0-edge.3"
   },
   "devDependencies": {
+    "@memberjunction/unit-testing": "6.2.0-edge.3",
     "@types/node": "24.10.11",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"

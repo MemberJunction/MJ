@@ -1,5 +1,5 @@
 import { AIErrorInfo, BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities, ChatToolCall, getToolResultBlocks, CHAT_FINISH_REASON_TOOL_CALLS,
-    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, extractOpenAICompatibleToolCalls } from "@memberjunction/ai";
+    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, extractOpenAICompatibleToolCalls, VendorCallParameters } from "@memberjunction/ai";
 import { APIUserAbortError, OpenAI } from "openai";
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageFunctionToolCall, ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionSystemMessageParam, ChatCompletionTool, ChatCompletionUserMessageParam } from "openai/resources";
@@ -142,6 +142,72 @@ export class OpenAILLM extends BaseLLM {
     }
 
     /**
+     * Whether `modelName` is an OpenAI reasoning model: the o-series (`o1`, `o3-mini`, `o4-mini`, ...) and GPT-5 and
+     * later (`gpt-5`, `gpt-5.4-nano`, `gpt-6-astra`, ...). These are the models the OpenAI SDK scopes its reasoning
+     * configuration to ("gpt-5 and o-series models only") and the ones MJ's model metadata flags `SupportsEffortLevel`.
+     * They accept only their default temperature, 1: any other value, 0 included, is answered with HTTP 400
+     * "Unsupported value: 'temperature'".
+     *
+     * Read from the name's family and major version rather than a list, so a new release needs no code change.
+     * `gpt-oss` (open-weight, reasons through its system prompt) and GPT-4 and earlier take any temperature, and a
+     * gateway-prefixed name (`openai/gpt-5` on OpenRouter) is the gateway's to handle.
+     */
+    public static IsReasoningModel(modelName: string): boolean {
+        const name = modelName.toLowerCase();
+        if (/^o\d/.test(name)) {
+            return true;
+        }
+        const gptMajor = /^gpt-(\d+)/.exec(name);
+        return gptMajor !== null && Number.parseInt(gptMajor[1], 10) >= 5;
+    }
+
+    /**
+     * The temperature both request paths send, and the one {@link DescribeSentParameters} reports. A reasoning model
+     * ({@link OpenAILLM.IsReasoningModel}) is sent a configured 1 and otherwise none, so the vendor applies its
+     * default 1 instead of refusing the call; the description then reports the temperature as not sent, which strict
+     * mode refuses. Every other model is sent the configured temperature, 0 included.
+     */
+    protected ResolveTemperature(params: ChatParams): number | undefined {
+        const temperature = params.temperature;
+        if (!OpenAILLM.IsReasoningModel(params.model)) {
+            return temperature;
+        }
+        return OpenAILLM.ReasoningModelSamplingValue(temperature);
+    }
+
+    /**
+     * The `top_p` both request paths send: the configured value, except that a reasoning model is sent only a
+     * configured 1. Reasoning models reject any other `top_p` (GPT-6 Astra: HTTP 400 "Unsupported parameter:
+     * 'top_p' is not supported with this model") and accept 1, their default.
+     */
+    protected ResolveTopP(params: ChatParams): number | undefined {
+        const topP = params.topP;
+        if (!OpenAILLM.IsReasoningModel(params.model)) {
+            return topP;
+        }
+        return OpenAILLM.ReasoningModelSamplingValue(topP);
+    }
+
+    /**
+     * What a reasoning model ({@link OpenAILLM.IsReasoningModel}) is sent for a configured sampling value
+     * (`temperature`, `top_p`): 1, the only value these models accept, when 1 is configured; otherwise nothing, so the
+     * vendor applies that default instead of refusing the call. Shared with drivers that serve the same models through
+     * another endpoint (Azure).
+     */
+    public static ReasoningModelSamplingValue(value: number | undefined): number | undefined {
+        return value === 1 ? 1 : undefined;
+    }
+
+    /**
+     * The request sends {@link ResolveTemperature}'s temperature, the configured `max_completion_tokens` and the
+     * configured seed, on both paths.
+     */
+    public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
+        // `??`: 0 is a sent value; only an unsent one becomes null.
+        return { VendorModelName: params.model, Temperature: this.ResolveTemperature(params) ?? null, MaxTokens: params.maxOutputTokens ?? null, Seed: params.seed ?? null };
+    }
+
+    /**
      * Extra request-body params merged into BOTH the streaming and non-streaming ChatCompletion
      * requests, beyond the standard OpenAI schema. Default is none. Subclasses targeting
      * OpenAI-compatible gateways override this to opt into provider extensions the OpenAI SDK
@@ -224,7 +290,14 @@ export class OpenAILLM extends BaseLLM {
     }
 
     /**
-     * Implementation of non-streaming chat completion for OpenAI
+     * Implementation of non-streaming chat completion for OpenAI.
+     *
+     * A cancelled request resolves a failed, non-failover-able ChatResult. Any other vendor failure is thrown, on
+     * purpose. BaseLLM leaves the non-streaming failure mode to the provider: `ChatCompletions` (plural) and the
+     * prompt runners' failover loop normalize a throw into a failed ChatResult with `errorInfo`. The throw is pinned
+     * as `NonStreamingFailureMode: 'throws'` by this package's `openAI.conformance.test.ts` and by the conformance
+     * suites of the subclasses that have one (OpenRouter, DeepInfra, MiniMax, SiliconFlow, Zhipu), so direct callers
+     * built on a `catch` keep working.
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         let messages = params.messages;
@@ -254,7 +327,7 @@ export class OpenAILLM extends BaseLLM {
         const openAIParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
             model: params.model,
             messages: formattedMessages,
-            temperature: params.temperature,
+            temperature: this.ResolveTemperature(params),
             max_completion_tokens: params.maxOutputTokens,
             logprobs: params.includeLogProbs === true ? true : false,
             top_logprobs: params.includeLogProbs && params.topLogProbs ? params.topLogProbs : undefined,
@@ -270,8 +343,9 @@ export class OpenAILLM extends BaseLLM {
         }
 
         // Add sampling and generation parameters
-        if (params.topP != null) {
-            openAIParams.top_p = params.topP;
+        const topP = this.ResolveTopP(params);
+        if (topP !== undefined && topP !== null) {
+            openAIParams.top_p = topP;
         }
         if (params.frequencyPenalty != null) {
             openAIParams.frequency_penalty = params.frequencyPenalty;
@@ -307,13 +381,6 @@ export class OpenAILLM extends BaseLLM {
                 break;
         }
 
-        // GPT 5 doesn't support a temperature value other than 1.
-        if ((openAIParams.model.toLowerCase() === 'gpt-5') && (openAIParams.temperature)) {
-            if (openAIParams.temperature !== 1) {
-                openAIParams.temperature = 1;
-            }
-        }
-
         // Merge any provider-specific extras (e.g. OpenRouter's usage accounting opt-in). The OpenAI
         // SDK forwards unknown body keys unchanged, so this is how compatible gateways are extended.
         Object.assign(openAIParams, this.getProviderRequestExtras(params));
@@ -327,7 +394,7 @@ export class OpenAILLM extends BaseLLM {
             if (this.isCancellationError(error, params.cancellationToken)) {
                 return this.buildCancelledChatResult(error, startTime);
             }
-            throw error; // all other failures propagate exactly as before
+            throw error; // every other failure is thrown: see this method's JSDoc for why
         }
         const endTime = new Date();
         const timeElapsed = endTime.getTime() - startTime.getTime();
@@ -476,7 +543,7 @@ export class OpenAILLM extends BaseLLM {
         const openAIParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
             model: params.model,
             messages: formattedMessages,
-            temperature: params.temperature,
+            temperature: this.ResolveTemperature(params),
             max_completion_tokens: params.maxOutputTokens,
             stream: true,
             logprobs: params.includeLogProbs === true ? true : false,
@@ -489,8 +556,9 @@ export class OpenAILLM extends BaseLLM {
         }
 
         // Add sampling and generation parameters
-        if (params.topP != null) {
-            openAIParams.top_p = params.topP;
+        const topP = this.ResolveTopP(params);
+        if (topP !== undefined && topP !== null) {
+            openAIParams.top_p = topP;
         }
         if (params.frequencyPenalty != null) {
             openAIParams.frequency_penalty = params.frequencyPenalty;

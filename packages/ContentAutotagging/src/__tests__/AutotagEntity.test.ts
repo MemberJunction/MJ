@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ============================================================================
 
 const {
-    mockRunView, mockEntitySave, mockEntityNewRecord, mockGetEntityObject,
+    mockRunView, mockRunViews, mockEntitySave, mockEntityNewRecord, mockGetEntityObject,
     mockParse, mockTagEngineInstance, mockEngineInstance,
 } = vi.hoisted(() => {
     const mockEntitySave = vi.fn().mockResolvedValue(true);
@@ -26,6 +26,7 @@ const {
     });
     return {
         mockRunView: vi.fn(),
+        mockRunViews: vi.fn(),
         mockEntitySave,
         mockEntityNewRecord,
         mockGetEntityObject,
@@ -62,6 +63,8 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     }
     class MockRunView {
         RunView = mockRunView;
+        RunViews = mockRunViews;
+        static FromMetadataProvider(): MockRunView { return new MockRunView(); }
     }
     return {
         ...actual,
@@ -109,11 +112,15 @@ vi.mock('../Core', () => ({
     AutotagProgressCallback: undefined,
 }));
 
-vi.mock('@memberjunction/entity-documents', () => ({
-    EntityDocumentTemplateParser: {
-        CreateInstance: vi.fn().mockReturnValue({ Parse: mockParse })
-    }
-}));
+vi.mock('@memberjunction/entity-documents', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/entity-documents')>();
+    return {
+        EntityDocumentTemplateParserBase: actual.EntityDocumentTemplateParserBase,
+        EntityDocumentTemplateParser: {
+            CreateInstance: vi.fn().mockImplementation(() => ({ Parse: mockParse }))
+        }
+    };
+});
 
 vi.mock('@memberjunction/templates', () => ({
     TemplateEngineServer: {
@@ -139,6 +146,8 @@ vi.mock('@memberjunction/tag-engine-base', () => ({
 }));
 
 import { AutotagEntity } from '../Entity/generic/AutotagEntity';
+import { LogError, UserInfo, type RunViewParams } from '@memberjunction/core';
+import { EntityDocumentTemplateParserBase } from '@memberjunction/entity-documents';
 
 describe('AutotagEntity', () => {
     let provider: AutotagEntity;
@@ -238,6 +247,8 @@ describe('AutotagEntity', () => {
                 .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'doc-1', TemplateID: 'tmpl-1', VectorIndexID: 'vi-1' }] })
                 // GetModifiedRecords returns 1 record
                 .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'rec-1', Name: 'Record 1' }] })
+                // LoadEscapedDocumentIDs
+                .mockResolvedValueOnce({ Success: true, Results: [] })
                 // LoadExistingERDs
                 .mockResolvedValueOnce({ Success: true, Results: [] })
                 // LoadExistingContentItems
@@ -365,52 +376,6 @@ describe('AutotagEntity', () => {
             EntityID: 'ent-1'
         };
 
-        const mockRecord = {
-            PrimaryKey: { Values: () => 'rec-1' },
-            GetAll: () => ({ Name: 'John Doe', Email: 'john@example.com' }),
-            Get: (field: string) => field === 'Name' ? 'John Doe' : null,
-        };
-
-        it('should skip records with empty rendered text', async () => {
-            mockParse.mockResolvedValueOnce('');
-
-            // Set up RunView to return entity doc, no existing ERDs, no existing items, and one modified record
-            mockRunView
-                .mockResolvedValueOnce({ Success: true, Results: [mockEntityDoc] }) // LoadEntityDocument
-                .mockResolvedValueOnce({ Success: true, Results: [mockRecord] })    // GetModifiedRecords
-                .mockResolvedValueOnce({ Success: true, Results: [] })              // LoadExistingERDs
-                .mockResolvedValueOnce({ Success: true, Results: [] });             // LoadExistingContentItems
-
-            const result = await provider.SetContentItemsToProcess([mockContentSource as never]);
-            expect(result).toHaveLength(0);
-        });
-
-        it('should skip unchanged records (same checksum)', async () => {
-            const existingContentItem = {
-                ID: 'ci-1',
-                EntityRecordDocumentID: 'erd-1',
-                Checksum: 'checksum-abc', // Same as what getChecksumFromText returns
-            };
-
-            const existingERD = {
-                ID: 'erd-1',
-                RecordID: 'rec-1',
-                DocumentText: 'old text',
-                EntityRecordUpdatedAt: new Date(),
-                Save: vi.fn().mockResolvedValue(true),
-            };
-
-            mockRunView
-                .mockResolvedValueOnce({ Success: true, Results: [mockEntityDoc] })     // LoadEntityDocument
-                .mockResolvedValueOnce({ Success: true, Results: [mockRecord] })         // GetModifiedRecords
-                .mockResolvedValueOnce({ Success: true, Results: [existingERD] })        // LoadExistingERDs
-                .mockResolvedValueOnce({ Success: true, Results: [existingContentItem] }); // LoadExistingContentItems
-
-            const result = await provider.SetContentItemsToProcess([mockContentSource as never]);
-            // Since checksum matches, UpsertContentItem returns null → no items to process
-            expect(result).toHaveLength(0);
-        });
-
         it('stores a composite-keyed record\'s whole key as the ERD RecordID (never just the first column)', async () => {
             // Configured (non-MJ) entity keyed by (OrderID, LineNo) — there is no ID column at all.
             const compositeEntity = {
@@ -433,6 +398,7 @@ describe('AutotagEntity', () => {
             mockRunView
                 .mockResolvedValueOnce({ Success: true, Results: [mockEntityDoc] }) // LoadEntityDocument
                 .mockResolvedValueOnce({ Success: true, Results: [row] })           // GetModifiedRecords
+                .mockResolvedValueOnce({ Success: true, Results: [] })              // LoadEscapedDocumentIDs
                 .mockResolvedValueOnce({ Success: true, Results: [] })              // LoadExistingERDs
                 .mockResolvedValueOnce({ Success: true, Results: [] });             // LoadExistingContentItems
 
@@ -481,6 +447,423 @@ describe('AutotagEntity', () => {
             expect(params.Fields).toEqual(['ID', 'EntityID', 'RecordID']);
             expect(params.BypassCache).toBe(true);
             expect(mockTagEngineInstance.CreateTaggedItem).toHaveBeenCalledWith('tag-resolved', 'ent-1', 'rec-1', expect.anything(), expect.anything());
+        });
+    });
+
+    // ========================================================================
+    // Documents stored by an escaping render are re-rendered raw
+    // ========================================================================
+
+    describe('re-rendering documents stored escaped', () => {
+        const source = {
+            ID: 'src-1', Name: 'People Source',
+            EntityID: 'ent-1', EntityDocumentID: 'doc-1',
+            ContentTypeID: 'ct-1', ContentFileTypeID: 'cft-1',
+            ContentSourceTypeID: 'cst-1', URL: null,
+            ConfigurationObject: { ShareTaxonomyWithLLM: false },
+        };
+        const people = {
+            ID: 'ent-1', Name: 'People',
+            PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' },
+            Fields: [{ Name: 'ID', IsNameField: false }, { Name: 'Title', IsNameField: true, Sequence: 1 }],
+            NameField: undefined,
+        };
+
+        /** What each view returns in one test: the rows a query for the given purpose reads. */
+        interface ViewRows {
+            Modified: Record<string, unknown>[];
+            Escaped: { EntityRecordDocumentID: string }[];
+            ERDs: Record<string, unknown>[];
+            ContentItems: Record<string, unknown>[];
+            /** Views whose read fails: 'Modified', 'ERDs', 'ContentItems', 'Untagged' or 'Item' (one content item by ID). */
+            Failing?: string[];
+        }
+
+        /** A view's filter as text; these views are all filtered by plain strings. */
+        function filterText(params: RunViewParams): string {
+            return typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
+        }
+
+        /** Routes every view the provider runs to its rows; the untagged-items retry query finds none. */
+        function routeViews(rows: ViewRows): void {
+            const failing = new Set(rows.Failing || []);
+            const failed = { Success: false, Results: [], ErrorMessage: 'Connection lost' };
+            mockRunView.mockImplementation(async (params: RunViewParams) => {
+                const filter = filterText(params);
+                switch (params.EntityName) {
+                    case 'MJ: Entity Documents':
+                        return { Success: true, Results: [{ ID: 'doc-1', Name: 'People Document', TemplateID: 'tmpl-1', VectorIndexID: 'vi-1', EntityID: 'ent-1' }] };
+                    case 'People':
+                        return failing.has('Modified') ? failed : { Success: true, Results: rows.Modified };
+                    case 'MJ: Entity Record Documents':
+                        return failing.has('ERDs') ? failed : { Success: true, Results: rows.ERDs };
+                    case 'MJ: Content Items':
+                        if (filter.includes('LIKE')) return { Success: true, Results: rows.Escaped };
+                        if (filter.includes('NOT EXISTS')) return failing.has('Untagged') ? failed : { Success: true, Results: [] };
+                        if (filter.startsWith('ID=')) return failing.has('Item') ? failed : { Success: true, Results: [] };
+                        return failing.has('ContentItems') ? failed : { Success: true, Results: rows.ContentItems };
+                    default:
+                        return { Success: false, Results: [], ErrorMessage: `unexpected view ${params.EntityName}` };
+                }
+            });
+        }
+
+        /** The query that finds content items whose text an escaping render wrote. */
+        function escapedQuery(): RunViewParams | undefined {
+            return mockRunView.mock.calls
+                .map((call) => call[0])
+                .find((params: RunViewParams) => params.EntityName === 'MJ: Content Items' && filterText(params).includes('LIKE'));
+        }
+
+        /** A content source as the provider loads it to record its render version: Load copies the source's configuration. */
+        class SourceRecord {
+            ConfigurationObject: Record<string, unknown> | null = null;
+            LatestResult = null;
+            Save = vi.fn(async () => true);
+            async Load(id: string): Promise<boolean> {
+                this.ConfigurationObject = id === source.ID ? { ...source.ConfigurationObject } : null;
+                return id === source.ID;
+            }
+        }
+        /** Every content source the provider loaded, in order. */
+        let loadedSources: SourceRecord[] = [];
+
+        /** The provider's entity factory: content sources are SourceRecords, every other entity the shared double. */
+        async function getEntityObject(entityName: string): Promise<unknown> {
+            if (entityName === 'MJ: Content Sources') {
+                const record = new SourceRecord();
+                loadedSources.push(record);
+                return record;
+            }
+            return mockGetEntityObject();
+        }
+
+        beforeEach(() => {
+            loadedSources = [];
+            mockRunView.mockReset();
+            mockRunViews.mockReset();
+            mockParse.mockReset();
+            mockEntitySave.mockReset();
+            mockEntitySave.mockResolvedValue(true);
+            mockParse.mockImplementation(async (_template: string, _entityID: string, record: Record<string, unknown>) => `Title: ${String(record.Title)}`);
+            Object.defineProperty(provider, 'ProviderToUse', {
+                configurable: true,
+                get: () => ({ EntityByID: () => people, GetEntityObject: getEntityObject }),
+            });
+            mockEngineInstance.getAllContentSources.mockResolvedValueOnce([source]);
+        });
+
+        /** The source with its stored text already healed, so only the records modified since its last run are processed. */
+        function healedSource() {
+            return {
+                ...source,
+                ConfigurationObject: { SourceSpecificConfiguration: { [AutotagEntity.RENDER_VERSION_KEY]: AutotagEntity.DOCUMENT_RENDER_VERSION } },
+            };
+        }
+
+        it('skips a record whose rendered text is empty: no document, no content item', async () => {
+            mockEngineInstance.getAllContentSources.mockReset();
+            mockEngineInstance.getAllContentSources.mockResolvedValueOnce([healedSource()]);
+            routeViews({ Modified: [{ ID: 'rec-1', Title: '' }], Escaped: [], ERDs: [], ContentItems: [] });
+            mockParse.mockResolvedValue('   ');
+            mockGetEntityObject.mockClear();
+
+            const count = await provider.Autotag(new UserInfo());
+
+            expect(mockParse).toHaveBeenCalledTimes(1);
+            expect(count).toBe(0);
+            expect(mockGetEntityObject).not.toHaveBeenCalled();
+            expect(mockEngineInstance.ExtractTextAndProcessWithLLM).not.toHaveBeenCalled();
+        });
+
+        it('skips a modified record whose text has the stored checksum: its content item is not saved or reprocessed', async () => {
+            mockEngineInstance.getAllContentSources.mockReset();
+            mockEngineInstance.getAllContentSources.mockResolvedValueOnce([healedSource()]);
+            const contentItemSave = vi.fn(async () => true);
+            const contentItem = { ID: 'ci-5', EntityRecordDocumentID: 'erd-5', Text: 'Title: Same', Checksum: 'checksum-abc', Save: contentItemSave };
+            routeViews({
+                Modified: [{ ID: 'rec-5', Title: 'Same' }],
+                Escaped: [],
+                ERDs: [{ ID: 'erd-5', RecordID: 'rec-5', DocumentText: 'Title: Same', Save: mockEntitySave }],
+                ContentItems: [contentItem],
+            });
+
+            const count = await provider.Autotag(new UserInfo());
+
+            expect(mockParse).toHaveBeenCalledTimes(1);
+            expect(count).toBe(0);
+            expect(contentItemSave).not.toHaveBeenCalled();
+            expect(mockEngineInstance.ExtractTextAndProcessWithLLM).not.toHaveBeenCalled();
+        });
+
+        it('writes nothing and records no render version when the existing documents cannot be read', async () => {
+            routeViews({ Modified: [{ ID: 'rec-1', Title: 'R&D' }], Escaped: [], ERDs: [], ContentItems: [], Failing: ['ERDs'] });
+
+            const count = await provider.Autotag(new UserInfo());
+
+            expect(count).toBe(0);
+            expect(mockParse).not.toHaveBeenCalled();
+            expect(mockGetEntityObject).not.toHaveBeenCalled();
+            expect(loadedSources).toHaveLength(0);
+        });
+
+        it('writes nothing and records no render version when the existing content items cannot be read', async () => {
+            routeViews({ Modified: [{ ID: 'rec-1', Title: 'R&D' }], Escaped: [], ERDs: [], ContentItems: [], Failing: ['ContentItems'] });
+
+            const count = await provider.Autotag(new UserInfo());
+
+            expect(count).toBe(0);
+            expect(mockParse).not.toHaveBeenCalled();
+            expect(mockGetEntityObject).not.toHaveBeenCalled();
+            expect(loadedSources).toHaveLength(0);
+        });
+
+        it('processes nothing and records no render version when the modified records cannot be read', async () => {
+            routeViews({ Modified: [], Escaped: [], ERDs: [], ContentItems: [], Failing: ['Modified'] });
+
+            await provider.Autotag(new UserInfo());
+
+            expect(mockParse).not.toHaveBeenCalled();
+            expect(loadedSources).toHaveLength(0);
+        });
+
+        it('updates the document of a record whose stored id differs only in case, rather than adding one', async () => {
+            mockEngineInstance.getAllContentSources.mockReset();
+            mockEngineInstance.getAllContentSources.mockResolvedValueOnce([healedSource()]);
+            const erdSave = vi.fn(async () => true);
+            routeViews({
+                Modified: [{ ID: 'a1b2c3d4-0000-4000-8000-000000000009', Title: 'Same' }],
+                Escaped: [],
+                ERDs: [{ ID: 'erd-9', RecordID: 'A1B2C3D4-0000-4000-8000-000000000009', DocumentText: 'Title: Old', Save: erdSave }],
+                ContentItems: [],
+            });
+            mockGetEntityObject.mockClear();
+
+            await provider.Autotag(new UserInfo());
+
+            expect(erdSave).toHaveBeenCalledTimes(1);
+            expect(mockGetEntityObject).toHaveBeenCalledTimes(1); // the new content item only, no second document
+        });
+
+        it('reports a failed read of the untagged items instead of taking it as "none to retry"', async () => {
+            routeViews({ Modified: [], Escaped: [], ERDs: [], ContentItems: [], Failing: ['Untagged'] });
+
+            await provider.Autotag(new UserInfo());
+
+            expect(vi.mocked(LogError)).toHaveBeenCalledWith(expect.stringContaining('untagged content items'));
+        });
+
+        it('reports a failed content-item read when linking a tag, and links nothing', async () => {
+            routeViews({ Modified: [], Escaped: [], ERDs: [], ContentItems: [], Failing: ['Item'] });
+            // a holder, not a local: the callback assigns it, which local-variable narrowing does not see
+            const captured: { Bridge: typeof mockEngineInstance.OnContentItemTagSaved } = { Bridge: null };
+            mockEngineInstance.ExtractTextAndProcessWithLLM.mockImplementationOnce(async () => {
+                captured.Bridge = mockEngineInstance.OnContentItemTagSaved;
+            });
+            mockEngineInstance.getAllContentSources.mockReset();
+            mockEngineInstance.getAllContentSources.mockResolvedValueOnce([healedSource()]);
+            routeViews({ Modified: [{ ID: 'rec-1', Title: 'R&D' }], Escaped: [], ERDs: [], ContentItems: [], Failing: ['Item'] });
+
+            await provider.Autotag(new UserInfo());
+            expect(captured.Bridge).not.toBeNull();
+            await captured.Bridge?.({ ItemID: 'item-1', Tag: 'AI', Weight: 0.9 }, null, new UserInfo());
+
+            expect(vi.mocked(LogError)).toHaveBeenCalledWith(expect.stringContaining('could not read content item item-1'));
+            expect(mockTagEngineInstance.CreateTaggedItem).not.toHaveBeenCalled();
+        });
+
+        it('records no render version when a record that is both modified and stored escaped fails, and looks again next run', async () => {
+            const views = {
+                Modified: [{ ID: 'rec-2', Title: 'R&D' }],
+                Escaped: [{ EntityRecordDocumentID: 'erd-2' }],
+                ERDs: [{ ID: 'erd-2', RecordID: 'rec-2', DocumentText: 'Title: R&amp;D', Save: mockEntitySave }],
+                ContentItems: [],
+            };
+            routeViews(views);
+            mockParse.mockRejectedValueOnce(new Error('could not read the Activities of People rec-2'));
+
+            await provider.Autotag(new UserInfo());
+
+            expect(loadedSources).toHaveLength(0);
+
+            mockRunView.mockClear();
+            mockEngineInstance.getAllContentSources.mockResolvedValueOnce([source]);
+            routeViews(views);
+            await provider.Autotag(new UserInfo());
+
+            expect(escapedQuery()).toBeDefined();
+        });
+
+        it('looks for escaped text once: a successful pass records the render version, and the next run does not look', async () => {
+            const contentItem = { ID: 'ci-2', EntityRecordDocumentID: 'erd-2', Text: 'Title: R&amp;D', Checksum: 'checksum-old', Save: mockEntitySave };
+            routeViews({
+                Modified: [],
+                Escaped: [{ EntityRecordDocumentID: 'erd-2' }],
+                ERDs: [{ ID: 'erd-2', RecordID: 'rec-2', DocumentText: 'Title: R&amp;D', Save: mockEntitySave }],
+                ContentItems: [contentItem],
+            });
+            mockRunViews.mockResolvedValue([{ Success: true, Results: [{ ID: 'rec-2', Title: 'R&D' }] }]);
+
+            await provider.Autotag(new UserInfo());
+
+            expect(escapedQuery()).toBeDefined();
+            expect(loadedSources).toHaveLength(1);
+            expect(loadedSources[0].Save).toHaveBeenCalledTimes(1);
+            const healedConfiguration = loadedSources[0].ConfigurationObject;
+            expect(healedConfiguration).toEqual({
+                ShareTaxonomyWithLLM: false, // the source's other settings are kept
+                SourceSpecificConfiguration: { [AutotagEntity.RENDER_VERSION_KEY]: AutotagEntity.DOCUMENT_RENDER_VERSION },
+            });
+
+            mockRunView.mockClear();
+            mockEngineInstance.getAllContentSources.mockResolvedValueOnce([{ ...source, ConfigurationObject: healedConfiguration }]);
+            await provider.Autotag(new UserInfo());
+
+            expect(escapedQuery()).toBeUndefined();
+            expect(loadedSources).toHaveLength(1);
+        });
+
+        it('records the render version of a source with nothing to heal', async () => {
+            routeViews({ Modified: [], Escaped: [], ERDs: [], ContentItems: [] });
+
+            await provider.Autotag(new UserInfo());
+
+            expect(loadedSources).toHaveLength(1);
+            expect(loadedSources[0].Save).toHaveBeenCalledTimes(1);
+        });
+
+        it('leaves the heal pending when a re-render fails, so the next run looks again', async () => {
+            routeViews({
+                Modified: [],
+                Escaped: [{ EntityRecordDocumentID: 'erd-2' }],
+                ERDs: [{ ID: 'erd-2', RecordID: 'rec-2', DocumentText: 'Title: R&amp;D', Save: mockEntitySave }],
+                ContentItems: [],
+            });
+            mockRunViews.mockResolvedValue([{ Success: true, Results: [{ ID: 'rec-2', Title: 'R&D' }] }]);
+            mockParse.mockRejectedValue(new Error('template failed'));
+
+            await provider.Autotag(new UserInfo());
+
+            expect(loadedSources).toHaveLength(0);
+        });
+
+        it('finds escaped content items by every entity an escaping render writes, in this source only', async () => {
+            routeViews({ Modified: [], Escaped: [], ERDs: [], ContentItems: [] });
+
+            await provider.Autotag(new UserInfo());
+
+            const query = escapedQuery();
+            const filter = query ? filterText(query) : '';
+            expect(filter).toContain("ContentSourceID='src-1'");
+            for (const entity of EntityDocumentTemplateParserBase.ESCAPED_ENTITIES) {
+                expect(filter).toContain(`Text LIKE '%${entity}%'`);
+            }
+        });
+
+        it('re-renders an unmodified record whose stored text was escaped, and reprocesses it', async () => {
+            const contentItem = { ID: 'ci-2', EntityRecordDocumentID: 'erd-2', Text: 'Title: R&amp;D', Checksum: 'checksum-old', Save: mockEntitySave };
+            routeViews({
+                Modified: [],
+                Escaped: [{ EntityRecordDocumentID: 'erd-2' }],
+                ERDs: [{ ID: 'erd-2', RecordID: 'rec-2', DocumentText: 'Title: R&amp;D', Save: mockEntitySave }],
+                ContentItems: [contentItem],
+            });
+            mockRunViews.mockResolvedValue([{ Success: true, Results: [{ ID: 'rec-2', Title: 'R&D' }] }]);
+
+            const count = await provider.Autotag(new UserInfo());
+
+            expect(count).toBe(1);
+            expect(mockRunViews.mock.calls[0][0]).toEqual([expect.objectContaining({ EntityName: 'People', ExtraFilter: "(ID='rec-2')" })]);
+            expect(contentItem.Text).toBe('Title: R&D');
+            expect(mockEngineInstance.ExtractTextAndProcessWithLLM.mock.calls[0][0]).toEqual([contentItem]);
+        });
+
+        it("renders with a parser bound to the provider's own metadata provider", async () => {
+            routeViews({ Modified: [{ ID: 'rec-1', Title: 'R&D' }], Escaped: [], ERDs: [], ContentItems: [] });
+
+            await provider.Autotag(new UserInfo());
+
+            expect(mockParse).toHaveBeenCalledTimes(1);
+            expect(mockParse.mock.contexts[0]).toEqual(expect.objectContaining({ ProviderOverride: expect.objectContaining({ EntityByID: expect.any(Function) }) }));
+        });
+
+        it('writes nothing for a re-rendered record whose data holds the entity literally', async () => {
+            const contentItem = { ID: 'ci-3', EntityRecordDocumentID: 'erd-3', Text: 'Title: Fish &amp; Chips', Checksum: 'checksum-abc', Save: mockEntitySave };
+            routeViews({
+                Modified: [],
+                Escaped: [{ EntityRecordDocumentID: 'erd-3' }],
+                ERDs: [{ ID: 'erd-3', RecordID: 'rec-3', DocumentText: 'Title: Fish &amp; Chips', Save: mockEntitySave }],
+                ContentItems: [contentItem],
+            });
+            mockRunViews.mockResolvedValue([{ Success: true, Results: [{ ID: 'rec-3', Title: 'Fish &amp; Chips' }] }]);
+
+            const count = await provider.Autotag(new UserInfo());
+
+            expect(mockParse).toHaveBeenCalledTimes(1);
+            expect(count).toBe(0);
+            expect(mockEntitySave).not.toHaveBeenCalled();
+            expect(mockEngineInstance.ExtractTextAndProcessWithLLM).not.toHaveBeenCalled();
+        });
+
+        it('does not load or render a modified record a second time', async () => {
+            routeViews({
+                Modified: [{ ID: 'rec-2', Title: 'R&D' }],
+                Escaped: [{ EntityRecordDocumentID: 'erd-2' }],
+                ERDs: [{ ID: 'erd-2', RecordID: 'rec-2', DocumentText: 'Title: R&amp;D', Save: mockEntitySave }],
+                ContentItems: [],
+            });
+
+            await provider.Autotag(new UserInfo());
+
+            expect(mockRunViews).not.toHaveBeenCalled();
+            expect(mockParse).toHaveBeenCalledTimes(1);
+        });
+
+        it('still refreshes the document of a modified record whose text is unchanged', async () => {
+            const contentItem = { ID: 'ci-4', EntityRecordDocumentID: 'erd-4', Text: 'Title: Same', Checksum: 'checksum-abc', Save: mockEntitySave };
+            routeViews({
+                Modified: [{ ID: 'rec-4', Title: 'Same' }],
+                Escaped: [],
+                ERDs: [{ ID: 'erd-4', RecordID: 'rec-4', DocumentText: 'Title: Same', Save: mockEntitySave }],
+                ContentItems: [contentItem],
+            });
+
+            const count = await provider.Autotag(new UserInfo());
+
+            expect(count).toBe(0);
+            expect(mockEntitySave).toHaveBeenCalledTimes(1); // the document, not the unchanged content item
+        });
+
+        it('matches a modified record to its document whatever the case of its key', async () => {
+            routeViews({
+                Modified: [{ ID: 'a1b2c3d4-0000-4000-8000-000000000002', Title: 'R&D' }],
+                Escaped: [{ EntityRecordDocumentID: 'erd-2' }],
+                ERDs: [{ ID: 'erd-2', RecordID: 'A1B2C3D4-0000-4000-8000-000000000002', DocumentText: 'Title: R&amp;D', Save: mockEntitySave }],
+                ContentItems: [],
+            });
+
+            await provider.Autotag(new UserInfo());
+
+            expect(mockRunViews).not.toHaveBeenCalled();
+            expect(mockParse).toHaveBeenCalledTimes(1);
+        });
+
+        it('loads the records to re-render in chunks of 500 keys', async () => {
+            const ids = Array.from({ length: 501 }, (_, i) => i);
+            routeViews({
+                Modified: [],
+                Escaped: ids.map((i) => ({ EntityRecordDocumentID: `erd-${i}` })),
+                ERDs: ids.map((i) => ({ ID: `erd-${i}`, RecordID: `rec-${i}`, DocumentText: 'x &amp; y' })),
+                ContentItems: [],
+            });
+            mockRunViews.mockResolvedValue([{ Success: true, Results: [] }, { Success: true, Results: [] }]);
+
+            await provider.Autotag(new UserInfo());
+
+            const views: RunViewParams[] = mockRunViews.mock.calls[0][0];
+            expect(views).toHaveLength(2);
+            expect(filterText(views[0]).split(' OR ')).toHaveLength(500);
+            expect(views[1].ExtraFilter).toBe("(ID='rec-500')");
         });
     });
 });

@@ -10,7 +10,18 @@ pluggable seams defined in [`@memberjunction/record-set-processor-base`](../base
 - **Batching** with a configurable batch size
 - **Bounded concurrency** within a batch (`maxConcurrency`)
 - **Rate limiting** (optional, token-bucket with a sliding window)
-- **Error-rate circuit breaker** — auto-fails a run when the error rate exceeds a threshold
+- **Error-rate circuit breaker** — auto-fails a run when the error rate of the records it attempted exceeds a threshold.
+  Records skipped on their watermark were never handed to the processor and are left out; records a processor itself
+  returned as `Skipped` (e.g. field rules that changed nothing) were evaluated and count as attempted
+- **Feature Pipeline runs** (`FeaturePipeline`, set by `RecordProcessExecutor` for Infer work) — the run ends `Failed`
+  when any record failed (records that succeeded keep their writes), and the summary carries a
+  `FeaturePipelineRunResult` (counts, pin, parameter fidelity) that `GenericProcessRunTracker` persists as the run's
+  `ResultSummary`. Side effect for `WatermarkStrategy = 'UpdatedAt'`: its window starts at the last `Completed` run, so
+  a pipeline with a record that keeps failing (e.g. an output its constraints always reject) never advances that
+  window and re-reads the same changed records each run until the failure is fixed (`Checksum`, the default, is per
+  record and unaffected). The LLM driver runs each prompt with `strictParameters`, so a model call that would not send
+  the pipeline's configured temperature, max tokens and seed is refused (the record fails); every record that made a
+  call carries its `ParameterFidelity`, and a refusal on any record is the run's fidelity
 - **Budget gate** — an `onAfterBatch` hook to pause when a cost/item budget is exhausted
 - **Progress events** after each batch
 - **Pause / cancel handshake** — the tracker re-checks its row's cancellation flag at each checkpoint
@@ -70,7 +81,7 @@ differs from the stored one, compared
 by the field's type (`OutputMappingWriter.ValuesEqual`): text exactly (case and whitespace count), dates by instant,
 decimal/numeric/money rounded to the column's scale, other numbers numerically, uniqueidentifiers case-insensitively.
 
-Each write-back transaction runs on its own provider instance (`OutputMappingWriter.RunIsolated`:
+Each write-back transaction runs on its own provider instance (`MetadataProviderCapabilities.RunIsolated` from `@memberjunction/feature-pipelines`:
 `CreateIndependentInstance()` on the caller's database provider — same connection pool, its own transaction stack —
 released afterwards). An MJ entity transaction belongs to the provider instance, so opened on the shared provider it
 would take in every other statement run through it meanwhile (other records' write-backs, the run tracker's detail

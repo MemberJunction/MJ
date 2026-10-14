@@ -1,6 +1,27 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
-import { UserInfo } from '@memberjunction/core';
+import {
+  BaseEntity,
+  BaseEntityResult,
+  EntityInfo,
+  ProviderBase,
+  UserInfo,
+  type DatasetResultType,
+  type DatasetStatusResultType,
+  type EntityRecordNameResult,
+  type ILocalStorageProvider,
+  type IMetadataProvider,
+  type PotentialDuplicateResponse,
+  type ProviderType,
+  type RecordDependency,
+  type RecordMergeResult,
+  type RunQueryResult,
+  type RunViewResult,
+  type ScoredCandidate,
+  type TransactionGroupBase,
+} from '@memberjunction/core';
+import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import { MakeModel, MakeModelVendor } from '@memberjunction/unit-testing';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
   BaseDecision,
@@ -17,6 +38,7 @@ import type {
   AIPromptParams,
   AIPromptRunResult,
 } from '@memberjunction/ai-core-plus';
+import { MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '../AIPromptRunner';
 import { AIDecisionRunner } from '../decision/AIDecisionRunner';
 import { LLMDecision } from '../decision/LLMDecision';
@@ -26,6 +48,8 @@ import {
   MODEL_TYPE,
   VENDOR,
   type AICatalog,
+  type FxModel,
+  type FxModelVendor,
 } from './__fixtures__/ai-metadata.fixtures';
 
 // ---------------------------------------------------------------------------
@@ -42,8 +66,8 @@ const h = vi.hoisted(() => {
     vendors: Array<{ ID: string; Name: string; CredentialTypeID?: string | null }>;
     modelTypes: Array<{ ID: string; Name: string }>;
     configurations: Array<{ ID: string; Name: string; ParentID: string | null }>;
-    models: Array<Record<string, unknown>>;
-    modelVendors: Array<Record<string, unknown>>;
+    models: FxModel[];
+    modelVendors: FxModelVendor[];
     promptModels: Array<Record<string, unknown>>;
     prompts: Array<Record<string, unknown>>;
     configuredDrivers: Set<string>;
@@ -85,7 +109,7 @@ const h = vi.hoisted(() => {
     get ModelTypesByID() { return new Map(state.modelTypes.map(t => [norm(t.ID), t])); },
     get ConfigurationsByID() { return new Map(state.configurations.map(c => [norm(c.ID), c])); },
     get ModelVendorsByModelID() {
-      const map = new Map<string, Array<Record<string, unknown>>>();
+      const map = new Map<string, FxModelVendor[]>();
       for (const mv of state.modelVendors) {
         const k = norm(mv.ModelID);
         (map.get(k) ?? map.set(k, []).get(k)!).push(mv);
@@ -127,7 +151,14 @@ const h = vi.hoisted(() => {
     GetHighestPriorityContent: () => { ID: string; TemplateText: string } | null;
   }> = [];
 
-  const mockRenderTemplate = vi.fn(async (_template: unknown, _content: unknown, data: Record<string, unknown>) => {
+  const mockRenderTemplate = vi.fn(async (
+    _template: unknown,
+    _content: unknown,
+    data: Record<string, unknown>,
+    _skipValidation?: boolean,
+    _suppressWarnings?: boolean,
+    _options?: { autoescape?: boolean },
+  ) => {
     return {
       Success: true,
       Output: `Rendered state for entity ${data?.entityId ?? 'default'}`,
@@ -303,61 +334,165 @@ function failedOverAfter(cost: number): DecisionResult {
 }
 
 // ---------------------------------------------------------------------------
-// Fake Prompt Run & Provider
+// Prompt run & provider: a real entity class and a real ProviderBase, holding no database
 // ---------------------------------------------------------------------------
+function notUsed(): Error {
+  return new Error('not used by these tests');
+}
+
+/**
+ * `MJ: AI Prompt Runs` metadata whose fields are the generated entity's own properties, so the run row holds every
+ * field the runner sets and nothing more.
+ */
+const PROMPT_RUN_ENTITY = new EntityInfo({
+  ID: 'entity-ai-prompt-runs',
+  Name: 'MJ: AI Prompt Runs',
+  Fields: Object.entries(Object.getOwnPropertyDescriptors(MJAIPromptRunEntity.prototype))
+    .filter(([, descriptor]) => descriptor.set !== undefined)
+    .map(([name], index) => ({
+      ID: `prompt-run-field-${name}`, EntityID: 'entity-ai-prompt-runs', Entity: 'MJ: AI Prompt Runs', Sequence: index + 1,
+      Name: name, Type: name === 'ID' ? 'uniqueidentifier' : 'nvarchar', IsPrimaryKey: name === 'ID', AllowUpdateAPI: true,
+    })),
+});
+
+/** The run row the runner created most recently. */
+let lastPromptRun: FakePromptRun | null = null;
 let prSeq = 0;
-class FakePromptRun {
-  public ID = '';
-  public PromptID?: string;
-  public ModelID?: string;
-  public VendorID?: string | null;
-  public Status?: string;
-  public Success?: boolean;
-  public RunAt?: Date;
-  public CompletedAt?: Date;
-  public ExecutionTimeMS?: number;
-  public Messages?: string;
-  public Result?: string;
-  public ErrorMessage?: string;
-  public ModelSpecificResponseDetails?: string;
-  public TokensPrompt?: number;
-  public TokensCompletion?: number;
-  public TokensUsed?: number;
-  public Cost?: number;
-  public CostCurrency?: string;
-  public LatestResult: { CompleteMessage: string } | null = null;
-  public saveCount = 0;
-  /** Whether a Save has succeeded, as `BaseEntity.IsSaved` reports it. */
-  public IsSaved = false;
+
+/**
+ * The prompt run the provider builds through the real class factory: it outranks the registered prompt-run classes,
+ * records itself as {@link lastPromptRun}, and saves to memory.
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Prompt Runs', 1000)
+class FakePromptRun extends MJAIPromptRunEntityExtended {
   /** When set, every Save fails, as an INSERT that fails validation does. */
   public static FailSaves = false;
-  [k: string]: unknown;
+  private saved = false;
 
-  NewRecord(): boolean {
-    this.ID = `pr-${++prSeq}`;
-    return true;
+  constructor(entity: EntityInfo) {
+    super(entity);
+    lastPromptRun = this;
   }
-  async Save(): Promise<boolean> {
-    this.saveCount++;
+
+  public override NewRecord(): boolean {
+    const created = super.NewRecord();
+    this.ID = `pr-${++prSeq}`;
+    return created;
+  }
+
+  /** Whether a Save has succeeded, as `BaseEntity.IsSaved` reports it. */
+  public override get IsSaved(): boolean {
+    return this.saved;
+  }
+
+  public override async Save(): Promise<boolean> {
     if (FakePromptRun.FailSaves) {
-      this.LatestResult = { CompleteMessage: 'Vendor cannot be null' };
+      this.RegisterResultHistoryEntry(new BaseEntityResult(false, 'Vendor cannot be null', 'create'));
       return false;
     }
-    this.IsSaved = true;
+    this.saved = true;
     return true;
   }
 }
 
-let lastPromptRun: FakePromptRun | null = null;
-const fakeProvider = {
-  GetEntityObject: vi.fn(async (entityName: string) => {
-    if (entityName.includes('AI Prompt Runs')) {
-      lastPromptRun = new FakePromptRun();
-      return lastPromptRun;
-    }
+/** A metadata provider that knows only `MJ: AI Prompt Runs`; its `GetEntityObject` is the real one. */
+class PromptRunProvider extends ProviderBase {
+  public override get Entities(): EntityInfo[] {
+    return [PROMPT_RUN_ENTITY];
+  }
+  public override EntityByID(entityID: string): EntityInfo | undefined {
+    return this.Entities.find((entity) => entity.ID === entityID);
+  }
+  public get ProviderType(): ProviderType {
+    return 'Database';
+  }
+  public get DatabaseConnection(): null {
     return null;
-  }),
-};
+  }
+  public get InstanceConnectionString(): string {
+    return '';
+  }
+  public get LocalStorageProvider(): ILocalStorageProvider {
+    throw notUsed();
+  }
+  protected get AllowRefresh(): boolean {
+    return false;
+  }
+  protected get Metadata(): IMetadataProvider {
+    return this;
+  }
+  protected InternalGetEntityRecordName(): Promise<string> {
+    throw notUsed();
+  }
+  protected InternalGetEntityRecordNames(): Promise<EntityRecordNameResult[]> {
+    throw notUsed();
+  }
+  public GetRecordFavoriteStatus(): Promise<boolean> {
+    throw notUsed();
+  }
+  public SetRecordFavoriteStatus(): Promise<void> {
+    throw notUsed();
+  }
+  protected InternalRunView<T>(): Promise<RunViewResult<T>> {
+    throw notUsed();
+  }
+  protected InternalRunViews<T>(): Promise<RunViewResult<T>[]> {
+    throw notUsed();
+  }
+  protected InternalRunQuery(): Promise<RunQueryResult> {
+    throw notUsed();
+  }
+  protected InternalRunQueries(): Promise<RunQueryResult[]> {
+    throw notUsed();
+  }
+  protected searchEntitiesSemanticPass(): Promise<ScoredCandidate[]> {
+    throw notUsed();
+  }
+  protected InternalExecuteQueryFromSpec(): Promise<RunQueryResult> {
+    throw notUsed();
+  }
+  protected GetCurrentUser(): Promise<UserInfo> {
+    throw notUsed();
+  }
+  public GetRecordDependencies(): Promise<RecordDependency[]> {
+    throw notUsed();
+  }
+  public GetRecordDuplicates(): Promise<PotentialDuplicateResponse> {
+    throw notUsed();
+  }
+  public MergeRecords(): Promise<RecordMergeResult> {
+    throw notUsed();
+  }
+  public GetDatasetByName(): Promise<DatasetResultType> {
+    throw notUsed();
+  }
+  public GetDatasetStatusByName(): Promise<DatasetStatusResultType> {
+    throw notUsed();
+  }
+  public CreateTransactionGroup(): Promise<TransactionGroupBase> {
+    throw notUsed();
+  }
+}
+
+const fakeProvider = new PromptRunProvider();
+
+/** The real class factory, captured before any test stubs it. */
+const classFactory = MJGlobal.Instance.ClassFactory;
+const realCreateInstance: typeof classFactory.CreateInstance = classFactory.CreateInstance.bind(classFactory);
+
+/**
+ * Stubs the class factory for decision drivers only: everything else (the prompt run entity, its fields) keeps coming
+ * from the real registrations, so the provider's real `GetEntityObject` still builds a {@link FakePromptRun}.
+ * @param driverFor the driver a test wants for a driver class (or a throw, or undefined for an unregistered class)
+ */
+function stubDrivers(driverFor: (driverClass: string | null, args: unknown[]) => BaseDecision | undefined): void {
+  // The factory's result type is its caller's type argument, so a stub's implementation returns `unknown`: the
+  // runner, not the stub, is what types the driver it receives.
+  vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockImplementation(
+    (baseClass: unknown, key: string | null = null, ...args: unknown[]) =>
+      baseClass === BaseDecision ? driverFor(key, args) : realCreateInstance(baseClass, key, ...args)
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Test Suite
@@ -404,17 +539,17 @@ describe('AIDecisionRunner', () => {
     h.state.configurations = catalog.configurations;
 
     // Add native decision model
-    const nativeModel = {
+    const nativeModel = MakeModel({
       ID: DECISION_MODEL_ID,
       Name: 'Native Decision Model',
       AIModelTypeID: DECISION_MODEL_TYPE_ID,
+      AIModelType: 'Decision',
       DriverClass: NATIVE_DRIVER,
       APIName: 'native-decision-v1',
-      Status: 'Active',
       IsActive: true,
       PowerRank: 50,
       ModelVendors: [
-        {
+        MakeModelVendor({
           ID: 'mv-decision-1',
           ModelID: DECISION_MODEL_ID,
           VendorID: VENDOR.OpenAI,
@@ -423,22 +558,22 @@ describe('AIDecisionRunner', () => {
           Status: 'Active',
           DriverClass: NATIVE_DRIVER,
           APIName: 'native-decision-v1',
-        },
+        }),
       ],
-    };
+    });
 
     // Add LLMDecision model
-    const llmDecisionModel = {
+    const llmDecisionModel = MakeModel({
       ID: LLM_DECISION_MODEL_ID,
       Name: 'LLM Decision Model',
       AIModelTypeID: DECISION_MODEL_TYPE_ID,
+      AIModelType: 'Decision',
       DriverClass: LLM_DRIVER,
       APIName: 'Decision System Chat Prompt',
-      Status: 'Active',
       IsActive: true,
       PowerRank: 50,
       ModelVendors: [
-        {
+        MakeModelVendor({
           ID: 'mv-llm-decision-1',
           ModelID: LLM_DECISION_MODEL_ID,
           VendorID: VENDOR.OpenAI,
@@ -447,9 +582,9 @@ describe('AIDecisionRunner', () => {
           Status: 'Active',
           DriverClass: LLM_DRIVER,
           APIName: 'Decision System Chat Prompt',
-        },
+        }),
       ],
-    };
+    });
 
     h.state.models = [...catalog.models, nativeModel, llmDecisionModel];
     h.state.modelVendors = [
@@ -509,14 +644,7 @@ describe('AIDecisionRunner', () => {
 
     mockDriver = new MockDecisionDriver();
     vi.spyOn(AIEngineBase.Instance, 'EnsureLoaded').mockResolvedValue(undefined as never);
-    vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockImplementation(
-      (_baseClass: unknown, driverClass: string) => {
-        if (driverClass === NATIVE_DRIVER || driverClass === LLM_DRIVER) {
-          return mockDriver as never;
-        }
-        return undefined as never;
-      }
-    );
+    stubDrivers((driverClass) => (driverClass === NATIVE_DRIVER || driverClass === LLM_DRIVER ? mockDriver : undefined));
 
     runner = new AIDecisionRunner();
   });
@@ -584,6 +712,19 @@ describe('AIDecisionRunner', () => {
     expect(result.success).toBe(true);
     expect(h.mockRenderTemplate).toHaveBeenCalled();
     expect(mockDriver.lastParams?.State).toBe('Rendered state for entity E-456');
+  });
+
+  it('renders the state template without HTML escaping, since the state is plain text for the model', async () => {
+    const params = new AIDecisionParams();
+    params.prompt = makeDecisionPrompt({ TemplateID: TEMPLATE_ID });
+    params.Questions = defaultQuestions;
+    params.data = { entityId: 'Affineur & Owner' };
+    params.provider = fakeProvider;
+
+    h.mockRenderTemplate.mockClear();
+    await runner.ExecuteDecision(params);
+
+    expect(h.mockRenderTemplate.mock.calls[0][5]).toEqual({ autoescape: false });
   });
 
   // 5. Direct state path: when State is provided as string or object, uses it directly without template rendering
@@ -888,7 +1029,7 @@ describe('AIDecisionRunner', () => {
   });
 
   it('10. an unregistered driver class fails with a clear message and never throws', async () => {
-    vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockImplementation(() => undefined as never);
+    stubDrivers(() => undefined);
     const params = new AIDecisionParams();
     params.prompt = makeDecisionPrompt({ FailoverStrategy: 'None' });
     params.Questions = defaultQuestions;
@@ -927,11 +1068,11 @@ describe('AIDecisionRunner', () => {
   /** Adds a second, lower-priority native decision model bound to the prompt, and returns its ID. */
   function addSecondaryCandidate(promptId: string): string {
     const SECONDARY_MODEL_ID = 'secondary-decision-model';
-    const secondaryModel = {
-      ID: SECONDARY_MODEL_ID, Name: 'Secondary Decision Model', AIModelTypeID: DECISION_MODEL_TYPE_ID,
-      DriverClass: NATIVE_DRIVER, APIName: 'secondary-v1', Status: 'Active', IsActive: true, PowerRank: 40,
-      ModelVendors: [{ ID: 'mv-sec-1', ModelID: SECONDARY_MODEL_ID, VendorID: VENDOR.Anthropic, Priority: 50, Status: 'Active', DriverClass: NATIVE_DRIVER }],
-    };
+    const secondaryModel = MakeModel({
+      ID: SECONDARY_MODEL_ID, Name: 'Secondary Decision Model', AIModelTypeID: DECISION_MODEL_TYPE_ID, AIModelType: 'Decision',
+      DriverClass: NATIVE_DRIVER, APIName: 'secondary-v1', IsActive: true, PowerRank: 40,
+      ModelVendors: [MakeModelVendor({ ID: 'mv-sec-1', ModelID: SECONDARY_MODEL_ID, VendorID: VENDOR.Anthropic, Priority: 50, Status: 'Active', DriverClass: NATIVE_DRIVER })],
+    });
     // Drop the LLMDecision model, so the secondary is the only failover target.
     h.state.models = h.state.models.filter(m => m.ID !== LLM_DECISION_MODEL_ID);
     h.state.modelVendors = h.state.modelVendors.filter(mv => mv.ModelID !== LLM_DECISION_MODEL_ID);
@@ -1002,11 +1143,11 @@ describe('AIDecisionRunner', () => {
     h.logStatus.mockClear();
     // A model no other test uses: the warn-once set lasts for the process.
     const UNKEYED_ID = 'unkeyed-decision-model';
-    const unkeyed = {
-      ID: UNKEYED_ID, Name: 'Unkeyed Decision Model', AIModelTypeID: DECISION_MODEL_TYPE_ID, DriverClass: 'UnkeyedDriver',
-      APIName: 'unkeyed-v1', Status: 'Active', IsActive: true, PowerRank: 60,
-      ModelVendors: [{ ID: 'mv-unkeyed-1', ModelID: UNKEYED_ID, VendorID: VENDOR.OpenAI, Priority: 100, Status: 'Active', DriverClass: 'UnkeyedDriver' }],
-    };
+    const unkeyed = MakeModel({
+      ID: UNKEYED_ID, Name: 'Unkeyed Decision Model', AIModelTypeID: DECISION_MODEL_TYPE_ID, AIModelType: 'Decision', DriverClass: 'UnkeyedDriver',
+      APIName: 'unkeyed-v1', IsActive: true, PowerRank: 60,
+      ModelVendors: [MakeModelVendor({ ID: 'mv-unkeyed-1', ModelID: UNKEYED_ID, VendorID: VENDOR.OpenAI, Priority: 100, Status: 'Active', DriverClass: 'UnkeyedDriver' })],
+    });
     h.state.models.push(unkeyed);
     h.state.modelVendors.push(unkeyed.ModelVendors[0]);
     const prompt = makeDecisionPrompt();
@@ -1033,7 +1174,7 @@ describe('AIDecisionRunner', () => {
   });
 
   it('9d. an exception after the run row is created finalizes the row as failed', async () => {
-    vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockImplementation(() => {
+    stubDrivers(() => {
       throw new Error('factory exploded');
     });
     const params = new AIDecisionParams();
@@ -1135,14 +1276,14 @@ describe('AIDecisionRunner', () => {
       return driverClasses.map((driverClass, i) => {
         const id = `scripted-decision-model-${i + 1}`;
         const priority = 100 - i * 10;
-        const modelVendor = {
+        const modelVendor = MakeModelVendor({
           ID: `mv-scripted-${i + 1}`, ModelID: id, VendorID: VENDOR.OpenAI, Vendor: 'OpenAI', Priority: priority,
           Status: 'Active', DriverClass: driverClass, APIName: `scripted-v${i + 1}`, TypeID: h.engine.InferenceProviderTypeID,
-        };
-        h.state.models.push({
-          ID: id, Name: `Scripted Decision Model ${i + 1}`, AIModelTypeID: DECISION_MODEL_TYPE_ID, DriverClass: driverClass,
-          APIName: `scripted-v${i + 1}`, Status: 'Active', IsActive: true, PowerRank: 50, ModelVendors: [modelVendor],
         });
+        h.state.models.push(MakeModel({
+          ID: id, Name: `Scripted Decision Model ${i + 1}`, AIModelTypeID: DECISION_MODEL_TYPE_ID, AIModelType: 'Decision', DriverClass: driverClass,
+          APIName: `scripted-v${i + 1}`, IsActive: true, PowerRank: 50, ModelVendors: [modelVendor],
+        }));
         h.state.modelVendors.push(modelVendor);
         h.state.promptModels.push({
           ID: `pm-scripted-${i + 1}`, PromptID: 'decision-prompt-001', ModelID: id, VendorID: VENDOR.OpenAI,
@@ -1181,7 +1322,7 @@ describe('AIDecisionRunner', () => {
       // The chat run's cost is the decision run's descendant cost, not its own.
       expect(lastPromptRun?.DescendantCost).toBe(0.0007);
       expect(lastPromptRun?.TotalCost).toBe(0.0007);
-      expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(lastPromptRun?.Cost).toBeNull();
       expect(result.cost).toBe(0.0007);
     });
 
@@ -1206,7 +1347,7 @@ describe('AIDecisionRunner', () => {
       expect(result.cost).toBe(0.0007);
       // Not linked, so not a descendant: no DescendantCost without a child to carry it. The cost is
       // the decision run's own, and the chat run is a root run of its own, as before child runs.
-      expect(lastPromptRun?.DescendantCost).toBeUndefined();
+      expect(lastPromptRun?.DescendantCost).toBeNull();
       expect(lastPromptRun?.Cost).toBe(0.0007);
       expect(lastPromptRun?.TotalCost).toBe(0.0007);
     });
@@ -1223,7 +1364,7 @@ describe('AIDecisionRunner', () => {
       expect(ScriptedLLMDecision.ParentsSeen).toEqual([lastPromptRun?.ID]);
       expect(lastPromptRun?.DescendantCost).toBe(0.002);
       expect(lastPromptRun?.TotalCost).toBe(0.002);
-      expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(lastPromptRun?.Cost).toBeNull();
       expect(lastPromptRun?.CostCurrency).toBe('USD');
       // The decision run keeps its own tokens, as before.
       expect(lastPromptRun?.TokensPrompt).toBe(120);
@@ -1241,7 +1382,7 @@ describe('AIDecisionRunner', () => {
       expect(waitForSaves).not.toHaveBeenCalled();
       expect(lastPromptRun?.Cost).toBe(0.002);
       expect(lastPromptRun?.TotalCost).toBe(0.002);
-      expect(lastPromptRun?.DescendantCost).toBeUndefined();
+      expect(lastPromptRun?.DescendantCost).toBeNull();
     });
 
     it('14c. for a driver that calls its model directly the runner records Cost, as before', async () => {
@@ -1250,7 +1391,7 @@ describe('AIDecisionRunner', () => {
       expect(result.DriverClass).toBe(NATIVE_DRIVER);
       expect(lastPromptRun?.Cost).toBe(0.002);
       expect(lastPromptRun?.TotalCost).toBe(0.002);
-      expect(lastPromptRun?.DescendantCost).toBeUndefined();
+      expect(lastPromptRun?.DescendantCost).toBeNull();
     });
 
     it('14d. with no cost the runner records neither Cost nor DescendantCost', async () => {
@@ -1266,9 +1407,9 @@ describe('AIDecisionRunner', () => {
 
       expect(result.success).toBe(true);
       expect(lastPromptRun?.TokensUsed).toBe(165);
-      expect(lastPromptRun?.Cost).toBeUndefined();
-      expect(lastPromptRun?.DescendantCost).toBeUndefined();
-      expect(lastPromptRun?.TotalCost).toBeUndefined();
+      expect(lastPromptRun?.Cost).toBeNull();
+      expect(lastPromptRun?.DescendantCost).toBeNull();
+      expect(lastPromptRun?.TotalCost).toBeNull();
     });
 
     it("14e. the decision run's INSERT lands before an LLMDecision driver runs, because its chat run names it as parent", async () => {
@@ -1303,7 +1444,7 @@ describe('AIDecisionRunner', () => {
 
       expect(result.success).toBe(true);
       expect(ScriptedLLMDecision.ParentsSeen).toEqual([undefined]);
-      expect(lastPromptRun?.DescendantCost).toBeUndefined();
+      expect(lastPromptRun?.DescendantCost).toBeNull();
       expect(lastPromptRun?.Cost).toBe(0.002);
       expect(lastPromptRun?.TotalCost).toBe(0.002);
     });
@@ -1321,7 +1462,7 @@ describe('AIDecisionRunner', () => {
       expect(ScriptedLLMDecision.ParentsSeen).toEqual([lastPromptRun?.ID, lastPromptRun?.ID]);
       expect(lastPromptRun?.DescendantCost).toBeCloseTo(0.003, 12);
       expect(lastPromptRun?.TotalCost).toBeCloseTo(0.003, 12);
-      expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(lastPromptRun?.Cost).toBeNull();
       expect(lastPromptRun?.CostCurrency).toBe('USD');
       // The tokens are still the answering attempt's.
       expect(lastPromptRun?.TokensPrompt).toBe(120);
@@ -1354,7 +1495,7 @@ describe('AIDecisionRunner', () => {
       expect(lastPromptRun?.Success).toBe(false);
       expect(lastPromptRun?.DescendantCost).toBeCloseTo(0.002, 12);
       expect(lastPromptRun?.TotalCost).toBeCloseTo(0.002, 12);
-      expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(lastPromptRun?.Cost).toBeNull();
       expect(lastPromptRun?.CostCurrency).toBe('USD');
     });
   });

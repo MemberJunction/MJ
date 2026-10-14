@@ -13,7 +13,7 @@ graph TD
     A -->|wraps| E["GoogleGenAI<br/>(@google/genai)"]
     C -->|wraps| E
     A -->|provides| F["Chat + Streaming"]
-    A -->|provides| G["Thinking/Reasoning<br/>Budget Control"]
+    A -->|provides| G["Thinking/Reasoning<br/>Output"]
     C -->|provides| H["Image Generation<br/>+ Editing + Variations"]
     B -->|registered via| I["@RegisterClass"]
     D -->|registered via| I
@@ -34,11 +34,10 @@ graph TD
 ### LLM (GeminiLLM)
 - **Chat Completions**: Full conversational AI with system instructions
 - **Streaming**: Real-time response streaming with chunk processing
-- **Thinking/Reasoning**: Configurable thinking budget for Gemini 2.5+ and thinking levels for Gemini 3+
+- **Thinking/Reasoning**: Returns the thinking the model produces; each model runs at its default thinking (see Thinking)
 - **Multimodal Input**: Native support for text, images, audio, video, and file inputs
 - **Message Alternation**: Automatic handling of Gemini's role alternation requirements
 - **Safety Handling**: Detection and reporting of content blocking with detailed safety ratings
-- **Effort Level Mapping**: Maps MJ effort levels (1-100) to Gemini thinking budgets (0-24576)
 
 ### Image Generation (GeminiImageGenerator)
 - **Text-to-Image**: Generate images using Gemini image models
@@ -93,7 +92,6 @@ const result = await llm.ChatCompletion({
 const result = await llm.ChatCompletion({
     model: "gemini-2.5-pro",
     messages: [{ role: "user", content: "Solve this math problem step by step." }],
-    effortLevel: "75",
     streaming: true,
     streamingCallbacks: {
         OnContent: (content) => process.stdout.write(content),
@@ -137,32 +135,30 @@ const multimodal = await embedding.EmbedContent({
 console.log(multimodal.vector.length); // 3072
 ```
 
-## Thinking Budget / Effort Level
+## Thinking
 
-The provider maps MJ effort levels to Gemini's thinking system:
-
-| Effort Level | Gemini 2.5 (Budget) | Gemini 3+ (Level) |
-|-------------|---------------------|-------------------|
-| 1-5 (Flash only) | 0 (disabled) | MINIMAL |
-| 1-33 | 1024-4096 | LOW |
-| 34-66 | 4097-12288 | MEDIUM |
-| 67-100 | 12289-24576 | HIGH |
+No `thinkingConfig` is sent, on either path: each Gemini model runs at its default thinking, and `effortLevel` is not mapped.
 
 ## Supported Parameters
 
 | Parameter | Supported | Notes |
 |-----------|-----------|-------|
-| temperature | Yes | Default 0.5 |
-| topP | Yes | Nucleus sampling |
-| topK | Yes | Top-K sampling |
+| temperature | Yes, before Gemini 3.6 | The configured value, 0 included; 0.5 when none is configured. Not sent to Gemini 3.6+ or unversioned Gemini ids (see below) |
+| topP | Yes, before Gemini 3.6 | Nucleus sampling |
+| topK | Yes, before Gemini 3.6 | Top-K sampling |
+| maxOutputTokens | Yes | Sent as `maxOutputTokens` when configured; otherwise the model's own limit applies |
 | seed | Yes | Deterministic outputs |
 | stopSequences | Yes | Custom stop sequences |
-| effortLevel | Yes | Maps to thinking budget/level |
+| effortLevel | No | Not mapped (see Thinking) |
 | responseFormat | Yes | JSON and text modes |
 | streaming | Yes | Real-time streaming |
 | frequencyPenalty | No | Not supported by Gemini |
 | presencePenalty | No | Not supported by Gemini |
 | minP | No | Not supported by Gemini |
+
+Since Gemini 3.6 Flash, Google ignores custom `temperature`, `topP` and `topK`, and upcoming models reject them, so the driver sends them only to models before 3.6 (and to non-Gemini models such as Gemma on Vertex) and logs a one-time warning when it drops a configured value. A `ModelSpecific` response format is merged in afterwards and can still set any of these three fields. A configured `stopSequences`, `seed` or `maxOutputTokens` is applied after that merge, so it wins over the `ModelSpecific` value.
+
+`DescribeSentParameters` reports the temperature, max output tokens and seed a call sends, read from the same generation options the request uses. With `strictParameters: true`, a call whose configured value would not be sent as configured (for example a temperature on Gemini 3.6+) is refused before any request.
 
 ## Gemini Live (realtime)
 

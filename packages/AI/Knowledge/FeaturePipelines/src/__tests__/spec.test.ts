@@ -7,8 +7,28 @@ import {
   EntityMetadataStub,
   IsLLMPipelineType,
   IsDecisionPipelineType,
+  ConstraintPromptTemplate,
 } from '../spec/data-feature-spec.js';
-import { ValidateOutputValue } from '../validation/constraint-validator.js';
+import { OutputValidator } from '../validation/constraint-validator.js';
+import type { DataFeatureOutput } from '../spec/data-feature-spec.js';
+import { SafeJSONParse } from '@memberjunction/global';
+
+/**
+ * A spec as a pipeline row's Configuration JSON yields it. ValidateSpec checks that untrusted text at run time, so a
+ * test of a malformed shape goes through the same parse instead of claiming the shape is a valid spec.
+ */
+function parsedSpec(configuration: object): DataFeatureSpec {
+  const spec = SafeJSONParse<DataFeatureSpec>(JSON.stringify(configuration));
+  if (!spec) {
+    throw new Error('the fixture configuration is not JSON');
+  }
+  return spec;
+}
+
+/** A complete spec: the given name, prompt and outputs over a minimal valid description, context and caching. */
+function specOf(fields: Pick<DataFeatureSpec, 'Name' | 'PromptID' | 'Outputs'> & Partial<DataFeatureSpec>): DataFeatureSpec {
+  return { Description: fields.Name, Context: { Fields: ['CurrentJobTitle'] }, Caching: { Cacheable: false }, ...fields };
+}
 
 const sampleEntity: EntityMetadataStub = {
   Name: 'Contacts',
@@ -33,7 +53,7 @@ const sampleEntity: EntityMetadataStub = {
   ],
 };
 
-describe('DataFeatureSpec — pure validator (P1-1)', () => {
+describe('DataFeatureSpec — pure validator', () => {
   it('rejects a spec with empty outputs', () => {
     const spec: DataFeatureSpec = {
       Name: 'Empty Pipeline',
@@ -197,9 +217,32 @@ describe('DataFeatureSpec — pure validator (P1-1)', () => {
     const issues = ValidateSpec(spec, sampleEntity);
     expect(issues.filter(i => i.Severity === 'error')).toHaveLength(0);
   });
+
+  it('rejects a ConfidenceRef that is not a result path', () => {
+    const issues = ValidateSpec({ Name: 'n', Description: 'd', PromptID: 'p', Context: {}, Caching: { Cacheable: false },
+      Outputs: [{ Name: 'o', Ref: '$.o', ConfidenceRef: 'o.conf', Target: { Mode: 'field', EntityFieldName: 'O' } }] });
+    expect(issues.some((i) => i.Path === 'Outputs[0].ConfidenceRef' && i.Severity === 'error')).toBe(true);
+  });
+
+  it('rejects a ConfidenceRef that names no property of the result', () => {
+    const issues = ValidateSpec({ Name: 'n', Description: 'd', PromptID: 'p', Context: {}, Caching: { Cacheable: false },
+      Outputs: [{ Name: 'o', Ref: '$.o', ConfidenceRef: '$conf', Target: { Mode: 'field', EntityFieldName: 'O' } }] });
+    expect(issues.some((i) => i.Path === 'Outputs[0].ConfidenceRef' && i.Severity === 'error')).toBe(true);
+  });
+
+  it('rejects an ItemRef deeper than one property of the item', () => {
+    const issues = ValidateSpec({ Name: 'n', Description: 'd', PromptID: 'p', Context: {}, Caching: { Cacheable: false },
+      Outputs: [{ Name: 'o', Ref: '$.items', Constraint: { Type: 'lookup', Entity: 'E', ItemRef: '$.a.b', OnViolation: 'fail' },
+        Target: { Mode: 'child', EntityName: 'C', ParentField: 'P', Map: { A: '$.a' } } }] });
+    expect(issues.some((i) => i.Path === 'Outputs[0].Constraint.ItemRef' && i.Severity === 'error')).toBe(true);
+    const ok = ValidateSpec({ Name: 'n', Description: 'd', PromptID: 'p', Context: {}, Caching: { Cacheable: false },
+      Outputs: [{ Name: 'o', Ref: '$.items', Constraint: { Type: 'lookup', Entity: 'E', ItemRef: '$.a', OnViolation: 'fail' },
+        Target: { Mode: 'child', EntityName: 'C', ParentField: 'P', Map: { A: '$.a' } } }] });
+    expect(ok.some((i) => i.Path === 'Outputs[0].Constraint.ItemRef')).toBe(false);
+  });
 });
 
-describe('resolveConstraint & renderConstraintBlock (P1-1)', () => {
+describe('resolveConstraint & renderConstraintBlock', () => {
   const sampleField = {
     Name: 'SeniorityLevel',
     TSType: 'string',
@@ -230,7 +273,7 @@ describe('resolveConstraint & renderConstraintBlock (P1-1)', () => {
   });
 
   it('renders allowed values into the prompt constraint block automatically', () => {
-    const outputs = [
+    const outputs: DataFeatureOutput[] = [
       {
         Ref: '$.seniority',
         Name: 'SeniorityLevel',
@@ -255,14 +298,14 @@ describe('resolveConstraint & renderConstraintBlock (P1-1)', () => {
   });
 });
 
-describe('validateOutputValue — runtime enforcement (P1-2)', () => {
+describe('OutputValidator.ValidateOutputValue — runtime enforcement', () => {
   it('handles enum match case-insensitively and returns canonical casing', () => {
     const constraint = {
       Type: 'enum' as const,
       Values: ['IC', 'Manager', 'Director', 'VP', 'C-Level'],
       OnViolation: 'fail' as const,
     };
-    const res = ValidateOutputValue('director', constraint);
+    const res = OutputValidator.ValidateOutputValue('director', constraint);
     expect(res.valid).toBe(true);
     expect(res.value).toBe('Director');
     expect(res.coerced).toBe(true);
@@ -272,20 +315,20 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
     const allowed = ['IC', 'Manager', 'Director'];
 
     // 1. fail
-    const failRes = ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'fail' });
+    const failRes = OutputValidator.ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'fail' });
     expect(failRes.valid).toBe(false);
     expect(failRes.violationPolicyApplied).toBe('fail');
     expect(failRes.violationMessage).toContain("Value 'Astronaut' is not in the allowed vocabulary");
 
     // 2. null
-    const nullRes = ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'null' });
+    const nullRes = OutputValidator.ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'null' });
     expect(nullRes.valid).toBe(true);
     expect(nullRes.value).toBeNull();
     expect(nullRes.coerced).toBe(true);
     expect(nullRes.violationPolicyApplied).toBe('null');
 
     // 3. coerce-to-other
-    const otherRes = ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'coerce-to-other' });
+    const otherRes = OutputValidator.ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'coerce-to-other' });
     expect(otherRes.valid).toBe(true);
     expect(otherRes.value).toBe('Other');
     expect(otherRes.coerced).toBe(true);
@@ -296,12 +339,12 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
     const numConstraint = { Type: 'numeric' as const, Min: 0, Max: 100, OnViolation: 'fail' as const };
 
     // Strict reject when column is not typed numeric
-    const strictRes = ValidateOutputValue('42', numConstraint, { targetFieldTSType: 'string' });
+    const strictRes = OutputValidator.ValidateOutputValue('42', numConstraint, { targetFieldTSType: 'string' });
     expect(strictRes.valid).toBe(false);
     expect(strictRes.violationMessage).toContain('rejected quoted string value');
 
     // Coerces when column is typed numeric
-    const coerceRes = ValidateOutputValue('42', numConstraint, { targetFieldTSType: 'number' });
+    const coerceRes = OutputValidator.ValidateOutputValue('42', numConstraint, { targetFieldTSType: 'number' });
     expect(coerceRes.valid).toBe(true);
     expect(coerceRes.value).toBe(42);
     expect(coerceRes.coerced).toBe(true);
@@ -310,24 +353,24 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
   it('enforces numeric bounds and integer constraint', () => {
     const intConstraint = { Type: 'numeric' as const, Min: 1, Max: 10, Integer: true, OnViolation: 'fail' as const };
 
-    expect(ValidateOutputValue(1, intConstraint).valid).toBe(true);
-    expect(ValidateOutputValue(5, intConstraint).valid).toBe(true);
-    expect(ValidateOutputValue(10, intConstraint).valid).toBe(true);
-    expect(ValidateOutputValue(5.5, intConstraint).valid).toBe(false);
-    expect(ValidateOutputValue(0, intConstraint).valid).toBe(false);
-    expect(ValidateOutputValue(11, intConstraint).valid).toBe(false);
+    expect(OutputValidator.ValidateOutputValue(1, intConstraint).valid).toBe(true);
+    expect(OutputValidator.ValidateOutputValue(5, intConstraint).valid).toBe(true);
+    expect(OutputValidator.ValidateOutputValue(10, intConstraint).valid).toBe(true);
+    expect(OutputValidator.ValidateOutputValue(5.5, intConstraint).valid).toBe(false);
+    expect(OutputValidator.ValidateOutputValue(0, intConstraint).valid).toBe(false);
+    expect(OutputValidator.ValidateOutputValue(11, intConstraint).valid).toBe(false);
   });
 
   it('handles enum constraint with empty allowed values gracefully', () => {
     const emptyEnum = { Type: 'enum' as const, Values: [], OnViolation: 'fail' as const };
-    const res = ValidateOutputValue('IC', emptyEnum);
+    const res = OutputValidator.ValidateOutputValue('IC', emptyEnum);
     expect(res.valid).toBe(false);
     expect(res.violationMessage).toContain('no allowed values configured');
   });
 
   it('degrades coerce-to-other to null on non-enum constraint violations', () => {
     const numConstraint = { Type: 'numeric' as const, Min: 0, Max: 100, OnViolation: 'coerce-to-other' as const };
-    const res = ValidateOutputValue(150, numConstraint);
+    const res = OutputValidator.ValidateOutputValue(150, numConstraint);
     expect(res.valid).toBe(true);
     expect(res.value).toBeNull();
     expect(res.coerced).toBe(true);
@@ -335,7 +378,7 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
   });
 
   it('rejects coerce-to-other on non-enum constraints during spec validation', () => {
-    const spec: DataFeatureSpec = {
+    const spec = specOf({
       Name: 'Invalid Coerce Spec',
       PromptID: 'prompt-1',
       Outputs: [
@@ -346,12 +389,12 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
           Constraint: { Type: 'numeric', Min: 0, Max: 100, OnViolation: 'coerce-to-other' },
         },
       ],
-    };
+    });
     const issues = ValidateSpec(spec, sampleEntity);
     expect(issues.some(i => i.Path?.includes('Constraint.OnViolation') && i.Severity === 'error')).toBe(true);
   });
 
-  it('rejects prototype pollution property names in output Ref (R15)', () => {
+  it('rejects prototype pollution property names in output Ref', () => {
     const maliciousPaths = [
       '$.__proto__.polluted',
       '$.constructor.prototype.isAdmin',
@@ -360,7 +403,7 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
     ];
 
     for (const ref of maliciousPaths) {
-      const spec: DataFeatureSpec = {
+      const spec = specOf({
         Name: 'Malicious Ref Spec',
         PromptID: 'prompt-1',
         Outputs: [
@@ -370,7 +413,7 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
             Target: { Mode: 'field', EntityFieldName: 'SentimentScore' },
           },
         ],
-      };
+      });
       const issues = ValidateSpec(spec, sampleEntity);
       const pollutionIssue = issues.find(i => i.Path === 'Outputs[0].Ref');
       expect(pollutionIssue).toBeDefined();
@@ -379,7 +422,7 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
     }
 
     // Valid paths should not be flagged for prototype pollution
-    const validSpec: DataFeatureSpec = {
+    const validSpec = specOf({
       Name: 'Valid Spec',
       PromptID: 'prompt-1',
       Outputs: [
@@ -389,12 +432,12 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
           Target: { Mode: 'field', EntityFieldName: 'SentimentScore' },
         },
       ],
-    };
+    });
     const validIssues = ValidateSpec(validSpec, sampleEntity);
     expect(validIssues.some(i => i.Message.includes('prototype pollution'))).toBe(false);
   });
 
-  it('rejects an output whose target has an invalid or missing Mode (Round 29 finding)', () => {
+  it('rejects an output whose target has an invalid or missing Mode', () => {
     interface MalformedTarget {
       TargetType: string;
       Field: string;
@@ -424,7 +467,7 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
       ],
     };
 
-    const issues = ValidateSpec(malformedSpec as DataFeatureSpec, sampleEntity);
+    const issues = ValidateSpec(parsedSpec(malformedSpec), sampleEntity);
     const modeIssue = issues.find(i => i.Path === 'Outputs[0].Target.Mode');
     expect(modeIssue).toBeDefined();
     expect(modeIssue?.Severity).toBe('error');
@@ -433,7 +476,7 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
   });
 
   it('rejects child target missing required Map, ParentField, or EntityName', () => {
-    const spec: DataFeatureSpec = {
+    const spec = specOf({
       Name: 'Incomplete Child Spec',
       PromptID: 'prompt-1',
       Outputs: [
@@ -448,7 +491,7 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
           },
         },
       ],
-    };
+    });
 
     const issues = ValidateSpec(spec, sampleEntity);
     expect(issues.some(i => i.Path === 'Outputs[0].Target.EntityName' && i.Severity === 'error')).toBe(true);
@@ -529,8 +572,8 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
     });
 
     it('rejects unrecognized FeatureKind', () => {
-      const spec = baseSpec();
-      spec.Outputs[0].FeatureKind = 'invalid-kind' as unknown as FeatureKind;
+      const base = baseSpec();
+      const spec = parsedSpec({ ...base, Outputs: [{ ...base.Outputs[0], FeatureKind: 'invalid-kind' }, ...base.Outputs.slice(1)] });
       const issues = ValidateSpec(spec, sampleEntity);
       expect(issues.some(i => i.Path === 'Outputs[0].FeatureKind' && i.Severity === 'error')).toBe(true);
     });
@@ -578,13 +621,14 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
             },
           },
         ],
+        Caching: { Cacheable: false },
       };
       const issues = ValidateSpec(spec, sampleEntity);
       expect(issues.filter(i => i.Path.includes('Levels'))).toHaveLength(0);
     });
 
     it('rejects fewer than 2 or more than 10 levels, or non-string/empty levels', () => {
-      const makeSpec = (levels: unknown) => ({
+      const makeSpec = (levels: unknown): DataFeatureSpec => parsedSpec({
         Name: 'ScorePipeline',
         Description: 'Scores items',
         Context: { Fields: ['CurrentJobTitle'] },
@@ -595,9 +639,9 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
             Name: 'SentimentScore',
             Target: { Mode: 'field', EntityFieldName: 'SentimentScore' },
             Constraint: {
-              Type: 'numeric' as const,
-              Levels: levels as string[],
-              OnViolation: 'fail' as const,
+              Type: 'numeric',
+              Levels: levels,
+              OnViolation: 'fail',
             },
           },
         ],
@@ -633,13 +677,14 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
             },
           },
         ],
+        Caching: { Cacheable: false },
       };
       const issues = ValidateSpec(spec, sampleEntity);
       expect(issues.filter(i => i.Path.includes('ValueDescriptions'))).toHaveLength(0);
     });
 
     it('rejects non-object ValueDescriptions', () => {
-      const spec: DataFeatureSpec = {
+      const spec = parsedSpec({
         Name: 'EnumPipeline',
         Description: 'Categorizes seniority',
         Context: { Fields: ['CurrentJobTitle'] },
@@ -652,12 +697,13 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
             Constraint: {
               Type: 'enum',
               Values: ['IC'],
-              ValueDescriptions: 'not-an-object' as unknown as Record<string, string>,
+              ValueDescriptions: 'not-an-object',
               OnViolation: 'fail',
             },
           },
         ],
-      };
+        Caching: { Cacheable: false },
+      });
       const issues = ValidateSpec(spec, sampleEntity);
       expect(issues.some(i => i.Path.includes('ValueDescriptions'))).toBe(true);
     });
@@ -823,5 +869,92 @@ describe('Pipeline type names', () => {
     expect(IsDecisionPipelineType(' DECISION ')).toBe(true);
     expect(IsDecisionPipelineType(undefined)).toBe(false);
     expect(IsDecisionPipelineType('LLM')).toBe(false);
+  });
+});
+
+describe('ConstraintPromptTemplate.RendersConstraintBlock', () => {
+  it('finds {{ ConstraintBlock }} and {{constraints}} with any spacing', () => {
+    expect(ConstraintPromptTemplate.RendersConstraintBlock('a {{ ConstraintBlock }} b')).toBe(true);
+    expect(ConstraintPromptTemplate.RendersConstraintBlock('a {{-constraints-}} b')).toBe(true);
+  });
+  it('rejects a template that only renders the record', () => {
+    expect(ConstraintPromptTemplate.RendersConstraintBlock('Job Title: {{record.CurrentJobTitle}}')).toBe(false);
+  });
+});
+
+describe('ConstraintPromptTemplate.DescribeMissingBlock', () => {
+  const constrained: DataFeatureSpec = {
+    Name: 'JT',
+    Description: 'jt',
+    PromptID: 'PROMPT-1',
+    Context: { Fields: ['CurrentJobTitle'] },
+    Caching: { Cacheable: false },
+    Outputs: [{ Name: 'Seniority', Ref: '$.seniority', Target: { Mode: 'field', EntityFieldName: 'SeniorityLevel' }, Constraint: { Type: 'enum', Values: ['IC', 'Manager'], OnViolation: 'fail' } }],
+  };
+  const recordOnly = 'Job Title: {{record.CurrentJobTitle}}';
+
+  it('names the prompt and the placeholder when a constrained LLM pipeline drops the block', () => {
+    expect(ConstraintPromptTemplate.DescribeMissingBlock(constrained, 'JT', recordOnly)).toBe(
+      "Feature Pipeline prompt 'JT' does not render its output constraints. " +
+        "Add {{ ConstraintBlock }} to the prompt template, or remove the constraints from the pipeline's outputs."
+    );
+  });
+  it('is null when the template renders the block', () => {
+    expect(ConstraintPromptTemplate.DescribeMissingBlock(constrained, 'JT', `${recordOnly} {{ constraints }}`)).toBeNull();
+  });
+  it('does not check a Decision pipeline, which renders no prompt', () => {
+    expect(ConstraintPromptTemplate.DescribeMissingBlock({ ...constrained, PipelineType: 'Decision' }, 'JT', recordOnly)).toBeNull();
+    expect(ConstraintPromptTemplate.RequiresConstraintBlock({ ...constrained, PipelineType: 'Decision' })).toBe(false);
+  });
+  it('does not check a pipeline whose outputs carry no constraint', () => {
+    const unconstrained: DataFeatureSpec = { ...constrained, Outputs: constrained.Outputs.map((o) => ({ ...o, Constraint: undefined })) };
+    expect(ConstraintPromptTemplate.DescribeMissingBlock(unconstrained, 'JT', recordOnly)).toBeNull();
+    expect(ConstraintPromptTemplate.RequiresConstraintBlock(undefined)).toBe(false);
+  });
+});
+
+describe('DataFeatureSpec — Activation validation', () => {
+  const gated = (activation: object | null): DataFeatureSpec => parsedSpec({
+    ...specOf({ Name: 'JT', PromptID: 'prompt-1', Outputs: [{ Name: 'Seniority', Ref: '$.s', Target: { Mode: 'field', EntityFieldName: 'SeniorityLevel' } }] }),
+    Activation: activation,
+  });
+  const activationPaths = (spec: DataFeatureSpec): string[] => ValidateSpec(spec).filter((i) => i.Path.startsWith('Activation')).map((i) => i.Path);
+
+  it('accepts a complete gate, at a threshold of 1 included', () => {
+    expect(activationPaths(gated({ GoldenSetTestID: 'T-1', Metric: 'accuracy', Threshold: 0.9 }))).toEqual([]);
+    expect(activationPaths(gated({ GoldenSetTestID: 'T-1', Metric: 'macro-f1', Threshold: 1 }))).toEqual([]);
+  });
+  it('accepts a spec without one', () => {
+    expect(activationPaths(specOf({ Name: 'JT', PromptID: 'prompt-1', Outputs: [] }))).toEqual([]);
+  });
+  it('names each missing or invalid part', () => {
+    expect(activationPaths(gated({ GoldenSetTestID: ' ', Metric: 'precision', Threshold: 0 })))
+      .toEqual(['Activation.GoldenSetTestID', 'Activation.Metric', 'Activation.Threshold']);
+    expect(activationPaths(gated({ GoldenSetTestID: 'T-1', Metric: 'accuracy', Threshold: 1.5 }))).toEqual(['Activation.Threshold']);
+    expect(activationPaths(gated({ GoldenSetTestID: 'T-1', Metric: 'accuracy', Threshold: '0.9' }))).toEqual(['Activation.Threshold']);
+  });
+  it('reports a JSON null Activation instead of skipping it', () => {
+    expect(activationPaths(gated(null))).toEqual(['Activation.GoldenSetTestID', 'Activation.Metric', 'Activation.Threshold']);
+  });
+});
+
+describe('DataFeatureSpec — Unattended validation', () => {
+  const unattended = (value: object | null): DataFeatureSpec => parsedSpec({
+    ...specOf({ Name: 'JT', PromptID: 'prompt-1', Outputs: [{ Name: 'Seniority', Ref: '$.s', Target: { Mode: 'field', EntityFieldName: 'SeniorityLevel' } }] }),
+    Unattended: value,
+  });
+  const unattendedPaths = (spec: DataFeatureSpec): string[] => ValidateSpec(spec).filter((i) => i.Path.startsWith('Unattended')).map((i) => i.Path);
+
+  it('accepts boolean opt-outs, an empty block and a spec without one', () => {
+    expect(unattendedPaths(unattended({ AutoEvaluate: false, AutoBackfill: true }))).toEqual([]);
+    expect(unattendedPaths(unattended({}))).toEqual([]);
+    expect(unattendedPaths(specOf({ Name: 'JT', PromptID: 'prompt-1', Outputs: [] }))).toEqual([]);
+  });
+  it('names each field that is present but not a boolean', () => {
+    expect(unattendedPaths(unattended({ AutoEvaluate: 'false', AutoBackfill: 0 }))).toEqual(['Unattended.AutoEvaluate', 'Unattended.AutoBackfill']);
+    expect(unattendedPaths(unattended({ AutoBackfill: null }))).toEqual(['Unattended.AutoBackfill']);
+  });
+  it('reports a JSON null Unattended instead of skipping it', () => {
+    expect(unattendedPaths(unattended(null))).toEqual(['Unattended']);
   });
 });

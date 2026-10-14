@@ -35,6 +35,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
   }
   class MockRunView {
     RunView = mockRunViewFn;
+    static FromMetadataProvider(): MockRunView { return new MockRunView(); }
   }
   return {
     ...actual,
@@ -126,12 +127,14 @@ function createMockContentItem(overrides: Partial<{
   Name: string | null;
   Checksum: string | null;
   ContentSourceID: string;
+  Text: string | null;
 }>): MJContentItemEntity {
   return {
     ID: 'ID' in overrides ? overrides.ID : 'item-1',
     Name: 'Name' in overrides ? overrides.Name : 'Test Article',
     Checksum: 'Checksum' in overrides ? overrides.Checksum : 'abc123hash',
     ContentSourceID: 'ContentSourceID' in overrides ? overrides.ContentSourceID : 'source-1',
+    Text: 'Text' in overrides ? overrides.Text : null,
   } as unknown as MJContentItemEntity;
 }
 
@@ -415,9 +418,8 @@ describe('Content Deduplication', () => {
       const contentItem = createMockContentItem({
         ID: 'item-A',
         ContentSourceID: 'source-1',
+        Text: 'Some text content',
       });
-      // Override text on the mock
-      (contentItem as Record<string, unknown>)['Text'] = 'Some text content';
 
       await engine.DetectVectorDuplicates(contentItem, mockContextUser);
 
@@ -429,8 +431,8 @@ describe('Content Deduplication', () => {
       const contentItem = createMockContentItem({
         ID: 'item-A',
         ContentSourceID: 'source-1',
+        Text: '',
       });
-      (contentItem as Record<string, unknown>)['Text'] = '';
 
       await engine.DetectVectorDuplicates(contentItem, mockContextUser, true);
 
@@ -441,8 +443,8 @@ describe('Content Deduplication', () => {
       const contentItem = createMockContentItem({
         ID: 'item-A',
         ContentSourceID: 'source-1',
+        Text: null,
       });
-      (contentItem as Record<string, unknown>)['Text'] = null;
 
       await engine.DetectVectorDuplicates(contentItem, mockContextUser, true);
 

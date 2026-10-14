@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MJConversationDetailEntityExtended } from '../custom/MJConversationDetailEntityExtended';
 
 /**
  * Owner gate on `MJ: Conversation Details`.
@@ -127,7 +128,6 @@ type Harness = {
 };
 
 async function makeEntity(): Promise<Harness> {
-    const { MJConversationDetailEntityExtended } = await import('../custom/MJConversationDetailEntityExtended');
     // Constructed through a zero-arg alias — see MJDashboardEntityExtended.ownership.test.ts for
     // why: Vitest's typecheck pass statically resolves the real generated constructor's required
     // args, and a bare `new` against it fails typecheck as an unhandled source error even though

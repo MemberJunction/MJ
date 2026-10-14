@@ -8,6 +8,7 @@
 import { type IMetadataProvider, LogError } from '@memberjunction/core';
 import type { RecordFeatureValuesOutcome } from '@memberjunction/feature-pipelines';
 import {
+    FeaturePipelineRunPin,
     IRecordProcessor,
     RecordProcessorContext,
     RecordRef,
@@ -41,7 +42,9 @@ export class WriteBackProcessor implements IRecordProcessor {
      * @param outputMapping - The `OutputMapping` config to apply to each successful result.
      * @param dryRun - When true, the inner work still runs but the write-back only computes a
      *   preview (no entity is saved / no child is created), so a dry-run of any wrapped work type
-     *   reports its effect without mutating data. Mirrors `FieldRulesProcessor`'s dry-run.
+     *   reports its effect without mutating data, and fails a record whose real write would fail.
+     *   Mirrors `FieldRulesProcessor`'s dry-run. A run whose context is a dry run
+     *   (`RecordProcessorContext.dryRun`) previews too, whatever this was built with.
      * @param run - Optional run provenance information stamped on write-back operations.
      * When `inner` keeps per-record values that must commit with the write-back ({@link DeferredFeatureValueSource}),
      * it is told to defer them here; on a dry-run they are then never written.
@@ -77,6 +80,11 @@ export class WriteBackProcessor implements IRecordProcessor {
         if (this.inner.Preflight) {
             await this.inner.Preflight(context);
         }
+    }
+
+    /** Forwards the run-level pin of the wrapped processor, when it reports one. */
+    public CurrentRunPin(): FeaturePipelineRunPin | null {
+        return this.inner.CurrentRunPin ? this.inner.CurrentRunPin() : null;
     }
 
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
@@ -130,9 +138,14 @@ export class WriteBackProcessor implements IRecordProcessor {
      * Applies the OutputMapping to one successful result, with the human-value guard (when the inner processor can
      * create one) and the run's overwrite switch. The inner processor's deferred Feature Values are written first
      * inside the write-back's unit. The record's outcome is `Upserted` when the write-back or the Feature Values
-     * changed anything, `Unchanged` when the Feature Values all held their values and nothing else changed.
+     * changed anything, `Unchanged` when the Feature Values all held their values and nothing else changed. A dry run
+     * whose preview found what the real write would fail on (`WriteBackResult.PreviewErrors`) is `Failed`, naming it.
+     * A run is a dry run when this processor was built as one or the run's context is one; that single flag drives both
+     * the preview and the record's result. A dry-run result carries `DryRun: true` and no `Outcome` (nothing was
+     * written), whether it succeeded or failed its preview.
      */
     protected async ApplyWriteBack(record: RecordRef, result: RecordResult, context: RecordProcessorContext, run: RunProvenance): Promise<RecordResult> {
+        const dry = this.dryRun || context.DryRun === true;
         const guard = WriteBackProcessor.supportsHumanValueGuard(this.inner) ? this.inner.CreateHumanValueGuard(record, context) : undefined;
         let featureValues: RecordFeatureValuesOutcome | null = null;
         const inner = this.inner;
@@ -141,14 +154,30 @@ export class WriteBackProcessor implements IRecordProcessor {
             : undefined;
         const writeBack = await ApplyOutputMapping({
             outputMapping: this.outputMapping, result: result.ResultPayload, record, contextUser: context.contextUser,
-            provider: context.provider, dryRun: this.dryRun, run, lookupCache: this._lookupCache,
+            provider: context.provider, dryRun: dry, run, lookupCache: this._lookupCache,
             humanGuard: guard, overwriteHumanValues: context.overwriteHumanValues === true, unitWork,
         });
+        const payload = { output: result.ResultPayload, writeBack };
         const preserved = (writeBack.preservedHumanFields?.length || 0) + (writeBack.preservedHumanChildIDs?.length || 0);
+        if (dry) {
+            const previewed = WriteBackProcessor.WithoutOutcome(result);
+            if (writeBack.PreviewErrors && writeBack.PreviewErrors.length > 0) {
+                // A dry run that reports success for a write that would fail tells the operator the opposite of the truth.
+                return { ...previewed, Status: 'Failed', ErrorMessage: `Dry run: the real write would fail: ${writeBack.PreviewErrors.join('; ')}`,
+                    ResultPayload: payload, DryRun: true };
+            }
+            return { ...previewed, ResultPayload: payload, HumanValuesPreserved: preserved, DryRun: true };
+        }
         return {
-            ...result, ResultPayload: { output: result.ResultPayload, writeBack },
+            ...result, ResultPayload: payload,
             Outcome: WriteBackProcessor.OutcomeOf(writeBack.changed, featureValues, result), HumanValuesPreserved: preserved,
         };
+    }
+
+    /** The result without an `Outcome`: a dry run wrote nothing, so it claims neither Upserted nor Unchanged. */
+    protected static WithoutOutcome(result: RecordResult): Omit<RecordResult, 'Outcome'> {
+        const { Outcome: _written, ...rest } = result;
+        return rest;
     }
 
     /** The record's outcome after write-back: see {@link ApplyWriteBack}; the inner outcome when neither wrote anything. */

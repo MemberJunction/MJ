@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, ChatMessageContentBlock, parseBase64DataUrl, ErrorAnalyzer } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, ChatMessageContentBlock, parseBase64DataUrl, ErrorAnalyzer, type VendorCallParameters } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { Ollama, ChatRequest, ChatResponse, GenerateRequest, GenerateResponse, Message, Fetch } from 'ollama';
 
@@ -33,6 +33,20 @@ export class OllamaLLM extends BaseLLM {
     constructor(apiKey?: string) {
         super(apiKey || ''); // Ollama doesn't require API key for local usage
         this._client = new Ollama({ host: this._baseUrl });
+    }
+
+    /** The `num_predict` both chat paths send: a positive configured cap; any other value is not sent. */
+    private resolveNumPredict(params: ChatParams): number | undefined {
+        return params.maxOutputTokens != null && params.maxOutputTokens > 0 ? params.maxOutputTokens : undefined;
+    }
+
+    /**
+     * Both chat paths send the configured temperature and seed, and the output cap only when it is positive
+     * ({@link resolveNumPredict}), so a configured cap of 0 or less is described as not sent.
+     */
+    public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
+        // `??`: 0 is a sent value; only an unsent one becomes null.
+        return { VendorModelName: params.model, Temperature: params.temperature ?? null, MaxTokens: this.resolveNumPredict(params) ?? null, Seed: params.seed ?? null };
     }
 
     /**
@@ -297,10 +311,11 @@ export class OllamaLLM extends BaseLLM {
             };
 
             // Add optional parameters
-            if (params.maxOutputTokens != null && params.maxOutputTokens > 0) {
+            const numPredict = this.resolveNumPredict(params);
+            if (numPredict !== undefined) {
                 chatRequest.options = {
                     ...chatRequest.options,
-                    num_predict: params.maxOutputTokens
+                    num_predict: numPredict
                 };
             }
             if (params.topP != null) {
@@ -466,10 +481,11 @@ export class OllamaLLM extends BaseLLM {
         };
 
         // Add optional parameters
-        if (params.maxOutputTokens != null && params.maxOutputTokens > 0) {
+        const numPredict = this.resolveNumPredict(params);
+        if (numPredict !== undefined) {
             chatRequest.options = {
                 ...chatRequest.options,
-                num_predict: params.maxOutputTokens
+                num_predict: numPredict
             };
         }
         if (params.topP != null) {

@@ -113,7 +113,7 @@ export function LogErrorEx(options: LogErrorOptions | string): void {
     
     // Add metadata if provided
     if (options.metadata && Object.keys(options.metadata).length > 0) {
-        fullMessage += '\n  Metadata: ' + JSON.stringify(options.metadata, null, 2);
+        fullMessage += '\n  Metadata: ' + stringifyMetadata(options.metadata);
     }
     
     // Log the error using the internal logging mechanism
@@ -304,6 +304,35 @@ export function LogStatus(message: any, logToFileName: string = null, ...args: a
         additionalArgs: args,
         verboseOnly: false
     });
+}
+
+/**
+ * The metadata of an error log as indented JSON. It never throws: callers log from catch blocks, and a TypeError here
+ * would replace the error being reported. A circular reference (an error whose classification points back at it) is
+ * written as `[Circular]`; a repeated but non-circular reference is written in full; metadata JSON cannot represent at
+ * all (a BigInt) is described instead.
+ */
+function stringifyMetadata(metadata: Record<string, unknown>): string {
+    // The objects on the path from the root to the value being written: a value already on it closes a cycle
+    const ancestors: object[] = [];
+    try {
+        // `unknown`: the replacer sees every value in arbitrary caller metadata; only objects are inspected
+        return JSON.stringify(metadata, function (this: unknown, _key: string, value: unknown): unknown {
+            if (typeof value !== 'object' || value === null) {
+                return value;
+            }
+            while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) {
+                ancestors.pop();
+            }
+            if (ancestors.includes(value)) {
+                return '[Circular]';
+            }
+            ancestors.push(value);
+            return value;
+        }, 2);
+    } catch (e) {
+        return `[not serializable: ${e instanceof Error ? e.message : String(e)}]`;
+    }
 }
 
 function logToConsole(message: any, isError: boolean, ...args: any[]) {

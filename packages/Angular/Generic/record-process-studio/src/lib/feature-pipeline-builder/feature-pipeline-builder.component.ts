@@ -21,7 +21,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, EntityFieldInfo, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, LogError, RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import {
     MJRecordProcessEntity,
     MJAIPromptEntity,
@@ -35,7 +35,11 @@ import {
     ValueConstraint,
     OutputTarget,
     ViolationPolicy,
-    renderConstraintBlock,
+    RenderConstraintBlock,
+    OutputConstraintResolver,
+    LookupConstraintValues,
+    type LookupValueRow,
+    type ResolvedConstraint,
     validateSpec,
     GetFeaturePipelineCapabilities,
     ValidateOutputsAgainstCapabilities,
@@ -180,10 +184,10 @@ export function ParseConfidenceFloor(raw: string): number {
                     }
                 </div>
 
-                @if (renderedConstraintPreview) {
+                @if (RenderedConstraintPreview) {
                     <div class="field rpe-mt">
                         <label>Injected Constraint Block <span class="muted">— automatically appended to prompt instructions</span></label>
-                        <pre class="fpb-code-preview">{{ renderedConstraintPreview }}</pre>
+                        <pre class="fpb-code-preview">{{ RenderedConstraintPreview }}</pre>
                     </div>
                 }
             </section>
@@ -840,7 +844,19 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     public set validationErrors(value: SpecValidationIssue[]) {
         this.ValidationErrors = value;
     }
+    /** The constraint block the model is sent, as the runner renders it (see {@link RenderConstraintPreview}). */
     public RenderedConstraintPreview = '';
+
+    /**
+     * Each lookup's allowed rows for the preview, read once per lookup (entity, match column, display columns, filter)
+     * through the provider they were read from ({@link previewLookupRowsProvider}). A failed read is not kept.
+     */
+    private previewLookupRows = new Map<string, Promise<LookupValueRow[]>>();
+    /** The provider the memoised preview rows came from; another provider's rows are not reused. */
+    private previewLookupRowsProvider: IMetadataProvider | null = null;
+
+    /** Counts preview renders, so a lookup load that finishes after a later edit does not overwrite that edit's preview. */
+    private previewRenderVersion = 0;
 
     /** @deprecated Use {@link RenderedConstraintPreview}. */
     public get renderedConstraintPreview() {
@@ -1769,8 +1785,81 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         };
     }
 
+    /**
+     * Renders the constraint block preview the way the runner renders the block it sends ({@link OutputConstraintResolver}):
+     * at once from the constraints resolved against the entity's fields (an enum's field value list), then again once
+     * the lookup outputs' allowed rows have loaded. Each lookup's rows are read once through `ProviderToUse` and reused
+     * across edits, so typing does not re-query.
+     */
+    protected RenderConstraintPreview(): void {
+        const outputs = this.spec.Outputs;
+        const entity = this.PreviewEntity();
+        this.RenderedConstraintPreview = RenderConstraintBlock(outputs, OutputConstraintResolver.ResolveFromFields(outputs, entity));
+        const version = ++this.previewRenderVersion;
+        if (outputs.some((o) => o.Constraint?.Type === 'lookup')) {
+            void this.RenderPreviewWithLookupRows(outputs, entity, version);
+        }
+    }
+
+    /** The pipeline's entity, whose fields the constraints resolve against; undefined before one is chosen. */
+    protected PreviewEntity(): EntityInfo | undefined {
+        const entityID = this.Record?.EntityID || this.EntityID;
+        return entityID ? this.ProviderToUse.EntityByID(entityID) : undefined;
+    }
+
+    /** Re-renders the preview with the lookup rows loaded, unless a later edit has rendered it since. */
+    protected async RenderPreviewWithLookupRows(outputs: DataFeatureOutput[], entity: EntityInfo | undefined, version: number): Promise<void> {
+        const resolved = await OutputConstraintResolver.Resolve(outputs, entity, (lookup) => this.PreviewLookupRows(lookup));
+        if (version !== this.previewRenderVersion) {
+            return;
+        }
+        this.RenderedConstraintPreview = RenderConstraintBlock(outputs, resolved);
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * A lookup's allowed rows for the preview, read once per lookup. A lookup whose entity is not a known entity (one
+     * still being typed) has none, so nothing is queried for it.
+     */
+    protected PreviewLookupRows(lookup: ResolvedConstraint): Promise<LookupValueRow[]> {
+        const entityName = lookup.RelatedEntityName;
+        if (!entityName || !this.ProviderToUse.EntityByName(entityName)) {
+            return Promise.resolve([]);
+        }
+        const provider = this.ProviderToUse;
+        if (this.previewLookupRowsProvider !== provider) {
+            // rows read through another provider may differ; start over for this one
+            this.previewLookupRows.clear();
+            this.previewLookupRowsProvider = provider;
+        }
+        const key = JSON.stringify([entityName.toLowerCase(), lookup.LookupMatchField || 'Name', lookup.DisplayFields || [], lookup.Filter || '']);
+        let rows = this.previewLookupRows.get(key);
+        if (!rows) {
+            rows = this.LoadPreviewLookupRows(lookup, provider, key);
+            this.previewLookupRows.set(key, rows);
+        }
+        return rows;
+    }
+
+    /**
+     * Reads a lookup's allowed rows for the preview. On failure the preview keeps the lookup's "Must match an existing"
+     * line (the run reports the failure itself), the failure is logged, and the memo entry is dropped so the next edit
+     * reads again (the lookup entity may have been created, or the error may have cleared).
+     */
+    protected async LoadPreviewLookupRows(lookup: ResolvedConstraint, provider: IMetadataProvider, key: string): Promise<LookupValueRow[]> {
+        try {
+            return await LookupConstraintValues.Load(lookup, provider, provider.CurrentUser);
+        } catch (e) {
+            LogError(`FeaturePipelineBuilder: the preview could not load the allowed values of '${lookup.RelatedEntityName}': ${e instanceof Error ? e.message : String(e)}`);
+            if (this.previewLookupRowsProvider === provider) {
+                this.previewLookupRows.delete(key);
+            }
+            return [];
+        }
+    }
+
     private recomputeValidation(): void {
-        this.RenderedConstraintPreview = renderConstraintBlock(this.spec.Outputs);
+        this.RenderConstraintPreview();
         const entity = this.Record?.EntityID ? this.ProviderToUse.EntityByID(this.Record.EntityID) : null;
         if (entity) {
             const stub: EntityMetadataStub = {

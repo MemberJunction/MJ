@@ -217,8 +217,33 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       if (action.Type === 'Runtime') {
          return false;
       }
-      const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, action.DriverClass || action.Name);
+      const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, this.ActionClassKey(action));
       return declaresAuthorizesCaller(registration?.SubClass);
+   }
+
+   /**
+    * The ClassFactory key a class-based action's class is registered under: its DriverClass, falling back to its
+    * name. The one place that resolution lives, so the run path and the availability checks never drift apart.
+    */
+   public ActionClassKey(action: Pick<MJActionEntity, 'DriverClass' | 'Name'>): string {
+      return action.DriverClass || action.Name;
+   }
+
+   /**
+    * True when a {@link BaseAction} subclass is registered under `classKey` in this process. A key with no
+    * registration means the package holding the class is not loaded here (for example an app installed
+    * database-only), so running the action would fail.
+    */
+   public IsActionClassRegistered(classKey: string): boolean {
+      return MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, classKey) !== null;
+   }
+
+   /**
+    * True when `action` can run in this process: a Runtime action (it runs in the sandbox and has no class), or a
+    * class-based action whose class is registered under {@link ActionClassKey}.
+    */
+   public IsActionClassLoaded(action: Pick<MJActionEntity, 'Type' | 'DriverClass' | 'Name'>): boolean {
+      return action.Type === 'Runtime' || this.IsActionClassRegistered(this.ActionClassKey(action));
    }
 
    // ── Proxied cached collections (single source of truth: ActionEngineBase.Instance) ──
@@ -620,7 +645,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    protected async RunClassBasedAction(params: RunActionParams): Promise<ActionResultSimple> {
       const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(
          BaseAction,
-         params.Action.DriverClass || params.Action.Name,
+         this.ActionClassKey(params.Action),
          params.ContextUser
       );
       if (!action || action.constructor === BaseAction) {

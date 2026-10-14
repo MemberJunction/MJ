@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { InferProcessor } from '../processors/InferProcessor';
+import { WriteBackProcessor } from '../processors/WriteBackProcessor';
 import { RecordRef, RecordProcessorContext } from '@memberjunction/record-set-processor-base';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { KnowledgeHubMetadataEngine, MJFeatureValueCacheEntity } from '@memberjunction/core-entities';
-import { DataFeatureSpec, FeaturePipelinePin, FeatureValueCacheService, type RecordFeatureValuesOutcome } from '@memberjunction/feature-pipelines';
+import { DataFeatureSpec, FeaturePipelinePin, FeaturePipelineVersionService, FeatureValueCacheService, type RecordFeatureValuesOutcome } from '@memberjunction/feature-pipelines';
 import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -283,6 +284,31 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         expect(typeof history.mock.calls[0][0].ParametersHash).toBe('string');
     });
 
+    it('gives each written record the pin its values were keyed on, and reports it as the run pin', async () => {
+        const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
+        const processor = new InferProcessor('prompt-1', undefined, { ...spec, Caching: { Cacheable: false } }, null);
+        expect(processor.CurrentRunPin()).toBeNull();
+        const result = await processor.ProcessRecord({ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }, context);
+        const written = history.mock.calls[0][0];
+        const pin = { PipelineVersion: null, PromptVersionHash: written.PromptVersionHash, AIModelID: 'model-A', ParametersHash: written.ParametersHash };
+        expect(result.PipelinePin).toEqual(pin);
+        expect(processor.CurrentRunPin()).toEqual(pin);
+        expect(new WriteBackProcessor(processor, { fields: {} }).CurrentRunPin()).toEqual(pin);
+    });
+
+    it('writes the resolved version into the record result and every Feature Value', async () => {
+        const records: RecordRef[] = [{ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }, { EntityID: 'ent-1', RecordID: 'r2', Record: { Title: 'Engineer' } }];
+        vi.spyOn(FeaturePipelineVersionService.Instance, 'ResolveForRun').mockResolvedValue({ Version: 7, Status: 'Active' });
+        const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
+        // uncached, so each record computes and writes its own Feature Values
+        const processor = new InferProcessor('prompt-1', undefined, { ...spec, Caching: { Cacheable: false } }, null);
+        await processor.Preflight(context);
+        const results = await processor.ProcessBatch(records, context);
+        expect([...results.values()].map((r) => r.PipelineVersion)).toEqual([7, 7]);
+        expect(history).toHaveBeenCalledTimes(2);
+        expect(history.mock.calls.map((c) => c[0].PipelineVersion)).toEqual([7, 7]);
+    });
+
     it('keys a cache hit\'s Feature Values on the pin and the input hash, and reports an unchanged hit Unchanged', async () => {
         const records: RecordRef[] = [{ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }];
         vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockImplementation(async (p) => new Map([[p.KeyHashes[0],
@@ -408,13 +434,63 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
             Configuration: JSON.stringify(spec),
         } as Pick<MJRecordProcessEntity, 'Name' | 'PromptID' | 'InputMapping' | 'OutputMapping' | 'Configuration'> as MJRecordProcessEntity);
         const prompt = AIEngine.Instance.Prompts[0];
-        const fromRow = await InferProcessor.FromRecordProcess(row('{"fields":{"A":"$.StandardTitle"}}')).ResolvePin(prompt);
-        const direct = await new InferProcessor('prompt-1', undefined, spec, '{"fields":{"A":"$.StandardTitle"}}').ResolvePin(prompt);
-        const otherMapping = await InferProcessor.FromRecordProcess(row('{"fields":{"B":"$.StandardTitle"}}')).ResolvePin(prompt);
-        const emptyMapping = await InferProcessor.FromRecordProcess(row('')).ResolvePin(prompt);
-        const noMapping = await InferProcessor.FromRecordProcess(row(null)).ResolvePin(prompt);
+        const fromRow = await InferProcessor.FromRecordProcess(row('{"fields":{"A":"$.StandardTitle"}}')).ResolvePin(prompt, context);
+        const direct = await new InferProcessor('prompt-1', undefined, spec, '{"fields":{"A":"$.StandardTitle"}}').ResolvePin(prompt, context);
+        const otherMapping = await InferProcessor.FromRecordProcess(row('{"fields":{"B":"$.StandardTitle"}}')).ResolvePin(prompt, context);
+        const emptyMapping = await InferProcessor.FromRecordProcess(row('')).ResolvePin(prompt, context);
+        const noMapping = await InferProcessor.FromRecordProcess(row(null)).ResolvePin(prompt, context);
         expect(fromRow.SpecHash).toBe(direct.SpecHash);
         expect(otherMapping.SpecHash).not.toBe(fromRow.SpecHash);
         expect(emptyMapping.SpecHash).toBe(noMapping.SpecHash);
+    });
+    it('a dry run looks the cache up without counting hits and writes no cache or Feature Value rows', async () => {
+        const records: RecordRef[] = [{ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }];
+        const lookup = vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
+        const store = vi.spyOn(FeatureValueCacheService.Instance, 'Store');
+        const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues');
+        const results = await new InferProcessor('prompt-1', undefined, spec, null).ProcessBatch(records, { ...context, DryRun: true });
+        expect(results.get('r1')?.Status).toBe('Succeeded');
+        expect(lookup.mock.calls[0][0].RecordHit).toBe(false);
+        expect(store).not.toHaveBeenCalled();
+        expect(history).not.toHaveBeenCalled();
+    });
+
+    it('a single-record dry run looks the cache up without counting a hit', async () => {
+        const lookup = vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
+        const store = vi.spyOn(FeatureValueCacheService.Instance, 'Store');
+        const result = await new InferProcessor('prompt-1', undefined, spec, null)
+            .ProcessRecord({ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }, { ...context, DryRun: true });
+        expect(result.Status).toBe('Succeeded');
+        expect(lookup.mock.calls[0][0].RecordHit).toBe(false);
+        expect(store).not.toHaveBeenCalled();
+    });
+
+    it('a dry run of a pipeline with write-back queues no Feature Values for the write-back unit', async () => {
+        vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
+        const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues');
+        const processor = new InferProcessor('prompt-1', undefined, spec, null);
+        processor.DeferFeatureValuesToWriteBack();
+        await processor.ProcessBatch([{ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }], { ...context, DryRun: true });
+        expect(await processor.WriteDeferredFeatureValues('r1', context.provider)).toBeNull();
+        expect(history).not.toHaveBeenCalled();
+    });
+
+    it('a dry run result claims no write: it is marked a dry run and has no Outcome', async () => {
+        vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
+        const results = await new InferProcessor('prompt-1', undefined, spec, null)
+            .ProcessBatch([{ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }], { ...context, DryRun: true });
+        expect(results.get('r1')).toMatchObject({ Status: 'Succeeded', DryRun: true });
+        expect(results.get('r1')?.Outcome).toBeUndefined();
+    });
+
+    it('BypassCache treats every key as a miss without reading the cache', async () => {
+        const records: RecordRef[] = [{ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }];
+        const lookup = vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup');
+        const results = await new InferProcessor('prompt-1', undefined, spec, null).ProcessBatch(records, { ...context, DryRun: true, BypassCache: true });
+        expect(results.get('r1')?.Status).toBe('Succeeded');
+        expect(lookup).not.toHaveBeenCalled();
+        const single = await new InferProcessor('prompt-1', undefined, spec, null).ProcessRecord(records[0], { ...context, DryRun: true, BypassCache: true });
+        expect(single.Status).toBe('Succeeded');
+        expect(lookup).not.toHaveBeenCalled();
     });
 });

@@ -60,7 +60,8 @@ export class FieldRulesProcessor implements IRecordProcessor {
                 return { Status: 'Failed', ErrorMessage: obj, DurationMs: Date.now() - started };
             }
             const rules = new EntityFieldRules(context.contextUser, this.buildPromptResolver(context), this.buildEntityDocumentResolver(context));
-            const result = await rules.ApplyToEntity(obj, this.options.RuleSet, { DryRun: this.options.DryRun });
+            // A dry-run context previews too, whatever this processor was built with
+            const result = await rules.ApplyToEntity(obj, this.options.RuleSet, { DryRun: this.options.DryRun === true || context.DryRun === true });
             return this.toRecordResult(result, started);
         } catch (err) {
             return { Status: 'Failed', ErrorMessage: err instanceof Error ? err.message : String(err), DurationMs: Date.now() - started };
@@ -145,11 +146,21 @@ export class FieldRulesProcessor implements IRecordProcessor {
             if (!(await doc.Load(EntityDocumentID))) {
                 throw new Error(`Entity Document '${EntityDocumentID}' not found`);
             }
-            const rendered = await TemplateEngineServer.Instance.RenderTemplateSimple(doc.TemplateText, Record);
-            if (!rendered.Success) {
-                throw new Error(rendered.Message ?? 'entity document render failed');
-            }
-            return rendered.Output ?? '';
+            return this.RenderEntityDocument(doc.TemplateText, Record);
         };
+    }
+
+    /**
+     * Renders an Entity Document's template against a record. The text feeds a prompt source's `Data`, so it is plain
+     * text for a model and renders without HTML escaping (`Affineur & Owner`, not `Affineur &amp; Owner`).
+     * @param templateText the document's template text
+     * @param record the record the template reads
+     */
+    protected async RenderEntityDocument(templateText: string, record: Record<string, unknown>): Promise<string> {
+        const rendered = await TemplateEngineServer.Instance.RenderTemplateSimple(templateText, record, { autoescape: false });
+        if (!rendered.Success) {
+            throw new Error(rendered.Message ?? 'entity document render failed');
+        }
+        return rendered.Output ?? '';
     }
 }

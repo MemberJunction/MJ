@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MJConversationBranchEntityExtended } from '../custom/MJConversationBranchEntityExtended';
 
 /**
  * Save and delete guards on `MJ: Conversation Branches` (forks).
@@ -122,7 +123,6 @@ function counted(total: number, success = true): { Success: boolean; TotalRowCou
 }
 
 async function makeEntity(): Promise<Harness> {
-    const { MJConversationBranchEntityExtended } = await import('../custom/MJConversationBranchEntityExtended');
     // Constructed through a zero-arg alias — see MJConversationDetailEntityExtended.test.ts.
     const Ctor = MJConversationBranchEntityExtended as unknown as new () => Harness;
     return new Ctor();

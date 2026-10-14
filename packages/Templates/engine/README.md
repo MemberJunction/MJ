@@ -85,6 +85,16 @@ if (result.Success) {
 }
 ```
 
+Stored templates are HTML-escaped by default too. When the output is plain text for a model rather than HTML — AI
+prompt templates, which `AIPromptRunner` renders this way — pass `{ autoescape: false }` as the sixth argument. The raw
+render keeps the registered extensions and the sandbox guards, a `{% template %}` embed inside it renders raw as well,
+and its compiled templates are cached separately from the escaping render's:
+
+```typescript
+const prompt = await engine.RenderTemplate(template, content, { title: 'Affineur & Owner' }, true, false, { autoescape: false });
+// prompt.Output contains "Affineur & Owner", not "Affineur &amp; Owner"
+```
+
 ### Simple Template Rendering
 
 For ad-hoc templates not stored in the database:
@@ -202,7 +212,7 @@ graph LR
     style D fill:#7c5295,stroke:#563a6b,color:#fff
 ```
 
-- **AIPrompt Extension**: Executes AI prompts inline within templates using `{% aiprompt %}` tags
+- **AIPrompt Extension**: Executes AI prompts inline within templates using `{% aiprompt %}` tags. On any failure (the model is not found, the driver throws, or it returns a failed result) the error is logged and its text is rendered in place of the response; the render never waits on a failed call
 - **TemplateEmbed Extension**: Embeds other templates within a template using `{% templateembed %}` tags
 
 ## API Reference
@@ -213,7 +223,7 @@ graph LR
 |--------|------|-------------|
 | `Instance` | static getter | Singleton instance |
 | `Config()` | method | Load metadata and initialize Nunjucks environment |
-| `RenderTemplate()` | method | Render a stored template with validation |
+| `RenderTemplate()` | method | Render a stored template with validation; `options.autoescape: false` renders without HTML escaping |
 | `RenderTemplateSimple()` | method | Render an ad-hoc template string |
 | `AddTemplate()` | method | Add a template to the Nunjucks loader |
 | `SetupNunjucks()` | method | Re-initialize the Nunjucks environment |

@@ -1,9 +1,11 @@
 /**
  * @fileoverview DataFeatureSpec artifact definition and pure validation/rendering functions.
- * Pure types + pure validators — zero imports from @memberjunction/core or database providers.
+ * Pure types + pure validators — zero imports from @memberjunction/core or database providers (the one entity import is
+ * type-only).
  * @module @memberjunction/feature-pipelines
  */
 
+import type { MJFeaturePipelineVersionEntity } from '@memberjunction/core-entities';
 import type { ValueConstraint, ResolvedConstraint } from './value-constraint.js';
 import type { OutputTarget } from './output-target.js';
 
@@ -43,7 +45,7 @@ export interface DataFeatureSpec {
     Scope?: 'pipeline' | 'prompt';
   };
 
-  /** Skip rows whose watermark says nothing they depend on has changed (P1-7). */
+  /** Skip rows whose watermark says nothing they depend on has changed. */
   Watermark?: {
     Enabled: boolean;
     Strategy: 'Checksum' | 'UpdatedAt' | 'None';
@@ -52,7 +54,7 @@ export interface DataFeatureSpec {
   /** Capture the model's rationale into the history row's Reasoning column (D20). */
   CaptureReasoning?: boolean;
 
-  /** Optional subclass hook registration (P1-6). */
+  /** Optional subclass hook registration. */
   ProcessorExtensionKey?: string;
 
   /** The name of an `MJ: Feature Pipeline Types` row. Absent means `LLM`. */
@@ -65,7 +67,34 @@ export interface DataFeatureSpec {
     /** A record escalates when ANY of its outputs' confidence is below this (0 < floor < 1). */
     BelowConfidence: number;
   };
+
+  /** When set, the pipeline is gated on a stored golden-set result. */
+  Activation?: DataFeatureActivation;
+
+  /** Unattended version-change handling (default: both on). */
+  Unattended?: DataFeatureUnattended;
 }
+
+/** How version changes complete without a person. Outside the spec hash: changing it is not a new version. */
+export interface DataFeatureUnattended {
+  /** The steward runs the golden-set test of a gated pipeline's unevaluated version (default true). */
+  AutoEvaluate?: boolean;
+  /** The steward runs the one backfill of a changed version (default true). */
+  AutoBackfill?: boolean;
+}
+
+/** A pipeline's activation gate: a version runs only after its golden-set result meets the threshold. */
+export interface DataFeatureActivation {
+  /** The MJ: Tests row (type "Feature Pipeline Golden Set") that evaluates this pipeline. */
+  GoldenSetTestID: string;
+  /** The golden-set metric; the version row's CHECK-constrained `Metric` values. */
+  Metric: NonNullable<MJFeaturePipelineVersionEntity['Metric']>;
+  /** 0 < Threshold <= 1. */
+  Threshold: number;
+}
+
+/** Every Activation.Metric value; typed by the entity union, so a CHECK change that drops one is a compile error. */
+const ACTIVATION_METRICS: ReadonlyArray<DataFeatureActivation['Metric']> = ['accuracy', 'macro-f1'];
 
 /** The pipeline type a spec without `PipelineType` runs as. */
 export const LLM_PIPELINE_TYPE = 'LLM';
@@ -98,6 +127,8 @@ export interface DataFeatureOutput {
   FeatureKind?: FeatureKind;
   /** Optional human-readable description / instructions for this output. */
   Description?: string;
+  /** Result path of this output's confidence (0..1), e.g. "$.SeniorityConfidence"; for drivers that return none. */
+  ConfidenceRef?: string;
 }
 
 /** Structured validation issue surfaced by validateSpec. */
@@ -163,6 +194,8 @@ export function ValidateSpec(
   }
 
   issues.push(...validateEscalation(spec));
+  issues.push(...validateActivation(spec));
+  issues.push(...validateUnattended(spec));
 
   if (!spec.Outputs || spec.Outputs.length === 0) {
     issues.push({
@@ -378,6 +411,27 @@ export function ValidateSpec(
         }
       }
 
+      // A result path names a property of the result: "$." or "$[" after the root, never "$" alone or "$name"
+      if (out.ConfidenceRef !== undefined && (typeof out.ConfidenceRef !== 'string' || !/^\$(\.|\[)./.test(out.ConfidenceRef))) {
+        issues.push({
+          Path: `${basePath}.ConfidenceRef`,
+          Message: `Output '${out.Name}' has an invalid ConfidenceRef '${String(out.ConfidenceRef)}'.`,
+          FixRecommendation: 'Use a result path such as "$.confidence" or "$.items[0].confidence".',
+          Severity: 'error',
+        });
+      }
+
+      // The validator writes each item's canonical value back at ItemRef, so it must be one property of the item
+      const itemRef = out.Constraint && (out.Constraint.Type === 'enum' || out.Constraint.Type === 'lookup') ? out.Constraint.ItemRef : undefined;
+      if (itemRef !== undefined && !/^\$\.[A-Za-z0-9_]+$/.test(itemRef)) {
+        issues.push({
+          Path: `${basePath}.Constraint.ItemRef`,
+          Message: `Output '${out.Name}' has an ItemRef '${itemRef}' that is not one property of the item.`,
+          FixRecommendation: 'Use one property of each item, such as "$.JobFunctionID".',
+          Severity: 'error',
+        });
+      }
+
 
 
       // Constraint bounds validation
@@ -522,6 +576,50 @@ function validateEscalation(spec: DataFeatureSpec): SpecValidationIssue[] {
   return issues;
 }
 
+/**
+ * Activation is optional. When a spec names one, it must name its golden-set test, a known metric and a threshold in
+ * (0, 1]. The spec is parsed from JSON, so a JSON `null` Activation is reported, not skipped.
+ */
+function validateActivation(spec: DataFeatureSpec): SpecValidationIssue[] {
+  const a = spec.Activation;
+  if (a === undefined) {
+    return [];
+  }
+  const issues: SpecValidationIssue[] = [];
+  if (!a || typeof a.GoldenSetTestID !== 'string' || a.GoldenSetTestID.trim() === '') {
+    issues.push({ Path: 'Activation.GoldenSetTestID', Message: 'Activation needs the ID of its golden-set MJ: Tests row.', FixRecommendation: 'Set Activation.GoldenSetTestID, or remove Activation.', Severity: 'error' });
+  }
+  if (!a || !ACTIVATION_METRICS.includes(a.Metric)) {
+    issues.push({ Path: 'Activation.Metric', Message: `Activation.Metric must be one of ${ACTIVATION_METRICS.join(', ')}.`, FixRecommendation: "Use 'accuracy'.", Severity: 'error' });
+  }
+  if (!a || typeof a.Threshold !== 'number' || !(a.Threshold > 0 && a.Threshold <= 1)) {
+    issues.push({ Path: 'Activation.Threshold', Message: 'Activation.Threshold must be greater than 0 and at most 1.', FixRecommendation: 'For example 0.9.', Severity: 'error' });
+  }
+  return issues;
+}
+
+/**
+ * Unattended is optional, and so is each of its fields; a field that is present must be a boolean. The spec is parsed
+ * from JSON, so a JSON `null` Unattended (or field) is reported, not skipped.
+ */
+function validateUnattended(spec: DataFeatureSpec): SpecValidationIssue[] {
+  const u = spec.Unattended;
+  if (u === undefined) {
+    return [];
+  }
+  if (!u || typeof u !== 'object') {
+    return [{ Path: 'Unattended', Message: 'Unattended must be an object.', FixRecommendation: 'Set { "AutoEvaluate": false } or { "AutoBackfill": false } to opt out, or remove Unattended.', Severity: 'error' }];
+  }
+  const issues: SpecValidationIssue[] = [];
+  if (u.AutoEvaluate !== undefined && typeof u.AutoEvaluate !== 'boolean') {
+    issues.push({ Path: 'Unattended.AutoEvaluate', Message: 'Unattended.AutoEvaluate must be true or false.', FixRecommendation: 'Use false to opt out of the steward\'s golden-set evaluation, or remove the field.', Severity: 'error' });
+  }
+  if (u.AutoBackfill !== undefined && typeof u.AutoBackfill !== 'boolean') {
+    issues.push({ Path: 'Unattended.AutoBackfill', Message: 'Unattended.AutoBackfill must be true or false.', FixRecommendation: 'Use false to opt out of the steward\'s backfill, or remove the field.', Severity: 'error' });
+  }
+  return issues;
+}
+
 /** Renders an invalid floor for a message: numbers as written (NaN too), anything else as JSON, and absence as "missing". */
 function describeFloor(floor: unknown): string {
   if (floor === undefined) {
@@ -615,6 +713,7 @@ export function ResolveConstraint(
         OnViolation: c.OnViolation,
         AllowedValues: allowedValues,
         ValueDescriptions: Object.keys(valueDescriptions).length > 0 ? valueDescriptions : undefined,
+        ItemRef: c.ItemRef,
       };
     }
     if (c.Type === 'numeric') {
@@ -657,6 +756,9 @@ export function ResolveConstraint(
         OnViolation: c.OnViolation,
         RelatedEntityName: c.Entity ?? field?.RelatedEntity,
         LookupMatchField: c.MatchField ?? (output.Target.Mode === 'field' ? output.Target.LookupMatchField : undefined) ?? 'Name',
+        DisplayFields: c.DisplayFields,
+        Filter: c.Filter,
+        ItemRef: c.ItemRef,
       };
     }
     if (c.Type === 'freetext') {
@@ -705,6 +807,9 @@ export function resolveConstraint(
 
 /**
  * Pure function to render the exact constraint block text injected into prompts and shown in UI previews.
+ * `resolvedConstraints` (by output name) supplies what only a run can resolve: a field's value list, and a lookup's
+ * allowed rows (see `LookupConstraintValues`), which are listed with their display text. An output missing from it is
+ * resolved from its spec alone, so a lookup without loaded rows renders the "Must match an existing …" line.
  */
 export function RenderConstraintBlock(
   outputs: DataFeatureOutput[],
@@ -730,7 +835,10 @@ export function RenderConstraintBlock(
     switch (resolved.Type) {
       case 'enum':
         if (resolved.AllowedValues && resolved.AllowedValues.length > 0) {
-          lines.push(`  Allowed values (MUST be exactly one of the following):`);
+          // Without ItemRef the line is unchanged, so an existing enum pipeline keeps its prompt version hash
+          lines.push(resolved.ItemRef
+            ? `  For each item, ${resolved.ItemRef} MUST be exactly one of the following values:`
+            : `  Allowed values (MUST be exactly one of the following):`);
           for (const val of resolved.AllowedValues) {
             lines.push(`  * "${val}"`);
           }
@@ -773,7 +881,16 @@ export function RenderConstraintBlock(
         lines.push(`  Date value in ISO-8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ).`);
         break;
       case 'lookup':
-        lines.push(`  Must match an existing ${resolved.RelatedEntityName || 'record'} by ${resolved.LookupMatchField || 'Name'}.`);
+        // The loaded rows are the taxonomy: the model sees every allowed value, with its display text when it has one
+        if (resolved.AllowedValues && resolved.AllowedValues.length > 0) {
+          lines.push(`  ${resolved.ItemRef ? `For each item, ${resolved.ItemRef} MUST` : 'MUST'} be exactly one of the following values:`);
+          for (const val of resolved.AllowedValues) {
+            const display = resolved.ValueDisplays?.[val];
+            lines.push(display ? `  * "${val}" — ${display}` : `  * "${val}"`);
+          }
+        } else {
+          lines.push(`  Must match an existing ${resolved.RelatedEntityName || 'record'} by ${resolved.LookupMatchField || 'Name'}.`);
+        }
         break;
       case 'freetext':
         if (resolved.MaxLength) {
@@ -786,6 +903,62 @@ export function RenderConstraintBlock(
   }
 
   return lines.join('\n');
+}
+
+/**
+ * A Feature Pipeline run refused because its prompt template does not render the output constraints
+ * ({@link ConstraintPromptTemplate.DescribeMissingBlock}).
+ */
+export class ConstraintBlockMissingError extends Error {
+  /**
+   * @param PromptName - The pipeline's AI Prompt, whose template must render the block.
+   * @param message - What is wrong and how to fix it.
+   */
+  constructor(public readonly PromptName: string, message: string) {
+    super(message);
+    this.name = 'ConstraintBlockMissingError';
+  }
+}
+
+/**
+ * Prompt-template checks of a Feature Pipeline spec. The constraint block ({@link RenderConstraintBlock}) is the only
+ * place an LLM pipeline's model sees its outputs' allowed values; a template that does not render it lets the model
+ * answer blind, and every answer outside the constraints is then rejected or coerced after the spend. The
+ * run refuses such a pipeline before its first record (`InferProcessor.Preflight`), and the server refuses to save it
+ * (`MJRecordProcessEntityExtended.ValidateAsync`); both use these checks, so the two refusals cannot drift apart.
+ */
+export class ConstraintPromptTemplate {
+  /** Whether a prompt template renders the constraint block InferProcessor passes as `ConstraintBlock` / `constraints`. */
+  public static RendersConstraintBlock(templateText: string | null | undefined): boolean {
+    return /\{\{-?\s*(ConstraintBlock|constraints)\b/.test(templateText || '');
+  }
+
+  /**
+   * Whether the spec's prompt template must render the constraint block: an LLM pipeline (only it renders a prompt)
+   * with at least one constrained output.
+   */
+  public static RequiresConstraintBlock(spec: Pick<DataFeatureSpec, 'Outputs' | 'PipelineType'> | null | undefined): boolean {
+    const constrained = (spec?.Outputs || []).some((o) => !!o.Constraint);
+    return constrained && IsLLMPipelineType(spec?.PipelineType);
+  }
+
+  /**
+   * Why the pipeline's prompt cannot run with this spec, naming the prompt and the placeholder to add; null when the
+   * template renders the block or the spec does not need it ({@link RequiresConstraintBlock}).
+   */
+  public static DescribeMissingBlock(
+    spec: Pick<DataFeatureSpec, 'Outputs' | 'PipelineType'> | null | undefined,
+    promptName: string,
+    templateText: string | null | undefined
+  ): string | null {
+    if (!ConstraintPromptTemplate.RequiresConstraintBlock(spec) || ConstraintPromptTemplate.RendersConstraintBlock(templateText)) {
+      return null;
+    }
+    return (
+      `Feature Pipeline prompt '${promptName}' does not render its output constraints. ` +
+      `Add {{ ConstraintBlock }} to the prompt template, or remove the constraints from the pipeline's outputs.`
+    );
+  }
 }
 
 /** @deprecated Use {@link RenderConstraintBlock}. */

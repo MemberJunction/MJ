@@ -1,5 +1,5 @@
 /**
- * @fileoverview WatermarkService — manages change-detection watermarks for Record Processes (P1-7b).
+ * @fileoverview WatermarkService — manages change-detection watermarks for Record Processes.
  * Supports Checksum (SHA-256 basis hash stored in MJ: Record Process Watermarks), UpdatedAt
  * (__mj_UpdatedAt comparison against lastRunAt, stores nothing), and None (disabled).
  * @module @memberjunction/record-set-processor
@@ -36,6 +36,12 @@ export interface CheckBatchWatermarksParams {
     processRunID?: string;
     maxConcurrency?: number;
     excludeFields?: string[];
+    /**
+     * The per-record context the run's processor gets (its dry-run flag, trigger and entity), used when the processor
+     * computes basis hashes, so a processor that memoises per-run state from its first context sees the run's own.
+     * Absent: a context is built from the other parameters (user, provider, run, pipeline and entity).
+     */
+    ProcessorContext?: RecordProcessorContext;
 }
 
 /** Parameters for updating/upserting a watermark after a successful process. */
@@ -126,10 +132,12 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
     private async checkChecksumBatch(params: CheckBatchWatermarksParams): Promise<Map<string, WatermarkDecision>> {
         const results = new Map<string, WatermarkDecision>();
         const provider = params.provider ?? Metadata.Provider;
-        const recordContext: RecordProcessorContext = {
+        const recordContext: RecordProcessorContext = params.ProcessorContext || {
             contextUser: params.contextUser,
             provider,
             processRunID: params.processRunID,
+            recordProcessID: params.recordProcessID,
+            entityID: params.entityID,
         };
 
         // Step 1: Compute basis hash for each record with bounded concurrency

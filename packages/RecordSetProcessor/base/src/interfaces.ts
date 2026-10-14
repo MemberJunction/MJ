@@ -7,6 +7,7 @@
 
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
+    FeaturePipelineRunPin,
     ProcessCursor,
     ProcessRunSummary,
     ProgressInfo,
@@ -64,6 +65,16 @@ export interface RecordProcessorContext {
     entityID?: string;
     /** When true, write-back overwrites values a person entered and retires their Human values (default false). */
     overwriteHumanValues?: boolean;
+    /**
+     * Compute-only run. The engine sets it on every record's context and on `Preflight`. Infer, FieldRules and the
+     * write-back wrapper persist nothing on it (each also honours the dry flag it was built with). An Action or Agent
+     * processor runs as it would for real: its own side effects are its own, and only its write-back is previewed.
+     */
+    DryRun?: boolean;
+    /** What triggered the run (the version gate treats scheduled and on-demand runs differently). */
+    TriggeredBy?: TriggeredByValue;
+    /** Skip Dedup Cache lookups (golden-set and consistency evaluations measure the model, not the cache). */
+    BypassCache?: boolean;
 }
 
 /**
@@ -104,6 +115,13 @@ export interface IRecordProcessor {
      * @param context - The run-level execution context (user, provider, run/process IDs).
      */
     Preflight?(context: RecordProcessorContext): Promise<void>;
+
+    /**
+     * Optional: the pin a Feature Pipeline processor computes this run under, once it has resolved one (after
+     * `Preflight` or the first record), else null. A run result takes its pin from its records first and from here when
+     * no record carried one, so a run whose records were all skipped still reports the pin it ran under.
+     */
+    CurrentRunPin?(): FeaturePipelineRunPin | null;
 }
 
 /** Opaque handle returned by a tracker's `BeginRun`, threaded back through the other tracker calls. */
@@ -221,6 +239,12 @@ export interface RecordSetProcessOptions {
     lastRunAt?: Date | null;
     /** When true, write-back overwrites values a person entered and retires their Human values (default false). Handed to every record's context. */
     overwriteHumanValues?: boolean;
+    /**
+     * A Feature Pipeline (Infer) run: the run ends `Failed` when any record failed, even below the error-rate breaker
+     * (records that succeeded are still written), and the summary carries a `FeaturePipelineRunResult`. Requires
+     * `recordProcessID`, which the result is attributed to.
+     */
+    FeaturePipeline?: boolean;
 }
 
 /** Strategy used to detect unchanged records when skipUnchanged is enabled. */

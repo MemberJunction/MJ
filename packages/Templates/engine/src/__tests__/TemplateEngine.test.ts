@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
     UserInfo: class {},
+    EntityInfo: class {},
     BaseEngine: class {
         static getInstance<T>(this: new () => T): T { return new this(); }
         protected ContextUser = { ID: 'test-user', Name: 'Test' };
@@ -19,7 +20,8 @@ vi.mock('@memberjunction/core', () => ({
     },
     BaseEnginePropertyConfig: class {},
     IMetadataProvider: class {},
-    ValidationErrorInfo: class { Message = ''; },
+    ValidationErrorInfo: class { constructor(public Source: string, public Message: string) {} },
+    ValidationResult: class { Success = false; Errors: Array<{ Message: string }> = []; },
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
@@ -35,6 +37,8 @@ vi.mock('@memberjunction/core-entities', () => ({
         Name = '';
         Content: Array<Record<string, unknown>> = [];
         Params: Array<Record<string, unknown>> = [];
+        /** The loader hands nunjucks `template.Get` as the source; a stub so the double has one to hand. */
+        Get(_fieldName: string): unknown { return undefined; }
 
         ValidateTemplateInput(_data: unknown, _contentId?: string) {
             return { Success: true, Errors: [] };
@@ -55,6 +59,7 @@ vi.mock('@memberjunction/core-entities', () => ({
         Type = 'Scalar';
         DefaultValue: string | null = null;
         TemplateID = '';
+        TemplateContentID: string | null = null;
     },
     MJTemplateCategoryEntity: class {},
     MJTemplateContentTypeEntity: class {},
@@ -85,11 +90,11 @@ vi.mock('@memberjunction/global', () => ({
 
 vi.mock('@memberjunction/templates-base-types', () => ({
     TemplateRenderResult: class { Success = false; Output: string | null = null; Message?: string = undefined; },
-    TemplateEngineBase: class {
+    TemplateEngineBase: class TemplateEngineBaseDouble {
         // TemplateEngineServer now composes this via `TemplateEngineBase.Instance` (cached singleton).
-        private static _inst: unknown;
-        static get Instance() { return (this._inst ||= new this()); }
-        static getInstance<T>(): T { return (this as unknown as { Instance: T }).Instance; }
+        private static _inst?: TemplateEngineBaseDouble;
+        static get Instance(): TemplateEngineBaseDouble { return (TemplateEngineBaseDouble._inst ||= new TemplateEngineBaseDouble()); }
+        static getInstance(): TemplateEngineBaseDouble { return TemplateEngineBaseDouble.Instance; }
         public ContextUser = { ID: 'test-user', Name: 'Test' };
         public Loaded = true;
         async Config() {}
@@ -117,6 +122,10 @@ vi.mock('@memberjunction/templates-base-types', () => ({
                 (t: Record<string, unknown>) => (t.Name as string).trim().toLowerCase() === name.trim().toLowerCase()
             );
         }
+
+        FindTemplateByID(id: string) {
+            return this._Metadata.Templates.find((t: Record<string, unknown>) => t.ID === id);
+        }
     },
 }));
 
@@ -124,7 +133,49 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 // Import under test
 // ============================================================================
 import { TemplateEngineServer, TemplateEntityLoader } from '../TemplateEngine';
-import { LogError } from '@memberjunction/core';
+import { EntityInfo, LogError, UserInfo, ValidationErrorInfo, ValidationResult } from '@memberjunction/core';
+import { MJTemplateContentEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from '@memberjunction/core-entities';
+import { TemplateEngineBase } from '@memberjunction/templates-base-types';
+
+/** A template of the mocked entity class (typed as the real one); its input validation always passes. */
+function makeTemplate(id: string): MJTemplateEntityExtended {
+    const template = new MJTemplateEntityExtended(new EntityInfo());
+    template.ID = id;
+    return template;
+}
+
+/** A content row of the mocked entity class (typed as the real one). */
+function makeContent(id: string, templateText: string): MJTemplateContentEntity {
+    const content = new MJTemplateContentEntity(new EntityInfo());
+    content.ID = id;
+    content.TemplateText = templateText;
+    return content;
+}
+
+/** A parameter row of the mocked entity class (typed as the real one). */
+function makeParam(name: string, type: MJTemplateParamEntity['Type'], defaultValue: string | null, templateContentID: string | null = null): MJTemplateParamEntity {
+    const param = new MJTemplateParamEntity(new EntityInfo());
+    param.Name = name;
+    param.Type = type;
+    param.DefaultValue = defaultValue;
+    param.TemplateContentID = templateContentID;
+    return param;
+}
+
+/** A failed input validation carrying the given messages. */
+function failedValidation(...messages: string[]): ValidationResult {
+    const result = new ValidationResult();
+    result.Success = false;
+    result.Errors = messages.map((message) => new ValidationErrorInfo('data', message, undefined));
+    return result;
+}
+
+/** The engine is a singleton with a protected constructor; each test builds a fresh one through this subclass. */
+class TestTemplateEngineServer extends TemplateEngineServer {
+    public constructor() {
+        super();
+    }
+}
 
 describe('TemplateEntityLoader', () => {
     let loader: TemplateEntityLoader;
@@ -139,8 +190,8 @@ describe('TemplateEntityLoader', () => {
 
     describe('AddTemplate', () => {
         it('should store template by ID', () => {
-            const template = { ID: 'tmpl-1', Name: 'Test', Get: 'template content' };
-            loader.AddTemplate('tmpl-1', template as never);
+            const template = makeTemplate('tmpl-1');
+            loader.AddTemplate('tmpl-1', template);
 
             // Verify by calling getSource
             const callback = vi.fn();
@@ -150,15 +201,15 @@ describe('TemplateEntityLoader', () => {
         });
 
         it('should retrieve template via getSource with numeric ID', () => {
-            const template = { ID: '42', Name: 'NumericTest', Get: 'content here' };
-            loader.AddTemplate('42', template as never);
+            const template = makeTemplate('42');
+            loader.AddTemplate('42', template);
 
             const callback = vi.fn();
             loader.getSource('42', callback);
 
             expect(callback).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    src: 'content here',
+                    src: template.Get,
                     noCache: true,
                 })
             );
@@ -174,12 +225,11 @@ describe('TemplateEntityLoader', () => {
 });
 
 describe('TemplateEngineServer', () => {
-    let engine: TemplateEngineServer;
+    let engine: TestTemplateEngineServer;
 
     beforeEach(() => {
         vi.clearAllMocks();
-        // the mocked BaseSingleton builds a fresh instance on every Instance read, so each test gets its own engine
-        engine = TemplateEngineServer.Instance;
+        engine = new TestTemplateEngineServer();
         // Call SetupNunjucks to initialize the nunjucks environment
         engine.SetupNunjucks();
     });
@@ -440,30 +490,22 @@ describe('TemplateEngineServer', () => {
 
     describe('RenderTemplate', () => {
         it('should return failure when templateContent is null', async () => {
-            const templateEntity = {
-                ID: 't-1',
-                Name: 'Test',
-                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
-                GetParametersForContent: vi.fn().mockReturnValue([]),
-            };
+            const templateEntity = makeTemplate('t-1');
+            templateEntity.Name = 'Test';
 
-            const result = await engine.RenderTemplate(templateEntity as never, null as never, {});
+            const result = await engine.RenderTemplate(templateEntity, null, {});
 
             expect(result.Success).toBe(false);
             expect(result.Message).toContain('templateContent variable is required');
         });
 
         it('should return failure when TemplateText is empty', async () => {
-            const templateEntity = {
-                ID: 't-1',
-                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
-                GetParametersForContent: vi.fn().mockReturnValue([]),
-            };
-            const templateContent = { ID: 'tc-1', TemplateText: '' };
+            const templateEntity = makeTemplate('t-1');
+            const templateContent = makeContent('tc-1', '');
 
             const result = await engine.RenderTemplate(
-                templateEntity as never,
-                templateContent as never,
+                templateEntity,
+                templateContent,
                 {}
             );
 
@@ -472,22 +514,15 @@ describe('TemplateEngineServer', () => {
         });
 
         it('should return failure when validation fails', async () => {
-            const templateEntity = {
-                ID: 't-1',
-                ValidateTemplateInput: vi.fn().mockReturnValue({
-                    Success: false,
-                    Errors: [
-                        { Message: 'Missing required field: name' },
-                        { Message: 'Invalid type for age' },
-                    ],
-                }),
-                GetParametersForContent: vi.fn().mockReturnValue([]),
-            };
-            const templateContent = { ID: 'tc-1', TemplateText: 'Hello {{ name }}' };
+            const templateEntity = makeTemplate('t-1');
+            vi.spyOn(templateEntity, 'ValidateTemplateInput').mockReturnValue(
+                failedValidation('Missing required field: name', 'Invalid type for age'),
+            );
+            const templateContent = makeContent('tc-1', 'Hello {{ name }}');
 
             const result = await engine.RenderTemplate(
-                templateEntity as never,
-                templateContent as never,
+                templateEntity,
+                templateContent,
                 {}
             );
 
@@ -497,17 +532,14 @@ describe('TemplateEngineServer', () => {
         });
 
         it('should skip validation when SkipValidation is true but log warnings by default', async () => {
-            const templateEntity = {
-                ID: 't-1',
-                Name: 'TestTemplate',
-                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
-                GetParametersForContent: vi.fn().mockReturnValue([]),
-            };
-            const templateContent = { ID: 'tc-1', TemplateText: 'Hello {{ name }}' };
+            const templateEntity = makeTemplate('t-1');
+            templateEntity.Name = 'TestTemplate';
+            const validate = vi.spyOn(templateEntity, 'ValidateTemplateInput');
+            const templateContent = makeContent('tc-1', 'Hello {{ name }}');
 
             const result = await engine.RenderTemplate(
-                templateEntity as never,
-                templateContent as never,
+                templateEntity,
+                templateContent,
                 { name: 'World' },
                 true // SkipValidation
             );
@@ -515,41 +547,34 @@ describe('TemplateEngineServer', () => {
             expect(result.Success).toBe(true);
             // With SkipValidation=true and SuppressWarnings defaulting to false,
             // ValidateTemplateInput IS called for non-fatal warning logging
-            expect(templateEntity.ValidateTemplateInput).toHaveBeenCalled();
+            expect(validate).toHaveBeenCalled();
         });
 
         it('should suppress warnings when both SkipValidation and SuppressWarnings are true', async () => {
-            const templateEntity = {
-                ID: 't-1',
-                Name: 'TestTemplate',
-                ValidateTemplateInput: vi.fn(),
-                GetParametersForContent: vi.fn().mockReturnValue([]),
-            };
-            const templateContent = { ID: 'tc-1', TemplateText: 'Hello {{ name }}' };
+            const templateEntity = makeTemplate('t-1');
+            templateEntity.Name = 'TestTemplate';
+            const validate = vi.spyOn(templateEntity, 'ValidateTemplateInput');
+            const templateContent = makeContent('tc-1', 'Hello {{ name }}');
 
             const result = await engine.RenderTemplate(
-                templateEntity as never,
-                templateContent as never,
+                templateEntity,
+                templateContent,
                 { name: 'World' },
                 true, // SkipValidation
                 true  // SuppressWarnings
             );
 
             expect(result.Success).toBe(true);
-            expect(templateEntity.ValidateTemplateInput).not.toHaveBeenCalled();
+            expect(validate).not.toHaveBeenCalled();
         });
 
         it('should render template with provided data', async () => {
-            const templateEntity = {
-                ID: 't-1',
-                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
-                GetParametersForContent: vi.fn().mockReturnValue([]),
-            };
-            const templateContent = { ID: 'tc-1', TemplateText: 'Dear {{ name }}, welcome!' };
+            const templateEntity = makeTemplate('t-1');
+            const templateContent = makeContent('tc-1', 'Dear {{ name }}, welcome!');
 
             const result = await engine.RenderTemplate(
-                templateEntity as never,
-                templateContent as never,
+                templateEntity,
+                templateContent,
                 { name: 'Alice' }
             );
 
@@ -558,19 +583,12 @@ describe('TemplateEngineServer', () => {
         });
 
         it('should catch rendering errors', async () => {
-            const templateEntity = {
-                ID: 't-1',
-                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
-                GetParametersForContent: vi.fn().mockReturnValue([]),
-            };
-            const templateContent = {
-                ID: 'tc-err',
-                TemplateText: '{% if %}missing condition{% endif %}',
-            };
+            const templateEntity = makeTemplate('t-1');
+            const templateContent = makeContent('tc-err', '{% if %}missing condition{% endif %}');
 
             const result = await engine.RenderTemplate(
-                templateEntity as never,
-                templateContent as never,
+                templateEntity,
+                templateContent,
                 {}
             );
 
@@ -579,57 +597,87 @@ describe('TemplateEngineServer', () => {
         });
 
         it('should use template caching', async () => {
-            const templateEntity = {
-                ID: 't-1',
-                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
-                GetParametersForContent: vi.fn().mockReturnValue([]),
-            };
-            const templateContent = { ID: 'cached-tc', TemplateText: '{{ x }}' };
+            const templateEntity = makeTemplate('t-1');
+            const templateContent = makeContent('cached-tc', '{{ x }}');
 
             // First render
             const result1 = await engine.RenderTemplate(
-                templateEntity as never,
-                templateContent as never,
+                templateEntity,
+                templateContent,
                 { x: 'first' }
             );
             expect(result1.Output).toBe('first');
 
             // Second render with same content ID should use cache
             const result2 = await engine.RenderTemplate(
-                templateEntity as never,
-                templateContent as never,
+                templateEntity,
+                templateContent,
                 { x: 'second' }
             );
             expect(result2.Output).toBe('second');
         });
 
         it('recompiles a cached template when its content text changes', async () => {
-            const templateEntity = { ID: 't-1', ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }), GetParametersForContent: vi.fn().mockReturnValue([]) };
-            const first = await engine.RenderTemplate(templateEntity as never, { ID: 'tc-9', TemplateText: 'A {{ x }}' } as never, { x: 1 });
-            const second = await engine.RenderTemplate(templateEntity as never, { ID: 'tc-9', TemplateText: 'B {{ x }}' } as never, { x: 1 });
+            const templateEntity = makeTemplate('t-1');
+            const first = await engine.RenderTemplate(templateEntity, makeContent('tc-9', 'A {{ x }}'), { x: 1 });
+            const second = await engine.RenderTemplate(templateEntity, makeContent('tc-9', 'B {{ x }}'), { x: 1 });
             expect(first.Output).toBe('A 1');
             expect(second.Output).toBe('B 1');
+        });
+
+        it('renders raw when autoescape is false, and still escapes by default', async () => {
+            const templateEntity = makeTemplate('t-1');
+            const content = makeContent('tc-amp', 'Job Title: {{ record.CurrentJobTitle }}');
+            const data = { record: { CurrentJobTitle: 'Affineur & Owner' } };
+            const raw = await engine.RenderTemplate(templateEntity, content, data, true, true, { autoescape: false });
+            const escaped = await engine.RenderTemplate(templateEntity, content, data, true, true);
+            expect(raw.Output).toBe('Job Title: Affineur & Owner');
+            expect(escaped.Output).toBe('Job Title: Affineur &amp; Owner');
+        });
+
+        it('registers the template extensions on the raw environment too', async () => {
+            class ProbeExtension { public static Created = 0; public tags = ['probeext']; constructor() { ProbeExtension.Created++; } public parse(): void { /* never invoked */ } }
+            const templateEntity = makeTemplate('t-2');
+            // a raw render before the extension is registered, so a raw environment that survived the rebuild would lack it
+            await engine.RenderTemplate(templateEntity, makeContent('tc-pre', 'x'), {}, true, true, { autoescape: false });
+            mockGetAllRegistrations.mockReturnValue([{ Key: 'probeext', SubClass: ProbeExtension }]);
+            engine.SetupNunjucks(); // drops the raw environment, so the next raw render builds it
+            const before = ProbeExtension.Created;
+            await engine.RenderTemplate(templateEntity, makeContent('tc-ext', 'x'), {}, true, true, { autoescape: false });
+            expect(ProbeExtension.Created).toBe(before + 1);
+            mockGetAllRegistrations.mockReturnValue([]);
+        });
+
+        it('runs the raw environment\'s extensions as the user the escaping environment\'s extensions run as', async () => {
+            const usersSeen: UserInfo[] = [];
+            class UserProbeExtension { public tags = ['userprobe']; constructor(user: UserInfo) { usersSeen.push(user); } public parse(): void { /* never invoked */ } }
+            mockGetAllRegistrations.mockReturnValue([{ Key: 'userprobe', SubClass: UserProbeExtension }]);
+            const firstUser = new UserInfo();
+            const laterUser = new UserInfo();
+            await engine.Config(false, firstUser); // builds the escaping environment's extensions for firstUser
+            await engine.Config(false, laterUser); // a later caller's user becomes the context user
+
+            await engine.RenderTemplate(makeTemplate('t-3'), makeContent('tc-user', 'x'), {}, true, true, { autoescape: false });
+
+            expect(usersSeen).toHaveLength(2);
+            expect(usersSeen[0]).toBe(firstUser);
+            expect(usersSeen[1]).toBe(firstUser);
+            mockGetAllRegistrations.mockReturnValue([]);
         });
     });
 
     describe('mergeDefaultValues', () => {
         it('should apply default values for missing parameters', async () => {
-            const templateEntity = {
-                ID: 't-1',
-                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
-                GetParametersForContent: vi.fn().mockReturnValue([
-                    { Name: 'greeting', Type: 'Scalar', DefaultValue: 'Hello' },
-                    { Name: 'title', Type: 'Scalar', DefaultValue: 'Mr.' },
-                ]),
-            };
-            const templateContent = {
-                ID: 'tc-defaults',
-                TemplateText: '{{ greeting }} {{ title }} {{ name }}',
-            };
+            const templateEntity = makeTemplate('t-1');
+            templateEntity.Params = [
+                makeParam('greeting', 'Scalar', 'Hello'),
+                makeParam('title', 'Scalar', 'Mr.'),
+            ];
+            const templateContent = makeContent('tc-defaults', '{{ greeting }} {{ title }} {{ name }}');
 
             const result = await engine.RenderTemplate(
-                templateEntity as never,
-                templateContent as never,
+                templateEntity,
+                templateContent,
                 { name: 'Smith' }
             );
 
@@ -638,21 +686,15 @@ describe('TemplateEngineServer', () => {
         });
 
         it('should not override provided values with defaults', async () => {
-            const templateEntity = {
-                ID: 't-1',
-                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
-                GetParametersForContent: vi.fn().mockReturnValue([
-                    { Name: 'greeting', Type: 'Scalar', DefaultValue: 'Hello' },
-                ]),
-            };
-            const templateContent = {
-                ID: 'tc-no-override',
-                TemplateText: '{{ greeting }}',
-            };
+            const templateEntity = makeTemplate('t-1');
+            templateEntity.Params = [
+                makeParam('greeting', 'Scalar', 'Hello'),
+            ];
+            const templateContent = makeContent('tc-no-override', '{{ greeting }}');
 
             const result = await engine.RenderTemplate(
-                templateEntity as never,
-                templateContent as never,
+                templateEntity,
+                templateContent,
                 { greeting: 'Hi' }
             );
 
@@ -661,21 +703,15 @@ describe('TemplateEngineServer', () => {
         });
 
         it('should parse JSON default values for complex types', async () => {
-            const templateEntity = {
-                ID: 't-1',
-                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
-                GetParametersForContent: vi.fn().mockReturnValue([
-                    { Name: 'config', Type: 'Object', DefaultValue: '{"color":"red"}' },
-                ]),
-            };
-            const templateContent = {
-                ID: 'tc-json-default',
-                TemplateText: '{{ config.color }}',
-            };
+            const templateEntity = makeTemplate('t-1');
+            templateEntity.Params = [
+                makeParam('config', 'Object', '{"color":"red"}'),
+            ];
+            const templateContent = makeContent('tc-json-default', '{{ config.color }}');
 
             const result = await engine.RenderTemplate(
-                templateEntity as never,
-                templateContent as never,
+                templateEntity,
+                templateContent,
                 {}
             );
 
@@ -684,21 +720,15 @@ describe('TemplateEngineServer', () => {
         });
 
         it('should handle non-JSON default values for complex types', async () => {
-            const templateEntity = {
-                ID: 't-1',
-                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
-                GetParametersForContent: vi.fn().mockReturnValue([
-                    { Name: 'data', Type: 'Array', DefaultValue: 'not-json' },
-                ]),
-            };
-            const templateContent = {
-                ID: 'tc-nonjson',
-                TemplateText: '{{ data }}',
-            };
+            const templateEntity = makeTemplate('t-1');
+            templateEntity.Params = [
+                makeParam('data', 'Array', 'not-json'),
+            ];
+            const templateContent = makeContent('tc-nonjson', '{{ data }}');
 
             const result = await engine.RenderTemplate(
-                templateEntity as never,
-                templateContent as never,
+                templateEntity,
+                templateContent,
                 {}
             );
 
@@ -707,22 +737,16 @@ describe('TemplateEngineServer', () => {
         });
 
         it('should skip defaults when value is null or undefined', async () => {
-            const templateEntity = {
-                ID: 't-1',
-                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
-                GetParametersForContent: vi.fn().mockReturnValue([
-                    { Name: 'nullDefault', Type: 'Scalar', DefaultValue: null },
-                    { Name: 'undefDefault', Type: 'Scalar', DefaultValue: undefined },
-                ]),
-            };
-            const templateContent = {
-                ID: 'tc-nulls',
-                TemplateText: '[{{ nullDefault }}][{{ undefDefault }}]',
-            };
+            const templateEntity = makeTemplate('t-1');
+            templateEntity.Params = [
+                makeParam('nullDefault', 'Scalar', null),
+                makeParam('undefDefault', 'Scalar', null),
+            ];
+            const templateContent = makeContent('tc-nulls', '[{{ nullDefault }}][{{ undefDefault }}]');
 
             const result = await engine.RenderTemplate(
-                templateEntity as never,
-                templateContent as never,
+                templateEntity,
+                templateContent,
                 {}
             );
 
@@ -732,22 +756,16 @@ describe('TemplateEngineServer', () => {
 
         it('should handle content-specific params overriding global params', async () => {
             const contentId = 'tc-precedence';
-            const templateEntity = {
-                ID: 't-1',
-                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
-                GetParametersForContent: vi.fn().mockReturnValue([
-                    { Name: 'val', Type: 'Scalar', DefaultValue: 'global' }, // global param
-                    { Name: 'val', Type: 'Scalar', DefaultValue: 'content-specific', TemplateContentID: contentId }, // content-specific
-                ]),
-            };
-            const templateContent = {
-                ID: contentId,
-                TemplateText: '{{ val }}',
-            };
+            const templateEntity = makeTemplate('t-1');
+            templateEntity.Params = [
+                makeParam('val', 'Scalar', 'global'), // global param
+                makeParam('val', 'Scalar', 'content-specific', contentId), // content-specific
+            ];
+            const templateContent = makeContent(contentId, '{{ val }}');
 
             const result = await engine.RenderTemplate(
-                templateEntity as never,
-                templateContent as never,
+                templateEntity,
+                templateContent,
                 {}
             );
 
@@ -759,29 +777,36 @@ describe('TemplateEngineServer', () => {
     describe('getNunjucksTemplate (caching behavior)', () => {
         it('should cache templates by contentId', async () => {
             // Render same template twice with same content ID
-            const templateEntity = {
-                ID: 't-1',
-                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
-                GetParametersForContent: vi.fn().mockReturnValue([]),
-            };
-            const tc = { ID: 'cache-id', TemplateText: '{{ x }}' };
+            const templateEntity = makeTemplate('t-1');
+            const tc = makeContent('cache-id', '{{ x }}');
 
-            await engine.RenderTemplate(templateEntity as never, tc as never, { x: 'a' });
-            await engine.RenderTemplate(templateEntity as never, tc as never, { x: 'b' });
+            await engine.RenderTemplate(templateEntity, tc, { x: 'a' });
+            await engine.RenderTemplate(templateEntity, tc, { x: 'b' });
 
             // Both should succeed (cache is being used)
-            const result = await engine.RenderTemplate(templateEntity as never, tc as never, { x: 'c' });
+            const result = await engine.RenderTemplate(templateEntity, tc, { x: 'c' });
             expect(result.Success).toBe(true);
             expect(result.Output).toBe('c');
         });
     });
 
+    describe('FindTemplateByID', () => {
+        it('looks the template up by ID in the template metadata cache', () => {
+            const byID = vi.spyOn(TemplateEngineBase.Instance, 'FindTemplateByID');
+
+            engine.FindTemplateByID('template-id');
+
+            expect(byID).toHaveBeenCalledWith('template-id');
+        });
+    });
+
     describe('AddTemplate', () => {
         it('should delegate to the template loader', () => {
-            const templateEntity = { ID: 'tmpl-1', Name: 'Test' };
+            const templateEntity = makeTemplate('tmpl-1');
+            templateEntity.Name = 'Test';
 
             // Should not throw
-            expect(() => engine.AddTemplate(templateEntity as never)).not.toThrow();
+            expect(() => engine.AddTemplate(templateEntity)).not.toThrow();
         });
     });
 });

@@ -40,6 +40,7 @@ import {
     TaxNodeCandidate,
 } from './tags-agent-context';
 import { ValidateStringParam } from '../../../shared/agent-tool-validation';
+import { ContentSourceConfiguration } from '../autotagging/shared/content-source-configuration';
 
 // ── Tab type ──
 
@@ -2169,7 +2170,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
             // Store the full SourceSpecificConfiguration in the Configuration JSON
             const currentConfig = entity.ConfigurationObject ?? {};
-            currentConfig.SourceSpecificConfiguration = { ...this.FormSourceSpecificConfig };
+            currentConfig.SourceSpecificConfiguration = ContentSourceConfiguration.MergeSourceSpecific(currentConfig.SourceSpecificConfiguration, this.FormSourceSpecificConfig);
             entity.ConfigurationObject = currentConfig;
 
             entity.EmbeddingModelID = this.FormSourceEmbeddingModelID || null;

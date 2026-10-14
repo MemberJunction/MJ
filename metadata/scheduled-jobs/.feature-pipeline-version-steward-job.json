@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "Name": "Feature Pipeline Version Steward",
+      "Description": "Every 15 minutes: golden-set evaluation and backfill of changed Feature Pipeline versions. Shipped Active so version changes never wait for a person.",
+      "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=FeaturePipelineVersionStewardDriver",
+      "CronExpression": "0 */15 * * * *",
+      "Timezone": "UTC",
+      "Status": "Active",
+      "Configuration": {}
+    },
+    "primaryKey": {
+      "ID": "0798CD7D-60F0-4BAF-BA4A-20E0959A13E3"
+    }
+  }
+]

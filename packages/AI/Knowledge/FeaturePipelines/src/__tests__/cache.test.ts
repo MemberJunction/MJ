@@ -274,6 +274,39 @@ describe('FeatureValueCacheService', () => {
             expect(saved).toHaveLength(0);
         });
 
+        it('makes an unchanged keyed row the latest again when another key holds the latest value', async () => {
+            const keyHash = await FeatureValueKey.ComputeHash(keyInput);
+            // a newer version wrote Manager last; this version's row still holds Director, which the run computes again
+            const newer = { FeatureName: 'SeniorityLevel', ValueKeyHash: 'newer-version-key', ValueText: 'Manager', ValueNumeric: null,
+                ValueBoolean: null, ValueDate: null, ValueJSON: null };
+            const computedBefore = new Date('2026-10-01T00:00:00Z');
+            const own: Record<string, unknown> = { FeatureName: 'SeniorityLevel', ValueKeyHash: keyHash, ValueText: 'Director', ValueNumeric: null,
+                ValueBoolean: null, ValueDate: null, ValueJSON: null, Reasoning: 'Title says Director', Confidence: 0.9,
+                ComputedAt: computedBefore, ProcessRunID: 'run-1', Save: vi.fn().mockResolvedValue(true), NewRecord: vi.fn() };
+            MockRunView.queue = [[newer], [own]];
+            const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues(params(providerWith([])));
+            expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Previous: { SeniorityLevel: { ...noValue, ValueText: 'Manager' } } });
+            expect(own.Save).toHaveBeenCalledTimes(1);
+            expect(own.NewRecord).not.toHaveBeenCalled();
+            expect(own.ProcessRunID).toBe('run-2');
+            expect(own.ComputedAt).not.toBe(computedBefore);
+        });
+
+        it('leaves an unchanged history row (a superseded decision) untouched even when another key holds the latest value', async () => {
+            const keyHash = await FeatureValueKey.ComputeHash(keyInput);
+            // the escalated answer's row (another key) is the latest; the superseded decision's row is written again unchanged
+            const answer = { FeatureName: 'SeniorityLevel', ValueKeyHash: 'answer-key', ValueText: 'Manager', ValueNumeric: null,
+                ValueBoolean: null, ValueDate: null, ValueJSON: null };
+            const own: Record<string, unknown> = { FeatureName: 'SeniorityLevel', ValueKeyHash: keyHash, ValueText: 'Director', ValueNumeric: null,
+                ValueBoolean: null, ValueDate: null, ValueJSON: null, Reasoning: 'Title says Director', Confidence: 0.9,
+                ProcessRunID: 'run-1', Save: vi.fn().mockResolvedValue(true), NewRecord: vi.fn() };
+            MockRunView.queue = [[answer], [own]];
+            const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues({ ...params(providerWith([])), HistoryOnly: true });
+            expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Previous: { SeniorityLevel: { ...noValue, ValueText: 'Manager' } } });
+            expect(own.Save).not.toHaveBeenCalled();
+            expect(own.ProcessRunID).toBe('run-1');
+        });
+
         it('updates the keyed row in place when its value changed, returning the value it had before', async () => {
             const keyHash = await FeatureValueKey.ComputeHash(keyInput);
             const existing: Record<string, unknown> = { FeatureName: 'SeniorityLevel', ValueKeyHash: keyHash, ValueText: 'Manager', Reasoning: null, Confidence: null,
@@ -316,7 +349,7 @@ describe('FeatureValueCacheService', () => {
                 expect(view.MaxRows).toBe(1);
                 expect(view.OrderBy).toBe('ComputedAt DESC');
                 expect(view.ResultType).toBeUndefined();
-                expect(view.Fields).toEqual(['FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON']);
+                expect(view.Fields).toEqual(['FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON', 'ValueKeyHash']);
             }
             expect(second.ExtraFilter).toContain("FeatureName = 'Department'");
         });

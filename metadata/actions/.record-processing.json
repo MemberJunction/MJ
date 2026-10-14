@@ -56,7 +56,7 @@
             "IsArray": false,
             "IsRequired": false,
             "DefaultValue": "false",
-            "Description": "When true, compute the per-record changes without writing (FieldRules work type). Defaults to false."
+            "Description": "When true, compute the per-record changes without writing, for every work type: Infer, FieldRules and every write-back persist nothing, while an Action or Agent still runs and only its write-back is previewed. An Infer dry run over the stored scope previews the first 25 records. Defaults to false."
           },
           "primaryKey": {
             "ID": "A597799F-4388-4EEB-85EA-1D542B032DD1"

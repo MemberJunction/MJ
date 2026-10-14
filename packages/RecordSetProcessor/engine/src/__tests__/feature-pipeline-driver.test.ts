@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest';
-import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { KnowledgeHubMetadataEngine, type MJFeaturePipelineTypeEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { AIPromptParams, AIPromptRunResult, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { ParameterFidelityError, type ParameterFidelity } from '@memberjunction/ai';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import {
     FeatureValueCacheService,
@@ -15,6 +16,9 @@ import {
     type RecordFeatureValuesOutcome,
 } from '@memberjunction/feature-pipelines';
 import { InferProcessor, type FeatureValueWriteParams } from '../processors/InferProcessor';
+import { HistoryStoreDouble } from './history-store-double';
+import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
+import { CacheEntry } from './helpers/cache-entry';
 import {
     BaseFeaturePipelineDriver,
     type FeaturePipelineComputeRequest,
@@ -36,6 +40,14 @@ class ConfidenceStubDriver extends BaseFeaturePipelineDriver {
     }
 }
 RegisterClass(BaseFeaturePipelineDriver, 'FeaturePipelineDriverTest_ConfidenceStub')(ConfidenceStubDriver);
+
+/** Produces a confidence per output, and an answer that also states one at a result path. */
+class ConfidenceAndAnswerStubDriver extends ConfidenceStubDriver {
+    public override async ComputeOutputs(): Promise<FeaturePipelineComputeResult> {
+        return { Success: true, RawResult: { seniority: 'Director', seniorityConfidence: 0.2 }, Confidence: { Seniority: 0.87 } };
+    }
+}
+RegisterClass(BaseFeaturePipelineDriver, 'FeaturePipelineDriverTest_ConfidenceAndAnswerStub')(ConfidenceAndAnswerStubDriver);
 
 /** Produces only boolean outputs written to a field. */
 class BooleanFieldOnlyDriver extends BaseFeaturePipelineDriver {
@@ -152,14 +164,10 @@ const HASH_ON_NEXT_WITHOUT_SPEC = '851bd19d440ee5324b4fd5c133145319bdaefcd631e28
 const UPSERTED: RecordFeatureValuesOutcome = { Upserted: 1, Unchanged: 0, Previous: {} };
 
 describe('Feature Pipeline driver seam', () => {
-    /**
-     * A provider with no entity metadata: every lookup by entity ID answers undefined, as the processor's field and
-     * value lookups see when the context carries no metadata for the entity (a partial test double).
-     */
-    const noEntityMetadata = { EntityByID: () => undefined } as unknown as IMetadataProvider;
     const context: RecordProcessorContext = {
-        contextUser: {} as UserInfo,
-        provider: noEntityMetadata,
+        contextUser: new UserInfo(),
+        // The entity is unknown here: the provider knows no entities
+        provider: new EntitiesOnlyProvider([]),
         recordProcessID: 'RP-1',
         entityID: 'ENT-1',
         processRunID: 'RUN-1',
@@ -172,7 +180,7 @@ describe('Feature Pipeline driver seam', () => {
 
     let catalogRows: MJFeaturePipelineTypeEntity[];
     let executePrompt: ReturnType<typeof vi.fn>;
-    let catalogConfig: ReturnType<typeof vi.spyOn>;
+    let catalogConfig: MockInstance<KnowledgeHubMetadataEngine['Config']>;
     let recordFeatureValues: MockInstance<FeatureValueCacheService['RecordFeatureValues']>;
 
     beforeEach(() => {
@@ -419,11 +427,80 @@ describe('Feature Pipeline driver seam', () => {
             };
             expect(await driver.ComputeOutputs(request)).toEqual({ Success: false, ErrorMessage: 'AI prompt execution failed', AIPromptRunID: undefined });
         });
+
+        it('runs the prompt strict and returns the call\'s parameter fidelity', async () => {
+            const fidelity: ParameterFidelity = { Status: 'sent-unchanged', Sent: { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: null, Seed: 42 } };
+            executePrompt.mockResolvedValue({ success: true, result: { a: 1 }, promptRun: { ID: 'r1' }, chatResult: { parameterFidelity: fidelity } });
+            const request: FeaturePipelineComputeRequest = {
+                Record: makeRecord(), Context: context, Prompt: mockPrompt,
+                Hooks: { BuildPromptData: async () => ({}), BeforeBuildContext: async () => undefined, BeforePromptExecute: async () => undefined, AfterPromptExecute: async (r) => r.result ?? {} },
+            };
+            const out = await new LLMFeaturePipelineDriver().ComputeOutputs(request);
+            const sent: AIPromptParams = executePrompt.mock.calls[0][0];
+            expect(sent.strictParameters).toBe(true);
+            expect('ErrorMessage' in out ? null : out.ParameterFidelity).toEqual(fidelity);
+        });
+
+        it('returns a refused call\'s parameter fidelity with the failure', async () => {
+            const sentShape = { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: null, Seed: 42 };
+            const refused: Extract<ParameterFidelity, { Status: 'refused' }> = { Status: 'refused', Configured: sentShape, WouldSend: { ...sentShape, Seed: null } };
+            const error = new ParameterFidelityError(refused, 'GeminiLLM');
+            executePrompt.mockResolvedValue({ success: false, errorMessage: error.message, promptRun: { ID: 'r2' }, chatResult: { success: false, exception: error } });
+            const request: FeaturePipelineComputeRequest = {
+                Record: makeRecord(), Context: context, Prompt: mockPrompt,
+                Hooks: { BuildPromptData: async () => ({}), BeforeBuildContext: async () => undefined, BeforePromptExecute: async () => undefined, AfterPromptExecute: async () => ({}) },
+            };
+            expect(await new LLMFeaturePipelineDriver().ComputeOutputs(request)).toEqual({
+                Success: false, ErrorMessage: error.message, AIPromptRunID: 'r2', ParameterFidelity: refused,
+            });
+        });
+
+        it('returns no parameter fidelity with a failure that is not a refusal, whatever the error carries', async () => {
+            const configured = { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: null, Seed: 42 };
+            const lookalike = Object.assign(new Error('model unavailable'), { Fidelity: { Status: 'refused', Configured: configured, WouldSend: configured } });
+            executePrompt.mockResolvedValue({ success: false, errorMessage: 'model unavailable', chatResult: { success: false, exception: lookalike } });
+            const request: FeaturePipelineComputeRequest = {
+                Record: makeRecord(), Context: context, Prompt: mockPrompt,
+                Hooks: { BuildPromptData: async () => ({}), BeforeBuildContext: async () => undefined, BeforePromptExecute: async () => undefined, AfterPromptExecute: async () => ({}) },
+            };
+            const out = await new LLMFeaturePipelineDriver().ComputeOutputs(request);
+            expect('ErrorMessage' in out ? out.ParameterFidelity : 'succeeded').toBeUndefined();
+        });
     });
 
     // ================================================================
     // Hashes
     // ================================================================
+
+    describe('parameter fidelity on the record result', () => {
+        const sentShape = { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: null, Seed: 42 };
+        const sent: ParameterFidelity = { Status: 'sent-unchanged', Sent: sentShape };
+
+        it('records the call\'s parameter fidelity on a succeeded record', async () => {
+            executePrompt.mockResolvedValue({ success: true, result: { seniority: 'Director' }, promptRun: { ID: 'PROMPT-RUN-1' }, chatResult: { parameterFidelity: sent } });
+            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec(), null).ProcessRecord(makeRecord(), context);
+
+            expect(result.Status).toBe('Succeeded');
+            expect(result.ParameterFidelity).toEqual(sent);
+        });
+
+        it('records the call\'s parameter fidelity on a record whose answer is rejected', async () => {
+            executePrompt.mockResolvedValue({ success: true, result: { seniority: 'Intern' }, promptRun: { ID: 'PROMPT-RUN-1' }, chatResult: { parameterFidelity: sent } });
+            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec(), null).ProcessRecord(makeRecord(), context);
+
+            expect(result.FailureKind).toBe('RejectedInvalid');
+            expect(result.ParameterFidelity).toEqual(sent);
+        });
+
+        it('records a refused call\'s parameter fidelity on the failed record', async () => {
+            const refused: Extract<ParameterFidelity, { Status: 'refused' }> = { Status: 'refused', Configured: sentShape, WouldSend: { ...sentShape, Seed: null } };
+            const error = new ParameterFidelityError(refused, 'GeminiLLM');
+            executePrompt.mockResolvedValue({ success: false, errorMessage: error.message, chatResult: { success: false, exception: error } });
+            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec(), null).ProcessRecord(makeRecord(), context);
+
+            expect(result).toMatchObject({ Status: 'Failed', ErrorMessage: error.message, ParameterFidelity: refused });
+        });
+    });
 
     describe('computePromptVersionHash', () => {
         const probe = new ProbeProcessor(PROMPT_ID, undefined, undefined, null);
@@ -461,6 +538,40 @@ describe('Feature Pipeline driver seam', () => {
             expect(result.Status).toBe('Succeeded');
             expect(result.Confidence).toEqual({ Seniority: 0.87 });
             expect(processor.HistoryParams[0].OutputConfidence).toEqual({ Seniority: 0.87 });
+            const outputs = recordFeatureValues.mock.calls[0][0].Outputs;
+            expect(outputs).toEqual([expect.objectContaining({ FeatureName: 'Seniority', Confidence: 0.87 })]);
+        });
+
+        it('prefers the driver\'s confidence over the one its answer states at the ConfidenceRef', async () => {
+            catalogRows = [LLM_ROW, pipelineTypeRow({ Name: 'Decision', DriverClass: 'FeaturePipelineDriverTest_ConfidenceAndAnswerStub', Status: 'Active' })];
+            const spec = buildSpec({ PipelineType: 'Decision' });
+            spec.Outputs[0].ConfidenceRef = '$.seniorityConfidence';
+            const processor = new HistoryCapturingProcessor(PROMPT_ID, undefined, spec, null);
+            await processor.ProcessRecord(makeRecord(), context);
+
+            const outputs = recordFeatureValues.mock.calls[0][0].Outputs;
+            expect(outputs).toEqual([expect.objectContaining({ FeatureName: 'Seniority', Confidence: 0.87 })]);
+        });
+
+        it('replays the driver\'s confidence on a cache hit, so a cached re-run of a Decision pipeline is Unchanged', async () => {
+            catalogRows = [LLM_ROW, pipelineTypeRow({ Name: 'Decision', DriverClass: 'FeaturePipelineDriverTest_ConfidenceStub', Status: 'Active' })];
+            const spec = buildSpec({ PipelineType: 'Decision', Caching: { Cacheable: true, KeyFields: ['Title'], Scope: 'pipeline' } });
+            const history = new HistoryStoreDouble();
+            recordFeatureValues.mockImplementation(history.Write);
+            const store = vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'CACHE-1' }));
+            vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
+            const miss = await new InferProcessor(PROMPT_ID, undefined, spec, null).ProcessRecord(makeRecord(), context);
+            expect(miss.Outcome).toBe('Upserted');
+
+            const stored = store.mock.calls[0][0];
+            const entry = CacheEntry({
+                ID: 'CACHE-1', OutputsJSON: stored.OutputsJSON, Reasoning: stored.Reasoning || null, AIPromptRunID: null,
+            });
+            vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map([[stored.KeyHash, entry]]));
+            recordFeatureValues.mockClear();
+            const hit = await new InferProcessor(PROMPT_ID, undefined, spec, null).ProcessRecord(makeRecord(), context);
+
+            expect(hit).toMatchObject({ Status: 'Succeeded', FeatureValueCacheID: 'CACHE-1', Outcome: 'Unchanged' });
             const outputs = recordFeatureValues.mock.calls[0][0].Outputs;
             expect(outputs).toEqual([expect.objectContaining({ FeatureName: 'Seniority', Confidence: 0.87 })]);
         });

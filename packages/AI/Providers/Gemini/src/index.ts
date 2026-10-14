@@ -1,10 +1,10 @@
 
 
 // Google Gemini Import
-import { GoogleGenAI, Content, Part, Blob, FileData, FunctionDeclaration, FunctionCallingConfigMode, ToolConfig, ToolListUnion } from "@google/genai";
+import { GoogleGenAI, Content, Part, Blob, FileData, FunctionDeclaration, FunctionCallingConfigMode, ToolConfig, ToolListUnion, type GenerateContentConfig, type GenerateContentResponseUsageMetadata } from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, type VendorCallParameters } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
 import { AcceptsCustomSampling } from "./geminiSampling";
 
@@ -27,6 +27,22 @@ type GeminiUsageMetadataLike = {
     cachedContentTokenCount?: number;
     candidatesTokenCount?: number;
 };
+
+/**
+ * A response Gemini returned but the driver cannot use — blocked, or with no output. Gemini still billed it, so the
+ * error carries the response's usage for the failed result to report: a thinking model that spends its whole cap
+ * thinking and returns no text is billed for every one of those tokens.
+ */
+export class GeminiUnusableResponseError extends Error {
+    /** The usage of the unusable response, normalized as for a usable one. */
+    public readonly Usage: ModelUsage;
+
+    constructor(message: string, usage: ModelUsage) {
+        super(message);
+        this.name = 'GeminiUnusableResponseError';
+        this.Usage = usage;
+    }
+}
 
 /**
  * True when `error` represents a client-initiated cancellation rather than a genuine provider or
@@ -221,8 +237,7 @@ export class GeminiLLM extends BaseLLM {
             // Fail fast if the caller already cancelled before we opened a socket.
             this.throwIfCancelled(params.cancellationToken);
 
-            // For text-only input, use the gemini-pro model
-            const modelName = params.model || "gemini-pro";
+            const modelName = GeminiLLM.resolveModelName(params);
             
             // Filter out system messages and extract system instruction content
             const noSystemMessages = params.messages.filter(m => m.role !== 'system');
@@ -254,6 +269,7 @@ export class GeminiLLM extends BaseLLM {
 
             // Sampling + response-format options, shaped for the model's version (see buildGenerationOptions)
             const modelOptions = this.buildGenerationOptions(params, modelName);
+            this.warnUnsupportedParameters(params, modelName);
 
             // Ensure Gemini client is initialized
             const client = await this.ensureGeminiClient();
@@ -304,7 +320,7 @@ export class GeminiLLM extends BaseLLM {
                     errorMessage += ': Model returned 0 completion tokens (possible timeout or internal error)';
                 }
 
-                throw new Error(errorMessage);
+                throw new GeminiUnusableResponseError(errorMessage, GeminiLLM.UsageFromMetadata(result.usageMetadata));
             }
 
             // Check finishReason for blocking or errors
@@ -319,7 +335,10 @@ export class GeminiLLM extends BaseLLM {
                     .map((r: any) => `${r.category}(${r.probability})`)
                     .join(', ');
 
-                throw new Error(`Content blocked by model: ${finishReason}${blockedCategories ? ` - ${blockedCategories}` : ''}`);
+                throw new GeminiUnusableResponseError(
+                    `Content blocked by model: ${finishReason}${blockedCategories ? ` - ${blockedCategories}` : ''}`,
+                    GeminiLLM.UsageFromMetadata(result.usageMetadata)
+                );
             }
 
             const rawContent = candidate.content?.parts?.find(part => part.text && !part.thought)?.text || '';
@@ -331,10 +350,12 @@ export class GeminiLLM extends BaseLLM {
             // satisfy this check just as text does.
             if (!rawContent && !thinking && !toolCalls) {
                 const usage = result.usageMetadata;
-                throw new Error(
+                throw new GeminiUnusableResponseError(
                     `No output received from model (finishReason: ${finishReason || 'none'}, ` +
                     `promptTokens: ${usage?.promptTokenCount || 0}, ` +
-                    `completionTokens: ${usage?.candidatesTokenCount || 0})`
+                    `completionTokens: ${usage?.candidatesTokenCount || 0}, ` +
+                    `thoughtsTokens: ${usage?.thoughtsTokenCount || 0})`,
+                    GeminiLLM.UsageFromMetadata(usage)
                 );
             }
 
@@ -355,18 +376,8 @@ export class GeminiLLM extends BaseLLM {
 
             const endTime = new Date();
 
-            // Gemini's cache convention: `promptTokenCount` INCLUDES cached tokens, reported
-            // separately as `cachedContentTokenCount`. Normalize to the uniform ModelUsage contract:
-            // promptTokens must be UNCACHED/net-new only, so subtract the cache-read count (clamped at
-            // 0) and record it disjointly. Gemini does not report a separate cache-write charge, so
-            // cacheWriteTokens stays 0. Full native prompt count = usage.totalInputTokens.
-            const geminiCachedTokens = result.usageMetadata?.cachedContentTokenCount ?? 0;
-            const geminiNetPromptTokens = Math.max(0, (result.usageMetadata?.promptTokenCount || 0) - geminiCachedTokens);
-            const geminiUsage = new ModelUsage(
-                geminiNetPromptTokens,
-                result.usageMetadata?.candidatesTokenCount || 0
-            );
-            geminiUsage.cacheReadTokens = geminiCachedTokens;
+            const geminiUsage = GeminiLLM.UsageFromMetadata(result.usageMetadata);
+            const geminiCachedTokens = geminiUsage.cacheReadTokens || 0;
 
             this.logCacheDiagnostics(
                 'non-streaming',
@@ -424,7 +435,9 @@ export class GeminiLLM extends BaseLLM {
                 timeElapsed: 0,
                 data: {
                     choices: [],
-                    usage: new ModelUsage(0, 0) // Gemini doesn't provide detailed token usage
+                    // A response Gemini returned but the driver could not use was still billed; any other
+                    // failure (a request that never got a response) used nothing.
+                    usage: e instanceof GeminiUnusableResponseError ? e.Usage : new ModelUsage(0, 0)
                 },
                 errorMessage: e.message,
                 exception: e,
@@ -598,31 +611,62 @@ export class GeminiLLM extends BaseLLM {
     private static readonly _warnedUnsupportedSampling = new Set<string>();
 
     /**
-     * Builds the per-request generation options: sampling, stop sequences, seed, response format.
+     * The model name a request sends: the configured one, or `gemini-pro` when none is configured.
+     */
+    private static resolveModelName(params: ChatParams): string {
+        return params.model || "gemini-pro";
+    }
+
+    /**
+     * The temperature this driver sends: the configured one, 0 included, or 0.5 when none is configured. `??` on purpose:
+     * 0 is a configured value, and `||` here once sent a configured 0 as 0.5. Only models that take custom sampling
+     * receive it (see buildGenerationOptions).
+     */
+    protected ResolveTemperature(params: ChatParams): number {
+        return params.temperature ?? 0.5;
+    }
+
+    /**
+     * What this driver sends for temperature, max output tokens and seed. It is read off the same generation options
+     * both request paths send, so the description cannot drift from the request: a model that takes no custom sampling
+     * is described as sending no temperature, and a `ModelSpecific` response format that sets these fields is described
+     * as it is sent. `??` on purpose: a sent 0 is a value, only an absent field is "not sent".
+     */
+    public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
+        const modelName = GeminiLLM.resolveModelName(params);
+        const sent = this.buildGenerationOptions(params, modelName);
+        return { VendorModelName: modelName, Temperature: sent.temperature ?? null, MaxTokens: sent.maxOutputTokens ?? null, Seed: sent.seed ?? null };
+    }
+
+    /**
+     * Builds the per-request generation options: sampling, stop sequences, seed, max output tokens, response format.
+     * Both request paths send these, and {@link DescribeSentParameters} reads them, so this method must stay free of
+     * side effects: the warnings about parameters Gemini drops live in warnUnsupportedParameters, which only the
+     * request paths call.
      *
      * Sampling fields depend on the model's version. Models before Gemini 3.6 keep the original
-     * shape (`temperature` defaulting to 0.5, `topP`, `topK`) because they still honor it. Every
+     * shape (`temperature` from ResolveTemperature, `topP`, `topK`) because they still honor it. Every
      * other model gets none of the three: Google ignores them since Gemini 3.6 Flash and upcoming
-     * models reject them with a 400, so a caller-supplied value is dropped with a one-time warning.
+     * models reject them with a 400, so a caller-supplied value is dropped.
      *
      * A `ModelSpecific` response format is merged in after this gate, so it can still set these
      * fields explicitly; that is the caller's deliberate override.
+     *
+     * The override order is not the same for every field. A `ModelSpecific` format overrides `temperature`,
+     * `topP` and `topK`, but a configured `stopSequences`, `seed` or `maxOutputTokens` overrides the
+     * `ModelSpecific` value, because those are applied after the merge.
      */
-    private buildGenerationOptions(params: ChatParams, modelName: string): Record<string, unknown> {
-        const modelOptions: Record<string, unknown> = {};
+    private buildGenerationOptions(params: ChatParams, modelName: string): GenerateContentConfig {
+        const modelOptions: GenerateContentConfig = {};
 
         if (AcceptsCustomSampling(modelName)) {
-            modelOptions.temperature = params.temperature ?? 0.5;
+            modelOptions.temperature = this.ResolveTemperature(params);
             if (params.topP != null) {
                 modelOptions.topP = params.topP;
             }
             if (params.topK != null) {
                 modelOptions.topK = params.topK;
             }
-        } else {
-            this.warnUnsupportedSampling(modelName, 'temperature', params.temperature);
-            this.warnUnsupportedSampling(modelName, 'topP', params.topP);
-            this.warnUnsupportedSampling(modelName, 'topK', params.topK);
         }
 
         switch (params.responseFormat) {
@@ -642,8 +686,24 @@ export class GeminiLLM extends BaseLLM {
         if (params.seed != null) {
             modelOptions.seed = params.seed;
         }
+        if (params.maxOutputTokens !== undefined && params.maxOutputTokens !== null) {
+            modelOptions.maxOutputTokens = params.maxOutputTokens;
+        }
 
-        // Gemini doesn't support these parameters - warn if provided
+        return modelOptions;
+    }
+
+    /**
+     * Warns about the configured parameters a request drops: sampling fields the model no longer takes (once per
+     * model and field), and the penalties and minP Gemini does not support. Called by the request paths only, so
+     * describing a call logs nothing.
+     */
+    private warnUnsupportedParameters(params: ChatParams, modelName: string): void {
+        if (!AcceptsCustomSampling(modelName)) {
+            this.warnUnsupportedSampling(modelName, 'temperature', params.temperature);
+            this.warnUnsupportedSampling(modelName, 'topP', params.topP);
+            this.warnUnsupportedSampling(modelName, 'topK', params.topK);
+        }
         if (params.frequencyPenalty != null) {
             console.warn('Gemini provider does not support frequencyPenalty parameter, ignoring');
         }
@@ -653,8 +713,6 @@ export class GeminiLLM extends BaseLLM {
         if (params.minP != null) {
             console.warn('Gemini provider does not support minP parameter, ignoring');
         }
-
-        return modelOptions;
     }
 
     private warnUnsupportedSampling(modelName: string, field: 'temperature' | 'topP' | 'topK', value: number | undefined): void {
@@ -690,7 +748,7 @@ export class GeminiLLM extends BaseLLM {
         this.resetStreamingState();
         this.throwIfCancelled(params.cancellationToken);
         this._streamingCancellationToken = params.cancellationToken ?? null;
-        const modelName = params.model || "gemini-pro";
+        const modelName = GeminiLLM.resolveModelName(params);
 
         // Filter out system messages and extract system instruction content
         const noSystemMessages = params.messages.filter(m => m.role !== 'system');
@@ -728,6 +786,7 @@ export class GeminiLLM extends BaseLLM {
 
         // Sampling + response-format options, shaped for the model's version (see buildGenerationOptions)
         const modelOptions = this.buildGenerationOptions(params, modelName);
+        this.warnUnsupportedParameters(params, modelName);
 
         // Ensure Gemini client is initialized
         const client = await this.ensureGeminiClient();
@@ -798,19 +857,11 @@ export class GeminiLLM extends BaseLLM {
             finishReason = chunk.candidates[0].finishReason;
         }
 
-        // Extract usage from chunk if available (appears on final chunk). Normalize to the uniform
-        // ModelUsage contract: promptTokenCount INCLUDES cached, so subtract cachedContentTokenCount
-        // (clamped at 0) to get UNCACHED/net-new promptTokens; cacheReadTokens holds the disjoint
-        // cache-read subset.
+        // Extract usage from chunk if available (appears on final chunk), normalized as the
+        // non-streaming path does — see UsageFromMetadata.
         let usage = null;
         if (chunk.usageMetadata) {
-            const chunkCachedTokens = chunk.usageMetadata.cachedContentTokenCount ?? 0;
-            const chunkNetPromptTokens = Math.max(0, (chunk.usageMetadata.promptTokenCount || 0) - chunkCachedTokens);
-            usage = new ModelUsage(
-                chunkNetPromptTokens,
-                chunk.usageMetadata.candidatesTokenCount || 0
-            );
-            usage.cacheReadTokens = chunkCachedTokens;
+            usage = GeminiLLM.UsageFromMetadata(chunk.usageMetadata);
 
             // Usage only appears on the final chunk — log the cache diagnostic once here.
             this.logCacheDiagnostics('streaming', this._cacheDiagContext, chunk.usageMetadata);
@@ -967,6 +1018,31 @@ export class GeminiLLM extends BaseLLM {
     }
     
     /**
+     * Normalizes Gemini's `usageMetadata` to the uniform {@link ModelUsage} contract, for the streaming and
+     * non-streaming paths alike.
+     *
+     * - Input: `promptTokenCount` INCLUDES cached tokens, reported separately as `cachedContentTokenCount`.
+     *   `promptTokens` must be UNCACHED/net-new only, so the cache-read count is subtracted (clamped at 0)
+     *   and recorded disjointly in `cacheReadTokens`. Gemini reports no separate cache-write charge, so
+     *   `cacheWriteTokens` stays 0.
+     * - Output: `candidatesTokenCount` EXCLUDES thinking, which a thinking model (Gemini 2.5+) reports as
+     *   `thoughtsTokenCount` and bills at the output rate. `completionTokens` is their sum — the same meaning
+     *   OpenAI's `completion_tokens` (reasoning included) and Anthropic's `output_tokens` (thinking included)
+     *   carry — so the run's completion count and the cost priced from it include the thinking. The split
+     *   stays on the raw response in `modelSpecificResponseDetails`.
+     *
+     * @param usageMetadata The usage Gemini returned; absent when the response carried none.
+     */
+    protected static UsageFromMetadata(usageMetadata: GenerateContentResponseUsageMetadata | undefined): ModelUsage {
+        const cachedTokens = usageMetadata?.cachedContentTokenCount || 0;
+        const netPromptTokens = Math.max(0, (usageMetadata?.promptTokenCount || 0) - cachedTokens);
+        const completionTokens = (usageMetadata?.candidatesTokenCount || 0) + (usageMetadata?.thoughtsTokenCount || 0);
+        const usage = new ModelUsage(netPromptTokens, completionTokens);
+        usage.cacheReadTokens = cachedTokens;
+        return usage;
+    }
+
+    /**
      * Create the final response from streaming results for Gemini
      */
     protected finalizeStreamingResponse(
@@ -1019,11 +1095,14 @@ export class GeminiLLM extends BaseLLM {
         if (!hasContent) {
             const now = new Date();
             const errorResult = new ChatResult(false, now, now);
-            const usageMetadata = usage || lastChunk?.usageMetadata;
+            // The vendor's own counts, from the final chunk: `usage` is already normalized to ModelUsage,
+            // which has no promptTokenCount/candidatesTokenCount to report.
+            const usageMetadata: GenerateContentResponseUsageMetadata | undefined = lastChunk?.usageMetadata;
             errorResult.statusText = 'No output received';
             errorResult.errorMessage = `No output received from model in streaming response (finishReason: ${finishReason || 'none'}, ` +
                 `promptTokens: ${usageMetadata?.promptTokenCount || 0}, ` +
-                `completionTokens: ${usageMetadata?.candidatesTokenCount || 0})`;
+                `completionTokens: ${usageMetadata?.candidatesTokenCount || 0}, ` +
+                `thoughtsTokens: ${usageMetadata?.thoughtsTokenCount || 0})`;
             errorResult.exception = new Error(errorResult.errorMessage);
             errorResult.errorInfo = ErrorAnalyzer.analyzeError(errorResult.exception, 'Gemini');
             errorResult.data = {

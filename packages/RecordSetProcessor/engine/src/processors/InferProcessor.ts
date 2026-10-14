@@ -16,10 +16,11 @@
 import { createHash } from 'node:crypto';
 import { type IMetadataProvider, LogError, LogStatus, Metadata, RunQuery, RunView } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, ResolveMappingRef, SafeJSONParse, resolveMappingRef, resolveValueMapping } from '@memberjunction/global';
-import { KnowledgeHubMetadataEngine, type MJFeaturePipelineTypeEntity, type MJRecordProcessEntity } from '@memberjunction/core-entities';
+import { KnowledgeHubMetadataEngine, type MJFeatureValueCacheEntity, type MJFeaturePipelineTypeEntity, type MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptParams, type AIPromptRunResult, type MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
+    FeaturePipelineRunPin,
     IRecordProcessor,
     RecordProcessorContext,
     RecordRef,
@@ -29,28 +30,35 @@ import {
     DataFeatureSpec,
     DataFeatureOutput,
     FeatureValueCacheService,
-    ResolveConstraint,
+    type ResolvedConstraint,
+    LookupConstraintValues,
+    ModelAnswer,
+    OutputConstraintResolver,
+    OutputValidator,
+    RenderConstraintBlock,
     BuildEntityFieldValueLookup,
     type CacheKeyResult,
     type FeatureValueOutputItem,
+    ConstraintBlockMissingError,
+    ConstraintPromptTemplate,
     IsDecisionPipelineType,
     IsLLMPipelineType,
     LLM_PIPELINE_TYPE,
-    renderConstraintBlock,
     validateMaterializationTargets,
-    validateOutputValue,
     validateSpec,
     type ViolationPolicy,
     type FeaturePipelineFieldValueLookup,
     FindOutputByName,
     FeaturePipelinePin,
     type FeaturePipelinePinData,
+    FeaturePipelineVersionService,
     type RecordFeatureValuesOutcome,
     type TypedFeatureValue,
 } from '@memberjunction/feature-pipelines';
 import { EntityDocumentCache, EntityDocumentTemplateParser } from '@memberjunction/entity-documents';
 import type { HumanValueGuard, HumanValueGuardSource, OutputMappingConfig } from '../writeBack';
 import { FeaturePipelineHumanValueGuard } from './FeaturePipelineHumanValueGuard';
+import { EscalationTargetUnresolvableError, FeaturePipelineUnresolvableError } from './FeaturePipelineErrors';
 import type { DeferredFeatureValueSource } from './WriteBackProcessor';
 import {
     BaseFeaturePipelineDriver,
@@ -79,6 +87,8 @@ interface PipelineRunState {
     Pin: FeaturePipelinePinData;
     /** SHA-256 of {@link Pin}. */
     PinHash: string;
+    /** Each output's resolved constraint, lookup rows included (see {@link InferProcessor.ResolveConstraints}). */
+    ResolvedConstraints: Map<string, ResolvedConstraint | null>;
 }
 
 /** Records that share a Dedup Cache key, computed once through the first of them. */
@@ -164,6 +174,12 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
      */
     protected PipelineVersion: number | null = null;
 
+    /** The pin hash the run resolved {@link PipelineVersion} for; a record computed under another pin is not written under it. */
+    private versionPinHash: string | null = null;
+
+    /** Dry runs only: why the real run would be refused by the version registry; each record's result warns of it. */
+    private dryRunRefusal: string | null = null;
+
     /**
      * Each record's Feature Values as they were before this processor first wrote them in the current batch, by record
      * ID, then feature name. Cleared when the next batch starts ({@link ResetBatchState}): its consumers (write-back,
@@ -176,6 +192,12 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
 
     /** The last pin resolved, and the inputs it was computed from (see {@link ResolvePin}). */
     private resolvedPin?: { Fingerprint: string; Pin: FeaturePipelinePinData };
+
+    /** Resolved constraints per output name, with lookup rows loaded; started once (a processor serves one run). */
+    private resolvedConstraints?: Promise<Map<string, ResolvedConstraint | null>>;
+
+    /** The map {@link ResolveConstraints} last produced, for the synchronous {@link ConstraintHash} getter. */
+    private lastResolvedConstraints?: Map<string, ResolvedConstraint | null>;
 
     /**
      * Whether this processor's Feature Value writes wait for the record's write-back ({@link DeferFeatureValuesToWriteBack}):
@@ -216,7 +238,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         if (!rp.PromptID) {
             throw new Error(`Record Process '${rp.Name}': WorkType=Infer requires PromptID`);
         }
-        const inputMapping = rp.InputMapping ? SafeJSONParse<Record<string, string>>(rp.InputMapping) : undefined;
+        // unparseable mapping JSON (SafeJSONParse answers null) falls back to the default mapping, as an absent one does
+        const inputMapping = (rp.InputMapping ? SafeJSONParse<Record<string, string>>(rp.InputMapping) : null) || undefined;
         const spec = InferProcessor.parseSpec(rp, provider);
         if (spec?.ProcessorExtensionKey) {
             const custom = MJGlobal.Instance.ClassFactory.CreateInstance<InferProcessor>(InferProcessor, spec.ProcessorExtensionKey, rp.PromptID, inputMapping, spec, rp.OutputMapping || null);
@@ -266,9 +289,14 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         return this.promptID;
     }
 
-    /** The hash that versions this pipeline's output constraints, as its Dedup Cache and history record it. */
+    /**
+     * The hash that versions this pipeline's output constraints, as its Dedup Cache and history record it. It includes
+     * the allowed values resolved for this processor's run (lookup rows, field value lists) once they are resolved.
+     * Read it only after the run resolved them ({@link ResolvePin}, which every record and `Preflight` go through):
+     * before that it is the hash of the declared constraints alone, which differs for a lookup pipeline.
+     */
     public get ConstraintHash(): string {
-        return this.computeConstraintHash(this.spec);
+        return this.computeConstraintHash(this.spec, this.lastResolvedConstraints);
     }
 
     /**
@@ -363,11 +391,82 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         return this.featureValueKeys.get(recordID);
     }
 
+    /**
+     * Run-level checks before the first record: an LLM pipeline whose outputs carry constraints must have a prompt
+     * template that renders them, or the model never sees the allowed values. `RecordSetProcessor` calls it once
+     * per run (through `WriteBackProcessor` when the pipeline writes back), so a refused run processes no record.
+     * Then, for a run of a Record Process that writes Feature Values, resolves the pipeline version the run writes
+     * under (the version registry's run gate: it refuses a scheduled run of a changed version, and a gated version
+     * without a passing golden-set result) and keeps it for every record's result and Feature Values. A gated
+     * processor that writes none (an escalation target) is only checked against its gate, read-only.
+     * @throws Error when the prompt or driver cannot be resolved (the same reason every record would fail with)
+     * @throws ConstraintBlockMissingError when the prompt template does not render the constraint block
+     * @throws FeaturePipelineVersionRefusedError when the run may not write under the pipeline's current version
+     */
+    public async Preflight(context: RecordProcessorContext): Promise<void> {
+        const run = await this.resolveRunState(context);
+        if ('ErrorMessage' in run) {
+            throw new Error(run.ErrorMessage);
+        }
+        const missingBlock = ConstraintPromptTemplate.DescribeMissingBlock(this.spec, run.Prompt.Name, run.Prompt.TemplateText);
+        if (missingBlock) {
+            throw new ConstraintBlockMissingError(run.Prompt.Name, missingBlock);
+        }
+        if (!context.recordProcessID) {
+            return;
+        }
+        if (this.WritesHistory) {
+            await this.ResolvePipelineVersion(context, context.recordProcessID, run.Pin, run.PinHash);
+        } else if (this.spec?.Activation) {
+            // A processor that writes no Feature Values (a Decision pipeline's escalation target: the Decision pipeline
+            // writes the answers under its own version) has no version to write under, and must not register or
+            // activate versions of its pipeline as a side effect of another pipeline's run. A gated one still may
+            // compute only under a version that passed its golden set: checked without writing anything.
+            await FeaturePipelineVersionService.Instance.AssertRunnable({
+                RecordProcessID: context.recordProcessID, Pin: run.Pin, Activation: this.spec.Activation,
+                ContextUser: context.contextUser, Provider: context.provider,
+            });
+        }
+    }
+
+    /**
+     * Asks the version registry for the version this run writes under and keeps it, with the pin hash it was resolved
+     * for. On a dry run, keeps why the real run would be refused, for each record's result.
+     * @throws FeaturePipelineVersionRefusedError when the run may not write under the pipeline's current version
+     */
+    protected async ResolvePipelineVersion(context: RecordProcessorContext, recordProcessID: string, pin: FeaturePipelinePinData, pinHash: string): Promise<void> {
+        const resolved = await FeaturePipelineVersionService.Instance.ResolveForRun({
+            RecordProcessID: recordProcessID, Pin: pin, Activation: this.spec?.Activation,
+            TriggeredBy: context.TriggeredBy, DryRun: context.DryRun, ContextUser: context.contextUser, Provider: context.provider,
+        });
+        this.PipelineVersion = resolved.Version;
+        this.versionPinHash = resolved.Version === null ? null : pinHash;
+        this.dryRunRefusal = resolved.WouldRefuse || null;
+    }
+
+    /**
+     * The pin of this processor's current run state (prompt, model, parameters, spec).
+     * @throws FeaturePipelineUnresolvableError when the prompt or driver cannot be resolved
+     */
+    public async ResolveRunPin(context: RecordProcessorContext): Promise<FeaturePipelinePinData> {
+        const run = await this.resolveRunState(context);
+        if ('ErrorMessage' in run) {
+            throw new FeaturePipelineUnresolvableError(run.ErrorMessage);
+        }
+        return run.Pin;
+    }
+
+    /** The resolved output constraints (with lookup rows) of this processor; the golden-set driver scores with them. */
+    public async GetResolvedConstraints(context: RecordProcessorContext): Promise<Map<string, ResolvedConstraint | null>> {
+        return this.ResolveConstraints(context);
+    }
+
     public async ProcessRecord(
         record: RecordRef,
         context: RecordProcessorContext,
         options?: { skipLookup?: boolean; keyInfo?: CacheKeyResult }
     ): Promise<RecordResult> {
+        const dry = context.DryRun === true;
         await this.ensureRecordsLoaded([record], context);
         const run = await this.resolveRunState(context);
         if ('ErrorMessage' in run) {
@@ -385,7 +484,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                     RecordData: this.recordToPlain(record),
                 }));
 
-            if (!options?.skipLookup) {
+            // BypassCache treats every key as a miss (an evaluation measures the model, not the cache)
+            if (!options?.skipLookup && context.BypassCache !== true) {
                 const cached = await FeatureValueCacheService.Instance.Lookup({
                     RecordProcessID: context.recordProcessID,
                     Scope: this.spec?.Caching?.Scope,
@@ -395,6 +495,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                     AIModelID: run.Pin.AIModelID,
                     ParametersHash: run.Pin.ParametersHash,
                     KeyHash: keyInfo.KeyHash,
+                    // A dry run reads the cache without counting the hit
+                    RecordHit: !dry,
                     ContextUser: context.contextUser,
                     Provider: context.provider,
                 });
@@ -408,17 +510,19 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                             // keep as string
                         }
                     }
+                    const annotations = this.RecordedAnnotations(cachedPayload);
                     return this.WithFeatureValues({
                         Status: 'Succeeded',
                         ResultPayload: cachedPayload,
                         AIPromptRunID: cached.AIPromptRunID || undefined,
                         PromptVersionHash: promptVersionHash,
                         FeatureValueCacheID: cached.ID,
+                        ...(annotations.OutputConfidence ? { Confidence: annotations.OutputConfidence } : {}),
                     }, {
                         Record: record,
                         Context: context,
                         Payload: cachedPayload,
-                        Reasoning: cached.Reasoning,
+                        ...annotations,
                         PromptID: prompt.ID,
                         ConstraintHash: constraintHash,
                         AIPromptRunID: cached.AIPromptRunID,
@@ -477,6 +581,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                     Status: 'Failed',
                     ErrorMessage: computed.ErrorMessage,
                     AIPromptRunID: computed.AIPromptRunID,
+                    ParameterFidelity: computed.ParameterFidelity,
                 },
             };
         }
@@ -499,6 +604,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         computed: FeaturePipelineComputeSuccess
     ): Promise<RecordResult> {
         const { Prompt: prompt, PromptVersionHash: promptVersionHash, ConstraintHash: constraintHash } = run;
+        const dry = context.DryRun === true;
         const aiPromptRunID = computed.AIPromptRunID;
         const rawResult = computed.RawResult;
 
@@ -511,20 +617,27 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         );
 
         if (!validationOutcome.valid) {
+            // Nothing is cached or recorded for an answer outside the constraints; the run counts it as rejected
             return {
                 Status: 'Failed',
-                ErrorMessage: validationOutcome.errorMessage ?? 'Constraint violation',
+                FailureKind: 'RejectedInvalid',
+                ErrorMessage: validationOutcome.errorMessage || 'Constraint violation',
                 AIPromptRunID: aiPromptRunID,
+                ParameterFidelity: computed.ParameterFidelity,
             };
         }
 
-        const confidence = this.confidenceOfKeptValues(computed.Confidence, validationOutcome.replacedOutputs);
+        // The payload carries the driver's own confidences, so the Dedup Cache stores them and a hit replays them
+        const payload = InferProcessor.WithDriverConfidence(
+            validationOutcome.payload,
+            this.confidenceOfKeptValues(computed.Confidence, validationOutcome.replacedOutputs)
+        );
+        const annotations = this.RecordedAnnotations(payload);
         let featureValueCacheID: string | undefined;
-        const reasoning = typeof rawResult === 'object' && rawResult !== null ? (rawResult as Record<string, unknown>).reasoning as string | undefined : undefined;
 
-        // Dedup Cache store
+        // Dedup Cache store (never on a dry run: it persists nothing)
         const warnings: string[] = [];
-        if (run.IsCacheable && keyInfo) {
+        if (run.IsCacheable && keyInfo && !dry) {
             try {
                 const stored = await FeatureValueCacheService.Instance.Store({
                     RecordProcessID: context.recordProcessID,
@@ -537,8 +650,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                     KeyHash: keyInfo.KeyHash,
                     KeyDisplay: keyInfo.KeyDisplay,
                     KeyJSON: keyInfo.KeyJSON,
-                    OutputsJSON: JSON.stringify(validationOutcome.payload),
-                    Reasoning: reasoning ?? null,
+                    OutputsJSON: JSON.stringify(payload),
+                    Reasoning: annotations.Reasoning || null,
                     AIPromptRunID: aiPromptRunID ?? null,
                     TtlSeconds: this.spec?.Caching?.TTLSeconds,
                     ContextUser: context.contextUser,
@@ -555,24 +668,24 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         // Feature Values (upserted on their key)
         return this.WithFeatureValues({
             Status: 'Succeeded',
-            ResultPayload: validationOutcome.payload,
+            ResultPayload: payload,
             AIPromptRunID: aiPromptRunID,
             PromptVersionHash: promptVersionHash,
             FeatureValueCacheID: featureValueCacheID,
-            ...(confidence ? { Confidence: confidence } : {}),
+            ParameterFidelity: computed.ParameterFidelity,
+            ...(annotations.OutputConfidence ? { Confidence: annotations.OutputConfidence } : {}),
             ...(warnings.length > 0 ? { Warnings: warnings } : {}),
         }, {
             Record: record,
             Context: context,
-            Payload: validationOutcome.payload,
-            Reasoning: reasoning,
+            Payload: payload,
+            ...annotations,
             PromptID: prompt.ID,
             ConstraintHash: constraintHash,
             AIPromptRunID: aiPromptRunID,
             FeatureValueCacheID: featureValueCacheID,
             InputHash: keyInfo?.KeyHash || null,
             Pin: run.Pin,
-            ...(confidence ? { OutputConfidence: confidence } : {}),
         });
     }
 
@@ -582,6 +695,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
      * and fans results back across all matching rows.
      */
     public async ProcessBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>> {
+        const dry = context.DryRun === true;
         this.ResetBatchState();
         await this.ensureRecordsLoaded(records, context);
         const results = new Map<string, RecordResult>();
@@ -618,20 +732,24 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             group.records.push(record);
         }
 
-        // Phase 2: Batch lookup existing cache entries for all distinct keys
+        // Phase 2: Batch lookup existing cache entries for all distinct keys. BypassCache treats every key as a miss
+        // (an evaluation measures the model, not the cache); a dry run reads the cache without counting the hits.
         const distinctKeyHashes = Array.from(keyGroupMap.keys());
-        const cacheMap = await FeatureValueCacheService.Instance.BatchLookup({
-            RecordProcessID: context.recordProcessID,
-            Scope: this.spec.Caching.Scope,
-            PromptID: prompt.ID,
-            PromptVersionHash: promptVersionHash,
-            ConstraintHash: constraintHash,
-            AIModelID: run.Pin.AIModelID,
-            ParametersHash: run.Pin.ParametersHash,
-            KeyHashes: distinctKeyHashes,
-            ContextUser: context.contextUser,
-            Provider: context.provider,
-        });
+        const cacheMap = context.BypassCache === true
+            ? new Map<string, MJFeatureValueCacheEntity>()
+            : await FeatureValueCacheService.Instance.BatchLookup({
+                RecordProcessID: context.recordProcessID,
+                Scope: this.spec.Caching.Scope,
+                PromptID: prompt.ID,
+                PromptVersionHash: promptVersionHash,
+                ConstraintHash: constraintHash,
+                AIModelID: run.Pin.AIModelID,
+                ParametersHash: run.Pin.ParametersHash,
+                KeyHashes: distinctKeyHashes,
+                RecordHit: !dry,
+                ContextUser: context.contextUser,
+                Provider: context.provider,
+            });
 
         // Phase 3: Fan out hits; execute misses ONCE per distinct key and fan out
         const escalatingMisses: CacheKeyGroup[] = [];
@@ -647,6 +765,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                         // keep as string
                     }
                 }
+                const annotations = this.RecordedAnnotations(cachedPayload);
                 for (const rec of group.records) {
                     results.set(rec.RecordID, await this.WithFeatureValues({
                         Status: 'Succeeded',
@@ -654,11 +773,12 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                         AIPromptRunID: cached.AIPromptRunID || undefined,
                         PromptVersionHash: promptVersionHash,
                         FeatureValueCacheID: cached.ID,
+                        ...(annotations.OutputConfidence ? { Confidence: annotations.OutputConfidence } : {}),
                     }, {
                         Record: rec,
                         Context: context,
                         Payload: cachedPayload,
-                        Reasoning: cached.Reasoning,
+                        ...annotations,
                         PromptID: prompt.ID,
                         ConstraintHash: constraintHash,
                         AIPromptRunID: cached.AIPromptRunID,
@@ -710,15 +830,25 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         if ('ErrorMessage' in resolution) {
             return { ErrorMessage: resolution.ErrorMessage };
         }
-        const pin = await this.ResolvePin(prompt as MJAIPromptEntityExtended);
+        const pin = await this.ResolvePin(prompt as MJAIPromptEntityExtended, context);
+        const pinHash = await FeaturePipelinePin.ComputeHash(pin);
+        if (this.versionPinHash && pinHash !== this.versionPinHash) {
+            // The prompt, model, parameters, spec or escalation target changed after the run resolved its version: a
+            // value computed now would carry a version that did not compute it.
+            return {
+                ErrorMessage: `The Feature Pipeline's prompt, model, parameters or spec changed during the run, after it resolved version v${this.PipelineVersion}. This record was not computed; run the pipeline again to compute it under the new version.`,
+            };
+        }
+        const resolved = await this.ResolveConstraints(context);
         return {
             Prompt: prompt,
             Driver: resolution.Driver,
             IsCacheable: this.spec?.Caching?.Cacheable === true,
             PromptVersionHash: pin.PromptVersionHash,
-            ConstraintHash: this.computeConstraintHash(this.spec),
+            ConstraintHash: this.computeConstraintHash(this.spec, resolved),
             Pin: pin,
-            PinHash: await FeaturePipelinePin.ComputeHash(pin),
+            PinHash: pinHash,
+            ResolvedConstraints: resolved,
         };
     }
 
@@ -741,8 +871,13 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
      * when an input changed: the result is kept with a fingerprint of everything the hashes read (the prompt's text and
      * parameters, the primary model and its settings), so an edited prompt, template or model takes effect on the next
      * record while an unchanged pin costs no hashing. The spec and OutputMapping are fixed for the processor's life.
+     * A Decision pipeline that escalates also fingerprints its escalation target's pin, which its spec hash covers
+     * ({@link ResolveEscalationTargetPinHash}).
+     * The prompt version hash covers the rendered constraint block, so it includes the run's resolved constraints
+     * (lookup rows), which are loaded once per processor through `context`.
      */
-    public async ResolvePin(prompt: MJAIPromptEntityExtended): Promise<FeaturePipelinePinData> {
+    public async ResolvePin(prompt: MJAIPromptEntityExtended, context: RecordProcessorContext): Promise<FeaturePipelinePinData> {
+        const resolved = await this.ResolveConstraints(context);
         const models = (AIEngine.Instance.PromptModels ?? []).filter((pm) => UUIDsEqual(pm.PromptID, prompt.ID));
         const primary = FeaturePipelinePin.SelectPrimaryModel(models);
         // `??` keeps a configured 0 (temperature, seed, effort) distinct from an unset value
@@ -752,21 +887,73 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             Seed: prompt.Seed ?? null, ResponseFormat: prompt.ResponseFormat,
             EffortLevel: primary?.EffortLevel ?? prompt.EffortLevel ?? null, ModelParameters: primary?.ModelParameters || null,
         };
+        const escalationTargetPinHash = await this.ResolveEscalationTargetPinHash(context);
         const fingerprint = Canonicalize({
-            PromptID: prompt.ID, PromptText: this.promptVersionHashBasis(prompt, this.spec), Parameters: parameters, AIModelID: primary?.ModelID || null,
+            PromptID: prompt.ID, PromptText: this.promptVersionHashBasis(prompt, this.spec, resolved), Parameters: parameters, AIModelID: primary?.ModelID || null,
+            EscalationTargetPinHash: escalationTargetPinHash,
         });
         if (this.resolvedPin?.Fingerprint === fingerprint) {
             return this.resolvedPin.Pin;
         }
         const pin: FeaturePipelinePinData = {
             PromptID: prompt.ID,
-            PromptVersionHash: this.computePromptVersionHash(prompt, this.spec),
+            PromptVersionHash: this.computePromptVersionHash(prompt, this.spec, resolved),
             AIModelID: primary?.ModelID || null,
             ParametersHash: await FeaturePipelinePin.ComputeParametersHash(parameters),
-            SpecHash: this.spec ? await FeaturePipelinePin.ComputeSpecHash(this.spec, this.outputMappingText) : 'no-spec',
+            SpecHash: this.spec ? await FeaturePipelinePin.ComputeSpecHash(this.spec, this.outputMappingText, escalationTargetPinHash) : 'no-spec',
         };
         this.resolvedPin = { Fingerprint: fingerprint, Pin: pin };
         return pin;
+    }
+
+    /**
+     * The pin hash of this Decision pipeline's escalation target, which its spec hash covers; null when the pipeline
+     * does not escalate, the context names no entity, or the target cannot be used as configured
+     * ({@link EscalationTargetUnresolvableError}). Such a target is not an error here: the Decision pipeline's own
+     * answers still compute, and every record that escalates fails with the target's reason (the escalation resolves it
+     * again, from the same memoised build, and reports it). A failure to load the target is rethrown: hashing without
+     * the target on a transient error would make a spurious new version.
+     * @throws Error when the target's row or what its pin needs cannot be loaded
+     */
+    protected async ResolveEscalationTargetPinHash(context: RecordProcessorContext): Promise<string | null> {
+        const escalator = this.escalator;
+        if (!escalator || !context.entityID) {
+            return null;
+        }
+        let targetPin: FeaturePipelinePinData;
+        try {
+            targetPin = await escalator.ResolveTargetPin(context, context.entityID);
+        } catch (e) {
+            if (e instanceof EscalationTargetUnresolvableError) {
+                return null;
+            }
+            throw e;
+        }
+        return FeaturePipelinePin.ComputeHash(targetPin);
+    }
+
+    /**
+     * The pipeline's resolved output constraints, lookup rows included; loaded once per processor (a processor serves
+     * one run). A failed load is kept too: every later record of the run fails with the same error rather than
+     * re-reading the lookup per record. The context must name the run's entity (`entityID`), since a field target's
+     * constraint resolves against it.
+     */
+    protected async ResolveConstraints(context: RecordProcessorContext): Promise<Map<string, ResolvedConstraint | null>> {
+        this.resolvedConstraints ||= this.LoadResolvedConstraints(context);
+        this.lastResolvedConstraints = await this.resolvedConstraints;
+        return this.lastResolvedConstraints;
+    }
+
+    /**
+     * Resolves every output's constraint and loads lookup rows through the run's provider, the one way the builder's
+     * preview resolves them too ({@link OutputConstraintResolver.Resolve}). The entity's metadata is read only when an
+     * output has a constraint and a field target: no other output resolves against a field.
+     */
+    protected async LoadResolvedConstraints(context: RecordProcessorContext): Promise<Map<string, ResolvedConstraint | null>> {
+        const outputs = this.spec?.Outputs || [];
+        const needsField = outputs.some((o) => o.Constraint && o.Target.Mode === 'field');
+        const entity = needsField && context.entityID ? context.provider.EntityByID(context.entityID) : undefined;
+        return OutputConstraintResolver.Resolve(outputs, entity, (resolved) => LookupConstraintValues.Load(resolved, context.provider, context.contextUser));
     }
 
     /**
@@ -810,7 +997,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             FeatureValueCacheID: result.FeatureValueCacheID,
             InputHash: keyInfo?.KeyHash || null,
             Pin: run.Pin,
-            ...(result.Confidence ? { OutputConfidence: result.Confidence } : {}),
+            // The same reasoning and confidences the sample recorded, from the same payload a later hit replays
+            ...this.RecordedAnnotations(result.ResultPayload),
         };
     }
 
@@ -966,20 +1154,20 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             return { Result: { Status: 'Failed', ErrorMessage: message, AIPromptRunID: decisionRunID } };
         }
         if ('ErrorMessage' in outcome) {
-            return { Result: { Status: 'Failed', ErrorMessage: outcome.ErrorMessage, AIPromptRunID: outcome.AIPromptRunID ?? decisionRunID } };
+            return { Result: { Status: 'Failed', ErrorMessage: outcome.ErrorMessage, AIPromptRunID: outcome.AIPromptRunID || decisionRunID, ParameterFidelity: outcome.ParameterFidelity } };
         }
         const checked = await this.validateOutputs(this.spec?.Outputs ?? [], this.projectEscalatedPayload(outcome), record, context);
         if (!checked.valid) {
             const reason = `its answer is outside this Decision pipeline's own constraints: ${checked.errorMessage ?? 'Constraint violation'}`;
             const message = DescribeEscalationFailure(outcome.EscalationReason, outcome.PipelineName, reason);
-            return { Result: { Status: 'Failed', ErrorMessage: message, AIPromptRunID: outcome.AIPromptRunID ?? decisionRunID } };
+            return { Result: { Status: 'Failed', FailureKind: 'RejectedInvalid', ErrorMessage: message, AIPromptRunID: outcome.AIPromptRunID || decisionRunID, ParameterFidelity: outcome.ParameterFidelity } };
         }
         const payload = checked.payload;
         try {
             await this.recordSupersededDecision(sample, decision, outcome, context, run);
         } catch (e) {
             const message = this.FeatureValueWriteFailure(e, record);
-            return { Result: { Status: 'Failed', ErrorMessage: message, AIPromptRunID: outcome.AIPromptRunID || decisionRunID } };
+            return { Result: { Status: 'Failed', ErrorMessage: message, AIPromptRunID: outcome.AIPromptRunID || decisionRunID, ParameterFidelity: outcome.ParameterFidelity } };
         }
         // The answer is keyed under the target's pin and its input hash: the target computed it
         const featureValues: GroupFeatureValues = {
@@ -1000,6 +1188,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             AIPromptRunID: outcome.AIPromptRunID,
             PromptVersionHash: outcome.PromptVersionHash,
             FeatureValueCacheID: outcome.FeatureValueCacheID,
+            ParameterFidelity: outcome.ParameterFidelity,
         }, { ...featureValues, Record: record });
         return { Result: result, FeatureValues: result.Status === 'Succeeded' ? featureValues : undefined };
     }
@@ -1020,6 +1209,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         if (!decision.AIPromptRunID) {
             return;
         }
+        // On a dry run UpsertFeatureValues writes nothing, so this row is not written either
         await this.UpsertFeatureValues({
             Record: sample.Sample,
             Context: context,
@@ -1068,15 +1258,18 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
      * keep, so changing it (or the target) invalidates the answers cached under the old settings. A
      * pipeline without `Escalation` keeps its hash.
      */
-    protected computePromptVersionHash(prompt: MJAIPromptEntityExtended, spec?: DataFeatureSpec): string {
-        return createHash('sha256').update(this.promptVersionHashBasis(prompt, spec)).digest('hex');
+    protected computePromptVersionHash(prompt: MJAIPromptEntityExtended, spec?: DataFeatureSpec, resolved?: Map<string, ResolvedConstraint | null>): string {
+        return createHash('sha256').update(this.promptVersionHashBasis(prompt, spec, resolved)).digest('hex');
     }
 
-    /** The text {@link computePromptVersionHash} hashes: the prompt's text, outputs, constraint block and suffixes. */
-    private promptVersionHashBasis(prompt: MJAIPromptEntityExtended, spec?: DataFeatureSpec): string {
+    /**
+     * The text {@link computePromptVersionHash} hashes: the prompt's text, outputs, constraint block (rendered with the
+     * run's resolved constraints, so a changed lookup taxonomy is a new prompt version) and suffixes.
+     */
+    private promptVersionHashBasis(prompt: MJAIPromptEntityExtended, spec?: DataFeatureSpec, resolved?: Map<string, ResolvedConstraint | null>): string {
         const promptText = prompt.TemplateText ?? prompt.Description ?? prompt.Name ?? '';
         const outputsStr = spec?.Outputs ? JSON.stringify(spec.Outputs) : '';
-        const constraintBlock = spec?.Outputs ? renderConstraintBlock(spec.Outputs) : '';
+        const constraintBlock = spec?.Outputs ? RenderConstraintBlock(spec.Outputs, resolved) : '';
         return `${prompt.ID}::${promptText}::${outputsStr}::${constraintBlock}${this.pipelineTypeHashSuffix(spec)}${this.escalationHashSuffix(spec)}`;
     }
 
@@ -1099,22 +1292,29 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         return `::Escalation=${Canonicalize(settings)}`;
     }
 
-    /** Computes a deterministic SHA-256 hash representing the output constraints. */
-    protected computeConstraintHash(spec?: DataFeatureSpec): string {
+    /**
+     * Computes a deterministic SHA-256 hash representing the output constraints and, when `resolved` is given, the
+     * allowed values each output resolved from outside its spec (see {@link ResolvedAllowedValuesOf}), so an answer
+     * cached under another taxonomy is never served. An output whose allowed values are all in its spec adds nothing,
+     * so a pipeline whose constraints did not change keeps its hash and its Dedup Cache.
+     */
+    protected computeConstraintHash(spec?: DataFeatureSpec, resolved?: Map<string, ResolvedConstraint | null>): string {
         if (!spec?.Outputs || spec.Outputs.length === 0) {
             return 'no-constraints';
         }
-        const constraints = spec.Outputs.map((o) => ({
-            name: o.Name,
-            constraint: o.Constraint,
-        }));
+        const constraints = spec.Outputs.map((o) => {
+            const allowed = InferProcessor.ResolvedAllowedValuesOf(o, resolved?.get(o.Name));
+            return allowed ? { name: o.Name, constraint: o.Constraint, allowed } : { name: o.Name, constraint: o.Constraint };
+        });
         const canonical = Canonicalize(constraints);
         return createHash('sha256').update(canonical).digest('hex');
     }
 
     /**
      * Writes one record's Feature Values and returns its result: Failed (with the reason) when the write failed, else
-     * the result with `Outcome` (Unchanged when every value already existed as it is) and `PipelineVersion`. The
+     * the result with `Outcome` (Unchanged when every value already existed as it is), `PipelineVersion` and the
+     * `PipelinePin` the values were written under (the run result reports it). On a dry
+     * run nothing is written: the result has `DryRun: true` and no `Outcome`. The
      * record's Feature Value key ({@link FeatureValueKeyOf}) is kept only once the write succeeded.
      */
     protected async WithFeatureValues(result: RecordResult, featureValues: FeatureValueWriteParams): Promise<RecordResult> {
@@ -1125,11 +1325,30 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             return { ...result, Status: 'Failed', ErrorMessage: this.FeatureValueWriteFailure(e, featureValues.Record) };
         }
         this.featureValueKeys.set(featureValues.Record.RecordID, { Pin: featureValues.Pin, InputHash: featureValues.InputHash });
+        const pinned: RecordResult = { ...result, PipelineVersion: this.PipelineVersion, PipelinePin: this.RunPinOf(featureValues.Pin) };
+        if (featureValues.Context.DryRun === true) {
+            // Nothing was written, so the result claims no Outcome; it says it is a dry run instead
+            const warnings = this.dryRunRefusal ? [...(result.Warnings || []), `A real run would be refused: ${this.dryRunRefusal}`] : result.Warnings;
+            return { ...pinned, DryRun: true, ...(warnings ? { Warnings: warnings } : {}) };
+        }
         if (this.deferFeatureValues) {
-            return { ...result, PipelineVersion: this.PipelineVersion }; // the write-back sets Outcome once it wrote them
+            return pinned; // the write-back sets Outcome once it wrote them
         }
         const unchanged = outcome !== null && outcome.Upserted === 0 && outcome.Unchanged > 0;
-        return { ...result, Outcome: unchanged ? 'Unchanged' : 'Upserted', PipelineVersion: this.PipelineVersion };
+        return { ...pinned, Outcome: unchanged ? 'Unchanged' : 'Upserted' };
+    }
+
+    /** The run-result pin of a Feature Value pin: this processor's pipeline version plus the pin's three key hashes. */
+    protected RunPinOf(pin: FeaturePipelinePinData): FeaturePipelineRunPin {
+        return { PipelineVersion: this.PipelineVersion, PromptVersionHash: pin.PromptVersionHash, AIModelID: pin.AIModelID, ParametersHash: pin.ParametersHash };
+    }
+
+    /**
+     * The pin this run computes under, once {@link ResolvePin} resolved one (`Preflight` and every record go through
+     * it), else null. The run result falls back to it when no record carried a pin (every record was skipped).
+     */
+    public CurrentRunPin(): FeaturePipelineRunPin | null {
+        return this.resolvedPin ? this.RunPinOf(this.resolvedPin.Pin) : null;
     }
 
     /**
@@ -1151,11 +1370,15 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
      * (see {@link PreviousFeatureValues}).
      * When the processor defers to its write-back ({@link DeferFeatureValuesToWriteBack}) the write is queued for the
      * record's write-back unit instead, and null is returned.
-     * @returns What the upsert did; null when nothing is written now ({@link WritesHistory} off, no outputs, no
-     * pipeline or entity in the context, or the write is deferred).
+     * A dry run neither writes nor queues anything, so a write-back unit has nothing to save for it either.
+     * @returns What the upsert did; null when nothing is written now (a dry run, {@link WritesHistory} off, no outputs,
+     * no pipeline or entity in the context, or the write is deferred).
      * @throws Error when a value cannot be written (the caller decides what fails).
      */
     protected async UpsertFeatureValues(params: FeatureValueWriteParams): Promise<RecordFeatureValuesOutcome | null> {
+        if (params.Context.DryRun === true) {
+            return null;
+        }
         if (!this.WritesHistory || !this.spec?.Outputs || this.spec.Outputs.length === 0 || !params.Context.recordProcessID || !params.Context.entityID) {
             return null;
         }
@@ -1210,6 +1433,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             ParametersHash: params.Pin.ParametersHash,
             InputHash: params.InputHash,
             Source: 'Pipeline',
+            // a superseded decision's row (no values) is history: it never takes the latest value back from the answer
+            HistoryOnly: params.OmitValues === true,
             ContextUser: params.Context.contextUser,
             Provider: params.Context.provider,
         });
@@ -1240,7 +1465,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         await this.ensureRecordsLoaded([record], context);
         await AIEngine.Instance.Config(false, context.contextUser);
         const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, this.promptID));
-        const pin = prompt ? await this.ResolvePin(prompt as MJAIPromptEntityExtended) : null;
+        const pin = prompt ? await this.ResolvePin(prompt as MJAIPromptEntityExtended, context) : null;
         const promptData = await this.buildPromptData(record, context);
         return ComputeContentHashAsync({
             promptData,
@@ -1405,13 +1630,13 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         ctx: RecordProcessorContext
     ): Promise<{ valid: boolean; payload?: unknown; errorMessage?: string; replacedOutputs?: string[] }> {
         if (!outputs || !Array.isArray(outputs) || outputs.length === 0) {
-            return { valid: true, payload: rawResult };
+            return { valid: true, payload: InferProcessor.WithoutReservedKeys(rawResult) };
         }
 
-        let payloadCopy: unknown =
-            typeof rawResult === 'object' && rawResult !== null
-                ? structuredClone(rawResult)
-                : rawResult;
+        // The model's own answer never sets the reserved keys: only this check and the driver write them
+        let payloadCopy: unknown = InferProcessor.WithoutReservedKeys(
+            typeof rawResult === 'object' && rawResult !== null ? structuredClone(rawResult) : rawResult
+        );
         const violations: Array<{ outputName: string; violationMessage: string; policy: ViolationPolicy }> = [];
 
         for (const output of outputs) {
@@ -1429,11 +1654,11 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                 )
                 : undefined;
 
-            // The resolved constraint carries the field's value list for an enum with FromFieldMetadata;
-            // without it the check sees only the spec's own Values
-            const validation = validateOutputValue(rawVal, output.Constraint, {
+            // The resolved constraint carries the field's value list for an enum with FromFieldMetadata and a
+            // lookup's allowed rows; an array output with an ItemRef is checked item by item
+            const validation = OutputValidator.ValidateOutputItems(rawVal, output.Constraint, {
                 targetFieldTSType: field?.TSType,
-                resolved: ResolveConstraint(output, field),
+                resolved: (await this.ResolveConstraints(ctx)).get(output.Name) || undefined,
             });
 
             if (!validation.valid) {
@@ -1485,6 +1710,122 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         return kept.length > 0 ? Object.fromEntries(kept) : undefined;
     }
 
+    /**
+     * The model's reasoning ({@link ModelAnswer.Reasoning}: a "reasoning" key in any case, empty or whitespace-only
+     * being none); undefined when capture is off.
+     * @param rawResult - the driver's raw result; `unknown` on purpose, a model's parsed JSON answer of any shape
+     */
+    public static ExtractReasoning(rawResult: unknown, capture: boolean): string | undefined {
+        return capture ? ModelAnswer.Reasoning(rawResult) : undefined;
+    }
+
+    /** Whether the pipeline records the model's reasoning (`CaptureReasoning`, on unless the spec turns it off). */
+    private get captureReasoning(): boolean {
+        return this.spec?.CaptureReasoning !== false;
+    }
+
+    /**
+     * Per-output confidences read at each output's ConfidenceRef, for values in [0, 1].
+     * @param result - a raw or validated result; `unknown` on purpose, a model's parsed JSON answer of any shape
+     */
+    private confidenceFromRefs(result: unknown): Record<string, number> | undefined {
+        const out: Record<string, number> = {};
+        for (const o of this.spec?.Outputs || []) {
+            if (!o.ConfidenceRef) {
+                continue;
+            }
+            const v = ResolveMappingRef(o.ConfidenceRef, { $: result });
+            if (typeof v === 'number' && v >= 0 && v <= 1) {
+                out[o.Name] = v;
+            }
+        }
+        return Object.keys(out).length > 0 ? out : undefined;
+    }
+
+    /**
+     * The payload key holding the driver's own per-output confidences (a Decision driver's), so the Dedup Cache stores
+     * them with the outputs and a hit replays them. Reserved, like `_violations`.
+     */
+    public static readonly DRIVER_CONFIDENCE_KEY = '_confidence';
+
+    /**
+     * The payload with the driver's confidences under {@link DRIVER_CONFIDENCE_KEY}; unchanged when there are none or
+     * the payload is not an object (then no output can carry a driver confidence on a hit either, so none is recorded).
+     * @param payload - the validated payload; `unknown` on purpose, a model's answer of any shape
+     */
+    protected static WithDriverConfidence(payload: unknown, driverConfidence: Record<string, number> | undefined): unknown {
+        if (!driverConfidence || !isPlainRecord(payload)) {
+            return payload;
+        }
+        return { ...payload, [InferProcessor.DRIVER_CONFIDENCE_KEY]: driverConfidence };
+    }
+
+    /**
+     * What a record's Feature Values carry besides their values: the model's reasoning and each output's confidence,
+     * read from the payload the Dedup Cache stores for the record's key. A miss (its sample and every other record of
+     * its key group) and every later hit of the key call this with that same payload, so a re-run of an unchanged key
+     * records exactly what the first run recorded (Unchanged). The driver's own confidence
+     * ({@link DRIVER_CONFIDENCE_KEY}) wins over the one the answer states at a ConfidenceRef; an output the constraint
+     * check replaced (the payload's `_violations`, see {@link validateOutputs}) gets none. Reasoning is none when the
+     * pipeline does not capture it.
+     * @param payload - the validated or cached payload; `unknown` on purpose, a model's answer of any shape
+     */
+    protected RecordedAnnotations(payload: unknown): Pick<FeatureValueWriteParams, 'Reasoning' | 'OutputConfidence'> {
+        const fields: Record<string, unknown> = isPlainRecord(payload) ? payload : {};
+        const violations = Array.isArray(fields._violations) ? fields._violations : [];
+        const replaced = violations.flatMap((v) => isPlainRecord(v) && typeof v.outputName === 'string' ? [v.outputName] : []);
+        const confidence = this.confidenceOfKeptValues(
+            { ...(this.confidenceFromRefs(payload) || {}), ...InferProcessor.DriverConfidenceOf(fields) },
+            replaced
+        );
+        return {
+            Reasoning: InferProcessor.ExtractReasoning(payload, this.captureReasoning) || null,
+            ...(confidence ? { OutputConfidence: confidence } : {}),
+        };
+    }
+
+    /**
+     * The allowed values an output resolved from outside its spec: a lookup's loaded rows, or an enum's values read
+     * from field metadata. Undefined when there are none or they are the spec's own enum `Values` (already hashed).
+     */
+    protected static ResolvedAllowedValuesOf(output: DataFeatureOutput, resolved: ResolvedConstraint | null | undefined): string[] | undefined {
+        const allowed = resolved?.AllowedValues;
+        if (!allowed || allowed.length === 0) {
+            return undefined;
+        }
+        const c = output.Constraint;
+        const external = c?.Type === 'lookup' || (c?.Type === 'enum' && c.FromFieldMetadata === true);
+        return external ? allowed : undefined;
+    }
+
+    /** The driver confidences a payload stores under {@link DRIVER_CONFIDENCE_KEY} (numbers in [0, 1] only). */
+    protected static DriverConfidenceOf(fields: Record<string, unknown>): Record<string, number> {
+        const stored = fields[InferProcessor.DRIVER_CONFIDENCE_KEY];
+        if (!isPlainRecord(stored)) {
+            return {};
+        }
+        return Object.fromEntries(Object.entries(stored).flatMap(([name, v]) => (typeof v === 'number' && v >= 0 && v <= 1 ? [[name, v]] : [])));
+    }
+
+    /**
+     * The payload keys this processor reserves: `_violations` (the outputs the constraint check replaced, see
+     * {@link validateOutputs}) and {@link DRIVER_CONFIDENCE_KEY}. Both ride in the Dedup Cache's stored payload and in
+     * the result payload, so a write-back that maps the whole payload (`$`) carries them too.
+     */
+    public static readonly RESERVED_PAYLOAD_KEYS: readonly string[] = ['_violations', InferProcessor.DRIVER_CONFIDENCE_KEY];
+
+    /**
+     * A model's answer without the reserved keys ({@link RESERVED_PAYLOAD_KEYS}), so an answer cannot claim a driver
+     * confidence or a replaced output. A non-object answer is returned as it is.
+     * @param answer - the model's parsed answer; `unknown` on purpose, JSON of any shape
+     */
+    protected static WithoutReservedKeys(answer: unknown): unknown {
+        if (!isPlainRecord(answer)) {
+            return answer;
+        }
+        return Object.fromEntries(Object.entries(answer).filter(([key]) => !InferProcessor.RESERVED_PAYLOAD_KEYS.includes(key)));
+    }
+
     /** Lifecycle hook to resolve a dedup cache key for this record. Default returns null (computed by cache service). */
     protected async resolveCacheKey(record: RecordRef, spec: DataFeatureSpec | undefined, ctx: RecordProcessorContext): Promise<string | null> {
         return null;
@@ -1501,6 +1842,19 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     // -------------------------------------------------------------------------------------------------
     // Context Construction & Helpers
     // -------------------------------------------------------------------------------------------------
+
+    /**
+     * Creates the parser that renders the spec's context Entity Document for a record. The rendered text goes to the
+     * model as plain text, so the parser renders without HTML escaping (`Affineur & Owner`, not `Affineur &amp; Owner`).
+     * @param provider the run's provider, which resolves the document's entities; the parser's default when omitted
+     */
+    protected CreateContextDocumentParser(provider?: IMetadataProvider): EntityDocumentTemplateParser {
+        const parser = EntityDocumentTemplateParser.CreateInstance();
+        if (provider) {
+            parser.ProviderOverride = provider;
+        }
+        return parser;
+    }
 
     /**
      * Builds the data object passed to the prompt.
@@ -1540,10 +1894,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                     this.spec.Context.EntityDocumentID
                 );
                 if (doc) {
-                    const parser = EntityDocumentTemplateParser.CreateInstance();
-                    if (ctx.provider) {
-                        parser.ProviderOverride = ctx.provider;
-                    }
+                    const parser = this.CreateContextDocumentParser(ctx.provider);
                     const templateText = await parser.resolveDocumentTemplateText(doc, ctx.contextUser);
                     if (templateText && templateText.trim().length > 0) {
                         const rendered = await parser.Parse(templateText, record.EntityID, recordData, ctx.contextUser);
@@ -1586,7 +1937,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
 
         // Layer 1: Inject constraint block if feature spec declares outputs
         if (this.spec?.Outputs && this.spec.Outputs.length > 0) {
-            const constraintBlock = renderConstraintBlock(this.spec.Outputs);
+            const constraintBlock = RenderConstraintBlock(this.spec.Outputs, ctx ? await this.ResolveConstraints(ctx) : undefined);
             if (constraintBlock && constraintBlock.trim().length > 0) {
                 promptData.constraints = constraintBlock;
                 promptData.ConstraintBlock = constraintBlock;

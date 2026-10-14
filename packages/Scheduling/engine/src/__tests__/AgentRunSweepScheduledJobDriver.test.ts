@@ -113,6 +113,12 @@ describe('AgentRunSweepScheduledJobDriver', () => {
             expect(n.Subject).toContain('2 orphaned');
             expect(n.Priority).toBe('Normal');
         });
+        it('treats a RunsFailed that is not a number as zero', () => {
+            const n = driver.FormatNotification(ctx(), { Success: true, Details: { RunsFailed: '2' } });
+            expect(n.Subject).toContain(': 0 orphaned');
+            expect(n.Priority).toBe('Low');
+            expect(n.Metadata).toEqual({ RunsFailed: 0 });
+        });
         it('uses Low priority when nothing was swept', () => {
             const n = driver.FormatNotification(ctx(), { Success: true, Details: { RunsFailed: 0 } });
             expect(n.Priority).toBe('Low');

@@ -139,6 +139,7 @@ Abstract base class for all job drivers. Provides:
 | `UserRoutineDispatcherDriver` | User Routine Dispatcher | Dispatches due user routines |
 | `AgentRunSweepScheduledJobDriver` | Agent Run Sweep | Force-fails agent runs orphaned by a dead process |
 | `ActionLogRetentionScheduledJobDriver` | Action Log Retention | Purges expired `MJ: Action Execution Logs` rows, bounded per run |
+| `FeaturePipelineVersionStewardDriver` | Feature Pipeline Version Steward | Runs the golden-set evaluation and the one backfill of each changed Feature Pipeline version (shipped Active, every 15 minutes); each decision is recorded in the run's `Details.Outcomes` |
 
 #### Action Log Retention
 
@@ -213,12 +214,13 @@ module.exports = {
         systemUserEmail: 'system@example.com',
         maxConcurrentJobs: 10,           // default 5
         defaultLockTimeout: 5 * 60_000,  // default 600000 (10 min)
+        pausedJobResumeInterval: 15 * 60_000, // default 3600000 (1 hour) — see "Action jobs whose class is not loaded"
     },
     // ...
 };
 ```
 
-`MJServer/services/ScheduledJobsService` reads these on startup and applies them to the engine via `MaxConcurrentJobs` and `LeaseTimeoutMs` setters.
+`MJServer/services/ScheduledJobsService` reads these on startup and applies them to the engine via the `MaxConcurrentJobs`, `LeaseTimeoutMs` and `PausedJobResumeIntervalMs` setters.
 
 ### Residual starvation window
 
@@ -280,6 +282,34 @@ When the sweep reclaims a hung job's lease:
 ### Job-list refresh
 
 The engine loads the job list ONCE at `StartPolling` time. Runtime changes to the `MJ: Scheduled Jobs` table (adds, deletions, cron edits) are NOT picked up automatically by the engine. Callers must explicitly invoke `await engine.OnJobChanged(contextUser)` after making such changes. This is pre-existing behavior — not changed by v5.39 — but worth calling out because the per-poll `Config(false)` no-op was moved out of the poll path, making the explicit `OnJobChanged` trigger the only refresh mechanism.
+
+### Action jobs whose class is not loaded
+
+An Action job whose action is class-based (Custom / Generated) needs that class registered in the server that runs it.
+When an app is installed database-only — its metadata and scheduled jobs are in the database, its server package is not
+loaded — the action would fail on every run. Instead, `ActionScheduledJobDriver` **pauses** the job: it sets
+`Status = 'Paused'`, writes `"PausedForMissingClass": "<class key>"` into the job's `Configuration`, and records one failed
+run whose message says which class is missing and how to install it. Runtime actions have no class and are never paused.
+
+The job comes back by itself — no person re-enables it:
+
+- **At server start**: `StartPolling` first sets every job marked `PausedForMissingClass` whose class this server now
+  loads back to `Active` and removes the marker (logged as `📅 Scheduled Jobs: resumed N job(s) …`).
+- **On an interval**: every server repeats that check every `PausedJobResumeIntervalMs` (MJServer
+  `scheduledJobs.pausedJobResumeInterval`, default one hour). The check runs even while dispatch polling is suspended
+  because no job is Active, and stops only on full service shutdown.
+
+**Mixed fleets.** The pause is stored in the database, but whether the class is loaded is a property of each server. In
+a fleet where some servers have the app's server package and some do not — typically during a rolling deploy — a server
+without the class that wins a run pauses the job for every server; a server with the class resumes it within one
+interval (at most `pausedJobResumeInterval` later), and a server without the class never resumes it. While both kinds of
+server remain, the job alternates between paused and active: each run a server without the class wins pauses it again
+instead of running the action, and it stays paused until the next resume check on a server with the class. Finish the deploy (every server loads the package), or shorten the interval while it is in progress;
+servers that will never load the package should not run scheduled jobs (`scheduledJobs.enabled: false`).
+
+**Pausing such a job by hand.** The marker stays in `Configuration` until a resume removes it. A person who pauses an
+auto-paused job by hand, wanting it to stay paused, must also remove `PausedForMissingClass` from its `Configuration`;
+otherwise the first server that loads the class sets it back to Active.
 
 ### Graceful shutdown
 

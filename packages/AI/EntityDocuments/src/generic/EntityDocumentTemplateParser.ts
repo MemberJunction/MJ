@@ -1,8 +1,8 @@
-import { CompositeKey, LogError, LogStatus, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
+import { CompositeKey, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJEntityDocumentEntity, MJTemplateContentEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { EntityDocumentTemplateParserBase } from './EntityDocumentTemplateParserBase';
+import { EntityDocumentIncompleteError, EntityDocumentTemplateParserBase } from './EntityDocumentTemplateParserBase';
 import { EntityDocumentCache } from '../models/EntityDocumentCache';
 
 interface EntityDocumentVirtualProps {
@@ -30,6 +30,8 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
    * @param maxRows - Maximum number of related rows to load
    * @param entityDocumentName - Name of the child Entity Document to render over each related row
    * @returns Concatenated rendered output for all related rows, or raw JSON data if no document specified
+   * @throws EntityDocumentIncompleteError when the parent record, its related rows or the child document's template
+   *   text cannot be read: the document would describe the record without them
    */
   protected async Relationship(
     entityID: string,
@@ -58,11 +60,14 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
     compositeKey.LoadFromEntityInfoAndRecord(entityInfo, entityRecord);
     const loadResult = await obj.InnerLoad(compositeKey);
     if (!loadResult) {
-      LogError(`Failed to load entity ${entityInfo.Name} with ID ${compositeKey.ToString()}`);
-      return '';
+      throw new EntityDocumentIncompleteError(`could not load ${entityInfo.Name} ${compositeKey.ToString()} to read its ${relationshipName}`);
     }
 
+    // null is a failed read; an empty Data array is a relationship with no rows
     const reData = await obj.GetRelatedEntityDataExt(re, null, maxRows);
+    if (!reData) {
+      throw new EntityDocumentIncompleteError(`could not read the ${relationshipName} of ${entityInfo.Name} ${compositeKey.ToString()}`);
+    }
 
     if (reData && reData.Data && reData.Data.length > 0) {
       if (entityDocumentName && entityDocumentName.trim().length > 0) {
@@ -149,7 +154,7 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
       }
 
       // 3. Fallback: RunView lookup for template content
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const rvResult = await rv.RunView<MJTemplateContentEntity>(
         {
           EntityName: 'MJ: Template Contents',
@@ -161,7 +166,11 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
         contextUser
       );
 
-      if (rvResult.Success && rvResult.Results.length > 0 && rvResult.Results[0].TemplateText) {
+      if (!rvResult.Success) {
+        // Unknown, not "no text": an empty child template would render every child document empty
+        throw new EntityDocumentIncompleteError(`could not read the template text of Entity Document ${doc.Name}: ${rvResult.ErrorMessage}`);
+      }
+      if (rvResult.Results.length > 0 && rvResult.Results[0].TemplateText) {
         return rvResult.Results[0].TemplateText;
       }
     }

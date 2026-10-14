@@ -85,8 +85,15 @@ export class FeaturePipelinePin {
         });
     }
 
-    /** SHA-256 of the spec parts that change what is computed or written, plus the OutputMapping text. */
-    public static async ComputeSpecHash(spec: DataFeatureSpec, outputMapping: string | null): Promise<string> {
+    /**
+     * SHA-256 of the spec parts that change what is computed or written, plus the OutputMapping text, plus, for a
+     * Decision pipeline that escalates, its escalation target's pin hash: the target computes the escalated records'
+     * answers, so a change to the target's prompt, model, parameters or spec is a new version of the Decision pipeline.
+     * (The spec hash is in neither the Dedup Cache key nor the Feature Value key, so this changes neither.)
+     * @param escalationTargetPinHash - the escalation target's {@link ComputeHash}; null for a pipeline that does not
+     * escalate, or whose target cannot be resolved (every record that would escalate then fails).
+     */
+    public static async ComputeSpecHash(spec: DataFeatureSpec, outputMapping: string | null, escalationTargetPinHash: string | null): Promise<string> {
         // `??` keeps a spec part that is present but falsy (an empty Outputs list, a 0) distinct from an absent one
         return ComputeContentHashAsync({
             Context: spec.Context ?? null,
@@ -96,6 +103,8 @@ export class FeaturePipelinePin {
             PromptID: spec.PromptID ? NormalizeUUID(spec.PromptID) : null,
             ProcessorExtensionKey: spec.ProcessorExtensionKey || null,
             OutputMapping: outputMapping || null,
+            // only when present, so the spec hash of every pipeline that does not escalate stays what it was
+            ...(escalationTargetPinHash ? { EscalationTargetPinHash: escalationTargetPinHash } : {}),
         });
     }
 

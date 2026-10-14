@@ -21,12 +21,6 @@ import {
     AssemblyAIRealtime,
 } from '@memberjunction/ai-assemblyai';
 
-// @memberjunction/ai-azure (2 classes)
-import {
-    AzureEmbedding,
-    AzureLLM,
-} from '@memberjunction/ai-azure';
-
 // @memberjunction/ai-bedrock (2 classes)
 import {
     BedrockEmbedding,
@@ -130,6 +124,12 @@ import {
     OpenAILiveRealtime,
     OpenAIRealtime,
 } from '@memberjunction/ai-openai';
+
+// @memberjunction/ai-azure (2 classes)
+import {
+    AzureEmbedding,
+    AzureLLM,
+} from '@memberjunction/ai-azure';
 
 // @memberjunction/ai-deepinfra (1 classes)
 import {
@@ -1039,8 +1039,9 @@ import {
     SQLServerExternalDataSourceDriver,
 } from '@memberjunction/external-data-source-sqlserver';
 
-// @memberjunction/feature-pipelines (1 classes)
+// @memberjunction/feature-pipelines (2 classes)
 import {
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
 } from '@memberjunction/feature-pipelines';
 
@@ -1345,13 +1346,29 @@ import {
     TeamsMessagingExtension,
 } from '@memberjunction/messaging-adapters';
 
-// @memberjunction/scheduling-engine (10 classes)
+// @memberjunction/testing-engine (5 classes)
+import {
+    AgentEvalDriver,
+    DecisionEvalDriver,
+    FeaturePipelineGoldenSetDriver,
+    PromptEvalDriver,
+    RubricCalibrationTestDriver,
+} from '@memberjunction/testing-engine';
+
+// @memberjunction/computer-use-engine (2 classes)
+import {
+    ComputerUseAction,
+    ComputerUseTestDriver,
+} from '@memberjunction/computer-use-engine';
+
+// @memberjunction/scheduling-engine (11 classes)
 import {
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
     EvaluateSampledAgentRunsDriver,
+    FeaturePipelineVersionStewardDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
@@ -1441,20 +1458,6 @@ import {
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
 } from '@memberjunction/scheduling-actions';
-
-// @memberjunction/testing-engine (4 classes)
-import {
-    AgentEvalDriver,
-    DecisionEvalDriver,
-    PromptEvalDriver,
-    RubricCalibrationTestDriver,
-} from '@memberjunction/testing-engine';
-
-// @memberjunction/computer-use-engine (2 classes)
-import {
-    ComputerUseAction,
-    ComputerUseTestDriver,
-} from '@memberjunction/computer-use-engine';
 
 // @memberjunction/testing-integration (1 classes)
 import {
@@ -1682,8 +1685,6 @@ import {
 const CLASS_REGISTRATIONS_0: any[] = [
     AnthropicLLM,
     AssemblyAIRealtime,
-    AzureEmbedding,
-    AzureLLM,
     BedrockEmbedding,
     BedrockLLM,
     BettyLLM,
@@ -1716,6 +1717,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAILLM,
     OpenAILiveRealtime,
     OpenAIRealtime,
+    AzureEmbedding,
+    AzureLLM,
     DeepInfraLLM,
     HuggingFaceRealtime,
     InceptionLLM,
@@ -2412,6 +2415,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PostgresExternalDataSourceDriver,
     SnowflakeExternalDataSourceDriver,
     SQLServerExternalDataSourceDriver,
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
     GeocodioGeocodingProvider,
     GoogleGeocodingProvider,
@@ -2491,11 +2495,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
-    AISkillExportMarkdownServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
@@ -2586,11 +2590,19 @@ const CLASS_REGISTRATIONS_4: any[] = [
     WorkflowValidateServerOperation,
     SlackMessagingExtension,
     TeamsMessagingExtension,
+    AgentEvalDriver,
+    DecisionEvalDriver,
+    FeaturePipelineGoldenSetDriver,
+    PromptEvalDriver,
+    RubricCalibrationTestDriver,
+    ComputerUseAction,
+    ComputerUseTestDriver,
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
     EvaluateSampledAgentRunsDriver,
+    FeaturePipelineVersionStewardDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
@@ -2667,12 +2679,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetScheduledJobStatisticsAction,
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
-    AgentEvalDriver,
-    DecisionEvalDriver,
-    PromptEvalDriver,
-    RubricCalibrationTestDriver,
-    ComputerUseAction,
-    ComputerUseTestDriver,
     IntegrationTestDriver,
     BraveWebSearchProvider,
     DuckDuckGoWebSearchProvider,
@@ -2693,13 +2699,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
-    CalculateExpressionAction,
-    CensusDataLookupAction,
-    CheckUserPermissionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CalculateExpressionAction,
+    CensusDataLookupAction,
+    CheckUserPermissionAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
@@ -2876,13 +2882,12 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1160;
+export const CLASS_REGISTRATIONS_COUNT = 1163;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-anthropic',
     '@memberjunction/ai-assemblyai',
-    '@memberjunction/ai-azure',
     '@memberjunction/ai-bedrock',
     '@memberjunction/ai-betty',
     '@memberjunction/ai-betty-bot',
@@ -2901,6 +2906,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-mistral',
     '@memberjunction/ai-ollama',
     '@memberjunction/ai-openai',
+    '@memberjunction/ai-azure',
     '@memberjunction/ai-deepinfra',
     '@memberjunction/ai-huggingface',
     '@memberjunction/ai-inception',
@@ -2991,12 +2997,12 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/predictive-studio',
     '@memberjunction/task-graph',
     '@memberjunction/messaging-adapters',
+    '@memberjunction/testing-engine',
+    '@memberjunction/computer-use-engine',
     '@memberjunction/scheduling-engine',
     '@memberjunction/core-entities-server',
     '@memberjunction/codegen-lib',
     '@memberjunction/scheduling-actions',
-    '@memberjunction/testing-engine',
-    '@memberjunction/computer-use-engine',
     '@memberjunction/testing-integration',
     '@memberjunction/web-search-engine',
     '@memberjunction/core-actions',

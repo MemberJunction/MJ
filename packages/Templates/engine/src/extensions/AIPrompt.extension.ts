@@ -107,58 +107,86 @@ export class AIPromptExtension extends TemplateExtensionBase {
             }
         }
 
-        // we now have the LLM prompt in the prompt variable
-        // we can't use async/await here because this is a synchronous function
-        // so instead we will use the callback pattern
-        // we will get the highest power model from the AI Engine
-        // then we will create an instance of the LLM class
-        AIEngine.Instance.Config(false, this.ContextUser).then(async () => {
-            try {
-                let model: MJAIModelEntityExtended = null;
-                if(config.AIModel) {
-                    model = AIEngine.Instance.Models.find(m => 
-                        m.Name.toLowerCase() === config.AIModel.toLowerCase() ||
-                        m.APIName?.toLowerCase() === config.AIModel.toLowerCase() 
-                    );
-                    if (!model) {
-                        throw new Error(`AI model '${config.AIModel}' not found.`);
-                    }
-                }
-                else{
-                    model = await AIEngine.Instance.GetHighestPowerModel('Groq', 'llm', this.ContextUser);
-                    if (!model) {
-                        throw new Error(`No AI model found for the vendor 'Groq' and type 'llm'.`);
-                    }
-                }
-                
-                const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass))
-                const llmResult = await llm.ChatCompletion({
-                    messages: [
-                        {
-                            role: 'system',
-                            content: `Background: The output from this will be DIRECTLY inserted into a messaging template going to a recipient. For this reason whenever
-                                                  you are prompted to provide a result, do not preface it with any text, just provide the result itself. ${config.AllowFormatting ? "" : this.AllowFormattingText }  Assume that the text you are generating will go directly into a message.
-                                      <IMPORTANT>ONLY PROVIDE THE RESPONSE REQUESTED FOR THE MESSAGE - **** DO NOT ADD ANYTHING ELSE ****</IMPORTANT>`,
-                        },
-                        {
-                            role: 'user',
-                            content: `${prompt}`,
-                        }
-                    ],
-                    model: model.APINameOrName
-                })
-                if (llmResult && llmResult.success) {
-                    let response = llmResult.data.choices[0].message.content;
-                    response = response.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+        // `run` is synchronous (a Nunjucks async-extension contract); the prompt runs in the background and answers the callback.
+        void this.runAndCallBack(prompt, config, callBack);
+    }
 
-                    callBack(null, response);
+    /**
+     * Runs the prompt and answers the render callback exactly once. A Nunjucks render waits on that callback, so every
+     * outcome must reach it: the response on success; on any failure (a thrown driver error, a failed ChatResult, a
+     * failed AI engine load) the error is logged and passed as the callback's result, as this extension has always
+     * reported errors, so the render goes on with the error text in place of the response.
+     */
+    private async runAndCallBack(prompt: string, config: AIPromptConfig, callBack: NunjucksCallback): Promise<void> {
+        let response: string;
+        try {
+            response = await this.ExecutePrompt(prompt, config);
+        } catch (e) {
+            LogError(e);
+            callBack(null, e);
+            return;
+        }
+        // Outside the try: an error thrown by the callback itself must not call it a second time.
+        callBack(null, response);
+    }
+
+    /**
+     * The model the prompt runs on: the one named by `AIModel` (matched on name or API name, case-insensitively), or
+     * the highest-power Groq LLM when none is named. Throws when no model matches.
+     */
+    protected async ResolveModel(config: AIPromptConfig): Promise<MJAIModelEntityExtended> {
+        const requested = config.AIModel;
+        if (requested) {
+            const wanted = requested.toLowerCase();
+            const model = AIEngine.Instance.Models.find(m => m.Name.toLowerCase() === wanted || m.APIName?.toLowerCase() === wanted);
+            if (!model) {
+                throw new Error(`AI model '${requested}' not found.`);
+            }
+            return model;
+        }
+        const model = await AIEngine.Instance.GetHighestPowerModel('Groq', 'llm', this.ContextUser);
+        if (!model) {
+            throw new Error(`No AI model found for the vendor 'Groq' and type 'llm'.`);
+        }
+        return model;
+    }
+
+    /**
+     * Sends the prompt to the configured model (or the highest-power Groq model) and returns its response text.
+     * Throws when the model cannot be resolved, when the driver throws, and when the driver returns a failed ChatResult
+     * ({@link AIPromptFailedError}): drivers differ in which of the last two they do.
+     */
+    protected async ExecutePrompt(prompt: string, config: AIPromptConfig): Promise<string> {
+        await AIEngine.Instance.Config(false, this.ContextUser);
+        const model = await this.ResolveModel(config);
+        const driverClass = model.DriverClass;
+        if (!driverClass) {
+            throw new Error(`AI model '${model.Name}' has no driver class.`);
+        }
+        const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, GetAIAPIKey(driverClass));
+        if (!llm) {
+            throw new Error(`No AI driver is registered as '${driverClass}' (model '${model.Name}').`);
+        }
+        const llmResult = await llm.ChatCompletion({
+            messages: [
+                {
+                    role: 'system',
+                    content: `Background: The output from this will be DIRECTLY inserted into a messaging template going to a recipient. For this reason whenever
+                                          you are prompted to provide a result, do not preface it with any text, just provide the result itself. ${config.AllowFormatting ? "" : this.AllowFormattingText }  Assume that the text you are generating will go directly into a message.
+                              <IMPORTANT>ONLY PROVIDE THE RESPONSE REQUESTED FOR THE MESSAGE - **** DO NOT ADD ANYTHING ELSE ****</IMPORTANT>`,
+                },
+                {
+                    role: 'user',
+                    content: `${prompt}`,
                 }
-            }
-            catch (e) {
-                LogError(e);
-                callBack(null, e);
-            }
-        });        
+            ],
+            model: model.APINameOrName
+        })
+        if (!llmResult || !llmResult.success) {
+            throw new AIPromptFailedError(model.Name, llmResult?.errorMessage || 'no error message');
+        }
+        const response: string = llmResult.data.choices[0].message.content;
+        return response.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
     }
 
 
@@ -181,6 +209,14 @@ export class AIPromptExtension extends TemplateExtensionBase {
         // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
         models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
         return models[0];
+    }
+}
+
+/** A model call that returned a failed ChatResult instead of throwing. */
+export class AIPromptFailedError extends Error {
+    constructor(public readonly ModelName: string, public readonly VendorMessage: string) {
+        super(`AI prompt failed on model '${ModelName}': ${VendorMessage}`);
+        this.name = 'AIPromptFailedError';
     }
 }
 

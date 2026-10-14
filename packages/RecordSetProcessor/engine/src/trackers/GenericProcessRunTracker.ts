@@ -137,6 +137,9 @@ export class GenericProcessRunTracker implements IProcessRunTracker {
         if (summary.ErrorMessage) {
             run.ErrorMessage = summary.ErrorMessage;
         }
+        if (summary.FeaturePipeline) {
+            run.ResultSummary = JSON.stringify(summary.FeaturePipeline);
+        }
         const saved = await run.Save();
         if (!saved) {
             LogError(`GenericProcessRunTracker: failed to complete run '${run.ID}': ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);

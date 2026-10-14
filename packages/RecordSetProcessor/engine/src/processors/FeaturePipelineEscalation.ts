@@ -21,7 +21,9 @@ import {
     type FeaturePipelinePinData,
     FindEscalationTargetRowProblem,
     FindEscalationTargetSpecProblem,
+    ModelAnswer,
 } from '@memberjunction/feature-pipelines';
+import { EscalationTargetUnresolvableError, FeaturePipelineUnresolvableError } from './FeaturePipelineErrors';
 
 /** What, besides the record and feature, keys a computed Feature Value: the pin it was computed under and its input hash. */
 export interface FeatureValueKeyParts {
@@ -47,6 +49,16 @@ export interface EscalationTargetProcessor {
     readonly ConstraintHash: string;
     /** Whether the target writes `MJ: Feature Values` history. Off for an escalation target: the Decision pipeline records the final answer. */
     WritesHistory: boolean;
+    /**
+     * The target's run-level checks, as when it runs on its own: an unresolvable prompt or driver, or a prompt template
+     * that does not render the output constraints, refuses the target before any record reaches its model.
+     */
+    Preflight(context: RecordProcessorContext): Promise<void>;
+    /**
+     * The target's pin (prompt, model, parameters, spec) as it stands; a Decision pipeline's version covers it.
+     * @throws Error when the target's prompt or driver cannot be resolved
+     */
+    ResolveRunPin(context: RecordProcessorContext): Promise<FeaturePipelinePinData>;
     /** The target's normal batch path: validation and violation policy apply exactly as when it runs on its own. */
     ProcessBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>>;
     /** The pin and input hash the target computed a record's answer under in its last batch; undefined when it did not succeed. */
@@ -100,6 +112,8 @@ export interface EscalatedAnswer {
     PipelineName: string;
     /** The reasoning of the history row that links the superseded decision's prompt run to the process run. */
     SupersededNote: string;
+    /** The target's model call: its configured versus sent parameters (none when its answer was cached). */
+    ParameterFidelity?: RecordResult['ParameterFidelity'];
 }
 
 /** Why an escalation failed. The message carries both reasons: why the record escalated, and why that failed. */
@@ -108,6 +122,8 @@ export interface EscalationFailure {
     ErrorMessage: string;
     /** The target's failed `MJ: AI Prompt Runs` row, when there is one. */
     AIPromptRunID?: string;
+    /** The target's model call parameters, when it made one (a refusal among them). */
+    ParameterFidelity?: RecordResult['ParameterFidelity'];
 }
 
 /** The outcome of escalating one record. Narrow it with `'ErrorMessage' in outcome`. */
@@ -118,6 +134,8 @@ interface ResolvedEscalationTarget {
     Processor: EscalationTargetProcessor;
     ID: string;
     Name: string;
+    /** `Escalation pipeline '<name>' (<id>)`, for messages. */
+    Label: string;
 }
 
 /**
@@ -125,7 +143,10 @@ interface ResolvedEscalationTarget {
  * processor instance, which is one run, so the target is loaded and checked once per run.
  */
 export class FeaturePipelineEscalator {
-    /** The target resolution, started on first use and shared by every record that escalates. */
+    /** The target's row loaded and checked and its processor built, started on first use; shared by the pin and the escalations. */
+    private targetBuild?: Promise<ResolvedEscalationTarget>;
+
+    /** The target resolution (built, then its run-level checks), started on first use and shared by every record that escalates. */
     private targetResolution?: Promise<ResolvedEscalationTarget>;
 
     /**
@@ -164,6 +185,27 @@ export class FeaturePipelineEscalator {
             }
         }
         return below;
+    }
+
+    /**
+     * The escalation target's pin as it stands, for the Decision pipeline's version: the target computes the escalated
+     * records' answers, so a change to its prompt, model, parameters or spec is a new version of the Decision pipeline.
+     * It needs the target built, not its run-level checks: a target that cannot run still has a pin, and its records
+     * fail when they escalate.
+     * @throws EscalationTargetUnresolvableError when the target cannot be used as configured (the reason every
+     * escalating record fails with)
+     * @throws Error when the target's row or what its pin needs cannot be loaded
+     */
+    public async ResolveTargetPin(context: RecordProcessorContext, entityID: string): Promise<FeaturePipelinePinData> {
+        const target = await this.buildTargetOnce(context, entityID);
+        try {
+            return await target.Processor.ResolveRunPin(this.targetContext(context, target.ID));
+        } catch (e) {
+            if (e instanceof FeaturePipelineUnresolvableError) {
+                throw new EscalationTargetUnresolvableError(`${target.Label} cannot run: ${e.message}`, { cause: e });
+            }
+            throw e;
+        }
     }
 
     /**
@@ -212,22 +254,55 @@ export class FeaturePipelineEscalator {
         }
     }
 
-    /** Loads the target row, checks it, builds its processor and checks its spec. */
+    /** Builds the target once per instance ({@link loadAndBuildTarget}); every later call shares the result, success or failure. */
+    private async buildTargetOnce(context: RecordProcessorContext, entityID: string): Promise<ResolvedEscalationTarget> {
+        this.targetBuild ??= this.loadAndBuildTarget(context, entityID);
+        return this.targetBuild;
+    }
+
+    /** The built target, then its {@link EscalationTargetProcessor.Preflight}. */
     private async loadTarget(context: RecordProcessorContext, entityID: string): Promise<ResolvedEscalationTarget> {
+        const target = await this.buildTargetOnce(context, entityID);
+        await this.preflightTarget(target.Processor, this.targetContext(context, target.ID), target.Label);
+        return target;
+    }
+
+    /** Loads the target row, checks it, builds its processor and checks its spec. */
+    private async loadAndBuildTarget(context: RecordProcessorContext, entityID: string): Promise<ResolvedEscalationTarget> {
         const row = await this.loadTargetRow(context);
         const label = `Escalation pipeline '${row.Name}' (${row.ID})`;
         const rowProblem = FindEscalationTargetRowProblem(row, entityID);
         if (rowProblem) {
-            throw new Error(`${label} ${rowProblem}.`);
+            throw new EscalationTargetUnresolvableError(`${label} ${rowProblem}.`);
         }
         const processor = this.buildTargetProcessor(row, context, label);
         const specProblem = FindEscalationTargetSpecProblem(processor.Spec, this.decisionOutputs);
         if (specProblem) {
-            throw new Error(`${label} ${specProblem}.`);
+            throw new EscalationTargetUnresolvableError(`${label} ${specProblem}.`);
         }
-        // The Decision pipeline records each escalated record's final answer, so the target records none
+        // The Decision pipeline records each escalated record's final answer, so the target records none. Set before
+        // its Preflight: a target that writes no Feature Values registers and activates no versions of its own (a
+        // gated target is still checked against its gate, read-only).
         processor.WritesHistory = false;
-        return { Processor: processor, ID: row.ID, Name: row.Name };
+        return { Processor: processor, ID: row.ID, Name: row.Name, Label: label };
+    }
+
+    /**
+     * Runs the target's run-level checks once, before any record escalates, so a target that would call its model
+     * without the allowed values is refused here as it is when it runs on its own; the refusal names the
+     * pipeline and fails every escalating record.
+     */
+    private async preflightTarget(processor: EscalationTargetProcessor, targetContext: RecordProcessorContext, label: string): Promise<void> {
+        try {
+            await processor.Preflight(targetContext);
+        } catch (e) {
+            throw new Error(`${label} cannot run: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+        }
+    }
+
+    /** The run's context with `recordProcessID` set to the target pipeline, so the target's cache uses its own entries. */
+    private targetContext(context: RecordProcessorContext, targetID: string): RecordProcessorContext {
+        return { ...context, recordProcessID: targetID };
     }
 
     /** Loads the target's `MJ: Record Processes` row through the run's provider. */
@@ -236,7 +311,7 @@ export class FeaturePipelineEscalator {
         const row = await context.provider.GetEntityObject<MJRecordProcessEntity>('MJ: Record Processes', context.contextUser);
         const loaded = await row.Load(pipelineID);
         if (!loaded) {
-            throw new Error(`Escalation pipeline '${pipelineID}' was not found in MJ: Record Processes.`);
+            throw new EscalationTargetUnresolvableError(`Escalation pipeline '${pipelineID}' was not found in MJ: Record Processes.`);
         }
         return row;
     }
@@ -246,7 +321,7 @@ export class FeaturePipelineEscalator {
         try {
             return this.buildTarget(row, context.provider);
         } catch (e) {
-            throw new Error(`${label} could not be built: ${e instanceof Error ? e.message : String(e)}`);
+            throw new EscalationTargetUnresolvableError(`${label} could not be built: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
         }
     }
 
@@ -260,9 +335,8 @@ export class FeaturePipelineEscalator {
         requests: EscalationRequest[],
         context: RecordProcessorContext
     ): Promise<Map<string, RecordResult>> {
-        const targetContext: RecordProcessorContext = { ...context, recordProcessID: target.ID };
         try {
-            return await target.Processor.ProcessBatch(requests.map((r) => r.Record), targetContext);
+            return await target.Processor.ProcessBatch(requests.map((r) => r.Record), this.targetContext(context, target.ID));
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             return new Map(requests.map((r): [string, RecordResult] => [r.Record.RecordID, { Status: 'Failed', ErrorMessage: message }]));
@@ -279,6 +353,7 @@ export class FeaturePipelineEscalator {
                     result?.ErrorMessage ?? 'it returned no result'
                 ),
                 AIPromptRunID: result?.AIPromptRunID,
+                ParameterFidelity: result?.ParameterFidelity,
             };
         }
         const key = target.Processor.FeatureValueKeyOf(request.Record.RecordID);
@@ -292,6 +367,7 @@ export class FeaturePipelineEscalator {
                     'it returned no Feature Value key (pin and input hash) for the record'
                 ),
                 AIPromptRunID: result.AIPromptRunID,
+                ParameterFidelity: result.ParameterFidelity,
             };
         }
         return {
@@ -308,6 +384,7 @@ export class FeaturePipelineEscalator {
             EscalationReason: this.escalationReason(request.BelowFloor),
             PipelineName: target.Name,
             SupersededNote: BuildSupersededDecisionNote(target.Name, this.settings.BelowConfidence, request.BelowFloor),
+            ParameterFidelity: result.ParameterFidelity,
         };
     }
 }
@@ -326,7 +403,7 @@ export function DescribeBelowFloor(belowFloor: BelowFloorOutput[]): string {
  */
 export function BuildEscalationNote(pipelineName: string, floor: number, belowFloor: BelowFloorOutput[], targetPayload: unknown): string {
     const note = `Escalated to LLM pipeline '${pipelineName}': decision confidence below ${floor} (${DescribeBelowFloor(belowFloor)}).`;
-    const reasoning = readReasoning(targetPayload);
+    const reasoning = ModelAnswer.Reasoning(targetPayload);
     return reasoning ? `${note}\n\n${reasoning}` : note;
 }
 
@@ -350,11 +427,3 @@ export function BuildSupersededDecisionNote(pipelineName: string, floor: number,
     );
 }
 
-/** The `reasoning` a payload carries, when it is a non-empty string. */
-function readReasoning(payload: unknown): string | undefined {
-    if (typeof payload !== 'object' || payload === null || !('reasoning' in payload)) {
-        return undefined;
-    }
-    const reasoning: unknown = payload.reasoning;
-    return typeof reasoning === 'string' && reasoning.trim().length > 0 ? reasoning : undefined;
-}

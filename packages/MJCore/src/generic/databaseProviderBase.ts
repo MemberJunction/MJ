@@ -712,11 +712,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         for (let i = 0; i < keys.length; i++) {
             const change = changesObject[keys[i]];
             if (sRet.length > 0) sRet += '\n';
-            if (change.oldValue && change.newValue)
+            const hasOld = change.oldValue !== null && change.oldValue !== undefined;
+            const hasNew = change.newValue !== null && change.newValue !== undefined;
+            if (hasOld && hasNew)
                 sRet += `${change.field} changed from ${this.TrimString(change.oldValue, maxValueLength, cutOffText)} to ${this.TrimString(change.newValue, maxValueLength, cutOffText)}`;
-            else if (change.newValue)
+            else if (hasNew)
                 sRet += `${change.field} set to ${this.TrimString(change.newValue, maxValueLength, cutOffText)}`;
-            else if (change.oldValue)
+            else if (hasOld)
                 sRet += `${change.field} cleared from ${this.TrimString(change.oldValue, maxValueLength, cutOffText)}`;
         }
         return sRet.replace(/'/g, "''");

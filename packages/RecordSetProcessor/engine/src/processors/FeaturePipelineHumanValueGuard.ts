@@ -68,7 +68,8 @@ export class FeaturePipelineHumanValueGuard implements HumanValueGuard {
      */
     public async RecordPreserved(fieldName: string, currentValue: unknown, provider: IMetadataProvider): Promise<void> {
         const output = this.OutputFor(fieldName);
-        if (!output) {
+        // A dry run persists nothing
+        if (!output || this.Options.Context.DryRun === true) {
             return;
         }
         await FeatureValueCacheService.Instance.RecordHumanValue({
@@ -76,10 +77,11 @@ export class FeaturePipelineHumanValueGuard implements HumanValueGuard {
         });
     }
 
-    /** Retires the record's Human Feature Value for the output that writes the field; false when there was none. */
+    /** Retires the record's Human Feature Value for the output that writes the field; false when there was none or on a dry run. */
     public async RetireHumanValue(fieldName: string, provider: IMetadataProvider): Promise<boolean> {
         const output = this.OutputFor(fieldName);
-        if (!output) {
+        // A dry run persists nothing
+        if (!output || this.Options.Context.DryRun === true) {
             return false;
         }
         return (await FeatureValueCacheService.Instance.RetireHumanValue(this.RefOf(output, provider))) > 0;

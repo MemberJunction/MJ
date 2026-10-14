@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MJDashboardEntityExtended } from '../custom/MJDashboardEntityExtended';
 
 /**
  * Ownership gate on `MJ: Dashboards`.
@@ -117,7 +118,6 @@ type Harness = {
 };
 
 async function makeEntity(persistedOwner: string, currentUserID: string): Promise<Harness> {
-    const { MJDashboardEntityExtended } = await import('../custom/MJDashboardEntityExtended');
     // Constructed through a zero-arg alias. `vi.mock` replaces the module at RUNTIME, but Vitest's
     // typecheck pass is static and still resolves the real generated constructor (1-2 required
     // args). A bare `new MJDashboardEntityExtended()` therefore fails typecheck as an UNHANDLED

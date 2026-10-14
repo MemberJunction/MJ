@@ -1,24 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-    BaseEntity,
-    EntityInfo,
-    ProviderBase,
-    UserInfo,
-    type DatasetResultType,
-    type DatasetStatusResultType,
-    type EntityRecordNameResult,
-    type ILocalStorageProvider,
-    type IMetadataProvider,
-    type PotentialDuplicateResponse,
-    type ProviderType,
-    type RecordDependency,
-    type RecordMergeResult,
-    type RunQueryResult,
-    type RunViewResult,
-    type ScoredCandidate,
-    type TransactionGroupBase,
-} from '@memberjunction/core';
-import { MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
+import { MJGlobal, NormalizeUUID, RegisterClass } from '@memberjunction/global';
 import {
     KnowledgeHubMetadataEngine,
     MJAIModelTypeEntity,
@@ -46,6 +28,7 @@ import {
     type FeaturePipelineComputeRequest,
 } from '../feature-pipeline-drivers/BaseFeaturePipelineDriver';
 import { DecisionFeaturePipelineDriver } from '../feature-pipeline-drivers/DecisionFeaturePipelineDriver';
+import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
 
 // ---------------------------------------------------------------------------
 // Metadata: real EntityInfo and entity objects, holding only the fields a test sets
@@ -65,92 +48,6 @@ function entityInfo(id: string, name: string, fields: EntityFieldSeed[] = []): E
 /** A new entity object whose metadata names only the fields a test sets. */
 function newEntity<T extends BaseEntity>(ctor: new (entity: EntityInfo) => T, entityName: string, fields: string[]): T {
     return new ctor(entityInfo(`${entityName} entity`, entityName, fields.map((field) => ({ Name: field }))));
-}
-
-function notUsed(): Error {
-    return new Error('not used by these tests');
-}
-
-/** A metadata provider that knows only the entities it is given. */
-class EntitiesOnlyProvider extends ProviderBase {
-    constructor(private readonly entityList: EntityInfo[]) {
-        super();
-    }
-    public override get Entities(): EntityInfo[] {
-        return this.entityList;
-    }
-    public override EntityByID(entityID: string): EntityInfo | undefined {
-        return this.entityList.find((entity) => UUIDsEqual(entity.ID, entityID));
-    }
-    public get ProviderType(): ProviderType {
-        return 'Database';
-    }
-    public get DatabaseConnection(): null {
-        return null;
-    }
-    public get InstanceConnectionString(): string {
-        return '';
-    }
-    public get LocalStorageProvider(): ILocalStorageProvider {
-        throw notUsed();
-    }
-    protected get AllowRefresh(): boolean {
-        return false;
-    }
-    protected get Metadata(): IMetadataProvider {
-        return this;
-    }
-    protected InternalGetEntityRecordName(): Promise<string> {
-        throw notUsed();
-    }
-    protected InternalGetEntityRecordNames(): Promise<EntityRecordNameResult[]> {
-        throw notUsed();
-    }
-    public GetRecordFavoriteStatus(): Promise<boolean> {
-        throw notUsed();
-    }
-    public SetRecordFavoriteStatus(): Promise<void> {
-        throw notUsed();
-    }
-    protected InternalRunView<T>(): Promise<RunViewResult<T>> {
-        throw notUsed();
-    }
-    protected InternalRunViews<T>(): Promise<RunViewResult<T>[]> {
-        throw notUsed();
-    }
-    protected InternalRunQuery(): Promise<RunQueryResult> {
-        throw notUsed();
-    }
-    protected InternalRunQueries(): Promise<RunQueryResult[]> {
-        throw notUsed();
-    }
-    protected searchEntitiesSemanticPass(): Promise<ScoredCandidate[]> {
-        throw notUsed();
-    }
-    protected InternalExecuteQueryFromSpec(): Promise<RunQueryResult> {
-        throw notUsed();
-    }
-    protected GetCurrentUser(): Promise<UserInfo> {
-        throw notUsed();
-    }
-    public GetRecordDependencies(): Promise<RecordDependency[]> {
-        throw notUsed();
-    }
-    public GetRecordDuplicates(): Promise<PotentialDuplicateResponse> {
-        throw notUsed();
-    }
-    public MergeRecords(): Promise<RecordMergeResult> {
-        throw notUsed();
-    }
-    public GetDatasetByName(): Promise<DatasetResultType> {
-        throw notUsed();
-    }
-    public GetDatasetStatusByName(): Promise<DatasetStatusResultType> {
-        throw notUsed();
-    }
-    public CreateTransactionGroup(): Promise<TransactionGroupBase> {
-        throw notUsed();
-    }
 }
 
 const TICKETS_ENTITY_ID = '6E0C4F1A-1B2C-4D3E-8F90-A1B2C3D4E5F6';
@@ -671,7 +568,8 @@ describe('DecisionFeaturePipelineDriver', () => {
             const { result, featureValues } = await processTicket([statusOutput()], { Status: choice('Open', 0.9, { Open: 0.9, Closed: 0.1 }) });
 
             expect(result.Status).toBe('Succeeded');
-            expect(result.ResultPayload).toEqual({ Status: 'Open' });
+            // The driver's confidences ride in the payload under the reserved key, so a cache hit replays them
+            expect(result.ResultPayload).toEqual({ Status: 'Open', [InferProcessor.DRIVER_CONFIDENCE_KEY]: { Status: 0.9 } });
             expect(result.Confidence).toEqual({ Status: 0.9 });
             expect(featureValues).toEqual([[expect.objectContaining({ FeatureName: 'Status', Value: 'Open', Confidence: 0.9 })]]);
         });
@@ -706,7 +604,7 @@ describe('DecisionFeaturePipelineDriver', () => {
             const { result, featureValues } = await processTicket([nested], { IsUrgent: likelihood(0.93) });
 
             expect(result.Status).toBe('Succeeded');
-            expect(result.ResultPayload).toEqual({ IsUrgent: true, flags: { urgent: true } });
+            expect(result.ResultPayload).toEqual({ IsUrgent: true, flags: { urgent: true }, [InferProcessor.DRIVER_CONFIDENCE_KEY]: { IsUrgent: 0.93 } });
             expect(result.ResultPayload).not.toHaveProperty(['flags.urgent']);
             expect(featureValues).toEqual([[expect.objectContaining({ FeatureName: 'IsUrgent', Value: true, Confidence: 0.93 })]]);
         });

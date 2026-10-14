@@ -171,6 +171,20 @@ describe('InferProcessor.CreateHumanValueGuard', () => {
         return g;
     };
 
+    it('records nothing on a dry run', async () => {
+        const rec = vi.spyOn(FeatureValueCacheService.Instance, 'RecordHumanValue').mockResolvedValue();
+        const g = new InferProcessor('prompt-1', undefined, SPEC, null).CreateHumanValueGuard(record, { ...CTX, DryRun: true });
+        await g?.RecordPreserved('SeniorityLevelID', 'board-id', unit);
+        expect(rec).not.toHaveBeenCalled();
+    });
+
+    it('retires nothing on a dry run', async () => {
+        const retire = vi.spyOn(FeatureValueCacheService.Instance, 'RetireHumanValue').mockResolvedValue(1);
+        const g = new InferProcessor('prompt-1', undefined, SPEC, null).CreateHumanValueGuard(record, { ...CTX, DryRun: true });
+        expect(await g?.RetireHumanValue('SeniorityLevelID', unit)).toBe(false);
+        expect(retire).not.toHaveBeenCalled();
+    });
+
     it('treats a value that differs from what the pipeline last wrote as human', async () => {
         vi.spyOn(FeatureValueCacheService.Instance, 'GetLatestValue').mockImplementation(async (p: LatestFeatureValueParams) => (p.Source === 'Human' ? null : fv('Director')));
         expect(await ask(guardOf(), 'SeniorityLevelID', 'board-id')).toBe(true);
@@ -570,7 +584,11 @@ describe('Feature Values commit with the write-back', () => {
     it('a failed write-back leaves the previous Feature Value, so the next run does not call the pipeline\'s value human', async () => {
         const { store, fail, contextOf } = setup('level-x', 'level-x');
         fail.Value = true;
+        // The failed write-back logs its error; capture it rather than print it, and check it was logged
+        const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const first = await new WriteBackProcessor(new ScriptedInfer('level-y'), mapping).ProcessRecord(record, contextOf('run-1'));
+        expect(logged.mock.calls.some((c) => String(c[0]).includes('write-back failed'))).toBe(true);
+        logged.mockRestore();
         expect(first.Status).toBe('Failed');
         expect(store.FeatureValues.filter((r) => r.Value === 'level-y')).toEqual([]); // rolled back with the write-back
         const second = await new WriteBackProcessor(new ScriptedInfer('level-y'), mapping).ProcessRecord(record, contextOf('run-2'));

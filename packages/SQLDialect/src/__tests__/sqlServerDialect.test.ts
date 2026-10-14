@@ -117,6 +117,12 @@ describe('SQLServerDialect', () => {
         });
     });
 
+    describe('TryConvert', () => {
+        it('converts with TRY_CONVERT, which yields NULL instead of failing', () => {
+            expect(dialect.TryConvert('[Sent].[Value]', 'decimal(5,4)')).toBe('TRY_CONVERT(decimal(5,4), [Sent].[Value])');
+        });
+    });
+
     describe('ReturnInsertedClause', () => {
         it('should return OUTPUT INSERTED.* when no columns specified', () => {
             expect(dialect.ReturnInsertedClause()).toBe('OUTPUT INSERTED.*');

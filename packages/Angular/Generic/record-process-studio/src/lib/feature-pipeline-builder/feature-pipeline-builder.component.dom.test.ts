@@ -7,7 +7,7 @@ import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { FeaturePipelineBuilderComponent, ParseConfidenceFloor, type EscalationTargetCandidate } from './feature-pipeline-builder.component';
-import type { DataFeatureSpec } from '@memberjunction/feature-pipelines';
+import { LookupConstraintValues, OutputConstraintResolver, RenderConstraintBlock, type DataFeatureOutput, type DataFeatureSpec } from '@memberjunction/feature-pipelines';
 
 try {
   getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -665,9 +665,14 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
 
     it('reports a failed load as a failure to check the target, a warning, not as "target not found"', async () => {
       const validity: boolean[] = [];
+      // Every load fails on purpose: capture the logged failures rather than print them, and check the target's was logged
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const f = renderWith(decisionWithTarget(), providerWithRunView(async () => runViewResult([], 'Timeout expired')), validity);
 
       await f.componentInstance.LoadEscalationTargets();
+      await f.whenStable();
+      expect(logged.mock.calls.some((c) => String(c[0]).includes('Failed to load Escalation Targets'))).toBe(true);
+      logged.mockRestore();
 
       expect(f.componentInstance.EscalationTargetsLoaded).toBe(false);
       expect(f.componentInstance.EscalationTargetsLoadError).toBe('Timeout expired');
@@ -680,6 +685,8 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     });
 
     it('treats a load that throws the same way', async () => {
+      // Every load throws on purpose: capture the logged errors rather than print them, and check the target's was logged
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const f = renderWith(
         decisionWithTarget(),
         providerWithRunView(async () => {
@@ -688,6 +695,9 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       );
 
       await f.componentInstance.LoadEscalationTargets();
+      await f.whenStable();
+      expect(logged.mock.calls.some((c) => String(c[0]).includes('Error loading Escalation Targets'))).toBe(true);
+      logged.mockRestore();
 
       expect(f.componentInstance.EscalationTargetsLoadError).toBe('network down');
       expect(targetIssues(f).map((e) => e.Severity)).toEqual(['warning']);
@@ -1177,3 +1187,105 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     });
   });
 });
+
+describe('the constraint block preview', () => {
+  const SENIORITY_LEVELS = new EntityInfo({ ID: 'e2', Name: 'Seniority Levels', Fields: [{ Name: 'Name', Type: 'nvarchar' }] });
+  const ROWS = [{ Name: 'Manager' }, { Name: 'Director' }];
+  const OUTPUTS: DataFeatureOutput[] = [
+    { Name: 'Tier', Ref: '$.Tier', Target: { Mode: 'field', EntityFieldName: 'Rating' }, Constraint: { Type: 'enum', FromFieldMetadata: true, OnViolation: 'fail' } },
+    {
+      Name: 'Level', Ref: '$.Level', Target: { Mode: 'child', EntityName: 'Levels', ParentField: 'AccountID', Map: { Name: '$.Name' } },
+      Constraint: { Type: 'lookup', Entity: 'Seniority Levels', MatchField: 'Name', OnViolation: 'fail' },
+    },
+  ];
+
+  /** A provider that knows the lookup entity and answers its view with ROWS, recording every view it runs. */
+  function previewProvider(views: RunViewParams[]) {
+    const entities = [...ENTITIES, SENIORITY_LEVELS];
+    return Object.assign(
+      createFakeProvider({
+        entities,
+        entityByName: (name: string) => entities.find((e) => e.Name === name),
+        runViewResults: (params: RunViewParams) => {
+          views.push(params);
+          return params.EntityName === 'Seniority Levels' ? ROWS : [];
+        },
+      }),
+      { EntityByID: (id: string) => ENTITIES.find((e) => UUIDsEqual(e.ID, id)) }
+    );
+  }
+
+  it('shows field values at once, then the lookup rows, exactly as the runner renders them, reading each lookup once', async () => {
+    const views: RunViewParams[] = [];
+    const rec = makeRecord({ PipelineType: 'LLM', Outputs: OUTPUTS });
+    const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider(views), EntityID: rec.EntityID } });
+    const builder = f.componentInstance;
+    expect(builder.RenderedConstraintPreview).toContain('"Hot"');
+
+    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toContain('"Director"'));
+    const rows = LookupConstraintValues.InStableOrder(ROWS.map((r) => ({ Match: r.Name, Display: null })));
+    const runnerBlock = RenderConstraintBlock(OUTPUTS, await OutputConstraintResolver.Resolve(OUTPUTS, ENTITIES[0], async () => rows));
+    expect(builder.RenderedConstraintPreview).toBe(runnerBlock);
+
+    builder.OnFieldsCsvChange(eventWithValue('Name', 'input'));
+    builder.OnFieldsCsvChange(eventWithValue('Name, Rating', 'input'));
+    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toBe(runnerBlock));
+    expect(views.filter((v) => v.EntityName === 'Seniority Levels')).toHaveLength(1);
+  });
+
+  it('keeps a later edit\'s preview when an earlier lookup load finishes after it', async () => {
+    const rec = makeRecord({ PipelineType: 'LLM', Outputs: OUTPUTS });
+    const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider([]), EntityID: rec.EntityID } });
+    const builder = f.componentInstance;
+    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toContain('"Director"'));
+    await f.whenStable();
+    // One edit renders and starts its lookup step; before that step settles, a second edit drops the lookup
+    builder.OnFieldsCsvChange(eventWithValue('Name', 'input'));
+    builder.UpdateConstraintType(1, eventWithValue('freetext'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(builder.RenderedConstraintPreview).not.toContain('"Director"');
+    expect(builder.RenderedConstraintPreview).toContain('Free-form text');
+  });
+
+  it('reads a lookup again on the next edit after its load failed, instead of keeping the empty result', async () => {
+    const views: RunViewParams[] = [];
+    const load = vi.spyOn(LookupConstraintValues, 'Load').mockRejectedValueOnce(new Error('lookup entity not reachable'));
+    const rec = makeRecord({ PipelineType: 'LLM', Outputs: OUTPUTS });
+    const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider(views), EntityID: rec.EntityID } });
+    const builder = f.componentInstance;
+    await vi.waitFor(() => expect(load).toHaveBeenCalled());
+    await f.whenStable();
+    // the first read failed; the next edit reads again, so the preview gains the rows
+    builder.OnFieldsCsvChange(eventWithValue('Name', 'input'));
+    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toContain('"Director"'));
+    expect(load.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(views.filter((v) => v.EntityName === 'Seniority Levels')).toHaveLength(1);
+    load.mockRestore();
+  });
+
+  it('reads a lookup again through a new provider instead of reusing the old provider\'s rows', async () => {
+    const firstViews: RunViewParams[] = [];
+    const secondViews: RunViewParams[] = [];
+    const rec = makeRecord({ PipelineType: 'LLM', Outputs: OUTPUTS });
+    const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider(firstViews), EntityID: rec.EntityID } });
+    const builder = f.componentInstance;
+    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toContain('"Director"'));
+
+    f.componentRef.setInput('Provider', previewProvider(secondViews));
+    builder.OnFieldsCsvChange(eventWithValue('Name', 'input'));
+    await vi.waitFor(() => expect(secondViews.filter((v) => v.EntityName === 'Seniority Levels')).toHaveLength(1));
+    expect(firstViews.filter((v) => v.EntityName === 'Seniority Levels')).toHaveLength(1);
+  });
+
+  it('queries nothing for a lookup whose entity is not a known entity (a name still being typed)', async () => {
+    const views: RunViewParams[] = [];
+    const typing: DataFeatureOutput = { ...OUTPUTS[1], Constraint: { Type: 'lookup', Entity: 'Seniority Lev', MatchField: 'Name', OnViolation: 'fail' } };
+    const rec = makeRecord({ PipelineType: 'LLM', Outputs: [typing] });
+    const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider(views), EntityID: rec.EntityID } });
+    await f.whenStable();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(views.filter((v) => v.EntityName === 'Seniority Lev')).toEqual([]);
+    expect(f.componentInstance.RenderedConstraintPreview).toContain('Must match an existing Seniority Lev by Name');
+  });
+});
+

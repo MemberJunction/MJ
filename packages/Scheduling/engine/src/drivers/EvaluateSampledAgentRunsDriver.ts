@@ -40,7 +40,9 @@ export class EvaluateSampledAgentRunsDriver extends BaseScheduledJob {
     }
 
     public FormatNotification(context: ScheduledJobExecutionContext, result: ScheduledJobResult): NotificationContent {
-        const evaluated = (result.Details?.['Evaluated'] as number) ?? 0;
+        // Details is free-form per job type; read the count only when it is a number.
+        const evaluatedValue = result.Details?.['Evaluated'];
+        const evaluated = typeof evaluatedValue === 'number' ? evaluatedValue : 0;
         if (!result.Success) {
             return {
                 Subject: `Evaluate Sampled Agent Runs failed: ${context.Schedule.Name}`,

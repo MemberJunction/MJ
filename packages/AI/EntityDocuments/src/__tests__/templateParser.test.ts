@@ -1,11 +1,26 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { EntityInfo, UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { TemplateEngineServer } from '@memberjunction/templates';
 import { EntityDocumentTemplateParserBase } from '../generic/EntityDocumentTemplateParserBase';
 import { EntityDocumentTemplateParser } from '../generic/EntityDocumentTemplateParser';
 import { EntityDocumentCache } from '../models/EntityDocumentCache';
-import type { MJEntityDocumentEntity } from '@memberjunction/core-entities';
+import { MJEntityDocumentEntity } from '@memberjunction/core-entities';
 
 const ENTITY_ID = '11111111-1111-1111-1111-111111111111';
+
+/** A real Entity Document row holding only an ID and a Name. */
+function entityDocument(id: string, name: string): MJEntityDocumentEntity {
+  const info = new EntityInfo({
+    ID: 'entity-entity-documents', Name: 'MJ: Entity Documents',
+    Fields: ['ID', 'Name'].map((field, index) => ({
+      ID: `entity-documents-${field}`, EntityID: 'entity-entity-documents', Entity: 'MJ: Entity Documents', Sequence: index + 1,
+      Name: field, Type: field === 'ID' ? 'uniqueidentifier' : 'nvarchar', IsPrimaryKey: field === 'ID',
+    })),
+  });
+  const doc = new MJEntityDocumentEntity(info);
+  doc.Hydrate({ ID: id, Name: name });
+  return doc;
+}
 const CHILD_ENTITY_ID = '22222222-2222-2222-2222-222222222222';
 
 class TestParser extends EntityDocumentTemplateParserBase {
@@ -30,7 +45,7 @@ describe('EntityDocumentTemplateParserBase', () => {
       'Hello ${FirstName} ${LastName}, welcome to ${City}!',
       ENTITY_ID,
       { ID: '1', FirstName: 'Alice', LastName: 'Smith', City: 'Chicago' },
-      {} as UserInfo
+      new UserInfo()
     );
     expect(result).toBe('Hello Alice Smith, welcome to Chicago!');
   });
@@ -48,7 +63,7 @@ describe('EntityDocumentTemplateParserBase', () => {
       'Report: ${Title} for Company: ${__Parent.CompanyName} (${__Parent.Industry})',
       CHILD_ENTITY_ID,
       childRecord,
-      {} as UserInfo
+      new UserInfo()
     );
     expect(result).toBe('Report: Quarterly Review for Company: Acme Corp (Tech)');
   });
@@ -63,12 +78,13 @@ describe('EntityDocumentTemplateParserBase', () => {
       'Location: ${State}, ${__Parent.Country} [${__Parent.__Parent.Region}]',
       ENTITY_ID,
       child,
-      {} as UserInfo
+      new UserInfo()
     );
     expect(result).toBe('Location: Illinois, USA [North America]');
   });
 
   it('pre-renders Nunjucks expressions and conditionals with __Parent', async () => {
+    vi.spyOn(TemplateEngineServer.Instance, 'Config').mockResolvedValue(undefined); // no metadata to load in a unit test
     const parser = new TestParser();
     const parentRecord = { ID: 'p-1', Tier: 'Gold' };
     const childRecord = {
@@ -78,8 +94,17 @@ describe('EntityDocumentTemplateParserBase', () => {
     };
 
     const template = '{% if __Parent.Tier == "Gold" %}VIP Customer: {% endif %}{{ Score }} points';
-    const result = await parser.Parse(template, ENTITY_ID, childRecord, {} as UserInfo);
+    const result = await parser.Parse(template, ENTITY_ID, childRecord, new UserInfo());
     expect(result).toBe('VIP Customer: 95 points');
+  });
+
+  it('renders Nunjucks values raw, never HTML-escaped', async () => {
+    vi.spyOn(TemplateEngineServer.Instance, 'Config').mockResolvedValue(undefined); // no metadata to load in a unit test
+    const record = { ID: 'r-1', CurrentJobTitle: 'Affineur & Owner <R&D> "Ace"' };
+
+    const text = await new TestParser().Parse('Job Title: {{ CurrentJobTitle }}', ENTITY_ID, record, new UserInfo());
+
+    expect(text).toBe('Job Title: Affineur & Owner <R&D> "Ace"');
   });
 
   it('safely handles $ in resolved values without expanding regex splices (#3171)', async () => {
@@ -92,7 +117,7 @@ describe('EntityDocumentTemplateParserBase', () => {
         'prefix ${Value} suffix',
         ENTITY_ID,
         { ID: '1', Value: val },
-        {} as UserInfo
+        new UserInfo()
       );
       expect(result).toBe(`prefix ${val} suffix`);
     }
@@ -111,7 +136,7 @@ describe('EntityDocumentTemplateParserBase', () => {
       'Value: ${foo(bar)baz}',
       ENTITY_ID,
       record,
-      {} as UserInfo
+      new UserInfo()
     );
     // Because foo(bar)baz has trailing "baz", it should not be treated as a function call,
     // but resolved as a property lookup
@@ -162,14 +187,31 @@ describe('EntityDocumentTemplateParser — Relationship & Nested Rendering (C1 f
       } as unknown as IMetadataProvider;
     }
 
-    protected override async resolveDocumentTemplateText(doc: MJEntityDocumentEntity): Promise<string> {
+    public override async resolveDocumentTemplateText(doc: MJEntityDocumentEntity): Promise<string> {
       // Return the mock document template text if set
       if (this.mockChildDocumentText) {
         return this.mockChildDocumentText;
       }
-      return super.resolveDocumentTemplateText(doc, {} as UserInfo);
+      return super.resolveDocumentTemplateText(doc, new UserInfo());
     }
   }
+
+  it('renders child documents raw', async () => {
+    const mockCache = EntityDocumentCache.Instance;
+    vi.spyOn(mockCache, 'IsLoaded', 'get').mockReturnValue(true);
+    vi.spyOn(mockCache, 'GetDocumentByName').mockReturnValue(entityDocument('doc-child-1', 'Contact Activities Doc'));
+    vi.spyOn(TemplateEngineServer.Instance, 'Config').mockResolvedValue(undefined); // no metadata to load in a unit test
+    vi.spyOn(EntityDocumentTemplateParser.prototype, 'resolveDocumentTemplateText').mockResolvedValue('Activity: {{ Subject }}');
+    const parentTemplate = '${Relationship("Activities", 5, "Contact Activities Doc")}';
+    const parentRecord = { ID: 'contact-1', FirstName: 'Sarah' };
+    const parser = new TestRelationshipParser();
+    parser.mockRelatedData = [{ ID: 'act-1', Subject: 'Q&A Call' }];
+
+    const text = await parser.Parse(parentTemplate, ENTITY_ID, parentRecord, new UserInfo());
+
+    expect(text).toContain('Activity: Q&A Call');
+    expect(text).not.toContain('&amp;');
+  });
 
   it('renders child document template text rather than template name (C1 fix) and passes __Parent', async () => {
     const parser = new TestRelationshipParser();
@@ -207,7 +249,7 @@ describe('EntityDocumentTemplateParser — Relationship & Nested Rendering (C1 f
     }).Relationship(
       ENTITY_ID,
       parentRecord,
-      {} as UserInfo,
+      new UserInfo(),
       'Activities',
       10,
       parser.mockChildDocumentName

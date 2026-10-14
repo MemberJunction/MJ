@@ -21,12 +21,6 @@ import {
     AssemblyAIRealtime,
 } from '@memberjunction/ai-assemblyai';
 
-// @memberjunction/ai-azure (2 classes)
-import {
-    AzureEmbedding,
-    AzureLLM,
-} from '@memberjunction/ai-azure';
-
 // @memberjunction/ai-bedrock (2 classes)
 import {
     BedrockEmbedding,
@@ -130,6 +124,12 @@ import {
     OpenAILiveRealtime,
     OpenAIRealtime,
 } from '@memberjunction/ai-openai';
+
+// @memberjunction/ai-azure (2 classes)
+import {
+    AzureEmbedding,
+    AzureLLM,
+} from '@memberjunction/ai-azure';
 
 // @memberjunction/ai-deepinfra (1 classes)
 import {
@@ -911,8 +911,9 @@ import {
     RotateEncryptionKeyAction,
 } from '@memberjunction/encryption';
 
-// @memberjunction/feature-pipelines (1 classes)
+// @memberjunction/feature-pipelines (2 classes)
 import {
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
 } from '@memberjunction/feature-pipelines';
 
@@ -1123,13 +1124,23 @@ import {
     WorkflowValidateServerOperation,
 } from '@memberjunction/task-graph';
 
-// @memberjunction/scheduling-engine (10 classes)
+// @memberjunction/testing-engine (5 classes)
+import {
+    AgentEvalDriver,
+    DecisionEvalDriver,
+    FeaturePipelineGoldenSetDriver,
+    PromptEvalDriver,
+    RubricCalibrationTestDriver,
+} from '@memberjunction/testing-engine';
+
+// @memberjunction/scheduling-engine (11 classes)
 import {
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
     EvaluateSampledAgentRunsDriver,
+    FeaturePipelineVersionStewardDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
@@ -1371,14 +1382,6 @@ import {
     UpdateScheduledJobAction,
 } from '@memberjunction/scheduling-actions';
 
-// @memberjunction/testing-engine (4 classes)
-import {
-    AgentEvalDriver,
-    DecisionEvalDriver,
-    PromptEvalDriver,
-    RubricCalibrationTestDriver,
-} from '@memberjunction/testing-engine';
-
 // @memberjunction/work-queue-engine (14 classes)
 import {
     DatabaseTransportDriverFactory,
@@ -1413,8 +1416,6 @@ import {
 const CLASS_REGISTRATIONS_0: any[] = [
     AnthropicLLM,
     AssemblyAIRealtime,
-    AzureEmbedding,
-    AzureLLM,
     BedrockEmbedding,
     BedrockLLM,
     BettyLLM,
@@ -1447,6 +1448,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAILLM,
     OpenAILiveRealtime,
     OpenAIRealtime,
+    AzureEmbedding,
+    AzureLLM,
     DeepInfraLLM,
     InceptionLLM,
     LlamaCppLLM,
@@ -2111,6 +2114,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     EnableFieldEncryptionAction,
     EnvVarKeySource,
     RotateEncryptionKeyAction,
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
     GeocodioGeocodingProvider,
     GoogleGeocodingProvider,
@@ -2222,11 +2226,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioScoreRecordSetServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
-    PredictiveStudioTrainModelServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
@@ -2243,11 +2247,17 @@ const CLASS_REGISTRATIONS_4: any[] = [
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
+    AgentEvalDriver,
+    DecisionEvalDriver,
+    FeaturePipelineGoldenSetDriver,
+    PromptEvalDriver,
+    RubricCalibrationTestDriver,
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
     EvaluateSampledAgentRunsDriver,
+    FeaturePipelineVersionStewardDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
@@ -2420,6 +2430,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PDFExtractorAction,
     ParallelExecuteAction,
     PasswordStrengthAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     PerplexitySearchAction,
     PostalCodeLookupAction,
     PreviewDocumentAction,
@@ -2427,10 +2441,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ReadRSSFeedAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -2479,10 +2489,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetScheduledJobStatisticsAction,
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
-    AgentEvalDriver,
-    DecisionEvalDriver,
-    PromptEvalDriver,
-    RubricCalibrationTestDriver,
     DatabaseTransportDriverFactory,
     MJWorkQueueDeduplicationEntityServer,
     MJWorkQueueDeliveryEntityServer,
@@ -2514,13 +2520,12 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1067;
+export const CLASS_REGISTRATIONS_COUNT = 1070;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-anthropic',
     '@memberjunction/ai-assemblyai',
-    '@memberjunction/ai-azure',
     '@memberjunction/ai-bedrock',
     '@memberjunction/ai-betty',
     '@memberjunction/ai-betty-bot',
@@ -2539,6 +2544,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-mistral',
     '@memberjunction/ai-ollama',
     '@memberjunction/ai-openai',
+    '@memberjunction/ai-azure',
     '@memberjunction/ai-deepinfra',
     '@memberjunction/ai-inception',
     '@memberjunction/ai-llamacpp',
@@ -2592,11 +2598,11 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/record-set-processor',
     '@memberjunction/predictive-studio',
     '@memberjunction/task-graph',
+    '@memberjunction/testing-engine',
     '@memberjunction/scheduling-engine',
     '@memberjunction/core-entities-server',
     '@memberjunction/core-actions',
     '@memberjunction/scheduling-actions',
-    '@memberjunction/testing-engine',
     '@memberjunction/work-queue-engine',
     '@memberjunction/work-queue-samples',
 ] as const;

@@ -1,4 +1,4 @@
-import { UserInfo, IMetadataProvider, LogError, RunView } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider, LogError, Metadata, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
     ApplicationSettingEngine,
@@ -108,7 +108,7 @@ export class ClassificationContextResolver {
     ): Promise<string | undefined> {
         try {
             await ApplicationSettingEngine.Instance.Config(false, contextUser, provider);
-            const appID = await this.resolveKnowledgeHubApplicationID(contextUser);
+            const appID = await this.resolveKnowledgeHubApplicationID(contextUser, provider);
             const raw = ApplicationSettingEngine.Instance.GetSetting(
                 CLASSIFY_ORG_CONTEXT_SETTING_KEY,
                 appID ?? undefined,
@@ -147,12 +147,13 @@ export class ClassificationContextResolver {
      */
     private static async resolveKnowledgeHubApplicationID(
         contextUser?: UserInfo,
+        provider?: IMetadataProvider,
     ): Promise<string | null> {
         if (this._khApplicationID !== undefined) {
             return this._khApplicationID;
         }
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(provider || Metadata.Provider);
         const result = await rv.RunView<{ ID: string }>(
             {
                 EntityName: 'MJ: Applications',
@@ -164,7 +165,11 @@ export class ClassificationContextResolver {
             contextUser,
         );
 
-        this._khApplicationID = result.Success && result.Results.length > 0 ? result.Results[0].ID : null;
+        if (!result.Success) {
+            // Unknown, not "no application": nothing is cached, so the next call reads again
+            throw new Error(`could not read the Knowledge Hub application: ${result.ErrorMessage}`);
+        }
+        this._khApplicationID = result.Results.length > 0 ? result.Results[0].ID : null;
         return this._khApplicationID;
     }
 

@@ -11,7 +11,11 @@ export interface RecordProcessRunNowInput {
     recordProcessID: string;
     /** When set, processes just this single record instead of the configured scope. */
     singleRecordID?: string;
-    /** Compute the per-record changes WITHOUT writing (FieldRules work type) — powers the preview. */
+    /**
+     * Compute the per-record changes WITHOUT writing, for every work type: Infer, FieldRules and every write-back
+     * persist nothing, while an Action or Agent still runs and only its write-back is previewed. An Infer dry run over
+     * the stored scope previews the first 25 records. Powers the preview.
+     */
     dryRun?: boolean;
     /** Runtime scope override (selected rows / a view / list / filter), used instead of the stored Scope. */
     scope?: RecordProcessScopeOverride;

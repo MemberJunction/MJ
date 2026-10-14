@@ -1,6 +1,6 @@
 import {
     AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult,
-    SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, getTextFromContent,
+    SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, getTextFromContent, type VendorCallParameters,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { HttpPost, HttpRequestConfig, IsHttpError, IsCancellationError } from '@memberjunction/network-utils';
@@ -81,6 +81,14 @@ export class BettyLLM extends BaseLLM {
     constructor(apiKey: string, endUserId?: string) {
         super(apiKey);
         this.endUserId = endUserId;
+    }
+
+    /**
+     * Betty's chat request carries no temperature, output cap or seed, so the description says none of them is sent; a strict call that configures one is refused rather
+     * than recorded as sent.
+     */
+    public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
+        return { VendorModelName: params.model, Temperature: null, MaxTokens: null, Seed: null };
     }
 
     /**

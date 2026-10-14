@@ -48,7 +48,7 @@ import { BedrockLLM } from '@memberjunction/ai-bedrock';
 const llm = new BedrockLLM('aws-credentials-json');
 
 const result = await llm.ChatCompletion({
-    model: 'anthropic.claude-v2',
+    model: 'us.anthropic.claude-opus-4-6-v1',
     messages: [
         { role: 'user', content: 'Explain machine learning.' }
     ]
@@ -68,6 +68,19 @@ const result = await embeddings.EmbedText({
 });
 ```
 
+### Model IDs and inference profiles
+
+`model` is sent to Bedrock exactly as given. It can be a foundation-model ID (`anthropic.claude-...`) or a
+cross-region inference-profile ID, which puts a geography in front of it (`us.`, `eu.`, `apac.`, `global.`, ...).
+Claude 4.x and later on Bedrock are served **only** through inference profiles: their bare foundation-model IDs are
+refused with "on-demand throughput isn't supported". The driver reads the model family (Anthropic, AI21, Amazon
+Titan, Meta) past the geography segment to choose the request body. `BedrockLLM.ResolveModelFamily(id)` exposes that
+rule. Other families (OpenAI, Mistral, xAI, Amazon Nova on Bedrock) are refused before anything is sent, and so are
+ARNs (`arn:aws:bedrock:...` application inference profiles and prompt routers), which carry no family to read.
+
+MJ's AI Model Vendor rows for Claude on Bedrock use the `us.` profiles. `BedrockLLM` is created with only the
+credential, so it always runs in `us-east-1`, and `us.` is the one geography that serves every listed Claude model.
+
 ## Configuration
 
 AWS credentials are passed as a JSON string containing:
@@ -84,7 +97,9 @@ AWS credentials are passed as a JSON string containing:
 | Feature | Supported | Notes |
 |---------|-----------|-------|
 | stopSequences | Yes | Supported for Anthropic Claude, AI21, and Amazon Titan models |
-| assistantPrefill | Yes (Claude only) | Pre-seed the assistant's response for `anthropic.*` model IDs ([guide](../../Prompts/PREFILL_AND_STOP_SEQUENCES.md)) |
+| system messages | Yes | Claude: sent in the top-level `system` field (Claude's `messages` take only user and assistant turns). Other families: a `System:` line in the prompt text |
+| topP | Yes | Claude: sent only when configured. Claude 4.x rejects `temperature` and `top_p` together, so with a configured topP the 0.7 default temperature is not sent (a configured temperature still is, and the call's parameter fidelity reports the omission). Other families: configured value or 0.9, beside the 0.7 default temperature |
+| assistantPrefill | Yes (Claude only) | Pre-seed the assistant's response for Claude model and inference-profile IDs ([guide](../../Prompts/PREFILL_AND_STOP_SEQUENCES.md)) |
 | streaming | Yes | Real-time streaming via `InvokeModelWithResponseStream` |
 
 ## Class Registration

@@ -487,14 +487,15 @@ export class DuplicateRecordDetector extends VectorBase {
      * @param entityName the entity the new record belongs to
      * @param values the entered values by field name; fields the entity does not have are ignored
      * @param contextUser the person entering the record. Required: the candidates are narrowed to the
-     *   records this user can read, and without a user the check fails rather than skip that step.
+     *   records this user can read, and without a user (null, e.g. an unauthenticated caller) the check fails rather
+     *   than skip that step.
      * @param options overrides for TopK and the potential-match threshold, the budget and cancellation
      * @returns the flagged candidates, most probable first, or why there are none
      */
     public async CheckRecordValues(
         entityName: string,
         values: Record<string, unknown>,
-        contextUser: UserInfo,
+        contextUser: UserInfo | null,
         options?: DuplicateEntryCheckOptions
     ): Promise<DuplicateEntryCheckResult> {
         const startTime = Date.now();
@@ -1328,7 +1329,8 @@ export class DuplicateRecordDetector extends VectorBase {
      * different document than the stored one and genuine duplicates fall below the threshold. So
      * the template is rendered exactly as sync renders it: from the row RunView returns for the
      * record ({@link LoadTemplateRows}), with every `Entity` param's related rows (a person's
-     * Phones, Emails...), through the same {@link EntityDocumentTemplateDataBuilder} sync uses.
+     * Phones, Emails...), built by the same {@link EntityDocumentTemplateDataBuilder} sync uses and
+     * rendered by the same {@link EntityDocumentTemplateDataBuilder.RenderDocumentText}.
      *
      * @throws when a related param's rows can't be loaded: a query rendered without them can't
      * match the stored text, and would quietly miss the duplicates the run exists to find
@@ -1365,12 +1367,8 @@ export class DuplicateRecordDetector extends VectorBase {
         const templateTexts: string[] = [];
         for (const [index, record] of records.entries()) {
             const data = dataBuilder.BuildTemplateData(entityInfo, rows[index], template, relatedData);
-
-            // Skip validation and suppress its warnings, as sync does: records commonly have null
-            // fields, and the templates handle them with {% if %} conditionals.
-            const result = await TemplateEngineServer.Instance.RenderTemplate(
-                template, templateContent, data, true, true
-            );
+            // The render sync stores with, so the query text is the stored text.
+            const result = await EntityDocumentTemplateDataBuilder.RenderDocumentText(template, templateContent, data);
 
             if (result.Success) {
                 templateTexts.push(result.Output);

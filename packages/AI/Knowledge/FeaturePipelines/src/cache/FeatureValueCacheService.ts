@@ -48,6 +48,8 @@ export interface FeatureValueCacheScope {
 /** Cache lookup parameters. */
 export interface CacheLookupParams extends FeatureValueCacheScope {
     KeyHash: string;
+    /** Whether a hit increments the entry's HitCount and LastHitAt (default true). */
+    RecordHit?: boolean;
 }
 
 /** Batch cache lookup parameters. */
@@ -103,6 +105,12 @@ export interface RecordFeatureValuesParams {
     InputHash: string | null;
     /** Who produced the values. */
     Source: FeatureValueSource;
+    /**
+     * The rows are history, never the feature's current value: a decision an escalation superseded (written with no
+     * values, before the escalated answer's row). An unchanged history row is left untouched even when another key holds
+     * the latest value, so an unchanged re-run of an escalated record saves nothing (default false).
+     */
+    HistoryOnly?: boolean;
     ContextUser: UserInfo;
     /** The provider the reads and writes run on — the caller's, never the process-wide default. */
     Provider: IMetadataProvider;
@@ -179,6 +187,13 @@ type FeatureValueWriteAttempt = { Result: FeatureValueWriteResult } | { Message:
 /** The columns {@link FeatureValueCacheService.LoadLatestPipelineValues} and {@link FeatureValueCacheService.GetLatestValue} read. */
 type LatestFeatureValueRow = TypedFeatureValue & Pick<MJFeatureValueEntity, 'FeatureName'>;
 
+/** A feature's latest Pipeline value of a record, and the key of the row that holds it. */
+export interface LatestPipelineValue {
+    Value: TypedFeatureValue;
+    /** The holding row's Feature Value key; null on a row written before keys existed. */
+    ValueKeyHash: MJFeatureValueEntity['ValueKeyHash'];
+}
+
 /**
  * Service managing the dedup cache (MJ: Feature Value Caches) and the keyed Feature Value upserts (MJ: Feature Values,
  * one row per Feature Value key; a row's earlier values are in Record Changes).
@@ -231,7 +246,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
 
     /**
      * Looks up an existing cache entry. Returns null on miss or when expired.
-     * Increments HitCount and updates LastHitAt on a hit.
+     * Increments HitCount and updates LastHitAt on a hit, unless `RecordHit` is false (a dry run reads without counting).
      */
     public async Lookup(params: CacheLookupParams): Promise<MJFeatureValueCacheEntity | null> {
         const batchMap = await this.BatchLookup({
@@ -352,7 +367,11 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
     /**
      * Upserts one Feature Value per output on its key (record, feature, pipeline version, prompt version hash, primary
      * model, parameters hash, input hash, source). A key that already holds the same value, reasoning and confidence is
-     * left untouched; a changed one is updated in place; a new one is inserted. The outputs are distinct keys, so they
+     * left untouched while it is the feature's latest Pipeline value; when another key holds the latest one (a version
+     * that becomes Active again re-derives a record a newer version wrote last), its `ComputedAt` and run links are
+     * refreshed so it is the latest again (counted Unchanged: the value did not change); a history row
+     * (`HistoryOnly`, a superseded decision) is never refreshed. A changed one is updated in
+     * place; a new one is inserted. The outputs are distinct keys, so they
      * are written in parallel. An insert that loses a race on the key's unique index (another run inserted it first)
      * reloads the row and applies the same rule to it, once.
      * @returns How many outputs were upserted or unchanged, and each feature's latest pipeline value before the call.
@@ -370,11 +389,17 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         })));
         const previous = await this.LoadLatestPipelineValues(params);
         const existing = await this.LoadByKeyHashes(params, keyed.map((k) => k.keyHash));
-        const results = await Promise.all(keyed.map(({ out, keyHash }) => this.UpsertOne(params, out, keyHash, existing.get(keyHash))));
+        const results = await Promise.all(keyed.map(({ out, keyHash }) => {
+            const latest = previous.get(out.FeatureName.toLowerCase());
+            // another key holds the latest value: an unchanged row on this key must become the latest again, unless the
+            // row is history (a superseded decision), which is never meant to be the latest
+            const supersededByAnotherKey = params.HistoryOnly !== true && !!latest && latest.ValueKeyHash !== keyHash;
+            return this.UpsertOne(params, out, keyHash, existing.get(keyHash), supersededByAnotherKey);
+        }));
 
         const outcome: RecordFeatureValuesOutcome = { Upserted: 0, Unchanged: 0, Previous: {} };
         keyed.forEach(({ out }, i) => {
-            outcome.Previous[out.FeatureName] = previous.get(out.FeatureName.toLowerCase()) || null;
+            outcome.Previous[out.FeatureName] = previous.get(out.FeatureName.toLowerCase())?.Value || null;
             outcome[results[i]]++;
         });
         return outcome;
@@ -390,16 +415,17 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         params: RecordFeatureValuesParams,
         out: FeatureValueOutputItem,
         keyHash: string,
-        row: MJFeatureValueEntity | undefined
+        row: MJFeatureValueEntity | undefined,
+        supersededByAnotherKey: boolean
     ): Promise<FeatureValueWriteResult> {
-        const attempt = await this.WriteOne(params, out, keyHash, row);
+        const attempt = await this.WriteOne(params, out, keyHash, row, supersededByAnotherKey);
         if ('Result' in attempt) {
             return attempt.Result;
         }
         if (!row) {
             const raced = (await this.LoadByKeyHashes(params, [keyHash])).get(keyHash);
             if (raced) {
-                const retry = await this.WriteOne(params, out, keyHash, raced);
+                const retry = await this.WriteOne(params, out, keyHash, raced, supersededByAnotherKey);
                 if ('Result' in retry) {
                     return retry.Result;
                 }
@@ -411,16 +437,19 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
 
     /**
      * One write of an output onto `row` (or a new row when absent); returns the provider's message instead of throwing
-     * when the save fails, so {@link UpsertOne} can check for a race.
+     * when the save fails, so {@link UpsertOne} can check for a race. An unchanged row is saved only when another key
+     * holds the feature's latest value (`supersededByAnotherKey`), to make it the latest again.
      */
     protected async WriteOne(
         params: RecordFeatureValuesParams,
         out: FeatureValueOutputItem,
         keyHash: string,
-        row: MJFeatureValueEntity | undefined
+        row: MJFeatureValueEntity | undefined,
+        supersededByAnotherKey: boolean
     ): Promise<FeatureValueWriteAttempt> {
         const typed = FeatureValueCacheService.ToTypedValue(out.Value);
-        if (row && this.IsUnchanged(row, typed, out)) {
+        const unchanged = !!row && this.IsUnchanged(row, typed, out);
+        if (unchanged && !supersededByAnotherKey) {
             return { Result: 'Unchanged' };
         }
         const fv = row || (await params.Provider.GetEntityObject<MJFeatureValueEntity>('MJ: Feature Values', params.ContextUser));
@@ -430,7 +459,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         }
         this.AssignValueColumns(fv, params, out, typed);
         if (await fv.Save()) {
-            return { Result: 'Upserted' };
+            return { Result: unchanged ? 'Unchanged' : 'Upserted' };
         }
         return { Message: fv.LatestResult?.CompleteMessage || 'unknown error' };
     }
@@ -483,22 +512,23 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
     }
 
     /**
-     * Each output feature's latest `Source='Pipeline'` value for the record, on any key, by lower-cased feature name.
-     * One batched round trip with one view per feature, each reading only its newest row and only the value columns.
+     * Each output feature's latest `Source='Pipeline'` value for the record, on any key, by lower-cased feature name,
+     * with the key of the row holding it. One batched round trip with one view per feature, each reading only its
+     * newest row and only the value and key columns.
      */
-    protected async LoadLatestPipelineValues(params: RecordFeatureValuesParams): Promise<Map<string, TypedFeatureValue>> {
-        const latest = new Map<string, TypedFeatureValue>();
+    protected async LoadLatestPipelineValues(params: RecordFeatureValuesParams): Promise<Map<string, LatestPipelineValue>> {
+        const latest = new Map<string, LatestPipelineValue>();
         const names = [...new Set(params.Outputs.map((o) => o.FeatureName))];
         if (names.length === 0) {
             return latest;
         }
         const recordFilter = `RecordProcessID = '${EscapeSQLString(params.RecordProcessID)}' AND EntityID = '${EscapeSQLString(params.EntityID)}'`
             + ` AND RecordID = '${EscapeSQLString(params.RecordID)}' AND Source = 'Pipeline'`;
-        const results = await RunView.FromMetadataProvider(params.Provider).RunViews<LatestFeatureValueRow>(names.map((name) => ({
+        const results = await RunView.FromMetadataProvider(params.Provider).RunViews<LatestFeatureValueRow & Pick<MJFeatureValueEntity, 'ValueKeyHash'>>(names.map((name) => ({
             EntityName: 'MJ: Feature Values',
             ExtraFilter: `${recordFilter} AND FeatureName = '${EscapeSQLString(name)}'`,
             OrderBy: 'ComputedAt DESC',
-            Fields: ['FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON'],
+            Fields: ['FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON', 'ValueKeyHash'],
             MaxRows: 1,
             BypassCache: true,
         })), params.ContextUser);
@@ -508,7 +538,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             }
             const row = res.Results?.[0];
             if (row) {
-                latest.set(names[i].toLowerCase(), FeatureValueCacheService.TypedValueOf(row));
+                latest.set(names[i].toLowerCase(), { Value: FeatureValueCacheService.TypedValueOf(row), ValueKeyHash: row.ValueKeyHash || null });
             }
         });
         return latest;

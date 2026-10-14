@@ -175,7 +175,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeatureValueCache',
     @level2type = N'COLUMN', @level2name = N'ParametersHash';
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types.',
+    @value = N'JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, previewed, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'ProcessRun',
     @level2type = N'COLUMN', @level2name = N'ResultSummary';
 EXEC sp_addextendedproperty @name = N'MS_Description',
@@ -233,7 +233,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The user whose
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineVersion', @level2type = N'COLUMN', @level2name = N'ApprovedByUserID';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'When a later Active version superseded this one.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineVersion', @level2type = N'COLUMN', @level2name = N'RetiredAt';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'When the Feature Pipeline Version Steward finished the one backfill run of this version (records whose values were written under an earlier version and have none under this one). NULL until then; the steward never backfills a version twice.',
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version (the records whose latest Pipeline value was written under another version, or under none). NULL until then; cleared when the version is retired or becomes Active again, so each activation is backfilled once.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineVersion', @level2type = N'COLUMN', @level2name = N'BackfilledAt';
 GO
 
@@ -1909,7 +1909,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CA9E4797-3E8A-4942-AFE9-274CD49872A7'),
             'BackfilledAt',
             'Backfilled At',
-            'When the Feature Pipeline Version Steward finished the one backfill run of this version (records whose values were written under an earlier version and have none under this one). NULL until then; the steward never backfills a version twice.',
+            'When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version (the records whose latest Pipeline value was written under another version, or under none). NULL until then; cleared when the version is retired or becomes Active again, so each activation is backfilled once.',
             'datetimeoffset',
             10,
             34,
@@ -2539,7 +2539,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9989A9A4-5546-4552-A765-B27EE399BFEA'),
             'ResultSummary',
             'Result Summary',
-            'JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types.',
+            'JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, previewed, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types.',
             'nvarchar',
             -1,
             0,

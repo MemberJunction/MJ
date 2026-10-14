@@ -39,3 +39,30 @@ describe('GenericProcessRunTracker.RecordResult', () => {
         expect(detail.Warnings).toBeNull();
     });
 });
+
+describe('GenericProcessRunTracker.CompleteRun', () => {
+    /** The run-header fields CompleteRun writes, on a plain object standing in for the entity. */
+    type RunDouble = Partial<Pick<MJProcessRunEntity, 'ID' | 'Status' | 'ResultSummary' | 'ErrorMessage'>> & { Save: () => Promise<boolean> };
+    const counts = { Processed: 1, Success: 1, Error: 0, Skipped: 0, Total: 1 };
+    const result = {
+        RecordProcessID: 'RP-1', Pin: null, ParameterFidelity: null, Attempted: 1, Upserted: 1, Unchanged: 0, Previewed: 0,
+        RejectedInvalid: 0, Failed: 0, Skipped: 0, HumanValuesPreserved: 0, Status: 'completed' as const,
+    };
+    const complete = async (run: RunDouble, summary: Parameters<GenericProcessRunTracker['CompleteRun']>[1]): Promise<void> => {
+        // a handle carrying the run double; the tracker writes header fields and calls Save
+        const runHandle: RunHandle = { ProcessRunID: 'run-1', run };
+        await new GenericProcessRunTracker().CompleteRun(runHandle, summary, user);
+    };
+
+    it('persists a Feature Pipeline run result as the run\'s ResultSummary JSON', async () => {
+        const run: RunDouble = { ID: 'run-1', ResultSummary: null, Save: vi.fn().mockResolvedValue(true) };
+        await complete(run, { ...counts, Status: 'Completed', FeaturePipeline: result });
+        expect(JSON.parse(run.ResultSummary || '{}')).toEqual(result);
+    });
+
+    it('leaves ResultSummary alone for a run without one', async () => {
+        const run: RunDouble = { ID: 'run-1', ResultSummary: null, Save: vi.fn().mockResolvedValue(true) };
+        await complete(run, { ...counts, Status: 'Completed' });
+        expect(run.ResultSummary).toBeNull();
+    });
+});

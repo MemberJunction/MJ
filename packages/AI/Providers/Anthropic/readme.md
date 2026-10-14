@@ -102,7 +102,7 @@ Anthropic caches only up to an explicit `cache_control` breakpoint, and a read-h
 | topK | Yes | Top-K sampling |
 | stopSequences | Yes | Custom stop sequences |
 | assistantPrefill | Yes | Pre-seed the start of the assistant's response ([guide](../../Prompts/PREFILL_AND_STOP_SEQUENCES.md)) |
-| responseFormat | Yes | JSON mode supported |
+| responseFormat | Partial | `ModelSpecific` is merged into the request. `JSON` has no native equivalent, so nothing is sent for it: JSON comes from the prompt's instructions, an assistant prefill and MJ's output parsing. A notice is logged once per process |
 | streaming | Yes | Real-time streaming |
 | effortLevel | Yes | Maps to thinking budget |
 

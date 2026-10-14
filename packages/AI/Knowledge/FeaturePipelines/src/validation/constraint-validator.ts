@@ -4,6 +4,7 @@
  * @module @memberjunction/feature-pipelines
  */
 
+import { GetValueAtPath } from '@memberjunction/global';
 import type { ValueConstraint, ResolvedConstraint, ViolationPolicy } from '../spec/value-constraint.js';
 
 export interface OutputValidationResult {
@@ -19,58 +20,114 @@ export interface ValidationOptions {
   targetFieldTSType?: string;
 }
 
-/**
- * Validates a single computed output value against its constraint and applies the declared violation policy.
- */
-export function ValidateOutputValue(
-  rawValue: unknown,
-  constraint: ValueConstraint,
-  options?: ValidationOptions
-): OutputValidationResult {
-  const policy: ViolationPolicy = constraint.OnViolation ?? 'fail';
+/** Output values checked against their constraint. */
+export class OutputValidator {
+  /**
+   * Validates a single computed output value against its constraint and applies the declared violation policy.
+   * A lookup value whose constraint carries its allowed rows (`options.resolved.AllowedValues`) must match one of them
+   * (case-insensitively) and is returned in the row's own form; without loaded rows only a non-empty identifier is required.
+   */
+  public static ValidateOutputValue(
+    rawValue: unknown,
+    constraint: ValueConstraint,
+    options?: ValidationOptions
+  ): OutputValidationResult {
+    const policy: ViolationPolicy = constraint.OnViolation ?? 'fail';
 
-  if (rawValue === null || rawValue === undefined) {
-    return { valid: true, value: rawValue };
+    if (rawValue === null || rawValue === undefined) {
+      return { valid: true, value: rawValue };
+    }
+
+    switch (constraint.Type) {
+      case 'enum':
+        return validateEnum(rawValue, constraint, policy, options);
+
+      case 'numeric':
+        return validateNumeric(rawValue, constraint, policy, options);
+
+      case 'money':
+        return validateMoney(rawValue, constraint, policy, options);
+
+      case 'boolean':
+        return validateBoolean(rawValue, constraint, policy, options);
+
+      case 'date':
+        return validateDate(rawValue, constraint, policy);
+
+      case 'freetext':
+        return validateFreetext(rawValue, constraint, policy);
+
+      case 'lookup':
+        return validateLookup(rawValue, policy, options);
+
+      default:
+        return { valid: true, value: rawValue };
+    }
   }
 
-  switch (constraint.Type) {
-    case 'enum':
-      return validateEnum(rawValue, constraint, policy, options);
-
-    case 'numeric':
-      return validateNumeric(rawValue, constraint, policy, options);
-
-    case 'money':
-      return validateMoney(rawValue, constraint, policy, options);
-
-    case 'boolean':
-      return validateBoolean(rawValue, constraint, policy, options);
-
-    case 'date':
-      return validateDate(rawValue, constraint, policy);
-
-    case 'freetext':
-      return validateFreetext(rawValue, constraint, policy);
-
-    case 'lookup':
-      // Lookup validation at runtime verifies non-empty match string
-      if (typeof rawValue !== 'string' || rawValue.trim().length === 0) {
-        return applyPolicy(rawValue, policy, `Lookup output must be a non-empty string identifier or name.`);
+  /**
+   * Validates each item of an array output at the constraint's `ItemRef` (one property of the item, e.g.
+   * `$.JobFunctionID`; `ValidateSpec` refuses a deeper path) and writes each item's canonical value back onto it.
+   * With `fail`, any invalid item fails the output, naming every invalid value. With `null`, an invalid item is
+   * dropped. With `coerce-to-other`, an item whose value the policy replaces with a value is kept with it (an enum's
+   * 'Other'), and an item it can only replace with null is dropped as `null` drops it (a lookup has no 'Other' row).
+   * `coerced` is true only when an item changed or was dropped. Without an `ItemRef`, or for a non-array value, this
+   * is {@link OutputValidator.ValidateOutputValue}.
+   */
+  public static ValidateOutputItems(rawValue: unknown, constraint: ValueConstraint, options?: ValidationOptions): OutputValidationResult {
+    const itemRef = (constraint.Type === 'enum' || constraint.Type === 'lookup') ? constraint.ItemRef : undefined;
+    if (!itemRef || !Array.isArray(rawValue)) {
+      return OutputValidator.ValidateOutputValue(rawValue, constraint, options);
+    }
+    const path = itemRef.replace(/^\$\.?/, '');
+    const kept: unknown[] = [];
+    const invalid: string[] = [];
+    let changed = false;
+    for (const item of rawValue) {
+      const v = GetValueAtPath(item, path);
+      const r = OutputValidator.ValidateOutputValue(v, constraint, options);
+      // An item the policy could only replace with null holds no allowed value: it is not kept
+      if (!r.valid || (r.violationPolicyApplied !== undefined && (r.value === null || r.value === undefined))) {
+        invalid.push(v === null || v === undefined ? '(missing)' : String(v));
+        continue;
       }
-      return { valid: true, value: rawValue.trim() };
-
-    default:
-      return { valid: true, value: rawValue };
+      changed ||= r.value !== v;
+      kept.push(item !== null && typeof item === 'object' && !Array.isArray(item) ? { ...item, [path]: r.value } : r.value);
+    }
+    if (invalid.length === 0) {
+      return { valid: true, value: kept, coerced: changed };
+    }
+    const message = `Items not allowed at ${itemRef}: ${invalid.join(', ')}.`;
+    const policy = constraint.OnViolation || 'fail';
+    return policy === 'fail'
+      ? { valid: false, value: rawValue, violationMessage: message, violationPolicyApplied: 'fail' }
+      : { valid: true, value: kept, violationMessage: message, violationPolicyApplied: policy, coerced: true };
   }
 }
 
-/** @deprecated Use {@link ValidateOutputValue}. */
-export function validateOutputValue(
-  rawValue: unknown,
-  constraint: ValueConstraint,
-  options?: ValidationOptions
-): OutputValidationResult {
-  return ValidateOutputValue(rawValue, constraint, options);
+/**
+ * A lookup output: a non-empty string or number identifier that, when the constraint's rows are loaded, matches one
+ * of them. The match is returned in the row's own form, so a differently-cased answer is written as the row has it.
+ */
+function validateLookup(rawValue: unknown, policy: ViolationPolicy, options?: ValidationOptions): OutputValidationResult {
+  if (typeof rawValue !== 'string' && typeof rawValue !== 'number') {
+    return applyPolicy(rawValue, policy, 'Lookup output must be a string or number identifier.');
+  }
+  const str = String(rawValue).trim();
+  if (str.length === 0) {
+    return applyPolicy(rawValue, policy, 'Lookup output must be a non-empty string identifier or name.');
+  }
+  const allowed = options?.resolved?.AllowedValues;
+  if (allowed && allowed.length > 0) {
+    const wanted = str.toLowerCase();
+    const match = allowed.find((v) => v.toLowerCase() === wanted);
+    if (match === undefined) {
+      const what = `${options?.resolved?.RelatedEntityName || 'record'} ${options?.resolved?.LookupMatchField || ''}`.trim();
+      return applyPolicy(rawValue, policy, `Value '${str}' does not match an existing ${what}.`);
+    }
+    return { valid: true, value: match, coerced: match !== rawValue };
+  }
+  return { valid: true, value: str };
 }
 
 function applyPolicy(

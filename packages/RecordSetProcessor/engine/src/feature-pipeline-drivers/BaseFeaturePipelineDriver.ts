@@ -8,6 +8,7 @@
  * @module @memberjunction/record-set-processor
  */
 
+import type { ParameterFidelity } from '@memberjunction/ai';
 import type { AIPromptParams, AIPromptRunResult, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import {
@@ -68,6 +69,8 @@ export interface FeaturePipelineComputeSuccess {
     AIPromptRunID?: string;
     /** Each output's confidence, keyed by output name, for drivers that produce one. */
     Confidence?: Record<string, number>;
+    /** Configured versus sent model parameters for the call. */
+    ParameterFidelity?: ParameterFidelity;
 }
 
 /** A driver could not compute the record's outputs. */
@@ -77,6 +80,8 @@ export interface FeaturePipelineComputeFailure {
     ErrorMessage: string;
     /** The `MJ: AI Prompt Runs` row of the failed run, when there is one. */
     AIPromptRunID?: string;
+    /** The refused parameters, when the call failed because the driver would not send the configured ones. */
+    ParameterFidelity?: Extract<ParameterFidelity, { Status: 'refused' }>;
 }
 
 /**

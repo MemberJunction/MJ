@@ -53909,7 +53909,7 @@ export class MJFeaturePipelineVersion_ {
     @Field({nullable: true, description: "When a later Active version superseded this one."}) 
     RetiredAt?: Date;
         
-    @Field({nullable: true, description: "When the Feature Pipeline Version Steward finished the one backfill run of this version (records whose values were written under an earlier version and have none under this one). NULL until then; the steward never backfills a version twice."}) 
+    @Field({nullable: true, description: "When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version (the records whose latest Pipeline value was written under another version, or under none). NULL until then; cleared when the version is retired or becomes Active again, so each activation is backfilled once."}) 
     BackfilledAt?: Date;
         
     @Field() 
@@ -70038,7 +70038,7 @@ export class MJProcessRun_ {
     @Field(() => Boolean, {nullable: true, description: "When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes."}) 
     DryRun?: boolean;
         
-    @Field({nullable: true, description: "JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types."}) 
+    @Field({nullable: true, description: "JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, previewed, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types."}) 
     ResultSummary?: string;
         
     @Field({nullable: true}) 

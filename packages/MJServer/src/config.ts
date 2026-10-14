@@ -167,6 +167,11 @@ const scheduledJobsSchema = z.object({
   maxConcurrentJobs: z.number().optional().default(5),
   defaultLockTimeout: z.number().optional().default(600000), // 10 minutes in ms
   staleLockCleanupInterval: z.number().optional().default(300000), // 5 minutes in ms
+  /**
+   * How often (ms) this server re-checks jobs paused because their action's class was not loaded on the server that
+   * ran them, resuming those whose class this server loads. Bounds how long such a job stays paused in a mixed fleet.
+   */
+  pausedJobResumeInterval: z.number().optional().default(3600000), // 1 hour in ms
 });
 
 /**
@@ -1050,7 +1055,8 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     systemUserEmail: 'not.set@nowhere.com',
     maxConcurrentJobs: 5,
     defaultLockTimeout: 600000,
-    staleLockCleanupInterval: 300000
+    staleLockCleanupInterval: 300000,
+    pausedJobResumeInterval: 3600000
   },
 
   // Integration sync worker defaults (off — syncs run inline unless a worker is enabled)

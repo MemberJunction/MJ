@@ -3,6 +3,7 @@ import { WatermarkService } from '../watermark/WatermarkService';
 import { RecordSetProcessor } from '../RecordSetProcessor';
 import { ArraySource, IRecordProcessor, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import { NoOpTracker } from '../trackers/NoOpTracker';
+import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
 import { UserInfo, RunView, IMetadataProvider } from '@memberjunction/core';
 
 // Mock RunView so we don't hit a real database in unit tests
@@ -23,7 +24,7 @@ vi.mock('@memberjunction/core', async () => {
     };
 });
 
-describe('WatermarkService (P1-7b)', () => {
+describe('WatermarkService', () => {
     const mockUser = { ID: 'user-1', Email: 'test@example.com' } as unknown as UserInfo;
     const recordProcessID = 'rp-123';
     const entityID = 'entity-456';
@@ -205,6 +206,17 @@ describe('WatermarkService (P1-7b)', () => {
         );
         expect(decisions.get('rec-1')?.shouldSkip).toBe(true);
         expect(decisions.get('rec-1')?.basisHash).toBe(customHash);
+    });
+
+    it('hands the processor the run\'s pipeline and entity when it computes a basis hash, or the context it is given', async () => {
+        const mockProcessor = { ProcessRecord: vi.fn(), ComputeBasisHash: vi.fn().mockResolvedValue('h') };
+        const record: RecordRef = { EntityID: entityID, RecordID: 'rec-1', Record: { Title: 'Nurse' } };
+        const base = { recordProcessID, entityID, records: [record], strategy: 'Checksum' as const, skipUnchanged: true, processor: mockProcessor, contextUser: mockUser };
+        await WatermarkService.Instance.CheckBatchWatermarks(base);
+        expect(mockProcessor.ComputeBasisHash.mock.calls[0][1]).toMatchObject({ recordProcessID, entityID });
+        const runContext = { contextUser: mockUser, provider: new EntitiesOnlyProvider([]), entityID, recordProcessID, DryRun: true };
+        await WatermarkService.Instance.CheckBatchWatermarks({ ...base, ProcessorContext: runContext });
+        expect(mockProcessor.ComputeBasisHash.mock.calls[1][1]).toBe(runContext);
     });
 
     it('integrates with RecordSetProcessor: skips unchanged records without calling processor', async () => {

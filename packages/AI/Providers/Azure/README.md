@@ -133,9 +133,9 @@ console.log(`Dimensions: ${result.vector.length}`);
 
 | Parameter | Supported | Notes |
 |-----------|-----------|-------|
-| temperature | Yes | 0.0 - 2.0 |
-| maxOutputTokens | Yes | Maximum tokens to generate |
-| topP | Yes | Nucleus sampling (0.0 - 1.0) |
+| temperature | Yes | 0.0 - 2.0. OpenAI reasoning models (o-series, GPT-5 and later; `OpenAILLM.IsReasoningModel`) accept only 1: any other configured value is not sent, and the call's parameter fidelity says so |
+| maxOutputTokens | Yes | Maximum tokens to generate. Sent as `max_tokens`, or as `max_completion_tokens` for OpenAI reasoning models, which reject `max_tokens` |
+| topP | Yes | Nucleus sampling (0.0 - 1.0); 0.95 when not configured. OpenAI reasoning models are sent only a configured 1 and no default |
 | frequencyPenalty | Yes | -2.0 to 2.0 |
 | presencePenalty | Yes | -2.0 to 2.0 |
 | seed | Yes | Deterministic outputs |
@@ -153,6 +153,7 @@ console.log(`Dimensions: ${result.vector.length}`);
 ## Dependencies
 
 - `@memberjunction/ai` - Core AI abstractions
+- `@memberjunction/ai-openai` - The OpenAI reasoning-model rule (`OpenAILLM.IsReasoningModel`), shared so both drivers treat the same models alike
 - `@memberjunction/global` - Class registration
 - `@azure-rest/ai-inference` - Azure AI inference REST client
 - `@azure/core-auth` - Azure authentication core

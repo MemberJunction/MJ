@@ -1,7 +1,10 @@
 import { BaseEntity, IMetadataProvider } from "@memberjunction/core";
-import { MJTemplateContentEntity } from "@memberjunction/core-entities";
-import { UUIDsEqual } from "@memberjunction/global";
+import { MJTemplateContentEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
+import { EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
+
+/** The Template Content fields {@link LinkedTemplateText.ReadRenderedText} reads: the selection's fields and the text. */
+type RenderedContentRow = Pick<MJTemplateContentEntity, 'ID' | 'Type' | 'Priority' | '__mj_CreatedAt' | 'TemplateText'>;
 
 /** The content row a template text came from, and that row's `__mj_UpdatedAt` (epoch ms) at the time. */
 interface TemplateTextSource {
@@ -106,7 +109,7 @@ export class LinkedTemplateText {
      * engine on every read.
      */
     public static EngineFor(entity: BaseEntity): TemplateEngineBase {
-        const provider = LinkedTemplateText.providerOf(entity);
+        const provider = LinkedTemplateText.ProviderOf(entity);
         if (provider?.InstanceConnectionString) {
             return TemplateEngineBase.GetProviderInstance<TemplateEngineBase>(provider, TemplateEngineBase) as TemplateEngineBase;
         }
@@ -120,14 +123,39 @@ export class LinkedTemplateText {
 
     /** Loads the entity's provider's template cache when it has not loaded yet. */
     public static async EnsureLoaded(entity: BaseEntity): Promise<void> {
-        await LinkedTemplateText.EngineFor(entity).Config(false, entity.ContextCurrentUser, LinkedTemplateText.providerOf(entity));
+        await LinkedTemplateText.EngineFor(entity).Config(false, entity.ContextCurrentUser, LinkedTemplateText.ProviderOf(entity));
+    }
+
+    /**
+     * The text the entity's linked template renders, read through the entity's own provider instead of the template
+     * engine's cache. The provider's reads join its open transaction, so a Template Content row written earlier in the
+     * same transaction is seen; the engine reloads only after commit and does not hold it yet. A metadata push that
+     * edits a prompt's template and then saves a row checked against that template needs exactly this. The row is the
+     * one the engine would select ({@link MJTemplateEntityExtended.SelectHighestPriorityContent}).
+     * @returns the rendered row's text ('' when the row has none); undefined when the template has no content row
+     * @throws Error naming the template when its content rows cannot be read
+     */
+    public static async ReadRenderedText(entity: BaseEntity, templateID: string): Promise<string | undefined> {
+        const result = await entity.RunViewProviderToUse.RunView<RenderedContentRow>({
+            EntityName: 'MJ: Template Contents',
+            ExtraFilter: `TemplateID='${EscapeSQLString(templateID)}'`,
+            Fields: ['ID', 'Type', 'Priority', '__mj_CreatedAt', 'TemplateText'],
+        }, entity.ContextCurrentUser);
+        if (!result.Success) {
+            throw new Error(`The content of template '${templateID}' could not be read: ${result.ErrorMessage}`);
+        }
+        const rendered = MJTemplateEntityExtended.SelectHighestPriorityContent(result.Results);
+        return rendered ? rendered.TemplateText || '' : undefined;
     }
 
     /**
      * The entity's provider as a metadata provider. `BaseEntity.ProviderToUse` is typed as the entity-data side of the
-     * same provider object; this is the one place the two views are bridged.
+     * same provider object; this is the one place the two views are bridged (with the one cast that takes), so callers
+     * that need the metadata view of an entity's provider use this instead of casting again. Public for entity checks
+     * that read templates through the entity's provider (and need its tier, e.g. `ProviderType`); it belongs with the
+     * entity/provider types if a caller unrelated to templates comes to need it.
      */
-    private static providerOf(entity: BaseEntity): IMetadataProvider | undefined {
+    public static ProviderOf(entity: BaseEntity): IMetadataProvider | undefined {
         return entity.ProviderToUse as unknown as IMetadataProvider | undefined;
     }
 

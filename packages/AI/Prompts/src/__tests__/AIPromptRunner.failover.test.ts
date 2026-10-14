@@ -85,6 +85,7 @@ const h = vi.hoisted(() => {
     },
     HasCredentialBindings() { return false; },
     GetCredentialBindingsForTarget() { return []; },
+    GetEffectiveModelConfiguration() { return null; },
   };
   return { state, engine, getApiKey: (d: string) => (state.configuredDrivers.has(d) ? 'sk-test' : '') };
 });
@@ -108,8 +109,12 @@ vi.mock('@memberjunction/credentials', async (importOriginal) => {
 import { AIPromptRunner } from '../AIPromptRunner';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJGlobal } from '@memberjunction/global';
-import type { ChatResult, AIPromptConfiguration } from '@memberjunction/ai'; // real types — the mock only replaces GetAIAPIKey
-import { TestLLM, makeFailedChatResult } from '@memberjunction/unit-testing';
+import type { ChatResult, AIPromptConfiguration, ChatParams } from '@memberjunction/ai'; // real types — the mock only replaces GetAIAPIKey
+import { ParameterFidelityError, VendorParameterFidelity } from '@memberjunction/ai';
+import { AIPromptParams, ChildPromptParam, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { UserInfo } from '@memberjunction/core';
+import { TestLLM, makeFailedChatResult, makeModelUsage, makeSuccessChatResult } from '@memberjunction/unit-testing';
+import { BuildRealEntity, UnsavedPromptRun, BuildPromptRunRecord, BuildPrompt, BuildPromptParams, InMemoryRunRecordRunner } from './__fixtures__/prompt-run.fixtures';
 import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL_TYPE, VENDOR, makeModel, makeModelVendor, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
 
 // ---------------------------------------------------------------------------
@@ -164,10 +169,10 @@ interface FailoverPromptRunRecord {
 }
 interface RecordedFailoverError { model: string; vendor?: string; error: string; errorType: string }
 
-function makePromptRunRecord(originalModelId: string, vendorId: string | null): FailoverPromptRunRecord {
+function makePromptRunRecord(originalModelId: string, vendorId: string | null | undefined): FailoverPromptRunRecord {
   return {
     FailoverAttempts: 0, FailoverErrors: null, FailoverDurations: null, TotalFailoverDuration: null,
-    OriginalModelID: originalModelId, ModelID: originalModelId, VendorID: vendorId,
+    OriginalModelID: originalModelId, ModelID: originalModelId, VendorID: vendorId || null, // a candidate without a vendor has none
   };
 }
 
@@ -186,6 +191,7 @@ async function runFailover(
   candidates: TestCandidate[],
   promptOverrides: Record<string, unknown> = {},
   promptRun?: FailoverPromptRunRecord,
+  paramOverrides: Partial<AIPromptParams> = {},
 ): Promise<ChatResult> {
   const prompt = makeFailoverPrompt(promptOverrides);
   const first = candidates[0];
@@ -193,7 +199,7 @@ async function runFailover(
   // templateMessageRole, cancellationToken, allCandidates, promptRun, vendorDriverClass,
   // vendorApiName, vendorSupportsEffortLevel, modelEffortLevel, credentialAvailability
   return (runner as unknown as FailoverRunner).executeModelWithFailover(
-    first.model, 'rendered prompt', prompt, { verbose: false }, first.vendorId,
+    first.model, 'rendered prompt', prompt, { verbose: false, ...paramOverrides }, first.vendorId,
     undefined, 'system', undefined, candidates, promptRun,
     first.driverClass, first.apiName, false, undefined,
   );
@@ -691,5 +697,364 @@ describe('ExecutePrompt — failover never crosses model types', () => {
     expect(result.success).toBe(false);
     expect(testLLM.CalledModels.length).toBeGreaterThanOrEqual(2);   // failover really happened
     expect(testLLM.CalledModels).not.toContain(EMBEDDING_API_NAME);
+  });
+});
+
+// ===========================================================================
+// Strict parameters: the caller's request reaches the driver, and a refusal fails the call with its own error
+// ===========================================================================
+describe('executeModel — strict parameters', () => {
+  it('forwards strictParameters to the driver call', async () => {
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    testLLM.Script({ kind: 'succeed', content: 'ok' });
+
+    await runFailover(runner, [c1], { Temperature: 0 }, undefined, { strictParameters: true });
+
+    expect(testLLM.Calls[0].strictParameters).toBe(true);
+    expect(testLLM.Calls[0].temperature).toBe(0);
+  });
+
+  it('sends a non-strict call when the caller does not ask for strict parameters', async () => {
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    testLLM.Script({ kind: 'succeed', content: 'ok' });
+
+    await runFailover(runner, [c1], { Temperature: 0 });
+
+    expect(testLLM.Calls[0].strictParameters).toBe(false);
+  });
+
+  it('fails a strict call the driver would not send as configured with the refusal message, keeping the typed error', async () => {
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    // This driver drops the seed, so a strict call configured with one is refused before any request
+    vi.spyOn(testLLM, 'DescribeSentParameters').mockImplementation((p: ChatParams) => ({ ...VendorParameterFidelity.ConfiguredParameters(p), Seed: null }));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined); // the refusal is logged as a model execution error
+    testLLM.Script({ kind: 'succeed', content: 'never sent' });
+
+    const result = await runFailover(runner, [c1], { Temperature: 0, Seed: 42 }, undefined, { strictParameters: true });
+
+    expect(result.success).toBe(false);
+    expect(result.errorMessage).toContain("would not send the configured parameters for model 'api-claude'");
+    expect(result.exception).toBeInstanceOf(ParameterFidelityError);
+    expect(result.exception instanceof ParameterFidelityError ? result.exception.Fidelity.WouldSend.Seed : 'not refused').toBeNull();
+  });
+});
+
+// ===========================================================================
+// A strict refusal through ExecutePrompt: Fatal, so it is neither failed over nor retried
+// ===========================================================================
+
+/** The runner with its retry delays counted instead of waited, and its run record kept in memory. */
+class RetryCountingRunner extends AIPromptRunner {
+  public RetryDelays = 0;
+  constructor(private readonly runRecord: MJAIPromptRunEntityExtended) {
+    super();
+  }
+  protected override async ApplyRetryDelay(): Promise<void> {
+    this.RetryDelays++;
+  }
+  protected override async CreateRunRecord(): Promise<MJAIPromptRunEntityExtended> {
+    return this.runRecord;
+  }
+}
+
+describe('ExecutePrompt — a strict refusal stops the prompt', () => {
+  // Built while collecting, before beforeEach replaces ClassFactory.CreateInstance (which builds each entity's fields)
+  const strictPrompt = BuildRealEntity(MJAIPromptEntityExtended, 'MJ: AI Prompts', {
+    ID: 'prompt-1', Name: 'Strict Prompt', Status: 'Active', SelectionStrategy: 'Default', AIModelTypeID: MODEL_TYPE.LLM,
+    OutputType: 'string', ValidationBehavior: 'Strict', MaxRetries: 2, ParallelizationMode: 'None', FailoverStrategy: 'None',
+    Temperature: 0, Seed: 42,
+  });
+  const runRecord = BuildRealEntity(UnsavedPromptRun, 'MJ: AI Prompt Runs', { ID: 'run-strict' });
+
+  it('makes one model call with no retry delay, and fails with the refusal on chatResult.exception, without a failover strategy', async () => {
+    vi.spyOn(testLLM, 'DescribeSentParameters').mockImplementation((p: ChatParams) => ({ ...VendorParameterFidelity.ConfiguredParameters(p), Seed: null }));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined); // the refusal is logged once as an execution error
+    testLLM.Script({ kind: 'succeed', content: 'never sent' });
+    const strictRunner = new RetryCountingRunner(runRecord);
+    const params = new AIPromptParams();
+    params.prompt = strictPrompt;
+    params.contextUser = new UserInfo();
+    params.conversationMessages = [{ role: 'user', content: 'Hello' }];
+    params.templateMessageRole = 'none';
+    params.strictParameters = true;
+
+    const result = await strictRunner.ExecutePrompt(params);
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CallCount).toBe(1);
+    expect(strictRunner.RetryDelays).toBe(0);
+    expect(result.errorMessage).toContain('would not send the configured parameters');
+    expect(result.chatResult.exception).toBeInstanceOf(ParameterFidelityError);
+  });
+});
+
+
+// ===========================================================================
+// A failed call's prompt run records the call's own error, not the parse fallback
+// ===========================================================================
+describe('ExecutePrompt — the prompt run of a failed call records its error', () => {
+  const PARSE_FALLBACK = 'Failed to parse result into expected format; raw output saved instead';
+
+  // Built while collecting, before beforeEach replaces ClassFactory.CreateInstance (which builds each entity's fields)
+  const prompts = {
+    plain: BuildPrompt(MODEL_TYPE.LLM),
+    strict: BuildPrompt(MODEL_TYPE.LLM, { Temperature: 0, Seed: 42 }),
+    strictWithFailover: BuildPrompt(MODEL_TYPE.LLM, { Temperature: 0, Seed: 42, FailoverStrategy: 'SameModelDifferentVendor' }),
+    parallel: BuildPrompt(MODEL_TYPE.LLM, { ParallelizationMode: 'StaticCount', ParallelCount: 2 }),
+    strictNumberWithRetry: BuildPrompt(MODEL_TYPE.LLM, { OutputType: 'number', ValidationBehavior: 'Strict', MaxRetries: 1 }),
+    child: BuildPrompt(MODEL_TYPE.LLM, { ID: 'child-prompt-1', Name: 'Child Prompt' }),
+  };
+  const runs = {
+    driverFailure: BuildPromptRunRecord('run-driver-failure'),
+    exceptionOnlyFailure: BuildPromptRunRecord('run-exception-only-failure'),
+    refusal: BuildPromptRunRecord('run-refusal'),
+    refusalWithFailover: BuildPromptRunRecord('run-refusal-failover'),
+    cancelledDuringCall: BuildPromptRunRecord('run-cancelled-call'),
+    hierarchicalCancelled: BuildPromptRunRecord('run-hierarchical-cancelled'),
+    hierarchicalParallelCancelled: BuildPromptRunRecord('run-hierarchical-parallel-cancelled'),
+    earlierAttemptUsage: BuildPromptRunRecord('run-earlier-attempt-usage'),
+    hierarchicalEarlierAttemptUsage: BuildPromptRunRecord('run-hierarchical-earlier-attempt-usage'),
+    fatalAfterRetryUsage: BuildPromptRunRecord('run-fatal-after-retry-usage'),
+    parsed: BuildPromptRunRecord('run-parsed'),
+    toolCallTurn: BuildPromptRunRecord('run-tool-call'),
+    parsedToNothing: BuildPromptRunRecord('run-parsed-to-nothing'),
+  };
+
+  /** Makes the scripted driver refuse a strict call: it would drop the configured seed. */
+  function refuseStrictCalls(): void {
+    vi.spyOn(testLLM, 'DescribeSentParameters').mockImplementation((p: ChatParams) => ({ ...VendorParameterFidelity.ConfiguredParameters(p), Seed: null }));
+  }
+
+  /** Execution parameters for a hierarchical prompt whose composed system prompt is given, so no template renders. */
+  function hierarchicalParams(prompt: MJAIPromptEntityExtended, signal: AbortSignal): AIPromptParams {
+    const params = BuildPromptParams(prompt);
+    params.childPrompts = [new ChildPromptParam(BuildPromptParams(prompts.child), 'child')];
+    params.systemPromptOverride = 'composed prompt';
+    params.cancellationToken = signal;
+    return params;
+  }
+
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined); // every failure here is logged as an execution error
+    vi.spyOn(console, 'log').mockImplementation(() => undefined); // a failed call's validation outcome and retries are announced on the status log
+  });
+
+  afterEach(() => {
+    h.engine.Config.mockImplementation(async () => undefined); // a test that scripts the engine load leaves the default behind
+  });
+
+  it('records a driver failure on ErrorMessage and ErrorDetails', async () => {
+    testLLM.Script({ kind: 'fail', error: new Error('fetch failed: network socket disconnected') });
+    const runner = new InMemoryRunRecordRunner(runs.driverFailure);
+
+    const result = await runner.ExecutePrompt(BuildPromptParams(prompts.plain));
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(result.success).toBe(false);
+    expect(runs.driverFailure.Status).toBe('Failed');
+    expect(runs.driverFailure.ErrorMessage).toBe(result.errorMessage);
+    expect(runs.driverFailure.ErrorMessage).toContain('network socket disconnected');
+    expect(runs.driverFailure.ErrorDetails).toBe(runs.driverFailure.ErrorMessage);
+  });
+
+  it('records a failure that carries only an exception on both ErrorMessage and ErrorDetails', async () => {
+    const failure = makeFailedChatResult({ errorMessage: '', exception: new Error('socket hang up') });
+    failure.data.choices = [];
+    testLLM.Script({ kind: 'failResult', result: failure }); // 'failResult' hands the given result back as-is
+    const runner = new InMemoryRunRecordRunner(runs.exceptionOnlyFailure);
+
+    await runner.ExecutePrompt(BuildPromptParams(prompts.plain));
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(runs.exceptionOnlyFailure.Status).toBe('Failed');
+    expect(runs.exceptionOnlyFailure.ErrorMessage).toBe('socket hang up');
+    expect(runs.exceptionOnlyFailure.ErrorDetails).toBe('socket hang up');
+  });
+
+  it('records a strict-parameter refusal on ErrorMessage, and returns the failed run', async () => {
+    refuseStrictCalls();
+    testLLM.Script({ kind: 'succeed', content: 'never sent' });
+    const runner = new InMemoryRunRecordRunner(runs.refusal);
+    const params = BuildPromptParams(prompts.strict);
+    params.strictParameters = true;
+
+    const result = await runner.ExecutePrompt(params);
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(result.success).toBe(false);
+    expect(runs.refusal.Status).toBe('Failed'); // a Fatal throw with no failover strategy still finalizes the run
+    expect(runs.refusal.ErrorMessage).toContain('would not send the configured parameters');
+    expect(result.promptRun).toBe(runs.refusal);
+  });
+
+  it('records a strict-parameter refusal returned through failover on ErrorMessage, not the parse fallback', async () => {
+    refuseStrictCalls();
+    testLLM.Script({ kind: 'succeed', content: 'never sent' });
+    const runner = new InMemoryRunRecordRunner(runs.refusalWithFailover);
+    const params = BuildPromptParams(prompts.strictWithFailover);
+    params.strictParameters = true;
+
+    const result = await runner.ExecutePrompt(params);
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CallCount).toBe(1);
+    expect(runs.refusalWithFailover.Status).toBe('Failed');
+    expect(runs.refusalWithFailover.ErrorMessage).toContain('would not send the configured parameters');
+  });
+
+  it('finalizes the run as cancelled when the caller cancels during the model call', async () => {
+    const controller = new AbortController();
+    vi.spyOn(testLLM, 'ChatCompletion').mockImplementation(async () => {
+      controller.abort();
+      throw new Error('This operation was aborted');
+    });
+    const runner = new InMemoryRunRecordRunner(runs.cancelledDuringCall);
+    const params = BuildPromptParams(prompts.plain);
+    params.cancellationToken = controller.signal;
+
+    const result = await runner.ExecutePrompt(params);
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(result.success).toBe(false);
+    expect(runs.cancelledDuringCall.Status).toBe('Cancelled');
+    expect(runs.cancelledDuringCall.Cancelled).toBe(true);
+    expect(runs.cancelledDuringCall.ErrorMessage).toBe(result.errorMessage);
+  });
+
+  it('finalizes a hierarchical prompt run as cancelled when the caller cancels before the model call', async () => {
+    const controller = new AbortController();
+    const runner = new InMemoryRunRecordRunner(runs.hierarchicalCancelled);
+    runner.OnRunCreated = () => controller.abort(); // cancelled once the composed prompt's run exists
+
+    const result = await runner.ExecutePrompt(hierarchicalParams(prompts.plain, controller.signal));
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CallCount).toBe(0);
+    expect(runs.hierarchicalCancelled.Status).toBe('Cancelled');
+    expect(runs.hierarchicalCancelled.ErrorMessage).toBe('Prompt execution was cancelled during template rendering');
+    expect(result.promptRun).toBe(runs.hierarchicalCancelled);
+  });
+
+  it('finalizes a hierarchical parallel prompt run as cancelled when the caller cancels while the engine loads', async () => {
+    const controller = new AbortController();
+    const runner = new InMemoryRunRecordRunner(runs.hierarchicalParallelCancelled);
+    let runCreated = false;
+    runner.OnRunCreated = () => { runCreated = true; };
+    h.engine.Config.mockImplementation(async () => {
+      if (runCreated) {
+        controller.abort(); // the parallel path's engine load, after the composed prompt's run exists
+      }
+    });
+
+    const result = await runner.ExecutePrompt(hierarchicalParams(prompts.parallel, controller.signal));
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CallCount).toBe(0);
+    expect(runs.hierarchicalParallelCancelled.Status).toBe('Cancelled');
+    expect(runs.hierarchicalParallelCancelled.ErrorMessage).toBe('Parallel execution was cancelled before task execution');
+    expect(result.promptRun).toBe(runs.hierarchicalParallelCancelled);
+  });
+
+  /** Attempt 1 answers (billed 10/5/$0.01) but fails Strict validation; attempt 2 throws. */
+  function scriptAnsweredThenThrown(): void {
+    testLLM.Script(
+      { kind: 'succeed', content: 'not a number', usage: makeModelUsage({ promptTokens: 10, completionTokens: 5, cost: 0.01 }) },
+      { kind: 'throw', error: new Error('fetch failed: network socket disconnected') },
+    );
+  }
+
+  it('records the usage of an attempt that completed before a later attempt threw', async () => {
+    scriptAnsweredThenThrown();
+    const runner = new InMemoryRunRecordRunner(runs.earlierAttemptUsage);
+
+    const result = await runner.ExecutePrompt(BuildPromptParams(prompts.strictNumberWithRetry));
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CallCount).toBe(2);
+    expect(runner.RetryDelays).toBe(1);
+    expect(runs.earlierAttemptUsage.Status).toBe('Failed');
+    expect(runs.earlierAttemptUsage.TokensPrompt).toBe(10);
+    expect(runs.earlierAttemptUsage.TokensCompletion).toBe(5);
+    expect(runs.earlierAttemptUsage.TokensUsed).toBe(15);
+    expect(runs.earlierAttemptUsage.Cost).toBe(0.01);
+  });
+
+  it('records the usage of an earlier attempt on a hierarchical prompt run when a later attempt threw', async () => {
+    scriptAnsweredThenThrown();
+    const runner = new InMemoryRunRecordRunner(runs.hierarchicalEarlierAttemptUsage);
+
+    const result = await runner.ExecutePrompt(hierarchicalParams(prompts.strictNumberWithRetry, new AbortController().signal));
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CallCount).toBe(2);
+    expect(runs.hierarchicalEarlierAttemptUsage.Status).toBe('Failed');
+    expect(runs.hierarchicalEarlierAttemptUsage.TokensPrompt).toBe(10);
+    expect(runs.hierarchicalEarlierAttemptUsage.TokensCompletion).toBe(5);
+    expect(runs.hierarchicalEarlierAttemptUsage.TokensUsed).toBe(15);
+    expect(runs.hierarchicalEarlierAttemptUsage.Cost).toBe(0.01);
+    expect(result.promptRun).toBe(runs.hierarchicalEarlierAttemptUsage);
+  });
+
+  it('counts a returned Fatal failure\'s billed usage with the earlier attempts\' usage', async () => {
+    const fatal = makeFailedChatResult({
+      errorMessage: 'No output received from model: Blocked (SAFETY)',
+      errorInfo: { errorType: 'InvalidRequest', severity: 'Fatal', canFailover: false },
+    });
+    fatal.data.usage = makeModelUsage({ promptTokens: 7, completionTokens: 3, cost: 0.02 });
+    testLLM.Script(
+      { kind: 'succeed', content: 'not a number', usage: makeModelUsage({ promptTokens: 10, completionTokens: 5, cost: 0.01 }) },
+      { kind: 'failResult', result: fatal }, // 'failResult' hands the given result back as-is
+    );
+    const runner = new InMemoryRunRecordRunner(runs.fatalAfterRetryUsage);
+
+    const result = await runner.ExecutePrompt(BuildPromptParams(prompts.strictNumberWithRetry));
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CallCount).toBe(2);
+    expect(runs.fatalAfterRetryUsage.Status).toBe('Failed');
+    expect(runs.fatalAfterRetryUsage.TokensPrompt).toBe(17);
+    expect(runs.fatalAfterRetryUsage.TokensCompletion).toBe(8);
+    expect(runs.fatalAfterRetryUsage.Cost).toBeCloseTo(0.03, 10);
+  });
+
+  it('records no error for a successful call whose output parses', async () => {
+    testLLM.Script({ kind: 'succeed', content: 'a parsed answer' });
+    const runner = new InMemoryRunRecordRunner(runs.parsed);
+
+    await runner.ExecutePrompt(BuildPromptParams(prompts.plain));
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(runs.parsed.Status).toBe('Completed');
+    expect(runs.parsed.ErrorMessage).toBeNull();
+  });
+
+  it('records no error for a successful native tool-call turn, which has no text to parse', async () => {
+    const toolCallTurn = makeSuccessChatResult('');
+    toolCallTurn.data.choices[0].message.toolCalls = [{ id: 'call-1', name: 'get_weather', arguments: { city: 'NYC' } }];
+    testLLM.Script({ kind: 'failResult', result: toolCallTurn }); // 'failResult' hands the given result back as-is
+    const runner = new InMemoryRunRecordRunner(runs.toolCallTurn);
+
+    await runner.ExecutePrompt(BuildPromptParams(prompts.plain));
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(runs.toolCallTurn.Status).toBe('Completed');
+    expect(runs.toolCallTurn.ErrorMessage).toBeNull();
+  });
+
+  it('keeps the parse fallback for a successful call whose output parses to nothing', async () => {
+    testLLM.Script({ kind: 'succeed', content: '   ' });
+    const runner = new InMemoryRunRecordRunner(runs.parsedToNothing);
+
+    await runner.ExecutePrompt(BuildPromptParams(prompts.plain));
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(runs.parsedToNothing.ErrorMessage).toBe(PARSE_FALLBACK);
+    expect(runs.parsedToNothing.Result).toBe('   ');
   });
 });
