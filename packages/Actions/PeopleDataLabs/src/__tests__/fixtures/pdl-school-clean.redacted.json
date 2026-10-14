@@ -1,0 +1,31 @@
+{
+  "url": "https://api.peopledatalabs.com/v5/school/clean?name=HKS",
+  "status": 200,
+  "headers": {
+    "x-ratelimit-limit": "{\"minute\": 100, \"month\": 10000}",
+    "x-ratelimit-remaining": "{\"minute\": 99, \"month\": 9999}",
+    "x-ratelimit-reset": "2026-10-12 21:53:52"
+  },
+  "body": {
+    "status": 200,
+    "name": "harvard kennedy school",
+    "type": "post-secondary institution",
+    "id": "wFf8bchauioIdYC6xBTKBA_0000",
+    "location": {
+      "name": "cambridge, massachusetts, united states",
+      "locality": "cambridge",
+      "region": "massachusetts",
+      "country": "united states",
+      "continent": "north america"
+    },
+    "linkedin_url": "linkedin.com/school/harvard-kennedy-school-of-government",
+    "facebook_url": "[facebook_url]",
+    "twitter_url": "[twitter_url]",
+    "linkedin_id": "[linkedin_id]",
+    "website": "hks.harvard.edu",
+    "domain": "harvard.edu",
+    "matched_on": [
+      "name_match_exact"
+    ]
+  }
+}

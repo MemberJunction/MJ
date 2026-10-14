@@ -586,14 +586,14 @@ describe('user resize gesture — gate + per-kind commit (board chrome contract)
   });
 
   describe('BuildResizeCommitPatch (what a committed handle drag writes)', () => {
-    it('commits the FULL box (X/Y/W/H) for shape, highlight and html widgets', () => {
-      for (const kind of ['shape', 'highlight', 'html'] as const) {
+    it('commits the FULL box (X/Y/W/H) for shape, highlight, html widgets and markdown panels', () => {
+      for (const kind of ['shape', 'highlight', 'html', 'markdown'] as const) {
         expect(BuildResizeCommitPatch(kind, BOUNDS), kind).toEqual({ X: 30, Y: 40, W: 320, H: 180 });
       }
     });
 
-    it('commits X/Y/W ONLY (height stays content-driven) for sticky, text, image and markdown', () => {
-      for (const kind of ['sticky', 'text', 'image', 'markdown'] as const) {
+    it('commits X/Y/W ONLY (height stays content-driven) for sticky, text and image', () => {
+      for (const kind of ['sticky', 'text', 'image'] as const) {
         const patch = BuildResizeCommitPatch(kind, BOUNDS);
         expect(patch, kind).toEqual({ X: 30, Y: 40, W: 320 });
         expect(patch, kind).not.toHaveProperty('H');
@@ -616,14 +616,16 @@ describe('user resize gesture — gate + per-kind commit (board chrome contract)
       expect(state.ItemBounds(state.GetItem(widget.ID)!)).toEqual({ X: 30, Y: 40, W: 320, H: 180 });
     });
 
-    it('markdown panel resize changes the width but PRESERVES an existing max-height cap', () => {
+    it('markdown panel resize moves its max-height cap, so a clipped agent panel can be dragged taller', () => {
       const state = new WhiteboardState();
-      const md = state.AddItem({ Kind: 'markdown', X: 0, Y: 0, W: 280, H: 200, Markdown: '## hi' }, 'agent') as WhiteboardMarkdownItem;
-      const patch = BuildResizeCommitPatch('markdown', BOUNDS);
-      expect(state.UpdateItem(md.ID, patch!, 'user')).toBe(true);
+      const md = state.AddItem({ Kind: 'markdown', X: 0, Y: 0, W: 280, H: 120, Markdown: '## hi' }, 'agent') as WhiteboardMarkdownItem;
+      const taller = { X: 0, Y: 0, W: 280, H: 400 };
+      expect(state.UpdateItem(md.ID, BuildResizeCommitPatch('markdown', taller)!, 'user')).toBe(true);
       const after = state.GetItem(md.ID) as WhiteboardMarkdownItem;
-      expect(after.W).toBe(320);
-      expect(after.H).toBe(200); // the gesture never writes H — the agent-set cap survives
+      expect(after.W).toBe(280);
+      expect(after.H).toBe(400);
+      state.Undo();
+      expect((state.GetItem(md.ID) as WhiteboardMarkdownItem).H).toBe(120);
     });
 
     it('text label resize sets an explicit wrap width and is one undoable step', () => {

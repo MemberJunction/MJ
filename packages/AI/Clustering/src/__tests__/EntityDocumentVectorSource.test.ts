@@ -233,6 +233,18 @@ describe('EntityDocumentVectorSource — binary vector column', () => {
         expect(captured[0].IncludeBinaryFields).toBe(true);
     });
 
+    // On the server a cached RunView widens Fields to every column so its slot can serve any field set,
+    // which would load each record's DocumentText and hold every vector in the cache.
+    it('reads only the columns it uses, bypassing the RunView cache', async () => {
+        const captured = stubRecords([]);
+
+        await new EntityDocumentVectorSource(mockUser).FetchVectors({ EntityDocumentID: 'doc-1' });
+
+        expect(captured[0].Fields).toEqual(['ID', 'RecordID', 'EntityID', 'Entity', 'EntityDocumentID', 'VectorBinary', 'VectorJSON']);
+        expect(captured[0].Fields).not.toContain('DocumentText');
+        expect(captured[0].BypassCache).toBe(true);
+    });
+
     it('reads a row that has only the binary column', async () => {
         stubRecords([record('a', { binary: toBinary([0.5, -1.5, 0.25]) })]);
 
