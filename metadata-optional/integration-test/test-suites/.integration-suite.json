@@ -1408,6 +1408,17 @@
           "primaryKey": {
             "ID": "84E2D287-9A54-49AC-859C-D796DA5E6182"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT115 - Conversation Message Authorship (client transport)",
+            "Sequence": 76,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3F27D8A1-8E70-49A6-86FF-858A80446494"
+          }
         }
       ]
     },
