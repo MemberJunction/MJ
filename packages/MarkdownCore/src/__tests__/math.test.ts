@@ -5,6 +5,13 @@ import type { MathToken, MathMLToken } from '../extensions/math.extension.js';
 
 const html = (markdown: string): string => new MarkdownEngine().ParseToHtml(markdown);
 
+/**
+ * Budget for the "stay linear" cases. They take 100–200 ms locally but 1.3–1.5 s on a CI runner
+ * under the full suite (the v6.2.0-edge.4 publish gate failed twice at 1 s, #5663). The quadratic
+ * scans these cases guard against took ~5 s locally, so 3 s still catches them.
+ */
+const LINEAR_BUDGET_MS = 3000;
+
 /** The TeX of every math placeholder in the HTML, decoded, in order. */
 const mathIn = (output: string): string[] =>
   [...output.matchAll(/<code class="mj-math(?: mj-math-display)?">([\s\S]*?)<\/code>/g)].map((m) =>
@@ -201,7 +208,7 @@ describe('math extension: MathML markup', () => {
   ])('%s stay linear', (_name, markdown) => {
     const started = performance.now();
     html(markdown);
-    expect(performance.now() - started).toBeLessThan(1000);
+    expect(performance.now() - started).toBeLessThan(LINEAR_BUDGET_MS);
   });
 
   it('is off with the rest of math when enableMath is false', () => {
@@ -232,7 +239,7 @@ describe('math extension: cost', () => {
   ])('%s stay linear', (_name, markdown) => {
     const started = performance.now();
     html(markdown);
-    expect(performance.now() - started).toBeLessThan(1000);
+    expect(performance.now() - started).toBeLessThan(LINEAR_BUDGET_MS);
   });
 });
 
