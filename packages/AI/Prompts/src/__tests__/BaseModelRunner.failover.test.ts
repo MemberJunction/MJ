@@ -59,6 +59,11 @@ class TestModelRunner extends BaseModelRunner {
     return this.availableDrivers.has(driverClass);
   }
 
+  public invokeRaceWithinBound<T>(call: Promise<T>, signal: AbortSignal, prompt: MJAIPromptEntityExtended): Promise<T> {
+    const bound = this.createExecutionBound(prompt, { prompt }, signal);
+    return this.RaceWithinBound(call, bound, prompt).finally(() => bound.Dispose());
+  }
+
   public invokeExecuteWithFailover<TResult extends BaseResult>(
     prompt: MJAIPromptEntityExtended,
     params: AIPromptParams,
@@ -304,6 +309,22 @@ describe('BaseModelRunner.ExecuteWithFailover', () => {
     expect(result.success).toBe(false);
     expect(result.errorMessage).toBe('Prompt schema violation');
     expect(result.errorInfo?.canFailover).toBe(false);
+  });
+
+  it('RaceWithinBound leaves no abort listener on a caller token reused across calls', async () => {
+    const runner = new TestModelRunner();
+    const controller = new AbortController();
+    const added = vi.spyOn(controller.signal, 'addEventListener');
+    const removed = vi.spyOn(controller.signal, 'removeEventListener');
+
+    for (let i = 0; i < 50; i++) {
+      await runner.invokeRaceWithinBound(Promise.resolve(i), controller.signal, createPrompt());
+    }
+
+    const adds = added.mock.calls.filter(([type]) => type === 'abort').length;
+    const removes = removed.mock.calls.filter(([type]) => type === 'abort').length;
+    expect(adds).toBe(50);
+    expect(removes).toBe(adds);
   });
 
   describe('caller cancellation', () => {
