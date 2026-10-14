@@ -64,6 +64,13 @@ describe('MarkdownComponent (DOM)', () => {
     expect(container(f).classList.contains('my-custom-class')).toBe(true);
   });
 
+  it('re-renders when the canonical Data input changes, not only the deprecated data alias', () => {
+    const f = render({ Data: '# One' });
+    f.componentRef.setInput('Data', '# Two');
+    f.detectChanges();
+    expect(container(f).querySelector('h1')?.textContent).toContain('Two');
+  });
+
   it('emits the rendered @Output with hasCodeBlocks=true for code content', async () => {
     const f = render({ data: '' });
     const events = capture<MarkdownRenderEvent>(f.componentInstance.rendered);
