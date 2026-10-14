@@ -1,4 +1,5 @@
 import { AIErrorInfo, AIErrorType, ErrorSeverity } from './errorTypes.js';
+import { IsAbortError, REQUEST_CANCELLED_CODE } from './cancellation.js';
 import { ContainsInOrderOnOneLine, FirstBraceSpanOnOneLine } from './linearTextScan.js';
 
 /**
@@ -185,6 +186,12 @@ export class ErrorAnalyzer {
      * @returns {AIErrorType} The categorized error type
      */
     private static determineErrorType(error: any, statusCode?: number): AIErrorType {
+        // An aborted request is a cancellation, whatever its message says. A timeout abort is named
+        // TimeoutError, not AbortError, and is classified as a network error below.
+        if (IsAbortError(error) || error?.code === REQUEST_CANCELLED_CODE) {
+            return 'Cancelled';
+        }
+
         // IMPORTANT: Check error message patterns FIRST before status codes
         // This allows us to correctly classify vendor-specific errors that may use
         // non-standard status codes (e.g., xAI using 403 for billing/quota issues)
@@ -365,6 +372,9 @@ export class ErrorAnalyzer {
             case 'ContextLengthExceeded':
                 return 'Fatal';
 
+            case 'Cancelled':             // The caller's decision - retrying would defeat it
+                return 'Fatal';
+
             default:
                 return 'Transient';
         }
@@ -399,6 +409,7 @@ export class ErrorAnalyzer {
             // Clear client-side structural/configuration errors - DO NOT failover (won't help)
             case 'InvalidRequest':         // Malformed JSON/syntax won't work anywhere
             case 'NoCredentials':          // No credentials configured for ANY provider - failover won't help
+            case 'Cancelled':              // The caller cancelled - another provider must not be tried
                 return false;
 
             // Unknown errors - DEFAULT to allowing failover (permissive approach)
