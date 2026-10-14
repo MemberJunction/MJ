@@ -14,10 +14,18 @@ import {
 } from "@memberjunction/ai";
 
 /**
- * Google Gemini 3 Pro Image (Nano Banana Pro) implementation of the BaseImageGenerator class.
+ * The model used when a caller pins none. Google's Stable ID for Nano Banana Pro; the `gemini-3-pro-image-preview`
+ * ID it replaces still answers as of 2026-10 but is no longer the documented one. Callers that go through MJ's AI
+ * model catalog (the image runner, Generate Image) pin a model and never see this default.
+ */
+const DEFAULT_IMAGE_MODEL = 'gemini-3-pro-image';
+
+/**
+ * Google Gemini image models (the Nano Banana family) implementation of the BaseImageGenerator class.
  * Supports Google's most advanced image generation model with 2K/4K resolution support.
  *
- * Model: gemini-3-pro-image-preview (November 2025)
+ * Default model: gemini-3-pro-image (Nano Banana Pro, Stable); the catalog pins others — gemini-nano-banana-2.1,
+ * gemini-3.1-flash-image (Nano Banana 2), gemini-3.1-flash-lite-image (Nano Banana 2 Lite). The -preview ID is legacy.
  * - Native multimodal image generation
  * - High resolution output (up to 4K)
  * - Advanced style control and prompt understanding
@@ -68,7 +76,7 @@ export class GeminiImageGenerator extends BaseImageGenerator {
         try {
             ThrowIfAborted(params.CancellationToken, 'Gemini');
             const client = await this.ensureGeminiClient();
-            const modelName = params.model || 'gemini-3-pro-image-preview';
+            const modelName = params.model || DEFAULT_IMAGE_MODEL;
 
             // Build the generation config
             const generateConfig = this.buildGenerationConfig(params);
@@ -112,7 +120,7 @@ export class GeminiImageGenerator extends BaseImageGenerator {
         try {
             ThrowIfAborted(params.CancellationToken, 'Gemini');
             const client = await this.ensureGeminiClient();
-            const modelName = params.model || 'gemini-3-pro-image-preview';
+            const modelName = params.model || DEFAULT_IMAGE_MODEL;
 
             // Normalize the input image
             const imageInput = await this.normalizeImageInput(params.image);
@@ -162,7 +170,7 @@ export class GeminiImageGenerator extends BaseImageGenerator {
         try {
             ThrowIfAborted(params.CancellationToken, 'Gemini');
             const client = await this.ensureGeminiClient();
-            const modelName = params.model || 'gemini-3-pro-image-preview';
+            const modelName = params.model || DEFAULT_IMAGE_MODEL;
 
             // Normalize the input image
             const imageInput = await this.normalizeImageInput(params.image);
@@ -218,12 +226,57 @@ export class GeminiImageGenerator extends BaseImageGenerator {
      * Get available Gemini image generation models.
      */
     public async GetModels(): Promise<ImageModelInfo[]> {
+        const sizes = ['1024x1024', '1536x1024', '1024x1536', '2048x2048', '3840x2160', '2160x3840'];
         return [
             {
+                id: 'gemini-3-pro-image',
+                name: 'Nano Banana Pro (Gemini 3 Pro Image)',
+                description: 'Google\'s state-of-the-art image generation and editing model. 1K, 2K and 4K output; reference objects, character and style references; negative prompts and seeds.',
+                supportedSizes: sizes,
+                maxImages: 4,
+                supportsEditing: true,
+                supportsVariations: true,
+                supportsNegativePrompt: true,
+                supportsSeed: true
+            },
+            {
+                id: 'gemini-nano-banana-2.1',
+                name: 'Nano Banana 2.1',
+                description: 'Google\'s current high-efficiency image generation and editing model (October 2026): better visual quality, typography and multi-turn consistency than Nano Banana 2. 1K, 2K and 4K output.',
+                supportedSizes: sizes,
+                maxImages: 4,
+                supportsEditing: true,
+                supportsVariations: true,
+                supportsNegativePrompt: true,
+                supportsSeed: true
+            },
+            {
+                id: 'gemini-3.1-flash-image',
+                name: 'Nano Banana 2 (Gemini 3.1 Flash Image)',
+                description: 'High-efficiency image generation and editing optimized for speed and volume (February 2026). 0.5K, 1K, 2K and 4K output; up to 14 reference images. Succeeded by Nano Banana 2.1.',
+                supportedSizes: ['512x512', ...sizes],
+                maxImages: 4,
+                supportsEditing: true,
+                supportsVariations: true,
+                supportsNegativePrompt: true,
+                supportsSeed: true
+            },
+            {
+                id: 'gemini-3.1-flash-lite-image',
+                name: 'Nano Banana 2 Lite (Gemini 3.1 Flash Lite Image)',
+                description: 'Ultra-low-latency, cost-effective image generation and editing for high-volume interactive use (June 2026). 1K output only; not optimized for multiple reference inputs or multi-turn editing.',
+                supportedSizes: ['1024x1024', '1536x1024', '1024x1536'],
+                maxImages: 4,
+                supportsEditing: true,
+                supportsVariations: false,
+                supportsNegativePrompt: true,
+                supportsSeed: true
+            },
+            {
                 id: 'gemini-3-pro-image-preview',
-                name: 'Gemini 3 Pro Image (Nano Banana Pro)',
-                description: 'Google\'s most advanced image generation model (November 2025). Supports up to 4K resolution with exceptional quality and style control.',
-                supportedSizes: ['1024x1024', '1536x1024', '1024x1536', '2048x2048', '3840x2160', '2160x3840'],
+                name: 'Nano Banana Pro (legacy preview ID)',
+                description: 'The pre-Stable ID for Nano Banana Pro. Still answers as of October 2026; prefer gemini-3-pro-image.',
+                supportedSizes: sizes,
                 maxImages: 4,
                 supportsEditing: true,
                 supportsVariations: true,

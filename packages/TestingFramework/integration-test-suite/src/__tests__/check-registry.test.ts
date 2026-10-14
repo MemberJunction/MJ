@@ -21,6 +21,7 @@ import { ApiKeysChecks } from '../checks/api-keys.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
+import { AiVendorEffortChecks } from '../checks/ai-vendor-effort.checks';
 import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
@@ -137,6 +138,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['predictive-studio', PredictiveStudioChecks, 5],
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
+        ['ai-vendor-effort', AiVendorEffortChecks, 2],
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
@@ -310,6 +312,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'perplexity-decider': 5,
         'predictive-studio': 5,
         'prompt-runner': 1,
+        'ai-vendor-effort': 2,
         'queue': 7,
         'realtime-deterministic': 18,
         'realtime-session-guard': 2,

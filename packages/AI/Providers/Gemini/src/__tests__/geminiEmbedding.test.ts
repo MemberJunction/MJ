@@ -16,6 +16,18 @@ vi.mock('@google/genai', () => ({
   Content: class {},
   Part: class {},
   Blob: class {},
+  ThinkingLevel: {
+    THINKING_LEVEL_UNSPECIFIED: 'THINKING_LEVEL_UNSPECIFIED',
+    MINIMAL: 'MINIMAL',
+    LOW: 'LOW',
+    MEDIUM: 'MEDIUM',
+    HIGH: 'HIGH',
+  },
+  // Shaped like the SDK's ApiError: an Error carrying the HTTP status.
+  ApiError: class extends Error {
+    status: number;
+    constructor(options: { message: string; status: number }) { super(options.message); this.status = options.status; }
+  },
 }));
 
 // Partial: the real @memberjunction/ai (loaded below for its cancellation helpers) needs the rest.

@@ -32,6 +32,7 @@ export * from './checks/prompt-eval-harness.checks';
 export * from './checks/agent-decisions-switch.checks';
 export * from './checks/agent-prompt-cancellation.checks';
 export * from './checks/prompt-runner.checks';
+export * from './checks/ai-vendor-effort.checks';
 export * from './checks/record-process-facade.checks';
 export * from './checks/entity-actions.checks';
 export * from './checks/task-graph-execution.checks';
