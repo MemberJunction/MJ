@@ -84,18 +84,21 @@ function sdkClient(endpoint: GeminiLiveEndpoint): GoogleGenAI {
         : new GoogleGenAI({ vertexai: true, httpOptions: { baseUrl } });
 }
 
-/** The setup the installed SDK sends for `config` in the endpoint's mode. */
-async function sdkSetup(endpoint: GeminiLiveEndpoint, model: string, config: LiveConnectConfig): Promise<LiveClientSetup> {
+/**
+ * The setup `client` sends for `config`. From @google/genai 2.11 `live.connect` settles only on the server's
+ * setupComplete, which the capture server never sends (it drops the socket once it has the setup), so this waits for
+ * the captured message rather than the connect; a connect that rejects first still fails the test.
+ */
+async function sdkSetup(client: GoogleGenAI, model: string, config: LiveConnectConfig): Promise<LiveClientSetup> {
     const captured = server.NextMessage();
-    const session = await sdkClient(endpoint).live.connect({ model, config: structuredClone(config), callbacks: { onmessage: () => undefined } });
-    const text = await captured;
-    session.close();
+    const connecting = client.live.connect({ model, config: structuredClone(config), callbacks: { onmessage: () => undefined } });
+    const text = await Promise.race([captured, connecting.then(() => captured)]);
     return (JSON.parse(text) as { setup: LiveClientSetup }).setup;
 }
 
 /** Asserts MJ's setup equals the SDK's in the endpoint's mode, with the model path the endpoint needs. */
 async function expectParity(endpoint: GeminiLiveEndpoint, model: string, config: LiveConnectConfig): Promise<void> {
-    const sdk = await sdkSetup(endpoint, model, config);
+    const sdk = await sdkSetup(sdkClient(endpoint), model, config);
     const ours = BuildGeminiLiveSetup({ Endpoint: endpoint, Model: model, Project: PROJECT, Location: LOCATION }, config);
     const { model: sdkModel, ...sdkRest } = sdk;
     const { model: ourModel, ...ourRest } = ours;
@@ -136,7 +139,7 @@ const MJ_SESSIONS: Array<[string, RealtimeSessionParams]> = [
             Model: 'gemini-3.8-live',
             SystemPrompt: 'You are a helpful agent.',
             Tools: [LOOKUP_TOOL],
-            Config: { voice: 'Kore', temperature: 0.4, turnDetection: { Coverage: 'audioActivityAndAllVideo' } },
+            Config: { voice: 'Kore', temperature: 0.4, turnDetection: { Coverage: 'audioActivityAndAllVideo' }, transcriptionLanguages: ['en-US'] },
         },
     ],
     ['an avatar session', { Model: 'gemini-3.8-live', SystemPrompt: 'You are Ben.', Avatar: { AvatarID: 'Ben', PersonaName: 'Ben' } }],
@@ -174,8 +177,8 @@ const EVERY_SHARED_KEY: LiveConnectConfig = {
     ],
     sessionResumption: {},
     contextWindowCompression: { triggerTokens: '25600', slidingWindow: { targetTokens: '12800' } },
-    inputAudioTranscription: {},
-    outputAudioTranscription: {},
+    inputAudioTranscription: { languageCodes: ['en-US'] },
+    outputAudioTranscription: { languageCodes: ['en-US', 'es-US'] },
     realtimeInputConfig: {
         automaticActivityDetection: { disabled: false, startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW, silenceDurationMs: 500 },
         turnCoverage: TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY,
@@ -224,24 +227,19 @@ describe.each<GeminiLiveEndpoint>(['developer', 'enterprise'])('BuildGeminiLiveS
 });
 
 describe('BuildGeminiLiveSetup matches the installed SDK on keys only one endpoint takes', () => {
-    it('Enterprise mode: explicitVadSignal, transparent resumption, transcription language codes, a safety method', async () => {
+    it('Enterprise mode: explicitVadSignal, transparent resumption, a safety method', async () => {
         await expectParity('enterprise', 'gemini-3.8-live', {
             responseModalities: [Modality.VIDEO],
             explicitVadSignal: true,
             sessionResumption: { transparent: true },
-            inputAudioTranscription: { languageCodes: ['en-US'] },
-            outputAudioTranscription: { languageCodes: ['en-US'] },
             safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH, method: HarmBlockMethod.SEVERITY }],
         });
     });
 
     it('Enterprise mode with a Google Cloud API key: the same setup with the short model name, the key sent as x-goog-api-key', async () => {
         const config = new ConfigProbe('enterprise').Build({ ...MJ_SESSIONS[0][1], Avatar: { AvatarID: 'Ben' } });
-        const captured = server.NextMessage();
         const client = new GoogleGenAI({ vertexai: true, apiKey: 'parity-api-key', httpOptions: { baseUrl, apiVersion: 'v1' } });
-        const session = await client.live.connect({ model: 'gemini-3.8-live', config: structuredClone(config), callbacks: { onmessage: () => undefined } });
-        const sdk = (JSON.parse(await captured) as { setup: LiveClientSetup }).setup;
-        session.close();
+        const sdk = await sdkSetup(client, 'gemini-3.8-live', config);
         expect(BuildGeminiLiveSetup({ Endpoint: 'enterprise', Model: 'gemini-3.8-live', UsesApiKey: true }, config)).toStrictEqual(sdk);
         expect(sdk.model).toBe('publishers/google/models/gemini-3.8-live');
         // How the SDK authenticates a Vertex socket with an API key: a header, never the URL.
@@ -254,12 +252,9 @@ describe('BuildGeminiLiveSetup matches the installed SDK on keys only one endpoi
     it("Enterprise mode with an API key on the regional route: given the full model name, the SDK sends it as is, beside the relay's setup", async () => {
         const config = new ConfigProbe('enterprise').Build({ ...MJ_SESSIONS[0][1], Avatar: { AvatarID: 'Ben' } });
         const target = { Endpoint: 'enterprise' as const, Model: 'gemini-3.8-live', Project: PROJECT, Location: LOCATION };
-        const captured = server.NextMessage();
         // What a bridged session hands the SDK for this route: the key, the location's host as the base URL, the full name.
         const client = new GoogleGenAI({ vertexai: true, apiKey: 'parity-api-key', httpOptions: { baseUrl, apiVersion: 'v1' } });
-        const session = await client.live.connect({ model: BuildGeminiLiveModelPath(target), config: structuredClone(config), callbacks: { onmessage: () => undefined } });
-        const sdk = (JSON.parse(await captured) as { setup: LiveClientSetup }).setup;
-        session.close();
+        const sdk = await sdkSetup(client, BuildGeminiLiveModelPath(target), config);
         expect(BuildGeminiLiveSetup(target, config)).toStrictEqual(sdk);
         expect(sdk.model).toBe(`projects/${PROJECT}/locations/${LOCATION}/publishers/google/models/gemini-3.8-live`);
         expect(server.LastUpgrade?.Headers['x-goog-api-key']).toBe('parity-api-key');
@@ -273,7 +268,6 @@ describe('BuildGeminiLiveSetup matches the installed SDK on keys only one endpoi
     it.each<[GeminiLiveEndpoint, string, LiveConnectConfig]>([
         ['developer', 'explicitVadSignal', { explicitVadSignal: true }],
         ['developer', 'transparent', { sessionResumption: { transparent: true } }],
-        ['developer', 'languageCodes', { inputAudioTranscription: { languageCodes: ['en-US'] } }],
         ['enterprise', 'translationConfig', { translationConfig: { targetLanguageCode: 'es' } }],
         ['enterprise', 'multiSpeakerVoiceConfig', { speechConfig: { multiSpeakerVoiceConfig: { speakerVoiceConfigs: [] } } }],
     ])('where the SDK refuses a key (%s mode: %s), the setup leaves it out instead', async (endpoint, key, config) => {

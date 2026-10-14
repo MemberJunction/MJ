@@ -112,6 +112,8 @@ function gateCacheWrite(name: string, provider?: IMetadataProvider) {
 
 **Why this matters**: `LocalCacheManager.SetRunViewResult`, `BaseEntityEvent` consumers, `AuthorizationEvaluator`, and `BaseEngine.applyRemoteRecordData` all read per-provider state (entity flags, roles, current user). When they reach for `new Metadata()` in a multi-provider client, they read the wrong server's metadata and produce subtly wrong cache decisions, role evaluations, or entity instances. These are latent bugs that don't surface until parallel-server scenarios exist.
 
+**Metadata Info objects know their provider.** Providers construct every Info object as `new X(row, provider)`, and `BaseInfo.OwningProvider` keeps that back-reference (outside the instance, so it never serializes). Getters on an Info class that resolve sibling metadata — `EntityInfo.ChildEntities` / `ParentEntityInfo`, RLS filters, `QueryInfo.Fields`, `AuthorizationInfo.Roles` — go through `MetadataProviderFor(this)`, never `Metadata.Provider`. When you add such a getter, do the same, and when an Info class builds child Info objects, pass the provider on.
+
 **When `new Metadata()` IS fine**: methods that genuinely operate on the global default — e.g., a one-off CLI script, application bootstrap, a singleton initializer that explicitly registers itself as the global provider.
 
 ### 🚨 CRITICAL: Entity Naming Convention Warning

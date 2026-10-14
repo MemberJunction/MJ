@@ -1,5 +1,6 @@
+import { PermissionConstrainedError } from '@memberjunction/core';
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual, NormalizeUUID, MJGlobal } from "@memberjunction/global";
+import { UUIDsEqual, NormalizeUUID, MJGlobal, IndexByUUID, UUIDSet } from "@memberjunction/global";
 import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ParseVendorConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
@@ -938,6 +939,21 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this.GetConfigData<MJAIAgentEntityExtended>('_agents');
     }
 
+    /**
+     * The agents this user may read, or none: `Agents` throws {@link PermissionConstrainedError} when the engine could not
+     * load them for the current user, which is right for code that needs them and wrong for a screen that must keep rendering
+     * (a conversation, a mention picker, a task's agent name) for a user who holds no read on MJ: AI Agents. Such code reads
+     * this instead and gets an empty list, the same way `IsPermissionConstrained` tells it to.
+     */
+    public get ReadableAgents(): MJAIAgentEntityExtended[] {
+        try {
+            return this.Agents;
+        } catch (error) {
+            if (error instanceof PermissionConstrainedError) return [];
+            throw error;
+        }
+    }
+
     public get AgentRelationships(): MJAIAgentRelationshipEntity[] {
         return this.GetConfigData<MJAIAgentRelationshipEntity>('_agentRelationships');
     }
@@ -1043,11 +1059,12 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     /** Walks up the category tree from `categoryId` and returns the first `DefaultStorageAccountID` found. */
     private resolveCategoryStorageAccountID(categoryId: string | null): string | null {
-        const visited = new Set<string>();
+        const categoriesById = IndexByUUID(this.AgentCategories);
+        const visited = new UUIDSet();
         let currentId = categoryId;
-        while (currentId && !visited.has(currentId)) {
-            visited.add(currentId);
-            const category = this.AgentCategories.find(c => UUIDsEqual(c.ID, currentId));
+        while (currentId && !visited.Has(currentId)) {
+            visited.Add(currentId);
+            const category = categoriesById.Get(currentId);
             if (!category) return null;
             if (category.DefaultStorageAccountID) return category.DefaultStorageAccountID;
             currentId = category.ParentID;

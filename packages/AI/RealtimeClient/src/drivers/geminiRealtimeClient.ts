@@ -25,6 +25,7 @@ import {
     type Content,
     type FunctionCall,
     type FunctionResponse,
+    type LiveCallbacks,
     type LiveConnectConfig,
     type LiveServerContent,
     type LiveServerMessage,
@@ -902,18 +903,37 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Creation seam for the Gemini Live session. Production constructs a `GoogleGenAI` client
      * with the **ephemeral token as the API key** on the `v1alpha` API version (the only
      * version that accepts `auth_tokens`), then opens `live.connect` with the server-built
-     * model + config. Unit tests override this to return an in-memory fake.
+     * model + config. Rejects if the socket errors or closes before Gemini acknowledges the setup.
+     * Unit tests override this to return an in-memory fake.
      */
     protected async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         const ai = new GoogleGenAI({ apiKey: args.EphemeralToken, httpOptions: { apiVersion: 'v1alpha' } });
-        return ai.live.connect({
-            model: args.Model,
-            config: args.Config,
-            callbacks: {
+        return this.connectUntilSetup(args, (callbacks) => ai.live.connect({ model: args.Model, config: args.Config, callbacks }));
+    }
+
+    /**
+     * Opens a Live connection with `connect`, which passes the given callbacks to `live.connect`, and rejects if the
+     * socket errors or closes before Gemini acknowledges the setup. `live.connect` (@google/genai 2.11+) resolves only on
+     * the server's setupComplete frame and never rejects when the socket errors or closes first (a rejected token, model
+     * or setup field), so without this the connect waits forever. A promise settles once, so callbacks after a successful
+     * connect only reach the handlers. Every {@link connectLiveSession} override should open through this.
+     */
+    protected connectUntilSetup(
+        args: GeminiClientConnectArgs,
+        connect: (callbacks: LiveCallbacks) => Promise<GeminiLiveClientSession>
+    ): Promise<GeminiLiveClientSession> {
+        return new Promise<GeminiLiveClientSession>((resolve, reject) => {
+            connect({
                 onmessage: args.OnMessage,
-                onerror: args.OnError,
-                onclose: args.OnClose,
-            },
+                onerror: (event) => {
+                    reject(new Error(`Gemini Live connection failed: ${event?.message ?? 'websocket error'}`));
+                    args.OnError(event);
+                },
+                onclose: (event) => {
+                    reject(new Error(`Gemini Live closed during setup (code ${event?.code ?? 'unknown'}${event?.reason ? `: ${event.reason}` : ''})`));
+                    args.OnClose(event);
+                },
+            }).then(resolve, reject);
         });
     }
 

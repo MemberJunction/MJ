@@ -1558,13 +1558,13 @@ export class SQLServerDataProvider
                                                                                         @Source='Clone',
                                                                                         @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
-    const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entity.EntityInfo.Name}',
+    const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entity.EntityInfo.Name}',
                                                                                         @RecordID=@ID,
                                                                                         @UserID='${payload.userID}',
                                                                                         @Type='${payload.type}',
-                                                                                        @ChangesJSON='${payload.changesJSON}',
-                                                                                        @ChangesDescription='${payload.changesDescription}',
-                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
+                                                                                        @ChangesJSON=N'${payload.changesJSON}',
+                                                                                        @ChangesDescription=N'${payload.changesDescription}',
+                                                                                        @FullRecordJSON=N'${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
                                                                                         @Comments=null${lineageClause}`;
 
@@ -1802,7 +1802,6 @@ export class SQLServerDataProvider
     );
     if (!payload) return null;
 
-    const quotes = wrapRecordIdInQuotes ? "'" : '';
     const lineageClause = payload.source === 'Restore'
       ? `,
                                                                                         @Source='Restore',
@@ -1814,13 +1813,13 @@ export class SQLServerDataProvider
                                                                                         @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
 
-    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
-                                                                                        @RecordID=${quotes}${recordID}${quotes},
+    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entityName}',
+                                                                                        @RecordID=${wrapRecordIdInQuotes ? `N'${recordID}'` : recordID},
                                                                                         @UserID='${payload.userID}',
                                                                                         @Type='${payload.type}',
-                                                                                        @ChangesJSON='${payload.changesJSON}',
-                                                                                        @ChangesDescription='${payload.changesDescription}',
-                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
+                                                                                        @ChangesJSON=N'${payload.changesJSON}',
+                                                                                        @ChangesDescription=N'${payload.changesDescription}',
+                                                                                        @FullRecordJSON=N'${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
                                                                                         @Comments=null${lineageClause}`;
   }
@@ -2707,12 +2706,12 @@ DECLARE ${varName} NVARCHAR(MAX) = (
 );
 IF ${varName} IS NOT NULL
     EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal
-        @EntityName='${safeEntityName}',
-        @RecordID='${recordID}',
+        @EntityName=N'${safeEntityName}',
+        @RecordID=N'${recordID}',
         @UserID='${safeUserId}',
         @Type='Update',
-        @ChangesJSON='${safeChangesJSON}',
-        @ChangesDescription='${safeChangesDesc}',
+        @ChangesJSON=N'${safeChangesJSON}',
+        @ChangesDescription=N'${safeChangesDesc}',
         @FullRecordJSON=${varName},
         @Status='Complete',
         @Comments=NULL${lineageClause};`;
