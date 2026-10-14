@@ -51,6 +51,8 @@ vi.mock('@memberjunction/ai', () => {
       this._additionalSettings = { ...this._additionalSettings, ...settings };
     }
     protected resetStreamingState() {}
+    // Cancellation itself is covered against the real BaseLLM in ollama.conformance.test.ts.
+    protected IsCancellationError(_error: unknown, signal?: AbortSignal | null): boolean { return signal?.aborted === true; }
     protected initializeThinkingStreamState() {}
     protected processStreamChunkWithThinking(content: string) { return content; }
     protected extractThinkingFromContent(content: string) {
@@ -75,6 +77,10 @@ vi.mock('@memberjunction/ai', () => {
     constructor(_apiKey: string) {}
     public SetAdditionalSettings(settings: Record<string, unknown>) {
       this._additionalSettings = { ...this._additionalSettings, ...settings };
+    }
+    // Embedding cancellation itself is covered against the real BaseEmbeddings in ollamaEmbedding.test.ts.
+    protected ThrowIfRequestAborted(error: unknown, signal?: AbortSignal | null): void {
+      if (signal?.aborted) { throw error; }
     }
   }
   class MockChatResult {
@@ -121,6 +127,9 @@ vi.mock('@memberjunction/ai', () => {
     EmbedTextResult: class {},
     EmbedTextsResult: class {},
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
+    ThrowIfAborted: (signal?: AbortSignal | null) => {
+      if (signal?.aborted) { throw new Error('cancelled'); }
+    },
     parseBase64DataUrl: vi.fn().mockImplementation((input: string) => {
       const match = input.match(/^data:([^;]+);base64,(.+)$/);
       if (match) return { mediaType: match[1], data: match[2] };
@@ -521,29 +530,6 @@ describe('OllamaLLM', () => {
       expect(mockOllamaConfigs).toHaveLength(0);
     });
 
-    it('returns a cancelled ChatResult without calling the SDK when pre-aborted', async () => {
-      const controller = new AbortController();
-      controller.abort();
-
-      const result = await callNonStreaming(controller.signal);
-
-      expect(mockChat).not.toHaveBeenCalled();
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('Cancelled');
-    });
-
-    it('maps a mid-flight AbortError to a cancelled ChatResult', async () => {
-      const abortError = new Error('The operation was aborted');
-      abortError.name = 'AbortError';
-      mockChat.mockRejectedValueOnce(abortError);
-
-      const result = await callNonStreaming(new AbortController().signal);
-
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('Cancelled');
-      expect(result.exception).toBe(abortError);
-    });
-
     it('still reports non-cancellation failures as normal errors', async () => {
       mockChat.mockRejectedValueOnce(new Error('connection refused'));
 
@@ -551,18 +537,6 @@ describe('OllamaLLM', () => {
 
       expect(result.success).toBe(false);
       expect(result.statusText).toBe('Error');
-    });
-
-    it('finalizeStreamingResponse reports cancellation when the stream was aborted mid-flight', () => {
-      const controller = new AbortController();
-      (llm as unknown as Record<string, AbortSignal | null>)['_streamingCancellationToken'] = controller.signal;
-      controller.abort();
-
-      const fn = (llm as unknown as Record<string, (...a: unknown[]) => ChatResultLike>)['finalizeStreamingResponse'].bind(llm);
-      const result = fn('partial text', null, null);
-
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('Cancelled');
     });
 
     it('combineSignals aborts when EITHER the caller token or the SDK signal fires', () => {

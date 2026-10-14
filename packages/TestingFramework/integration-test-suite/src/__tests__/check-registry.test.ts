@@ -21,12 +21,14 @@ import { ApiKeysChecks } from '../checks/api-keys.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
+import { AiVendorEffortChecks } from '../checks/ai-vendor-effort.checks';
 import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
 import { ConversationCompactionChecks } from '../checks/conversation-compaction.checks';
 import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.checks';
 import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.checks';
+import { AgentPromptCancellationChecks } from '../checks/agent-prompt-cancellation.checks';
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
@@ -136,6 +138,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['predictive-studio', PredictiveStudioChecks, 5],
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
+        ['ai-vendor-effort', AiVendorEffortChecks, 2],
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
@@ -146,6 +149,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['conversation-compaction', ConversationCompactionChecks, 23], // CC1-CC23
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
         ['agent-decisions-switch', AgentDecisionsSwitchChecks, 9], // DS1-DS9 the decisionsEnabled master switch, scripted chat and decision drivers (IT97)
+        ['agent-prompt-cancellation', AgentPromptCancellationChecks, 2], // APC1-APC2 a run cancelled mid-call stops there and is recorded cancelled (IT122)
         ['agent-loop-live', AgentLoopLiveChecks, 7],
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
@@ -243,6 +247,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
         'agent-decisions-switch': 9,
+        'agent-prompt-cancellation': 2,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
         'agent-loop-standin': 11,
@@ -287,7 +292,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
         'entity-server-invariants': 9,
-        'entity-writes': 9,
+        'entity-writes': 10,
         'field-rules-bulk-update': 3,
         'fls-enforcement': 24,
         'fls-enforcement-client': 6,
@@ -307,6 +312,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'perplexity-decider': 5,
         'predictive-studio': 5,
         'prompt-runner': 1,
+        'ai-vendor-effort': 2,
         'queue': 7,
         'realtime-deterministic': 18,
         'realtime-session-guard': 2,
@@ -375,7 +381,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(114);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(116);
     });
 });
 
@@ -491,6 +497,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'entity-server-invariants.ESI4',
         'entity-server-invariants.ESI9',
         'entity-writes.EW1',
+        'entity-writes.EW10',
         'entity-writes.EW2',
         'entity-writes.EW3',
         'entity-writes.EW5',

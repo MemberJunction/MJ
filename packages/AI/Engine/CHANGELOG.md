@@ -1,5 +1,116 @@
 # Change Log - @memberjunction/aiengine
 
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- 432cb73: Weekly AI model/vendor metadata refresh (2026-10-12) — two new models and two first-party price corrections in `metadata/ai-models/.ai-models.json`.
+  - **Claude Haiku 5.5 added** (`claude-haiku-5-5`, released 2026-10-07). 1M context, 128K max output, first Haiku-class model with an adjustable effort setting. Routes for Anthropic (Model Developer + Inference Provider) and Amazon Bedrock (`anthropic.claude-haiku-5-5`). Cost rows record the base tier, $0.10/$0.50 per 1M tokens with cache reads $0.01; the over-100K-prompt tier at $0.50/$2.50 is documented in `Comments` but not modelled, because MJ stores one price pair per route.
+  - **Mistral Large 4 added** (`mistral-large-4`, public preview 2026-10-06). 1.05T-parameter MoE with 52B active, 1M context. Cost row records Mistral's launch promotion ($0.68/$2.09, cached input $0.07) and names the standard post-promotion rate ($1.36/$4.18) so the row can be expired when the two-week discount lapses around 2026-10-20.
+  - **Claude Sonnet 5.5 cache-read price corrected** on the Anthropic route, $0.20 → $0.10 per 1M. Anthropic prices cache hits and refreshes on Sonnet 5.5 at 0.05x the base input price rather than the standard 0.1x. The Bedrock and OpenRouter rows keep $0.20, which came from those vendors' own price lists.
+  - **Claude Opus 5 cache-write price filled** on the Anthropic route ($6.25 per 1M, 5-minute writes), previously null. Base rates unchanged.
+
+  No vendor rows were deprecated and no existing cost row was expired this week. Verification sweeps against the vendors' own rate cards found MJ's GPT-6 family, Gemini 3.x family, Grok 4.x family and GLM 5.x family already matching current published prices.
+
+- af6f892: Gemini 3.8 Live Extended Thinking now counts video into its turns, as Gemini 3.8 Live does: its model row and its Google model-vendor row set `ModelConfiguration.Realtime.TurnDetection.Coverage` to `audioActivityAndAllVideo`. Without it the Gemini driver states `audioActivityOnly`, so camera and screen frames sent while nobody speaks may not be part of a turn. Metadata only, no code change.
+- 7316ac3: Gemini 3.8 Live gets a Vertex AI (Gemini Enterprise) model-vendor row, its voices and one example avatar persona on Vertex AI, an avatar video price and a default Vertex AI token price. The AI configuration JSON type catches up with its `@memberjunction/ai` mirror, and `spCreateAIModelCost` lets a cost row omit the deprecated `PriceTypeID`.
+  - **Vertex AI row:** `GeminiEnterpriseRealtime`, API name `gemini-3.8-live`, the Google row's `ModelConfiguration.Realtime`, Priority 1 (Google's is 0). Realtime sessions select it only where `AI_VENDOR_API_KEY__GeminiEnterpriseRealtime` is set. Gemini 3.8 Live also gains a Video / Output modality row.
+  - **Voices and avatar on Vertex AI:** Puck, Charon, Kore, Fenrir and Aoede get Audio bindings on Vertex AI with the same voice names as on Google, and the new persona "Ben" pairs Google's "Ben" avatar preset (Video binding, `VendorSettings.Avatar.Kind` `preset`) with the Puck voice. With the existing model persona rows plus Ben's, Gemini 3.8 Live lists all six on Vertex AI; the Google listing is unchanged. The Vertex AI names are unverified until Vertex AI access, and each binding says so.
+  - **Avatar video price:** `ModelConfiguration.Realtime.Pricing.AvatarVideoOutput` on the Vertex AI row is $1.00 per 1M avatar video output tokens in USD, Google's list price.
+  - **Token price:** a default cost row for Gemini 3.8 Live on Vertex AI mirrors Google's Developer API list price ($0.75 input and $4.50 output per 1M tokens, Realtime), to be checked against the Vertex AI price list. It leaves `PriceTypeID` to the database default.
+  - **AI configuration types:** `IAIConfiguration` now declares everything the `@memberjunction/ai` mirror does: `TurnDetection.Coverage`, `Reasoning.Level` (new in both, with `RealtimeReasoningEffort`), `Reasoning.IncludeThoughtSummaries`, `Tooling`, `RequestedTracks` (with a copy of the track descriptor types), `IdleSignal`, and the new `Pricing`. Members the mirror declares without `| null` lose it in the JSON type, so the generated `ModelConfigurationObject` / `PromptConfigurationObject` / `ConfigurationObject` types on the six AI entities match the mirror exactly. A Core test now fails when the two drift.
+  - **`spCreateAIModelCost`:** a migration drops the procedure so CodeGen regenerates it with `@PriceTypeID` optional, defaulting to the Tokens price type (the column default since 6.1). Cost rows can now omit the deprecated column, as its description asks.
+
+- 6d5c6ad: Add the Nano Banana 2.1 image model (`gemini-nano-banana-2.1`, Google, `GeminiImageGenerator`) with its Gemini API price: $0.0336 per 1K image ($0.0504 at 2K, $0.113 at 4K). It is not bound to the `Default Image Generation` prompt, so image generation routing is unchanged until it is added there.
+
+### Patch Changes
+
+- a709bb6: Agents no longer fail when several file storage accounts are active and none is configured as the default. The system fallback now picks the most recently updated account (ties broken by ID) and logs a warning once per agent naming the candidates and where to set `DefaultStorageAccountID`. The logic lives in shared engines so any caller gets the same answer: `FileStorageEngineBase.ActiveAccounts` / `ResolveDefaultAccount()` / `ResolveDefaultAccountID()` pick the system default, and `AIEngineBase.ResolveAgentStorageAccountID()` (delegated from `AIEngine`) runs the full agent → category → agent type → system chain. `BaseAgent.getStorageAccountID` now delegates to it.
+- 64b6fa5: `AIEngine.EmbedText` and `AIEngine.EmbedContent` now resolve the embedding driver's API key with `GetAIAPIKey(model.DriverClass)` when the caller passes none, the same fallback `PrepareLLMInstance` already applies to chat models. Semantic `SearchEntity` embeds the query with the Entity Document's model and no key, so an index built with a keyed model (Gemini, OpenAI, ...) could be written but not queried, which broke Sage's Find Candidate Agents. A caller-supplied key still wins, and local drivers are unaffected.
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [51c469d]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [822ed69]
+- Updated dependencies [1da00cb]
+- Updated dependencies [92ecdf9]
+- Updated dependencies [b699a37]
+- Updated dependencies [0dbd455]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [02bb563]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai-core-plus@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/ai-engine-base@6.2.0-edge.4
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/storage@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/actions-base@6.2.0-edge.4
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Minor Changes
