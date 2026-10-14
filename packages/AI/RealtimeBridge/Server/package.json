@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-bridge-server",
   "type": "module",
-  "version": "6.2.0-edge.3",
+  "version": "6.2.0-edge.4",
   "description": "MemberJunction: Server-tier coordination + execution for Realtime Bridges — completes the unified media-transport seam (the bridge ↔ IRealtimeSession pipe), bot-session lifecycle, host affinity + janitor, participant tracking, and turn-taking integration. Mirrors the AIEngineBase/AIEngine pair.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,12 +17,12 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.2.0-edge.3",
-    "@memberjunction/global": "6.2.0-edge.3",
-    "@memberjunction/core-entities": "6.2.0-edge.3",
-    "@memberjunction/ai": "6.2.0-edge.3",
-    "@memberjunction/ai-bridge-base": "6.2.0-edge.3",
-    "@memberjunction/communication-types": "6.2.0-edge.3",
+    "@memberjunction/core": "6.2.0-edge.4",
+    "@memberjunction/global": "6.2.0-edge.4",
+    "@memberjunction/core-entities": "6.2.0-edge.4",
+    "@memberjunction/ai": "6.2.0-edge.4",
+    "@memberjunction/ai-bridge-base": "6.2.0-edge.4",
+    "@memberjunction/communication-types": "6.2.0-edge.4",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

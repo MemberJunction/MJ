@@ -1,5 +1,36 @@
 # @memberjunction/work-queue-server
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [dde482c]
+- Updated dependencies [49f26d9]
+- Updated dependencies [88e6902]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [fcf8e1c]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [e1942c7]
+- Updated dependencies [bdea87a]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [b653746]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/generic-database-provider@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/api-keys@6.2.0-edge.4
+  - @memberjunction/work-queue-engine@6.2.0-edge.4
+  - @memberjunction/server-extensions-core@6.2.0-edge.4
+  - @memberjunction/work-queue-core@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Minor Changes

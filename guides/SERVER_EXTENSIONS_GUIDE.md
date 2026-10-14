@@ -291,6 +291,36 @@ module.exports = {
 };
 ```
 
+### Owning CORS for Your RootPath (`OwnsCORS`)
+
+MJServer mounts a **global CORS middleware before every extension** (so 401s from the auth middleware carry CORS headers). By default that middleware:
+
+- reflects any allowed origin onto your extension's responses — **including its refusals**, and
+- answers **every preflight** (`OPTIONS`) with `204` itself, so your own `OPTIONS` handler never runs.
+
+That is fine for webhooks, but an extension with **its own origin policy** (a public pre-auth edge whose allowed origins are set per resource, such as a ballot endpoint) cannot enforce it. Set `OwnsCORS: true` and the global middleware **skips every request under your `RootPath`**:
+
+```javascript
+// Open App server package (or the host serverExtensions[] entry — the host overlay can override it)
+export const MJ_SERVER_EXTENSIONS = [
+    {
+        Enabled: true,
+        DriverClass: 'BallotEdgeExtension',
+        RootPath: '/ballot',
+        Phase: 'pre-auth',
+        OwnsCORS: true,          // global CORS skips /ballot/**; this extension answers its own preflights
+        Settings: {},
+    },
+];
+```
+
+With `OwnsCORS: true` your extension is responsible for **all** CORS on its routes: answer `OPTIONS`, and set `Access-Control-Allow-Origin` (plus `Vary: Origin`) only for origins you allow. A route that sets nothing is not readable cross-origin, so a forgotten handler fails closed: MJServer answers a preflight under your root that no extension handled with a bare `404` (no CORS headers) rather than letting it fall through to the GraphQL endpoint's own CORS, which would approve every origin. Matching follows Express mount semantics (case-insensitive, on a segment boundary: `/ballot` owns `/ballot/x`, not `/ballots`). Disabled entries own nothing, and a non-boolean value is ignored with a warning. The unified auth middleware passes `OPTIONS` through, so the flag also works for `post-auth` extensions — their 401 responses then carry no CORS headers unless you add them.
+
+Do **not** reorder Express's `app.router.stack` to get ahead of the global CORS middleware; `OwnsCORS` is the supported mechanism. MJServer also disables Express's `X-Powered-By` header app-wide.
+
+### Overriding a published extension from the host
+A host `mj.config.cjs` `serverExtensions[]` entry whose `DriverClass` an Open App package already publishes is an **overlay**: it needs only `DriverClass` plus the fields it changes, for example `{ DriverClass: 'BallotEdgeExtension', OwnsCORS: false }` or `{ DriverClass: 'BallotEdgeExtension', Settings: { RateLimitMax: 200 } }`. `RootPath`, `Enabled` and `Phase` come from the published entry unless the overlay sets them, and `Settings` are merged key by key. A host-only entry (no package publishes that `DriverClass`) must still give a valid `RootPath`; one without it is reported and not mounted.
+
 ### Disabling Extensions
 To temporarily disable an extension without removing its configuration, set:
 ```javascript

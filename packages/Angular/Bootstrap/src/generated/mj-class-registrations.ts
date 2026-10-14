@@ -11,10 +11,11 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (7 classes)
+// @memberjunction/ai-realtime-client (8 classes)
 import {
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
     OpenAILiveClient,
@@ -34,7 +35,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (450 classes)
+// @memberjunction/core-entities (452 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -205,6 +206,8 @@ import {
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -561,13 +564,16 @@ import {
     MJWorkOSProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (10 classes)
+// @memberjunction/ng-conversations (13 classes)
 import {
     AgentMentionProvider,
     ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
+    RealtimeAvatarChannel,
+    RealtimeCameraChannel,
     RealtimeMediaChannel,
+    RealtimeScreenShareChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
     RemoteBrowserChannel,
@@ -851,6 +857,7 @@ import {
 const CLASS_REGISTRATIONS_0: any[] = [
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
     OpenAILiveClient,
@@ -1029,6 +1036,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -1046,13 +1055,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardCategoryLinkEntity,
     MJDashboardCategoryPermissionEntity,
     MJDashboardEntity,
-    MJDashboardEntityExtended,
-    MJDashboardPartTypeEntity,
-    MJDashboardPermissionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardEntityExtended,
+    MJDashboardPartTypeEntity,
+    MJDashboardPermissionEntity,
     MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
     MJDashboardUserStateEntity,
@@ -1250,13 +1259,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
-    MJStateProvinceEntity,
-    MJTagAuditLogEntity,
-    MJTagCoOccurrenceEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJStateProvinceEntity,
+    MJTagAuditLogEntity,
+    MJTagCoOccurrenceEntity,
     MJTagEntity,
     MJTagScopeEntity,
     MJTagSuggestionEntity,
@@ -1363,7 +1372,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
+    RealtimeAvatarChannel,
+    RealtimeCameraChannel,
     RealtimeMediaChannel,
+    RealtimeScreenShareChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
     RemoteBrowserChannel,
@@ -1451,16 +1463,16 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RubricDiffPanel,
     RubricEvaluationComparePanel,
     RubricEvaluationFormPolicy,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     RubricEvaluationResultPanel,
     RubricFormPolicy,
     RubricPublishPanel,
     RubricScaleFormPolicy,
     RubricScaleLevelsPanel,
     RubricVersionFormPolicy,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     RubricVersionSummaryPanel,
     RubricVersionsPanel,
     SkillHierarchyPanel,
@@ -1608,7 +1620,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 733;
+export const CLASS_REGISTRATIONS_COUNT = 739;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

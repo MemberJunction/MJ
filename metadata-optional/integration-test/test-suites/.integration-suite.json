@@ -1302,6 +1302,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT122 - Agent Prompt Cancellation",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7A7D504D-15A9-45A2-9BD7-2F7DB12C3E8F"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT108 - Cloudflare Clef Decision Models",
             "Sequence": 48,
             "Status": "Active"
@@ -1390,20 +1401,42 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT119 - View Properties over GraphQL",
-            "Sequence": 75,
-            "Status": "Active"
-          }
-        },
-        {
-          "fields": {
-            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT107 - Cache Architecture Invariants",
             "Sequence": 48,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "3DA009D7-6777-438C-B45A-66BE07808056"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT113 - LiveKit Room Agent Vision Consent",
+            "Sequence": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "84E2D287-9A54-49AC-859C-D796DA5E6182"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT115 - Conversation Message Authorship (client transport)",
+            "Sequence": 76,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3F27D8A1-8E70-49A6-86FF-858A80446494"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT121 - View Properties over GraphQL",
+            "Sequence": 75,
+            "Status": "Active"
           }
         },
         {
@@ -1417,7 +1450,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT122 - Calendar Event Links and Sync",
+            "TestID": "@lookup:MJ: Tests.Name=IT123 - Calendar Event Links and Sync",
             "Sequence": 49,
             "Status": "Active"
           }
@@ -1655,7 +1688,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT63 - Agent Wire Callback (fire-and-forget)",
-            "Sequence": 16,
+            "Sequence": 17,
             "Status": "Active"
           },
           "primaryKey": {
@@ -1679,6 +1712,14 @@
           "sync": {
             "lastModified": "2026-09-09T11:23:36.834Z",
             "checksum": "804747ad27abd437764b0d85a464b9e73f7964bd1b3da6c62cba0620196b60ff"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT114 - AI Vendor Effort Levels",
+            "Sequence": 16,
+            "Status": "Active"
           }
         }
       ]

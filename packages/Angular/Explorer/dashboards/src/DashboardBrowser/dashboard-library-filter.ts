@@ -9,7 +9,7 @@
  * or Uncategorized shows the dashboards whose effective category it is.
  */
 import type { MJDashboardCategoryEntity, MJDashboardEntity } from '@memberjunction/core-entities';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { FilterByUUIDs, IndexByUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 
 /** The Library filters, in rail order. */
@@ -71,7 +71,7 @@ export function FilterDashboardsForLibrary(
     case 'shared':
       return dashboards.filter(d => !UUIDsEqual(d.UserID, ctx.CurrentUserId));
     case 'favorites':
-      return dashboards.filter(d => ctx.FavoriteIds.some(id => UUIDsEqual(id, d.ID)));
+      return FilterByUUIDs(dashboards, ctx.FavoriteIds);
     case 'recent':
       return pickInOrder(dashboards, ctx.RecentIds);
     default:
@@ -81,10 +81,13 @@ export function FilterDashboardsForLibrary(
 
 /** The dashboards named by `ids`, in that order, each once. Unknown ids are skipped. */
 function pickInOrder(dashboards: MJDashboardEntity[], ids: string[]): MJDashboardEntity[] {
+  const byID = IndexByUUID(dashboards);
   const picked: MJDashboardEntity[] = [];
+  const seen = new Set<MJDashboardEntity>();
   for (const id of ids) {
-    const hit = dashboards.find(d => UUIDsEqual(d.ID, id));
-    if (hit && !picked.includes(hit)) {
+    const hit = byID.Get(id);
+    if (hit && !seen.has(hit)) {
+      seen.add(hit);
       picked.push(hit);
     }
   }
@@ -236,6 +239,7 @@ export function CountDashboardsByCategory(
   effectiveCategoryMap: Map<string, string | null>
 ): CategoryCounts {
   const byCategory = new Map<string, number>();
+  const categoriesByID = IndexByUUID(categories);
   let uncategorized = 0;
   for (const dashboard of dashboards.filter(IsBrowsableDashboard)) {
     const categoryId = EffectiveCategoryId(dashboard, effectiveCategoryMap);
@@ -243,7 +247,7 @@ export function CountDashboardsByCategory(
       uncategorized++;
       continue;
     }
-    const category = categories.find(c => UUIDsEqual(c.ID, categoryId));
+    const category = categoriesByID.Get(categoryId);
     if (category) {
       byCategory.set(category.ID, (byCategory.get(category.ID) ?? 0) + 1);
     }

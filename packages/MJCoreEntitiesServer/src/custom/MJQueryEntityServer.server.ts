@@ -130,7 +130,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
 
             // Extract and sync parameters AFTER saving, outside of any transaction
             if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
-                await this.extractAndSyncDataAsync();
+                await this.extractAndSyncDataAsync(options?.SkipEntityAIActions === true);
                 await this.autoConvertDialectsAsync();
             } else if (!this.SQL || this.SQL.trim().length === 0) {
                 this.UsesTemplate = false;
@@ -265,7 +265,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * Builds the QuerySyncContext from this entity instance for use by the extraction pipeline.
      * Resolves the SQL to the appropriate dialect variant for the connected database.
      */
-    private buildSyncContext(): QuerySyncContext {
+    private buildSyncContext(skipAIEnrichment = false): QuerySyncContext {
         return {
             queryID: this.ID,
             queryName: this.Name,
@@ -276,6 +276,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             runViewProvider: this.RunViewProviderToUse,
             platform: this.currentPlatform,
             parameterHints: this.ParameterHints,
+            SkipAIEnrichment: skipAIEnrichment,
         };
     }
 
@@ -284,18 +285,22 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * when a dialect variant matching the current platform is saved — this handles
      * the timing issue where the parent Query is saved before its QuerySQL children
      * exist in the cache.
+     *
+     * @param skipAIEnrichment Skip the LLM enrichment stage, as `SkipEntityAIActions` does for Save.
      */
-    public async RerunExtraction(): Promise<void> {
-        await this.extractAndSyncDataAsync();
+    public async RerunExtraction(skipAIEnrichment = false): Promise<void> {
+        await this.extractAndSyncDataAsync(skipAIEnrichment);
     }
 
     /**
      * Runs the extraction pipeline and saves the UsesTemplate flag.
      * On error, sets UsesTemplate=false and attempts to save so the query remains usable.
+     *
+     * @param skipAIEnrichment Skip the LLM enrichment stage (the save asked to skip AI actions).
      */
-    private async extractAndSyncDataAsync(): Promise<void> {
+    private async extractAndSyncDataAsync(skipAIEnrichment: boolean): Promise<void> {
         try {
-            const ctx = this.buildSyncContext();
+            const ctx = this.buildSyncContext(skipAIEnrichment);
             const pipelineResult = await RunExtractionPipeline(ctx);
             this.UsesTemplate = pipelineResult.UsesTemplate;
 
