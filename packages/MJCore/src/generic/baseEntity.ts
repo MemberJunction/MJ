@@ -6187,11 +6187,17 @@ export abstract class BaseEntity<T = unknown> {
                 }
             }
 
+            // Blank name (#4683) is checked BEFORE the per-field rules: when it fires it is that field's
+            // one, most specific message, and the field's own rules are skipped below.
+            const blankNameField = this.validateNameFieldNotBlank(result);
+
             // Validate own fields — for IS-A entities, skip parent field mirrors since
             // those are validated via _parentEntity above
             for (let field of this.Fields) {
                 if (this._parentEntityFieldNames?.has(field.Name))
                     continue; // skip parent field mirrors — authoritative validation is on _parentEntity
+                if (field === blankNameField)
+                    continue; // already refused above — one mistake, one message
 
                 const err = field.Validate();
                 err.Errors.forEach(element => {
@@ -6199,8 +6205,6 @@ export abstract class BaseEntity<T = unknown> {
                 });
                 result.Success = result.Success && err.Success; // if any field fails, we fail, but keep going to get all of the validation messages
             }
-
-            this.validateNameFieldNotBlank(result);
 
             // Companions validate LAST but still BEFORE any write, over their complete state including
             // pending removals. That ordering is what lets a cross-child invariant — "debits must equal
@@ -6244,25 +6248,25 @@ export abstract class BaseEntity<T = unknown> {
      *     the column's own declaration is the authority.
      *   - Skipped under the same conditions as every other field rule: read-only, `SkipValidation`,
      *     not loaded (the save does not write it), or an IS-A parent mirror (the parent validates it).
-     *   - One mistake, one message: if the field's own rules already refused the value (e.g. a value
-     *     list), that error stands alone.
+     *   - One mistake, one message: it runs before the per-field rules, and the caller skips the
+     *     refused field's own rules (a blank name on a value-list field would otherwise also fail
+     *     the list).
      *
      * @param result - The accumulating result the refusal is added to.
+     * @returns The refused name field, or null when the rule did not fire.
      */
-    private validateNameFieldNotBlank(result: ValidationResult): void {
+    private validateNameFieldNotBlank(result: ValidationResult): EntityField | null {
         const nameFieldInfo = this.EntityInfo?.NameField;
         if (!nameFieldInfo || this._parentEntityFieldNames?.has(nameFieldInfo.Name)) {
-            return;
+            return null;
         }
         const field = this.GetFieldByName(nameFieldInfo.Name);
         if (!field || !this.isBlankRequiredNameValue(nameFieldInfo, field)) {
-            return;
-        }
-        if (result.Errors.some(e => e.Source === field.Name)) {
-            return;
+            return null;
         }
         result.Success = false;
         result.Errors.push(new ValidationErrorInfo(field.Name, `${nameFieldInfo.DisplayNameOrName} cannot be blank — it is the name this record is identified by`, field.Value));
+        return field;
     }
 
     /**

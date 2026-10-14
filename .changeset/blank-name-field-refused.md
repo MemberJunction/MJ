@@ -15,7 +15,7 @@ Deliberately narrow, and each narrowing is load-bearing:
 - **Only when that column is NOT NULL.** Where the name field is nullable the developer has said absence is legal, and `''` is absence's twin — the column's own declaration is the authority rather than a constraint invented in the application layer.
 - **Not-loaded fields are exempt**, for the same reason the required check already exempts them: the save does not write them.
 
-This completes the other half of #4359, which established that `''` is a value rather than absence for every *other* column. If the field's own rules already refuse the value (a value list, say), that single error stands; the blank-name error is not added on top.
+This completes the other half of #4359, which established that `''` is a value rather than absence for every *other* column. A blank name reports one error: the blank-name check runs first and the field's other rules (a value list, say) are skipped for it.
 
 **Behavior change**: saving a record whose name field is blank or whitespace-only now fails validation where it previously succeeded. A scan of three instance databases found no existing rows this would refuse.
 

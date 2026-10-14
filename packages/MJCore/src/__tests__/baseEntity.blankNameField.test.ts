@@ -14,7 +14,7 @@
  *   2. Only when that column is NOT NULL. A nullable name field permits `null`, so it permits `''`
  *      too — the column's own declaration is the authority (ruled by @rkihm-BC on #4644).
  *   3. Whitespace-only counts as blank: `'   '` is as unidentifiable as `''`.
- *   4. One mistake, one message — a value the field's own rules already refused is not reported twice.
+ *   4. One mistake, one message — a blank name is not also reported by the field's other rules.
  *
  * The rule is entity knowledge ("which field names this record"), so it lives in BaseEntity and every
  * case here goes through an entity. Written against the EXPECTED behaviour, not read off the
@@ -230,10 +230,12 @@ describe('BaseEntity.Validate — refuses a blank value in the resolved name fie
 
         const result = entity.Validate();
 
-        // The field's own value-list rule already refuses '' — that error stands alone.
+        // '' would also fail the value list; the blank-name rule runs first and is the one message.
         expect(result.Success).toBe(false);
         expect(result.Errors).toHaveLength(1);
         expect(result.Errors[0].Source).toBe('Name');
+        expect(result.Errors[0].Message).toContain('cannot be blank');
+        expect(result.Errors[0].Message).not.toContain('must be one of');
     });
 
     it('does not validate a read-only name field', async () => {
