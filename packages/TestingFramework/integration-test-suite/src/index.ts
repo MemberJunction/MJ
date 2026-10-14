@@ -30,7 +30,9 @@ export * from './checks/permission-engine.checks';
 export * from './checks/predictive-studio.checks';
 export * from './checks/prompt-eval-harness.checks';
 export * from './checks/agent-decisions-switch.checks';
+export * from './checks/agent-prompt-cancellation.checks';
 export * from './checks/prompt-runner.checks';
+export * from './checks/ai-vendor-effort.checks';
 export * from './checks/record-process-facade.checks';
 export * from './checks/entity-actions.checks';
 export * from './checks/task-graph-execution.checks';
@@ -45,6 +47,7 @@ export * from './checks/fls-enforcement.checks';
 export * from './checks/fls-lifecycle.checks';
 export * from './checks/fls-client.checks';
 export * from './checks/self-avatar-client.checks';
+export * from './checks/conversation-authorship-client.checks';
 export * from './checks/keyrowfilter.checks'; // KF1–KF6: registers into the 'rls-isolation' bundle AFTER RLS1–RLS10 (order matters for GetBundle parity)
 export * from './checks/runquery-cache.checks';
 export * from './checks/scheduled-jobs.checks';
