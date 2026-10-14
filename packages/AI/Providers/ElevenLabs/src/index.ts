@@ -1,5 +1,5 @@
 import { RegisterClass } from "@memberjunction/global";
-import { BaseAudioGenerator, BaseTextToSpeech, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
+import { AIErrorInfo, BaseAudioGenerator, BaseTextToSpeech, BuildCancellationErrorInfo, IsRequestAborted, ThrowIfAborted, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
 // Realtime (Agents Platform) driver — BaseRealtimeModel implementation
@@ -23,8 +23,13 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
         this._elevenLabs = new ElevenLabsClient({apiKey: apiKey});
     }
 
+    /**
+     * Speaks `params.text`. `params.CancellationToken` is passed to the request, and reading the audio
+     * stops as soon as it aborts; the failure is then classified as a cancellation.
+     */
     public async CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult> {
         const speechResult = new SpeechResult();
+        const signal = params.CancellationToken;
         try {
             // New API uses textToSpeech.convert instead of generate
             const audioStream = await this._elevenLabs.textToSpeech.convert(
@@ -35,29 +40,16 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
                     voiceSettings: params.voice_settings,
                     applyTextNormalization: params.apply_text_normalization,
                     pronunciationDictionaryLocators: params.pronunciation_dictionary_locators,
-                }
+                },
+                { abortSignal: signal }
             )
 
-            // Convert ReadableStream to Buffer
-            const chunks: Uint8Array[] = [];
-            const reader = audioStream.getReader();
-
-            try {
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    if (value) chunks.push(value);
-                }
-            } finally {
-                reader.releaseLock();
-            }
-
-            const audioBuffer = Buffer.concat(chunks as Uint8Array[]);
+            const audioBuffer = await this.readAudio(audioStream, signal);
             speechResult.data = audioBuffer;
             speechResult.content = audioBuffer.toString('base64'); // Convert to base64 string
             speechResult.success = true;
         } catch (error) {
-            const errorInfo = ErrorAnalyzer.analyzeError(error, 'ElevenLabs');
+            const errorInfo = this.classifySpeechError(error, signal);
             speechResult.success = false;
             speechResult.errorMessage = error?.message || 'Unknown error occurred';
             // Kept so a caller can tell a rejected request (a 422 for an unknown voice) from an
@@ -66,6 +58,51 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
             console.error('ElevenLabs CreateSpeech error:', error, errorInfo);
         }
         return speechResult;
+    }
+
+    /**
+     * Reads the audio stream into one buffer. When `signal` aborts, the stream is cancelled, so the
+     * pending read ends at once, and a cancellation error is thrown instead of returning partial audio.
+     */
+    private async readAudio(audioStream: ReadableStream<Uint8Array>, signal: AbortSignal | undefined): Promise<Buffer> {
+        const chunks: Uint8Array[] = [];
+        const reader = audioStream.getReader();
+        const onAbort = (): void => {
+            reader.cancel(signal?.reason).catch(() => undefined);
+        };
+        signal?.addEventListener('abort', onAbort, { once: true });
+        let finished = false;
+        try {
+            while (true) {
+                ThrowIfAborted(signal, 'ElevenLabs');
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (value) chunks.push(value);
+            }
+            ThrowIfAborted(signal, 'ElevenLabs');
+            finished = true;
+        } finally {
+            signal?.removeEventListener('abort', onAbort);
+            // A read that stopped early — including an abort before the listener was attached — must
+            // still cancel the stream, or the response body stays open until it is collected.
+            if (!finished) {
+                reader.cancel(signal?.reason).catch(() => undefined);
+            }
+            reader.releaseLock();
+        }
+        return Buffer.concat(chunks);
+    }
+
+    /**
+     * Classifies a failed speech request. A request ended by its `CancellationToken` is a
+     * cancellation (never failed over), or a network error when the signal was aborted by a timeout;
+     * anything else is the analyzer's reading of the SDK's error, which keeps its HTTP status.
+     */
+    private classifySpeechError(error: unknown, signal: AbortSignal | undefined): AIErrorInfo {
+        if (IsRequestAborted(error, signal)) {
+            return BuildCancellationErrorInfo({ error, signal, provider: 'ElevenLabs' });
+        }
+        return ErrorAnalyzer.analyzeError(error, 'ElevenLabs');
     }
 
     public async SpeechToText(params: SpeechToTextParams): Promise<SpeechResult> {

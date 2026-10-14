@@ -1,3 +1,5 @@
+import type { TimeoutAbortReason } from '@memberjunction/ai';
+
 /**
  * Typed error thrown when a model call exceeds the prompt's configured `AIPrompt.TimeoutMS`.
  *
@@ -10,7 +12,13 @@
  * do so structurally via `instanceof AIPromptTimeoutError` (or by checking `name`, which survives
  * a serialization round-trip).
  */
-export class AIPromptTimeoutError extends Error {
+export class AIPromptTimeoutError extends Error implements TimeoutAbortReason {
+    /**
+     * Marks this as a timeout by type, so a signal aborted with it is classified as a timeout — a
+     * retriable network error — not as the caller cancelling.
+     */
+    public readonly IsTimeout = true as const;
+
     /** The configured timeout, in milliseconds, that was exceeded. */
     public readonly TimeoutMS: number;
 
