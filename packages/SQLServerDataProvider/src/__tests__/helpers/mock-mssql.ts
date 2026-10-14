@@ -19,14 +19,6 @@
 export interface RecordedInput {
   name: string;
   value: unknown;
-  /** The declared type when bound as `input(name, type, value)`; absent for `input(name, value)`. */
-  type?: MockSqlType;
-}
-
-/** What the mock's type factories (`sql.NVarChar(len)`) return — enough to assert the declared type. */
-export interface MockSqlType {
-  type: string;
-  length?: number;
 }
 
 export interface RecordedQuery {
@@ -175,12 +167,8 @@ export class MockRequest {
     this.parent = parent;
   }
 
-  public input(name: string, typeOrValue: unknown, value?: unknown): this {
-    if (arguments.length >= 3) {
-      this.boundInputs.push({ name, value, type: typeOrValue as MockSqlType });
-    } else {
-      this.boundInputs.push({ name, value: typeOrValue });
-    }
+  public input(name: string, value: unknown): this {
+    this.boundInputs.push({ name, value });
     return this;
   }
 
@@ -220,16 +208,11 @@ export class MockRequest {
  * and `import * as sql from 'mssql'` consumers see the same constructors (keeping
  * `instanceof` checks inside the provider working).
  */
-/** Mirrors `mssql.MAX`. */
-export const MOCK_MAX = 65535;
-
 export function createMockMssqlModule(): Record<string, unknown> {
   const mod = {
     ConnectionPool: MockConnectionPool,
     Transaction: MockTransaction,
     Request: MockRequest,
-    MAX: MOCK_MAX,
-    NVarChar: (length?: number): MockSqlType => ({ type: 'NVarChar', length }),
   };
   return { ...mod, default: mod };
 }

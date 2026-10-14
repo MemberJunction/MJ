@@ -71,12 +71,6 @@ import { BehaviorSubject, Observable, Subject, concatMap, from, catchError, of }
 
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
 import {
-  IsParameterizedStatementArray,
-  ResolveParameterizedStatement,
-  SaveParameterCollector,
-  SQLServerParameterizedStatement,
-} from './parameterizedSave';
-import {
   ExecuteSQLOptions,
   SQLServerProviderConfigData,
   SQLExecutionContext,
@@ -145,17 +139,7 @@ function buildRequest(
   }
 
   let processedQuery = query;
-  const parameterized = ResolveParameterizedStatement(query, parameters);
-  if (parameterized) {
-    // A save/delete whose values travel as parameters (see parameterizedSave.ts): run the
-    // constant-text statement, every input nvarchar(max) so the declaration list never varies.
-    for (const p of parameterized.Parameters) {
-      request.input(p.Name, sql.NVarChar(sql.MAX), p.Value);
-    }
-    processedQuery = parameterized.SQL;
-  } else if (IsParameterizedStatementArray(parameters)) {
-    // Built for a different query text — run the query it was handed, literally, unbound.
-  } else if (parameters) {
+  if (parameters) {
     if (Array.isArray(parameters)) {
       // Handle positional parameters (legacy TypeORM style)
       parameters.forEach((value, index) => {
@@ -1370,61 +1354,7 @@ export class SQLServerDataProvider
     isUpdate: boolean,
     _spName: string,
   ): SaveCallBinding {
-    const binding = this.renderSaveCallBindingWithSuffix(entity, fieldValues, isUpdate, this.allocateSaveCallSuffix(entity));
-    if (this.CanParameterizeStatement(entity)) {
-      // The same binding with every value as a parameter and a constant variable suffix, so the
-      // executed text repeats across saves. The literal binding above stays the canonical one:
-      // it is what the replay/log forms and the TransactionGroup path are built from.
-      const params = new SaveParameterCollector();
-      const parameterized = this.renderSaveCallBindingWithSuffix(entity, fieldValues, isUpdate, SQLServerDataProvider.PARAMETERIZED_SUFFIX, params);
-      if (!params.Unsafe) {
-        this._parameterizedBindings.set(binding, { Binding: parameterized, Params: params });
-      }
-    }
-    return binding;
-  }
-
-  /**
-   * When true (the default), single-record saves and deletes send their values as `nvarchar(max)`
-   * parameters so SQL Server reuses one plan per entity + operation instead of compiling every
-   * save. False restores the all-literal batches everywhere.
-   */
-  public static ParameterizeSaves: boolean = true;
-
-  /**
-   * Most parameters one parameterized save/delete may bind. SQL Server allows 2,100 per request;
-   * a statement that would need more runs as the literal batch instead.
-   */
-  public static MaxSaveParameters: number = 2000;
-
-  /** Variable suffix for the parameterized statement: constant, so its text repeats. */
-  private static readonly PARAMETERIZED_SUFFIX = '_mjp';
-
-  /** Parameterized twin of each literal save binding, keyed by the binding the generic layer hands back. */
-  private _parameterizedBindings = new WeakMap<SaveCallBinding, { Binding: Extract<SaveCallBinding, { kind: 'mssql-declare-exec' }>; Params: SaveParameterCollector }>();
-
-  /**
-   * Whether this entity's save/delete may run parameterized. A TransactionGroup combines its
-   * items' SQL text (and regenerates it via `GetSaveSQL`, which returns text only), so grouped
-   * saves keep the literal batch.
-   */
-  protected CanParameterizeStatement(entity: BaseEntity): boolean {
-    return SQLServerDataProvider.ParameterizeSaves && !entity.TransactionGroup;
-  }
-
-  /**
-   * Pairs a literal statement with its parameterized twin as the `parameters` the executor
-   * understands. When the twin is unusable (a value with no text form, or over
-   * {@link MaxSaveParameters}) the fragment carries the literal statement alone.
-   */
-  private toParameterizedFragment(literalSQL: string, parameterizedSQL: string, params: SaveParameterCollector): SaveSQLFragment {
-    if (params.Count > SQLServerDataProvider.MaxSaveParameters) {
-      params.MarkUnsafe(`${params.Count} parameters exceeds SQLServerDataProvider.MaxSaveParameters (${SQLServerDataProvider.MaxSaveParameters})`);
-    }
-    if (params.Unsafe) {
-      return { sql: literalSQL };
-    }
-    return { sql: literalSQL, parameters: [new SQLServerParameterizedStatement(parameterizedSQL, [...params.Parameters], literalSQL)] };
+    return this.renderSaveCallBindingWithSuffix(entity, fieldValues, isUpdate, this.allocateSaveCallSuffix(entity));
   }
 
   /**
@@ -1437,7 +1367,6 @@ export class SQLServerDataProvider
     fieldValues: Map<EntityFieldInfo, unknown>,
     isUpdate: boolean,
     uniqueSuffix: string,
-    params?: SaveParameterCollector,
   ): Extract<SaveCallBinding, { kind: 'mssql-declare-exec' }> {
     const declarations: string[] = [];
     const setStatements: string[] = [];
@@ -1452,18 +1381,12 @@ export class SQLServerDataProvider
       // A binary value is rendered to its hex literal ONCE and reused below: the literal is twice
       // the size of the bytes, and the SET block and the simple-params form both carry it.
       const hasValue = value !== null && value !== undefined;
-      if (params) {
-        // Parameterized: every field gets a SET (NULL included) so the text does not vary with
-        // which values happen to be null. No simple-params form — it is a literal-only artifact.
-        setStatements.push(`SET ${varName} = ${params.AddField(f, value)}`);
-      } else {
-        const binaryLiteral = hasValue && f.IsBinaryFieldType ? this.FormatBinaryLiteral(f, value) : undefined;
-        if (hasValue) {
-          setStatements.push(`SET ${varName} = ${binaryLiteral ?? this.generateSetStatementValue(f, value)}`);
-        }
-        simpleParams += this.generateSingleSPParam(f, value as string, bFirst, binaryLiteral);
+      const binaryLiteral = hasValue && f.IsBinaryFieldType ? this.FormatBinaryLiteral(f, value) : undefined;
+      if (hasValue) {
+        setStatements.push(`SET ${varName} = ${binaryLiteral ?? this.generateSetStatementValue(f, value)}`);
       }
       execParams.push(`@${f.CodeName}=${varName}`);
+      simpleParams += this.generateSingleSPParam(f, value as string, bFirst, binaryLiteral);
       bFirst = false;
 
       if ((value === null || value === undefined) && f.NeedsClearCompanion) {
@@ -1481,7 +1404,7 @@ export class SQLServerDataProvider
         if (!f) continue;
         const varName = `@${f.CodeName}${uniqueSuffix}`;
         declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
-        setStatements.push(`SET ${varName} = ${params ? params.AddField(f, pkv.Value) : this.generateSetStatementValue(f, pkv.Value)}`);
+        setStatements.push(`SET ${varName} = ${this.generateSetStatementValue(f, pkv.Value)}`);
         execParams.push(`@${f.CodeName}=${varName}`);
         const pkeyQuotes = f.NeedsQuotes ? "'" : '';
         simpleParams += `, @${f.CodeName} = ${pkeyQuotes}${pkv.Value}${pkeyQuotes}`;
@@ -1599,18 +1522,8 @@ export class SQLServerDataProvider
     if (binding.kind !== 'mssql-declare-exec') {
       throw new Error(`SQLServerDataProvider.WrapSaveCallForResult: unexpected binding kind '${binding.kind}'`);
     }
-    const literalSQL = this.renderSaveCallForResult(binding, entity, spName);
-    const parameterized = this._parameterizedBindings.get(binding);
-    if (!parameterized) {
-      return { sql: literalSQL };
-    }
-    const parameterizedSQL = this.renderSaveCallForResult(parameterized.Binding, entity, spName);
-    return this.toParameterizedFragment(literalSQL, parameterizedSQL, parameterized.Params.Clone());
-  }
-
-  private renderSaveCallForResult(binding: Extract<SaveCallBinding, { kind: 'mssql-declare-exec' }>, entity: BaseEntity, spName: string): string {
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${binding.callArgsSQL}`;
-    return `${this.renderDeclareSetHead(binding)}${execSQL}`;
+    return { sql: `${this.renderDeclareSetHead(binding)}${execSQL}` };
   }
 
   /**
@@ -1627,26 +1540,6 @@ export class SQLServerDataProvider
     if (binding.kind !== 'mssql-declare-exec') {
       throw new Error(`SQLServerDataProvider.WrapSaveCallWithRecordChange: unexpected binding kind '${binding.kind}'`);
     }
-    const literalSQL = this.renderSaveWithRecordChange(binding, payload, entity);
-    const parameterized = this._parameterizedBindings.get(binding);
-    if (!parameterized) {
-      return { sql: literalSQL };
-    }
-    const params = parameterized.Params.Clone();
-    const parameterizedSQL = this.renderSaveWithRecordChange(parameterized.Binding, payload, entity, params);
-    return this.toParameterizedFragment(literalSQL, parameterizedSQL, params);
-  }
-
-  /**
-   * The @ResultTable + inline `spCreateRecordChange_Internal` save statement. With `params`, the
-   * Record Change values are bound through it instead of being inlined.
-   */
-  private renderSaveWithRecordChange(
-    binding: Extract<SaveCallBinding, { kind: 'mssql-declare-exec' }>,
-    payload: RecordChangePayload,
-    entity: BaseEntity,
-    params?: SaveParameterCollector,
-  ): string {
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
     const spName = this.GetCreateUpdateSPName(entity, payload.type === 'Create');
     const concatPKIDString = `CONCAT(${entity.EntityInfo.PrimaryKeys
@@ -1655,10 +1548,28 @@ export class SQLServerDataProvider
 
     // Build the inline `EXEC spCreateRecordChange_Internal` from the payload,
     // referencing `@ID` (set below from the result table).
-    const recordChange = this.renderRecordChangeEXEC(entity.EntityInfo.Name, '@ID', payload, params);
+    const lineageClause = payload.source === 'Restore'
+      ? `,
+                                                                                        @Source='Restore',
+                                                                                        @RestoredFromID='${payload.restoredFromID}',
+                                                                                        @RestoreReason=${payload.restoreReason ? `N'${payload.restoreReason.replace(/'/g, "''")}'` : 'NULL'}`
+      : payload.source === 'Clone'
+      ? `,
+                                                                                        @Source='Clone',
+                                                                                        @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
+      : '';
+    const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entity.EntityInfo.Name}',
+                                                                                        @RecordID=@ID,
+                                                                                        @UserID='${payload.userID}',
+                                                                                        @Type='${payload.type}',
+                                                                                        @ChangesJSON='${payload.changesJSON}',
+                                                                                        @ChangesDescription='${payload.changesDescription}',
+                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
+                                                                                        @Status='Complete',
+                                                                                        @Comments=null${lineageClause}`;
 
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${binding.callArgsSQL}`;
-    return `
+    const sql = `
                     ${binding.preambleSQL}
 
                     DECLARE @ResultTable TABLE (
@@ -1680,67 +1591,12 @@ export class SQLServerDataProvider
                             ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
                         );
 
-                        ${recordChange.DeclareSQL ? `${recordChange.DeclareSQL}\n\n                        ` : ''}INSERT INTO @ResultChangesTable
-                        ${recordChange.ExecSQL};
+                        INSERT INTO @ResultChangesTable
+                        ${recordChangeEXEC};
                     END;
 
                     SELECT * FROM @ResultTable;`;
-  }
-
-  /**
-   * Renders `EXEC spCreateRecordChange_Internal ...` for a payload. Literal form (no `params`):
-   * the payload's values are inlined exactly as they always were. Parameterized form: each
-   * per-save value is bound through `params` into a local typed like its literal (`'…'` →
-   * VARCHAR(MAX), `N'…'` → NVARCHAR(MAX)), so the procedure receives what the literal produced;
-   * `DeclareSQL` holds those locals and must precede the EXEC.
-   */
-  private renderRecordChangeEXEC(
-    entityName: string,
-    recordIDSQL: string,
-    payload: RecordChangePayload,
-    params?: SaveParameterCollector,
-  ): { DeclareSQL: string; ExecSQL: string } {
-    const locals: string[] = [];
-    const bind = (name: string, sqlType: 'VARCHAR(MAX)' | 'NVARCHAR(MAX)', reference: string): string => {
-      locals.push(`@mjrc_${name} ${sqlType} = ${reference}`);
-      return `@mjrc_${name}`;
-    };
-    const userID = params ? bind('UserID', 'VARCHAR(MAX)', params.Add(payload.userID)) : `'${payload.userID}'`;
-    const changesJSON = params ? bind('ChangesJSON', 'VARCHAR(MAX)', params.AddEscaped(payload.changesJSON)) : `'${payload.changesJSON}'`;
-    const changesDescription = params
-      ? bind('ChangesDescription', 'VARCHAR(MAX)', params.AddEscaped(payload.changesDescription))
-      : `'${payload.changesDescription}'`;
-    const fullRecordJSON = params ? bind('FullRecordJSON', 'VARCHAR(MAX)', params.AddEscaped(payload.fullRecordJSON)) : `'${payload.fullRecordJSON}'`;
-
-    let lineageClause = '';
-    if (payload.source === 'Restore') {
-      const restoredFromID = params ? bind('RestoredFromID', 'VARCHAR(MAX)', params.Add(payload.restoredFromID)) : `'${payload.restoredFromID}'`;
-      const restoreReason = params
-        ? bind('RestoreReason', 'NVARCHAR(MAX)', params.Add(payload.restoreReason ? payload.restoreReason : null))
-        : payload.restoreReason ? `N'${payload.restoreReason.replace(/'/g, "''")}'` : 'NULL';
-      lineageClause = `,
-                                                                                        @Source='Restore',
-                                                                                        @RestoredFromID=${restoredFromID},
-                                                                                        @RestoreReason=${restoreReason}`;
-    } else if (payload.source === 'Clone') {
-      const changeContext = params
-        ? bind('ChangeContext', 'NVARCHAR(MAX)', params.AddSQLStringEscaped(payload.changeContext))
-        : `N'${EscapeSQLString(payload.changeContext)}'`;
-      lineageClause = `,
-                                                                                        @Source='Clone',
-                                                                                        @ChangeContext=${changeContext}`;
-    }
-
-    const execSQL = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
-                                                                                        @RecordID=${recordIDSQL},
-                                                                                        @UserID=${userID},
-                                                                                        @Type='${payload.type}',
-                                                                                        @ChangesJSON=${changesJSON},
-                                                                                        @ChangesDescription=${changesDescription},
-                                                                                        @FullRecordJSON=${fullRecordJSON},
-                                                                                        @Status='Complete',
-                                                                                        @Comments=null${lineageClause}`;
-    return { DeclareSQL: locals.length > 0 ? `DECLARE ${locals.join(', ')};` : '', ExecSQL: execSQL };
+    return { sql };
   }
 
   /**
@@ -1930,23 +1786,6 @@ export class SQLServerDataProvider
     restoreContext?: RestoreContext | null,
     cloneContext?: CloneContext | null,
   ) {
-    return this.renderLogRecordChange(newData, oldData, entityName, recordID, entityInfo, type, user, wrapRecordIdInQuotes, restoreContext, cloneContext)?.ExecSQL ?? null;
-  }
-
-  /** {@link GetLogRecordChangeSQL}, optionally binding the per-change values through `params`. */
-  private renderLogRecordChange(
-    newData: Record<string, unknown> | null,
-    oldData: Record<string, unknown> | null,
-    entityName: string,
-    recordID: string,
-    entityInfo: EntityInfo,
-    type: 'Create' | 'Update' | 'Delete',
-    user: UserInfo,
-    wrapRecordIdInQuotes: boolean,
-    restoreContext?: RestoreContext | null,
-    cloneContext?: CloneContext | null,
-    params?: SaveParameterCollector,
-  ): { DeclareSQL: string; ExecSQL: string } | null {
     // Dialect-agnostic payload assembly is hoisted into DatabaseProviderBase
     // so SQL Server and PostgreSQL share one implementation. We only render
     // the T-SQL EXEC wrapper here.
@@ -1964,15 +1803,26 @@ export class SQLServerDataProvider
     if (!payload) return null;
 
     const quotes = wrapRecordIdInQuotes ? "'" : '';
-    const recordIDSQL = params ? '@mjrc_RecordID' : `${quotes}${recordID}${quotes}`;
-    const rendered = this.renderRecordChangeEXEC(entityName, recordIDSQL, payload, params);
-    if (!params) return rendered;
-    // Unquoted record ids are numeric literals; only the quoted (string) form binds as text.
-    if (!wrapRecordIdInQuotes) {
-      params.MarkUnsafe('record change RecordID is an unquoted literal');
-    }
-    const recordIDDeclare = `DECLARE @mjrc_RecordID VARCHAR(MAX) = ${params.Add(String(recordID))};`;
-    return { DeclareSQL: `${recordIDDeclare}\n${rendered.DeclareSQL}`, ExecSQL: rendered.ExecSQL };
+    const lineageClause = payload.source === 'Restore'
+      ? `,
+                                                                                        @Source='Restore',
+                                                                                        @RestoredFromID='${payload.restoredFromID}',
+                                                                                        @RestoreReason=${payload.restoreReason ? `N'${payload.restoreReason.replace(/'/g, "''")}'` : 'NULL'}`
+      : payload.source === 'Clone'
+      ? `,
+                                                                                        @Source='Clone',
+                                                                                        @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
+      : '';
+
+    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
+                                                                                        @RecordID=${quotes}${recordID}${quotes},
+                                                                                        @UserID='${payload.userID}',
+                                                                                        @Type='${payload.type}',
+                                                                                        @ChangesJSON='${payload.changesJSON}',
+                                                                                        @ChangesDescription='${payload.changesDescription}',
+                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
+                                                                                        @Status='Complete',
+                                                                                        @Comments=null${lineageClause}`;
   }
   /**
    * Implements the abstract BuildRecordChangeSQL from DatabaseProviderBase.
@@ -2011,20 +1861,11 @@ export class SQLServerDataProvider
    * This function generates both the full SQL (with record change metadata) and the simple stored procedure call for delete
    * @returns Object with fullSQL and simpleSQL properties
    */
-  private getDeleteSQLWithDetails(
-    entity: BaseEntity,
-    user: UserInfo,
-    skipRecordChanges = false,
-    params?: SaveParameterCollector,
-  ): { fullSQL: string; simpleSQL: string } {
+  private getDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo, skipRecordChanges = false): { fullSQL: string; simpleSQL: string } {
     let sSQL: string = '';
     const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.BaseTableCodeName}`;
     const sParams = entity.PrimaryKey.KeyValuePairs.map((kv) => {
       const f = entity.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase());
-      if (params) {
-        // An unquoted key is a numeric literal; bind it only when it is plain digits.
-        return `@${f.CodeName}=${f.NeedsQuotes ? params.Add(String(kv.Value)) : params.AddField(f, kv.Value)}`;
-      }
       const quotes = f.NeedsQuotes ? "'" : '';
       return `@${f.CodeName}=${quotes}${kv.Value}${quotes}`;
     }).join(', ');
@@ -2047,8 +1888,6 @@ export class SQLServerDataProvider
         return `@${pk.CodeName} IS NOT NULL`;
       }).join(' AND ');
       const sCombinedPrimaryKey: string = entity.PrimaryKey.ToConcatenatedString();
-      // pass in null for new data for deleted records
-      const recordChange = this.renderLogRecordChange(null, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true, entity.RestoreContext, entity.CloneContext, params);
       const sReturnList: string = entity.PrimaryKeys.map((pk) => {
         return `@${pk.CodeName} AS [${pk.Name}]`;
       }).join(', ');
@@ -2071,8 +1910,8 @@ export class SQLServerDataProvider
                             ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
                         )
 
-                        ${recordChange?.DeclareSQL ? `${recordChange.DeclareSQL}\n\n                        ` : ''}INSERT INTO @ResultChangesTable
-                        ${recordChange?.ExecSQL ?? null}
+                        INSERT INTO @ResultChangesTable
+                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true, entity.RestoreContext, entity.CloneContext)}
                     END
 
                     SELECT ${sReturnList}`;
@@ -2097,20 +1936,10 @@ export class SQLServerDataProvider
   // above). See plans/sp-save-builder-generic-layer-refactor.md (rev 4).
 
   protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo, options?: EntityDeleteOptions): DeleteSQLResult {
-    const skipRecordChanges = options?.SkipRecordChanges === true;
-    const sqlDetails = this.getDeleteSQLWithDetails(entity, user, skipRecordChanges);
-    if (!this.CanParameterizeStatement(entity)) {
-      return { fullSQL: sqlDetails.fullSQL, simpleSQL: sqlDetails.simpleSQL };
-    }
-    // Same statement with the key + Record Change values as parameters; fullSQL stays literal
-    // (logging, error messages), the executor runs the parameterized twin.
-    const params = new SaveParameterCollector();
-    const parameterized = this.getDeleteSQLWithDetails(entity, user, skipRecordChanges, params);
-    const fragment = this.toParameterizedFragment(sqlDetails.fullSQL, parameterized.fullSQL, params);
+    const sqlDetails = this.getDeleteSQLWithDetails(entity, user, options?.SkipRecordChanges === true);
     return {
       fullSQL: sqlDetails.fullSQL,
       simpleSQL: sqlDetails.simpleSQL,
-      ...(fragment.parameters ? { parameters: fragment.parameters } : {}),
     };
   }
 
