@@ -9,7 +9,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 // config.ts evaluates `configInfo = LoadConfig()` at module load, and it rejects a configuration
 // carrying no database credentials. Stubbing only the cosmiconfig search lets the module import so the
-// REAL serverExtensionSchema is under test (same pattern as newUserRolesDefault.test.ts).
+// REAL ServerExtensionSchema is under test (same pattern as newUserRolesDefault.test.ts).
 vi.mock('cosmiconfig', () => ({
     cosmiconfigSync: () => ({
         search: () => ({
@@ -22,7 +22,7 @@ vi.mock('cosmiconfig', () => ({
 
 import { MergeServerExtensionConfigs, PrepareServerExtensionConfigs } from '@memberjunction/server-extensions-core';
 import type { ServerExtensionConfig } from '@memberjunction/server-extensions-core';
-import { serverExtensionSchema } from '../config.js';
+import { ServerExtensionSchema } from '../config.js';
 
 const published: ServerExtensionConfig = {
     Enabled: true,
@@ -34,27 +34,27 @@ const published: ServerExtensionConfig = {
 
 describe('host serverExtensions[] overlay schema', () => {
     it('accepts an overlay that names only DriverClass and the fields it overrides', () => {
-        const parsed = serverExtensionSchema.safeParse({ DriverClass: 'BallotEdge', OwnsCORS: false });
+        const parsed = ServerExtensionSchema.safeParse({ DriverClass: 'BallotEdge', OwnsCORS: false });
         expect(parsed.success).toBe(true);
         expect(parsed.success && parsed.data.RootPath).toBeUndefined();
         expect(parsed.success && parsed.data.Enabled).toBeUndefined();
     });
 
     it('merges the overlay onto the published entry without losing RootPath or Enabled', () => {
-        const overlay = serverExtensionSchema.parse({ DriverClass: 'BallotEdge', OwnsCORS: false, Settings: { RateLimitMax: 2000 } });
+        const overlay = ServerExtensionSchema.parse({ DriverClass: 'BallotEdge', OwnsCORS: false, Settings: { RateLimitMax: 2000 } });
         const [merged] = MergeServerExtensionConfigs([published], [overlay as ServerExtensionConfig]);
         expect(merged).toMatchObject({ DriverClass: 'BallotEdge', RootPath: '/vote', Enabled: true, OwnsCORS: false });
         expect(merged.Settings).toEqual({ RateLimitMax: 2000 });
     });
 
     it('does not re-enable an extension the package ships disabled', () => {
-        const overlay = serverExtensionSchema.parse({ DriverClass: 'BallotEdge', Settings: { RateLimitMax: 5 } });
+        const overlay = ServerExtensionSchema.parse({ DriverClass: 'BallotEdge', Settings: { RateLimitMax: 5 } });
         const [merged] = MergeServerExtensionConfigs([{ ...published, Enabled: false }], [overlay as ServerExtensionConfig]);
         expect(merged.Enabled).toBe(false);
     });
 
     it('still rejects a host-only entry without a RootPath, after the merge', () => {
-        const overlay = serverExtensionSchema.parse({ DriverClass: 'NotPublishedAnywhere' });
+        const overlay = ServerExtensionSchema.parse({ DriverClass: 'NotPublishedAnywhere' });
         const problems: string[] = [];
         const prepared = PrepareServerExtensionConfigs(
             MergeServerExtensionConfigs([published], [overlay as ServerExtensionConfig]),

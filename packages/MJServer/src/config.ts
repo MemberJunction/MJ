@@ -235,7 +235,7 @@ const telemetrySchema = z.object({
  * `RootPath`; `Enabled` defaults to true) is validated after the merge, by prepareServerExtensionConfigs,
  * which reports an incomplete host-only entry instead of mounting it.
  */
-export const serverExtensionSchema = z.object({
+export const ServerExtensionSchema = z.object({
   Enabled: z.boolean().optional(),
   DriverClass: z.string(),
   RootPath: z.string().optional(),
@@ -839,7 +839,7 @@ const configInfoSchema = z.object({
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),
-  serverExtensions: z.array(serverExtensionSchema).optional().default([]),
+  serverExtensions: z.array(ServerExtensionSchema).optional().default([]),
   cacheSettings: cacheSettingsSchema.optional().default({}),
   loggingSettings: loggingSettingsSchema.optional().default({}),
   feedbackSettings: feedbackSettingsSchema.optional().default({}),
@@ -902,7 +902,7 @@ export type { WorkQueueConfig } from './services/workQueueConfig.js';
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
 export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
-export type ServerExtensionConfig = z.infer<typeof serverExtensionSchema>;
+export type ServerExtensionConfig = z.infer<typeof ServerExtensionSchema>;
 export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
 export type LoggingSettingsConfig = z.infer<typeof loggingSettingsSchema>;
 export type FeedbackGithubSettingsConfig = z.infer<typeof feedbackGithubSettingsSchema>;

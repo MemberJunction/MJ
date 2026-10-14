@@ -12,7 +12,8 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { GetCorsOwningServerExtensionRoots, type ServerExtensionConfig } from '@memberjunction/server-extensions-core';
-import { CreateGlobalCorsMiddleware } from '../globalCors.js';
+import cors from 'cors';
+import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from '../globalCors.js';
 
 const ALLOWED_BALLOT_ORIGIN = 'https://vote.example.org';
 const OTHER_ORIGIN = 'https://evil.example.com';
@@ -142,6 +143,67 @@ describe('CreateGlobalCorsMiddleware', () => {
         const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
         const res = await fetch(`${base}/core`, { headers: { Origin: OTHER_ORIGIN } });
         expect(res.headers.get('access-control-allow-credentials')).toBeNull();
+    });
+});
+
+/**
+ * The real mount order: global CORS → extensions → (fallback) → the GraphQL mount at `/`, whose own
+ * `cors()` approves every origin. The webhook extension owns its CORS but has no OPTIONS handler.
+ */
+async function startAppWithGraphQLMount(withFallback: boolean): Promise<string> {
+    const extensions: ServerExtensionConfig[] = [
+        ballotConfig(true),
+        { Enabled: true, DriverClass: 'Webhook', RootPath: '/webhook', Phase: 'pre-auth', OwnsCORS: true, Settings: {} },
+    ];
+    const ownedRoots = GetCorsOwningServerExtensionRoots(extensions);
+    const app = express();
+    app.use(CreateGlobalCorsMiddleware({ allowedOrigins: ['*'] }, ownedRoots));
+    mountBallotExtension(app);
+    app.post('/webhook/events', (_req, res) => { res.json({ received: true }); });
+    if (withFallback) {
+        app.use(CreateExtensionOwnedPreflightFallback(ownedRoots));
+    }
+    app.use('/', cors(), (_req, res) => { res.json({ graphql: true }); });
+    server = app.listen(0);
+    await new Promise<void>((resolve) => server!.once('listening', () => resolve()));
+    return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+}
+
+async function preflight(url: string, origin: string): Promise<Response> {
+    return fetch(url, { method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': 'POST' } });
+}
+
+describe('CreateExtensionOwnedPreflightFallback', () => {
+    it('without it, an unanswered preflight under an owned root falls through to the GraphQL cors() and is approved for any origin (the bug)', async () => {
+        const base = await startAppWithGraphQLMount(false);
+        const res = await preflight(`${base}/webhook/events`, OTHER_ORIGIN);
+        expect(res.status).toBe(204);
+        expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    });
+
+    it('refuses an unanswered preflight under an owned root with a bare 404', async () => {
+        const base = await startAppWithGraphQLMount(true);
+        for (const path of ['/webhook/events', '/WEBHOOK/Events', '/webhook/', '/webhook/no-such-route']) {
+            const res = await preflight(`${base}${path}`, OTHER_ORIGIN);
+            expect(res.status, path).toBe(404);
+            expect(res.headers.get('access-control-allow-origin'), path).toBeNull();
+        }
+    });
+
+    it('leaves an extension that answers its own preflight in charge', async () => {
+        const base = await startAppWithGraphQLMount(true);
+        const res = await preflight(`${base}/ballot/cast`, ALLOWED_BALLOT_ORIGIN);
+        expect(res.status).toBe(200);
+        expect(res.headers.get('x-ballot-preflight')).toBe('extension');
+    });
+
+    it('touches neither non-preflight requests under an owned root nor preflights elsewhere', async () => {
+        const base = await startAppWithGraphQLMount(true);
+        const post = await fetch(`${base}/webhook/events`, { method: 'POST', headers: { Origin: OTHER_ORIGIN } });
+        expect(post.status).toBe(200);
+        const sibling = await preflight(`${base}/webhookx/events`, OTHER_ORIGIN);
+        expect(sibling.status).toBe(204);
+        expect(sibling.headers.get('access-control-allow-origin')).toBe(OTHER_ORIGIN);
     });
 });
 

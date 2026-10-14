@@ -104,7 +104,7 @@ import {
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
 import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath, GetCorsOwningServerExtensionRoots } from '@memberjunction/server-extensions-core';
-import { CreateGlobalCorsMiddleware } from './globalCors.js';
+import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
 import { coreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 import { CreateMetadataRefreshSignalHandler, METADATA_REFRESH_SIGNAL } from './metadataRefreshSignal.js';
@@ -1579,6 +1579,13 @@ const setupComplete$ = new ReplaySubject(1);
       httpServer,
       publicUrl: oauthPublicUrl,
     });
+  }
+
+  // Every extension has now had its chance at the request: a preflight under an extension-owned
+  // root that none of them answered is refused here, instead of falling through to the GraphQL
+  // mount's cors(), which would approve it for every origin.
+  if (corsOwnedExtensionRoots.length > 0) {
+    app.use(CreateExtensionOwnedPreflightFallback(corsOwnedExtensionRoots));
   }
 
   // ─── Cross-extension lifecycle hook: OnAllExtensionsMounted ───────────────
