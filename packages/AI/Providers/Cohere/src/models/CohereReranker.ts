@@ -4,7 +4,8 @@ import { CohereClient } from 'cohere-ai';
 
 /**
  * Cohere implementation of the BaseReranker class.
- * Uses Cohere's Rerank API for semantic document reranking.
+ * Uses Cohere's Rerank API for semantic document reranking. A request's `CancellationToken` is
+ * handed to the SDK as its `abortSignal`, so cancelling it tears the HTTP request down.
  *
  * Supported models:
  * - rerank-v3.5: Latest English reranker with best accuracy
@@ -87,14 +88,15 @@ Find memory notes that would help respond appropriately to this message.`;
             allDocs: params.documents.map((d, i) => `[${i}] ${d.text.substring(0, 80)}...`)
         }, null, 2));
 
-        // Call Cohere's rerank endpoint with enhanced query
+        // Call Cohere's rerank endpoint with enhanced query. The caller's signal tears the request
+        // down; BaseReranker.Rerank reports the abort as a cancellation.
         const response = await this._client.rerank({
             model: this._modelName,
             query: enhancedQuery,
             documents: params.documents.map(d => d.text),
             topN: params.topK || params.documents.length,
             returnDocuments: false // We track documents ourselves to preserve metadata
-        });
+        }, { abortSignal: params.CancellationToken });
 
         // DEBUG: Log response
         console.log('CohereReranker RESPONSE:', JSON.stringify({

@@ -47,6 +47,13 @@ import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
 
+/**
+ * Entities whose update is always hydrated from the stored row, never from the client's `OldValues___`, though they
+ * do not track record changes: their server-side write rules compare against the prior state, which a client could
+ * otherwise supply itself (lower-case names). See `ResolverBase.MustLoadTruthFromDatabase`.
+ */
+const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set(['mj: record changes', 'mj: conversation details']);
+
 export class ResolverBase {
   private static _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
   private static _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
@@ -366,13 +373,16 @@ export class ResolverBase {
    * @param dataObject - The data object containing field values
    * @param encryptionEngine - Optional encryption engine for re-encryption (lazy loaded if needed)
    * @param contextUser - User context for encryption operations
+   * @param fieldKey - What the object's keys are: field CodeNames (GraphQL transport rows, the
+   *   default) or field Names (raw provider rows, such as dataset item results)
    * @returns The filtered data object
    */
   protected async FilterEncryptedFieldsForAPI(
     entityName: string,
     dataObject: Record<string, unknown>,
     contextUser: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    fieldKey: 'CodeName' | 'Name' = 'CodeName'
   ): Promise<Record<string, unknown>> {
     if (!dataObject) return dataObject;
 
@@ -386,7 +396,7 @@ export class ResolverBase {
 
     // Process each encrypted field
     for (const field of encryptedFields) {
-      const fieldName = field.CodeName;
+      const fieldName = fieldKey === 'Name' ? field.Name : field.CodeName;
       const value = dataObject[fieldName];
 
       // Skip null/undefined values
@@ -427,13 +437,15 @@ export class ResolverBase {
   }
 
   /**
-   * Filters encrypted fields for an array of data objects
+   * Filters encrypted fields for an array of data objects. `fieldKey` is as for
+   * {@link FilterEncryptedFieldsForAPI}.
    */
   protected async ArrayFilterEncryptedFieldsForAPI(
     entityName: string,
     dataObjectArray: Record<string, unknown>[],
     contextUser: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    fieldKey: 'CodeName' | 'Name' = 'CodeName'
   ): Promise<Record<string, unknown>[]> {
     if (!dataObjectArray || dataObjectArray.length === 0) return dataObjectArray;
 
@@ -447,7 +459,7 @@ export class ResolverBase {
 
     // Process each element
     for (const element of dataObjectArray) {
-      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider);
+      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider, fieldKey);
     }
 
     return dataObjectArray;
@@ -1945,6 +1957,11 @@ export class ResolverBase {
    * caller pin forged audit columns as both old and new values. It doesn't track its own changes, so
    * nothing else forces the load.
    *
+   * `MJ: Conversation Details` always loads for the same reason: its write gate decides from the stored
+   * row (who wrote a person's message, its role, the owner's rating), and an OldValues-hydrated entity
+   * would let a grantee claim to be a message's author while rewriting it. See
+   * {@link ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW}.
+   *
    * A caller under an Update row filter (a role's Update RLS filter or an API-key row filter) always
    * loads from the database too (#4919). The save's post-image check skips its query when no column
    * the filter reads is dirty, and dirtiness measured against client OldValues is the caller's to
@@ -1962,7 +1979,7 @@ export class ResolverBase {
   ): boolean {
     return (
       entityInfo.TrackRecordChanges ||
-      entityInfo.Name.trim().toLowerCase() === 'mj: record changes' ||
+      ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW.has(entityInfo.Name.trim().toLowerCase()) ||
       !input.OldValues___ ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
