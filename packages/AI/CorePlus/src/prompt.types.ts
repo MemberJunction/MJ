@@ -15,6 +15,7 @@ import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
 import { MJAIModelEntityExtended } from './MJAIModelEntityExtended';
 import { AIModelRunParams, type AIModelRunResult } from './model-run.types';
+import type { TemplateDataCaptureMode } from './prompt-run-messages.types';
 
 /**
  * Modality types for multi-modal outputs
@@ -380,6 +381,13 @@ export class AIPromptParams extends AIModelRunParams {
    * Optional custom template data that augments the main data context
    */
   templateData?: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+  /**
+   * Which template inputs (`data`, `templateData`) this run stores in `AIPromptRun.Messages`.
+   * Overrides the `TemplateDataCapture` of the run's prompts (child prompts, then the main prompt)
+   * and the server default (`aiPromptRuns.templateDataCapture` in mj.config.cjs, otherwise `'None'`).
+   */
+  TemplateDataCapture?: TemplateDataCaptureMode;
 
   /**
    * Optional conversation messages for multi-turn conversations
