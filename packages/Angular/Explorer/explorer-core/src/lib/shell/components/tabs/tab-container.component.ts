@@ -2368,7 +2368,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    * stores a single-field key in the URL-segment form with the server's casing ('ID|<UUID>'), while
    * its tab may keep the bare lower-case value from a deep link ('<uuid>'). The field name is dropped
    * only when the other id is a bare value, so two ids that both contain '|' are compared as they are.
-   * Case is ignored.
+   * Key values compare case-insensitively, as SQL Server's default collation matches them.
    */
   public static IsSameRecordId(a: string | null | undefined, b: string | null | undefined): boolean {
     const left = (a ?? '').trim().toLowerCase();

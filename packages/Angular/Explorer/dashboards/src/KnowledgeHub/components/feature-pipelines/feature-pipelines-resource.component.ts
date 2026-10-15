@@ -59,6 +59,8 @@ const RUN_FEATURE_PIPELINE_OP = 'PredictiveStudio.RunFeaturePipeline';
 export interface FeaturePipelineRunNotice {
   Message: string;
   Style: 'success' | 'warning' | 'error';
+  /** True only when the run's status is `Completed`. */
+  Completed: boolean;
 }
 
 @RegisterClass(BaseResourceComponent, 'FeaturePipelinesResource')
@@ -202,6 +204,7 @@ export class FeaturePipelinesResourceComponent
     } catch (error) {
       const notice: FeaturePipelineRunNotice = {
         Style: 'error',
+        Completed: false,
         Message: `Failed to run "${pipeline.Name}": ${error instanceof Error ? error.message : String(error)}`,
       };
       MJNotificationService.Instance.CreateSimpleNotification(notice.Message, notice.Style, 5000);
@@ -331,17 +334,18 @@ export class FeaturePipelinesResourceComponent
   ): FeaturePipelineRunNotice {
     const out = result.Output;
     if (!result.Success || !out) {
-      return { Style: 'error', Message: `"${pipelineName}" did not complete: ${result.ErrorMessage ?? 'unknown error'}` };
+      return { Style: 'error', Completed: false, Message: `"${pipelineName}" did not complete: ${result.ErrorMessage ?? 'unknown error'}` };
     }
     const reason = out.errorMessage || `the run ended with status ${out.status}`;
     if (out.status === 'Failed') {
-      return { Style: 'error', Message: `"${pipelineName}" failed: ${reason}` };
+      return { Style: 'error', Completed: false, Message: `"${pipelineName}" failed: ${reason}` };
     }
     if (out.status !== 'Completed') {
-      return { Style: 'warning', Message: `"${pipelineName}" did not finish: ${reason}` };
+      return { Style: 'warning', Completed: false, Message: `"${pipelineName}" did not finish: ${reason}` };
     }
     return {
       Style: out.error > 0 ? 'warning' : 'success',
+      Completed: true,
       Message: `"${pipelineName}" finished: ${out.processed} processed, ${out.written} succeeded, ${out.skipped} skipped unchanged, ${out.error} error(s).`,
     };
   }
@@ -417,10 +421,10 @@ export class FeaturePipelinesResourceComponent
             return { Success: false, ErrorMessage: `"${r.pipeline.Name}" is not enabled for on-demand runs.` };
           }
           const notice = await this.OnRunPipeline(r.pipeline);
-          if (notice?.Style === 'error') {
-            return { Success: false, ErrorMessage: notice.Message };
+          if (!notice?.Completed) {
+            return { Success: false, ErrorMessage: notice?.Message ?? `"${r.pipeline.Name}" is already running.` };
           }
-          return { Success: true, Data: { Pipeline: r.pipeline.Name } };
+          return { Success: true, Data: { Pipeline: r.pipeline.Name, Message: notice.Message } };
         },
       },
       {

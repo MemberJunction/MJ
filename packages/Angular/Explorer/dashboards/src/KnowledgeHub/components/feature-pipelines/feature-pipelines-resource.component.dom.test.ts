@@ -31,7 +31,7 @@ const SUMMARY: FeaturePipelineSummary = {
   LastRunProcessed: 10, LastRunSuccess: 9, LastRunErrors: 1, LastRunOutcomeText: null, LastRunErrorMessage: null, PipelineType: 'LLM',
 };
 
-function render(pipeline: FeaturePipelineSummary): ComponentFixture<FeaturePipelinesResourceComponent> {
+function render(pipeline: FeaturePipelineSummary, navigation: Partial<NavigationService> = {}): ComponentFixture<FeaturePipelinesResourceComponent> {
   // the base class's tab and query-param wiring and the engine load are not under test
   vi.spyOn(FeaturePipelinesResourceComponent.prototype, 'ngAfterViewInit').mockResolvedValue();
   vi.spyOn(FeaturePipelinesResourceComponent.prototype, 'ngOnInit').mockReturnValue();
@@ -42,7 +42,7 @@ function render(pipeline: FeaturePipelineSummary): ComponentFixture<FeaturePipel
       MJStatBadgeComponent, MJButtonDirective, StubLoadingComponent, StubEmptyStateComponent,
     ],
     declarations: [FeaturePipelinesResourceComponent],
-    providers: [{ provide: NavigationService, useValue: {} }],
+    providers: [{ provide: NavigationService, useValue: navigation }],
   });
   const fixture = TestBed.createComponent(FeaturePipelinesResourceComponent);
   fixture.componentInstance.IsLoading = false;
@@ -101,16 +101,52 @@ describe('Feature Pipelines card (DOM)', () => {
   });
 });
 
+describe('RunFeaturePipeline agent tool', () => {
+  type AgentTools = Parameters<NavigationService['SetAgentClientTools']>[1];
+
+  /** Runs the registered tool for a pipeline whose run ends with `output`, and returns what the tool answers. */
+  async function runTool(output: Partial<PredictiveStudioRunFeaturePipelineOutput>): Promise<unknown> {
+    const notifications: MJNotificationService = Object.create(MJNotificationService.prototype);
+    notifications.CreateSimpleNotification = vi.fn();
+    vi.spyOn(MJNotificationService, 'Instance', 'get').mockReturnValue(notifications);
+    let tools: AgentTools = [];
+    const component = render(SUMMARY, { SetAgentClientTools: (_caller, registered) => { tools = registered; } }).componentInstance;
+    const provider: IMetadataProvider = Object.create(null);
+    Object.assign(provider, { RouteOperation: vi.fn().mockResolvedValue(opResult(output)) });
+    component.Provider = provider;
+    // the engine reload after a run fails on this provider double and logs it; that reload is not under test
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    component['registerAgentTools']();
+    const tool = tools.find((t) => t.Name === 'RunFeaturePipeline');
+    if (!tool) {
+      throw new Error('RunFeaturePipeline was not registered');
+    }
+    return tool.Handler({ pipeline: SUMMARY.Name });
+  }
+
+  it('reports a refused run as a failure with its message', async () => {
+    expect(await runTool({ status: 'Failed', errorMessage: 'version v6 is not activated' })).toEqual({
+      Success: false, ErrorMessage: '"Member Engagement" failed: version v6 is not activated',
+    });
+  });
+
+  it('reports a cancelled run as a failure, not a success', async () => {
+    expect(await runTool({ status: 'Cancelled' })).toEqual({
+      Success: false, ErrorMessage: '"Member Engagement" did not finish: the run ended with status Cancelled',
+    });
+  });
+});
+
 describe('Feature Pipelines Run notice', () => {
   it('reports a cancelled run as a warning, not as finished', () => {
     expect(FeaturePipelinesResourceComponent.RunResultNotice('Job Titles', opResult({ status: 'Cancelled' }))).toEqual({
-      Style: 'warning', Message: '"Job Titles" did not finish: the run ended with status Cancelled',
+      Style: 'warning', Completed: false, Message: '"Job Titles" did not finish: the run ended with status Cancelled',
     });
   });
 
   it('reports a completed run as finished, with its counts', () => {
     expect(FeaturePipelinesResourceComponent.RunResultNotice('Job Titles', opResult({ processed: 5, written: 0, skipped: 5 }))).toEqual({
-      Style: 'success', Message: '"Job Titles" finished: 5 processed, 0 succeeded, 5 skipped unchanged, 0 error(s).',
+      Style: 'success', Completed: true, Message: '"Job Titles" finished: 5 processed, 0 succeeded, 5 skipped unchanged, 0 error(s).',
     });
   });
 });

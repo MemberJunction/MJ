@@ -78,8 +78,8 @@ describe('TestingInstrumentationService — Overview', () => {
         ];
         state.members.set('S-gates', ['t-golden', 'T-IT125', 'T-unrun']);
         const nodes = await firstValueFrom(new TestingInstrumentationService().SuiteHierarchy$);
-        expect(nodes.find((n) => n.id === 'S-gates')).toMatchObject({ testCount: 3, RunCount: 3, passRate: (2 / 3) * 100 });
-        expect(nodes.find((n) => n.id === 'S-empty')).toMatchObject({ testCount: 0, RunCount: 0, passRate: 0 });
+        expect(nodes.find((n) => n.name === 'Predictive Studio Gates')).toMatchObject({ testCount: 3, RunCount: 3, passRate: (2 / 3) * 100 });
+        expect(nodes.find((n) => n.name === 'Integration Tests')).toMatchObject({ testCount: 0, RunCount: 0, passRate: 0 });
     });
 
     it('includes runs started after the service was created in the default window', async () => {
@@ -96,7 +96,9 @@ describe('TestingInstrumentationService — Overview', () => {
         const service = new TestingInstrumentationService();
         service.SetSuiteFilter('S-gates');
         await firstValueFrom(service.TestRuns$);
-        expect(filterOf(state.calls.find((c) => c.EntityName === 'MJ: Test Runs')!))
+        const runsRead = state.calls.find((c) => c.EntityName === 'MJ: Test Runs');
+        expect(runsRead).toBeDefined();
+        expect(filterOf(runsRead as RunViewParams))
             .toContain("TestID IN (SELECT TestID FROM [__mj].[vwTestSuiteTests] WHERE SuiteID = 'S-gates')");
     });
 });
