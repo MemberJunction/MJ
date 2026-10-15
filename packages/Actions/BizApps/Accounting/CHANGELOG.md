@@ -1,5 +1,35 @@
 # @memberjunction/actions-bizapps-accounting
 
+## 6.1.5
+
+### Patch Changes
+
+- 11bf565: Accounting verbs can now run against a Business Central connection made by MJ's Integrations connector, and they no longer pick the first of several matching connections (#4867).
+  - **Connection lookups work on SQL Server.** Both lookups filtered `Integration.Name`, which SQL Server cannot bind ("The multi-part identifier could not be bound"). They now filter on the view's `Integration` column.
+  - **Business Central aliases.** A connection whose Integration is `business-central` (the connector's name) or `BusinessCentral` (older hosts) is found as Business Central. The dispatcher maps the alias back to the canonical name, so the plugin key stays `${verb}:Microsoft Dynamics 365 Business Central`. New exports: `ERP_INTEGRATION_ALIASES`, `ACCOUNTING_ERP_INTEGRATION_ALIASES`, `CanonicalERPIntegrationName`, `ERPIntegrationNameAliases`.
+  - **`CompanyIntegrationID` param.** Every verb and plugin accepts an optional `CompanyIntegrationID`. The dispatcher loads that connection and refuses it when it is missing, belongs to another company, is inactive, or is not an accounting connection (`COMPANY_INTEGRATION_NOT_FOUND`, `COMPANY_INTEGRATION_WRONG_COMPANY`, `COMPANY_INTEGRATION_INACTIVE`, `NOT_ACCOUNTING_INTEGRATION`; `VALIDATION_ERROR` for a malformed ID). Whichever connection the dispatcher chooses, it writes the ID into the params, so the plugin uses the same connection instead of looking one up again.
+  - **No more first match.** Without `CompanyIntegrationID`, lookups match active connections only (`IsActive = 1`). More than one match is refused with `AMBIGUOUS_ACCOUNTING_INTEGRATION`, and the message names each connection. This also applies when `IntegrationName` is passed: a company with a production and a sandbox Business Central connection must pass `CompanyIntegrationID`. Plugins invoked directly also refuse instead of taking `Results[0]`.
+  - **Connector-style Business Central auth.** A connection with a `CredentialID`, or with a `Configuration` that carries a tenant or environment, is resolved the way the connector does it: `{ ...Configuration, ...Credential.Values }` plus the `ClientID` / `ClientSecret` / `APIKey` / `ExternalSystemID` column fallbacks. The action then gets a client-credentials token from Entra ID through `OAuth2TokenManager` (one per connection) and calls `/v2.0/{tenant}/{environment}/api/v2.0/companies({companyId})`. A missing environment or company is an error; the environment is never defaulted. Connections without those settings keep the legacy path: an env or `AccessToken` token, `CustomAttribute1`, and `ExternalSystemID`. On both paths the tenant, environment and company are now URL-encoded, which leaves every valid Business Central value unchanged.
+  - **The request's provider.** The connection search and load and the Credential load use the provider the action was run with (`RunActionParams.Provider`), and fall back to the global provider when there is none.
+  - **No secret in a JSON error.** Invalid JSON in a connection's `Configuration` or a Credential's `Values` is reported by source and ID only, because the parser's message can quote the text around the error.
+  - Adds a dependency on `@memberjunction/integration-engine` for `OAuth2TokenManager`.
+
+  QuickBooks gets the lookup and `CompanyIntegrationID` fixes but not connector-style auth. The QuickBooks connector's `QuickBooks` Integration is not an alias yet.
+
+- Updated dependencies [3910bd5]
+- Updated dependencies [8ee1709]
+- Updated dependencies [8ee1709]
+- Updated dependencies [13d92ac]
+- Updated dependencies [ad65a01]
+- Updated dependencies [c3d7e50]
+- Updated dependencies [ec5f382]
+  - @memberjunction/core@6.1.5
+  - @memberjunction/actions-base@6.1.5
+  - @memberjunction/actions@6.1.5
+  - @memberjunction/core-entities@6.1.5
+  - @memberjunction/integration-engine@6.1.5
+  - @memberjunction/global@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes

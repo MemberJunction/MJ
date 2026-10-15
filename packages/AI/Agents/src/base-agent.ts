@@ -20,7 +20,7 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
@@ -109,7 +109,8 @@ import {
     ExtractPromptResultText,
     GetTaskGraphSubmitter,
     SkillAvailabilityPurpose,
-    ArtifactDirective
+    ArtifactDirective,
+    type AIPromptExecutionScope
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -2048,6 +2049,7 @@ export class BaseAgent {
             ? (params.data?.realtimeSelfNames as unknown[]).filter((n): n is string => typeof n === 'string')
             : undefined;
         return {
+            CredentialScope: params.CredentialScope,
             CoAgent: params.agent,
             TargetAgentID: targetID,
             AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
@@ -2097,7 +2099,8 @@ export class BaseAgent {
             if (!vendor) {
                 continue;
             }
-            const apiKey = GetAIAPIKey(vendor.DriverClass);
+            // Realtime only ever uses the platform key here, so a scope that rules that out has no key.
+            const apiKey = CredentialScopeAllows(params.CredentialScope, 'Environment') ? GetAIAPIKey(vendor.DriverClass) : undefined;
             if (!apiKey) {
                 continue;
             }
@@ -2437,6 +2440,7 @@ export class BaseAgent {
                 parentDepth: this._depth,
                 configurationId: params.configurationId,
                 apiKeys: params.apiKeys,
+                CredentialScope: params.CredentialScope,
                 data: params.data,
                 verbose: params.verbose,
                 // Progress streams BOTH to the runner's narration consumer (request.OnProgress —
@@ -3000,6 +3004,14 @@ export class BaseAgent {
             this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
             const nextStep = await this.executeNextStep<P>(params, config, currentNextStep, stepCount);
             stepCount++;
+
+            // A failed step cut short by a cancellation is not a failure: end the run as cancelled
+            // before the step is counted toward the consecutive-failure limit, which would end it as
+            // Failed. A step that finished is kept: a final answer the user stopped too late to
+            // prevent still completes the run.
+            if (nextStep.step === 'Failed' && params.cancellationToken?.aborted) {
+                throw new Error('Cancelled during execution');
+            }
 
             // Promote any media outputs from this step to the agent's outputs
             if (nextStep.promoteMediaOutputs && nextStep.promoteMediaOutputs.length > 0) {
@@ -4103,6 +4115,7 @@ export class BaseAgent {
             if (params.apiKeys && params.apiKeys.length > 0) {
                 childPromptParams.apiKeys = params.apiKeys;
             }
+            childPromptParams.CredentialScope = params.CredentialScope;
             
             // Pass through configurationId to both parent and child prompts if provided
             if (params.configurationId) {
@@ -4144,6 +4157,10 @@ export class BaseAgent {
         if (params.apiKeys && params.apiKeys.length > 0) {
             promptParams.apiKeys = params.apiKeys;
             this.logStatus(`🔑 Using ${params.apiKeys.length} API key(s) provided at runtime`, true, params);
+        }
+        promptParams.CredentialScope = params.CredentialScope;
+        if (!CredentialScopeAllows(params.CredentialScope, 'Environment')) {
+            this.logStatus(`🔒 Credential scope is ${params.CredentialScope}: the platform's environment API keys will not be used`, true, params);
         }
 
         // Thread the per-request provider so prompt run records are saved through the isolated provider
@@ -6443,10 +6460,10 @@ The context is now within limits. Please retry your request with the recovered c
                     throw new Error(`The '${BaseAgent.SummarizeRangePromptName}' system prompt is not present in this environment`);
                 }
                 const promptParams = new AIPromptParams();
+                Object.assign(promptParams, this.runPromptExecutionScope(params));
                 promptParams.prompt = prompt;
                 // Keys are the summarize-range.template.md contract ({{ lens }}, {{ messages }})
                 promptParams.data = { lens, messages: rangeText };
-                promptParams.contextUser = params.contextUser;
                 promptParams.agentId = params.agent.ID;
                 const result = await this._promptRunner.ExecutePrompt<string>(promptParams);
                 const text = ExtractPromptResultText(result);
@@ -7444,7 +7461,10 @@ The context is now within limits. Please retry your request with the recovered c
                 ContextUser: contextUser,
                 Filters: [],
                 SkipActionLog: false,
-                Context: actionContext
+                Context: actionContext,
+                // AICredentialScope → actions-base's RuntimeCredentialScope mirror: a value added to the
+                // former and not the latter fails to compile here, so the two cannot drift apart.
+                CredentialScope: params.CredentialScope
             });
             
             if (result.Success) {
@@ -7713,6 +7733,7 @@ The context is now within limits. Please retry your request with the recovered c
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
                 apiKeys: params.apiKeys, // propagate API keys to sub-agent
+                CredentialScope: params.CredentialScope, // a sub-agent may not spend keys its parent could not
                 inputArtifacts: params.inputArtifacts, // propagate input artifacts so sub-agents inherit the parent's artifact manifest + tools (e.g. a Codesmith delegate can read a Data Snapshot the parent references)
                 data: {
                         ...params.data,
@@ -9585,6 +9606,25 @@ The context is now within limits. Please retry your request with the recovered c
                 this._lastModelSelectionInfo = promptResult.modelSelectionInfo;
             }
 
+            // Check for cancellation after prompt execution — before the failure check, because a prompt
+            // the caller cancelled comes back failed, and that is not a prompt failure. The step does not
+            // terminate the loop: a terminating step would finalize the run as Failed. The loop's own
+            // cancellation check, before the next step, ends the run as Cancelled.
+            if (params.cancellationToken?.aborted) {
+                if (stepEntity && payload) {
+                    stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
+                }
+
+                await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
+                return {
+                    errorMessage: 'Cancelled during prompt execution',
+                    step: 'Failed',
+                    terminate: false,
+                    previousPayload: payload,
+                    newPayload: payload
+                };
+            }
+
             // Check if prompt execution failed
             if (!promptResult.success) {
                 // CRITICAL FIX: Preserve payload before finalizing step
@@ -9628,24 +9668,6 @@ The context is now within limits. Please retry your request with the recovered c
                     previousPayload: payload,
                     newPayload: payload
                 };
-            }
-
-            // Check for cancellation after prompt execution
-            if (params.cancellationToken?.aborted) {
-                // CRITICAL FIX: Preserve payload before finalizing step
-                if (stepEntity && payload) {
-                    stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
-                }
-
-                await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
-                const cancelledResult = await this.createCancelledResult('Cancelled during prompt execution', params.contextUser);
-                return {
-                    ...cancelledResult,
-                    terminate: true,
-                    step: 'Failed', // Cancelled is treated as failed
-                    previousPayload: cancelledResult.payload,
-                    newPayload: cancelledResult.payload // No changes, just return the same payload
-                }
             }
 
             // Report decision processing progress
@@ -14879,6 +14901,22 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * The {@link AIPromptExecutionScope} of a prompt this run starts outside the agent's own turn —
+     * summarizing a range, compacting a message, compacting the conversation. Each built its params
+     * with only `contextUser`, so it ran on the platform's keys and default configuration inside a
+     * run on a customer's keys, and under a `'RuntimeOnly'` scope would have bypassed it.
+     */
+    private runPromptExecutionScope(params: ExecuteAgentParams): AIPromptExecutionScope {
+        return {
+            contextUser: params.contextUser,
+            provider: params.provider || this._activeProvider,
+            configurationId: params.configurationId,
+            apiKeys: params.apiKeys,
+            CredentialScope: params.CredentialScope,
+        };
+    }
+
+    /**
      * Runs one compaction pass and records it as a `StepType='Compaction'` run step —
      * TargetID = the summary prompt, TargetLogID = the summary AIPromptRun (the same ID
      * written to `ConversationDetail.SummaryPromptRunID`, closing the lineage chain).
@@ -14901,6 +14939,7 @@ The context is now within limits. Please retry your request with the recovered c
             Budget: budget,
             ContextUser: params.contextUser,
             Provider: this.ProviderToUse,
+            ExecutionScope: this.runPromptExecutionScope(params),
             EstimateTokens: (messages) => this.estimateConversationTokens(messages),
             Verbose: params.verbose,
             // The in-flight agent-response placeholder row: a post-turn pass runs while
@@ -15171,6 +15210,7 @@ The context is now within limits. Please retry your request with the recovered c
 
                     // Execute summarization prompt
                     const promptParams = new AIPromptParams();
+                    Object.assign(promptParams, this.runPromptExecutionScope(params));
                     promptParams.prompt = prompt;
                     promptParams.data = {
                         originalContent,
@@ -15179,7 +15219,6 @@ The context is now within limits. Please retry your request with the recovered c
                         messageType: message.metadata?.messageType || 'unknown',
                         turnAdded: message.metadata?.turnAdded || 0
                     };
-                    promptParams.contextUser = params.contextUser;
                     promptParams.agentId = params.agent.ID;
 
                     const runner = new AIPromptRunner();

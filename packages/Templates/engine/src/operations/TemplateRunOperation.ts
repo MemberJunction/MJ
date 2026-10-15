@@ -8,13 +8,23 @@
  * @module @memberjunction/templates
  */
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRemotableOperation, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { BaseRemotableOperation, IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { TemplateRunOperation, type TemplateRunInput, type TemplateRunOutput } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '../TemplateEngine';
+import { GetTemplateRunRefusal } from './TemplateRunAuthorization';
 
 @RegisterClass(BaseRemotableOperation, 'Template.Run')
 export class TemplateRunServerOperation extends TemplateRunOperation {
+    /**
+     * Refuses scope-limited sessions and callers who cannot read templates and their content.
+     * The remote-operation resolver checks only API-key scope, which JWT, magic-link and widget
+     * sessions do not carry.
+     */
+    protected override async Authorize(_input: TemplateRunInput, user: UserInfo): Promise<boolean> {
+        return GetTemplateRunRefusal(user, Metadata.Provider) === null; // global-provider-ok: Authorize receives no provider; entity permissions are process-global metadata
+    }
+
     protected async InternalExecute(input: TemplateRunInput, provider: IMetadataProvider, user: UserInfo): Promise<TemplateRunOutput> {
         if (!input?.templateID) {
             throw new Error('templateID is required');

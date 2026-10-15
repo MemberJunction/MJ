@@ -1,5 +1,144 @@
 # Change Log - @memberjunction/server
 
+## 6.1.5
+
+### Patch Changes
+
+- 8ee1709: Durable entity actions (`EntityAction.RunMode = 'Durable'`) now receive their declared parameters by name (#4794).
+
+  `BuildDurableDeferral` stored the redacted parameters in `Task.InputPayload` as a `LoggedParam[]` array, while `TaskGraphActionRunner` reads that payload back as a name → value object. Every released build with durable dispatch (v6.1.0 onward, including 6.1.4) hit the same failure: the dispatcher's `mergedPayload` only merges plain objects, so it silently dropped the array and the action received NONE of its params. Parameters named `0…n` would only appear if the array reached `TaskGraphActionRunner.buildParams` directly, bypassing that drop. Either way every durable binding ran without its inputs, e.g. `Common.LogActivity` failing with `TypeCode is required. | Title is required.`
+  - `@memberjunction/actions-base`: new `RedactParamsToRecord()` beside `RedactParamsToJSON()`. It applies the same redaction rules and returns `{ Name: Value }`, omitting suppressed parameters, which then arrive at the action as absent rather than as a redaction stub.
+  - `@memberjunction/actions`: `BuildDurableDeferral` submits that record.
+  - `@memberjunction/task-graph`: a task whose `InputPayload` is not a name → value object now **fails** with a message naming the task, instead of running with its input silently dropped.
+  - `@memberjunction/server`: round-trip regression test through `TaskGraphActionRunner`.
+  - `@memberjunction/integration-test-suite`: EA6 now rejects an array `RedactedParams` and checks a bound param arrives by name.
+
+  **Upgrade note:** durable tasks queued before this fix still carry array payloads. They now fail loudly (`Task <id> has an InputPayload that is an array; expected a name → value object…`) instead of running with no inputs. Re-trigger the source save if that work matters, or — from the Workflows run view — use the failed step's **Edit input & retry** control to replace the stored array with a name → value object and retry it in place.
+
+  A durable binding never receives a whole record: `Entity Object` / `Entity Object Data` bindings are always stripped from the durable payload. Pass a key (e.g. `Entity Field 'ID'`) and load the record in the action.
+
+- 8ee1709: Follow-ups to the durable entity-action payload fix (#4794), found while verifying it end to end.
+  - `@memberjunction/actions`: a durable binding now redacts its payload against the engine's live `ActionParam` definitions, the same ones `ActionExecutionLog.Params` uses. Before, it read a per-action cached collection that keeps the old row after an in-place update, so setting a parameter's `LogValue` to 0 on a running server redacted the log while the value was still written to `Task.InputPayload` until a restart. The runtime parameters are now named from those same live definitions too: redaction matches definitions by name, so a parameter renamed on a running server was named from the stale copy, matched nothing, and was written to the payload unredacted, whole-record bindings included.
+  - `@memberjunction/task-graph`: a task whose `InputPayload` is not valid JSON now **fails** (`Task <id> has an InputPayload that is not valid JSON …`) instead of running with no inputs. A raw string reaches that column through `TaskGraph.RetryTask` / `UpdateTaskInput`.
+  - `@memberjunction/server`: `TaskGraphActionRunner` no longer adds one parameter per upstream task to an action step. That map is keyed by upstream task ID, so every step with a dependency received an extra parameter named by a GUID and holding the upstream step's whole output (logged in full). The dependency outputs still reach the step, merged by key, through the dispatcher.
+  - `@memberjunction/ng-dashboards`: the Workflows run view shows why a failed step failed ("Why it failed"). Before, the message was only in the JSON tab.
+
+- 13d92ac: Realtime voice sessions from magic-link (anonymous) users now save their hidden tool-execution and artifact-anchor conversation turns. These were refused because they were written as the system user, who does not own the conversation. A refused conversation-detail write now reports why, instead of logging "unknown error" (#4791). Agent runs started from a conversation now include that reason when saving their conversation messages fails.
+- 1057ffe: Fix magic-link redemption on hosts whose MJAPI login is not db_owner (#4753). The single-use consume now runs through a new `spConsumeMagicLinkInvite` procedure granted to `cdp_Developer`/`cdp_Integration` instead of a raw UPDATE on the `MagicLinkInvite` base table, which those roles cannot touch. PostgreSQL is unchanged: its runtime roles hold table DML, so it keeps the direct guarded `UPDATE … RETURNING`. A database failure during the consume is now reported as `server_error` (HTTP 500) instead of `consumed` (HTTP 410 "Invite already redeemed or expired.").
+- ec5f382: Saved queries, ad-hoc SQL and composed queries now render and run correctly on SQL Server and PostgreSQL in the shapes that previously failed or returned the wrong rows.
+  - **Row caps and paging.** A query's own `TOP` / `LIMIT` / `OFFSET … FETCH` is kept: when the caller also passes `MaxRows`, the smaller wins and `TotalRowCount` follows. CTEs, `WITH RECURSIVE`, query hints, `SELECT DISTINCT`, set operations, `TOP PERCENT` / `WITH TIES` and SQL the parser cannot read are paged and capped by editing the statement in place, or as a derived table, instead of being rewritten from the syntax tree. Ad-hoc SQL with `MaxRows` is paged in the database instead of fetching every row. A requested cap that cannot be applied is logged; paging a `FOR JSON` / `FOR XML` query fails with an error that says so.
+  - **Composition.** A dependency's trailing `;`, SQL Server `OPTION (…)` hints, template tags (`{% if %}` and similar) and doubled quotes in static values now compose correctly. The real composition token is resolved, not a copy in a comment or string literal. Composing into an outer `WITH` / `WITH RECURSIVE` produces one valid clause, and a dependency CTE that shares a name with one of the outer query's CTEs is renamed instead of declared twice. A query that references the same dependency twice saves one dependency row.
+  - **PostgreSQL.** Pools get the `statement_timeout` and `idle_in_transaction_session_timeout` that match SQL Server's request timeout. Caller-supplied SQL runs in a rolled-back read-only transaction, and the read-only provider gets its own pool on the read-only login. Column references are read as names, and comment stripping no longer breaks dollar-quoted and `E''` strings.
+  - **Caller-supplied SQL** must be a single read query. Ad-hoc SQL over GraphQL (`ExecuteAdhocQuery`) now runs through the read-only provider's own ad-hoc path, so it works on PostgreSQL too and pages the same way everywhere. `RunQueryParams.TimeoutSeconds` (ad-hoc SQL) and `ExecuteSQLOptions.timeoutMs` set a per-call limit that the database enforces: the request is cancelled on SQL Server, and `statement_timeout` applies on PostgreSQL. That limit can shorten the server's own limit but never lengthen it.
+  - **What caller-supplied SQL may call.** Ad-hoc SQL, `TestQuerySQL` and query specs are refused when they call a function that runs SQL given as a string, or reads files or other databases (on PostgreSQL `query_to_xml` and its family, `ts_stat` and `ts_rewrite`, `dblink`, the server-file and large-object functions, and server-administration functions; on SQL Server `OPENROWSET`, `OPENQUERY`, `OPENDATASOURCE` and the trace and audit file readers). The list is the new `SQLDialect.CallerSQLForbiddenFunctions`. On PostgreSQL, advisory locks taken by such SQL are released before its connection returns to the pool, and MJAPI warns at startup when the read-only login can read base tables or server files.
+  - **Dialects.** The rendering pipeline reads `SQLDialect` members (`SelectListPagingOrderBy`, `PagingRequiresOrderBy`, `QueryHintKeyword`, `SupportsEscapeStringLiterals`, `SupportsDollarQuotedStrings`, `StringLiteralPrefix`, `EscapeLikePattern`, `BooleanParameterValue`) instead of checking the platform name, so a new dialect declares its behaviour in one class.
+  - **Text filters.** `sqlString` / `sqlIn` keep non-ASCII text on SQL Server, and the LIKE filters escape `[` (SQL Server) and `\` (PostgreSQL). SQL Server bracket-quoted identifiers escape `]`.
+  - `RunQueryParams.MaxRows` documents that there is no default row limit, and that `MaxRows` limits the rows returned, not the work the database does.
+
+- Updated dependencies [11bf565]
+- Updated dependencies [f79063b]
+- Updated dependencies [3910bd5]
+- Updated dependencies [8ee1709]
+- Updated dependencies [8ee1709]
+- Updated dependencies [13d92ac]
+- Updated dependencies [ad65a01]
+- Updated dependencies [c3d7e50]
+- Updated dependencies [1d3f2cb]
+- Updated dependencies [0885fb6]
+- Updated dependencies [5cccaf2]
+- Updated dependencies [ec5f382]
+  - @memberjunction/actions-bizapps-accounting@6.1.5
+  - @memberjunction/codegen-lib@6.1.5
+  - @memberjunction/core@6.1.5
+  - @memberjunction/actions-base@6.1.5
+  - @memberjunction/actions@6.1.5
+  - @memberjunction/task-graph@6.1.5
+  - @memberjunction/core-entities@6.1.5
+  - @memberjunction/ai-agents@6.1.5
+  - @memberjunction/redis-provider@6.1.5
+  - @memberjunction/graphql-dataprovider@6.1.5
+  - @memberjunction/ai-prompts@6.1.5
+  - @memberjunction/ai@6.1.5
+  - @memberjunction/testing-engine@6.1.5
+  - @memberjunction/sql-dialect@6.1.5
+  - @memberjunction/generic-database-provider@6.1.5
+  - @memberjunction/sql-parser@6.1.5
+  - @memberjunction/core-entities-server@6.1.5
+  - @memberjunction/postgresql-dataprovider@6.1.5
+  - @memberjunction/sqlserver-dataprovider@6.1.5
+  - @memberjunction/ai-agent-manager-actions@6.1.5
+  - @memberjunction/ai-agent-manager@6.1.5
+  - @memberjunction/ai-engine-base@6.1.5
+  - @memberjunction/clustering-engine@6.1.5
+  - @memberjunction/computer-use@6.1.5
+  - @memberjunction/ai-core-plus@6.1.5
+  - @memberjunction/aiengine@6.1.5
+  - @memberjunction/tag-engine@6.1.5
+  - @memberjunction/tag-engine-base@6.1.5
+  - @memberjunction/ai-mcp-client@6.1.5
+  - @memberjunction/computer-use-engine@6.1.5
+  - @memberjunction/ai-bridge-base@6.1.5
+  - @memberjunction/ai-bridge-ringcentral@6.1.5
+  - @memberjunction/ai-bridge-teams@6.1.5
+  - @memberjunction/ai-bridge-twilio@6.1.5
+  - @memberjunction/ai-bridge-vonage@6.1.5
+  - @memberjunction/ai-bridge-server@6.1.5
+  - @memberjunction/remote-browser-base@6.1.5
+  - @memberjunction/remote-browser-cdp@6.1.5
+  - @memberjunction/remote-browser-selfhost@6.1.5
+  - @memberjunction/remote-browser-server@6.1.5
+  - @memberjunction/ai-vectordb@6.1.5
+  - @memberjunction/ai-vectors-pinecone@6.1.5
+  - @memberjunction/ai-vector-sync@6.1.5
+  - @memberjunction/api-keys@6.1.5
+  - @memberjunction/actions-apollo@6.1.5
+  - @memberjunction/actions-bizapps-crm@6.1.5
+  - @memberjunction/actions-bizapps-formbuilders@6.1.5
+  - @memberjunction/actions-bizapps-lms@6.1.5
+  - @memberjunction/actions-bizapps-social@6.1.5
+  - @memberjunction/core-actions@6.1.5
+  - @memberjunction/auth-providers@6.1.5
+  - @memberjunction/communication-types@6.1.5
+  - @memberjunction/communication-engine@6.1.5
+  - @memberjunction/entity-communications-base@6.1.5
+  - @memberjunction/entity-communications-server@6.1.5
+  - @memberjunction/notifications@6.1.5
+  - @memberjunction/communication-ms-graph@6.1.5
+  - @memberjunction/communication-sendgrid@6.1.5
+  - @memberjunction/component-registry-client-sdk@6.1.5
+  - @memberjunction/credentials@6.1.5
+  - @memberjunction/doc-utils@6.1.5
+  - @memberjunction/encryption@6.1.5
+  - @memberjunction/external-change-detection@6.1.5
+  - @memberjunction/integration-engine@6.1.5
+  - @memberjunction/integration-engine-base@6.1.5
+  - @memberjunction/integration-schema-builder@6.1.5
+  - @memberjunction/interactive-component-types@6.1.5
+  - @memberjunction/lists@6.1.5
+  - @memberjunction/livekit-room-server@6.1.5
+  - @memberjunction/data-context@6.1.5
+  - @memberjunction/data-context-server@6.1.5
+  - @memberjunction/queue@6.1.5
+  - @memberjunction/storage@6.1.5
+  - @memberjunction/record-comparison@6.1.5
+  - @memberjunction/scheduling-actions@6.1.5
+  - @memberjunction/scheduling-engine-base@6.1.5
+  - @memberjunction/scheduling-engine@6.1.5
+  - @memberjunction/schema-engine@6.1.5
+  - @memberjunction/search-engine@6.1.5
+  - @memberjunction/server-extensions-core@6.1.5
+  - @memberjunction/templates@6.1.5
+  - @memberjunction/testing-engine-base@6.1.5
+  - @memberjunction/version-history@6.1.5
+  - @memberjunction/esignature@6.1.5
+  - @memberjunction/ai-provider-bundle@6.1.5
+  - @memberjunction/config@6.1.5
+  - @memberjunction/integration-progress-artifacts@6.1.5
+  - @memberjunction/lists-base@6.1.5
+  - @memberjunction/global@6.1.5
+  - @memberjunction/network-utils@6.1.5
+  - @memberjunction/scheduling-base-types@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes

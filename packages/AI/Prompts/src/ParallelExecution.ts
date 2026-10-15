@@ -1,5 +1,5 @@
 import { MJAIPromptModelEntity } from "@memberjunction/core-entities";
-import { MJAIPromptEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, AIPromptParams } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, AIPromptParams, type AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { ValidationResult } from '@memberjunction/global';
 import { ChatResult, ChatMessage, StreamingChatCallbacks } from '@memberjunction/ai';
@@ -476,5 +476,6 @@ export interface IParallelExecutionCoordinator {
     config: ResultSelectionConfig,
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
+    executionScope?: AIPromptExecutionScope,
   ): Promise<ExecutionTaskResult | null>;
 }

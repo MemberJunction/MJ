@@ -1,5 +1,11 @@
 # @memberjunction/cli-core
 
+## 6.1.5
+
+### Patch Changes
+
+- @memberjunction/global@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes
