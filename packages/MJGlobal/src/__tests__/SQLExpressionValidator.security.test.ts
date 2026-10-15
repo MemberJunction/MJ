@@ -360,7 +360,7 @@ describe('SQLExpressionValidator - Security', () => {
     });
 
     it('rejects a stacked statement hidden behind bracket identifiers in a full query', () => {
-      const r = validator.ValidateFullQuery("SELECT [a'] FROM T ; SELECT 1 ; SELECT [b'] FROM T");
+      const r = validator.validateFullQuery("SELECT [a'] FROM T ; SELECT 1 ; SELECT [b'] FROM T");
       expect(r.valid).toBe(false);
     });
 
@@ -376,17 +376,17 @@ describe('SQLExpressionValidator - Security', () => {
 
     it('rejects a stacked statement hidden behind an E string written against an operator (PostgreSQL full query)', () => {
       // `@@` is an operator, so PostgreSQL reads E'\'' as a one-character literal and runs SELECT 2.
-      const r = validator.ValidateFullQuery("SELECT 'a' @@E'\\'' ; SELECT 2 ; --'", 'postgresql');
+      const r = validator.validateFullQuery("SELECT 'a' @@E'\\'' ; SELECT 2 ; --'", 'postgresql');
       expect(r.valid).toBe(false);
     });
 
     it('rejects a stacked statement hidden behind an apostrophe in a line comment (full query)', () => {
-      const r = validator.ValidateFullQuery("SELECT 1 -- it's\n; SELECT 2 --'");
+      const r = validator.validateFullQuery("SELECT 1 -- it's\n; SELECT 2 --'");
       expect(r.valid).toBe(false);
     });
 
     it('rejects a stacked statement hidden behind an apostrophe in a block comment (full query)', () => {
-      const r = validator.ValidateFullQuery("SELECT 1 /* it's */ ; SELECT 2 ; /* ' */");
+      const r = validator.validateFullQuery("SELECT 1 /* it's */ ; SELECT 2 ; /* ' */");
       expect(r.valid).toBe(false);
     });
 
@@ -431,7 +431,7 @@ describe('SQLExpressionValidator - Security', () => {
     ];
     for (const [label, dialect] of DIALECT_SETTINGS) {
       it.each(OPENERS)(`refuses %s (${label})`, sql => {
-        const r = validator.ValidateFullQuery(sql, dialect);
+        const r = validator.validateFullQuery(sql, dialect);
         expect(r.valid).toBe(false);
       });
     }
@@ -440,8 +440,8 @@ describe('SQLExpressionValidator - Security', () => {
       'select Name from __mj.vwUsers',
       '-- header\n/* block */\nWITH cte AS (SELECT 1 AS One) SELECT One FROM cte',
     ])('accepts %s', sql => {
-      expect(validator.ValidateFullQuery(sql, 'sqlserver').valid).toBe(true);
-      expect(validator.ValidateFullQuery(sql, 'postgresql').valid).toBe(true);
+      expect(validator.validateFullQuery(sql, 'sqlserver').valid).toBe(true);
+      expect(validator.validateFullQuery(sql, 'postgresql').valid).toBe(true);
     });
 
     const CASE_MAPPED_OPENERS: Array<[string, string]> = [
@@ -450,7 +450,7 @@ describe('SQLExpressionValidator - Security', () => {
     ];
     for (const [label, dialect] of DIALECT_SETTINGS) {
       it.each(CASE_MAPPED_OPENERS)(`refuses an opening word that matches %s only under Unicode case mapping (${label})`, (_keyword, sql) => {
-        const r = validator.ValidateFullQuery(sql, dialect);
+        const r = validator.validateFullQuery(sql, dialect);
         expect(r.valid).toBe(false);
         expect(r.error).toBe('Ad-hoc query must start with SELECT or WITH');
       });
@@ -458,8 +458,8 @@ describe('SQLExpressionValidator - Security', () => {
 
     it('accepts SELECT and WITH in any ASCII case', () => {
       for (const sql of ['SeLeCt 1 AS One', 'wItH cte AS (SELECT 1 AS One) SELECT One FROM cte']) {
-        expect(validator.ValidateFullQuery(sql, 'sqlserver').valid).toBe(true);
-        expect(validator.ValidateFullQuery(sql, 'postgresql').valid).toBe(true);
+        expect(validator.validateFullQuery(sql, 'sqlserver').valid).toBe(true);
+        expect(validator.validateFullQuery(sql, 'postgresql').valid).toBe(true);
       }
     });
   });
@@ -476,8 +476,8 @@ describe('SQLExpressionValidator - Security', () => {
     });
 
     it.each<SQLScreeningDialect | undefined>(['sqlserver', undefined])('stays visible in a full query (%s)', dialect => {
-      expect(validator.ValidateFullQuery('SELECT £1EXEC sp_who', dialect).valid).toBe(false);
-      expect(validator.ValidateFullQuery("SELECT €1WAITFOR DELAY '00:00:01'", dialect).valid).toBe(false);
+      expect(validator.validateFullQuery('SELECT £1EXEC sp_who', dialect).valid).toBe(false);
+      expect(validator.validateFullQuery("SELECT €1WAITFOR DELAY '00:00:01'", dialect).valid).toBe(false);
     });
   });
 
@@ -485,11 +485,11 @@ describe('SQLExpressionValidator - Security', () => {
     const POSSESSIVE_ALIAS = "SELECT COUNT(*) AS [Today's Count] FROM __mj.vwUsers WHERE Status = 'Active'";
 
     it('accepts a bracket identifier that contains a quote when the dialect is SQL Server', () => {
-      expect(validator.ValidateFullQuery(POSSESSIVE_ALIAS, 'sqlserver').valid).toBe(true);
+      expect(validator.validateFullQuery(POSSESSIVE_ALIAS, 'sqlserver').valid).toBe(true);
     });
 
     it('rejects it when the dialect is unknown, because PostgreSQL reads the quote as a literal', () => {
-      const r = validator.ValidateFullQuery(POSSESSIVE_ALIAS);
+      const r = validator.validateFullQuery(POSSESSIVE_ALIAS);
       expect(r.valid).toBe(false);
       expect(r.trigger).toBe('unclassified');
     });
@@ -506,12 +506,12 @@ describe('SQLExpressionValidator - Security', () => {
     });
 
     it('accepts an apostrophe in the header comment of a full query', () => {
-      const r = validator.ValidateFullQuery("-- Customer's open orders\nSELECT * FROM __mj.vwOrders WHERE Status = 'Open'");
+      const r = validator.validateFullQuery("-- Customer's open orders\nSELECT * FROM __mj.vwOrders WHERE Status = 'Open'");
       expect(r.valid).toBe(true);
     });
 
     it('accepts a trailing semicolon followed by a comment in a full query', () => {
-      expect(validator.ValidateFullQuery('SELECT Name FROM __mj.vwUsers ORDER BY Name; -- by name').valid).toBe(true);
+      expect(validator.validateFullQuery('SELECT Name FROM __mj.vwUsers ORDER BY Name; -- by name').valid).toBe(true);
     });
 
     it.each([
@@ -519,7 +519,7 @@ describe('SQLExpressionValidator - Security', () => {
       'SELECT name FROM [sys].[sql_logins]',
       'SELECT * FROM "pg_catalog"."pg_authid"',
     ])('catches a system catalog written with quoted names: %s', sql => {
-      const r = validator.ValidateFullQuery(sql);
+      const r = validator.validateFullQuery(sql);
       expect(r.valid).toBe(false);
       expect(r.trigger).toBe('system-object');
     });

@@ -5,7 +5,7 @@
  * close the gap it papered over by proving the REAL provider method (the inherited
  * `InternalRunQuery` → `ExecuteAdhocQuery` pipeline running on a SQLServerDataProvider
  * instance) actually:
- *   1. invokes SQLExpressionValidator.ValidateFullQuery with the ad-hoc SQL and the SQL Server dialect,
+ *   1. invokes SQLExpressionValidator.validateFullQuery with the ad-hoc SQL and the SQL Server dialect,
  *   2. refuses to touch the connection when validation fails (returning the
  *      validator's own error), and
  *   3. executes the EXACT validated SQL through the mssql request boundary.
@@ -57,7 +57,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     mssqlState.Reset();
   });
 
-  it('invokes SQLExpressionValidator.ValidateFullQuery with exactly the ad-hoc SQL and the SQL Server dialect before executing', async () => {
+  it('invokes SQLExpressionValidator.validateFullQuery with exactly the ad-hoc SQL and the SQL Server dialect before executing', async () => {
     const provider = makeProvider();
     const sqlText = 'SELECT TOP 10 ID, Name FROM __mj.vwUsers ORDER BY Name';
     const validatorSpy = vi.spyOn(SQLExpressionValidator.Instance, 'validateFullQuery');
@@ -99,7 +99,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     const badSQL = "INSERT INTO Users (Name) VALUES ('hacked')";
     // The expected error is whatever the REAL validator produces — computed here,
     // asserted below, so the provider must surface the validator's message verbatim.
-    const expected = SQLExpressionValidator.Instance.ValidateFullQuery(badSQL, 'sqlserver');
+    const expected = SQLExpressionValidator.Instance.validateFullQuery(badSQL, 'sqlserver');
     expect(expected.valid).toBe(false);
 
     const result = await provider.RunQueryDirect({ SQL: badSQL }, TEST_USER);
