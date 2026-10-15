@@ -30,7 +30,7 @@ import {
 } from '@memberjunction/feature-pipelines';
 import { InferProcessor, type FeatureValueWriteParams } from '../processors/InferProcessor';
 import { WriteBackProcessor } from '../processors/WriteBackProcessor';
-import type { WriteBackResult } from '../writeBack';
+import type { WriteBackRunPayload } from '@memberjunction/record-set-processor-base';
 import {
     BaseFeaturePipelineDriver,
     type FeaturePipelineComputeRequest,
@@ -142,7 +142,7 @@ type PipelineTypeDouble = Pick<MJFeaturePipelineTypeEntity, 'ID' | 'Name' | 'Dri
 type CacheEntryDouble = Pick<MJFeatureValueCacheEntity, 'ID' | 'OutputsJSON' | 'Reasoning' | 'AIPromptRunID'>;
 type TargetRowDouble = Pick<
     MJRecordProcessEntity,
-    'ID' | 'Name' | 'WorkType' | 'Status' | 'EntityID' | 'Entity' | 'PromptID' | 'Configuration' | 'InputMapping' | 'Load'
+    'ID' | 'Name' | 'WorkType' | 'Status' | 'EntityID' | 'Entity' | 'PromptID' | 'Configuration' | 'InputMapping' | 'Load' | 'InnerLoad' | 'Get'
 >;
 type ProviderDouble = Pick<IMetadataProvider, 'GetEntityObject' | 'EntityByID' | 'EntityByName'>;
 type PromptModelDouble = Pick<MJAIPromptModelEntity, 'PromptID' | 'ModelID' | 'Priority' | 'Status' | 'EffortLevel' | 'ModelParameters'>;
@@ -276,6 +276,9 @@ describe('Decision pipeline escalation', () => {
             Configuration: JSON.stringify(llmSpec()),
             InputMapping: null,
             Load: loadTarget,
+            // the dry-run write-back also loads the processed record through this double, to compare its fields
+            InnerLoad: vi.fn().mockResolvedValue(true),
+            Get: () => undefined,
         };
         getEntityObject = vi.fn().mockImplementation(async () => targetRow);
         const provider: ProviderDouble = {
@@ -311,6 +314,38 @@ describe('Decision pipeline escalation', () => {
     // ================================================================
     // Which records escalate
     // ================================================================
+
+    describe('the Decision pipeline\'s confidence floors hold for an escalated answer', () => {
+        /** The decision spec with a floor on Seniority, read from the escalated answer's `seniorityConfidence`. */
+        const flooredDecision = (policy: 'null' | 'fail'): DataFeatureSpec => decisionSpec({
+            Outputs: outputs().map((o) => (o.Name === 'Seniority' ? { ...o, ConfidenceRef: '$.seniorityConfidence', MinConfidence: 0.8, OnLowConfidence: policy } : o)),
+        });
+
+        it('withholds a below-floor escalated output under a null floor', async () => {
+            decisionAnswers.set('r1', BELOW_FLOOR);
+            llmResults.set('r1', { Success: true, RawResult: { seniority: 'Executive', isVip: true, seniorityConfidence: 0.3 }, AIPromptRunID: 'LLM-RUN-r1' });
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, flooredDecision('null'), null).ProcessRecord(makeRecord('r1'), context);
+            expect(result.Status).toBe('Succeeded');
+            expect(result.BelowConfidenceOutputs).toEqual(['Seniority']);
+            expect(result.ResultPayload).toMatchObject({ seniority: null, isVip: true });
+        });
+
+        it('fails the record as BelowConfidence under a fail floor, naming the escalation', async () => {
+            decisionAnswers.set('r1', BELOW_FLOOR);
+            llmResults.set('r1', { Success: true, RawResult: { seniority: 'Executive', isVip: true, seniorityConfidence: 0.3 }, AIPromptRunID: 'LLM-RUN-r1' });
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, flooredDecision('fail'), null).ProcessRecord(makeRecord('r1'), context);
+            expect(result).toMatchObject({ Status: 'Failed', FailureKind: 'BelowConfidence', BelowConfidenceOutputs: ['Seniority'] });
+            expect(result.ErrorMessage).toMatch(/escalation to LLM pipeline 'Seniority \(LLM\)' failed: Answer below its confidence floor: 'Seniority' confidence 0.3 < 0.8/);
+        });
+
+        it('keeps an escalated answer at or above the floor', async () => {
+            decisionAnswers.set('r1', BELOW_FLOOR);
+            llmResults.set('r1', { Success: true, RawResult: { seniority: 'Executive', isVip: true, seniorityConfidence: 0.9 }, AIPromptRunID: 'LLM-RUN-r1' });
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, flooredDecision('fail'), null).ProcessRecord(makeRecord('r1'), context);
+            expect(result.Status).toBe('Succeeded');
+            expect(result.BelowConfidenceOutputs).toBeUndefined();
+        });
+    });
 
     describe('which records escalate', () => {
         it('does not escalate a record whose every output is at or above the floor', async () => {
@@ -364,9 +399,9 @@ describe('Decision pipeline escalation', () => {
             expect(llmCalls).toEqual(['r1']);
             expect(result.AIPromptRunID).toBe('LLM-RUN-r1');
             expect(result.Confidence).toBeUndefined();
-            const { output, writeBack: applied } = result.ResultPayload as { output: unknown; writeBack: WriteBackResult };
+            const { output, writeBack: applied } = result.ResultPayload as WriteBackRunPayload;
             expect(output).toEqual({ seniority: 'Executive', isVip: true });
-            expect(applied.previewFields).toEqual({ Seniority: 'Executive', IsVIP: true });
+            expect(applied?.previewFields).toEqual({ Seniority: 'Executive', IsVIP: true });
             expect(processor.EscalatedRecordCount).toBe(1);
             expect(consoleLog).toHaveBeenCalledWith(
                 "InferProcessor: escalated 1 record(s) whose decision confidence was below 0.7 to Feature Pipeline 'LLM-PIPE-1' (0 failed); 1 escalated in this run."
@@ -756,8 +791,8 @@ describe('Decision pipeline escalation', () => {
             const writeBack = new WriteBackProcessor(processor, { fields: { Seniority: '$.seniority', IsVIP: '$.isVip' } }, true);
             const result = await writeBack.ProcessRecord(makeRecord('r1'), context);
 
-            const { writeBack: applied } = result.ResultPayload as { output: unknown; writeBack: WriteBackResult };
-            expect(applied.previewFields).toEqual({ Seniority: 'Staff', IsVIP: true });
+            const { writeBack: applied } = result.ResultPayload as WriteBackRunPayload;
+            expect(applied?.previewFields).toEqual({ Seniority: 'Staff', IsVIP: true });
             // A dry-run write-back writes no Feature Value: the pipeline's values commit only with a real write-back.
             expect(answersFor('r1')).toEqual([]);
             await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);

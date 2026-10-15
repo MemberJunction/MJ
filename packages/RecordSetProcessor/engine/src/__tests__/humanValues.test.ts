@@ -283,6 +283,105 @@ describe('the pipeline guard through write-back, by field type', () => {
     });
 });
 
+describe('a withheld (below-confidence-floor) field through the pipeline guard', () => {
+    /** One write-back of SeniorityLevelID whose answer was withheld; this run's capture says the pipeline last wrote `last`. */
+    async function withheldWrite(current: unknown, last: TypedFeatureValue | null, humanRow: TypedFeatureValue | null = null, overwriteHumanValues = false) {
+        vi.spyOn(FeatureValueCacheService.Instance, 'GetLatestValue').mockImplementation(async (p: LatestFeatureValueParams) => (p.Source === 'Human' ? humanRow : null));
+        vi.spyOn(FeatureValueCacheService.Instance, 'RecordHumanValue').mockResolvedValue();
+        const retire = vi.spyOn(FeatureValueCacheService.Instance, 'RetireHumanValue').mockResolvedValue(1);
+        const proc = new CapturedInfer();
+        proc.Capture('person-1', { SeniorityLevel: last });
+        const { provider, saves } = parentProvider({ SeniorityLevelID: current });
+        const out = await ApplyOutputMapping({ outputMapping: { fields: { SeniorityLevelID: '$.SeniorityLevel' } }, result: { SeniorityLevel: 'ignored-by-the-floor' },
+            record, contextUser: USER, provider, humanGuard: proc.CreateHumanValueGuard(record, CTX), withheld: { Fields: ['SeniorityLevelID'], ChildEntities: [] },
+            overwriteHumanValues });
+        return { out, saves, retire };
+    }
+
+    it('keeps a person\'s value and its Human row even on a run that overwrites human values: an abstention is no answer', async () => {
+        const edited = await withheldWrite('board-id', fv('director-id'), null, true);
+        expect(edited.saves).toHaveLength(0);
+        expect(edited.out.preservedHumanFields).toEqual(['SeniorityLevelID']);
+        const human = await withheldWrite('director-id', fv('director-id'), fv('director-id'), true);
+        expect(human.saves).toHaveLength(0);
+        expect(human.retire).not.toHaveBeenCalled();
+        expect(human.out.retiredHumanFields).toBeUndefined();
+    });
+
+    it('still clears a value the pipeline wrote on a run that overwrites human values', async () => {
+        const { saves, retire } = await withheldWrite('director-id', fv('director-id'), null, true);
+        expect(saves).toEqual([expect.objectContaining({ SeniorityLevelID: null })]);
+        expect(retire).not.toHaveBeenCalled();
+    });
+
+    it('a real answer on a run that overwrites human values still replaces a person\'s value and retires its Human row', async () => {
+        vi.spyOn(FeatureValueCacheService.Instance, 'GetLatestValue').mockResolvedValue(fv('board-id'));
+        const retire = vi.spyOn(FeatureValueCacheService.Instance, 'RetireHumanValue').mockResolvedValue(1);
+        const proc = new CapturedInfer();
+        proc.Capture('person-1', { SeniorityLevel: fv('director-id') });
+        const { provider, saves } = parentProvider({ SeniorityLevelID: 'board-id' });
+        const out = await ApplyOutputMapping({ outputMapping: { fields: { SeniorityLevelID: '$.SeniorityLevel' } }, result: { SeniorityLevel: 'manager-id' },
+            record, contextUser: USER, provider, humanGuard: proc.CreateHumanValueGuard(record, CTX), overwriteHumanValues: true });
+        expect(saves[0].SeniorityLevelID).toBe('manager-id');
+        expect(retire).toHaveBeenCalledTimes(1);
+        expect(out.retiredHumanFields).toEqual(['SeniorityLevelID']);
+    });
+
+    it('keeps a value nothing can confirm the pipeline wrote (no guard)', async () => {
+        const { provider, saves } = parentProvider({ SeniorityLevelID: 'director-id' });
+        await ApplyOutputMapping({ outputMapping: { fields: { SeniorityLevelID: '$.SeniorityLevel' } }, result: { SeniorityLevel: 'x' }, record, contextUser: USER, provider,
+            withheld: { Fields: ['SeniorityLevelID'], ChildEntities: [] } });
+        expect(saves).toHaveLength(0);
+    });
+
+    it('leaves a withheld field whose column does not allow null, says why, and does not fail the write', async () => {
+        const strict = new EntityInfo({ ID: 'ENT-P', Name: 'People', Fields: [{ Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true },
+            { Name: 'SeniorityLevelID', Type: 'nvarchar', AllowsNull: false }, { Name: 'Nickname', Type: 'nvarchar' }] });
+        const { provider, saves } = parentProvider({ SeniorityLevelID: 'director-id', Nickname: 'old' });
+        const members: Pick<IMetadataProvider, 'EntityByID' | 'GetEntityObject'> = { EntityByID: () => strict, GetEntityObject: provider.GetEntityObject };
+        const out = await ApplyOutputMapping({ outputMapping: { fields: { SeniorityLevelID: '$.SeniorityLevel', Nickname: '$.nick' } }, result: { SeniorityLevel: 'x', nick: 'new' },
+            record, contextUser: USER, provider: members as IMetadataProvider, withheld: { Fields: ['SeniorityLevelID'], ChildEntities: [] } });
+        expect(saves).toEqual([expect.objectContaining({ SeniorityLevelID: 'director-id', Nickname: 'new' })]);
+        expect(out.withheldKeptFields).toEqual(['SeniorityLevelID']);
+        const dry = await ApplyOutputMapping({ outputMapping: { fields: { SeniorityLevelID: '$.SeniorityLevel' } }, result: { SeniorityLevel: 'x' },
+            record, contextUser: USER, provider: members as IMetadataProvider, dryRun: true, withheld: { Fields: ['SeniorityLevelID'], ChildEntities: [] } });
+        expect(dry.previewFields).toEqual({});
+        expect(dry.withheldKeptFields).toEqual(['SeniorityLevelID']);
+    });
+
+    it('clears a value the pipeline itself wrote', async () => {
+        const { out, saves } = await withheldWrite('director-id', fv('director-id'));
+        expect(saves).toEqual([expect.objectContaining({ SeniorityLevelID: null })]);
+        expect(out.withheldFields).toEqual(['SeniorityLevelID']);
+        expect(out.preservedHumanFields).toBeUndefined();
+    });
+
+    it('keeps a value a person entered: one that differs from what the pipeline last wrote, or one with a Human row', async () => {
+        const edited = await withheldWrite('board-id', fv('director-id'));
+        expect(edited.saves).toHaveLength(0);
+        expect(edited.out.preservedHumanFields).toEqual(['SeniorityLevelID']);
+        const human = await withheldWrite('director-id', fv('director-id'), fv('director-id'));
+        expect(human.saves).toHaveLength(0);
+        expect(human.out.preservedHumanFields).toEqual(['SeniorityLevelID']);
+    });
+
+    it('changes nothing on an empty field (a second run after the clear)', async () => {
+        const { out, saves } = await withheldWrite(null, EMPTY);
+        expect(saves).toHaveLength(0);
+        expect(out.changed).toBe(false);
+        expect(out.withheldFields).toEqual(['SeniorityLevelID']);
+    });
+
+    it('a dry run resolves the withheld field to null, and with no guard decides no change, as the real write keeps the value', async () => {
+        const { provider } = parentProvider({ SeniorityLevelID: 'director-id' });
+        const out = await ApplyOutputMapping({ outputMapping: { fields: { SeniorityLevelID: '$.SeniorityLevel' } }, result: { SeniorityLevel: 'x' }, record, contextUser: USER,
+            provider, dryRun: true, withheld: { Fields: ['SeniorityLevelID'], ChildEntities: [] } });
+        expect(out.previewFields).toEqual({ SeniorityLevelID: null });
+        expect(out.previewFieldChanges).toEqual([]);
+        expect(out.withheldFields).toEqual(['SeniorityLevelID']);
+    });
+});
+
 describe('WriteBackProcessor human values', () => {
     /** An inner processor that answers Manager and can create a guard that calls every current value human. */
     class GuardedProcessor implements IRecordProcessor, HumanValueGuardSource {

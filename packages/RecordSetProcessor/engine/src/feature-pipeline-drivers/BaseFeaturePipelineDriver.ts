@@ -42,6 +42,11 @@ export interface FeaturePipelineComputeHooks {
     BeforePromptExecute: (params: AIPromptParams, record: RecordRef, ctx: RecordProcessorContext) => Promise<void>;
     /** Called after the prompt succeeds; returns the raw result (`InferProcessor.afterPromptExecute`). */
     AfterPromptExecute: (result: AIPromptRunResult<unknown>, record: RecordRef, ctx: RecordProcessorContext) => Promise<unknown>;
+    /**
+     * The record's data for the prompt's user turn, or null for none (`InferProcessor.BuildUserMessage`). The template
+     * is the system turn; the record's data rides on its own user turn, so it is read as data rather than instructions.
+     */
+    BuildUserMessage: (record: RecordRef, ctx: RecordProcessorContext) => Promise<string | null>;
 }
 
 /** Everything a driver needs to compute one record's outputs. */

@@ -1,7 +1,9 @@
 /**
  * @fileoverview WatermarkService — manages change-detection watermarks for Record Processes.
  * Supports Checksum (SHA-256 basis hash stored in MJ: Record Process Watermarks), UpdatedAt
- * (__mj_UpdatedAt comparison against lastRunAt, stores nothing), and None (disabled).
+ * (__mj_UpdatedAt comparison against lastRunAt, stores nothing), and None (disabled). Under either strategy an
+ * unchanged record is skipped only while its outputs exist and the run keeps human values. A watermark records what
+ * was processed: a Checksum run that does not skip still refreshes it for a processor that computes a basis hash.
  * @module @memberjunction/record-set-processor
  */
 
@@ -9,6 +11,7 @@ import { BaseSingleton, ComputeContentHashAsync, EscapeSQLString } from '@member
 import { BaseEntity, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import type { MJRecordProcessEntity, MJRecordProcessWatermarkEntity } from '@memberjunction/core-entities';
 import type { IRecordProcessor, RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
+import { RecordIDs } from '@memberjunction/record-set-processor-base';
 
 export type WatermarkStrategy = MJRecordProcessEntity['WatermarkStrategy'];
 
@@ -28,6 +31,10 @@ export interface CheckBatchWatermarksParams {
     entityID: string;
     records: RecordRef[];
     strategy: WatermarkStrategy;
+    /**
+     * Whether unchanged records are skipped. Off, no record is skipped, but under `Checksum` each record still carries
+     * the basis hash its processor computes (no record-content fallback), so a real run refreshes its watermarks.
+     */
     skipUnchanged?: boolean;
     lastRunAt?: Date | null;
     processor?: IRecordProcessor;
@@ -42,6 +49,11 @@ export interface CheckBatchWatermarksParams {
      * Absent: a context is built from the other parameters (user, provider, run, pipeline and entity).
      */
     ProcessorContext?: RecordProcessorContext;
+    /**
+     * The run overwrites human values: no record is skipped on its watermark, because an unchanged record still holds
+     * the human values the run must overwrite. Its basis hash is still computed, so the watermark is refreshed after.
+     */
+    OverwriteHumanValues?: boolean;
 }
 
 /** Parameters for updating/upserting a watermark after a successful process. */
@@ -81,23 +93,120 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
     }
 
     /**
-     * Evaluates watermarks for a batch of records. Returns a map of RecordID -> WatermarkDecision.
+     * Evaluates watermarks for a batch of records. Returns a map of RecordID -> WatermarkDecision. A record the strategy
+     * finds unchanged is skipped only when its outputs still exist and the run does not overwrite human values
+     * ({@link ConfirmSkips}). Without `skipUnchanged` no record is skipped, but under `Checksum` each record still
+     * carries the basis hash its processor computes, so its watermark is refreshed once it succeeds
+     * ({@link RefreshDecisions}).
      */
     public async CheckBatchWatermarks(params: CheckBatchWatermarksParams): Promise<Map<string, WatermarkDecision>> {
+        if (params.strategy === 'None' || params.records.length === 0) {
+            return WatermarkService.ProcessAll(params.records);
+        }
+        if (!params.skipUnchanged) {
+            return params.strategy === 'Checksum' ? this.RefreshDecisions(params) : WatermarkService.ProcessAll(params.records);
+        }
+
+        const decisions = params.strategy === 'UpdatedAt' ? this.checkUpdatedAtBatch(params) : await this.checkChecksumBatch(params);
+        await this.ConfirmSkips(decisions, params);
+        return decisions;
+    }
+
+    /**
+     * The decisions of a run that skips nothing: every record is processed, and each one whose processor computes a
+     * basis hash carries it and its loaded watermark (one read for the batch), so a succeeded record's watermark records
+     * what was processed and the next `skipUnchanged` run can skip it (ruling QF-I1; e.g. a version backfill).
+     *
+     * Only the processor's own `ComputeBasisHash` counts here, not the record-content fallback a skip check uses: a
+     * processor without one (Action, Agent and registry work) gets no watermark from a run that does not skip.
+     * @param params - The batch check's parameters (`skipUnchanged` off, strategy `Checksum`).
+     */
+    protected async RefreshDecisions(params: CheckBatchWatermarksParams): Promise<Map<string, WatermarkDecision>> {
+        const processor = params.processor;
+        if (!hasComputeBasisHash(processor)) {
+            return WatermarkService.ProcessAll(params.records);
+        }
+        const hashes = await this.computeBasisHashes(params, (record, context) => processor.ComputeBasisHash(record, context));
+        const existing = await this.loadExistingWatermarks(params.recordProcessID, params.entityID, Array.from(hashes.keys()), params.contextUser, params.provider || Metadata.Provider);
         const results = new Map<string, WatermarkDecision>();
-        if (!params.skipUnchanged || params.strategy === 'None' || params.records.length === 0) {
-            for (const r of params.records) {
-                results.set(r.RecordID, { shouldSkip: false });
+        for (const r of params.records) {
+            const basisHash = hashes.get(r.RecordID);
+            results.set(r.RecordID, basisHash ? { shouldSkip: false, basisHash, existingWatermark: existing.get(RecordIDs.Key(r.RecordID)) } : { shouldSkip: false });
+        }
+        return results;
+    }
+
+    /**
+     * A "process, nothing to refresh" decision for every record.
+     * @param records - The batch's records.
+     */
+    protected static ProcessAll(records: RecordRef[]): Map<string, WatermarkDecision> {
+        return new Map(records.map((r): [string, WatermarkDecision] => [r.RecordID, { shouldSkip: false }]));
+    }
+
+    /**
+     * Turns a skip back into "process" where an unchanged watermark cannot vouch for the record: on a run that
+     * overwrites human values (every skip), and for a record whose outputs are gone (asked of the processor once for the
+     * batch's skipped records). A record turned back keeps its basis hash and loaded watermark, so its watermark is
+     * refreshed once it is processed. Both strategies come through here.
+     * @param decisions - The strategy's decisions for the batch; updated in place.
+     * @param params - The batch check's parameters.
+     */
+    protected async ConfirmSkips(decisions: Map<string, WatermarkDecision>, params: CheckBatchWatermarksParams): Promise<void> {
+        const skipped = params.records.filter((r) => decisions.get(r.RecordID)?.shouldSkip);
+        if (skipped.length === 0) {
+            return;
+        }
+        if (params.OverwriteHumanValues) {
+            this.Unskip(decisions, skipped);
+            return;
+        }
+        const withOutputs = await this.RecordsWithOutputs(skipped, params);
+        this.Unskip(decisions, skipped.filter((r) => !withOutputs.has(r.RecordID)));
+    }
+
+    /**
+     * The skipped records whose outputs exist, per the processor's `RecordsWithOutputs`; every record when the processor
+     * has no outputs to check. A failed check answers none, so those records are processed rather than skipped on an
+     * unverified state.
+     * @param records - The batch's records whose watermark matched.
+     * @param params - The batch check's parameters (its processor and context).
+     */
+    protected async RecordsWithOutputs(records: RecordRef[], params: CheckBatchWatermarksParams): Promise<Set<string>> {
+        const processor = params.processor;
+        if (!processor?.RecordsWithOutputs) {
+            return new Set(records.map((r) => r.RecordID));
+        }
+        try {
+            return await processor.RecordsWithOutputs(records, this.ProcessorContextOf(params));
+        } catch (e) {
+            LogError(`WatermarkService: checking the outputs of ${records.length} unchanged records failed (processing them): ${e instanceof Error ? e.message : String(e)}`);
+            return new Set<string>();
+        }
+    }
+
+    /** Marks the records' decisions as "process", keeping their basis hash and loaded watermark. */
+    protected Unskip(decisions: Map<string, WatermarkDecision>, records: RecordRef[]): void {
+        for (const r of records) {
+            const decision = decisions.get(r.RecordID);
+            if (decision) {
+                decisions.set(r.RecordID, { ...decision, shouldSkip: false });
             }
-            return results;
         }
+    }
 
-        if (params.strategy === 'UpdatedAt') {
-            return this.checkUpdatedAtBatch(params);
-        }
-
-        // Checksum strategy
-        return this.checkChecksumBatch(params);
+    /**
+     * The context the processor gets for the batch check: the run's own when given, else one built from the parameters.
+     * @param params - The batch check's parameters.
+     */
+    protected ProcessorContextOf(params: CheckBatchWatermarksParams): RecordProcessorContext {
+        return params.ProcessorContext || {
+            contextUser: params.contextUser,
+            provider: params.provider || Metadata.Provider,
+            processRunID: params.processRunID,
+            recordProcessID: params.recordProcessID,
+            entityID: params.entityID,
+        };
     }
 
     /**
@@ -132,39 +241,13 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
     private async checkChecksumBatch(params: CheckBatchWatermarksParams): Promise<Map<string, WatermarkDecision>> {
         const results = new Map<string, WatermarkDecision>();
         const provider = params.provider ?? Metadata.Provider;
-        const recordContext: RecordProcessorContext = params.ProcessorContext || {
-            contextUser: params.contextUser,
-            provider,
-            processRunID: params.processRunID,
-            recordProcessID: params.recordProcessID,
-            entityID: params.entityID,
-        };
 
         // Step 1: Compute basis hash for each record with bounded concurrency
-        const computedHashes = new Map<string, string>();
-        const queue = [...params.records];
-        const concurrency = Math.max(1, params.maxConcurrency ?? 1);
-        const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
-            while (queue.length > 0) {
-                const record = queue.shift();
-                if (!record) break;
-                try {
-                    const hash = await this.ComputeRecordBasisHash(record, params.processor, recordContext, { excludeFields: params.excludeFields });
-                    if (hash) {
-                        computedHashes.set(record.RecordID, hash);
-                    }
-                } catch (e) {
-                    LogError(`WatermarkService: failed computing basis hash for record '${record.RecordID}': ${e instanceof Error ? e.message : String(e)}`);
-                }
-            }
-        });
-        await Promise.all(workers);
+        const computedHashes = await this.computeBasisHashes(params, (record, context) =>
+            this.ComputeRecordBasisHash(record, params.processor, context, { excludeFields: params.excludeFields }));
 
         if (computedHashes.size === 0) {
-            for (const r of params.records) {
-                results.set(r.RecordID, { shouldSkip: false });
-            }
-            return results;
+            return WatermarkService.ProcessAll(params.records);
         }
 
         // Step 2: Query existing watermarks in batch
@@ -179,7 +262,7 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
         // Step 3: Compare hashes
         for (const r of params.records) {
             const currentHash = computedHashes.get(r.RecordID);
-            const existing = existingWatermarks.get(r.RecordID);
+            const existing = existingWatermarks.get(RecordIDs.Key(r.RecordID));
             if (!currentHash) {
                 results.set(r.RecordID, { shouldSkip: false });
             } else if (existing && existing.Hash === currentHash) {
@@ -190,6 +273,36 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
         }
 
         return results;
+    }
+
+    /**
+     * The batch's basis hashes by RecordID, computed with bounded concurrency; a record whose hash is empty or fails to
+     * compute is left out (and logged), so it is processed with no watermark to refresh.
+     */
+    private async computeBasisHashes(
+        params: CheckBatchWatermarksParams,
+        hashOf: (record: RecordRef, context: RecordProcessorContext) => Promise<string | undefined>
+    ): Promise<Map<string, string>> {
+        const recordContext = this.ProcessorContextOf(params);
+        const computedHashes = new Map<string, string>();
+        const queue = [...params.records];
+        const concurrency = Math.max(1, params.maxConcurrency ?? 1);
+        const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+            while (queue.length > 0) {
+                const record = queue.shift();
+                if (!record) break;
+                try {
+                    const hash = await hashOf(record, recordContext);
+                    if (hash) {
+                        computedHashes.set(record.RecordID, hash);
+                    }
+                } catch (e) {
+                    LogError(`WatermarkService: failed computing basis hash for record '${record.RecordID}': ${e instanceof Error ? e.message : String(e)}`);
+                }
+            }
+        });
+        await Promise.all(workers);
+        return computedHashes;
     }
 
     /**
@@ -270,8 +383,9 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
         }
 
         if (res.Results) {
+            // Keyed by RecordIDs.Key: the database returns a UUID RecordID in its own case, the caller's in theirs
             for (const wm of res.Results) {
-                map.set(wm.RecordID, wm);
+                map.set(RecordIDs.Key(wm.RecordID), wm);
             }
         }
         return map;

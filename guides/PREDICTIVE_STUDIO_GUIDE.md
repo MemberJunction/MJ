@@ -653,7 +653,8 @@ latest value of a feature for a record is the row with the newest `ComputedAt`.
 
 **`Source` and human values.** `Source` is `Pipeline` (computed) or `Human` (a value a person entered on the target
 record, recorded when write-back found it and left it in place). Write-back never overwrites a `Human` value unless
-the run sets `overwriteHumanValues` (an input of the Record Process run-now operation); the run's
+the run sets `overwriteHumanValues` (an input of the Record Process run-now operation); such a run skips no record on
+its watermark, since an unchanged record still holds the human values it must overwrite. The run's
 `HumanValuesPreserved` tally counts the ones it left alone.
 
 **`MJ: Feature Pipeline Versions`.** Each distinct pin (prompt version hash, primary model, parameters hash, spec
@@ -689,12 +690,57 @@ per output, the A-B and A-C agreement must reach a Wilson 95% lower bound (defau
 disagreement; a case all three disagree on is **excluded** and listed (at most 5 of 52 by default). The record is tied
 to the cases by hash and re-checked before every evaluation, so an edited case invalidates it.
 
+**Required and abstention cases.** A golden case can be marked `Required: true`: when any output it scores is wrong,
+the golden set fails whatever its accuracy. The stored gate value is then 0 (`ResultDetails.Score` keeps the measured
+value as `MeasuredValue` and lists the wrong cases in `RequiredFailures`), so the existing activation path refuses the
+version, and the test result carries a failed `golden-set.required` oracle naming each case and output. A case can
+also expect an **abstention** for some outputs (`ExpectAbstain: ["SeniorityLevel", "JobFunctions"]`): such an output is
+right when the pipeline withheld it below its confidence floor, answered nothing (null, an empty list), or answered one
+of the case's `Expected` labels (an explicit abstain value such as `Unknown`); a record that failed for another reason
+is not an abstention. Cases fixed by the pipeline's written rule rather than judged (prompt-injection attempts,
+non-titles) carry `LabelSource: "specification"`: no labeler labels them, and the label-quality record covers only the
+labelled cases, so adding one leaves the record valid. A specification case must be `Required` (the label-quality check
+refuses one that is not), so it can only make the gate stricter. The job-title golden set has 52 labelled cases and 6 required
+specification cases (an instruction posing as a title, a fence breakout, a fake system line, gibberish, a blank title,
+and a genuine title with an embedded instruction to ignore).
+
 **Output constraints.** Each output can declare a `Constraint`: `enum`, `lookup`, `numeric`, `money`, `date`,
 `boolean` or `freetext`, with an `OnViolation` policy. A `lookup` constraint reads its allowed rows from the named
 entity and **renders them in the prompt as the taxonomy** (a stable order, so the hash does not churn); an
 array output uses `ItemRef` to name the field of each item the constraint applies to, so it is checked item by item. A
 violating answer is reported `RejectedInvalid` (counted apart from `Failed`) and nothing is written for it; the run
 still ends `Failed` (see the Record Set Processing guide).
+
+**Confidence floors.** An output can declare `MinConfidence` (0 < floor <= 1) with `OnLowConfidence` (`null` or
+`fail`; both or neither; not on a whole-answer `$` output beside other outputs, since withholding it would drop
+theirs). Its confidence is the driver's, else the answer's at the output's `ConfidenceRef` (an LLM
+pipeline output with a floor must have one); a missing or unusable confidence is below the floor. With `null`, a
+below-floor output is **withheld**: its Feature Value records the abstention (a `Pipeline` row with no value, so the
+record counts as answered and the watermark skip does not re-run it); write-back maps its target field to null through
+the human-value guard, so a value the pipeline wrote earlier is **cleared** and a value a person entered is kept (and
+counted in `HumanValuesPreserved`) even on a run that sets `overwriteHumanValues`, which lets an answer replace a
+person's value but never lets an abstention erase it or retire its Human value; a column that does not allow null is
+left as it is (listed in `withheldKeptFields`, and still in `withheldFields`); a withheld child-target output's child
+mapping is skipped (its rows stay as they are, and a reconcile mapping deletes no stale row); the record's other
+outputs are written as usual. The
+result lists it in `BelowConfidenceOutputs`, the payload names it under `_belowConfidence` (a reserved key the model's
+answer cannot set; the Dedup Cache replays it), and a dry run's write-back preview reports the real write's decision
+for it: `withheldFields` lists every withheld field, `withheldChildEntities` every skipped child mapping, and
+`previewFieldChanges` holds a change to null only where the real write clears the value (one the pipeline wrote; not a
+person's value, a column that does not allow null, or an empty field). The Bulk Operations run dialog shows each
+withheld output as "withheld (below confidence)" beside the record's changes. With `fail`, the record fails with `FailureKind: 'BelowConfidence'` and
+nothing is cached or written. The run's `ResultSummary.BelowConfidence` counts every record a floor acted on (its
+rejections are left out of `Failed`). The floor is part of the outputs, so it is part of the spec hash and the prompt
+version hash: changing it is a new pipeline version, gated again by the golden set. A value an earlier version wrote
+from an answer that now abstains is cleared by the next run of that record, unless a person has since changed it.
+
+**The record's data as the user turn (opt-in).** An LLM pipeline that sets `Context.RecordAsUserMessage: true` (it
+needs `Context.Fields`; `ValidateSpec` refuses it on another pipeline type) sends the prompt template as the system
+turn and the record's context fields, as one JSON object (`{"CurrentJobTitle": "..."}`), as the user turn
+(`InferProcessor.BuildUserMessage`, overridable). JSON encoding fences each value: a value cannot close its string or
+add a key, whatever instruction, quote or closing tag it holds. The flag is part of the spec hash and of the prompt
+version hash (so the Dedup Cache never serves an answer read the other way). A pipeline that does
+not opt in sends exactly the messages it sent before (the template, and the runner's default user turn).
 
 **Strict vendor parameters.** A call sends the prompt's parameters as configured: Gemini, Vertex and Bedrock send
 `temperature: 0` as `0` (not as "unset"), and the OpenAI/Azure reasoning-model rule is by model family, dropping the
@@ -924,7 +970,7 @@ flowchart TB
 - `PredictiveStudioScoringStartup` (`Engine/src/scoring/startup-register.ts`) — a `@RegisterForStartup`-decorated `IStartupSink` (a `BaseSingleton`) whose `HandleStartup()` calls `registerMLScoringProcessor(buildProductionMLInferenceDeps())` **once at MJAPI boot**. It warms no `BaseEngine` cache and touches no DB — the injected seams take their `provider` + `user` per call — so the registration is a cheap synchronous map write (not `deferred`). Mirrors `RemoteBrowserEngine`'s startup pattern.
 - The **migration** `migrations/v5/V202606280215__v5.44.x__RecordProcess_WorkType_AddMLModel.sql` adds `'ML Model'` to the `CK_RecordProcess_WorkType` CHECK constraint — **drop the old constraint + add the new one** (`'Action' | 'Agent' | 'Infer' | 'FieldRules' | 'ML Model'`) **in a single migration**. The CHECK is the **source of truth**: CodeGen derives the field's value list, its `ValueListType`, and the generated TypeScript union from it, and the value validates at SAVE time (a typo'd work type is rejected up front). Work-type **resolution** still happens at execution time via `RecordProcessExecutor.buildProcessor() → RecordProcessorRegistry.Resolve()` (the registry is the pluggable seam) — the CHECK just guarantees the stored value is a known work type. To add further work types, extend the CHECK the same way + re-run `mj codegen`. *(Never hand-edit `EntityFieldValue` / `ValueListType` to do this — that metadata is CodeGen-derived from the CHECK; see [`migrations/CLAUDE.md`](../migrations/CLAUDE.md).)*
 
-**Dry-run write-back fix.** PS2-1 also hardened the substrate's write-back so a **dry-run** of any wrapped work type (Action / Agent / Infer / **ML Model**) computes its effect without mutating data. `applyOutputMapping(... dryRun: true)` (`packages/RecordSetProcessor/engine/src/writeBack.ts`) now still resolves the mapped values and validates the target entity/field metadata, but saves nothing — returning the would-be values in `previewFields` / `previewChild` (`WriteBackResult.dryRun`). This mirrors the first-class `ProcessRun.DryRun` flag threaded through `WriteBackProcessor.ts` and `RecordProcessExecutor.ts`, and through the action's `ScoreRecordSetRequest.dryRun`.
+**Dry-run write-back fix.** PS2-1 also hardened the substrate's write-back so a **dry-run** of any wrapped work type (Action / Agent / Infer / **ML Model**) computes its effect without mutating data. `applyOutputMapping(... dryRun: true)` (`packages/RecordSetProcessor/engine/src/writeBack.ts`) now still resolves the mapped values and validates the target entity/field metadata, but saves nothing — returning the would-be values in `previewFields` / `previewChild` (`WriteBackResult.dryRun`), and the real write's own decision in `previewFieldChanges` / `previewChildChanges` / `previewTags` (see the Record Set Processing guide's Infer dry runs). This mirrors the first-class `ProcessRun.DryRun` flag threaded through `WriteBackProcessor.ts` and `RecordProcessExecutor.ts`, and through the action's `ScoreRecordSetRequest.dryRun`.
 
 **Usage** — score a view and write a probability column on demand:
 

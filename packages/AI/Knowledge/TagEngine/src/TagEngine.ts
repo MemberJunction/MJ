@@ -2,7 +2,7 @@ import { BaseSingleton, Float32VectorToBase64, MJGlobal, UUIDsEqual, NormalizeUU
 import { SaveTimeAISettings } from '@memberjunction/ai';
 import { UserInfo, LogError, LogStatus, Metadata, EntitySaveOptions, type SimpleEmbeddingResult } from '@memberjunction/core';
 import { MJTagEntity, MJTaggedItemEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
-import { TagEngineBase, TagTreeNode, TagScopeContext } from '@memberjunction/tag-engine-base';
+import { TagEngineBase, TagTreeNode, TagScopeContext, type TaggedItemLookup } from '@memberjunction/tag-engine-base';
 import { ReadStoredVector, SimpleVectorService, VectorEntry, VectorInputEntry } from '@memberjunction/ai-vectors-memory';
 import { AIEngine, EmbeddingBackfill } from '@memberjunction/aiengine';
 import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
@@ -232,6 +232,11 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         contextUser: UserInfo
     ): Promise<MJTaggedItemEntity> {
         return this.Base.CreateTaggedItem(tagID, entityID, recordID, weight, contextUser);
+    }
+
+    /** The existing TaggedItems linking any of the tags to a record (see {@link TagEngineBase.FindTaggedItems}). */
+    public async FindTaggedItems(entityID: string, recordID: string, tagIDs: string[], contextUser: UserInfo): Promise<TaggedItemLookup> {
+        return this.Base.FindTaggedItems(entityID, recordID, tagIDs, contextUser);
     }
 
     // ========================================================================

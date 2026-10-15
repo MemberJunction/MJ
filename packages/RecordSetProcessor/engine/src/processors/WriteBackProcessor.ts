@@ -10,11 +10,15 @@ import type { RecordFeatureValuesOutcome } from '@memberjunction/feature-pipelin
 import {
     FeaturePipelineRunPin,
     IRecordProcessor,
+    RecordBatchOutcome,
     RecordProcessorContext,
     RecordRef,
     RecordResult,
+    WriteBackRunPayload,
 } from '@memberjunction/record-set-processor-base';
-import { OutputMappingConfig, RunProvenance, ApplyOutputMapping, type HumanValueGuardSource } from '../writeBack';
+import { OutputMappingConfig, RunProvenance, ApplyOutputMapping, type HumanValueGuardSource, type WithheldTargetSource } from '../writeBack';
+import { OutputMappingPresence, type RecordedAnswerSource } from '../outputPresence';
+import { PreviewRecordNames, type WriteBackPreviewItem } from '../previewRecordNames';
 
 /** The hook a processor may expose to adjust its result before write-back (`InferProcessor.beforeWriteBack`). */
 interface BeforeWriteBackHook {
@@ -87,9 +91,62 @@ export class WriteBackProcessor implements IRecordProcessor {
         return this.inner.CurrentRunPin ? this.inner.CurrentRunPin() : null;
     }
 
+    /** Forwards the dry-run refusal of the wrapped processor, when it reports one. */
+    public CurrentRunRefusal(): string | null {
+        return this.inner.CurrentRunRefusal ? this.inner.CurrentRunRefusal() : null;
+    }
+
+    /**
+     * The records that still hold this write-back's outputs, read once for the batch on the run's provider
+     * ({@link OutputMappingPresence.RecordsWithOutputs}): a target holds a value, or the record's latest recorded
+     * answer for it was empty. The watermark gate processes an unchanged record missing from the answer instead of
+     * skipping it.
+     *
+     * Checked only when the inner processor records its answers ({@link RecordedAnswerSource}: Infer). For an Action,
+     * Agent or registry processor every record counts as holding its outputs, so it is skipped on its watermark alone as
+     * before: it records no answer, so an empty target may be a legitimately empty result, and re-running it to find
+     * out is paid and has side effects.
+     * @param records - the batch's records whose watermark matched
+     * @param context - the run's per-record context (its provider, user, pipeline and entity)
+     * @throws OutputPresenceReadError when a read fails
+     */
+    public async RecordsWithOutputs(records: RecordRef[], context: RecordProcessorContext): Promise<Set<string>> {
+        const outputs = WriteBackProcessor.recordsAnswers(this.inner) ? this.inner.RecordedAnswerOutputs() : [];
+        if (outputs.length === 0 || !context.recordProcessID || !context.entityID) {
+            return new Set(records.map((r) => r.RecordID));
+        }
+        return OutputMappingPresence.RecordsWithOutputs({
+            OutputMapping: this.outputMapping, Records: records, Provider: context.provider, ContextUser: context.contextUser,
+            Answers: { RecordProcessID: context.recordProcessID, EntityID: context.entityID, Outputs: outputs },
+            LookupCache: this._lookupCache,
+        });
+    }
+
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
         const result = await this.inner.ProcessRecord(record, context);
         return result.Status === 'Succeeded' ? this.WriteBackOne(record, result, context) : this.WithoutWriteBack(record, result);
+    }
+
+    /**
+     * Names what a dry-run batch's previews show (the processed records, the foreign-key values), all at once
+     * ({@link PreviewRecordNames.NameWriteBackBatch}: one read per related entity for the whole batch, none for a record
+     * the source loaded with its name fields), so the preview dialog reads no records itself. The record loop calls it
+     * once per dry-run batch (never on a real run), before it records the results; a result without a write-back (a failed
+     * record's inner result) is left as it is.
+     */
+    public async CompleteDryRunBatch(outcomes: RecordBatchOutcome[], context: RecordProcessorContext): Promise<void> {
+        const items: WriteBackPreviewItem[] = [];
+        for (const { Record, Result } of outcomes) {
+            if (WriteBackProcessor.IsWriteBackRunPayload(Result.ResultPayload) && Result.ResultPayload.writeBack) {
+                items.push({ Record, WriteBack: Result.ResultPayload.writeBack });
+            }
+        }
+        await PreviewRecordNames.NameWriteBackBatch(items, this.outputMapping, context.provider, context.contextUser);
+    }
+
+    /** Whether a result payload is a write-back run's `{ output, writeBack }` (the payload this processor builds). */
+    protected static IsWriteBackRunPayload(payload: unknown): payload is WriteBackRunPayload {
+        return payload !== null && typeof payload === 'object' && 'writeBack' in payload;
     }
 
     /**
@@ -152,12 +209,14 @@ export class WriteBackProcessor implements IRecordProcessor {
         const unitWork = WriteBackProcessor.defersFeatureValues(inner)
             ? async (unitProvider: IMetadataProvider) => { featureValues = await inner.WriteDeferredFeatureValues(record.RecordID, unitProvider); }
             : undefined;
+        // The targets the result withheld (outputs below their confidence floor) are left as they are
+        const withheld = WriteBackProcessor.supportsWithheldTargets(inner) ? inner.WithheldWriteBackTargets(result) : undefined;
         const writeBack = await ApplyOutputMapping({
             outputMapping: this.outputMapping, result: result.ResultPayload, record, contextUser: context.contextUser,
             provider: context.provider, dryRun: dry, run, lookupCache: this._lookupCache,
-            humanGuard: guard, overwriteHumanValues: context.overwriteHumanValues === true, unitWork,
+            humanGuard: guard, overwriteHumanValues: context.overwriteHumanValues === true, unitWork, withheld,
         });
-        const payload = { output: result.ResultPayload, writeBack };
+        const payload: WriteBackRunPayload = { output: result.ResultPayload, writeBack };
         const preserved = (writeBack.preservedHumanFields?.length || 0) + (writeBack.preservedHumanChildIDs?.length || 0);
         if (dry) {
             const previewed = WriteBackProcessor.WithoutOutcome(result);
@@ -196,6 +255,16 @@ export class WriteBackProcessor implements IRecordProcessor {
     /** Whether a processor has the `beforeWriteBack` hook (InferProcessor and its extensions). */
     private static hasBeforeWriteBack(p: IRecordProcessor): p is IRecordProcessor & BeforeWriteBackHook {
         return 'beforeWriteBack' in p && typeof p.beforeWriteBack === 'function';
+    }
+
+    /** Whether a processor records its answers as Feature Values (a capability check, not a class check). */
+    private static recordsAnswers(p: IRecordProcessor): p is IRecordProcessor & RecordedAnswerSource {
+        return 'RecordedAnswerOutputs' in p && typeof p.RecordedAnswerOutputs === 'function';
+    }
+
+    /** Whether a processor's results can withhold write-back targets (a capability check, not a class check). */
+    private static supportsWithheldTargets(p: IRecordProcessor): p is IRecordProcessor & WithheldTargetSource {
+        return 'WithheldWriteBackTargets' in p && typeof p.WithheldWriteBackTargets === 'function';
     }
 
     /** Whether a processor can say which target values a person entered (a capability check, not a class check). */

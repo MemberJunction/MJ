@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewEncapsulation, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RunView } from '@memberjunction/core';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, RemoteOpResult, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJButtonDirective, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -9,6 +9,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
   PredictiveStudioCreateScoringProcessOperation,
   RecordProcessRunNowOperation,
+  type RecordProcessRunNowOutput,
   MJUserViewEntity,
   MJListEntity,
   MJScheduledJobTypeEntity,
@@ -26,6 +27,14 @@ import {
 } from './ps-operate-dialog.mapping';
 
 const RUN_RECORD_PROCESS_JOB_TYPE = 'Run Record Process';
+
+/** The toast the dialog's Run now shows: the run's counts, or why it did not complete. */
+export interface OperateRunNotice {
+  /** The toast text. */
+  Message: string;
+  /** `success` for a completed run, `warning` for one that stopped, `error` for a failed or unrun one. */
+  Style: 'success' | 'warning' | 'error';
+}
 
 /**
  * **Operate this model** — the dialog that turns a published model into a running one. It composes
@@ -380,15 +389,10 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
     try {
       const run = new RecordProcessRunNowOperation();
       const result = await run.Execute({ recordProcessID: rpId }, { provider: this.provider ?? undefined, user: this.CurrentUser ?? undefined });
+      const notice = PSOperateDialogComponent.RunNowNotice(result);
+      this.notifications.CreateSimpleNotification(notice.Message, notice.Style, notice.Style === 'error' ? 6000 : 5000);
       if (result.Success && result.Output) {
-        this.notifications.CreateSimpleNotification(
-          `Scored ${result.Output.success}/${result.Output.processed} record(s) — ${result.Output.status}.`,
-          result.Output.status === 'Completed' ? 'success' : 'warning',
-          5000,
-        );
         await this.refreshAndClose();
-      } else {
-        this.notifications.CreateSimpleNotification(result.ErrorMessage || 'Run failed (the process was created and can be run again).', 'error', 6000);
       }
     } catch (e) {
       this.notifications.CreateSimpleNotification(`Run error: ${this.msg(e)}`, 'error', 6000);
@@ -396,6 +400,26 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
       this.Busy = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * The toast for a Run now result. The operation succeeding only means the run was carried out: a run that ended
+   * `Failed` (e.g. refused, or its error rate tripped the breaker) is an error with the run's own message, and one
+   * that stopped otherwise, or completed with record errors, is a warning; only a clean completed run is a success.
+   */
+  public static RunNowNotice(result: RemoteOpResult<RecordProcessRunNowOutput>): OperateRunNotice {
+    const out = result.Output;
+    if (!result.Success || !out) {
+      return { Style: 'error', Message: result.ErrorMessage || 'Run failed (the process was created and can be run again).' };
+    }
+    if (out.status === 'Failed') {
+      return { Style: 'error', Message: `The run failed: ${out.errorMessage || 'no reason was given'} (the process was created and can be run again).` };
+    }
+    // as on the Feature Pipelines card: a completed run with record errors is a warning, not a clean success
+    return {
+      Style: out.status === 'Completed' && out.error === 0 ? 'success' : 'warning',
+      Message: `Scored ${out.success}/${out.processed} record(s) — ${out.status}${out.error > 0 ? `, ${out.error} error(s)` : ''}.`,
+    };
   }
 
   /** @deprecated Use {@link OnRunNow}. */

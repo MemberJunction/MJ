@@ -12,7 +12,7 @@ import type { SuiteHierarchyNode } from '../../services/testing-instrumentation.
 
 function node(over: Partial<SuiteHierarchyNode> = {}): SuiteHierarchyNode {
   return {
-    id: 'n1', name: 'Suite A', testCount: 4, passRate: 92, expanded: false, children: [], ...over,
+    id: 'n1', name: 'Suite A', testCount: 4, RunCount: 10, SkippedCount: 0, passRate: 92, expanded: false, children: [], ...over,
   } as SuiteHierarchyNode;
 }
 
@@ -61,5 +61,16 @@ describe('SuiteTreeComponent (DOM)', () => {
     fixture.componentInstance.collapseAll();
     expect(parent.expanded).toBe(false);
     expect(child.expanded).toBe(false);
+  });
+
+  it('shows "No runs" instead of a 0% pass rate for a suite with no runs in the period (F18)', () => {
+    const fixture = render({ suites: [node({ id: 'a', name: 'Alpha', RunCount: 0, passRate: 0 }), node({ id: 'b', name: 'Beta' })] });
+    const rates = queryAll(fixture, '.pass-rate').map((e) => e.textContent?.trim());
+    expect(rates).toEqual(['No runs', '92%']);
+  });
+
+  it('shows "All skipped" for a suite whose runs in the period were all skipped (QF2-Y2)', () => {
+    const fixture = render({ suites: [node({ id: 'a', name: 'Alpha', RunCount: 3, SkippedCount: 3, passRate: 0 })] });
+    expect(queryAll(fixture, '.pass-rate').map((e) => e.textContent?.trim())).toEqual(['All skipped']);
   });
 });

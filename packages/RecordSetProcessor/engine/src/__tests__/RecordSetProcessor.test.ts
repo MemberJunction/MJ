@@ -11,6 +11,7 @@ import {
     IProcessRunTracker,
     ProcessCursor,
     ProcessRunSummary,
+    RecordBatchOutcome,
     RecordProcessorContext,
     RecordRef,
     RecordResult,
@@ -301,6 +302,87 @@ describe('RecordSetProcessor.Process', () => {
         expect(tracker.details.map((d) => d.record.RecordID)).toEqual(['r3', 'r4']);
     });
 
+    describe('finishing a dry-run batch (CompleteDryRunBatch)', () => {
+        afterEach(() => vi.restoreAllMocks());
+
+        /** A processor that records the order of its calls, and on CompleteDryRunBatch marks every result's payload. */
+        function finishingProcessor(events: string[], fail = false) {
+            return {
+                ProcessRecord: async (r: RecordRef): Promise<RecordResult> => {
+                    events.push(`process ${r.RecordID}`);
+                    return { Status: 'Succeeded', ResultPayload: { named: false } };
+                },
+                CompleteDryRunBatch: vi.fn(async (outcomes: RecordBatchOutcome[]): Promise<void> => {
+                    events.push(`complete ${outcomes.map((o) => o.Record.RecordID).join(',')}`);
+                    if (fail) {
+                        throw new Error('names unavailable');
+                    }
+                    for (const o of outcomes) {
+                        o.Result.ResultPayload = { named: true };
+                    }
+                }),
+            };
+        }
+
+        /** A tracker that also logs each recorded result into `events`. */
+        function orderedTracker(events: string[]): SpyTracker {
+            const tracker = new SpyTracker();
+            const record = tracker.RecordResult.bind(tracker);
+            tracker.RecordResult = async (h, r, result) => { events.push(`record ${r.RecordID}`); await record(h, r, result); };
+            return tracker;
+        }
+
+        it('finishes each dry-run batch once, before its results are recorded, in batch order', async () => {
+            const events: string[] = [];
+            const tracker = orderedTracker(events);
+            const processor = finishingProcessor(events);
+
+            await engine.Process({ source: new ArraySource(recs(3), 'E'), processor, tracker, contextUser: USER, provider: PROVIDER, batchSize: 2, dryRun: true, maxConcurrency: 2 });
+
+            expect(processor.CompleteDryRunBatch).toHaveBeenCalledTimes(2);
+            expect(events.filter((e) => !e.startsWith('process'))).toEqual(['complete r0,r1', 'record r0', 'record r1', 'complete r2', 'record r2']);
+            expect(tracker.details.map((d) => d.result.ResultPayload)).toEqual([{ named: true }, { named: true }, { named: true }]);
+        });
+
+        it('records a real run\'s records as each finishes, and never calls it', async () => {
+            const events: string[] = [];
+            const processor = finishingProcessor(events);
+
+            await engine.Process({ source: new ArraySource(recs(2), 'E'), processor, tracker: orderedTracker(events), contextUser: USER, provider: PROVIDER, batchSize: 2 });
+
+            expect(processor.CompleteDryRunBatch).not.toHaveBeenCalled();
+            expect(events).toEqual(['process r0', 'record r0', 'process r1', 'record r1']);
+        });
+
+        it('records the results as they are, logging once, when finishing the batch fails', async () => {
+            const events: string[] = [];
+            const tracker = orderedTracker(events);
+            const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+            const result = await engine.Process({ source: new ArraySource(recs(2), 'E'), processor: finishingProcessor(events, true), tracker,
+                contextUser: USER, provider: PROVIDER, batchSize: 2, dryRun: true });
+
+            expect(result.Status).toBe('Completed');
+            expect(tracker.details).toHaveLength(2);
+            expect(tracker.details.map((d) => d.result.Status)).toEqual(['Succeeded', 'Succeeded']);
+            expect(logged.mock.calls.filter((c) => String(c[0]).includes('finishing the dry-run batch failed'))).toHaveLength(1);
+        });
+
+        it('finishes a batch-path processor\'s dry-run batch before recording it too', async () => {
+            const events: string[] = [];
+            const tracker = orderedTracker(events);
+            const processor = {
+                ...finishingProcessor(events),
+                ProcessBatch: async (rs: RecordRef[]): Promise<Map<string, RecordResult>> => new Map(rs.map((r) => [r.RecordID, { Status: 'Succeeded', ResultPayload: { named: false } }])),
+            };
+
+            await engine.Process({ source: new ArraySource(recs(2), 'E'), processor, tracker, contextUser: USER, provider: PROVIDER, batchSize: 2, dryRun: true });
+
+            expect(events).toEqual(['complete r0,r1', 'record r0', 'record r1']);
+            expect(tracker.details.map((d) => d.result.ResultPayload)).toEqual([{ named: true }, { named: true }]);
+        });
+    });
+
     describe('the breaker over attempted records', () => {
         afterEach(() => vi.restoreAllMocks());
         /** The engine skips records r0..r(n-1) on their watermark, without handing them to the processor. */
@@ -349,10 +431,27 @@ describe('RecordSetProcessor.Process', () => {
             const result = await engine.Process({ source: new ArraySource(recs(10), 'E'), processor, tracker, contextUser: USER,
                 provider: PROVIDER, batchSize: 10, FeaturePipeline: true, recordProcessID: 'RP-1' });
             expect(result.Status).toBe('Failed');
-            expect(result.ErrorMessage).toBe('1 of 10 attempted records failed (1 rejected by output constraints)');
+            expect(result.ErrorMessage).toBe('1 of 10 attempted records failed (1 rejected by output constraints, 0 below a confidence floor)');
             expect(tracker.completed?.FeaturePipeline).toEqual({
                 RecordProcessID: 'RP-1', Pin: PIN, ParameterFidelity: null, Attempted: 10, Upserted: 8, Unchanged: 1, Previewed: 0,
-                RejectedInvalid: 1, Failed: 0, Skipped: 0, HumanValuesPreserved: 1, Status: 'failed',
+                RejectedInvalid: 1, BelowConfidence: 0, Failed: 0, Skipped: 0, HumanValuesPreserved: 1, Status: 'failed',
+            });
+        });
+
+        it('tallies the records a confidence floor acted on, and leaves its rejections out of Failed', async () => {
+            const tracker = new SpyTracker();
+            const processor = new FunctionRecordProcessor((r): RecordResult => {
+                if (r.RecordID === 'r0') return { Status: 'Failed', ErrorMessage: 'below floor', FailureKind: 'BelowConfidence', BelowConfidenceOutputs: ['S'] };
+                if (r.RecordID === 'r1') return { Status: 'Succeeded', Outcome: 'Upserted', BelowConfidenceOutputs: ['S'] };
+                if (r.RecordID === 'r2') return { Status: 'Failed', ErrorMessage: 'deadlock' };
+                return { Status: 'Succeeded', Outcome: 'Upserted', PipelinePin: PIN };
+            });
+            const result = await engine.Process({ source: new ArraySource(recs(10), 'E'), processor, tracker, contextUser: USER,
+                provider: PROVIDER, batchSize: 10, FeaturePipeline: true, recordProcessID: 'RP-1' });
+            expect(result.Status).toBe('Failed');
+            expect(result.ErrorMessage).toBe('2 of 10 attempted records failed (0 rejected by output constraints, 1 below a confidence floor)');
+            expect(tracker.completed?.FeaturePipeline).toMatchObject({
+                Attempted: 10, Upserted: 8, RejectedInvalid: 0, BelowConfidence: 2, Failed: 1, Status: 'failed',
             });
         });
 
@@ -390,6 +489,29 @@ describe('RecordSetProcessor.Process', () => {
             expect(tracker.completed?.FeaturePipeline).toMatchObject({ Attempted: 3, Previewed: 3, Upserted: 0, Unchanged: 0, Status: 'completed' });
         });
 
+        it('carries why the real run would be refused on a dry run\'s result (F16)', async () => {
+            const tracker = new SpyTracker();
+            const refusal = 'Feature Pipeline version v6 is not activated';
+            const processor = { ProcessRecord: async (): Promise<RecordResult> => ({ Status: 'Succeeded', DryRun: true, PipelinePin: PIN }), CurrentRunRefusal: () => refusal };
+            const result = await engine.Process({ source: new ArraySource(recs(2), 'E'), processor, tracker, contextUser: USER, provider: PROVIDER,
+                batchSize: 2, dryRun: true, FeaturePipeline: true, recordProcessID: 'RP-1' });
+            expect(tracker.completed?.FeaturePipeline?.WouldRefuse).toBe(refusal);
+            expect(result.FeaturePipeline?.WouldRefuse).toBe(refusal);
+        });
+
+        it('carries no refusal on a real run, nor on a dry run whose version would run', async () => {
+            const real = new SpyTracker();
+            await engine.Process({ source: new ArraySource(recs(1), 'E'), tracker: real, contextUser: USER, provider: PROVIDER,
+                processor: { ProcessRecord: async (): Promise<RecordResult> => ({ Status: 'Succeeded', Outcome: 'Upserted' }), CurrentRunRefusal: () => 'stale' },
+                batchSize: 1, FeaturePipeline: true, recordProcessID: 'RP-1' });
+            expect(real.completed?.FeaturePipeline).not.toHaveProperty('WouldRefuse');
+            const dry = new SpyTracker();
+            await engine.Process({ source: new ArraySource(recs(1), 'E'), tracker: dry, contextUser: USER, provider: PROVIDER,
+                processor: { ProcessRecord: async (): Promise<RecordResult> => ({ Status: 'Succeeded', DryRun: true }), CurrentRunRefusal: () => null },
+                batchSize: 1, dryRun: true, FeaturePipeline: true, recordProcessID: 'RP-1' });
+            expect(dry.completed?.FeaturePipeline).not.toHaveProperty('WouldRefuse');
+        });
+
         it('tallies the batch path the same way as the per-record path', async () => {
             const tracker = new SpyTracker();
             const processor = {
@@ -402,7 +524,7 @@ describe('RecordSetProcessor.Process', () => {
             const result = await engine.Process({ source: new ArraySource(recs(12), 'E'), processor, tracker, contextUser: USER, provider: PROVIDER,
                 batchSize: 12, FeaturePipeline: true, recordProcessID: 'RP-1' });
             expect(result.Status).toBe('Failed');
-            expect(result.ErrorMessage).toBe('2 of 12 attempted records failed (1 rejected by output constraints)');
+            expect(result.ErrorMessage).toBe('2 of 12 attempted records failed (1 rejected by output constraints, 0 below a confidence floor)');
             expect(tracker.completed?.FeaturePipeline).toMatchObject({
                 Pin: PIN, Attempted: 12, Upserted: 9, Unchanged: 1, RejectedInvalid: 1, Failed: 1, HumanValuesPreserved: 20, Status: 'failed',
             });

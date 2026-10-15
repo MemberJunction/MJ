@@ -363,15 +363,22 @@ export class ActionResolver extends ResolverBase {
    * @private
    */
   private createActionResult(result: ActionResult): ActionResultOutput {
-    const x =(result.Params || result.RunParams.Params || [])
-              .filter(p => p.Type.trim().toLowerCase() === 'output' ||
-                           p.Type.trim().toLowerCase() === 'both')     ;
     return {
       Success: result.Success,
       Message: result.Message,
       ResultCode: result.Result?.ResultCode,
-      ResultData: x && x.length > 0 ? JSON.stringify(CopyScalarsAndArrays(x)) : undefined
+      ResultData: ActionResolver.SerializeOutputParams(result.Params || result.RunParams.Params || [])
     };
+  }
+
+  /**
+   * The `ResultData` payload of a RunAction result: a JSON ARRAY of the run's Output/Both params, or undefined when
+   * there are none. Each param is copied on its own — copying the array as one object would turn it into an
+   * index-keyed object (`{"0": …, "1": …}`), which clients that look params up by name cannot read.
+   */
+  public static SerializeOutputParams(params: ActionParam[]): string | undefined {
+    const outputs = params.filter(p => p.Type.trim().toLowerCase() === 'output' || p.Type.trim().toLowerCase() === 'both');
+    return outputs.length > 0 ? JSON.stringify(outputs.map(p => CopyScalarsAndArrays(p))) : undefined;
   }
 
   /**

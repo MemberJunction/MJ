@@ -43,8 +43,11 @@ vi.mock('@memberjunction/ng-base-application', () => ({
   ApplicationManager: class {},
   FlattenLayoutToSingleStack: vi.fn(),
 }));
-vi.mock('@memberjunction/global', () => ({ MJGlobal: { Instance: { ClassFactory: {} } } }));
-vi.mock('@memberjunction/ng-shared', () => ({
+vi.mock('@memberjunction/global', async () => ({
+  ...(await vi.importActual<typeof import('@memberjunction/global')>('@memberjunction/global')),
+  MJGlobal: { Instance: { ClassFactory: {} } },
+}));
+vi.mock('@memberjunction/ng-shared', async () => ({
   BaseResourceComponent: class {},
   HomeAppPinService: class {},
   NavigationService: class {},
@@ -63,10 +66,11 @@ vi.mock('@memberjunction/core-entities', () => ({
   MJResourceTypeEntity: class {},
   ResourcePermissionEngine: { Instance: {} },
 }));
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', async () => ({
   BaseEntity: class {},
   Metadata: class {},
   LogError: vi.fn(),
+  CompositeKey: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core')).CompositeKey,
 }));
 vi.mock('@memberjunction/ng-notifications', () => ({ MJNotificationService: class {} }));
 vi.mock('@memberjunction/ng-base-types', () => ({ BaseAngularComponent: class {} }));
@@ -162,6 +166,7 @@ function createHarness(initial: TestTab, live: LiveData): Harness {
     getCachedComponent: vi.fn(() => ({ componentRef: { instance }, wrapperElement: {} })),
     markAsAttached: vi.fn(),
     rekeyComponent: vi.fn(() => true),
+    HasEntry: vi.fn(() => false),
   };
   internals['getResourceDataFromTab'] = vi.fn(async (t: TestTab) => ({
     ResourceRecordID: (t.configuration['recordId'] as string) || t.resourceRecordId,
@@ -302,5 +307,120 @@ describe('main layout sync — reload only when the tab content changes', () => 
 
     expect(saved.resourceRecordId).toBe('ID|w-1');
     expect(h.cleanupTabComponent).not.toHaveBeenCalled();
+  });
+
+  describe('saving an existing record on a deep-linked records tab', () => {
+    const URL_FORM = 'd8a9b7ab-7450-48e5-a0ea-acd1d86acf70';
+    const SERVER_FORM = 'ID|D8A9B7AB-7450-48E5-A0EA-ACD1D86ACF70';
+
+    async function openAndSave() {
+      const deepLinked = tab('Records', URL_FORM, { Entity: 'Widgets' });
+      const live = liveData('Records', URL_FORM, 'RecordResource', deepLinked.configuration);
+      const h = createHarness(deepLinked, live);
+      await load(h);
+      // BaseResourceComponent.ResourceRecordSaved stores the server's URL-segment form.
+      live.ResourceRecordID = SERVER_FORM;
+      const entity = { PrimaryKey: { ToURLSegment: () => SERVER_FORM } };
+      (h.component as unknown as Internals).handleResourceRecordSaved('RecordResource', 'app-home', 'tab-1', { Data: live }, entity);
+      const workspace = h.internals['workspaceManager'] as { GetTab(id: string): TestTab; UpdateTabResourceRecordId: ReturnType<typeof vi.fn> };
+      return { h, workspace };
+    }
+
+    it('writes the saved URL segment back to the tab so tab and component agree', async () => {
+      const { workspace } = await openAndSave();
+      expect(workspace.UpdateTabResourceRecordId).toHaveBeenCalledWith('tab-1', SERVER_FORM);
+      expect(workspace.GetTab('tab-1').resourceRecordId).toBe(SERVER_FORM);
+    });
+
+    it('does not reload the tab on the configuration emission the save causes', async () => {
+      const { h, workspace } = await openAndSave();
+      sync(h, workspace.GetTab('tab-1'));
+      sync(h, workspace.GetTab('tab-1'));
+      expect(h.cleanupTabComponent).not.toHaveBeenCalled();
+      expect(h.loadTabContent).not.toHaveBeenCalled();
+      // A reload re-attaches the component, and the re-attach is what retitles the tab and emits again.
+      expect(h.internals['updateTabDisplayName']).not.toHaveBeenCalled();
+    });
+
+    it('does not reload even when the tab still holds the bare URL form', async () => {
+      const deepLinked = tab('Records', URL_FORM, { Entity: 'Widgets' });
+      const live = liveData('Records', URL_FORM, 'RecordResource', deepLinked.configuration);
+      const h = createHarness(deepLinked, live);
+      await load(h);
+      live.ResourceRecordID = SERVER_FORM;
+      sync(h, { ...deepLinked, title: 'Renamed' });
+      expect(h.cleanupTabComponent).not.toHaveBeenCalled();
+    });
+
+    it('leaves the tab alone when it already holds the saved URL segment', async () => {
+      const current = tab('Records', SERVER_FORM, { Entity: 'Widgets' });
+      const live = liveData('Records', SERVER_FORM, 'RecordResource', current.configuration);
+      const h = createHarness(current, live);
+      await load(h);
+      const entity = { PrimaryKey: { ToURLSegment: () => SERVER_FORM } };
+      (h.component as unknown as Internals).handleResourceRecordSaved('RecordResource', 'app-home', 'tab-1', { Data: live }, entity);
+      const workspace = h.internals['workspaceManager'] as { UpdateTabResourceRecordId: ReturnType<typeof vi.fn> };
+      expect(workspace.UpdateTabResourceRecordId).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('TabContainerComponent.IsSameRecordId — record identity', () => {
+  it('ignores UUID case, bare or prefixed', () => {
+    expect(TabContainerComponent.IsSameRecordId('ID|D8A9B7AB-7450-48E5-A0EA-ACD1D86ACF70', 'd8a9b7ab-7450-48e5-a0ea-acd1d86acf70')).toBe(true);
+    expect(TabContainerComponent.IsSameRecordId('D8A9B7AB-7450-48E5-A0EA-ACD1D86ACF70', 'd8a9b7ab-7450-48e5-a0ea-acd1d86acf70')).toBe(true);
+    expect(TabContainerComponent.IsSameRecordId('ID|d8a9b7ab-7450-48e5-a0ea-acd1d86acf70', 'ID|D8A9B7AB-7450-48E5-A0EA-ACD1D86ACF70')).toBe(true);
+  });
+
+  it('tells different UUIDs apart', () => {
+    expect(TabContainerComponent.IsSameRecordId('ID|D8A9B7AB-7450-48E5-A0EA-ACD1D86ACF70', '11111111-2222-3333-4444-555555555555')).toBe(false);
+  });
+
+  it('folds case for every string value, as CompositeKey.EqualsKey does', () => {
+    expect(TabContainerComponent.IsSameRecordId('Code|Abc', 'abc')).toBe(true);
+    expect(TabContainerComponent.IsSameRecordId('Abc', 'abd')).toBe(false);
+  });
+
+  it('compares composite keys field by field, in any order', () => {
+    expect(TabContainerComponent.IsSameRecordId('OrderID|1||LineNo|3', 'LineNo|3||OrderID|1')).toBe(true);
+    expect(TabContainerComponent.IsSameRecordId('OrderID|1||LineNo|3', 'OrderID|1||LineNo|4')).toBe(false);
+    expect(TabContainerComponent.IsSameRecordId('OrderID|1||LineNo|3', 'OrderID|1')).toBe(false);
+  });
+
+  it('treats two empty ids as the same and empty against non-empty as different', () => {
+    expect(TabContainerComponent.IsSameRecordId('', undefined)).toBe(true);
+    expect(TabContainerComponent.IsSameRecordId('', 'x')).toBe(false);
+  });
+});
+
+describe('main layout sync — record identity applies to Records only', () => {
+  it('reloads a non-record tab whose id changes only by case', async () => {
+    const dashboard = tab('Dashboards', 'dash-abc', { dashboardId: 'dash-abc' });
+    const h = createHarness(dashboard, liveData('Dashboards', 'dash-abc', 'DashboardResource'));
+    await load(h);
+    const recased = tab('Dashboards', 'DASH-ABC', { dashboardId: 'DASH-ABC' });
+    h.setTab(recased);
+
+    sync(h, recased);
+
+    expect(h.cleanupTabComponent).toHaveBeenCalledWith('tab-1');
+  });
+
+  it('does not reload a records tab whose id changes only by case', async () => {
+    const record = tab('Records', 'd8a9b7ab-7450-48e5-a0ea-acd1d86acf70', { Entity: 'Widgets' });
+    const live = liveData('Records', 'd8a9b7ab-7450-48e5-a0ea-acd1d86acf70', 'RecordResource', record.configuration);
+    const h = createHarness(record, live);
+    await load(h);
+    live.ResourceRecordID = 'ID|D8A9B7AB-7450-48E5-A0EA-ACD1D86ACF70';
+
+    sync(h, record);
+
+    expect(h.cleanupTabComponent).not.toHaveBeenCalled();
+  });
+
+  it('still tolerates the URL-segment prefix for a non-record tab', () => {
+    expect(TabContainerComponent.IsSameResourceId('Dashboards', 'ID|dash-1', 'dash-1')).toBe(true);
+    expect(TabContainerComponent.IsSameResourceId('Dashboards', 'ID|dash-1', 'DASH-1')).toBe(false);
+    expect(TabContainerComponent.IsSameResourceId('Dashboards', 'ID|x', 'Name|x')).toBe(false);
   });
 });

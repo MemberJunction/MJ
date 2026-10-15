@@ -284,20 +284,9 @@ export class DatabaseDesignerService {
         // result.Result is typed as MJActionResultCodeEntity | undefined in the ActionResult
         // class, but GraphQLActionClient repurposes it to carry the parsed ResultData payload
         // (an ActionParam[]).  We cast through unknown to acknowledge this intentional mismatch.
+        // The server sends the Output/Both params as a JSON array (ActionResolver.SerializeOutputParams)
         const raw: unknown = result.Result;
-        if (Array.isArray(raw)) return raw as ActionParam[];
-
-        // CopyScalarsAndArrays (used server-side to serialize ResultData) converts arrays to
-        // numeric-keyed plain objects — e.g. [p0, p1] → {"0": p0, "1": p1}.
-        // Detect and restore that pattern so callers can find their output params.
-        if (raw && typeof raw === 'object') {
-            const keys = Object.keys(raw as object);
-            if (keys.length > 0 && keys.every(k => /^\d+$/.test(k))) {
-                const obj = raw as Record<string, ActionParam>;
-                return keys.sort((a, b) => +a - +b).map(k => obj[k]);
-            }
-        }
-        return [];
+        return Array.isArray(raw) ? raw as ActionParam[] : [];
     }
 
     /**

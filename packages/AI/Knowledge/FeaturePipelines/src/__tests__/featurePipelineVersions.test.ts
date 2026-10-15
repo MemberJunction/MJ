@@ -282,7 +282,7 @@ function featureValueResult(params: RunViewParams): RunViewResult<FeatureValueRo
 
 /** Seeds a saved version row of pipeline RP under `pin`. */
 async function seedVersion(provider: VersionRegistryProvider, pin: FeaturePipelinePinData,
-    fields: Partial<Pick<MJFeaturePipelineVersionEntityExtended, 'Version' | 'Status' | 'Gated' | 'Threshold' | 'ResultValue' | 'GoldenSetTestRunID' | 'BackfilledAt'
+    fields: Partial<Pick<MJFeaturePipelineVersionEntityExtended, 'Version' | 'Status' | 'Gated' | 'Threshold' | 'ResultValue' | 'GoldenSetTestRunID' | 'BackfilledAt' | 'ActivatedAt' | 'ApprovedByUserID' | 'RetiredAt' | 'ResultDetails'
         | 'GoldenSetTestID' | 'Metric' | '__mj_CreatedAt' | '__mj_UpdatedAt'>>): Promise<MJFeaturePipelineVersionEntityExtended> {
     const row = provider.NewRow();
     await row.LoadFromData({
@@ -373,6 +373,13 @@ describe('FeaturePipelineVersionService.ResolveForRun', () => {
         await seedVersion(provider, pinA, { Version: 1, Status: 'Refused', Gated: true, Threshold: 0.9, ResultValue: 0.77, GoldenSetTestRunID: 'TR' });
         await expect(svc.ResolveForRun({ RecordProcessID: 'RP', Pin: pinA, TriggeredBy: 'OnDemand', ContextUser: user, Provider: provider, Activation: gate }))
             .rejects.toThrow(/v1 was refused activation: its golden-set result 0.77 is below the threshold 0.9/);
+    });
+
+    it('names the wrong required golden cases when they refused the version, without the threshold remedy', async () => {
+        const details = JSON.stringify({ Score: { RequiredFailures: [{ CaseID: 'h01', Outputs: ['SeniorityLevel'] }, { CaseID: 'h03', Outputs: ['SeniorityLevel', 'JobFunctions'] }] } });
+        await seedVersion(provider, pinA, { Version: 1, Status: 'Refused', Gated: true, Threshold: 0.9, ResultValue: 0, GoldenSetTestRunID: 'TR', ResultDetails: details });
+        const refusal = svc.ResolveForRun({ RecordProcessID: 'RP', Pin: pinA, TriggeredBy: 'OnDemand', ContextUser: user, Provider: provider, Activation: gate });
+        await expect(refusal).rejects.toThrow(/v1 was refused activation: its golden set has 2 required case\(s\) wrong: h01 \(SeniorityLevel\); h03 \(SeniorityLevel, JobFunctions\)\. Change the prompt, model, parameters or spec \(the Feature Pipeline Version Steward evaluates the new version automatically\)\.$/);
     });
 
     it('keeps the Candidate a refused run registered: the refusal is thrown after the lock committed', async () => {
@@ -557,10 +564,19 @@ describe('RecordGoldenSetResult', () => {
 });
 
 describe('MJFeaturePipelineVersionEntityExtended.GetActivationProblems (the save check)', () => {
-    const base: VersionActivationFields = { Version: 3, Gated: true, Threshold: 0.9, GoldenSetTestRunID: 'TR', ResultValue: 0.95, Status: 'Active' };
+    const base: VersionActivationFields = { Version: 3, Gated: true, Threshold: 0.9, GoldenSetTestRunID: 'TR', ResultValue: 0.95, Status: 'Active', ResultDetails: null };
     const problems = (v: VersionActivationFields): string[] => MJFeaturePipelineVersionEntityExtended.GetActivationProblems(v);
     it('accepts an Active gated version at or above threshold', () => { expect(problems(base)).toEqual([]); });
     it('refuses Active below threshold', () => { expect(problems({ ...base, ResultValue: 0.8 })[0]).toMatch(/below the threshold 0.9/); });
+    it('names the wrong required cases instead of the 0 result they forced', () => {
+        const details = JSON.stringify({ Score: { RequiredFailures: [{ CaseID: 'h06', Outputs: ['SeniorityLevel'] }] }, Answers: [] });
+        expect(problems({ ...base, ResultValue: 0, ResultDetails: details })).toEqual(['Version 3 cannot be activated: its golden set has 1 required case(s) wrong: h06 (SeniorityLevel).']);
+    });
+    it('falls back to the threshold wording when the stored details are not JSON or carry no well-formed failures', () => {
+        expect(problems({ ...base, ResultValue: 0.5, ResultDetails: 'not json' })[0]).toMatch(/its golden-set result 0.5000 is below the threshold 0.9/);
+        expect(problems({ ...base, ResultValue: 0.5, ResultDetails: JSON.stringify({ Score: { RequiredFailures: [{ CaseID: 7 }] } }) })[0]).toMatch(/below the threshold 0.9/);
+        expect(problems({ ...base, ResultValue: 0.5, ResultDetails: JSON.stringify({ Score: { RequiredFailures: [] } }) })[0]).toMatch(/below the threshold 0.9/);
+    });
     it('refuses Active without a stored result', () => { expect(problems({ ...base, GoldenSetTestRunID: null })[0]).toMatch(/without a stored golden-set result/); });
     it('does not constrain ungated or non-Active rows', () => {
         expect(problems({ ...base, Gated: false, ResultValue: null })).toEqual([]);
@@ -795,6 +811,8 @@ describe('FeaturePipelineVersionService.PlanUnattended', () => {
         expect(await plan(pinA)).toEqual({ Kind: 'none', Version: 1 });
         versionRow(1).Status = 'Refused';
         expect((await plan(pinA)).Kind).toBe('refused');
+        versionRow(1).ResultDetails = JSON.stringify({ Score: { RequiredFailures: [{ CaseID: 'h02', Outputs: ['JobFunctions'] }] } });
+        expect(await plan(pinA)).toEqual({ Kind: 'refused', Version: 1, Message: 'v1 was refused activation: its golden set has 1 required case(s) wrong: h02 (JobFunctions).' });
     });
 
     it('backfills a first version over the records whose Pipeline values all predate versions (PipelineVersion NULL)', async () => {
@@ -857,6 +875,28 @@ describe('FeaturePipelineVersionService activation and the backfill mark', () =>
         await svc.ResolveForRun({ RecordProcessID: 'RP', Pin: pinA, TriggeredBy: 'OnDemand', ContextUser: user, Provider: provider });
         expect(stored(1)?.Status).toBe('Active');
         expect(stored(1)?.BackfilledAt).toBeNull();
+    });
+    it('keeps the activation date and approver of a version that stays Active when a new golden-set result is recorded', async () => {
+        const activatedAt = new Date('2026-10-01T14:45:00Z');
+        await seedVersion(provider, pinA, { Version: 1, Status: 'Active', Gated: true, Threshold: 0.8, ResultValue: 0.85, GoldenSetTestRunID: 'TR-1',
+            ActivatedAt: activatedAt, ApprovedByUserID: 'approver-1' });
+        await svc.RecordGoldenSetResult({ RecordProcessID: 'RP', Pin: pinA, Activation: gate, TestRunID: 'TR-2',
+            Result: { Value: 0.95, Lower: 0.9, Upper: 0.98, N: 52, Details: '{}' }, ApprovedByUserID: 'qa-runner', ContextUser: user, Provider: provider });
+        expect(stored(1)?.Status).toBe('Active');
+        expect(stored(1)?.ActivatedAt).toEqual(activatedAt);
+        expect(stored(1)?.ApprovedByUserID).toBe('approver-1');
+        expect(stored(1)?.GoldenSetTestRunID).toBe('TR-2');
+        expect(stored(1)?.ResultValue).toBe(0.95);
+    });
+    it('stamps the activation date and approver when a golden-set result moves a version to Active', async () => {
+        const retiredAt = new Date('2026-09-01T00:00:00Z');
+        await seedVersion(provider, pinA, { Version: 1, Status: 'Retired', Gated: true, Threshold: 0.8, RetiredAt: retiredAt });
+        await svc.RecordGoldenSetResult({ RecordProcessID: 'RP', Pin: pinA, Activation: gate, TestRunID: 'TR-2',
+            Result: { Value: 0.95, Lower: 0.9, Upper: 0.98, N: 52, Details: '{}' }, ApprovedByUserID: 'qa-runner', ContextUser: user, Provider: provider });
+        expect(stored(1)?.Status).toBe('Active');
+        expect(stored(1)?.ActivatedAt).toBeInstanceOf(Date);
+        expect(stored(1)?.ApprovedByUserID).toBe('qa-runner');
+        expect(stored(1)?.RetiredAt).toBeNull();
     });
     it('keeps the backfill mark of a version that stays Active when a new golden-set result is recorded', async () => {
         const backfilled = new Date('2026-10-01T00:00:00Z');

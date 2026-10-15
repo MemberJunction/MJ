@@ -3,9 +3,10 @@
  * decides whether a run may write under it, and stores golden-set activations.
  * @module @memberjunction/feature-pipelines
  */
-import { BaseSingleton, EscapeSQLString, IsValidUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { DatabaseProviderBase, RunInEntityTransaction, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJFeaturePipelineVersionEntity, MJFeatureValueEntity, MJProcessRunEntity } from '@memberjunction/core-entities';
+import { RecordIDs } from '@memberjunction/record-set-processor-base';
 import { FeaturePipelinePin, type FeaturePipelinePinData } from '../spec/feature-value-key.js';
 import type { DataFeatureActivation, DataFeatureUnattended } from '../spec/data-feature-spec.js';
 import { MJFeaturePipelineVersionEntityExtended, type VersionActivationFields } from '../entities/MJFeaturePipelineVersionEntityExtended.js';
@@ -251,7 +252,7 @@ export class FeaturePipelineVersionService extends BaseSingleton<FeaturePipeline
             return this.PlanEvaluation(row, p.Activation, p.Unattended);
         }
         if (row.Status === 'Refused') {
-            return { Kind: 'refused', Version: row.Version, Message: `v${row.Version} was refused activation: golden-set result ${row.ResultValue} is below the threshold ${row.Threshold}.` };
+            return { Kind: 'refused', Version: row.Version, Message: `v${row.Version} was refused activation: ${MJFeaturePipelineVersionEntityExtended.DescribeShortfall(row, String(row.ResultValue))}.` };
         }
         if (row.BackfilledAt) {
             return { Kind: 'none', Version: row.Version };
@@ -294,11 +295,11 @@ export class FeaturePipelineVersionService extends BaseSingleton<FeaturePipeline
             .map((latest) => latest.RecordID);
     }
 
-    /** Each record's latest value (by `ComputedAt`), keyed by {@link RecordKey}; a tie keeps the first row read. */
+    /** Each record's latest value (by `ComputedAt`), keyed by `RecordIDs.Key`; a tie keeps the first row read. */
     protected LatestValuePerRecord(rows: PipelineValueStamp[]): Map<string, PipelineValueStamp> {
         const latest = new Map<string, PipelineValueStamp>();
         for (const row of rows) {
-            const key = this.RecordKey(row.RecordID);
+            const key = RecordIDs.Key(row.RecordID);
             const kept = latest.get(key);
             // `new Date()`: a simple-result date may arrive as a string
             if (!kept || new Date(row.ComputedAt).getTime() > new Date(kept.ComputedAt).getTime()) {
@@ -387,11 +388,6 @@ export class FeaturePipelineVersionService extends BaseSingleton<FeaturePipeline
         return res.TotalRowCount > 0;
     }
 
-    /** The key a record is matched by: a UUID case-insensitively, any other key as written. */
-    protected RecordKey(recordID: string): string {
-        return IsValidUUID(recordID) ? NormalizeUUID(recordID) : recordID;
-    }
-
     /**
      * Under the pipeline lock: a gated version runs (activated first when it is not yet Active) once its stored result
      * passes; otherwise the refusal is returned, for the caller to throw once the lock's transaction committed.
@@ -436,7 +432,7 @@ export class FeaturePipelineVersionService extends BaseSingleton<FeaturePipeline
         const judged: VersionGateFields = existing || {
             Version: this.NextVersionNumber(versions), Status: 'Candidate', Gated: !!p.Activation,
             Threshold: p.Activation?.Threshold || null, GoldenSetTestID: p.Activation?.GoldenSetTestID || null,
-            ResultValue: null, GoldenSetTestRunID: null,
+            ResultValue: null, GoldenSetTestRunID: null, ResultDetails: null,
         };
         const refusal = this.DescribeRefusal(judged, versions, p);
         const version: ResolvedPipelineVersion = existing ? { Version: existing.Version, Status: existing.Status } : { Version: null, Status: null };
@@ -454,7 +450,10 @@ export class FeaturePipelineVersionService extends BaseSingleton<FeaturePipeline
     /** Why a gated pipeline may not run this version (refused, or no passing stored result); null when it may. */
     protected GatedRefusal(row: VersionGateFields, activation: DataFeatureActivation | undefined): string | null {
         if (row.Status === 'Refused') {
-            return `Feature Pipeline version v${row.Version} was refused activation: its golden-set result ${row.ResultValue} is below the threshold ${row.Threshold}. Change the prompt, model, parameters or spec (the Feature Pipeline Version Steward evaluates the new version automatically), or the pipeline's Activation.Threshold and run the golden-set test again.`;
+            // a wrong required case is not fixed by lowering the threshold, so that remedy is offered only for a low result
+            const thresholdRemedy = MJFeaturePipelineVersionEntityExtended.RequiredFailuresOf(row).length > 0
+                ? '' : `, or the pipeline's Activation.Threshold and run the golden-set test again`;
+            return `Feature Pipeline version v${row.Version} was refused activation: ${MJFeaturePipelineVersionEntityExtended.DescribeShortfall(row, String(row.ResultValue))}. Change the prompt, model, parameters or spec (the Feature Pipeline Version Steward evaluates the new version automatically)${thresholdRemedy}.`;
         }
         if (MJFeaturePipelineVersionEntityExtended.HasPassingResult(row)) {
             return null;
@@ -565,7 +564,7 @@ export class FeaturePipelineVersionService extends BaseSingleton<FeaturePipeline
      * them, and the lock's transaction makes the saves one unit (a failed save rolls the whole activation back).
      * Sequential saves: they share the transaction. A retired version's backfill mark is cleared, and so is the mark of
      * a version that becomes Active again: its records are re-derived under it. A version that is already Active (a new
-     * golden-set result recorded on it) keeps its mark.
+     * golden-set result recorded on it) keeps its mark and its activation date and approver.
      */
     protected async Activate(row: MJFeaturePipelineVersionEntity, versions: MJFeaturePipelineVersionEntity[], approvedByUserID: string): Promise<void> {
         for (const other of versions) {
@@ -577,12 +576,14 @@ export class FeaturePipelineVersionService extends BaseSingleton<FeaturePipeline
             }
         }
         if (row.Status !== 'Active') {
+            // A real transition to Active: stamp when and by whom. An already-Active version keeps its original
+            // activation provenance; recording a new golden-set result on it must not rewrite it.
             row.BackfilledAt = null;
+            row.Status = 'Active';
+            row.ActivatedAt = new Date();
+            row.RetiredAt = null;
+            row.ApprovedByUserID = approvedByUserID;
         }
-        row.Status = 'Active';
-        row.ActivatedAt = new Date();
-        row.RetiredAt = null;
-        row.ApprovedByUserID = approvedByUserID;
         await this.SaveVersion(row);
     }
 

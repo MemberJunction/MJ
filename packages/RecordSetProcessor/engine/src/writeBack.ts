@@ -8,7 +8,7 @@
 
 import { BaseEntity, CompositeKey, DatabaseProviderBase, type EntityFieldInfo, EntityFieldTSType, type EntityInfo, IMetadataProvider, type IRunViewProvider, LogStatus, RunInEntityTransaction, RunView, UserInfo, LogError } from '@memberjunction/core';
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual, resolveMappingRef } from '@memberjunction/global';
-import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
+import type { RecordProcessorContext, RecordRef, RecordResult, TagWriteBackPreview, WriteBackChildChange, WriteBackFieldChange, WriteBackResult } from '@memberjunction/record-set-processor-base';
 import { TagEngine, TaxonomyMode } from '@memberjunction/tag-engine';
 import type { MJTagEntity } from '@memberjunction/core-entities';
 import { MetadataProviderCapabilities } from '@memberjunction/feature-pipelines';
@@ -62,6 +62,49 @@ export interface HumanValueGuard {
      * @returns whether a Human value existed and was retired
      */
     RetireHumanValue(fieldName: string, provider: IMetadataProvider): Promise<boolean>;
+}
+
+/**
+ * The targets whose answer a record's result withheld (a Feature Pipeline output below its confidence floor): the
+ * record's fields, which write-back clears when the pipeline wrote their value (a person's value is kept), and the child
+ * entities, whose mappings write-back skips (their rows stay as they are).
+ */
+export interface WithheldWriteBackTargets {
+    /** Fields of the processed record mapped to null, through the human-value guard (names compare case-insensitively). */
+    Fields: string[];
+    /** Child entities whose mappings to skip (names compare case-insensitively). */
+    ChildEntities: string[];
+}
+
+/** A processor whose results can withhold some of their write-back targets (InferProcessor's confidence floors). */
+export interface WithheldTargetSource {
+    /** The targets one successful result withholds; undefined when it withholds none. */
+    WithheldWriteBackTargets(result: RecordResult): WithheldWriteBackTargets | undefined;
+}
+
+/** Membership checks on {@link WithheldWriteBackTargets}. */
+export class WithheldTargets {
+    /** Whether `field` is withheld (case-insensitive); false without withheld targets. */
+    public static HasField(withheld: WithheldWriteBackTargets | undefined, field: string): boolean {
+        return WithheldTargets.includes(withheld?.Fields, field);
+    }
+
+    /** Whether the entity's column `field` does not allow null (names compare case-insensitively); false for an undeclared field. */
+    public static ColumnRequiresValue(entity: EntityInfo, field: string): boolean {
+        const wanted = field.trim().toLowerCase();
+        return entity.Fields.find((f) => f.Name.toLowerCase() === wanted)?.AllowsNull === false;
+    }
+
+    /** Whether the child entity `entity` is withheld (case-insensitive); false without withheld targets. */
+    public static HasChildEntity(withheld: WithheldWriteBackTargets | undefined, entity: string): boolean {
+        return WithheldTargets.includes(withheld?.ChildEntities, entity);
+    }
+
+    /** Whether a name list holds `name`, trimmed and case-insensitively, as metadata names compare. */
+    private static includes(names: string[] | undefined, name: string): boolean {
+        const wanted = name.trim().toLowerCase();
+        return (names || []).some((n) => n.trim().toLowerCase() === wanted);
+    }
 }
 
 /** A processor that can say which of its target values a person entered (InferProcessor). */
@@ -141,59 +184,6 @@ export interface OutputMappingConfig {
     tags?: TagOutputMapping[];
 }
 
-/** Preview outcome for a single resolved tag. */
-export interface TagWriteBackPreview {
-    tagText: string;
-    resolvedTagID?: string;
-    resolvedTagName?: string;
-    matched: boolean;
-    created: boolean;
-    rootTagID: string;
-    depth?: number;
-    error?: string;
-}
-
-/** Outcome of {@link ApplyOutputMapping}. */
-export interface WriteBackResult {
-    /** True if the processed record's fields were actually updated (false on a dry-run, and when every mapped field already held its value). */
-    updatedRecord: boolean;
-    /** True when anything was written (record field, child insert/update/delete, tag). False for an identical re-run. */
-    changed: boolean;
-    /** ID of the created child record, when a single child mapping was applied (absent on a dry-run). */
-    createdChildID?: string;
-    /** IDs of created child records when childRecords (or fan-out) was applied (absent on a dry-run). */
-    createdChildIDs?: string[];
-    /** IDs of reconciled child rows that were updated. */
-    updatedChildIDs?: string[];
-    /** IDs of reconciled child rows that were deleted (stale pipeline rows). */
-    deletedChildIDs?: string[];
-    /** IDs of reconciled child rows that already held the proposed values. */
-    unchangedChildIDs?: string[];
-    /** IDs of human-owned child rows the result also proposed and that were left untouched. */
-    preservedHumanChildIDs?: string[];
-    /** Fields whose human-entered value write-back left in place. */
-    preservedHumanFields?: string[];
-    /** Fields whose Human value a run that overwrites human values retired (the field is the pipeline's again). */
-    retiredHumanFields?: string[];
-    /** IDs of created tagged item records (absent on a dry-run). */
-    createdTaggedItemIDs?: string[];
-    /** True when this was a dry-run: values were computed (and field names validated) but NOTHING was saved. */
-    dryRun?: boolean;
-    /** On a dry-run, the resolved field values that WOULD be written to the processed record — the write-back preview. */
-    previewFields?: Record<string, unknown>;
-    /** On a dry-run with a single child mapping, the resolved child values that WOULD be created. */
-    previewChild?: Record<string, unknown>;
-    /** On a dry-run with childRecords (or fan-out), the array of resolved child records that WOULD be created. */
-    previewChildren?: Array<Record<string, unknown>>;
-    /** On a dry-run with tag mappings, the resolved tag previews. */
-    previewTags?: TagWriteBackPreview[];
-    /**
-     * On a dry run: what the real write would fail on (a foreign-key value with no row in its related entity, a
-     * reconcile key proposed twice, a tag outside its root or depth). Absent when the real write would go through.
-     */
-    PreviewErrors?: string[];
-}
-
 /** One resolved child row to write, and the mapping it came from. */
 export interface ChildToWrite {
     /** The child entity name. */
@@ -249,6 +239,15 @@ export interface OutputMappingWriterOptions {
     LookupCache: Map<string, string | number>;
     /** Compute-only: an `onLookupMiss: 'create'` miss is previewed, not created. */
     DryRun: boolean;
+    /**
+     * Fields whose answer was withheld (an abstention). The guard always decides them, whatever `OverwriteHumanValues`
+     * says (overwriting lets an answer replace a person's value; an abstention is no answer), and their Human values are
+     * never retired. With no {@link HumanGuard} a withheld field keeps its value: nothing can confirm the pipeline wrote
+     * it. That happens on a run that names no pipeline, and on a direct `Process()` call whose context lacks
+     * `recordProcessID` or `entityID` (`InferProcessor.CreateHumanValueGuard` returns no guard then);
+     * `RecordProcessExecutor` always passes both.
+     */
+    Withheld?: WithheldWriteBackTargets;
 }
 
 /** A value that is already a key, not a match string: a UUID in any case, surrounding whitespace allowed. */
@@ -449,7 +448,8 @@ export class OutputMappingWriter {
             this.Options.Result.updatedRecord = true;
             this.Options.Result.changed = true;
         }
-        await this.RetireHumanValues(Object.keys(fields));
+        // a withheld field's abstention is no answer, so it never retires the field's Human value
+        await this.RetireHumanValues(Object.keys(fields).filter((f) => !WithheldTargets.HasField(this.Options.Withheld, f)));
     }
 
     /** The processed record, loaded on the writer's provider; null when it does not exist. */
@@ -479,7 +479,7 @@ export class OutputMappingWriter {
     /**
      * The mapped fields whose value differs from the record's current value ({@link ValuesEqual}) and that do not hold
      * a value a person entered ({@link PreservesHumanValue}). Sequential: each guard question reads the database.
-     * The one decision both the real write and the dry-run preview ({@link PreviewFieldProblems}) use.
+     * The one decision both the real write and the dry-run preview ({@link PreviewFields}) use.
      * @param recordPreserved - record each preserved human value (the real write); false for the preview, which writes nothing
      */
     protected async FieldChanges(entity: EntityInfo, obj: BaseEntity, fields: Record<string, unknown>,
@@ -499,7 +499,8 @@ export class OutputMappingWriter {
     }
 
     /**
-     * True when the field holds a value a person entered and the run does not overwrite it; with `recordPreserved`,
+     * True when the field holds a value a person entered and the run does not overwrite it (a withheld field is never
+     * overwritten: see {@link OutputMappingWriterOptions.Withheld}); with `recordPreserved`,
      * the preserved value is recorded through the guard and reported on the result. An empty field holds no human value, so the guard is not asked. The guard resolves
      * the pipeline's earlier answer read-only ({@link ResolveStoredForm}) and compares by the field's type
      * ({@link OwnedValuesEqual}).
@@ -507,7 +508,17 @@ export class OutputMappingWriter {
     protected async PreservesHumanValue(entity: EntityInfo, field: string, current: unknown, recordPreserved: boolean): Promise<boolean> {
         const guard = this.Options.HumanGuard;
         const fieldInfo = this.FieldInfoOf(entity, field);
-        if (!guard || this.Options.OverwriteHumanValues || OutputMappingWriter.NormalizeKeyPart(fieldInfo, current) === '') {
+        // A withheld field (an abstention) is cleared only when the guard says the pipeline owns its value: overwriting
+        // human values lets an answer replace them, not an abstention erase them; without a guard (no pipeline, or a
+        // direct Process() call without recordProcessID/entityID) nothing can say so, and the value is kept
+        const withheld = WithheldTargets.HasField(this.Options.Withheld, field);
+        if (OutputMappingWriter.NormalizeKeyPart(fieldInfo, current) === '') {
+            return false;
+        }
+        if (!guard) {
+            return withheld;
+        }
+        if (this.Options.OverwriteHumanValues && !withheld) {
             return false;
         }
         const owned = await guard.IsHumanOwned({
@@ -640,9 +651,21 @@ export class OutputMappingWriter {
 
     /** The entity a foreign-key field points at: the lookup's `relatedEntity`, else the field's metadata. */
     protected RelatedEntityNameOf(fieldInfo: EntityFieldInfo | undefined, lookup: FieldLookupConfig | undefined): string | undefined {
+        return OutputMappingWriter.RelatedEntityNameFor(this.Options.LookupProvider, fieldInfo, lookup);
+    }
+
+    /**
+     * The entity a foreign-key field points at: the lookup's `relatedEntity`, else the field's `RelatedEntity`, else its
+     * `RelatedEntityID` resolved on the provider. Undefined for a field that is not a foreign key.
+     * @param provider - the provider whose metadata resolves `RelatedEntityID`
+     * @param fieldInfo - the field's metadata, when the entity declares it
+     * @param lookup - the mapping's lookup rules for the field, if any
+     */
+    public static RelatedEntityNameFor(provider: IMetadataProvider, fieldInfo: EntityFieldInfo | undefined,
+        lookup: FieldLookupConfig | undefined): string | undefined {
         return lookup?.relatedEntity
             || fieldInfo?.RelatedEntity
-            || (fieldInfo?.RelatedEntityID ? this.Options.LookupProvider.EntityByID(fieldInfo.RelatedEntityID)?.Name : undefined);
+            || (fieldInfo?.RelatedEntityID ? provider.EntityByID(fieldInfo.RelatedEntityID)?.Name : undefined);
     }
 
     /**
@@ -727,8 +750,49 @@ export class OutputMappingWriter {
 
     /** A config-named field's metadata (names compare case-insensitively), or undefined when the entity does not declare it. */
     protected FieldInfoOf(entity: EntityInfo | undefined, field: string): EntityFieldInfo | undefined {
+        return OutputMappingWriter.FieldInfoFor(entity, field);
+    }
+
+    /**
+     * A config-named field's metadata: names compare case-insensitively, as the mapping's field names are matched
+     * everywhere write-back resolves them. Undefined when the entity does not declare the field.
+     * @param entity - the entity the field belongs to
+     * @param field - the mapped (config-named) field
+     */
+    public static FieldInfoFor(entity: EntityInfo | undefined, field: string): EntityFieldInfo | undefined {
         const name = field.toLowerCase();
         return entity?.Fields?.find((f) => f.Name.toLowerCase() === name);
+    }
+
+    /**
+     * Every child mapping of an output mapping, in write order: the single `childRecord` (flagged as such) first, then
+     * `childRecords`. The one place write-back, and anything that checks what write-back wrote, reads them from.
+     * @param outputMapping - the Record Process's output mapping
+     */
+    public static ChildMappingsOf(outputMapping: OutputMappingConfig): Array<{ Config: ChildRecordMapping; IsLegacySingle: boolean }> {
+        const mappings: Array<{ Config: ChildRecordMapping; IsLegacySingle: boolean }> = [];
+        if (outputMapping.childRecord) {
+            mappings.push({ Config: outputMapping.childRecord, IsLegacySingle: true });
+        }
+        if (outputMapping.childRecords && Array.isArray(outputMapping.childRecords)) {
+            for (const c of outputMapping.childRecords) {
+                mappings.push({ Config: c, IsLegacySingle: false });
+            }
+        }
+        return mappings;
+    }
+
+    /**
+     * A child mapping's parent field, checked to be a plain identifier because it is written into a view filter. The
+     * message names no operation: write-back and the output check both call it, and each reports its own context.
+     * @param config - the child mapping
+     * @throws Error when the parent field is not a plain identifier
+     */
+    public static ParentFieldOf(config: ChildRecordMapping): string {
+        if (!/^[A-Za-z0-9_]+$/.test(config.parentField)) {
+            throw new Error(`invalid parentField identifier '${config.parentField}' for '${config.entity}'`);
+        }
+        return config.parentField;
     }
 
     /** Inserts one child row; throws with the save's CompleteMessage when the save fails. */
@@ -775,15 +839,13 @@ export class OutputMappingWriter {
                 created.set(Item, await this.InsertChild(Item));
             }
         }
-        if (rc.deleteStale !== false) {
-            await this.DeleteStaleChildren(config, rc, childEntity, Existing, new Set(keyed.keys()));
-        }
+        await this.DeleteStaleChildren(config, rc, childEntity, Existing, new Set(keyed.keys()));
     }
 
     /**
      * The parent's existing rows of a mapping, and each keyed proposal paired with the existing row of its key (none:
      * the proposal is inserted). Shared by the real write ({@link ReconcileChildren}) and the dry-run preview
-     * ({@link PlannedChildWrites}).
+     * ({@link PlanChildren}).
      */
     protected async MatchExisting(config: ChildRecordMapping, rc: ChildReconcileConfig, childEntity: EntityInfo | undefined,
         keyed: Map<string, ChildToWrite>): Promise<{ Existing: BaseEntity[]; Matches: Array<{ Item: ChildToWrite; Row: BaseEntity | undefined }> }> {
@@ -842,12 +904,9 @@ export class OutputMappingWriter {
 
     /** The parent's existing rows of a child mapping, read fresh (they are updated or deleted in this transaction). */
     protected async LoadExistingChildren(config: ChildRecordMapping): Promise<BaseEntity[]> {
-        if (!/^[A-Za-z0-9_]+$/.test(config.parentField)) {
-            throw new Error(`applyOutputMapping: invalid parentField identifier '${config.parentField}' for '${config.entity}'`);
-        }
         const res = await RunView.FromMetadataProvider(this.Options.Provider).RunView<BaseEntity>({
             EntityName: config.entity,
-            ExtraFilter: `${config.parentField} = '${EscapeSQLString(this.Options.Record.RecordID)}'`,
+            ExtraFilter: `${OutputMappingWriter.ParentFieldOf(config)} = '${EscapeSQLString(this.Options.Record.RecordID)}'`,
             ResultType: 'entity_object', // the rows are saved or deleted below
             BypassCache: true, // a cached read could miss a row this run's transaction must update or delete
         }, this.Options.ContextUser);
@@ -876,7 +935,7 @@ export class OutputMappingWriter {
     /**
      * What the write does with an existing row a proposal matches: leaves a human row alone (unless overwriting),
      * keeps an identical row, or updates only the fields that differ. The one decision both the real write
-     * ({@link ReconcileRow}) and the dry-run preview ({@link PlannedChildWrites}) use.
+     * ({@link ReconcileRow}) and the dry-run preview ({@link PlanChildren}) use.
      */
     protected RowDecision(rc: ChildReconcileConfig, childEntity: EntityInfo | undefined, row: BaseEntity,
         data: Record<string, unknown>): ChildRowDecision {
@@ -911,13 +970,24 @@ export class OutputMappingWriter {
     }
 
     /**
+     * The existing rows the write deletes as stale: pipeline rows (never human rows) whose key the new result no longer
+     * proposes; none when the mapping sets `deleteStale: false`. The one decision both the real write
+     * ({@link DeleteStaleChildren}) and the dry-run preview ({@link PlanChildren}) use.
+     */
+    protected StaleRows(rc: ChildReconcileConfig, childEntity: EntityInfo | undefined, existing: BaseEntity[], proposed: Set<string>): BaseEntity[] {
+        if (rc.deleteStale === false) {
+            return [];
+        }
+        return existing.filter((row) => !proposed.has(this.KeyOfRow(rc, childEntity, row)) && !this.IsHumanRow(rc, childEntity, row));
+    }
+
+    /**
      * Deletes the pipeline's rows the new result no longer proposes; human rows are never deleted. Sequential on
      * purpose: the deletes share the unit provider's open transaction.
      */
     protected async DeleteStaleChildren(config: ChildRecordMapping, rc: ChildReconcileConfig, childEntity: EntityInfo | undefined,
         existing: BaseEntity[], proposed: Set<string>): Promise<void> {
-        const stale = existing.filter((row) => !proposed.has(this.KeyOfRow(rc, childEntity, row)) && !this.IsHumanRow(rc, childEntity, row));
-        for (const row of stale) {
+        for (const row of this.StaleRows(rc, childEntity, existing, proposed)) {
             const id = row.PrimaryKey.ToCompactURLSegment();
             if (!(await row.Delete())) {
                 throw new Error(`applyOutputMapping: failed deleting stale '${config.entity}' row '${id}': ${row.LatestResult?.CompleteMessage || 'unknown error'}`);
@@ -930,49 +1000,48 @@ export class OutputMappingWriter {
     /**
      * What the real child writes would fail on, found without writing: the same reconcile key proposed twice, and
      * written values a database foreign-key constraint would reject (one read per related column, never one per
-     * value — `.claude/rules/data-access.md`). Only the values the real write stores are checked
-     * ({@link PlannedChildWrites}). A reconcile config the real write refuses throws here as it does there.
+     * value, see `.claude/rules/data-access.md`). Only the values the real write stores are checked
+     * ({@link PlanChildren}). A reconcile config the real write refuses throws here as it does there. Also returns
+     * every child row with what the real write does with it, from the same plan (one read of the existing rows).
      * @param answers - every answered child mapping, as {@link WriteChildren} would receive them
-     * @returns one message per problem; empty when the real child writes would go through
+     * @returns the problems (one message each; empty when the real child writes would go through) and the child changes
      */
-    public async PreviewChildProblems(answers: ChildMappingAnswer[]): Promise<string[]> {
+    public async PreviewChildren(answers: ChildMappingAnswer[]): Promise<{ Problems: string[]; Changes: WriteBackChildChange[] }> {
         const problems = this.DuplicateKeyProblems(answers);
-        const targets = this.CollectForeignKeyRefs(await this.PlannedChildWrites(answers), problems);
+        const plan = await this.PlanChildren(answers);
+        const targets = this.CollectForeignKeyRefs(plan.Writes, problems);
         problems.push(...(await this.MissingForeignKeyProblems(targets)));
-        return problems;
+        return { Problems: problems, Changes: plan.Changes };
     }
 
     /**
-     * What the real write of the record's own fields would fail on: a value passed through as a key (a UUID, which
-     * {@link ResolveFieldValue} writes without a lookup) that a database foreign-key constraint would reject. A value
-     * a lookup resolved came from a row; a lookup miss is null or (`create`) a preview key, so neither is checked.
-     * That is every value a constraint could reject here: {@link ResolveKey} passes only a UUID through unchanged and
-     * resolves any other value (a name, a number) through a lookup. Only a value the real write stores is checked: the record is loaded and the write's own decision
-     * ({@link FieldChanges}, without recording anything) drops unchanged fields and human values the run keeps.
+     * What the real write of the record's own fields would do and fail on. The record is loaded and the write's own
+     * decision ({@link FieldChanges}, without recording anything) drops unchanged fields and human values the run
+     * keeps; what remains is `Changes` (each with the record's current value). `Problems` are the values among those
+     * the real write would fail on: a value passed through as a key (a UUID, which {@link ResolveFieldValue} writes
+     * without a lookup) that a database foreign-key constraint would reject. A value a lookup resolved came from a row;
+     * a lookup miss is null or (`create`) a preview key, so neither is checked. That is every value a constraint could
+     * reject here: {@link ResolveKey} passes only a UUID through unchanged and resolves any other value (a name, a
+     * number) through a lookup. A record that does not exist is a problem: the real write fails loading it.
      * @param entity - the processed record's entity
      * @param fields - the resolved field values, as the real write would store them
      */
-    public async PreviewFieldProblems(entity: EntityInfo, fields: Record<string, unknown>): Promise<string[]> {
-        const candidates = Object.fromEntries(Object.entries(fields).filter(([field, value]) =>
-            typeof value === 'string' && UUID_PATTERN.test(value.trim()) && this.IsConstrainedForeignKey(this.FieldInfoOf(entity, field))));
-        if (Object.keys(candidates).length === 0) {
-            return []; // nothing a constraint checks: the record is not even loaded
-        }
+    public async PreviewFields(entity: EntityInfo, fields: Record<string, unknown>): Promise<{ Problems: string[]; Changes: WriteBackFieldChange[] }> {
         const obj = await this.LoadRecord(entity);
         if (!obj) {
-            return [`record '${this.Options.Record.RecordID}' of '${entity.Name}' not found (the real write fails loading it)`];
+            return { Problems: [`record '${this.Options.Record.RecordID}' of '${entity.Name}' not found (the real write fails loading it)`], Changes: [] };
         }
+        const changes = await this.FieldChanges(entity, obj, fields, false);
         const problems: string[] = [];
         const targets = new Map<string, ForeignKeyTarget>();
-        for (const [field, value] of await this.FieldChanges(entity, obj, candidates, false)) {
-            // candidates are constrained foreign keys, so each has field metadata; the check keeps the type honest
+        for (const [field, value] of changes) {
             const fieldInfo = this.FieldInfoOf(entity, field);
-            if (typeof value === 'string' && fieldInfo) {
+            if (typeof value === 'string' && UUID_PATTERN.test(value.trim()) && this.IsConstrainedForeignKey(fieldInfo)) {
                 this.AddForeignKeyRef(targets, problems, fieldInfo, { Entity: entity.Name, Field: field, Value: value });
             }
         }
         problems.push(...(await this.MissingForeignKeyProblems(targets)));
-        return problems;
+        return { Problems: problems, Changes: changes.map(([field, value]) => ({ Field: field, OldValue: obj.Get(field), NewValue: value })) }; // config-driven field name
     }
 
     /**
@@ -999,29 +1068,41 @@ export class OutputMappingWriter {
     /**
      * The child values the real write stores, by the write's own decisions: every row of a plain mapping is inserted;
      * a reconciled proposal is inserted when no existing row has its key, otherwise {@link RowDecision} says whether
-     * it writes nothing (a human row kept, an identical row) or only the differing fields. Reads the existing rows as
-     * the real write does ({@link MatchExisting}); a repeated key keeps its first proposal (the preview reports it).
+     * it writes nothing (a human row kept, an identical row) or only the differing fields; a stale pipeline row is
+     * deleted. Reads the existing rows as the real write does ({@link MatchExisting}); a repeated key keeps its first
+     * proposal (the preview reports it).
+     * @returns `Writes`: the values stored (what the foreign-key check judges); `Changes`: every row with its action
      */
-    protected async PlannedChildWrites(answers: ChildMappingAnswer[]): Promise<PlannedChildWrite[]> {
+    protected async PlanChildren(answers: ChildMappingAnswer[]): Promise<{ Writes: PlannedChildWrite[]; Changes: WriteBackChildChange[] }> {
         const writes: PlannedChildWrite[] = [];
+        const changes: WriteBackChildChange[] = [];
         for (const { Config: config, Rows: rows } of answers) {
             const rc = config.reconcile;
             if (!rc) {
                 writes.push(...rows.map((item) => ({ Item: item, Values: item.Data })));
+                changes.push(...rows.map((item) => ({ Entity: config.entity, Action: 'insert' as const, Values: item.Data })));
                 continue;
             }
             const childEntity = this.Options.Provider.EntityByName(config.entity);
-            const { Matches } = await this.MatchExisting(config, rc, childEntity, this.KeyedProposals(rc, childEntity, rows).Keyed);
+            const keyed = this.KeyedProposals(rc, childEntity, rows).Keyed;
+            const { Existing, Matches } = await this.MatchExisting(config, rc, childEntity, keyed);
             for (const { Item, Row } of Matches) {
                 const decision = Row ? this.RowDecision(rc, childEntity, Row, Item.Data) : undefined;
                 if (!decision) {
                     writes.push({ Item, Values: Item.Data });
+                    changes.push({ Entity: config.entity, Action: 'insert', Values: Item.Data });
                 } else if (decision.Kind === 'update') {
                     writes.push({ Item, Values: Object.fromEntries(decision.Changes) });
+                    changes.push({ Entity: config.entity, Action: 'update', Values: Object.fromEntries(decision.Changes) });
+                } else {
+                    changes.push({ Entity: config.entity, Action: 'none', Values: Item.Data });
                 }
             }
+            for (const row of this.StaleRows(rc, childEntity, Existing, new Set(keyed.keys()))) {
+                changes.push({ Entity: config.entity, Action: 'delete', Values: Object.fromEntries(rc.keyFields.map((f) => [f, row.Get(f)])) }); // config-driven field names
+            }
         }
-        return writes;
+        return { Writes: writes, Changes: changes };
     }
 
     /**
@@ -1202,6 +1283,18 @@ function computeTagDepth(
     return -1;
 }
 
+/** The weight the real write gives every tag link it creates or re-saves. */
+const TAG_LINK_WEIGHT = 1.0;
+
+/**
+ * The entity a mapping's tags are linked on: its `taggedEntityName`'s entity, else the processed record's entity.
+ * Undefined when the named entity is not in metadata. The one resolution both the real tag write and its dry-run
+ * preview use.
+ */
+function TaggedEntityIDOf(provider: IMetadataProvider, mapping: TagOutputMapping, record: RecordRef): string | undefined {
+    return mapping.taggedEntityName ? provider.EntityByName(mapping.taggedEntityName)?.ID : record.EntityID;
+}
+
 /**
  * Applies an {@link OutputMappingConfig} against a work result.
  * Supports updating fields (both single-key and composite-key entities), writing child records
@@ -1256,6 +1349,8 @@ export async function ApplyOutputMapping(opts: {
      * dry-run.
      */
     unitWork?: (unitProvider: IMetadataProvider) => Promise<void>;
+    /** Targets to leave as they are: the answer withheld them (see {@link WithheldWriteBackTargets}). */
+    withheld?: WithheldWriteBackTargets;
 }): Promise<WriteBackResult> {
     const { outputMapping, result, record, contextUser, dryRun, run, provider } = opts;
     let payload = result;
@@ -1280,6 +1375,7 @@ export async function ApplyOutputMapping(opts: {
         Record: record, Provider: provider, LookupProvider: provider, ContextUser: contextUser, Result: out,
         OverwriteHumanValues: opts.overwriteHumanValues === true, HumanGuard: opts.humanGuard,
         FieldLookups: outputMapping.fieldLookups, LookupCache: opts.lookupCache || new Map<string, string | number>(), DryRun: dryRun === true,
+        Withheld: opts.withheld,
     };
     const writer = new OutputMappingWriter(writerOptions);
     // Set when there are field mappings: the processed record's entity and its resolved values, written in step 3.
@@ -1294,10 +1390,20 @@ export async function ApplyOutputMapping(opts: {
         if (!entity) {
             throw new Error(`applyOutputMapping: entity '${record.EntityID}' not found in metadata`);
         }
-        // Resolve the mapped values once — shared by the dry-run preview and the real apply.
+        // Resolve the mapped values once — shared by the dry-run preview and the real apply. A withheld field (the
+        // answer abstained) maps to null: the human-value guard keeps a person's value, and clears one the pipeline wrote.
         const resolved: Record<string, unknown> = {};
         for (const [field, ref] of Object.entries(outputMapping.fields)) {
-            resolved[field] = resolveMappingRef(ref, sources);
+            const withheld = WithheldTargets.HasField(opts.withheld, field);
+            if (withheld) {
+                (out.withheldFields ||= []).push(field);
+                if (WithheldTargets.ColumnRequiresValue(entity, field)) {
+                    // A column that does not allow null cannot be cleared: its value stays, and the result says why
+                    (out.withheldKeptFields ||= []).push(field);
+                    continue;
+                }
+            }
+            resolved[field] = withheld ? null : resolveMappingRef(ref, sources);
         }
 
         // Foreign-key fields whose mapped value is a match string (e.g. 'Director') resolve to the related row's key.
@@ -1307,7 +1413,9 @@ export async function ApplyOutputMapping(opts: {
         if (dryRun) {
             // Compute-only: surface what an apply WOULD write, and what it would fail on; persist nothing.
             out.previewFields = resolved;
-            previewErrors.push(...(await writer.PreviewFieldProblems(entity, resolved)));
+            const preview = await writer.PreviewFields(entity, resolved);
+            out.previewFieldChanges = preview.Changes;
+            previewErrors.push(...preview.Problems);
         } else {
             fieldEntity = entity;
             fieldsToWrite = resolved;
@@ -1317,18 +1425,15 @@ export async function ApplyOutputMapping(opts: {
     // 2) Resolve the child records (single childRecord and/or childRecords with fan-out). Each mapping with an answer
     //    becomes one ChildMappingAnswer; an empty array is an answer ("none"), a missing/null fan-out value is not.
     const childAnswers: ChildMappingAnswer[] = [];
-    const childConfigs: Array<{ config: ChildRecordMapping; isLegacySingle: boolean }> = [];
-    if (outputMapping.childRecord) {
-        childConfigs.push({ config: outputMapping.childRecord, isLegacySingle: true });
-    }
-    if (outputMapping.childRecords && Array.isArray(outputMapping.childRecords)) {
-        for (const c of outputMapping.childRecords) {
-            childConfigs.push({ config: c, isLegacySingle: false });
-        }
-    }
+    const childConfigs = OutputMappingWriter.ChildMappingsOf(outputMapping);
 
     if (childConfigs.length > 0) {
-        for (const { config: childConfig, isLegacySingle } of childConfigs) {
+        for (const { Config: childConfig, IsLegacySingle: isLegacySingle } of childConfigs) {
+            if (WithheldTargets.HasChildEntity(opts.withheld, childConfig.entity)) {
+                // Withheld: not an answer, so nothing of this mapping changes (a reconcile mapping deletes nothing)
+                (out.withheldChildEntities ||= []).push(childConfig.entity);
+                continue;
+            }
             const rows: ChildToWrite[] = [];
             if (childConfig.fanOutRef) {
                 const fanOutVal = resolveMappingRef(childConfig.fanOutRef, sources);
@@ -1379,7 +1484,9 @@ export async function ApplyOutputMapping(opts: {
         }
         if (dryRun) {
             // An empty answer is checked too: its reconcile config is validated as the real write validates it.
-            previewErrors.push(...(await writer.PreviewChildProblems(childAnswers)));
+            const preview = await writer.PreviewChildren(childAnswers);
+            previewErrors.push(...preview.Problems);
+            out.previewChildChanges = preview.Changes;
         }
     }
 
@@ -1427,14 +1534,15 @@ export async function ApplyOutputMapping(opts: {
                 }
             }
 
-            if (dryRun && tagMapping.taggedEntityName && !provider.EntityByName(tagMapping.taggedEntityName)
-                && tagNames.some((t) => t.trim().length > 0)) {
+            const taggedEntityID = TaggedEntityIDOf(provider, tagMapping, record);
+            if (dryRun && !taggedEntityID && tagNames.some((t) => t.trim().length > 0)) {
                 // The real write refuses it when it links this mapping's first tag.
                 previewErrors.push(`taggedEntityName '${tagMapping.taggedEntityName}' not found in metadata`);
             }
             const growthMode = (tagMapping.growth ?? 'constrained') as TaxonomyMode;
             const matchThreshold = tagMapping.matchThreshold ?? 0.8;
 
+            const mappingPreviewsFrom = previewTags.length;
             for (const tagName of tagNames) {
                 if (!tagName || typeof tagName !== 'string' || tagName.trim().length === 0) {
                     continue;
@@ -1532,26 +1640,34 @@ export async function ApplyOutputMapping(opts: {
                         throw new Error(`applyOutputMapping: tag '${resolvedTag.Name}' depth (${depth}) exceeds maxDepth (${tagMapping.maxDepth}) under root '${tagMapping.rootTagId}'`);
                     }
 
-                    let targetEntityID = record.EntityID;
-                    if (tagMapping.taggedEntityName) {
-                        const taggedEntity = provider.EntityByName(tagMapping.taggedEntityName);
-                        if (!taggedEntity) {
-                            throw new Error(`applyOutputMapping: taggedEntityName '${tagMapping.taggedEntityName}' not found in metadata`);
-                        }
-                        targetEntityID = taggedEntity.ID;
+                    if (!taggedEntityID) {
+                        throw new Error(`applyOutputMapping: taggedEntityName '${tagMapping.taggedEntityName}' not found in metadata`);
                     }
 
                     const taggedItem = await TagEngine.Instance.CreateTaggedItem(
                         resolvedTag.ID,
-                        targetEntityID,
+                        taggedEntityID,
                         record.RecordID,
-                        1.0,
+                        TAG_LINK_WEIGHT,
                         contextUser
                     );
                     if (taggedItem) {
                         const itemKey = taggedItem.PrimaryKey.ToCompactURLSegment();
                         createdTaggedItemIDs.push(itemKey.length > 0 ? itemKey : taggedItem.ID);
                     }
+                }
+            }
+            if (dryRun && taggedEntityID) {
+                // One read for all this mapping's matched tags, by the lookup the real write decides link-or-create with.
+                const matched = previewTags.slice(mappingPreviewsFrom).filter((t) => t.matched && t.resolvedTagID);
+                const lookup = await TagEngine.Instance.FindTaggedItems(taggedEntityID, record.RecordID, matched.flatMap((t) => (t.resolvedTagID ? [t.resolvedTagID] : [])), contextUser);
+                if (!lookup.Success) {
+                    previewErrors.push(`checking the existing links of the record's tags failed: ${lookup.ErrorMessage}`);
+                }
+                for (const tag of matched) {
+                    const link = lookup.Items.find((item) => UUIDsEqual(item.TagID, tag.resolvedTagID));
+                    tag.alreadyLinked = !!link;
+                    tag.reweighted = !!link && Number(link.Weight) !== TAG_LINK_WEIGHT;
                 }
             }
         }

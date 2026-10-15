@@ -12,6 +12,7 @@ import {
   TestRunSummary,
   SuiteHierarchyNode
 } from '../services/testing-instrumentation.service';
+import { TestingPassRate } from '../services/testing-pass-rate';
 import { KPICardData } from '../../AI/components/widgets/kpi-card.component';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 import { TestingExecutionService, ActiveRun, TestingDialogService } from '@memberjunction/ng-testing';
@@ -142,8 +143,13 @@ interface TestAlert {
                   <div class="suite-health-row">
                     <div class="suite-health-info">
                       <span class="suite-health-name">{{ suite.name }}</span>
-                      <span class="suite-health-count">{{ suite.testCount }} tests</span>
+                      <span class="suite-health-count" [attr.title]="suite.RunCount > 0 ? ExecutedLabel(suite.RunCount, suite.SkippedCount) : null">{{ suite.testCount }} tests</span>
                     </div>
+                    @if (suite.RunCount === 0) {
+                      <span class="suite-health-none" title="No runs of this suite's tests in the period">No runs</span>
+                    } @else if (suite.RunCount === suite.SkippedCount) {
+                      <span class="suite-health-none" title="Every run of this suite's tests in the period was skipped">All skipped</span>
+                    } @else {
                     <div class="suite-health-bar-wrapper">
                       <div class="suite-health-bar">
                         <div
@@ -156,6 +162,7 @@ interface TestAlert {
                         {{ suite.passRate | number:'1.0-0' }}%
                       </span>
                     </div>
+                    }
                   </div>
                 } @empty {
                   <mj-empty-state Size="compact" Icon="fa-solid fa-layer-group"
@@ -525,6 +532,12 @@ interface TestAlert {
       transition: width 0.3s ease;
     }
 
+    .suite-health-none {
+      font-size: 12px;
+      color: var(--mj-text-muted);
+      flex-shrink: 0;
+    }
+
     .suite-health-pct {
       font-size: 12px;
       font-weight: 600;
@@ -798,6 +811,8 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
       {
         title: 'Pass Rate',
         value: `${kpis.PassRateThisMonth.toFixed(1)}%`,
+        // The rate covers executed runs only; skipped runs are shown beside it so the counts add up (QF2-Y2).
+        subtitle: TestingPassRate.ExecutedLabel(kpis.TotalTestRuns, kpis.SkippedTests),
         icon: 'fa-check-circle',
         color: kpis.PassRateThisMonth >= 90 ? 'success' : kpis.PassRateThisMonth >= 75 ? 'warning' : 'danger',
         trend: kpis.PassRateTrend !== 0 ? {
@@ -886,12 +901,15 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Flag tests with scores below 0.5 */
+  /**
+   * Flag tests with scores below 0.5. Only scored outcomes count: a Running run has no score yet and a Skipped
+   * run never ran (its score is 0 because nothing was evaluated), so neither is a low score.
+   */
   private detectLowScores(runs: TestRunSummary[], alerts: TestAlert[]): void {
     const alertIds = new Set(alerts.map(a => a.id));
 
     for (const run of runs) {
-      if (run.score < 0.5 && run.status !== 'Running' && !alertIds.has(run.id)) {
+      if (run.score < 0.5 && run.status !== 'Running' && run.status !== 'Skipped' && !alertIds.has(run.id)) {
         alerts.push({
           id: run.id,
           testName: run.testName,
@@ -904,11 +922,24 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Flatten suite hierarchy and sort by worst health first */
+  /** "N executed · M skipped" for a run count shown beside a pass rate. */
+  ExecutedLabel(runs: number, skipped: number): string {
+    return TestingPassRate.ExecutedLabel(runs, skipped);
+  }
+
+  /**
+   * Flatten suite hierarchy and sort by worst health first; suites with no executed runs in the period (no runs,
+   * or all skipped — no health to rank) go last.
+   */
   private flattenAndSort(nodes: SuiteHierarchyNode[]): SuiteHierarchyNode[] {
     const flat: SuiteHierarchyNode[] = [];
     this.collectNodes(nodes, flat);
-    return flat.sort((a, b) => a.passRate - b.passRate);
+    return flat.sort((a, b) => {
+      const aHasRuns = TestingPassRate.Executed(a.RunCount, a.SkippedCount) > 0;
+      const bHasRuns = TestingPassRate.Executed(b.RunCount, b.SkippedCount) > 0;
+      if (aHasRuns !== bHasRuns) return aHasRuns ? -1 : 1;
+      return a.passRate - b.passRate;
+    });
   }
 
   private collectNodes(nodes: SuiteHierarchyNode[], out: SuiteHierarchyNode[]): void {

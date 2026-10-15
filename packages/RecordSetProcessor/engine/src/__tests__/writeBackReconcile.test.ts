@@ -8,6 +8,7 @@ import {
 import type { RecordRef } from '@memberjunction/record-set-processor-base';
 import { MJGlobal } from '@memberjunction/global';
 import { TagEngine } from '@memberjunction/tag-engine';
+import type { MJTagEntity, MJTaggedItemEntity } from '@memberjunction/core-entities';
 import { ApplyOutputMapping, OutputMappingWriter, type HumanValueGuard, type OutputMappingConfig } from '../writeBack';
 import { WriteBackProcessor } from '../processors/WriteBackProcessor';
 import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
@@ -934,7 +935,8 @@ describe('dry-run preview checks what the database constraint checks', () => {
         const out = await ApplyOutputMapping({ outputMapping: { fields: mapping.fields, fieldLookups: { SeniorityLevelID: { relatedEntity: 'Seniority Levels' } } },
             result, record, contextUser: USER, provider: d, dryRun: true });
         expect(out.PreviewErrors).toBeUndefined();
-        expect(d.Loads).toHaveLength(0);
+        expect(d.SqlRuns).toHaveLength(0); // no constraint to check
+        expect(d.LoadedRecords.every((r) => r.Saved === 0)).toBe(true); // the record is loaded to decide its changes, never saved
     });
 
     it('compares on the related column the foreign key names, read from the base table without user filtering', async () => {
@@ -1079,5 +1081,267 @@ describe('OutputMappingWriter.ExceedsColumnLength — text longer than a charact
         expect(OutputMappingWriter.ExceedsColumnLength(code10, '0123456789X')).toBe(true);
         expect(OutputMappingWriter.ExceedsColumnLength(new EntityFieldInfo({ Name: 'Code', Type: 'nvarchar', Length: -1 }), 'x'.repeat(5000))).toBe(false);
         expect(OutputMappingWriter.ExceedsColumnLength(field('ID', 'uniqueidentifier'), `${JOB_FUNCTION_ID}-and-more`)).toBe(false);
+    });
+});
+
+/** What `TagEngine.FindTaggedItems` answers. */
+type TaggedItemLookup = Awaited<ReturnType<TagEngine['FindTaggedItems']>>;
+
+describe('the dry-run preview is the real write\'s decision', () => {
+    const LEVEL = '11111111-1111-1111-1111-111111111111';
+    const fieldMapping: OutputMappingConfig = {
+        fields: { SeniorityLevelID: '$.Level', Nickname: '$.Nick', LastReviewedAt: '$.At' },
+    };
+    /** The record already holds: the level (upper case), an empty nickname, the review instant (as a Date). */
+    const heldValues = { SeniorityLevelID: LEVEL.toUpperCase(), Nickname: '', LastReviewedAt: new Date('2026-10-13T10:00:00Z') };
+    const answer = { Level: LEVEL, Nick: null, At: '2026-10-13T12:00:00+02:00' };
+
+    /** The fields whose stored value changed after `run`. */
+    async function changedFields(setup: () => ReturnType<typeof harness>, dryRun: boolean, guard?: HumanValueGuard) {
+        const h = setup();
+        Object.assign(h.parent.Values, heldValues);
+        const before = { ...h.parent.Values };
+        const out = await ApplyOutputMapping({ outputMapping: fieldMapping, result: answer, record, contextUser: USER, provider: h.provider, dryRun, humanGuard: guard });
+        const changed = Object.keys(h.parent.Values).filter((f) => h.parent.Values[f] !== before[f]);
+        return { out, changed, h };
+    }
+
+    it('lists the fields the real write saves: equal dates, ids and an empty-vs-null difference decided as the write decides', async () => {
+        const dry = await changedFields(() => harness([]), true);
+        const real = await changedFields(() => harness([]), false);
+
+        expect(real.changed).toEqual(['Nickname']);
+        expect(dry.out.previewFieldChanges).toEqual([{ Field: 'Nickname', OldValue: '', NewValue: null }]);
+        expect(dry.out.previewFieldChanges?.map((c) => c.Field)).toEqual(real.changed);
+        expect(dry.h.parent.Saved).toBe(0);
+    });
+
+    it('leaves out a field the real write keeps because a person entered it', async () => {
+        const kept = { IsHumanOwned: vi.fn(async (q: { FieldName: string }) => q.FieldName === 'Nickname'), RecordPreserved: vi.fn(async () => undefined), RetireHumanValue: vi.fn(async () => false) };
+        const heldNick = () => { const h = harness([]); return h; };
+        const dryHarness = heldNick();
+        Object.assign(dryHarness.parent.Values, { ...heldValues, Nickname: 'Bobby' });
+        const dry = await ApplyOutputMapping({ outputMapping: fieldMapping, result: answer, record, contextUser: USER, provider: dryHarness.provider, dryRun: true, humanGuard: kept });
+        const realHarness = heldNick();
+        Object.assign(realHarness.parent.Values, { ...heldValues, Nickname: 'Bobby' });
+        const real = await ApplyOutputMapping({ outputMapping: fieldMapping, result: answer, record, contextUser: USER, provider: realHarness.provider, humanGuard: kept });
+
+        expect(real.preservedHumanFields).toEqual(['Nickname']);
+        expect(real.updatedRecord).toBe(false);
+        expect(dry.previewFieldChanges).toEqual([]);
+    });
+
+    it('previews nothing for an identical re-run, as the real write changes nothing', async () => {
+        const order: string[] = [];
+        const existing = [
+            new Row({ ID: 'pjf-1', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000001', Sequence: 1, Confidence: 0.9, Source: 'Derived' }, order, 'e1'),
+            new Row({ ID: 'pjf-2', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000002', Sequence: 2, Confidence: 0.4, Source: 'Derived' }, order, 'e2'),
+        ];
+        const h = harness(existing);
+        h.parent.Values.SeniorityLevelID = LEVEL;
+        const dry = await ApplyOutputMapping({ outputMapping: mapping, result, record, contextUser: USER, provider: h.provider, dryRun: true });
+        const real = await ApplyOutputMapping({ outputMapping: mapping, result, record, contextUser: USER, provider: h.provider });
+
+        expect(real.changed).toBe(false);
+        expect(dry.previewFieldChanges).toEqual([]);
+        expect(dry.previewChildChanges?.map((c) => c.Action)).toEqual(['none', 'none']);
+    });
+
+    it('marks each child row insert, update, delete or none as the real write does, an update showing only the differing values', async () => {
+        const order: string[] = [];
+        const same = new Row({ ID: 'pjf-1', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000001', Sequence: 1, Confidence: 0.9, Source: 'Derived' }, order, 'e1');
+        const differs = new Row({ ID: 'pjf-2', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000002', Sequence: 2, Confidence: 0.3, Source: 'Derived' }, order, 'e2');
+        const stale = new Row({ ID: 'pjf-3', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000003', Sequence: 3, Source: 'Derived' }, order, 'e3');
+        const human = new Row({ ID: 'pjf-4', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000004', Sequence: 4, Source: 'Manual' }, order, 'e4');
+        const added = { JobFunctionID: 'AAAAAAAA-0000-0000-0000-000000000005', Sequence: 5, Confidence: 0.5 };
+        const humanProposed = { JobFunctionID: 'AAAAAAAA-0000-0000-0000-000000000004', Sequence: 4, Confidence: 0.5 };
+        const proposal = { ...result, Functions: [...result.Functions, added, humanProposed] };
+
+        const dryHarness = harness([same, differs, stale, human]);
+        const dry = await ApplyOutputMapping({ outputMapping: mapping, result: proposal, record, contextUser: USER, provider: dryHarness.provider, dryRun: true });
+        const realHarness = harness([same, differs, stale, human]);
+        const real = await ApplyOutputMapping({ outputMapping: mapping, result: proposal, record, contextUser: USER, provider: realHarness.provider });
+
+        const byAction = (action: string) => (dry.previewChildChanges ?? []).filter((c) => c.Action === action);
+        expect(byAction('insert')).toHaveLength(real.createdChildIDs?.length ?? 0);
+        expect(byAction('update')).toHaveLength(real.updatedChildIDs?.length ?? 0);
+        expect(byAction('delete')).toHaveLength(real.deletedChildIDs?.length ?? 0);
+        expect(byAction('none')).toHaveLength((real.unchangedChildIDs?.length ?? 0) + (real.preservedHumanChildIDs?.length ?? 0));
+        expect(byAction('update')[0]).toMatchObject({ Entity: 'Person Job Functions', Values: { Confidence: 0.4 } });
+        expect(Object.keys(byAction('update')[0].Values)).not.toContain('Sequence');
+        expect(byAction('insert')[0]).toMatchObject({ Entity: 'Person Job Functions', Values: { JobFunctionID: added.JobFunctionID } });
+        expect(dryHarness.created).toHaveLength(0);
+    });
+
+    /** Previews one tag whose lookup of existing links answers `lookup`; the real write's weight is 1. */
+    async function previewTag(lookup: TaggedItemLookup) {
+        const resolve = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockResolvedValue(TAG);
+        const byID = vi.spyOn(TagEngine.Instance, 'GetTagByID').mockReturnValue(TAG);
+        const config = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
+        const find = vi.spyOn(TagEngine.Instance, 'FindTaggedItems').mockResolvedValue(lookup);
+        try {
+            const out = await ApplyOutputMapping({ outputMapping: { tags: [{ ref: '$.tag', rootTagId: 'root-1' }] }, result: { tag: 'Sales' }, record, contextUser: USER, provider: harness([]).provider, dryRun: true });
+            return { out, calls: [...find.mock.calls] };
+        } finally {
+            resolve.mockRestore();
+            byID.mockRestore();
+            config.mockRestore();
+            find.mockRestore();
+        }
+    }
+    const TAG = { ID: 'tag-1', Name: 'Sales', ParentID: 'root-1' } as unknown as MJTagEntity;
+    const linkWithWeight = (Weight: number) => ({ TagID: 'tag-1', Weight }) as unknown as MJTaggedItemEntity;
+
+    it('marks a tag that is already linked at the real write\'s weight as no change', async () => {
+        const { out, calls } = await previewTag({ Success: true, Items: [linkWithWeight(1)] });
+
+        expect(out.previewTags?.[0]).toMatchObject({ alreadyLinked: true, reweighted: false });
+        expect(calls).toEqual([['ENT-P', 'person-1', ['tag-1'], USER]]);
+    });
+
+    it('marks an existing link whose weight differs as a reweight, which the real write saves', async () => {
+        const { out } = await previewTag({ Success: true, Items: [linkWithWeight(0.5)] });
+
+        expect(out.previewTags?.[0]).toMatchObject({ alreadyLinked: true, reweighted: true });
+    });
+
+    it('marks a tag with no link as neither linked nor reweighted', async () => {
+        const { out } = await previewTag({ Success: true, Items: [] });
+
+        expect(out.previewTags?.[0]).toMatchObject({ alreadyLinked: false, reweighted: false });
+    });
+
+    it('reports a failed read of the existing links as a preview error, not as "not linked"', async () => {
+        const { out } = await previewTag({ Success: false, ErrorMessage: 'view read failed', Items: [] });
+
+        expect(out.PreviewErrors).toEqual(['checking the existing links of the record\'s tags failed: view read failed']);
+    });
+
+    it('reads the existing links of all the mapping\'s matched tags once', async () => {
+        const resolve = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockImplementation(async (text) => ({ ID: `tag-${text}`, Name: text, ParentID: 'root-1' } as unknown as MJTagEntity));
+        const byID = vi.spyOn(TagEngine.Instance, 'GetTagByID').mockReturnValue(TAG);
+        const config = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
+        const find = vi.spyOn(TagEngine.Instance, 'FindTaggedItems').mockResolvedValue({ Success: true, Items: [] });
+        await ApplyOutputMapping({ outputMapping: { tags: [{ ref: '$.tags', rootTagId: 'root-1' }] }, result: { tags: ['a', 'b', 'c'] }, record, contextUser: USER, provider: harness([]).provider, dryRun: true });
+        const calls = find.mock.calls.length;
+        const ids = find.mock.calls[0]?.[2];
+        resolve.mockRestore();
+        byID.mockRestore();
+        config.mockRestore();
+        find.mockRestore();
+
+        expect(calls).toBe(1);
+        expect(ids).toEqual(['tag-a', 'tag-b', 'tag-c']);
+    });
+
+    it('previews exactly the stale rows the real write deletes, and none when deleteStale is off', async () => {
+        const mk = (id: string, fn: string, source: string) => new Row({ ID: id, PersonID: 'person-1', JobFunctionID: fn, Sequence: 9, Source: source }, [], id);
+        const rows = () => [
+            mk('pjf-s1', 'aaaaaaaa-0000-0000-0000-0000000000a1', 'Derived'),
+            mk('pjf-s2', 'aaaaaaaa-0000-0000-0000-0000000000a2', 'Derived'),
+            mk('pjf-h', 'aaaaaaaa-0000-0000-0000-0000000000a3', 'Manual'),
+        ];
+        const keep: OutputMappingConfig = { childRecords: [{ ...mapping.childRecords![0], reconcile: { ...mapping.childRecords![0].reconcile!, deleteStale: false } }] };
+        for (const [config, expected] of [[mapping, ['pjf-s1', 'pjf-s2']], [keep, []]] as Array<[OutputMappingConfig, string[]]>) {
+            const dry = await ApplyOutputMapping({ outputMapping: config, result, record, contextUser: USER, provider: harness(rows()).provider, dryRun: true });
+            const real = await ApplyOutputMapping({ outputMapping: config, result, record, contextUser: USER, provider: harness(rows()).provider });
+
+            expect(real.deletedChildIDs || []).toEqual(expected);
+            expect((dry.previewChildChanges || []).filter((c) => c.Action === 'delete').map((c) => c.Values.JobFunctionID)).toEqual(expected.map((id) => id === 'pjf-s1' ? 'aaaaaaaa-0000-0000-0000-0000000000a1' : 'aaaaaaaa-0000-0000-0000-0000000000a2'));
+        }
+    });
+});
+
+describe('a dry run with a withheld (below-confidence) output reports exactly what the real write does', () => {
+    const LEVEL = '11111111-1111-1111-1111-111111111111';
+    const withheldLevel = { Fields: ['SeniorityLevelID'], ChildEntities: [] };
+    const fieldOnly: OutputMappingConfig = { fields: { SeniorityLevelID: '$.SeniorityLevel' } };
+
+    /** A guard double: the field's current value is a person's (`human`) or the pipeline's own; it records what it was asked to retire. */
+    function ownerGuard(human: boolean) {
+        const retired: string[] = [];
+        const guard: HumanValueGuard = {
+            IsHumanOwned: vi.fn(async () => human),
+            RecordPreserved: vi.fn(async () => undefined),
+            RetireHumanValue: vi.fn(async (f: string) => { retired.push(f); return true; }),
+        };
+        return { guard, retired };
+    }
+
+    /** One dry run and one real write of the same answer over the same record (the level held), each on its own harness. */
+    async function dryAndReal(opts: { human: boolean; overwriteHumanValues?: boolean; provider?: (h: ReturnType<typeof harness>) => IMetadataProvider }) {
+        const run = async (dryRun: boolean) => {
+            const h = harness([]);
+            h.parent.Values.SeniorityLevelID = LEVEL;
+            const { guard, retired } = ownerGuard(opts.human);
+            const out = await ApplyOutputMapping({ outputMapping: fieldOnly, result: { SeniorityLevel: 'ignored-by-the-floor' }, record, contextUser: USER,
+                provider: opts.provider ? opts.provider(h) : h.provider, dryRun, humanGuard: guard, withheld: withheldLevel,
+                overwriteHumanValues: opts.overwriteHumanValues === true });
+            return { out, h, retired };
+        };
+        return { dry: await run(true), real: await run(false) };
+    }
+
+    it('a value the pipeline wrote: the preview\'s one change is the clear to null the real write saves', async () => {
+        const { dry, real } = await dryAndReal({ human: false });
+
+        expect(real.h.parent.Values.SeniorityLevelID).toBeNull();
+        expect(real.h.parent.Saved).toBe(1);
+        expect(dry.out.previewFieldChanges).toEqual([{ Field: 'SeniorityLevelID', OldValue: LEVEL, NewValue: null }]);
+        expect(dry.h.parent.Saved).toBe(0);
+        expect(dry.out.withheldFields).toEqual(real.out.withheldFields);
+    });
+
+    it('a person\'s value: no change in the preview and none in the real write, also on a run that overwrites human values', async () => {
+        for (const overwriteHumanValues of [false, true]) {
+            const { dry, real } = await dryAndReal({ human: true, overwriteHumanValues });
+
+            expect(real.h.parent.Saved).toBe(0);
+            expect(real.h.parent.Values.SeniorityLevelID).toBe(LEVEL);
+            expect(real.retired).toEqual([]);
+            expect(real.out.retiredHumanFields).toBeUndefined();
+            expect(dry.out.previewFieldChanges).toEqual([]);
+            expect(dry.out.withheldFields).toEqual(['SeniorityLevelID']);
+        }
+    });
+
+    it('a column that does not allow null: no change in either, and both list it as withheld and kept', async () => {
+        const strict = new EntityInfo({ ID: 'ENT-P', Name: 'People', Fields: [{ Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true },
+            { Name: 'SeniorityLevelID', Type: 'uniqueidentifier', AllowsNull: false }] });
+        const strictProvider = (h: ReturnType<typeof harness>): IMetadataProvider => {
+            vi.spyOn(h.provider, 'EntityByID').mockReturnValue(strict);
+            return h.provider;
+        };
+        const { dry, real } = await dryAndReal({ human: false, provider: strictProvider });
+
+        expect(real.h.parent.Saved).toBe(0);
+        expect(real.h.parent.Values.SeniorityLevelID).toBe(LEVEL);
+        expect(dry.out.previewFieldChanges).toEqual([]);
+        for (const out of [dry.out, real.out]) {
+            expect(out.withheldFields).toEqual(['SeniorityLevelID']);
+            expect(out.withheldKeptFields).toEqual(['SeniorityLevelID']);
+        }
+    });
+
+    it('a withheld child entity: no child change in the preview, and the real write neither writes nor deletes a stale row', async () => {
+        const mk = (id: string, fn: string, source: string) => new Row({ ID: id, PersonID: 'person-1', JobFunctionID: fn, Sequence: 9, Source: source }, [], id);
+        const rows = () => [mk('pjf-s1', 'aaaaaaaa-0000-0000-0000-0000000000a1', 'Derived'), mk('pjf-h', 'aaaaaaaa-0000-0000-0000-0000000000a3', 'Manual')];
+        const withheldChildren = { Fields: [], ChildEntities: ['Person Job Functions'] };
+        const dryHarness = harness(rows());
+        const dry = await ApplyOutputMapping({ outputMapping: mapping, result, record, contextUser: USER, provider: dryHarness.provider, dryRun: true, withheld: withheldChildren });
+        const realRows = rows();
+        const realHarness = harness(realRows);
+        const real = await ApplyOutputMapping({ outputMapping: mapping, result, record, contextUser: USER, provider: realHarness.provider, withheld: withheldChildren });
+
+        expect(dry.previewChildChanges || []).toEqual([]);
+        expect(dry.withheldChildEntities).toEqual(['Person Job Functions']);
+        expect(real.withheldChildEntities).toEqual(['Person Job Functions']);
+        expect(real.createdChildIDs || []).toEqual([]);
+        expect(real.updatedChildIDs || []).toEqual([]);
+        expect(real.deletedChildIDs || []).toEqual([]);
+        expect(realHarness.created).toHaveLength(0);
+        expect(realRows.some((r) => r.Deleted)).toBe(false);
+        // the field mapping is not withheld, so both still decide it alike
+        expect(dry.previewFieldChanges?.map((c) => c.Field)).toEqual(real.updatedRecord ? ['SeniorityLevelID'] : []);
     });
 });

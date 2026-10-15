@@ -9801,7 +9801,7 @@ Sequence 6, tier `live-model`).
 - [x] Step 4: Run:
   ```bash
   MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "IT123 - Feature Pipeline Key, Cache and Versions (core)"   # Passed 7/7
-  MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Feature Pipelines"                         # 6 passed / 0 failed / 0 skipped (IT124 live: needs the Gemini key)
+  (cd packages/MJAPI && MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm exec mj test suite "Predictive Studio Gates — Feature Pipelines")   # 6 passed / 0 failed / 0 skipped (IT124 live: needs the Gemini key; run from packages/MJAPI with its own .env so the CLI loads the BizApps entity classes, see guides/INTEGRATION_TESTING_QUICKSTART.md)
   cd packages/TestingFramework/integration-test-suite && pnpm test                                                       # all pass
   ```
 - [x] Step 5: Runtime verification: record the suite's summary line, the IT124 consistency counts (52/52 seniority,

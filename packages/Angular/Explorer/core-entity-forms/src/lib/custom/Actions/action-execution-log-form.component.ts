@@ -4,6 +4,7 @@ import { RegisterClass, ParseJSONRecursive, ParseJSONOptions } from '@memberjunc
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey } from '@memberjunction/core';
+import { ActionExecutionLogParams } from './action-execution-log-params';
 import { MJActionExecutionLogFormComponent } from '../../generated/Entities/MJActionExecutionLog/mjactionexecutionlog.form.component';
 
 type ParamType = 'Input' | 'Output' | 'Both';
@@ -242,10 +243,12 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
             debug: false
         };
 
-        // Format Params with recursive JSON parsing
-        if (this.record.Params) {
+        // Format the params with recursive JSON parsing — the merged inputs + outputs once the run has ended
+        // (ResultParams), the as-called inputs before that (see ActionExecutionLogParams.DisplayJSON).
+        const paramsJSON = ActionExecutionLogParams.DisplayJSON(this.record);
+        if (paramsJSON) {
             try {
-                const parsed = JSON.parse(this.record.Params);
+                const parsed = JSON.parse(paramsJSON);
                 const recursivelyParsed = ParseJSONRecursive(parsed, parseOptions);
                 this.FormattedParams = JSON.stringify(recursivelyParsed, null, 2);
 
@@ -253,7 +256,7 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
                     this.buildDisplayParameters(recursivelyParsed as ActionParameter[]);
                 }
             } catch (e) {
-                this.FormattedParams = this.record.Params;
+                this.FormattedParams = paramsJSON;
             }
         }
 
@@ -557,26 +560,6 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
     /** @deprecated Use {@link GetResultCodeIcon}. */
     getResultCodeIcon(): string {
       return this.GetResultCodeIcon();
-    }
-
-    // Save handlers for JSON fields
-    async SaveParams() {
-        if (!this.EditMode) return;
-        
-        try {
-            // Validate JSON
-            JSON.parse(this.FormattedParams);
-            this.record.Params = this.FormattedParams;
-            await this.record.Save();
-        } catch (e) {
-            console.error('Invalid JSON in Params field:', e);
-            // Could show notification here
-        }
-    }
-
-    /** @deprecated Use {@link SaveParams}. */
-    async saveParams() {
-      return this.SaveParams();
     }
 
     async SaveMessage() {

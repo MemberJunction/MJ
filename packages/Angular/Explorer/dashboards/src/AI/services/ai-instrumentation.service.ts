@@ -44,7 +44,7 @@ export {
  * this is checked rather than asserted — a provider that cannot run queries fails loudly here
  * instead of at the first RunQuery call.
  */
-function IsRunQueryProvider(provider: IMetadataProvider): provider is IMetadataProvider & IRunQueryProvider {
+export function IsRunQueryProvider(provider: IMetadataProvider): provider is IMetadataProvider & IRunQueryProvider {
   return 'RunQuery' in provider && typeof provider.RunQuery === 'function'
     && 'RunQueries' in provider && typeof provider.RunQueries === 'function';
 }

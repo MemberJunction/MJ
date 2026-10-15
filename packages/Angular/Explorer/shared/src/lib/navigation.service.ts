@@ -450,7 +450,7 @@ export class NavigationService implements OnDestroy {
   /**
    * Check if a tab request matches an existing tab's resource
    */
-  private isSameResource(tab: any, request: TabRequest): boolean {
+  private isSameResource(tab: WorkspaceTab, request: TabRequest): boolean {
     // Different apps = different resources
     if (tab.applicationId !== request.ApplicationId) {
       return false;
@@ -460,8 +460,12 @@ export class NavigationService implements OnDestroy {
     if (request.Configuration?.resourceType) {
       const requestRecordId = request.ResourceRecordId || '';
       const tabRecordId = tab.resourceRecordId || '';
-      return tab.configuration?.resourceType === request.Configuration.resourceType &&
-             tabRecordId === requestRecordId;
+      // Record identity applies to records only (a record's id can be spelled several ways); other
+      // resource types compare their ids exactly.
+      const sameId = request.Configuration.resourceType === RECORDS_RESOURCE_TYPE
+        ? CompositeKey.URLSegmentsNameSameRecord(tabRecordId, requestRecordId)
+        : tabRecordId === requestRecordId;
+      return tab.configuration?.resourceType === request.Configuration.resourceType && sameId;
     }
 
     // For app nav items, compare appName and navItemName
@@ -658,7 +662,7 @@ export class NavigationService implements OnDestroy {
   private findOpenRecordTab(entityName: string, recordId: string): { id: string } | null {
     const config = this.workspaceManager.GetConfiguration();
     const match = config?.tabs.find(t =>
-      t.resourceRecordId === recordId &&
+      CompositeKey.URLSegmentsNameSameRecord(t.resourceRecordId, recordId) &&
       t.configuration?.['resourceType'] === RECORDS_RESOURCE_TYPE &&
       t.configuration?.['Entity'] === entityName
     );
@@ -849,7 +853,7 @@ export class NavigationService implements OnDestroy {
       const stillParent = !!sourceTab &&
         IsRecordsTabConfiguration(sourceTab.configuration) &&
         sourceTab.configuration?.['Entity'] === origin.sourceRecordEntity &&
-        sourceTab.resourceRecordId === origin.sourceRecordId;
+        CompositeKey.URLSegmentsNameSameRecord(sourceTab.resourceRecordId, origin.sourceRecordId);
       if (sourceTab && stillParent) {
         this.workspaceManager.SetActiveTab(sourceTab.id);
         return;
@@ -1731,7 +1735,7 @@ export class NavigationService implements OnDestroy {
       sameText(ownerConfig['resourceType'], tabConfig['resourceType'], true) &&
       sameText(ownerConfig['driverClass'], tabConfig['driverClass'], false) &&
       sameText(ownerConfig['Entity'], tabConfig['Entity'], true) &&
-      String(owner.ResourceRecordID ?? '') === String(tabRecordId);
+      CompositeKey.URLSegmentsNameSameRecord(String(owner.ResourceRecordID ?? ''), String(tabRecordId));
   }
 
   private shallowParamsEqual(a: Record<string, string>, b: Record<string, string>): boolean {

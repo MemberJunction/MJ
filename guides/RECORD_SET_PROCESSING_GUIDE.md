@@ -131,7 +131,7 @@ A **Record Process** (`MJ: Record Processes`) is a saved operation. Its columns 
 | `ScheduleEnabled` + `CronExpression` + `Timezone` | trigger on a schedule |
 | `OnDemandEnabled` | runnable from the UI / API |
 | `BatchSize` / `MaxConcurrency` | substrate knobs |
-| `SkipUnchanged` | don't write (or count) records the work left unchanged |
+| `SkipUnchanged` + `WatermarkStrategy` | skip a record whose input is unchanged since it was last processed (`Checksum`, the default, or `UpdatedAt`), unless the run overwrites human values or — for an `Infer` pipeline — an output it answered non-empty (or with no answer recorded) has since been deleted or cleared; such a record is processed and its watermark refreshed. An output the pipeline answered empty stays skipped; Action/Agent work skips on the watermark alone. A watermark records what was processed: a real (non-dry) `Checksum` run without `SkipUnchanged`, such as a version backfill, skips nothing but still writes the watermark of each record it processed successfully when its processor computes a basis hash (`Infer`), so the next skipping run skips those records |
 
 The **`RecordProcessExecutor`** facade turns a row into a substrate run:
 
@@ -247,8 +247,34 @@ called, so its `MJ: AI Prompt Runs` are recorded and the preview costs what a re
   `Dry run: the real write would fail: …` (the write-back validates the change without applying it), so a clean
   preview means the real run will not fail on those records.
 - **Preflight.** A dry run reports the version the real run would use and, in `WouldRefuse`, why a real run would be
-  refused (a version that has not passed its golden set); it never registers or activates a version.
+  refused (a version that has not passed its golden set); it never registers or activates a version. The processor
+  reports the refusal at run level (`IRecordProcessor.CurrentRunRefusal`), the run's `ResultSummary` carries it as
+  `WouldRefuse` (even when every record was skipped), and `RecordProcess.RunNow` / `PredictiveStudio.RunFeaturePipeline`
+  return it as `wouldRefuse`; the Bulk Operations dialog then says applying would be refused and offers no Apply.
 - **Tally.** A previewed record counts as `Previewed` in the run's `ResultSummary`, never as `Upserted` or `Unchanged`.
+- **The real write's decision.** Each record's write-back preview is decided by the same code as the real write:
+  `previewFieldChanges` lists only the fields the real write would change (the value differs, and a person did not
+  enter the current one), with their old values; `previewChildChanges` marks each child row `insert`, `update`,
+  `delete` (stale rows a reconcile mapping removes) or `none`; `previewTags` says whether each tag link is new, already
+  linked, or reweighted. `previewFields` / `previewChild` / `previewChildren` hold the resolved values themselves. The
+  Bulk Operations run dialog renders the decision without reading the records, so its change count is what the
+  following real run writes (a record whose real write would fail shows its error instead). The dry run also names
+  what the preview shows: `RecordName` (the processed record), `OldValueName` / `NewValueName` on a foreign-key field
+  change, and `ValueNames` on a child row (a FieldRules dry run puts `RecordName` and the per-change names on its diff
+  payload). A whole batch is named at once (`PreviewRecordNames`, from the processor's `CompleteDryRunBatch`, which the
+  record loop calls once per dry-run batch before recording its results): a processed record the source loaded with
+  every name field is named from its own fields, and every other record the batch shows is read in one `RunViews` call,
+  one view per related entity, under the acting user's permissions. A name is shown only when the user may read every
+  name field (`EntityInfo.CanUserReadRecordName`, the database provider's rule), otherwise the key is shown. The dialog shows the names (child fields by their display names), the
+  IDs on hover; a value without a readable name shows its ID.
+- **Withheld outputs.** An output below its confidence floor (`MinConfidence` with `OnLowConfidence: 'null'`) maps its
+  field to null, which the real run writes only over a value the pipeline itself wrote (the human-value guard keeps a
+  person's value, even when the run overwrites human values, and a column that does not allow null is left, listed in
+  `withheldKeptFields` and still in `withheldFields`); a withheld child mapping changes no row (no stale deletes). The
+  preview reports exactly that: every withheld field in `withheldFields`, every skipped child mapping in
+  `withheldChildEntities`, and a change to null in `previewFieldChanges` only where the real write clears the value.
+  The run dialog shows each withheld output as "withheld (below confidence)", and the record's result names the output
+  in `BelowConfidenceOutputs`.
 
 ---
 
@@ -321,7 +347,9 @@ graph LR
 - For a Feature Pipeline, `ResultSummary` holds the **`FeaturePipelineRunResult`** JSON: the pin the run used
   (`Pin`), the `ParameterFidelity` of the vendor call, and the tallies `Attempted` (every processed record except
   those skipped on their watermark), `Upserted`, `Unchanged`, `Previewed` (dry runs), `RejectedInvalid` (output failed
-  its constraints), `Failed`, `Skipped` and `HumanValuesPreserved`, plus `Status`. **A Feature Pipeline run with any
+  its constraints), `BelowConfidence` (records an output confidence floor acted on: withheld outputs, or a record failed
+  with `FailureKind: 'BelowConfidence'`, which is left out of `Failed`), `Failed`, `Skipped` and
+  `HumanValuesPreserved`, plus `Status`. **A Feature Pipeline run with any
   failed or rejected record ends `Failed`** (the run's status is the honest summary, not "Completed with errors"). A run is a Feature
   Pipeline run when the processor options carry `FeaturePipeline: true` (the executor sets it for every `Infer` Record
   Process); other work types keep their existing status rules. The breaker still stops a runaway rate early.

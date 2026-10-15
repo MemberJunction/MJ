@@ -84,3 +84,25 @@ describe('PSOperateDialogComponent (DOM)', () => {
     expect(closed).toEqual([{ changed: false }]);
   });
 });
+
+describe('PSOperateDialogComponent Run now notice (F16 sweep)', () => {
+  const output = { processRunID: 'run-1', processed: 4, success: 3, error: 1, skipped: 0 };
+
+  it('reports a Failed run as an error with the run\'s message, not as scored', () => {
+    const notice = PSOperateDialogComponent.RunNowNotice({ Success: true, Output: { ...output, status: 'Failed', errorMessage: 'Circuit breaker: error rate 25.0%' } });
+
+    expect(notice).toEqual({ Style: 'error', Message: 'The run failed: Circuit breaker: error rate 25.0% (the process was created and can be run again).' });
+  });
+
+  it('reports a completed run as scored, and one that stopped as a warning', () => {
+    expect(PSOperateDialogComponent.RunNowNotice({ Success: true, Output: { ...output, error: 0, status: 'Completed' } }))
+      .toEqual({ Style: 'success', Message: 'Scored 3/4 record(s) — Completed.' });
+    expect(PSOperateDialogComponent.RunNowNotice({ Success: true, Output: { ...output, status: 'Completed' } }))
+      .toEqual({ Style: 'warning', Message: 'Scored 3/4 record(s) — Completed, 1 error(s).' });
+    expect(PSOperateDialogComponent.RunNowNotice({ Success: true, Output: { ...output, status: 'Cancelled' } }).Style).toBe('warning');
+  });
+
+  it('reports an operation failure with its error', () => {
+    expect(PSOperateDialogComponent.RunNowNotice({ Success: false, ErrorMessage: 'not authorized' })).toEqual({ Style: 'error', Message: 'not authorized' });
+  });
+});

@@ -172,6 +172,18 @@
           }
         }
       ],
+      "MJ: Action Authorizations": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "AuthorizationID": "@lookup:MJ: Authorizations.Name=Run Record Processes",
+            "Comments": "Holders of Run Record Processes (or Record Processing) may run this action. The action does not authorize its caller itself, so without this row only an Owner could run it."
+          },
+          "primaryKey": {
+            "ID": "49FBDB8C-BE76-4524-86B5-522B6E9FA31A"
+          }
+        }
+      ],
       "MJ: Action Result Codes": [
         {
           "fields": {

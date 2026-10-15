@@ -120,4 +120,39 @@ describe('RecordProcessEditorComponent (DOM)', () => {
     input.dispatchEvent(new Event('input'));
     expect(rec.Name).toBe('Typed name');
   });
+
+  // F15: the Entity <select> rendered its options with @for, so a [value] binding on the <select> ran before
+  // the options existed and the browser showed the first entity instead of the stored one.
+  const entitySelect = (f: Fx) => queryAll(f, 'select').find((s) => (s as HTMLSelectElement).options[0]?.textContent?.includes('choose an entity')) as HTMLSelectElement;
+
+  it('selects the stored entity (UUIDs compared case-insensitively), not the first option', () => {
+    const f = render(makeRecord({ Name: 'Job titles', EntityID: 'E2' }));
+    const select = entitySelect(f);
+    expect(select.selectedOptions[0]?.textContent?.trim()).toBe('Contacts');
+  });
+
+  it('selects the placeholder when the stored entity is not listed', () => {
+    const f = render(makeRecord({ Name: 'Job titles', EntityID: 'zzz-unlisted' }));
+    expect(entitySelect(f).selectedIndex).toBe(0);
+  });
+
+  it('keeps the stored EntityID when the picker submits the entity it displays, then saves', async () => {
+    const rec = makeRecord({ Name: 'Job titles', EntityID: 'E2' });
+    const f = render(rec);
+    // A change event at the displayed option is what reaches the record when a user re-confirms the picker
+    // without choosing another entity: with the first option displayed it would re-target the process.
+    const select = entitySelect(f);
+    select.dispatchEvent(new Event('change'));
+    (query(f, '.rpe-bar button') as HTMLButtonElement).click();
+    await f.whenStable();
+    expect(rec.EntityID.toLowerCase()).toBe('e2');
+  });
+
+  it('falls back to a generic message when a failed save carries no detail', async () => {
+    const rec = makeRecord({ Name: 'Cleanup', EntityID: 'zzz', LatestResult: { CompleteMessage: '' } }, async () => false);
+    const f = render(rec);
+    await f.componentInstance.Save();
+    f.detectChanges(false);
+    expect(query(f, '.rpe-err')?.textContent).toContain('Save failed');
+  });
 });

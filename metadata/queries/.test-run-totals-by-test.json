@@ -1,0 +1,52 @@
+[
+  {
+    "fields": {
+      "Name": "TestRunTotalsByTest",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=MJ",
+      "UserQuestion": "For each test that ran in a time window, how many runs passed or failed, what did they cost, and how long did they take?",
+      "Description": "One row per test that ran between start and end: run count, passed count, failures (Failed or Error), skipped count, total cost, and average and maximum duration of completed runs. Feeds the Testing dashboard's analytics, which rates executed (non-skipped) runs only.",
+      "SQL": "@file:SQL/test-run-totals-by-test.sql",
+      "TechnicalDescription": "Groups vwTestRuns joined to vwTests by TestID, test Name and test Type for runs whose StartedAt is in [start, end] ({{ start | sqlDate }}, {{ end | sqlDate }}). Failures = Failed + Error. Skipped = Skipped runs (not executed; excluded from the dashboard's rate denominators). TotalCost sums CostUSD (NULL as 0). AvgDurationMs/MaxDurationMs use DATEDIFF_BIG(millisecond, StartedAt, CompletedAt), NULL for runs not completed.",
+      "Status": "Approved",
+      "QualityRank": 8,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "relatedEntities": {
+      "MJ: Query Parameters": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "Name": "start",
+            "Type": "date",
+            "IsRequired": true,
+            "SampleValue": "2026-09-15T00:00:00.000Z",
+            "Description": "Inclusive lower bound on the run's StartedAt (ISO timestamp).",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CA578183-7E65-4CFC-9F73-62D3051D5FDA"
+          }
+        },
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "Name": "end",
+            "Type": "date",
+            "IsRequired": true,
+            "SampleValue": "2026-10-15T00:00:00.000Z",
+            "Description": "Inclusive upper bound on the run's StartedAt (ISO timestamp).",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "96413705-EF92-4C83-99A6-5DF624926078"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "EA38ECFB-C331-487E-92B2-70E5051B32C8"
+    }
+  }
+]

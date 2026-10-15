@@ -861,7 +861,15 @@ coverage loss):
 | `self-test` | cache-warm (1) | server | — | smoke script | Proves the instrumented cache observes RunView traffic (lives in the framework package) |
 
 
-**Predictive Studio gate suite.** `Predictive Studio Gates — Feature Pipelines` holds the Phase 7 gates (`C1 → C2.1` first) and `IT124`. It needs bizapps-common installed; run it with `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Feature Pipelines"`. `IT123` also runs in the deterministic suite (`RUN_MUTATION_TESTS=1` enables its mutation checks).
+**Predictive Studio gate suite.** `Predictive Studio Gates — Feature Pipelines` holds the Phase 7 gates (`C1 → C2.1` first) and `IT124`. It needs bizapps-common installed and `RUN_MUTATION_TESTS=1` (the C2 gates are mutation-tier and report Skipped without it). `IT123` also runs in the deterministic suite (`RUN_MUTATION_TESTS=1` enables its mutation checks). The gates write bizapps-common rows, so the CLI process must load the same entity classes MJAPI loads; a run that does not logs `ClassFactory: no registration found … 'MJ_BizApps_Common: …'` for every fixture write. Run the gates from the MJAPI directory, which declares the host-generated entities package, and give that directory its own `.env` (the CLI reads `.env` from the working directory; copy the repo-root one):
+
+```bash
+cd packages/MJAPI
+MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm exec mj test suite "Predictive Studio Gates — Feature Pipelines"
+MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm exec mj test run "C1 → C2.3"     # one gate
+```
+
+Name the generated package (`codeGeneration: { packages: { entities: { name: 'mj_generatedentities' } } }`) in the repo-root `mj.config.cjs` as a **local, uncommitted** edit (`packages/MJAPI/mj.config.cjs` only re-exports it); the tracked config does not carry it, because the generated packages exist only on a host that ran CodeGen. From the repo root the same commands still log the errors: pnpm gives the root no access to a package only MJAPI declares, and the loader reports it not found. See the [Dynamic Package Loading guide](DYNAMIC_PACKAGE_LOADING_GUIDE.md).
 
 There are no script-only suites anymore — the former `lists` / `user-routines` /
 `open-app-teardown` scripts graduated to bundles (IT20–IT22), and the multi-process /

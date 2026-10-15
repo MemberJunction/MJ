@@ -44,6 +44,9 @@ function stubProvider(getEntityObject: ReturnType<typeof vi.fn>): IMetadataProvi
     return { GetEntityObject: getEntityObject } as Partial<IMetadataProvider> as IMetadataProvider;
 }
 
+/** The latest-value order every latest-value read shares: newest ComputedAt, ties broken by creation time, then ID. */
+const LATEST_ORDER = 'ComputedAt DESC, __mj_CreatedAt DESC, ID DESC';
+
 describe('FeatureValueCacheService', () => {
     const mockUser = { ID: 'user-1', Email: 'test@example.com' } as unknown as UserInfo;
 
@@ -332,7 +335,7 @@ describe('FeatureValueCacheService', () => {
             expect(latest.ExtraFilter).toContain("RecordID = 'rec-1' AND Source = 'Pipeline'");
             expect(latest.ExtraFilter).toContain("FeatureName = 'SeniorityLevel'");
             expect(latest.ExtraFilter).not.toContain('ValueKeyHash');
-            expect(latest.OrderBy).toBe('ComputedAt DESC');
+            expect(latest.OrderBy).toBe(LATEST_ORDER);
         });
 
         it('reads only each feature\'s newest row, and only its value columns, in one batch', async () => {
@@ -347,7 +350,7 @@ describe('FeatureValueCacheService', () => {
             const [first, second] = MockRunView.calls;
             for (const view of [first, second]) {
                 expect(view.MaxRows).toBe(1);
-                expect(view.OrderBy).toBe('ComputedAt DESC');
+                expect(view.OrderBy).toBe(LATEST_ORDER);
                 expect(view.ResultType).toBeUndefined();
                 expect(view.Fields).toEqual(['FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON', 'ValueKeyHash']);
             }
@@ -523,9 +526,16 @@ describe('FeatureValueCacheService', () => {
             expect(view?.ExtraFilter).toContain("RecordID = 'person-1' AND FeatureName = 'SeniorityLevel'");
             expect(view?.ExtraFilter).toContain("Source = 'Pipeline'");
             expect(view?.ExtraFilter).toContain("(ProcessRunID IS NULL OR ProcessRunID <> 'run-9')");
-            expect(view?.OrderBy).toBe('ComputedAt DESC');
+            expect(view?.OrderBy).toBe(LATEST_ORDER);
             expect(view?.MaxRows).toBe(1);
             expect(view?.BypassCache).toBe(true);
+        });
+
+        it('builds the batched latest-value view in the same shape, for many records and features', () => {
+            const view = FeatureValueCacheService.LatestValuesView({ RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordIDs: ['p-1', "o'b"], FeatureNames: ['A', 'B'], Source: 'Pipeline' });
+            expect(view).toMatchObject({ EntityName: 'MJ: Feature Values', OrderBy: LATEST_ORDER, BypassCache: true });
+            expect(view.Fields).toEqual(['RecordID', 'FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON']);
+            expect(view.ExtraFilter).toBe("RecordProcessID = 'rp-1' AND EntityID = 'ENT-P' AND RecordID IN ('p-1', 'o''b') AND FeatureName IN ('A', 'B') AND Source = 'Pipeline'");
         });
 
         it('GetLatestValue returns null when the source never wrote the feature, and adds no run filter without one', async () => {

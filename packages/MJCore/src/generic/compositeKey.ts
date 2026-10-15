@@ -398,7 +398,7 @@ export function RecordUrlMatchesTab(
     if (IsNewEntityRecordUrlId(urlRecordId) && IsNewEntityRecordUrlId(tabRecordId)) {
         return true;
     }
-    return (tabRecordId ?? '') === urlRecordId;
+    return CompositeKey.URLSegmentsNameSameRecord(tabRecordId ?? '', urlRecordId);
 }
 
 /**
@@ -537,6 +537,71 @@ export class CompositeKey extends FieldValueCollection {
             compositeKey.LoadFromSingleKeyValuePair('ID', segment); // pk-literal-ok: documented fallback when entity metadata is unresolvable
         }
         return compositeKey;
+    }
+
+    /**
+     * Whether two record-id strings name the same record. Each is either a bare value (a
+     * single-column key) or a `Field|Value` URL segment (`ID|abc`, or `A|1||B|2` for a composite
+     * key), parsed with {@link SimpleLoadFromURLSegment}. A bare value matches a single-field
+     * segment carrying the same value whatever the field is called; two segments match when they
+     * carry the same field names and values, in any order. The comparison is symmetric. Two empty
+     * ids name the same (absent) record; an empty id never matches a non-empty one.
+     *
+     * Values compare the way {@link EqualsKey} compares them: string values fold case. SQL Server's
+     * default case-insensitive collation makes 'abc' and 'ABC' the same row, and UUID casing
+     * differs between the server ('D8A9…') and a URL ('d8a9…'), so two spellings of one id must
+     * not read as two records. Numeric values arrive as strings from a URL, so they compare as
+     * text.
+     * @example CompositeKey.URLSegmentsNameSameRecord('ID|D8A9B7AB-…', 'd8a9b7ab-…') // true
+     */
+    public static URLSegmentsNameSameRecord(a: string, b: string): boolean {
+        const left = CompositeKey.parseIdPairs(a);
+        const right = CompositeKey.parseIdPairs(b);
+        if (left.Malformed || right.Malformed) {
+            // A segment with an empty field name ('|abc') names no field, so it can match only itself.
+            return left.Malformed && right.Malformed && left.Text === right.Text;
+        }
+        if (left.Pairs.length === 0 || right.Pairs.length === 0) {
+            return left.Pairs.length === right.Pairs.length;
+        }
+        if (left.Bare || right.Bare) {
+            return left.Pairs.length === 1 && right.Pairs.length === 1 && UUIDsEqual(String(left.Pairs[0].Value), String(right.Pairs[0].Value));
+        }
+        if (left.Pairs.length !== right.Pairs.length) {
+            return false;
+        }
+        // Sorting both sides by field name then folded value makes the pairwise walk order-free and,
+        // with repeated field names, symmetric.
+        const sorted = (pairs: KeyValuePair[]): KeyValuePair[] =>
+            [...pairs].sort((x, y) => {
+                const kx = CompositeKey.pairSortKey(x);
+                const ky = CompositeKey.pairSortKey(y);
+                return kx < ky ? -1 : kx > ky ? 1 : 0;
+            });
+        const sortedRight = sorted(right.Pairs);
+        return sorted(left.Pairs).every((pair, i) =>
+            pair.FieldName === sortedRight[i].FieldName && UUIDsEqual(String(pair.Value), String(sortedRight[i].Value)));
+    }
+
+    /**
+     * Splits an id into key/value pairs. A text with no delimiter is a bare value (one pair, `Bare`);
+     * a delimited text is parsed as a URL segment and is `Malformed` when any pair has an empty field name.
+     */
+    private static parseIdPairs(id: string): { Pairs: KeyValuePair[]; Bare: boolean; Malformed: boolean; Text: string } {
+        const text = (id ?? '').trim();
+        if (text === '') {
+            return { Pairs: [], Bare: false, Malformed: false, Text: text };
+        }
+        if (!text.includes(CompositeKey.DefaultValueDelimiter)) {
+            return { Pairs: [new KeyValuePair('', text)], Bare: true, Malformed: false, Text: text };
+        }
+        const key = new CompositeKey();
+        key.SimpleLoadFromURLSegment(text);
+        return { Pairs: key.KeyValuePairs, Bare: false, Malformed: key.KeyValuePairs.some(p => p.FieldName === ''), Text: text };
+    }
+
+    private static pairSortKey(pair: KeyValuePair): string {
+        return `${pair.FieldName}\u0000${String(pair.Value).trim().toLowerCase()}`;
     }
 
     /**

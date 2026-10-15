@@ -143,4 +143,21 @@ describe('PredictiveStudioRunFeaturePipelineServerOperation — validation/error
     expect(out.status).toBe('Failed');
     expect(out.errorMessage).toBe('boom');
   });
+
+  it('returns why a real run would be refused, for a dry run whose version is not activated (F16)', async () => {
+    const refusal = 'Feature Pipeline version v6 is not activated';
+    const facade = new MockFacade(fakeRunResult({
+      FeaturePipeline: { RecordProcessID: 'fp-1', Pin: null, ParameterFidelity: null, Attempted: 1, Upserted: 0, Unchanged: 0, Previewed: 1,
+        RejectedInvalid: 0, BelowConfidence: 0, Failed: 0, Skipped: 0, HumanValuesPreserved: 0, Status: 'completed', WouldRefuse: refusal },
+    }));
+    const result = await new TestableRunFeatureOp(facade).ExecuteServer({ featurePipelineID: 'fp-1', dryRun: true }, new CapturingContext());
+
+    expect(result.Output?.wouldRefuse).toBe(refusal);
+  });
+
+  it('returns no refusal for a run without one', async () => {
+    const result = await new TestableRunFeatureOp(new MockFacade(fakeRunResult())).ExecuteServer({ featurePipelineID: 'fp-1' }, new CapturingContext());
+
+    expect(result.Output).not.toHaveProperty('wouldRefuse');
+  });
 });

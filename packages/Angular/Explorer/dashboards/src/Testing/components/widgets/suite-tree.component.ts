@@ -238,9 +238,15 @@ export class SuiteTreeComponent {
             <i class="fa-solid fa-flask"></i>
             {{ node.testCount }}
           </span>
-          <span class="pass-rate" [class]="getPassRateClass(node.passRate)" title="Pass Rate">
-            {{ node.passRate.toFixed(0) }}%
-          </span>
+          @if (node.RunCount === 0) {
+            <span class="pass-rate" title="No runs in the period">No runs</span>
+          } @else if (node.RunCount === node.SkippedCount) {
+            <span class="pass-rate" title="Every run in the period was skipped">All skipped</span>
+          } @else {
+            <span class="pass-rate" [class]="getPassRateClass(node.passRate)" title="Pass Rate">
+              {{ node.passRate.toFixed(0) }}%
+            </span>
+          }
         </div>
       </div>
     

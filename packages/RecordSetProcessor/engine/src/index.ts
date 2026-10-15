@@ -9,6 +9,7 @@ export * from './RateLimiter';
 export * from './RecordSetProcessor';
 export * from './RecordProcessExecutor';
 export * from './writeBack';
+export * from './outputPresence';
 export * from './processors/FunctionRecordProcessor';
 export * from './processors/ActionRecordProcessor';
 export * from './processors/AgentRecordProcessor';

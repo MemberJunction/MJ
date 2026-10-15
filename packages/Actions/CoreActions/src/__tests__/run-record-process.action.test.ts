@@ -55,3 +55,38 @@ describe('RunRecordProcessAction: OverwriteHumanValues', () => {
         expect(runByID.mock.calls[0][1].provider).toBe(params.Provider);
     });
 });
+
+describe('RunRecordProcessAction: output params (F13)', () => {
+    beforeEach(() => runByID.mockClear());
+
+    it('returns the merged param set (inputs + the run summary outputs) on the result', async () => {
+        const params = paramsWith([]);
+        const result = await new TestableRunRecordProcess().Run(params);
+        expect(result.Params).toBe(params.Params);
+        const outputs = (result.Params || []).filter((p) => p.Type === 'Output');
+        expect(outputs.map((p) => [p.Name, p.Value])).toEqual([
+            ['ProcessRunID', 'run-1'], ['Processed', 1], ['Succeeded', 1], ['Errored', 0], ['Skipped', 0],
+        ]);
+    });
+
+    it('replaces a same-name output already on the param list instead of appending a duplicate', async () => {
+        const params = paramsWith([{ Name: 'Processed', Type: 'Output', Value: null }]);
+        await new TestableRunRecordProcess().Run(params);
+        const processed = params.Params.filter((p) => p.Name === 'Processed');
+        expect(processed).toEqual([{ Name: 'Processed', Type: 'Output', Value: 1 }]);
+    });
+
+    it('falls back to the run status when a failed run carries an empty ErrorMessage', async () => {
+        runByID.mockResolvedValueOnce({ ProcessRunID: 'run-2', Status: 'Failed', Total: 0, Processed: 0, Success: 0, Error: 0, Skipped: 0, ErrorMessage: '' });
+        const result = await new TestableRunRecordProcess().Run(paramsWith([]));
+        expect(result.Success).toBe(false);
+        expect(result.Message).toBe("Run ended with status 'Failed'");
+    });
+
+    it('reports an invalid Scope JSON with the parser message', async () => {
+        const result = await new TestableRunRecordProcess().Run(paramsWith([{ Name: 'Scope', Type: 'Input', Value: '{not json' }]));
+        expect(result.ResultCode).toBe('INVALID_JSON');
+        expect(result.Message).toMatch(/^Failed to parse Scope JSON: /);
+        expect(runByID).not.toHaveBeenCalled();
+    });
+});

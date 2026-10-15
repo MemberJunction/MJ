@@ -5,14 +5,16 @@
  * @module @memberjunction/testing-engine
  */
 import { EscapeSQLString, GetValueAtPath, RegisterClass, ResolveMappingRef, UUIDSet, UUIDsEqual } from '@memberjunction/global';
-import { RunView, type UserInfo } from '@memberjunction/core';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJAIPromptRunEntity, MJFeaturePipelineVersionEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { InferProcessor } from '@memberjunction/record-set-processor';
 import type { RecordProcessorContext, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import {
     FeaturePipelinePin,
     FeaturePipelineVersionService,
+    MJFeaturePipelineVersionEntityExtended,
     type DataFeatureActivation,
+    type GoldenSetResultDetails,
     type FeaturePipelinePinData,
     type ResolvedConstraint,
 } from '@memberjunction/feature-pipelines';
@@ -54,6 +56,15 @@ export interface PreparedGoldenSetEvaluation {
     RecordProcess: MJRecordProcessEntity;
     Processor: InferProcessor;
     Activation: DataFeatureActivation;
+}
+
+/** The AI Prompt Runs that hold a batch's cost could not be read, so the cost is unknown (never reported as 0). */
+export class PromptRunCostReadError extends Error {
+    /** @param ReadMessage the read's own error message */
+    constructor(public readonly ReadMessage: string) {
+        super(`could not read the AI Prompt Runs to report their cost: ${ReadMessage}`);
+        this.name = 'PromptRunCostReadError';
+    }
 }
 
 /**
@@ -158,7 +169,7 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
         await this.AssertPinUnchanged(p.Processor, ctx, pin, rp.Name, cost);
         const score = GoldenSetScorer.Score(p.Cases, answers, p.Activation.Metric);
         const row = await this.StoreResult(pin, rp, p.Activation, score, answers, p.LabelQuality, context);
-        return this.BuildResult(score, row, p.Activation, p.Cases.length, started, cost);
+        return this.BuildResult(score, row, p.Activation, p.Cases.length, started, cost, p.Cases.filter((c) => c.Required === true).length);
     }
 
     /** The pipeline's `MJ: Record Processes` row, read on this driver's provider; null when it does not exist. */
@@ -214,12 +225,13 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
     /** Stores the score on the version of the pin the cases ran under, with the per-case answers and the label-quality record as its details. */
     protected async StoreResult(pin: FeaturePipelinePinData, rp: MJRecordProcessEntity, activation: DataFeatureActivation, score: GoldenSetScore,
         answers: GoldenAnswer[], labelQuality: GoldenLabelQuality | undefined, context: DriverExecutionContext): Promise<MJFeaturePipelineVersionEntity> {
+        // typed against the stored shape the version service reads (its refusal names the wrong required cases)
+        const details: GoldenSetResultDetails & { Answers: GoldenAnswer[]; LabelQuality: GoldenLabelQuality | null } = {
+            Score: score, Answers: answers, LabelQuality: labelQuality || null,
+        };
         return FeaturePipelineVersionService.Instance.RecordGoldenSetResult({
             RecordProcessID: rp.ID, Pin: pin, Activation: activation, TestRunID: context.testRun.ID,
-            Result: {
-                Value: score.Value, Lower: score.Lower, Upper: score.Upper, N: score.N,
-                Details: JSON.stringify({ Score: score, Answers: answers, LabelQuality: labelQuality || null }),
-            },
+            Result: { Value: score.Value, Lower: score.Lower, Upper: score.Upper, N: score.N, Details: JSON.stringify(details) },
             ApprovedByUserID: context.contextUser.ID, ContextUser: context.contextUser, Provider: this.Provider,
         });
     }
@@ -239,9 +251,14 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
         const results = await processor.ProcessBatch(records, ctx);
         const cost = await this.EvaluationCost(results, ctx.contextUser);
         FeaturePipelineGoldenSetDriver.AssertAnswered(cases, results, cost);
-        const answers = cases.map((c) => {
+        const answers = cases.map((c): GoldenAnswer => {
             const r = results.get(`golden-${c.ID}`);
-            return { CaseID: c.ID, Values: r?.Status === 'Succeeded' ? this.AnswerValues(r.ResultPayload, processor, constraints, config) : null };
+            const withheld = r?.BelowConfidenceOutputs || [];
+            return {
+                CaseID: c.ID, Values: r?.Status === 'Succeeded' ? this.AnswerValues(r.ResultPayload, processor, constraints, config) : null,
+                // the outputs the confidence floor withheld (or failed the record on): an abstention, for a case expecting one
+                ...(withheld.length > 0 ? { Withheld: withheld } : {}),
+            };
         });
         return { Answers: answers, CostUSD: cost };
     }
@@ -253,10 +270,28 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
      * @throws GoldenSetEvaluationError when the prompt runs cannot be read: an unknown cost is never reported as 0
      */
     protected async EvaluationCost(results: Map<string, RecordResult>, contextUser: UserInfo): Promise<number> {
+        try {
+            return await FeaturePipelineGoldenSetDriver.PromptRunCost(results.values(), this.Provider, contextUser);
+        } catch (e) {
+            if (e instanceof PromptRunCostReadError) {
+                throw new GoldenSetEvaluationError(`could not read the evaluation's AI Prompt Runs to report its cost: ${e.ReadMessage}`);
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * What a batch's model calls cost: the sum of `TotalCost` over the distinct AI Prompt Runs the results name
+     * (`AIPromptRunID`), read by ID on `provider`. Distinct, because records that share a cache key share one prompt
+     * run. 0 when no result names a prompt run. Shared by every caller that reports a batch's spend, so the readers
+     * cannot drift.
+     * @throws PromptRunCostReadError when the prompt runs cannot be read: an unknown cost is never reported as 0
+     */
+    public static async PromptRunCost(results: Iterable<RecordResult>, provider: IMetadataProvider, contextUser: UserInfo): Promise<number> {
         // The set only de-duplicates; the IDs put in the filter are the ones the results carry, never normalized copies.
         const seen = new UUIDSet();
         const ids: string[] = [];
-        for (const id of [...results.values()].map((r) => r.AIPromptRunID)) {
+        for (const id of [...results].map((r) => r.AIPromptRunID)) {
             if (id && !seen.Has(id)) {
                 seen.Add(id);
                 ids.push(id);
@@ -265,27 +300,28 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
         if (ids.length === 0) {
             return 0;
         }
-        const runs = await RunView.FromMetadataProvider(this.Provider).RunView<Pick<MJAIPromptRunEntity, 'ID' | 'TotalCost'>>({
+        const runs = await RunView.FromMetadataProvider(provider).RunView<Pick<MJAIPromptRunEntity, 'ID' | 'TotalCost'>>({
             EntityName: 'MJ: AI Prompt Runs',
             ExtraFilter: `ID IN (${ids.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`,
             Fields: ['ID', 'TotalCost'],
         }, contextUser);
         if (!runs.Success) {
-            throw new GoldenSetEvaluationError(`could not read the evaluation's AI Prompt Runs to report its cost: ${runs.ErrorMessage}`);
+            throw new PromptRunCostReadError(runs.ErrorMessage);
         }
         return runs.Results.reduce((sum, r) => sum + (r.TotalCost || 0), 0);
     }
 
     /**
-     * Fails when any case has no answer and no constraint rejection: its result is missing, skipped, or failed for a
-     * reason other than `RejectedInvalid`.
+     * Fails when any case has no answer and no rejection of its answer: its result is missing, skipped, or failed for a
+     * reason other than `RejectedInvalid` (a constraint) or `BelowConfidence` (a `fail` confidence floor). Both are the
+     * model's answer, so they are scored.
      * @param costUSD what the batch cost, carried on the error so the test run still reports it
      * @throws GoldenSetEvaluationError naming how many cases failed and the first case's error
      */
     protected static AssertAnswered(cases: GoldenCase[], results: Map<string, RecordResult>, costUSD: number): void {
         const failed = cases.filter((c) => {
             const r = results.get(`golden-${c.ID}`);
-            return !r || (r.Status !== 'Succeeded' && r.FailureKind !== 'RejectedInvalid');
+            return !r || (r.Status !== 'Succeeded' && r.FailureKind !== 'RejectedInvalid' && r.FailureKind !== 'BelowConfidence');
         });
         if (failed.length > 0) {
             const first = results.get(`golden-${failed[0].ID}`);
@@ -373,15 +409,19 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
     }
 
     /**
-     * One oracle per output (its value against the threshold) plus the activation outcome, which decides the status;
-     * `costUSD` is the evaluation's model cost, which the test run records as its CostUSD.
+     * One oracle per output (its value against the threshold), one for the required cases (when the set has any), plus
+     * the activation outcome, which decides the status: a wrong required case stores a gate value of 0, so the version
+     * is refused and the test fails. `costUSD` is the evaluation's model cost, which the test run records as its CostUSD.
      */
     protected BuildResult(score: GoldenSetScore, row: MJFeaturePipelineVersionEntity, activation: DataFeatureActivation,
-        caseCount: number, started: number, costUSD: number): DriverExecutionResult {
+        caseCount: number, started: number, costUSD: number, requiredCount: number): DriverExecutionResult {
         const oracles: OracleResult[] = Object.entries(score.PerOutput).map(([name, s]) => ({
             oracleType: `golden-set.${name}`, passed: s.Value >= activation.Threshold, score: s.Value,
             message: `${name}: ${s.Correct}/${s.N} = ${s.Value.toFixed(4)}${s.Lower !== null && s.Upper !== null ? ` [${s.Lower.toFixed(4)}, ${s.Upper.toFixed(4)}]` : ''} (threshold ${activation.Threshold})`,
         }));
+        if (requiredCount > 0) {
+            oracles.push(FeaturePipelineGoldenSetDriver.RequiredOracle(score, requiredCount));
+        }
         const active = row.Status === 'Active';
         oracles.push({ oracleType: 'golden-set.activation', passed: active, score: active ? 1 : 0, message: `Version v${row.Version} ${row.Status}` });
         const passed = oracles.filter((o) => o.passed).length;
@@ -389,6 +429,17 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
             targetType: TARGET_TYPE, targetLogId: row.ID, status: active ? 'Passed' : 'Failed',
             score: score.Value, oracleResults: oracles, passedChecks: passed, failedChecks: oracles.length - passed, totalChecks: oracles.length,
             inputData: { cases: caseCount }, actualOutput: score, durationMs: Date.now() - started, totalCost: costUSD,
+        };
+    }
+
+    /** The required cases' oracle: passed when none is wrong, else naming each wrong case and its wrong outputs. */
+    protected static RequiredOracle(score: GoldenSetScore, requiredCount: number): OracleResult {
+        const wrong = score.RequiredFailures;
+        return {
+            oracleType: 'golden-set.required', passed: wrong.length === 0, score: (requiredCount - wrong.length) / requiredCount,
+            message: wrong.length === 0
+                ? `${requiredCount}/${requiredCount} required case(s) right`
+                : MJFeaturePipelineVersionEntityExtended.FormatRequiredFailures(wrong),
         };
     }
 

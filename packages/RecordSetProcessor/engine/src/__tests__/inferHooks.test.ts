@@ -47,10 +47,13 @@ describe('InferProcessor Lifecycle Hooks', () => {
         });
 
         const writeBackProc = new WriteBackProcessor(processor, { fields: { TargetField: '$.foo' } }, true);
-        // A dry-run write-back reads only the processed record's entity metadata: Name and Fields[].Name.
+        // A dry-run write-back reads the processed record's entity metadata (Name, Fields[].Name) and loads the record.
         const widgets = new EntityInfo({ ID: 'ent-1', Name: 'Widgets', Fields: [{ Name: 'TargetField' }] });
-        const provider: Pick<IMetadataProvider, 'EntityByID'> = {
+        const loaded = { InnerLoad: async () => true, Get: () => undefined };
+        const provider: Pick<IMetadataProvider, 'EntityByID' | 'GetEntityObject'> = {
             EntityByID: (id: string) => (id === 'ent-1' ? widgets : undefined),
+            // a dry-run write-back loads the record to compare its fields; the double is typed as the generic return every provider makes
+            GetEntityObject: async <T>() => loaded as T,
         };
         const context: RecordProcessorContext = {
             contextUser: {} as UserInfo,
@@ -66,7 +69,7 @@ describe('InferProcessor Lifecycle Hooks', () => {
         const result = await writeBackProc.ProcessRecord(record, context);
         expect(processor.beforeWriteBackCalled).toBe(true);
         expect(result.Status).toBe('Succeeded');
-        expect(result.ResultPayload).toEqual({ output: { foo: 'bar' }, writeBack: { updatedRecord: false, changed: false, dryRun: true, previewFields: { TargetField: 'bar' } } });
+        expect(result.ResultPayload).toEqual({ output: { foo: 'bar' }, writeBack: { updatedRecord: false, changed: false, dryRun: true, previewFields: { TargetField: 'bar' }, previewFieldChanges: [{ Field: 'TargetField', OldValue: undefined, NewValue: 'bar' }] } });
     });
 
     it('resolves custom subclass via ClassFactory using DataFeatureSpec.ProcessorExtensionKey', () => {

@@ -20,7 +20,8 @@
     "@memberjunction/ai-core-plus": "6.2.0-edge.3",
     "@memberjunction/core": "6.2.0-edge.3",
     "@memberjunction/core-entities": "6.2.0-edge.3",
-    "@memberjunction/global": "6.2.0-edge.3"
+    "@memberjunction/global": "6.2.0-edge.3",
+    "@memberjunction/record-set-processor-base": "6.2.0-edge.3"
   },
   "devDependencies": {
     "@memberjunction/unit-testing": "6.2.0-edge.3",

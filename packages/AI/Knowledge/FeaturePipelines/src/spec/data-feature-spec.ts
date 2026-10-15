@@ -8,6 +8,7 @@
 import type { MJFeaturePipelineVersionEntity } from '@memberjunction/core-entities';
 import type { ValueConstraint, ResolvedConstraint } from './value-constraint.js';
 import type { OutputTarget } from './output-target.js';
+import { ConfidenceFloor, type LowConfidencePolicy } from './confidence-floor.js';
 
 export interface DataFeatureSpec {
   Name: string;
@@ -25,6 +26,13 @@ export interface DataFeatureSpec {
     Fields?: string[];
     /** Optional value remap layered on whatever the above produced. */
     InputMapping?: Record<string, string>;
+    /**
+     * Opt-in (default off), LLM pipelines only, needs `Fields`: send the record's `Fields` values as one JSON object in
+     * the prompt's user message, with the template as the system message, instead of the runner's default user message.
+     * JSON-encoding fences each value, so a value holding an instruction or a closing tag stays data. Part of the spec
+     * hash, so turning it on or off is a new pipeline version.
+     */
+    RecordAsUserMessage?: boolean;
   };
 
   /** The prompt. User-visible and user-editable (D11). */
@@ -129,6 +137,14 @@ export interface DataFeatureOutput {
   Description?: string;
   /** Result path of this output's confidence (0..1), e.g. "$.SeniorityConfidence"; for drivers that return none. */
   ConfidenceRef?: string;
+  /**
+   * The confidence floor (0 < floor <= 1): an answer whose confidence for this output is below it, or that gives none,
+   * is handled by {@link OnLowConfidence}. Set together with OnLowConfidence; an LLM pipeline also needs ConfidenceRef.
+   * Part of the spec hash, so changing it is a new pipeline version.
+   */
+  MinConfidence?: number;
+  /** What a below-floor answer does: `null` leaves this output unwritten, `fail` fails the record (see {@link LowConfidencePolicy}). */
+  OnLowConfidence?: LowConfidencePolicy;
 }
 
 /** Structured validation issue surfaced by validateSpec. */
@@ -193,6 +209,7 @@ export function ValidateSpec(
     issues.push(pipelineTypeIssue);
   }
 
+  issues.push(...validateRecordAsUserMessage(spec));
   issues.push(...validateEscalation(spec));
   issues.push(...validateActivation(spec));
   issues.push(...validateUnattended(spec));
@@ -236,6 +253,9 @@ export function ValidateSpec(
   // Validate Outputs
   if (spec.Outputs && spec.Outputs.length > 0) {
     const seenNames = new Set<string>();
+    // A PipelineType that is not a string is reported by validatePipelineType; here it is simply not the LLM type
+    const pipelineType: unknown = spec.PipelineType;
+    const isLLMPipeline = (pipelineType === undefined || pipelineType === null || typeof pipelineType === 'string') && IsLLMPipelineType(spec.PipelineType);
 
     for (let i = 0; i < spec.Outputs.length; i++) {
       const out = spec.Outputs[i];
@@ -421,6 +441,8 @@ export function ValidateSpec(
         });
       }
 
+      issues.push(...ConfidenceFloor.Validate(out, basePath, isLLMPipeline, spec.Outputs.length));
+
       // The validator writes each item's canonical value back at ItemRef, so it must be one property of the item
       const itemRef = out.Constraint && (out.Constraint.Type === 'enum' || out.Constraint.Type === 'lookup') ? out.Constraint.ItemRef : undefined;
       if (itemRef !== undefined && !/^\$\.[A-Za-z0-9_]+$/.test(itemRef)) {
@@ -572,6 +594,34 @@ function validateEscalation(spec: DataFeatureSpec): SpecValidationIssue[] {
       FixRecommendation: 'Set the confidence floor between 0 and 1 (for example 0.7). A record escalates when any output\'s confidence is below it.',
       Severity: 'error',
     });
+  }
+  return issues;
+}
+
+/**
+ * `Context.RecordAsUserMessage` is optional; when present it must be a boolean, and `true` needs an LLM pipeline (only
+ * its driver builds the prompt's messages) and `Context.Fields` (the values the message carries). The spec is parsed from
+ * JSON, so the value is read as `unknown`.
+ */
+function validateRecordAsUserMessage(spec: DataFeatureSpec): SpecValidationIssue[] {
+  const flag: unknown = spec.Context?.RecordAsUserMessage;
+  if (flag === undefined) {
+    return [];
+  }
+  const path = 'Context.RecordAsUserMessage';
+  if (typeof flag !== 'boolean') {
+    return [{ Path: path, Message: 'Context.RecordAsUserMessage must be true or false.', FixRecommendation: 'Use true to send the record\'s context fields as the user message, or remove it.', Severity: 'error' }];
+  }
+  if (!flag) {
+    return [];
+  }
+  const issues: SpecValidationIssue[] = [];
+  const pipelineType: unknown = spec.PipelineType;
+  if (!((pipelineType === undefined || pipelineType === null || typeof pipelineType === 'string') && IsLLMPipelineType(spec.PipelineType))) {
+    issues.push({ Path: path, Message: 'Context.RecordAsUserMessage is only honoured by an LLM pipeline, which builds the prompt\'s messages.', FixRecommendation: 'Remove Context.RecordAsUserMessage, or make the pipeline an LLM pipeline.', Severity: 'error' });
+  }
+  if (!spec.Context?.Fields || spec.Context.Fields.length === 0) {
+    issues.push({ Path: path, Message: 'Context.RecordAsUserMessage needs Context.Fields: they are the values the user message carries.', FixRecommendation: 'List the record fields to send in Context.Fields.', Severity: 'error' });
   }
   return issues;
 }

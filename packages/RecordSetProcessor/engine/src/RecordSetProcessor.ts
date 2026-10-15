@@ -101,7 +101,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         const handle = await tracker.BeginRun(meta, contextUser, provider);
         const counts: RunCounts = { Processed: 0, Success: 0, Error: 0, Skipped: 0 };
         const tally: RunTally = {
-            WatermarkSkipped: 0, Upserted: 0, Unchanged: 0, Previewed: 0, RejectedInvalid: 0, HumanValuesPreserved: 0, Pin: null, ParameterFidelity: null,
+            WatermarkSkipped: 0, Upserted: 0, Unchanged: 0, Previewed: 0, RejectedInvalid: 0, BelowConfidence: 0, BelowConfidenceRejected: 0, HumanValuesPreserved: 0, Pin: null, ParameterFidelity: null,
         };
         let cursor = shouldResume ? await tracker.LoadResumeCursor(handle, contextUser, provider) : undefined;
         let total: number | null = null;
@@ -145,10 +145,10 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             // A Feature Pipeline run is only Completed when every attempted record was computed and written; the
             // records that succeeded keep their writes.
             status = 'Failed';
-            errorMessage = `${counts.Error} of ${attempted} attempted records failed (${tally.RejectedInvalid} rejected by output constraints)`;
+            errorMessage = `${counts.Error} of ${attempted} attempted records failed (${tally.RejectedInvalid} rejected by output constraints, ${tally.BelowConfidenceRejected} below a confidence floor)`;
         }
         const featurePipeline = options.recordProcessID && options.FeaturePipeline
-            ? this.featurePipelineResult(options.recordProcessID, counts, tally, status, processor)
+            ? this.featurePipelineResult(options.recordProcessID, counts, tally, status, processor, options.dryRun === true)
             : undefined;
 
         const summary: ProcessRunSummary = {
@@ -254,9 +254,12 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             TriggeredBy: ctx.triggeredBy,
         };
 
-        // Watermark check: batch-evaluate unchanged records when skipUnchanged is active
+        // Watermark check: batch-evaluate unchanged records when skipUnchanged is active. A record is skipped only while
+        // its outputs exist and the run keeps human values; the others are processed and their watermark refreshed.
+        // A real run without skipUnchanged skips nothing but still reads its basis hashes, so a watermark records what
+        // was processed (QF-I1).
         let watermarkDecisions: Map<string, WatermarkDecision> | undefined;
-        if (options.skipUnchanged && options.recordProcessID && options.entityID) {
+        if (this.readsWatermarks(options)) {
             try {
                 let writeBackFields: string[] | undefined;
                 const procWithWriteBack = options.processor as { getWriteBackFields?: () => string[]; OutputMapping?: OutputMappingConfig };
@@ -280,6 +283,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                     maxConcurrency: ctx.maxConcurrency,
                     excludeFields: writeBackFields,
                     ProcessorContext: recordContext,
+                    OverwriteHumanValues: options.overwriteHumanValues === true,
                 });
             } catch (e) {
                 LogError(`RecordSetProcessor: Watermark check failed (proceeding without skipping): ${e instanceof Error ? e.message : String(e)}`);
@@ -328,6 +332,9 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
 
             const totalDuration = Date.now() - batchStarted;
             const perRecordDuration = Math.round(totalDuration / Math.max(1, eligibleRecords.length));
+            if (options.dryRun === true) {
+                await this.completeDryRunBatch(eligibleRecords, batchResults, options.processor, recordContext);
+            }
 
             for (const record of eligibleRecords) {
                 let result = batchResults.get(record.RecordID) ?? { Status: 'Failed', ErrorMessage: 'No result returned from batch processor' };
@@ -364,6 +371,11 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             return;
         }
 
+        // A real run records each record as it finishes (a crash mid-batch loses nothing already done). A dry run whose
+        // processor finishes its batches (CompleteDryRunBatch) holds the results until the batch is done: it wrote nothing,
+        // so a crash mid-batch loses only those previews' detail rows.
+        const deferred = options.dryRun === true && typeof options.processor.CompleteDryRunBatch === 'function'
+            ? new Map<string, RecordResult>() : null;
         const worker = async (record: RecordRef): Promise<void> => {
             const decision = watermarkDecisions?.get(record.RecordID);
             const started = Date.now();
@@ -401,10 +413,36 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                 counts.Error++;
             }
             this.tallyRecord(result, ctx.tally);
+            if (deferred) {
+                deferred.set(record.RecordID, result);
+                return;
+            }
             await ctx.tracker.RecordResult(ctx.handle, record, result, options.contextUser, ctx.provider);
         };
 
         await this.runWithConcurrency(eligibleRecords, ctx.maxConcurrency, worker);
+        if (deferred) {
+            // A dry run's batch is finished together (its previews named), then recorded in batch order
+            await this.completeDryRunBatch(eligibleRecords, deferred, options.processor, recordContext);
+            for (const record of eligibleRecords) {
+                const result = deferred.get(record.RecordID);
+                if (result) {
+                    await ctx.tracker.RecordResult(ctx.handle, record, result, options.contextUser, ctx.provider);
+                }
+            }
+        }
+    }
+
+    /**
+     * Whether a batch's watermarks are read: on a run of a Record Process over an entity that skips unchanged records
+     * (the skip decision), or on a real run that does not (no skip: the basis hashes its succeeded records' watermarks
+     * are refreshed with, ruling QF-I1). A dry run without skipping writes no watermark, so it computes no hash.
+     */
+    private readsWatermarks(options: RecordSetProcessOptions): options is RecordSetProcessOptions & { recordProcessID: string; entityID: string } {
+        if (!options.recordProcessID || !options.entityID) {
+            return false;
+        }
+        return options.skipUnchanged === true || options.dryRun !== true;
     }
 
     /** Records the processor was handed: every processed record except those skipped on their watermark. */
@@ -425,6 +463,12 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             }
         } else if (result.Status === 'Failed' && result.FailureKind === 'RejectedInvalid') {
             tally.RejectedInvalid++;
+        } else if (result.Status === 'Failed' && result.FailureKind === 'BelowConfidence') {
+            tally.BelowConfidenceRejected++;
+        }
+        // Withheld outputs (a succeeded record) and a floor rejection (a failed one) both count as the floor acting
+        if (result.FailureKind === 'BelowConfidence' || (result.Status === 'Succeeded' && (result.BelowConfidenceOutputs?.length || 0) > 0)) {
+            tally.BelowConfidence++;
         }
         tally.HumanValuesPreserved += result.HumanValuesPreserved || 0;
         tally.Pin ||= result.PipelinePin || null;
@@ -435,14 +479,18 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
 
     /**
      * The run's FeaturePipelineRunResult from its counts and tally. The pin is the records' pin, else the processor's
-     * run-level pin, so a run whose records were all skipped still names the pin it ran under.
+     * run-level pin, so a run whose records were all skipped still names the pin it ran under. A dry run also carries
+     * the processor's run-level refusal, when the real run would be refused.
      */
     private featurePipelineResult(recordProcessID: string, counts: RunCounts, tally: RunTally,
-        status: ProcessRunStatusValue, processor: RecordSetProcessOptions['processor']): FeaturePipelineRunResult {
+        status: ProcessRunStatusValue, processor: RecordSetProcessOptions['processor'], dryRun: boolean): FeaturePipelineRunResult {
+        const wouldRefuse = dryRun ? processor.CurrentRunRefusal?.() || null : null;
         return {
+            ...(wouldRefuse ? { WouldRefuse: wouldRefuse } : {}),
             RecordProcessID: recordProcessID, Pin: tally.Pin || processor.CurrentRunPin?.() || null, ParameterFidelity: tally.ParameterFidelity,
             Attempted: this.attemptedOf(counts, tally), Upserted: tally.Upserted, Unchanged: tally.Unchanged, Previewed: tally.Previewed,
-            RejectedInvalid: tally.RejectedInvalid, Failed: counts.Error - tally.RejectedInvalid, Skipped: counts.Skipped,
+            RejectedInvalid: tally.RejectedInvalid, BelowConfidence: tally.BelowConfidence,
+            Failed: counts.Error - tally.RejectedInvalid - tally.BelowConfidenceRejected, Skipped: counts.Skipped,
             HumanValuesPreserved: tally.HumanValuesPreserved, Status: status === 'Completed' ? 'completed' : 'failed',
         };
     }
@@ -463,6 +511,27 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             }
         };
         await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => runNext()));
+    }
+
+    /**
+     * Lets the processor finish a dry run's batch ({@link IRecordProcessor.CompleteDryRunBatch}) before its results are
+     * recorded. A throw only costs the finishing (e.g. the previews show IDs instead of names): it is logged and the
+     * results are recorded as they are.
+     */
+    private async completeDryRunBatch(records: RecordRef[], results: Map<string, RecordResult>,
+        processor: RecordSetProcessOptions['processor'], context: RecordProcessorContext): Promise<void> {
+        if (!processor.CompleteDryRunBatch) {
+            return;
+        }
+        const outcomes = records.flatMap((record) => {
+            const result = results.get(record.RecordID);
+            return result ? [{ Record: record, Result: result }] : [];
+        });
+        try {
+            await processor.CompleteDryRunBatch(outcomes, context);
+        } catch (e) {
+            LogError(`RecordSetProcessor: finishing the dry-run batch failed (its results are recorded as they are): ${e instanceof Error ? e.message : String(e)}`);
+        }
     }
 
     /** Invokes the budget-gate hook, treating a thrown hook as non-fatal (continue). */
@@ -517,6 +586,10 @@ interface RunTally {
     Unchanged: number;
     Previewed: number;
     RejectedInvalid: number;
+    /** Records the confidence floor acted on (withheld outputs or a floor rejection): FeaturePipelineRunResult.BelowConfidence. */
+    BelowConfidence: number;
+    /** Records failed by a confidence floor (`FailureKind` `BelowConfidence`), so `Failed` can leave them out. */
+    BelowConfidenceRejected: number;
     HumanValuesPreserved: number;
     Pin: FeaturePipelineRunPin | null;
     ParameterFidelity: ParameterFidelity | null;

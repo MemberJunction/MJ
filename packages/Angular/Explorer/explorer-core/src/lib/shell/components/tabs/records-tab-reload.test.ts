@@ -37,8 +37,11 @@ vi.mock('@memberjunction/ng-base-application', () => ({
   ApplicationManager: class {},
   FlattenLayoutToSingleStack: vi.fn(),
 }));
-vi.mock('@memberjunction/global', () => ({ MJGlobal: { Instance: { ClassFactory: {} } } }));
-vi.mock('@memberjunction/ng-shared', () => ({
+vi.mock('@memberjunction/global', async () => ({
+  ...(await vi.importActual<typeof import('@memberjunction/global')>('@memberjunction/global')),
+  MJGlobal: { Instance: { ClassFactory: {} } },
+}));
+vi.mock('@memberjunction/ng-shared', async () => ({
   BaseResourceComponent: class {},
   HomeAppPinService: class {},
   NavigationService: class {},
@@ -57,10 +60,11 @@ vi.mock('@memberjunction/core-entities', () => ({
   MJResourceTypeEntity: class {},
   ResourcePermissionEngine: { Instance: {} },
 }));
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', async () => ({
   BaseEntity: class {},
   Metadata: class {},
   LogError: vi.fn(),
+  CompositeKey: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core')).CompositeKey,
 }));
 vi.mock('@memberjunction/ng-notifications', () => ({ MJNotificationService: class {} }));
 vi.mock('@memberjunction/ng-base-types', () => ({ BaseAngularComponent: class {} }));
@@ -172,6 +176,37 @@ describe('records region — reload on in-place replacement', () => {
     expect(reload(h, tabFor('Widgets', 'r2'))).toBe(true);
     expect(h.markNotLoaded).toHaveBeenCalledWith('tab-1');
     expect(h.loadTabContent).not.toHaveBeenCalled();
+  });
+
+  describe('record identity, not string identity', () => {
+    // ResourceRecordSaved rewrites the live component's id to PrimaryKey.ToURLSegment() (prefixed,
+    // server casing) while a deep-linked tab keeps the bare lower-case id from the URL. Reading
+    // that as a different record reloads the pane, and the reload re-emits the configuration.
+    const SERVER_FORM = 'ID|D8A9B7AB-7450-48E5-A0EA-ACD1D86ACF70';
+    const URL_FORM = 'd8a9b7ab-7450-48e5-a0ea-acd1d86acf70';
+
+    it('does NOT reload a deep-linked tab after its record was saved', () => {
+      const h = createHarness({ bound: boundResource('Widgets', SERVER_FORM) });
+      expect(reload(h, tabFor('Widgets', URL_FORM))).toBe(false);
+      expect(h.cleanupTabComponent).not.toHaveBeenCalled();
+      expect(h.markNotLoaded).not.toHaveBeenCalled();
+      expect(h.loadTabContent).not.toHaveBeenCalled();
+    });
+
+    it('stays quiet across repeated configuration emissions after the save', () => {
+      const h = createHarness({ bound: boundResource('Widgets', SERVER_FORM) });
+      for (let i = 0; i < 5; i++) {
+        expect(reload(h, tabFor('Widgets', URL_FORM))).toBe(false);
+      }
+      expect(h.cleanupTabComponent).not.toHaveBeenCalled();
+    });
+
+    it('still reloads when the tab now holds a genuinely different UUID', () => {
+      const h = createHarness({ bound: boundResource('Widgets', SERVER_FORM) });
+      expect(reload(h, tabFor('Widgets', '11111111-2222-3333-4444-555555555555'))).toBe(true);
+      expect(h.cleanupTabComponent).toHaveBeenCalledWith('tab-1');
+      expect(h.loadTabContent).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('region guards', () => {

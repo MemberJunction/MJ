@@ -477,6 +477,15 @@ export class FeaturePipelineGateFixtures {
         return source;
     }
 
+    /**
+     * The stub pipeline's spec from the installed pipeline's: without the activation gate (the checks drive activation
+     * themselves) and without `Context.RecordAsUserMessage`, which only an LLM pipeline honours (its driver builds the
+     * prompt's messages; the stub driver builds none), so `ValidateSpec` would refuse it on the stub type.
+     */
+    public static StubSpec(spec: DataFeatureSpec): StubPipelineOptions['Spec'] {
+        return { ...spec, Context: { ...spec.Context, RecordAsUserMessage: false }, Activation: undefined };
+    }
+
     /** A pipeline's spec; throws when its Configuration is not a spec. */
     protected static ParseSpec(rp: MJRecordProcessEntity): DataFeatureSpec {
         const spec = rp.Configuration ? SafeJSONParse<DataFeatureSpec>(rp.Configuration) : null;
@@ -508,7 +517,7 @@ export class FeaturePipelineGateFixtures {
             Prompt: { TypeID: sourcePrompt.TypeID, CategoryID: sourcePrompt.CategoryID, ResponseFormat: sourcePrompt.ResponseFormat,
                 TemplateText: sourcePrompt.TemplateText },
             Model: { ModelID: sourceModel.ModelID, VendorID: sourceModel.VendorID },
-            Spec: { ...FeaturePipelineGateFixtures.ParseSpec(source), Activation: undefined },
+            Spec: FeaturePipelineGateFixtures.StubSpec(FeaturePipelineGateFixtures.ParseSpec(source)),
             RecordProcess: { CategoryID: source.CategoryID, OutputMapping: source.OutputMapping, WatermarkStrategy: source.WatermarkStrategy,
                 ScopeFilter: `(${source.ScopeFilter}) AND [__mj_BizAppsCommon].[vwPeople].[ID] LIKE '${PREFIX}%'` },
         };

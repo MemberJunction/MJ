@@ -15,6 +15,7 @@ import {
     RecordProcessorRegistry,
     RecordRef,
     ViewSource,
+    type WriteBackRunPayload,
 } from '@memberjunction/record-set-processor-base';
 import {
     ActionRecordProcessor,
@@ -25,7 +26,6 @@ import {
     WriteBackProcessor,
     ApplyOutputMapping,
     RecordSetProcessor,
-    type WriteBackResult,
 } from '../index';
 
 const USER = {} as UserInfo;
@@ -317,9 +317,11 @@ class FakeEntity {
 function fakeProvider(childKey?: CompositeKey, primaryKeys: Array<{ Name: string }> = [{ Name: 'ID' }]): { provider: IMetadataProvider; created: FakeEntity[] } {
     const created: FakeEntity[] = [];
     const provider = {
-        EntityByID: () => ({ Name: 'Customer', PrimaryKeys: primaryKeys, FirstPrimaryKey: primaryKeys[0] }),
-        EntityByName: (name: string) => ({ ID: 'ENT-' + name, Name: name, PrimaryKeys: [{ Name: 'ID' }] }),
+        // Fields: a dry run names its preview from the entity's name fields (these entities declare none)
+        EntityByID: () => ({ Name: 'Customer', PrimaryKeys: primaryKeys, FirstPrimaryKey: primaryKeys[0], Fields: [] }),
+        EntityByName: (name: string) => ({ ID: 'ENT-' + name, Name: name, PrimaryKeys: [{ Name: 'ID' }], Fields: [] }),
         GetEntityObject: async () => { const e = new FakeEntity(childKey); created.push(e); return e; },
+        RunView: async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' }),
     } as unknown as IMetadataProvider;
     return { provider, created };
 }
@@ -383,8 +385,8 @@ describe('ApplyOutputMapping', () => {
         expect(out.dryRun).toBe(true);
         expect(out.updatedRecord).toBe(false);
         expect(out.previewFields).toEqual({ Satisfaction: 'High', Sentiment: 0.8 });
-        // No entity object is even created on a dry-run (nothing loaded, nothing saved).
-        expect(created.length).toBe(0);
+        // A dry-run loads the record to compare its fields, and saves nothing.
+        expect(created.every((e) => !e.saved)).toBe(true);
     });
 
     it('dry-run previews the child record values but creates NOTHING', async () => {
@@ -411,11 +413,11 @@ describe('ApplyOutputMapping', () => {
         const proc = new WriteBackProcessor(inner, { fields: { Satisfaction: '$.satisfaction' } }, true);
         const result = await proc.ProcessRecord(record, { contextUser: USER, provider });
         expect(result.Status).toBe('Succeeded');
-        // The write-back payload carries the dry-run preview; the entity was never created/saved.
-        const writeBack = (result.ResultPayload as { writeBack: WriteBackResult }).writeBack;
-        expect(writeBack.dryRun).toBe(true);
-        expect(writeBack.previewFields).toEqual({ Satisfaction: 'High' });
-        expect(created.length).toBe(0);
+        // The write-back payload carries the dry-run preview; the record was loaded to compare its fields, never saved.
+        const writeBack = (result.ResultPayload as WriteBackRunPayload).writeBack;
+        expect(writeBack?.dryRun).toBe(true);
+        expect(writeBack?.previewFields).toEqual({ Satisfaction: 'High' });
+        expect(created.every((e) => !e.saved)).toBe(true);
     });
 
     it('WriteBackProcessor previews when the run is a dry run, whatever it was built with', async () => {
@@ -425,10 +427,10 @@ describe('ApplyOutputMapping', () => {
         };
         const proc = new WriteBackProcessor(inner, { fields: { Satisfaction: '$.satisfaction' } });
         const result = await proc.ProcessRecord(record, { contextUser: USER, provider, DryRun: true });
-        const writeBack = (result.ResultPayload as { writeBack: WriteBackResult }).writeBack;
-        expect(writeBack.dryRun).toBe(true);
-        expect(writeBack.previewFields).toEqual({ Satisfaction: 'High' });
-        expect(created.length).toBe(0);
+        const writeBack = (result.ResultPayload as WriteBackRunPayload).writeBack;
+        expect(writeBack?.dryRun).toBe(true);
+        expect(writeBack?.previewFields).toEqual({ Satisfaction: 'High' });
+        expect(created.every((e) => !e.saved)).toBe(true);
         // A previewed write-back claims no write
         expect(result).toMatchObject({ DryRun: true });
         expect(result.Outcome).toBeUndefined();
@@ -579,6 +581,10 @@ describe('ApplyOutputMapping', () => {
             { OrderID: 'c1', Sku: 'ITEM-A', Qty: 1 },
             { OrderID: 'c1', Sku: 'ITEM-B', Qty: 3 },
         ]);
+        expect(out.previewChildChanges).toEqual([
+            { Entity: 'OrderLine', Action: 'insert', Values: { OrderID: 'c1', Sku: 'ITEM-A', Qty: 1 } },
+            { Entity: 'OrderLine', Action: 'insert', Values: { OrderID: 'c1', Sku: 'ITEM-B', Qty: 3 } },
+        ]);
     });
 
     it('previews tags in dry-run mode under constrained and auto-grow', async () => {
@@ -598,6 +604,7 @@ describe('ApplyOutputMapping', () => {
             return undefined;
         });
         const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
+        const mockFind = vi.spyOn(TagEngine.Instance, 'FindTaggedItems').mockResolvedValue({ Success: true, Items: [] });
 
         const { provider, created } = fakeProvider();
         const out = await ApplyOutputMapping({
@@ -630,6 +637,8 @@ describe('ApplyOutputMapping', () => {
             rootTagID: 'root-1',
             depth: 1,
             error: undefined,
+            alreadyLinked: false,
+            reweighted: false,
         });
         // Deep Tag is matched at depth 2 (under tag-1 -> root-1), so exceeds maxDepth 1
         expect(out.previewTags?.[1].matched).toBe(true);
@@ -660,6 +669,7 @@ describe('ApplyOutputMapping', () => {
         mockResolveTag.mockRestore();
         mockGetTagByID.mockRestore();
         mockConfig.mockRestore();
+        mockFind.mockRestore();
     });
 
     it('creates TaggedItem records for resolved tags in non-dry-run mode', async () => {
@@ -740,6 +750,7 @@ describe('ApplyOutputMapping', () => {
             return undefined;
         });
         const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
+        const mockFind = vi.spyOn(TagEngine.Instance, 'FindTaggedItems').mockResolvedValue({ Success: true, Items: [] });
 
         const { provider } = fakeProvider();
         const out = await ApplyOutputMapping({
@@ -768,6 +779,7 @@ describe('ApplyOutputMapping', () => {
         mockResolveTag.mockRestore();
         mockGetTagByID.mockRestore();
         mockConfig.mockRestore();
+        mockFind.mockRestore();
     });
 
     it('throws when resolved tag is not a descendant of root tag in non-dry-run mode', async () => {
@@ -997,7 +1009,7 @@ describe('ApplyOutputMapping', () => {
 
             expect(out.dryRun).toBe(true);
             expect(out.updatedRecord).toBe(false);
-            expect(created.length).toBe(0);
+            expect(created.every((e) => !e.saved)).toBe(true);
             expect(out.previewFields?.SeniorityLevelID).toBe('preview-new-Seniority Levels-Staff');
         });
 

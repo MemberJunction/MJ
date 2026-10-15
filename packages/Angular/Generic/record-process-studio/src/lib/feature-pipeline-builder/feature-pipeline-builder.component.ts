@@ -45,6 +45,7 @@ import {
     ValidateOutputsAgainstCapabilities,
     FindEscalationTargetRowProblem,
     FindEscalationTargetSpecProblem,
+    type FeaturePipelineConstraintType,
     type FeaturePipelineDriverCapabilities,
     type FeaturePipelineFieldValueLookup,
     type SpecValidationIssue,
@@ -389,6 +390,65 @@ export function ParseConfidenceFloor(raw: string): number {
                                         </div>
                                     }
                                 }
+                                @if (output.Constraint?.Type === 'lookup') {
+                                    <div class="rpe-grid2 rpe-mt">
+                                        <div class="field">
+                                            <label>Lookup Entity <span class="muted">— the entity whose rows are the allowed values</span></label>
+                                            <select class="mj-input" (change)="UpdateLookupEntity(outputIndex, $event)">
+                                                <option value="" [selected]="!LookupOf(output.Constraint)?.Entity">— From the target field —</option>
+                                                @if (LookupOf(output.Constraint)?.Entity && !IsEntityListed(LookupOf(output.Constraint)?.Entity)) {
+                                                    <option [value]="LookupOf(output.Constraint)?.Entity" [selected]="true">{{ LookupOf(output.Constraint)?.Entity }}</option>
+                                                }
+                                                @for (e of availableEntities; track e.ID) {
+                                                    <option [value]="e.Name" [selected]="e.Name === LookupOf(output.Constraint)?.Entity">{{ e.DisplayName || e.Name }}</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="field">
+                                            <label>Match Field <span class="muted">— the column the model's answer is matched on (default Name)</span></label>
+                                            <input class="mj-input" [value]="LookupOf(output.Constraint)?.MatchField || ''" (input)="UpdateLookupMatchField(outputIndex, $event)" placeholder="e.g. Name">
+                                        </div>
+                                    </div>
+                                    <div class="rpe-grid2 rpe-mt">
+                                        <div class="field">
+                                            <label>Display Fields <span class="muted">— comma separated, shown to the model next to each value</span></label>
+                                            <input class="mj-input" [value]="GetLookupDisplayFieldsCsv(output.Constraint)" (input)="UpdateLookupDisplayFields(outputIndex, $event)" placeholder="e.g. Name, Description">
+                                        </div>
+                                        <div class="field">
+                                            <label>Filter <span class="muted">— limits which rows are allowed</span></label>
+                                            <input class="mj-input" [value]="LookupOf(output.Constraint)?.Filter || ''" (input)="UpdateLookupFilter(outputIndex, $event)" placeholder="e.g. Status='Active'">
+                                        </div>
+                                    </div>
+                                }
+                                @if (output.Constraint?.Type === 'money') {
+                                    <!-- Min and Max use ?? : 0 is a legitimate amount and must show as 0, not as empty -->
+                                    <div class="rpe-grid2 rpe-mt">
+                                        <div class="field">
+                                            <label>Min Amount</label>
+                                            <input class="mj-input" type="number" [value]="MoneyOf(output.Constraint)?.Min ?? ''" (input)="UpdateMoneyMin(outputIndex, $event)">
+                                        </div>
+                                        <div class="field">
+                                            <label>Max Amount</label>
+                                            <input class="mj-input" type="number" [value]="MoneyOf(output.Constraint)?.Max ?? ''" (input)="UpdateMoneyMax(outputIndex, $event)">
+                                        </div>
+                                    </div>
+                                    <div class="field rpe-mt">
+                                        <label>Currency Code</label>
+                                        <input class="mj-input" [value]="MoneyOf(output.Constraint)?.CurrencyCode || ''" (input)="UpdateMoneyCurrencyCode(outputIndex, $event)" placeholder="e.g. USD">
+                                    </div>
+                                }
+                                @if (output.Constraint?.Type === 'date') {
+                                    <div class="rpe-grid2 rpe-mt">
+                                        <div class="field">
+                                            <label>Earliest Date</label>
+                                            <input class="mj-input" type="date" [value]="DateOf(output.Constraint)?.Min || ''" (input)="UpdateDateMin(outputIndex, $event)">
+                                        </div>
+                                        <div class="field">
+                                            <label>Latest Date</label>
+                                            <input class="mj-input" type="date" [value]="DateOf(output.Constraint)?.Max || ''" (input)="UpdateDateMax(outputIndex, $event)">
+                                        </div>
+                                    </div>
+                                }
                                 @if (output.Constraint?.Type === 'boolean' && IsDecisionPipeline) {
                                     <div class="field rpe-mt">
                                         <label>Decision Threshold (0.0 to 1.0) <span class="muted">— calibrated probability threshold for true</span></label>
@@ -676,24 +736,40 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return all.filter((m) => supported.includes(m.Value));
     }
 
+    /**
+     * The constraint types the picker offers: every type the pipeline type's driver declares, each with its label, plus
+     * `none` for a pipeline type that allows an unconstrained output.
+     */
     public get AvailableConstraintTypes(): Array<{ Value: string; Label: string }> {
         const options: Array<{ Value: string; Label: string }> = [];
         if (!this.IsDecisionPipeline) {
             options.push({ Value: 'none', Label: 'None / Unconstrained' });
         }
-        if (this.CurrentCapabilities.ConstraintTypes.includes('boolean')) {
-            options.push({ Value: 'boolean', Label: 'Boolean' });
-        }
-        if (this.CurrentCapabilities.ConstraintTypes.includes('enum')) {
-            options.push({ Value: 'enum', Label: 'Enum (Allowed Values)' });
-        }
-        if (this.CurrentCapabilities.ConstraintTypes.includes('numeric')) {
-            options.push({ Value: 'numeric', Label: this.IsDecisionPipeline ? 'Numeric (Levels)' : 'Numeric (Min/Max)' });
-        }
-        if (this.CurrentCapabilities.ConstraintTypes.includes('freetext')) {
-            options.push({ Value: 'freetext', Label: 'Free Text' });
+        const declared = this.CurrentCapabilities.ConstraintTypes;
+        for (const type of FeaturePipelineBuilderComponent.constraintTypeOrder) {
+            if (declared.includes(type)) {
+                options.push({ Value: type, Label: this.constraintTypeLabel(type) });
+            }
         }
         return options;
+    }
+
+    /** The picker's label for every constraint type, keyed so the compiler fails when the spec gains a type this does not name. */
+    private static readonly constraintTypeLabels: Record<FeaturePipelineConstraintType, string> = {
+        boolean: 'Boolean',
+        enum: 'Enum (Allowed Values)',
+        numeric: 'Numeric (Min/Max)',
+        lookup: 'Lookup (Existing Records)',
+        money: 'Money',
+        date: 'Date',
+        freetext: 'Free Text',
+    };
+
+    /** The picker's order of the constraint types. */
+    private static readonly constraintTypeOrder = Object.keys(FeaturePipelineBuilderComponent.constraintTypeLabels) as FeaturePipelineConstraintType[];
+
+    private constraintTypeLabel(type: FeaturePipelineConstraintType): string {
+        return type === 'numeric' && this.IsDecisionPipeline ? 'Numeric (Levels)' : FeaturePipelineBuilderComponent.constraintTypeLabels[type];
     }
 
     // The pickers mark the saved option with [selected] on each <option>, not [value] on the <select>. A [value]
@@ -1338,9 +1414,16 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return this.UpdateChildTargetEntity(index, event);
     }
 
+    /**
+     * Switches the output's constraint type. Choosing the type the output already has changes nothing, so a saved
+     * constraint keeps its settings; choosing another type replaces the constraint with that type's starting one.
+     */
     public UpdateConstraintType(index: number, event: Event): void {
         const type = (event.target as HTMLSelectElement).value;
         const output = this.spec.Outputs[index];
+        if ((output.Constraint?.Type || 'none') === type) {
+            return;
+        }
         if (type === 'none') {
             output.Constraint = undefined;
         } else if (type === 'enum') {
@@ -1354,6 +1437,12 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             }
         } else if (type === 'boolean') {
             output.Constraint = { Type: 'boolean', OnViolation: 'fail' };
+        } else if (type === 'lookup') {
+            output.Constraint = { Type: 'lookup', OnViolation: 'fail' };
+        } else if (type === 'money') {
+            output.Constraint = { Type: 'money', OnViolation: 'fail' };
+        } else if (type === 'date') {
+            output.Constraint = { Type: 'date', OnViolation: 'fail' };
         } else if (type === 'freetext') {
             output.Constraint = { Type: 'freetext', MaxLength: 500, OnViolation: 'fail' };
         }
@@ -1452,6 +1541,120 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     /** @deprecated Use {@link UpdateNumericMax}. */
     public updateNumericMax(index: number, event: Event): void {
         return this.UpdateNumericMax(index, event);
+    }
+
+    /** The constraint as a lookup, or undefined when it is another type. */
+    public LookupOf(constraint?: ValueConstraint): Extract<ValueConstraint, { Type: 'lookup' }> | undefined {
+        return constraint?.Type === 'lookup' ? constraint : undefined;
+    }
+
+    /** The constraint as a money constraint, or undefined when it is another type. */
+    public MoneyOf(constraint?: ValueConstraint): Extract<ValueConstraint, { Type: 'money' }> | undefined {
+        return constraint?.Type === 'money' ? constraint : undefined;
+    }
+
+    /** The constraint as a date constraint, or undefined when it is another type. */
+    public DateOf(constraint?: ValueConstraint): Extract<ValueConstraint, { Type: 'date' }> | undefined {
+        return constraint?.Type === 'date' ? constraint : undefined;
+    }
+
+    /** A lookup's display fields as the comma separated text the editor shows. */
+    public GetLookupDisplayFieldsCsv(constraint?: ValueConstraint): string {
+        return this.LookupOf(constraint)?.DisplayFields?.join(', ') || '';
+    }
+
+    /** Sets (or, for an empty entry, clears) the lookup's entity. */
+    public UpdateLookupEntity(index: number, event: Event): void {
+        const lookup = this.LookupOf(this.spec.Outputs[index].Constraint);
+        if (lookup) {
+            lookup.Entity = FeaturePipelineBuilderComponent.textOrUndefined(event);
+        }
+        this.emitChanges();
+    }
+
+    /** Sets (or, for an empty entry, clears) the lookup's match field. */
+    public UpdateLookupMatchField(index: number, event: Event): void {
+        const lookup = this.LookupOf(this.spec.Outputs[index].Constraint);
+        if (lookup) {
+            lookup.MatchField = FeaturePipelineBuilderComponent.textOrUndefined(event);
+        }
+        this.emitChanges();
+    }
+
+    /** Sets (or, for an empty entry, clears) the lookup's display fields from comma separated text. */
+    public UpdateLookupDisplayFields(index: number, event: Event): void {
+        const lookup = this.LookupOf(this.spec.Outputs[index].Constraint);
+        if (lookup) {
+            const fields = (event.target as HTMLInputElement).value.split(',').map((f) => f.trim()).filter((f) => f.length > 0);
+            lookup.DisplayFields = fields.length > 0 ? fields : undefined;
+        }
+        this.emitChanges();
+    }
+
+    /** Sets (or, for an empty entry, clears) the lookup's filter. */
+    public UpdateLookupFilter(index: number, event: Event): void {
+        const lookup = this.LookupOf(this.spec.Outputs[index].Constraint);
+        if (lookup) {
+            lookup.Filter = FeaturePipelineBuilderComponent.textOrUndefined(event);
+        }
+        this.emitChanges();
+    }
+
+    /** Sets (or, for an empty entry, clears) the money constraint's minimum amount. */
+    public UpdateMoneyMin(index: number, event: Event): void {
+        const money = this.MoneyOf(this.spec.Outputs[index].Constraint);
+        if (money) {
+            money.Min = FeaturePipelineBuilderComponent.numberOrUndefined(event);
+        }
+        this.emitChanges();
+    }
+
+    /** Sets (or, for an empty entry, clears) the money constraint's maximum amount. */
+    public UpdateMoneyMax(index: number, event: Event): void {
+        const money = this.MoneyOf(this.spec.Outputs[index].Constraint);
+        if (money) {
+            money.Max = FeaturePipelineBuilderComponent.numberOrUndefined(event);
+        }
+        this.emitChanges();
+    }
+
+    /** Sets (or, for an empty entry, clears) the money constraint's currency code. */
+    public UpdateMoneyCurrencyCode(index: number, event: Event): void {
+        const money = this.MoneyOf(this.spec.Outputs[index].Constraint);
+        if (money) {
+            money.CurrencyCode = FeaturePipelineBuilderComponent.textOrUndefined(event);
+        }
+        this.emitChanges();
+    }
+
+    /** Sets (or, for an empty entry, clears) the date constraint's earliest date. */
+    public UpdateDateMin(index: number, event: Event): void {
+        const date = this.DateOf(this.spec.Outputs[index].Constraint);
+        if (date) {
+            date.Min = FeaturePipelineBuilderComponent.textOrUndefined(event);
+        }
+        this.emitChanges();
+    }
+
+    /** Sets (or, for an empty entry, clears) the date constraint's latest date. */
+    public UpdateDateMax(index: number, event: Event): void {
+        const date = this.DateOf(this.spec.Outputs[index].Constraint);
+        if (date) {
+            date.Max = FeaturePipelineBuilderComponent.textOrUndefined(event);
+        }
+        this.emitChanges();
+    }
+
+    /** The event target's trimmed text, or undefined when it is empty (so an emptied editor field leaves the spec). */
+    private static textOrUndefined(event: Event): string | undefined {
+        const text = (event.target as HTMLInputElement | HTMLSelectElement).value.trim();
+        return text.length > 0 ? text : undefined;
+    }
+
+    /** The event target's number, or undefined when it is empty or not a number. */
+    private static numberOrUndefined(event: Event): number | undefined {
+        const value = parseFloat((event.target as HTMLInputElement).value);
+        return isNaN(value) ? undefined : value;
     }
 
     public UpdateWatermarkStrategy(event: Event): void {

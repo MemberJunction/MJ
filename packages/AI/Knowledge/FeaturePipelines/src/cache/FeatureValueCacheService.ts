@@ -4,8 +4,8 @@
  * @module @memberjunction/feature-pipelines
  */
 
-import { BaseSingleton, Canonicalize, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
-import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { BaseSingleton, Canonicalize, ComputeContentHashAsync, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
+import { IMetadataProvider, LogError, RunView, type RunViewParams, UserInfo } from '@memberjunction/core';
 import { FeatureValueKey, type FeatureValueSource } from '../spec/feature-value-key.js';
 import type { MJFeatureValueCacheEntity, MJFeatureValueEntity } from '@memberjunction/core-entities';
 
@@ -137,6 +137,23 @@ export interface LatestFeatureValueParams extends FeatureValueRecordRef {
     /** Ignore values this run wrote: they are not "what the pipeline last wrote". */
     ExcludeProcessRunID?: string | null;
 }
+
+/** Which latest Feature Values a batched read covers: some features of many records, from one source. */
+export interface LatestFeatureValuesBatch {
+    /** The pipeline. */
+    RecordProcessID: string;
+    /** The records' entity. */
+    EntityID: string;
+    /** The records, as their runs wrote them. */
+    RecordIDs: string[];
+    /** The features. */
+    FeatureNames: string[];
+    /** The source the values came from. */
+    Source: FeatureValueSource;
+}
+
+/** One row of a batched latest-value read ({@link FeatureValueCacheService.LatestValuesView}). */
+export type LatestFeatureValueRecordRow = TypedFeatureValue & Pick<MJFeatureValueEntity, 'FeatureName' | 'RecordID'>;
 
 /** Parameters for recording a value a person entered on a pipeline's target. */
 export interface RecordHumanValueParams extends FeatureValueRecordRef {
@@ -523,14 +540,13 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             return latest;
         }
         const recordFilter = `RecordProcessID = '${EscapeSQLString(params.RecordProcessID)}' AND EntityID = '${EscapeSQLString(params.EntityID)}'`
-            + ` AND RecordID = '${EscapeSQLString(params.RecordID)}' AND Source = 'Pipeline'`;
+            + ` AND RecordID = '${EscapeSQLString(params.RecordID)}'${FeatureValueCacheService.SourceFilter('Pipeline')}`;
+        const shape = FeatureValueCacheService.LatestValueViewShape();
         const results = await RunView.FromMetadataProvider(params.Provider).RunViews<LatestFeatureValueRow & Pick<MJFeatureValueEntity, 'ValueKeyHash'>>(names.map((name) => ({
-            EntityName: 'MJ: Feature Values',
+            ...shape,
+            Fields: [...(shape.Fields || []), 'ValueKeyHash'],
             ExtraFilter: `${recordFilter} AND FeatureName = '${EscapeSQLString(name)}'`,
-            OrderBy: 'ComputedAt DESC',
-            Fields: ['FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON', 'ValueKeyHash'],
             MaxRows: 1,
-            BypassCache: true,
         })), params.ContextUser);
         results.forEach((res, i) => {
             if (!res.Success) {
@@ -577,12 +593,9 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             ? ` AND (ProcessRunID IS NULL OR ProcessRunID <> '${EscapeSQLString(p.ExcludeProcessRunID)}')`
             : '';
         const res = await RunView.FromMetadataProvider(p.Provider).RunView<LatestFeatureValueRow>({
-            EntityName: 'MJ: Feature Values',
-            ExtraFilter: `${FeatureValueCacheService.RecordFeatureFilter(p)} AND Source = '${EscapeSQLString(p.Source)}'${exclude}`,
-            OrderBy: 'ComputedAt DESC',
-            Fields: ['FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON'],
+            ...FeatureValueCacheService.LatestValueViewShape(),
+            ExtraFilter: `${FeatureValueCacheService.RecordFeatureFilter(p)}${FeatureValueCacheService.SourceFilter(p.Source)}${exclude}`,
             MaxRows: 1,
-            BypassCache: true,
         }, p.ContextUser);
         if (!res.Success) {
             throw new Error(`FeatureValueCacheService: reading the latest '${p.FeatureName}' value of record '${p.RecordID}' failed: ${res.ErrorMessage}`);
@@ -630,6 +643,62 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             }
         }
         return rows.length;
+    }
+
+    /**
+     * The batched form of {@link GetLatestValue}: one view reading some features of many records from one source, newest
+     * first. Pass its rows to {@link LatestValuesOf} for each record's latest value per feature. A caller adds the view to
+     * its own `RunViews` call, so the read shares that round trip.
+     * @param p - the pipeline, entity, records, features and source
+     */
+    public static LatestValuesView(p: LatestFeatureValuesBatch): RunViewParams {
+        const list = (values: string[]): string => values.map((v) => `'${EscapeSQLString(v)}'`).join(', ');
+        const shape = FeatureValueCacheService.LatestValueViewShape();
+        return {
+            ...shape,
+            Fields: ['RecordID', ...(shape.Fields || [])],
+            ExtraFilter: `RecordProcessID = '${EscapeSQLString(p.RecordProcessID)}' AND EntityID = '${EscapeSQLString(p.EntityID)}'`
+                + ` AND RecordID IN (${list(p.RecordIDs)}) AND FeatureName IN (${list(p.FeatureNames)})${FeatureValueCacheService.SourceFilter(p.Source)}`,
+        };
+    }
+
+    /**
+     * Each record's latest value per feature from the rows of a {@link LatestValuesView} (newest first): keyed by the
+     * normalised record ID, then the lower-cased feature name.
+     * @param rows - the view's rows, in the view's order
+     */
+    public static LatestValuesOf(rows: LatestFeatureValueRecordRow[]): Map<string, Map<string, TypedFeatureValue>> {
+        const latest = new Map<string, Map<string, TypedFeatureValue>>();
+        for (const row of rows) {
+            const recordKey = NormalizeUUID(row.RecordID);
+            const features = latest.get(recordKey) || new Map<string, TypedFeatureValue>();
+            const feature = row.FeatureName.toLowerCase();
+            if (!features.has(feature)) {
+                features.set(feature, FeatureValueCacheService.TypedValueOf(row)); // the first row is the newest
+            }
+            latest.set(recordKey, features);
+        }
+        return latest;
+    }
+
+    /**
+     * The entity, order, columns and freshness every latest-value read shares: the guard's single read
+     * ({@link GetLatestValue}), the batched read ({@link LatestValuesView}) and {@link LoadLatestPipelineValues}. "Latest"
+     * is the newest `ComputedAt`; rows with equal `ComputedAt` are ordered by creation time, then by ID, so every read
+     * picks the same row on a tie.
+     */
+    protected static LatestValueViewShape(): Pick<RunViewParams, 'EntityName' | 'OrderBy' | 'Fields' | 'BypassCache'> {
+        return {
+            EntityName: 'MJ: Feature Values',
+            OrderBy: 'ComputedAt DESC, __mj_CreatedAt DESC, ID DESC',
+            Fields: ['FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON'],
+            BypassCache: true, // decisions are made from it: a value written moments ago must be seen
+        };
+    }
+
+    /** The SQL filter fragment selecting one source's Feature Values. */
+    protected static SourceFilter(source: FeatureValueSource): string {
+        return ` AND Source = '${EscapeSQLString(source)}'`;
     }
 
     /** The SQL filter selecting one record's Feature Values of one feature in one pipeline. */

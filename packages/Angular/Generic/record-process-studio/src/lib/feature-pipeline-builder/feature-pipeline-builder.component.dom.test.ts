@@ -7,7 +7,7 @@ import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { FeaturePipelineBuilderComponent, ParseConfidenceFloor, type EscalationTargetCandidate } from './feature-pipeline-builder.component';
-import { LookupConstraintValues, OutputConstraintResolver, RenderConstraintBlock, type DataFeatureOutput, type DataFeatureSpec } from '@memberjunction/feature-pipelines';
+import { LookupConstraintValues, OutputConstraintResolver, RenderConstraintBlock, type DataFeatureOutput, type DataFeatureSpec, type ValueConstraint } from '@memberjunction/feature-pipelines';
 
 try {
   getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -1289,3 +1289,140 @@ describe('the constraint block preview', () => {
   });
 });
 
+
+describe('the constraint type picker and the lookup, money and date editors', () => {
+  const lookupOutput = (constraint: ValueConstraint): DataFeatureOutput => ({
+    Name: 'Level', Ref: '$.Level', Target: { Mode: 'field', EntityFieldName: 'Rating' }, Constraint: constraint,
+  });
+  const SAVED_LOOKUP: ValueConstraint = {
+    Type: 'lookup', Entity: 'Accounts', MatchField: 'Summary', DisplayFields: ['Rating', 'Summary'], Filter: "Rating='Hot'", ItemRef: '$.Level', OnViolation: 'null',
+  };
+
+  /** The control of the given kind in the field whose label starts with `label`. */
+  const controlIn = (f: ComponentFixture<FeaturePipelineBuilderComponent>, label: string, tag: 'select' | 'input'): Element => {
+    const field = Array.from((f.nativeElement as Element).querySelectorAll('.field')).find((el) => el.querySelector('label')?.textContent?.trim().startsWith(label));
+    const control = field?.querySelector(tag);
+    if (!control) {
+      throw new Error(`no ${tag} labelled '${label}'`);
+    }
+    return control;
+  };
+  const selectLabelled = (f: ComponentFixture<FeaturePipelineBuilderComponent>, label: string) => controlIn(f, label, 'select') as HTMLSelectElement;
+  const inputLabelled = (f: ComponentFixture<FeaturePipelineBuilderComponent>, label: string) => controlIn(f, label, 'input') as HTMLInputElement;
+  const constraintSelect = (f: ComponentFixture<FeaturePipelineBuilderComponent>) => selectLabelled(f, 'Constraint Type');
+  const shownText = (select: HTMLSelectElement): string => select.options[select.selectedIndex]?.textContent?.trim() ?? '';
+  const renderOutput = (constraint: ValueConstraint) => render(makeRecord({ PipelineType: 'LLM', Outputs: [lookupOutput(constraint)] }));
+  const savedConstraint = (f: ComponentFixture<FeaturePipelineBuilderComponent>) => savedSpec(f.componentInstance.Record as MJRecordProcessEntity)?.Outputs[0].Constraint;
+
+  it('offers every constraint type the LLM pipeline type declares, each with a label', () => {
+    const f = render(makeRecord());
+
+    const offered = f.componentInstance.AvailableConstraintTypes;
+    expect(offered.map((t) => t.Value)).toEqual(['none', 'boolean', 'enum', 'numeric', 'lookup', 'money', 'date', 'freetext']);
+    expect(offered.every((t) => t.Label.trim().length > 0)).toBe(true);
+  });
+
+  it('shows a saved lookup as Lookup and populates its fields', () => {
+    const f = renderOutput(SAVED_LOOKUP);
+
+    expect(shownText(constraintSelect(f))).toBe('Lookup (Existing Records)');
+    expect(f.componentInstance.IsConstraintTypeOffered(f.componentInstance.spec.Outputs[0])).toBe(true);
+    expect(selectLabelled(f, 'Lookup Entity').value).toBe('Accounts');
+    expect(inputLabelled(f, 'Match Field').value).toBe('Summary');
+    expect(inputLabelled(f, 'Display Fields').value).toBe('Rating, Summary');
+    expect(inputLabelled(f, 'Filter').value).toBe("Rating='Hot'");
+  });
+
+  it('keeps the other lookup fields when the filter is edited', () => {
+    const f = renderOutput(SAVED_LOOKUP);
+    const emitted: DataFeatureSpec[] = [];
+    f.componentInstance.SpecChange.subscribe((s: DataFeatureSpec) => emitted.push(s));
+
+    f.componentInstance.UpdateLookupFilter(0, eventWithValue("Rating='Cold'", 'input'));
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].Outputs[0].Constraint).toEqual({ ...SAVED_LOOKUP, Filter: "Rating='Cold'" });
+    expect(savedConstraint(f)).toEqual({ ...SAVED_LOOKUP, Filter: "Rating='Cold'" });
+  });
+
+  it('edits the lookup entity, match field and display fields without disturbing the rest', () => {
+    const f = renderOutput(SAVED_LOOKUP);
+
+    f.componentInstance.UpdateLookupMatchField(0, eventWithValue('Rating', 'input'));
+    f.componentInstance.UpdateLookupDisplayFields(0, eventWithValue(' Summary , ,Rating ', 'input'));
+    f.componentInstance.UpdateLookupEntity(0, eventWithValue('Accounts'));
+
+    expect(savedConstraint(f)).toEqual({ ...SAVED_LOOKUP, MatchField: 'Rating', DisplayFields: ['Summary', 'Rating'] });
+  });
+
+  it('drops an emptied lookup field instead of saving an empty string', () => {
+    const f = renderOutput(SAVED_LOOKUP);
+
+    f.componentInstance.UpdateLookupFilter(0, eventWithValue('  ', 'input'));
+    f.componentInstance.UpdateLookupDisplayFields(0, eventWithValue('', 'input'));
+
+    const { Filter: _filter, DisplayFields: _display, ...rest } = SAVED_LOOKUP;
+    expect(savedConstraint(f)).toEqual(rest);
+  });
+
+  it('keeps the lookup when Lookup is selected again', () => {
+    const f = renderOutput(SAVED_LOOKUP);
+
+    f.componentInstance.UpdateConstraintType(0, eventWithValue('lookup'));
+
+    expect(savedConstraint(f)).toEqual(SAVED_LOOKUP);
+  });
+
+  it('replaces the lookup when the user picks another type, and starts a fresh lookup from another type', () => {
+    const f = renderOutput(SAVED_LOOKUP);
+
+    f.componentInstance.UpdateConstraintType(0, eventWithValue('freetext'));
+    expect(savedConstraint(f)).toEqual({ Type: 'freetext', MaxLength: 500, OnViolation: 'fail' });
+
+    f.componentInstance.UpdateConstraintType(0, eventWithValue('lookup'));
+    expect(savedConstraint(f)).toEqual({ Type: 'lookup', OnViolation: 'fail' });
+  });
+
+  it('keeps a saved enum when Enum is selected again', () => {
+    const f = render(makeRecord());
+    const before = savedConstraint(f) ?? f.componentInstance.spec.Outputs[0].Constraint;
+
+    f.componentInstance.UpdateConstraintType(0, eventWithValue('enum'));
+
+    expect(f.componentInstance.spec.Outputs[0].Constraint).toEqual(before);
+    expect(f.componentInstance.spec.Outputs[0].Constraint).toEqual({ Type: 'enum', Values: ['Hot', 'Warm', 'Cold'], OnViolation: 'fail' });
+  });
+
+  it('shows a saved money output as Money with its limits and currency', () => {
+    const f = renderOutput({ Type: 'money', Min: 5, Max: 900, CurrencyCode: 'USD', OnViolation: 'fail' });
+
+    expect(shownText(constraintSelect(f))).toBe('Money');
+    expect(inputLabelled(f, 'Min Amount').value).toBe('5');
+    expect(inputLabelled(f, 'Max Amount').value).toBe('900');
+    expect(inputLabelled(f, 'Currency Code').value).toBe('USD');
+
+    f.componentInstance.UpdateMoneyMax(0, eventWithValue('1000', 'input'));
+    f.componentInstance.UpdateMoneyCurrencyCode(0, eventWithValue('EUR', 'input'));
+    expect(savedConstraint(f)).toEqual({ Type: 'money', Min: 5, Max: 1000, CurrencyCode: 'EUR', OnViolation: 'fail' });
+  });
+
+  it('shows a saved date output as Date with its limits', () => {
+    const f = renderOutput({ Type: 'date', Min: '2020-01-01', Max: '2030-12-31', OnViolation: 'null' });
+
+    expect(shownText(constraintSelect(f))).toBe('Date');
+    expect(inputLabelled(f, 'Earliest Date').value).toBe('2020-01-01');
+    expect(inputLabelled(f, 'Latest Date').value).toBe('2030-12-31');
+
+    f.componentInstance.UpdateDateMin(0, eventWithValue('2021-06-01', 'input'));
+    expect(savedConstraint(f)).toEqual({ Type: 'date', Min: '2021-06-01', Max: '2030-12-31', OnViolation: 'null' });
+  });
+
+  it('starts a money and a date constraint with only the required policy when picked', () => {
+    const f = render(makeRecord());
+
+    f.componentInstance.UpdateConstraintType(0, eventWithValue('money'));
+    expect(savedConstraint(f)).toEqual({ Type: 'money', OnViolation: 'fail' });
+    f.componentInstance.UpdateConstraintType(0, eventWithValue('date'));
+    expect(savedConstraint(f)).toEqual({ Type: 'date', OnViolation: 'fail' });
+  });
+});

@@ -1,9 +1,14 @@
 import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject, from, combineLatest } from 'rxjs';
 import { map, switchMap, shareReplay, tap } from 'rxjs/operators';
-import { RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
+import { RunView, RunQuery, Metadata, IMetadataProvider, IRunQueryProvider, LogError, type AggregateExpression, type RunViewParams, type RunViewResult } from '@memberjunction/core';
 import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
+import type { TestingTimeRange } from '../testing-agent-context';
+import { IsRunQueryProvider } from '../../AI/services/ai-instrumentation.service';
+import { TestRunTotals } from './test-run-totals';
+import { TestingListBoundInfo, type TestingListBounds } from './testing-list-bound';
+import { TestingPassRate } from './testing-pass-rate';
 
 export interface TestingDashboardKPIs {
   TotalTestsActive: number;
@@ -45,6 +50,10 @@ export interface SuiteHierarchyNode {
   level: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   children: SuiteHierarchyNode[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   testCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** Runs of the suite's member tests in the period. 0 means there is no pass rate to show (passRate is then 0). */
+  RunCount: number;
+  /** Skipped runs among RunCount; passRate covers only the executed ones (RunCount − SkippedCount). */
+  SkippedCount: number;
   passRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   totalCost: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   averageScore: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -57,6 +66,8 @@ export interface VersionMetrics {
   agentVersion: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   runDate: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   totalTests: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** Skipped tests across the version's suite runs; not part of the pass rate's denominator. */
+  SkippedTests: number;
   passRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   averageScore: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   totalCost: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -92,7 +103,9 @@ export interface TestAnalytics {
   slowestTests: Array<{ testName: string; avgDuration: number; maxDuration: number }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   costByType: Array<{ testType: string; totalCost: number; testCount: number }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   costBySuite: Array<{ suiteName: string; totalCost: number; testCount: number }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-  passingRateByType: Array<{ testType: string; passRate: number; totalTests: number }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  passingRateByType: Array<{ testType: string; passRate: number; totalTests: number; Skipped: number }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** Why the analytics could not load (the rankings are then empty); absent when they loaded. */
+  LoadError?: string;
 }
 
 export interface FeedbackStats {
@@ -208,14 +221,26 @@ export interface RunSelectionIntent {
   nonce: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
+/** The run aggregates one Overview read needs, by alias. */
+interface RunAggregateValues {
+  [alias: string]: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class TestingInstrumentationService {
-  private readonly _dateRange$ = new BehaviorSubject<{ start: Date; end: Date }>({
-    start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
-    end: new Date()
-  });
+  private readonly _dateRange$ = new BehaviorSubject<{ start: Date; end: Date }>(
+    TestingInstrumentationService.WindowForRange('month', new Date()) // Last 30 days
+  );
+
+  /**
+   * The named range the window follows, or null for an explicit start/end. A named range is ROLLING: every
+   * load re-resolves it against the current time (see {@link currentWindow}). The service is a root singleton,
+   * so a window frozen at construction would leave every run started after the app loaded out of the Overview
+   * — Refresh included — until someone picked a range.
+   */
+  private _rollingRange: TestingTimeRange | null = 'month';
 
   /**
    * Agent-driven filter intents for the Runs surface. Published by the Testing
@@ -284,6 +309,18 @@ export class TestingInstrumentationService {
   private readonly _testTypeFilter$ = new BehaviorSubject<string | null>(null);
   private readonly _refreshTrigger$ = new BehaviorSubject<number>(0);
   private readonly _isLoading$ = new BehaviorSubject<boolean>(false);
+  private readonly _listBounds$ = new BehaviorSubject<TestingListBounds>(TestingListBoundInfo.EmptyBounds());
+
+  /**
+   * How much of each capped list its latest load returned against the exact match count, so a surface can say
+   * "Showing the newest 1,000 of N" instead of letting a list disagree silently with an exact KPI.
+   */
+  readonly ListBounds$ = this._listBounds$.asObservable();
+
+  /** Records one list's bound from its load. */
+  private setListBound(list: keyof TestingListBounds, shown: number, totalRowCount: number | null | undefined): void {
+    this._listBounds$.next({ ...this._listBounds$.value, [list]: TestingListBoundInfo.FromCounts(shown, totalRowCount) });
+  }
   private _provider: IMetadataProvider | null = null;
 
   /** Set the metadata provider this service should use. Components should call this after injection. */
@@ -445,6 +482,7 @@ export class TestingInstrumentationService {
   }
 
   SetDateRange(start: Date, end: Date): void {
+    this._rollingRange = null;
     this._dateRange$.next({ start, end });
   }
 
@@ -458,8 +496,13 @@ export class TestingInstrumentationService {
    * range-to-dates computation so both the Runs surface UI and the agent's
    * `FilterTestsByTimeRange` tool resolve identical windows.
    */
-  SetDateRangeByName(range: 'today' | 'week' | 'month' | '90days'): void {
-    const now = new Date();
+  SetDateRangeByName(range: TestingTimeRange): void {
+    this._rollingRange = range;
+    this._dateRange$.next(TestingInstrumentationService.WindowForRange(range, new Date()));
+  }
+
+  /** The window a named range covers, ending at `now`. */
+  public static WindowForRange(range: TestingTimeRange, now: Date): { start: Date; end: Date } {
     let start: Date;
     switch (range) {
       case 'today':
@@ -477,11 +520,16 @@ export class TestingInstrumentationService {
         start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         break;
     }
-    this.SetDateRange(start, now);
+    return { start, end: new Date(now) };
+  }
+
+  /** The window a load reads: a named range re-resolved against the current time, or the explicit range. */
+  private currentWindow(): { start: Date; end: Date } {
+    return this._rollingRange ? TestingInstrumentationService.WindowForRange(this._rollingRange, new Date()) : this._dateRange$.value;
   }
 
   /** @deprecated Use {@link SetDateRangeByName}. */
-  setDateRangeByName(range: 'today' | 'week' | 'month' | '90days'): void {
+  setDateRangeByName(range: TestingTimeRange): void {
     return this.SetDateRangeByName(range);
   }
 
@@ -503,8 +551,19 @@ export class TestingInstrumentationService {
     return this.SetTestTypeFilter(typeId);
   }
 
+  /**
+   * Reloads every stream. Under a rolling named range the window is re-resolved to end now and emitted on
+   * {@link DateRange$} (every stream reloads on a window change, so the trigger is not bumped as well —
+   * that would load twice). A filter change between refreshes reloads with {@link currentWindow}, which also
+   * resolves the rolling range against the current time, while {@link DateRange$} keeps the last emitted
+   * window until the next Refresh or range change.
+   */
   Refresh(): void {
-    this._refreshTrigger$.next(this._refreshTrigger$.value + 1);
+    if (this._rollingRange) {
+      this._dateRange$.next(TestingInstrumentationService.WindowForRange(this._rollingRange, new Date()));
+    } else {
+      this._refreshTrigger$.next(this._refreshTrigger$.value + 1);
+    }
   }
 
   /** @deprecated Use {@link Refresh}. */
@@ -512,132 +571,194 @@ export class TestingInstrumentationService {
     return this.Refresh();
   }
 
+  /**
+   * The aggregates the Overview reads over the runs in a window. Aggregates cover EVERY row the filter
+   * matches; a plain row read is capped at the entity's UserViewMaxRows (1000 for Test Runs) and ordered by
+   * primary key, so totals computed from rows were an arbitrary sample once a window held more runs than that.
+   */
+  private static readonly RUN_AGGREGATES: AggregateExpression[] = [
+    { expression: 'COUNT(*)', alias: 'Runs' },
+    { expression: "SUM(CASE WHEN Status = 'Passed' THEN 1 ELSE 0 END)", alias: 'Passed' },
+    { expression: "SUM(CASE WHEN Status = 'Failed' THEN 1 ELSE 0 END)", alias: 'Failed' },
+    { expression: "SUM(CASE WHEN Status = 'Skipped' THEN 1 ELSE 0 END)", alias: 'Skipped' },
+    { expression: "SUM(CASE WHEN Status = 'Error' THEN 1 ELSE 0 END)", alias: 'Errors' },
+    { expression: 'SUM(CostUSD)', alias: 'Cost' },
+    // A run without a score counts as 0, as the row-based averages did.
+    { expression: 'AVG(COALESCE(Score, 0))', alias: 'AverageScore' },
+    // NULL for a run that has not completed, which AVG skips — the average covers completed runs only.
+    // Seconds × 1000: DATEDIFF returns int, and in milliseconds it overflows (failing the whole aggregate
+    // query) past ~24.8 days; DATEDIFF_BIG is not on the aggregate allowlist.
+    { expression: 'AVG(DATEDIFF(second, StartedAt, CompletedAt) * 1000.0)', alias: 'AverageDurationMs' },
+  ];
+
+  /**
+   * Aggregates over `MJ: Test Run Feedbacks` for the review stats. A feedback without a rating counts as 0, as
+   * the row-based average did; IsCorrect is a bit.
+   */
+  private static readonly FEEDBACK_AGGREGATES: AggregateExpression[] = [
+    { expression: 'COUNT(*)', alias: 'Feedback' },
+    { expression: 'AVG(CAST(COALESCE(Rating, 0) AS FLOAT))', alias: 'AverageRating' },
+    { expression: 'SUM(CASE WHEN IsCorrect = 1 THEN 1 ELSE 0 END)', alias: 'Correct' },
+    { expression: 'SUM(CASE WHEN IsCorrect = 0 THEN 1 ELSE 0 END)', alias: 'Incorrect' },
+  ];
+
+  /**
+   * The most rows a row-listing read of the window returns (the Runs, review-queue and evaluation lists). The
+   * lists show the newest runs first, so the bound keeps the newest; totals never come from these reads.
+   */
+  private static readonly LIST_MAX_ROWS = 1000;
+
+  /**
+   * The most feedback rows the evaluation list reads per listed run. Feedback is read only for the listed runs
+   * (at most {@link LIST_MAX_ROWS}), so the read is bounded by LIST_MAX_ROWS × this; a run with more feedback
+   * than that is logged (TotalRowCount above the rows returned).
+   */
+  private static readonly FEEDBACK_PER_RUN_BOUND = 5;
+
+  /** The Test Runs filter for runs started inside a window. */
+  private static windowFilter(start: Date, end: Date): string {
+    return `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`;
+  }
+
+  /**
+   * A Test Runs read that returns only {@link RUN_AGGREGATES} over the filter (one row is the least a view
+   * read returns; it is ignored).
+   */
+  private static aggregateRunsParams(extraFilter: string): RunViewParams {
+    // No CacheLocal on window reads: a rolling window puts a new timestamp in every filter, so a cached entry
+    // could never be hit again and would only fill the local cache.
+    return {
+      EntityName: 'MJ: Test Runs',
+      ExtraFilter: extraFilter,
+      Fields: ['ID'],
+      MaxRows: 1,
+      Aggregates: TestingInstrumentationService.RUN_AGGREGATES,
+      ResultType: 'simple'
+    };
+  }
+
+  /**
+   * Reads a result's aggregates into numbers by alias (NULL, e.g. a SUM over no rows, reads as 0). A failed
+   * read or a refused aggregate is logged with its message and reads as 0, so one bad figure does not blank
+   * the whole Overview.
+   */
+  /** A count_only result's count; a failed read is logged with its message and reads as 0, like {@link aggregateValues}. */
+  private static countValue(result: RunViewResult, label: string): number {
+    if (!result.Success) {
+      LogError(`Testing Overview: ${label} failed: ${result.ErrorMessage}`);
+      return 0;
+    }
+    return result.TotalRowCount || 0;
+  }
+
+  private static aggregateValues(result: RunViewResult): RunAggregateValues {
+    const values: RunAggregateValues = {};
+    if (!result.Success) {
+      LogError(`Testing Overview: run aggregates failed: ${result.ErrorMessage}`);
+    }
+    for (const agg of result.AggregateResults || []) {
+      if (agg.error) {
+        LogError(`Testing Overview: aggregate ${agg.alias} failed: ${agg.error}`);
+      }
+      values[agg.alias] = Number(agg.value) || 0;
+    }
+    return values;
+  }
+
   private async loadKPIs(): Promise<TestingDashboardKPIs> {
-    const { start, end } = this._dateRange$.value;
+    const { start, end } = this.currentWindow();
     const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Get Tests from TestEngineBase cache instead of querying DB
     const engine = TestEngineBase.Instance;
     const activeTests = engine.Tests.filter(t => t.Status === 'Active');
 
-    // Only load runs via RunView (not cached in engine) - use simple result type with only needed fields
-    const [testRunsResult] = await rv.RunViews([
-      {
-        EntityName: 'MJ: Test Runs',
-        ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-        Fields: ['ID', 'Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt'],
-        ResultType: 'simple',
-        CacheLocal: true
-      }
-    ]);
-
-    const testRuns = testRunsResult.Results as TestRunSimple[];
-
-    // Calculate KPIs
-    const totalTestsActive = activeTests.length;
-    const totalTestRuns = testRuns.length;
-
-    const passedRuns = testRuns.filter(r => r.Status === 'Passed');
-    const failedRuns = testRuns.filter(r => r.Status === 'Failed');
-    const skippedRuns = testRuns.filter(r => r.Status === 'Skipped');
-
-    const passRateThisMonth = totalTestRuns > 0 ? (passedRuns.length / totalTestRuns) * 100 : 0;
-
-    const totalCostThisMonth = testRuns.reduce((sum, r) => sum + (r.CostUSD || 0), 0);
-
-    const completedRuns = testRuns.filter(r => r.CompletedAt != null && r.StartedAt != null);
-    const averageDuration = completedRuns.length > 0
-      ? completedRuns.reduce((sum, r) => {
-          const startTime = r.StartedAt instanceof Date ? r.StartedAt.getTime() : new Date(r.StartedAt).getTime();
-          const endTime = r.CompletedAt instanceof Date ? r.CompletedAt.getTime() : new Date(r.CompletedAt!).getTime();
-          return sum + (endTime - startTime);
-        }, 0) / completedRuns.length
-      : 0;
-
-    // Count tests pending review (no feedback)
-    const testRunIDs = testRuns.map(r => r.ID);
-    const testsPendingReview = await this.countTestsPendingReview(testRunIDs);
-
-    // Calculate trend (compare to previous period)
+    // The previous period of equal length, for the pass-rate trend.
     const periodDuration = end.getTime() - start.getTime();
     const previousStart = new Date(start.getTime() - periodDuration);
-    const previousEnd = new Date(start.getTime());
+    const windowFilter = TestingInstrumentationService.windowFilter(start, end);
 
-    const previousRunsResult = await rv.RunView<TestRunSimple>({
-      EntityName: 'MJ: Test Runs',
-      ExtraFilter: `StartedAt >= '${previousStart.toISOString()}' AND StartedAt < '${previousEnd.toISOString()}'`,
-      Fields: ['ID', 'Status'],
-      ResultType: 'simple',
-      CacheLocal: true
-    });
+    const [currentResult, previousResult, pendingResult] = await rv.RunViews([
+      TestingInstrumentationService.aggregateRunsParams(windowFilter),
+      TestingInstrumentationService.aggregateRunsParams(`StartedAt >= '${previousStart.toISOString()}' AND StartedAt < '${start.toISOString()}'`),
+      this.pendingReviewCountParams(windowFilter)
+    ]);
+    const current = TestingInstrumentationService.aggregateValues(currentResult);
+    const previous = TestingInstrumentationService.aggregateValues(previousResult);
 
-    const previousRuns = previousRunsResult.Results || [];
-    const previousPassRate = previousRuns.length > 0
-      ? (previousRuns.filter(r => r.Status === 'Passed').length / previousRuns.length) * 100
-      : 0;
-
+    const totalTestRuns = current['Runs'] || 0;
+    // Skipped runs were not executed: neither passes nor failures (ruling QF2-Y2).
+    const passRateThisMonth = TestingPassRate.OfExecuted(current['Passed'] || 0, totalTestRuns, current['Skipped'] || 0);
+    const previousPassRate = TestingPassRate.OfExecuted(previous['Passed'] || 0, previous['Runs'] || 0, previous['Skipped'] || 0);
     const passRateTrend = previousPassRate > 0 ? passRateThisMonth - previousPassRate : 0;
 
     return {
-      TotalTestsActive: totalTestsActive,
+      TotalTestsActive: activeTests.length,
       PassRateThisMonth: passRateThisMonth,
-      TotalCostThisMonth: totalCostThisMonth,
-      AverageDuration: averageDuration,
-      TestsPendingReview: testsPendingReview,
+      TotalCostThisMonth: current['Cost'] || 0,
+      AverageDuration: current['AverageDurationMs'] || 0,
+      TestsPendingReview: TestingInstrumentationService.countValue(pendingResult, 'pending review count'),
       TotalTestRuns: totalTestRuns,
-      FailedTests: failedRuns.length,
-      SkippedTests: skippedRuns.length,
+      FailedTests: current['Failed'] || 0,
+      SkippedTests: current['Skipped'] || 0,
       PassRateTrend: passRateTrend
     };
   }
 
-  private async countTestsPendingReview(testRunIDs: string[]): Promise<number> {
-    if (testRunIDs.length === 0) return 0;
+  /**
+   * Counts the window's runs that have no feedback yet. A count, not a row read: the window can hold more
+   * runs than a row read returns, and their IDs would otherwise have to travel back as an IN list.
+   */
+  private pendingReviewCountParams(windowFilter: string): RunViewParams {
+    return {
+      EntityName: 'MJ: Test Runs',
+      ExtraFilter: `${windowFilter} AND ${this.feedbackPredicate(false)}`,
+      ResultType: 'count_only'
+    };
+  }
 
-    const rv = RunView.FromMetadataProvider(this.Provider);
-    const idList = testRunIDs.join("','");
+  /** `[schema].[base view]` of an entity, from metadata — for the subqueries in the run filters. */
+  private baseViewOf(entityName: string): string {
+    const entity = this.Provider.EntityByName(entityName);
+    if (!entity) {
+      throw new Error(`Entity '${entityName}' not found in metadata`);
+    }
+    return `[${entity.SchemaName}].[${entity.BaseView}]`;
+  }
 
-    const feedbackResult = await rv.RunView<{TestRunID: string}>({
-      EntityName: 'MJ: Test Run Feedbacks',
-      ExtraFilter: `TestRunID IN ('${idList}')`,
-      Fields: ['TestRunID'],
-      ResultType: 'simple',
-      CacheLocal: true
-    });
+  /** Test Runs predicate: the run has (or has no) feedback. */
+  private feedbackPredicate(hasFeedback: boolean): string {
+    return `ID ${hasFeedback ? 'IN' : 'NOT IN'} (SELECT TestRunID FROM ${this.baseViewOf('MJ: Test Run Feedbacks')} WHERE TestRunID IS NOT NULL)`;
+  }
 
-    const feedbackTestRunIDs = new Set((feedbackResult.Results || []).map(f => f.TestRunID));
-
-    return testRunIDs.filter(id => !feedbackTestRunIDs.has(id)).length;
+  /** The Test Runs filter for the window plus the suite and test-type filters the Runs surfaces apply. */
+  private filteredRunsFilter(start: Date, end: Date): string {
+    let filter = TestingInstrumentationService.windowFilter(start, end);
+    const suiteFilter = this._suiteFilter$.value;
+    if (suiteFilter) {
+      filter += ` AND TestID IN (SELECT TestID FROM ${this.baseViewOf('MJ: Test Suite Tests')} WHERE SuiteID = '${suiteFilter}')`;
+    }
+    const typeFilter = this._testTypeFilter$.value;
+    if (typeFilter) {
+      filter += ` AND TestID IN (SELECT ID FROM ${this.baseViewOf('MJ: Tests')} WHERE TypeID = '${typeFilter}')`;
+    }
+    return filter;
   }
 
   private async loadTestRuns(): Promise<TestRunSummary[]> {
-    const { start, end } = this._dateRange$.value;
-    const suiteFilter = this._suiteFilter$.value;
-    const typeFilter = this._testTypeFilter$.value;
-
-    let filter = `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`;
-
-    if (suiteFilter) {
-      // Need to join through TestSuiteTest
-      filter += ` AND TestID IN (SELECT TestID FROM [__mj].[vwTestSuiteTests] WHERE TestSuiteID = '${suiteFilter}')`;
-    }
-
-    if (typeFilter) {
-      filter += ` AND TestID IN (SELECT ID FROM [__mj].[vwTests] WHERE TypeID = '${typeFilter}')`;
-    }
-
+    const { start, end } = this.currentWindow();
     const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<TestRunSimple>({
       EntityName: 'MJ: Test Runs',
-      ExtraFilter: filter,
+      ExtraFilter: this.filteredRunsFilter(start, end),
       OrderBy: 'StartedAt DESC',
-      MaxRows: 1000,
+      MaxRows: TestingInstrumentationService.LIST_MAX_ROWS,
       Fields: ['ID', 'TestID', 'Test', 'Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt', 'TargetType', 'TargetLogID'],
-      ResultType: 'simple',
-      CacheLocal: true
+      ResultType: 'simple'
     });
 
     const testRuns = result.Results || [];
+    this.setListBound('Runs', testRuns.length, result.TotalRowCount);
 
     return testRuns.map(run => {
       const startedAt = run.StartedAt instanceof Date ? run.StartedAt : new Date(run.StartedAt);
@@ -665,61 +786,44 @@ export class TestingInstrumentationService {
   }
 
   private async loadSuiteHierarchy(): Promise<SuiteHierarchyNode[]> {
-    const { start, end } = this._dateRange$.value;
+    const { start, end } = this.currentWindow();
     const rv = RunView.FromMetadataProvider(this.Provider);
 
-    // Get Test Suites from TestEngineBase cache instead of querying DB
+    // Suites and their member tests come from the TestEngineBase cache (MJ: Test Suite Tests).
     const engine = TestEngineBase.Instance;
     const suites = engine.TestSuites.filter(s => s.Status === 'Active');
+    const memberIDs = new Map<string, string[]>(suites.map(suite => [suite.ID, engine.GetTestsForSuite(suite.ID).map(t => t.ID)]));
 
-    // Only load test runs via RunView (not cached in engine) - use simple result type
-    const testRunsResult = await rv.RunView<{ID: string; TestID: string; Status: string; Score: number; CostUSD: number}>({
-      EntityName: 'MJ: Test Runs',
-      ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-      Fields: ['ID', 'TestID', 'Status', 'Score', 'CostUSD'],
-      ResultType: 'simple',
-      CacheLocal: true
-    });
+    // One aggregate read per suite that has members, all in one round trip: runs of the suite's tests in the window.
+    const windowFilter = TestingInstrumentationService.windowFilter(start, end);
+    const suitesWithMembers = suites.filter(suite => (memberIDs.get(suite.ID) || []).length > 0);
+    const results = suitesWithMembers.length > 0
+      ? await rv.RunViews(suitesWithMembers.map(suite => {
+          const inList = (memberIDs.get(suite.ID) || []).map(id => `'${id}'`).join(',');
+          return TestingInstrumentationService.aggregateRunsParams(`${windowFilter} AND TestID IN (${inList})`);
+        }))
+      : [];
+    const metricsBySuite = new Map<string, RunAggregateValues>(
+      suitesWithMembers.map((suite, i) => [suite.ID, TestingInstrumentationService.aggregateValues(results[i])])
+    );
 
-    const testRuns = testRunsResult.Results || [];
-
-    // Build hierarchy
-    const nodes: SuiteHierarchyNode[] = suites.map(suite => ({
-      id: suite.ID,
-      name: suite.Name,
-      parentID: suite.ParentID || null,
-      level: 0,
-      children: [],
-      testCount: 0,
-      passRate: 0,
-      totalCost: 0,
-      averageScore: 0,
-      expanded: false
-    }));
-
-    // Calculate metrics for each suite (simplified - would need TestSuiteTest join for accuracy)
-    type SimpleTestRun = {ID: string; TestID: string; Status: string; Score: number; CostUSD: number};
-    const suiteTestRuns = new Map<string, SimpleTestRun[]>();
-
-    testRuns.forEach(run => {
-      // This is simplified - would need to query TestSuiteTest to get actual suite membership
-      const suiteID = run.TestID; // Placeholder
-      if (!suiteTestRuns.has(suiteID)) {
-        suiteTestRuns.set(suiteID, []);
-      }
-      suiteTestRuns.get(suiteID)!.push(run);
-    });
-
-    nodes.forEach(node => {
-      const runs = suiteTestRuns.get(node.id) || [];
-      node.testCount = runs.length;
-      node.passRate = runs.length > 0
-        ? (runs.filter(r => r.Status === 'Passed').length / runs.length) * 100
-        : 0;
-      node.totalCost = runs.reduce((sum, r) => sum + (r.CostUSD || 0), 0);
-      node.averageScore = runs.length > 0
-        ? runs.reduce((sum, r) => sum + (r.Score || 0), 0) / runs.length
-        : 0;
+    const nodes: SuiteHierarchyNode[] = suites.map(suite => {
+      const metrics = metricsBySuite.get(suite.ID) || {};
+      const runs = metrics['Runs'] || 0;
+      return {
+        id: suite.ID,
+        name: suite.Name,
+        parentID: suite.ParentID || null,
+        level: 0,
+        children: [],
+        testCount: (memberIDs.get(suite.ID) || []).length,
+        RunCount: runs,
+        SkippedCount: metrics['Skipped'] || 0,
+        passRate: TestingPassRate.OfExecuted(metrics['Passed'] || 0, runs, metrics['Skipped'] || 0),
+        totalCost: metrics['Cost'] || 0,
+        averageScore: metrics['AverageScore'] || 0,
+        expanded: false
+      };
     });
 
     // Build tree structure
@@ -746,283 +850,126 @@ export class TestingInstrumentationService {
   }
 
   private async loadTrends(): Promise<TestTrendData[]> {
-    const { start, end } = this._dateRange$.value;
-
-    // Create time buckets
+    const { start, end } = this.currentWindow();
+    const bucketSize = this.getBucketSize(start, end);
     const buckets = this.createTimeBuckets(start, end);
+    if (buckets.length === 0) return [];
+
+    // One aggregate read per bucket, all in one round trip. Bounded by the bucket count, which getBucketSize
+    // keeps small (hourly up to a day, 4-hourly up to a week, daily up to 30 days, weekly beyond — ≤ 42 for
+    // the named ranges, 53 for a year).
     const rv = RunView.FromMetadataProvider(this.Provider);
+    const results = await rv.RunViews(buckets.map(bucketStart => {
+      const bucketEnd = new Date(bucketStart.getTime() + bucketSize);
+      return TestingInstrumentationService.aggregateRunsParams(
+        `StartedAt >= '${bucketStart.toISOString()}' AND StartedAt < '${bucketEnd.toISOString()}' AND StartedAt <= '${end.toISOString()}'`
+      );
+    }));
 
-    // Load all test runs for the period - use simple result type with only needed fields
-    type TrendRun = {Status: string; Score: number; CostUSD: number; StartedAt: string | Date; CompletedAt: string | Date | null};
-    const result = await rv.RunView<TrendRun>({
-      EntityName: 'MJ: Test Runs',
-      ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-      OrderBy: 'StartedAt',
-      Fields: ['Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt'],
-      ResultType: 'simple',
-      CacheLocal: true
-    });
-
-    const allRuns = result.Results || [];
-
-    // Aggregate into buckets
-    const trends: TestTrendData[] = buckets.map(bucketStart => {
-      const bucketEnd = new Date(bucketStart.getTime() + this.getBucketSize(start, end));
-
-      const bucketRuns = allRuns.filter(r => {
-        if (!r.StartedAt) return false;
-        const runTime = r.StartedAt instanceof Date ? r.StartedAt : new Date(r.StartedAt);
-        return runTime >= bucketStart && runTime < bucketEnd;
-      });
-
-      const passed = bucketRuns.filter(r => r.Status === 'Passed').length;
-      const failed = bucketRuns.filter(r => r.Status === 'Failed').length;
-      const skipped = bucketRuns.filter(r => r.Status === 'Skipped').length;
-      const errors = bucketRuns.filter(r => r.Status === 'Error').length;
-
-      const averageScore = bucketRuns.length > 0
-        ? bucketRuns.reduce((sum, r) => sum + (r.Score || 0), 0) / bucketRuns.length
-        : 0;
-
-      const totalCost = bucketRuns.reduce((sum, r) => sum + (r.CostUSD || 0), 0);
-
-      const completedRuns = bucketRuns.filter(r => r.CompletedAt != null && r.StartedAt != null);
-      const averageDuration = completedRuns.length > 0
-        ? completedRuns.reduce((sum, r) => {
-            const startTime = r.StartedAt instanceof Date ? r.StartedAt.getTime() : new Date(r.StartedAt).getTime();
-            const endTime = r.CompletedAt instanceof Date ? r.CompletedAt.getTime() : new Date(r.CompletedAt!).getTime();
-            return sum + (endTime - startTime);
-          }, 0) / completedRuns.length
-        : 0;
-
+    return buckets.map((bucketStart, i) => {
+      const values = TestingInstrumentationService.aggregateValues(results[i]);
       return {
         timestamp: bucketStart,
-        totalRuns: bucketRuns.length,
-        passed,
-        failed,
-        skipped,
-        errors,
-        averageScore,
-        totalCost,
-        averageDuration
+        totalRuns: values['Runs'] || 0,
+        passed: values['Passed'] || 0,
+        failed: values['Failed'] || 0,
+        skipped: values['Skipped'] || 0,
+        errors: values['Errors'] || 0,
+        averageScore: values['AverageScore'] || 0,
+        totalCost: values['Cost'] || 0,
+        averageDuration: values['AverageDurationMs'] || 0
       };
     });
-
-    return trends;
   }
 
+  /** The provider as a query runner; MJ's providers implement both interfaces (see {@link IsRunQueryProvider}). */
+  private get runQueryProvider(): IRunQueryProvider {
+    const provider = this.Provider;
+    if (!IsRunQueryProvider(provider)) {
+      throw new Error('TestingInstrumentationService: the configured MetadataProvider cannot run queries');
+    }
+    return provider;
+  }
+
+  /**
+   * Per-test totals come from the `TestRunTotalsByTest` query, which groups on the server: one row per test that
+   * ran in the window, so the read is bounded by the number of tests, not runs. The rankings (top 10) and the
+   * by-type roll-ups are computed from those rows.
+   */
   private async loadAnalytics(): Promise<TestAnalytics> {
-    const { start, end } = this._dateRange$.value;
-    const rv = RunView.FromMetadataProvider(this.Provider);
-
-    // Use simple result type with only needed fields
-    type AnalyticsRun = {Test: string; Status: string; Score: number; CostUSD: number; StartedAt: string | Date; CompletedAt: string | Date | null};
-    const result = await rv.RunView<AnalyticsRun>({
-      EntityName: 'MJ: Test Runs',
-      ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-      Fields: ['Test', 'Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt'],
-      ResultType: 'simple',
-      CacheLocal: true
+    const { start, end } = this.currentWindow();
+    const result = await new RunQuery(this.runQueryProvider).RunQuery({
+      QueryName: 'TestRunTotalsByTest',
+      CategoryPath: '/MJ/',
+      Parameters: { start: start.toISOString(), end: end.toISOString() }
     });
-
-    const testRuns = result.Results || [];
-
-    // Group by test name
-    const testMetrics = new Map<string, { runs: AnalyticsRun[], failures: number }>();
-
-    testRuns.forEach(run => {
-      const testName = run.Test || 'Unknown';
-      if (!testMetrics.has(testName)) {
-        testMetrics.set(testName, { runs: [], failures: 0 });
-      }
-      const metrics = testMetrics.get(testName)!;
-      metrics.runs.push(run);
-      if (run.Status === 'Failed' || run.Status === 'Error') {
-        metrics.failures++;
-      }
-    });
-
-    // Top failing tests
-    const topFailingTests = Array.from(testMetrics.entries())
-      .map(([testName, metrics]) => ({
-        testName,
-        failureCount: metrics.failures,
-        failureRate: metrics.runs.length > 0 ? (metrics.failures / metrics.runs.length) * 100 : 0
-      }))
-      .sort((a, b) => b.failureCount - a.failureCount)
-      .slice(0, 10);
-
-    // Most expensive tests
-    const mostExpensiveTests = Array.from(testMetrics.entries())
-      .map(([testName, metrics]) => {
-        const totalCost = metrics.runs.reduce((sum, r) => sum + (r.CostUSD || 0), 0);
-        const avgCost = metrics.runs.length > 0 ? totalCost / metrics.runs.length : 0;
-        return { testName, totalCost, avgCost };
-      })
-      .sort((a, b) => b.totalCost - a.totalCost)
-      .slice(0, 10);
-
-    // Slowest tests
-    const slowestTests = Array.from(testMetrics.entries())
-      .map(([testName, metrics]) => {
-        const durations = metrics.runs
-          .filter(r => r.CompletedAt != null && r.StartedAt != null)
-          .map(r => {
-            const startTime = r.StartedAt instanceof Date ? r.StartedAt.getTime() : new Date(r.StartedAt).getTime();
-            const endTime = r.CompletedAt instanceof Date ? r.CompletedAt.getTime() : new Date(r.CompletedAt!).getTime();
-            return endTime - startTime;
-          });
-
-        const avgDuration = durations.length > 0
-          ? durations.reduce((sum, d) => sum + d, 0) / durations.length
-          : 0;
-        const maxDuration = durations.length > 0 ? Math.max(...durations) : 0;
-
-        return { testName, avgDuration, maxDuration };
-      })
-      .sort((a, b) => b.avgDuration - a.avgDuration)
-      .slice(0, 10);
-
-    // Cost by type (simplified - would need actual type data)
-    const typeMetrics = new Map<string, { cost: number, count: number }>();
-    testRuns.forEach(run => {
-      const type = run.Test || 'Unknown';
-      if (!typeMetrics.has(type)) {
-        typeMetrics.set(type, { cost: 0, count: 0 });
-      }
-      const metrics = typeMetrics.get(type)!;
-      metrics.cost += run.CostUSD || 0;
-      metrics.count++;
-    });
-
-    const costByType = Array.from(typeMetrics.entries())
-      .map(([testType, metrics]) => ({
-        testType,
-        totalCost: metrics.cost,
-        testCount: metrics.count
-      }))
-      .sort((a, b) => b.totalCost - a.totalCost);
-
-    // Passing rate by type
-    const typePassingMetrics = new Map<string, { total: number, passed: number }>();
-    testRuns.forEach(run => {
-      const type = run.Test || 'Unknown';
-      if (!typePassingMetrics.has(type)) {
-        typePassingMetrics.set(type, { total: 0, passed: 0 });
-      }
-      const metrics = typePassingMetrics.get(type)!;
-      metrics.total++;
-      if (run.Status === 'Passed') {
-        metrics.passed++;
-      }
-    });
-
-    const passingRateByType = Array.from(typePassingMetrics.entries())
-      .map(([testType, metrics]) => ({
-        testType,
-        passRate: metrics.total > 0 ? (metrics.passed / metrics.total) * 100 : 0,
-        totalTests: metrics.total
-      }))
-      .sort((a, b) => a.passRate - b.passRate);
-
-    return {
-      topFailingTests,
-      mostExpensiveTests,
-      slowestTests,
-      costByType,
-      costBySuite: [], // Would need suite data
-      passingRateByType
-    };
+    if (!result.Success) {
+      LogError(`Testing analytics: TestRunTotalsByTest failed: ${result.ErrorMessage}`);
+      return { ...TestRunTotals.ToAnalytics([]), LoadError: result.ErrorMessage || 'The TestRunTotalsByTest query failed.' };
+    }
+    return TestRunTotals.ToAnalytics(TestRunTotals.FromQueryRows(result.Results));
   }
 
+  /**
+   * The review queue: the window's newest runs with no feedback, plus the newest reviewed runs whose automated
+   * result disagrees with their score. Both are bounded run reads ({@link LIST_MAX_ROWS} each, newest first);
+   * the feedback test runs on the server (an IN / NOT IN subquery), so no feedback rows are read.
+   */
   private async loadPendingFeedback(): Promise<FeedbackPending[]> {
-    const { start, end } = this._dateRange$.value;
+    const { start, end } = this.currentWindow();
     const rv = RunView.FromMetadataProvider(this.Provider);
+    const windowFilter = TestingInstrumentationService.windowFilter(start, end);
 
-    // Use simple result types with only needed fields
     type FeedbackTestRun = {ID: string; Test: string; Score: number; Status: string; StartedAt: string | Date};
-    type FeedbackItem = {TestRunID: string};
+    const listParams = (extraFilter: string): RunViewParams => ({
+      EntityName: 'MJ: Test Runs',
+      ExtraFilter: extraFilter,
+      Fields: ['ID', 'Test', 'Score', 'Status', 'StartedAt'],
+      OrderBy: 'StartedAt DESC',
+      MaxRows: TestingInstrumentationService.LIST_MAX_ROWS,
+      ResultType: 'simple'
+    });
+    const discrepancy = "((Status = 'Failed' AND Score >= 0.8) OR (Status = 'Passed' AND Score < 0.5))";
 
-    const [testRunsResult, feedbackResult] = await rv.RunViews([
-      {
-        EntityName: 'MJ: Test Runs',
-        ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-        Fields: ['ID', 'Test', 'Score', 'Status', 'StartedAt'],
-        ResultType: 'simple',
-        CacheLocal: true
-      },
-      {
-        EntityName: 'MJ: Test Run Feedbacks',
-        ExtraFilter: `CreatedAt >= '${start.toISOString()}'`,
-        Fields: ['TestRunID'],
-        ResultType: 'simple',
-        CacheLocal: true
-      }
+    const [unreviewedResult, discrepantResult] = await rv.RunViews([
+      listParams(`${windowFilter} AND ${this.feedbackPredicate(false)}`),
+      listParams(`${windowFilter} AND ${this.feedbackPredicate(true)} AND ${discrepancy}`)
     ]);
 
-    const testRuns = testRunsResult.Results as FeedbackTestRun[];
-    const feedbacks = feedbackResult.Results as FeedbackItem[];
-
-    const feedbackTestRunIDs = new Set(feedbacks.map(f => f.TestRunID));
-
-    const pending: FeedbackPending[] = [];
-
-    testRuns.forEach(run => {
-      const hasFeedback = feedbackTestRunIDs.has(run.ID);
-      const runDateTime = run.StartedAt instanceof Date ? run.StartedAt : new Date(run.StartedAt);
-
-      if (!hasFeedback) {
-        pending.push({
-          testRunID: run.ID,
-          testName: run.Test || 'Unknown',
-          automatedScore: run.Score || 0,
-          automatedStatus: run.Status,
-          runDateTime,
-          reason: 'no-feedback'
-        });
-      } else {
-        // Check for discrepancies
-        if (run.Status === 'Failed' && run.Score != null && run.Score >= 0.8) {
-          pending.push({
-            testRunID: run.ID,
-            testName: run.Test || 'Unknown',
-            automatedScore: run.Score,
-            automatedStatus: run.Status,
-            runDateTime,
-            reason: 'high-score-failed'
-          });
-        } else if (run.Status === 'Passed' && run.Score != null && run.Score < 0.5) {
-          pending.push({
-            testRunID: run.ID,
-            testName: run.Test || 'Unknown',
-            automatedScore: run.Score,
-            automatedStatus: run.Status,
-            runDateTime,
-            reason: 'low-score-passed'
-          });
-        }
-      }
+    const toPending = (run: FeedbackTestRun, reason: FeedbackPending['reason']): FeedbackPending => ({
+      testRunID: run.ID,
+      testName: run.Test || 'Unknown',
+      automatedScore: run.Score || 0,
+      automatedStatus: run.Status,
+      runDateTime: run.StartedAt instanceof Date ? run.StartedAt : new Date(run.StartedAt),
+      reason
     });
 
+    const unreviewed = (unreviewedResult.Results || []) as FeedbackTestRun[];
+    const discrepant = (discrepantResult.Results || []) as FeedbackTestRun[];
+    this.setListBound('PendingUnreviewed', unreviewed.length, unreviewedResult.TotalRowCount);
+    this.setListBound('PendingDiscrepant', discrepant.length, discrepantResult.TotalRowCount);
+    const pending: FeedbackPending[] = [
+      ...unreviewed.map(run => toPending(run, 'no-feedback')),
+      ...discrepant.map(run => toPending(run, run.Status === 'Failed' ? 'high-score-failed' : 'low-score-passed'))
+    ];
     return pending.sort((a, b) => b.runDateTime.getTime() - a.runDateTime.getTime());
   }
 
+  /** Review stats from aggregates over the window's feedback — every feedback row, not a capped sample. */
   private async loadFeedbackStats(): Promise<FeedbackStats> {
-    const { start, end } = this._dateRange$.value;
+    const { start, end } = this.currentWindow();
     const rv = RunView.FromMetadataProvider(this.Provider);
-
-    // Load all feedback for the period - use simple result type with only needed fields
-    type FeedbackStatItem = {Rating: number; IsCorrect: boolean};
-    const feedbackResult = await rv.RunView<FeedbackStatItem>({
+    const result = await rv.RunView({
       EntityName: 'MJ: Test Run Feedbacks',
       ExtraFilter: `CreatedAt >= '${start.toISOString()}' AND CreatedAt <= '${end.toISOString()}'`,
-      Fields: ['Rating', 'IsCorrect'],
-      ResultType: 'simple',
-      CacheLocal: true
+      Fields: ['ID'],
+      MaxRows: 1,
+      Aggregates: TestingInstrumentationService.FEEDBACK_AGGREGATES,
+      ResultType: 'simple'
     });
-
-    const feedbacks = feedbackResult.Results || [];
-    const totalFeedback = feedbacks.length;
+    const values = TestingInstrumentationService.aggregateValues(result);
+    const totalFeedback = values['Feedback'] || 0;
 
     if (totalFeedback === 0) {
       return {
@@ -1035,26 +982,15 @@ export class TestingInstrumentationService {
       };
     }
 
-    // Calculate average rating
-    const avgRating = feedbacks.reduce((sum, f) => sum + (f.Rating || 0), 0) / totalFeedback;
-
-    // Calculate agreement/disagreement rates based on IsCorrect field
-    const correctCount = feedbacks.filter(f => f.IsCorrect === true).length;
-    const incorrectCount = feedbacks.filter(f => f.IsCorrect === false).length;
-
-    const agreementRate = (correctCount / totalFeedback) * 100;
-    const disagreementRate = (incorrectCount / totalFeedback) * 100;
-
-    // Accuracy rate is the same as agreement rate (% of times human agreed with automated result)
-    const accuracyRate = agreementRate;
-
+    const agreementRate = ((values['Correct'] || 0) / totalFeedback) * 100;
     return {
       TotalFeedback: totalFeedback,
       ReviewedCount: totalFeedback, // All feedbacks in this query are reviewed
-      AvgRating: avgRating,
+      AvgRating: values['AverageRating'] || 0,
       AgreementRate: agreementRate,
-      DisagreementRate: disagreementRate,
-      AccuracyRate: accuracyRate
+      DisagreementRate: ((values['Incorrect'] || 0) / totalFeedback) * 100,
+      // Accuracy rate is the same as agreement rate (% of times human agreed with automated result)
+      AccuracyRate: agreementRate
     };
   }
 
@@ -1087,13 +1023,13 @@ export class TestingInstrumentationService {
     const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Use simple result type with only needed fields
-    type VersionRun = {TotalTests: number; PassedTests: number; TotalCostUSD: number; StartedAt: string | Date; GitCommit: string; AgentVersion: string};
+    type VersionRun = {TotalTests: number; PassedTests: number; SkippedTests: number; TotalCostUSD: number; StartedAt: string | Date; GitCommit: string; AgentVersion: string};
     const result = await rv.RunView<VersionRun>({
       EntityName: 'MJ: Test Suite Runs',
       ExtraFilter: '',
       OrderBy: 'StartedAt DESC',
       MaxRows: 100,
-      Fields: ['TotalTests', 'PassedTests', 'TotalCostUSD', 'StartedAt', 'GitCommit', 'AgentVersion'],
+      Fields: ['TotalTests', 'PassedTests', 'SkippedTests', 'TotalCostUSD', 'StartedAt', 'GitCommit', 'AgentVersion'],
       ResultType: 'simple',
       CacheLocal: true
     });
@@ -1117,6 +1053,7 @@ export class TestingInstrumentationService {
 
       const totalTests = runs.reduce((sum, r) => sum + (r.TotalTests || 0), 0);
       const totalPassed = runs.reduce((sum, r) => sum + (r.PassedTests || 0), 0);
+      const totalSkipped = runs.reduce((sum, r) => sum + (r.SkippedTests || 0), 0);
       const totalCost = runs.reduce((sum, r) => sum + (r.TotalCostUSD || 0), 0);
 
       const runDate = latest.StartedAt instanceof Date ? latest.StartedAt : new Date(latest.StartedAt);
@@ -1127,7 +1064,8 @@ export class TestingInstrumentationService {
         agentVersion,
         runDate,
         totalTests,
-        passRate: totalTests > 0 ? (totalPassed / totalTests) * 100 : 0,
+        SkippedTests: totalSkipped,
+        passRate: TestingPassRate.OfExecuted(totalPassed, totalTests, totalSkipped),
         averageScore: 0, // Would need to calculate from test runs
         totalCost,
         averageDuration: 0, // Would need to calculate from test runs
@@ -1176,20 +1114,7 @@ export class TestingInstrumentationService {
    * Load test runs with feedback data joined for evaluation display
    */
   private async loadTestRunsWithFeedback(): Promise<TestRunWithFeedbackSummary[]> {
-    const { start, end } = this._dateRange$.value;
-    const suiteFilter = this._suiteFilter$.value;
-    const typeFilter = this._testTypeFilter$.value;
-
-    let filter = `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`;
-
-    if (suiteFilter) {
-      filter += ` AND TestID IN (SELECT TestID FROM [__mj].[vwTestSuiteTests] WHERE TestSuiteID = '${suiteFilter}')`;
-    }
-
-    if (typeFilter) {
-      filter += ` AND TestID IN (SELECT ID FROM [__mj].[vwTests] WHERE TypeID = '${typeFilter}')`;
-    }
-
+    const { start, end } = this.currentWindow();
     const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Load test runs with additional fields for evaluation
@@ -1214,32 +1139,24 @@ export class TestingInstrumentationService {
       RunContextDetails: string | null;
     };
 
-    const [testRunsResult, feedbackResult] = await rv.RunViews([
-      {
-        EntityName: 'MJ: Test Runs',
-        ExtraFilter: filter,
-        OrderBy: 'StartedAt DESC',
-        MaxRows: 1000,
-        Fields: ['ID', 'TestID', 'Test', 'Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt', 'TargetType', 'TargetLogID', 'PassedChecks', 'FailedChecks', 'TotalChecks', 'MachineName', 'MachineID', 'RunByUserName', 'RunByUserEmail', 'RunContextDetails'],
-        ResultType: 'simple',
-        CacheLocal: true
-      },
-      {
-        EntityName: 'MJ: Test Run Feedbacks',
-        ExtraFilter: `CreatedAt >= '${start.toISOString()}'`,
-        Fields: ['ID', 'TestRunID', 'Rating', 'IsCorrect', 'Comments'],
-        ResultType: 'simple',
-        CacheLocal: true
-      }
-    ]);
+    const testRunsResult = await rv.RunView<MJTestRunExtended>({
+      EntityName: 'MJ: Test Runs',
+      ExtraFilter: this.filteredRunsFilter(start, end),
+      OrderBy: 'StartedAt DESC',
+      MaxRows: TestingInstrumentationService.LIST_MAX_ROWS,
+      Fields: ['ID', 'TestID', 'Test', 'Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt', 'TargetType', 'TargetLogID', 'PassedChecks', 'FailedChecks', 'TotalChecks', 'MachineName', 'MachineID', 'RunByUserName', 'RunByUserEmail', 'RunContextDetails'],
+      ResultType: 'simple'
+    });
+    const testRuns = testRunsResult.Results || [];
+    this.setListBound('RunsWithFeedback', testRuns.length, testRunsResult.TotalRowCount);
+    const feedbacks = await this.loadFeedbackForRuns(testRuns.map(r => r.ID));
 
-    const testRuns = (testRunsResult.Results || []) as MJTestRunExtended[];
-    const feedbacks = (feedbackResult.Results || []) as TestRunFeedbackSimple[];
-
-    // Create feedback lookup map
+    // Feedback is read newest first; the map keeps each run's first (newest) row.
     const feedbackMap = new Map<string, TestRunFeedbackSimple>();
     feedbacks.forEach(f => {
-      feedbackMap.set(f.TestRunID, f);
+      if (!feedbackMap.has(f.TestRunID)) {
+        feedbackMap.set(f.TestRunID, f);
+      }
     });
 
     // Map test runs with feedback
@@ -1287,6 +1204,32 @@ export class TestingInstrumentationService {
   }
 
   /**
+   * The feedback rows of the listed runs, newest first. Bounded: only the given runs (at most
+   * {@link LIST_MAX_ROWS}) and at most {@link FEEDBACK_PER_RUN_BOUND} rows per run on average; when the runs hold
+   * more feedback than that, the oldest rows are not read and the overflow is logged.
+   */
+  private async loadFeedbackForRuns(runIDs: string[]): Promise<TestRunFeedbackSimple[]> {
+    if (runIDs.length === 0) return [];
+    const maxRows = runIDs.length * TestingInstrumentationService.FEEDBACK_PER_RUN_BOUND;
+    const result = await RunView.FromMetadataProvider(this.Provider).RunView<TestRunFeedbackSimple>({
+      EntityName: 'MJ: Test Run Feedbacks',
+      ExtraFilter: `TestRunID IN (${runIDs.map(id => `'${id}'`).join(',')})`,
+      Fields: ['ID', 'TestRunID', 'Rating', 'IsCorrect', 'Comments'],
+      OrderBy: 'CreatedAt DESC',
+      MaxRows: maxRows,
+      ResultType: 'simple'
+    });
+    if (!result.Success) {
+      LogError(`Testing evaluation: feedback read failed: ${result.ErrorMessage}`);
+      return [];
+    }
+    if ((result.TotalRowCount || 0) > result.Results.length) {
+      LogError(`Testing evaluation: ${result.TotalRowCount} feedback rows for ${runIDs.length} runs exceed the ${maxRows}-row bound; the oldest were not read.`);
+    }
+    return result.Results;
+  }
+
+  /**
    * Calculate aggregated evaluation metrics from test runs with feedback
    */
   private calculateEvaluationMetrics(runs: TestRunWithFeedbackSummary[]): EvaluationSummaryMetrics {
@@ -1316,7 +1259,9 @@ export class TestingInstrumentationService {
     const execErrors = runs.filter(r =>
       r.status === 'Error' || r.status === 'Timeout'
     );
-    const execSuccessRate = totalRuns > 0 ? (execCompleted.length / totalRuns) * 100 : 0;
+    // Skipped runs were not executed, so they are out of the success rate's denominator (QF2-Y2).
+    const skippedRuns = runs.filter(r => r.status === 'Skipped').length;
+    const execSuccessRate = TestingPassRate.ShareOfExecuted(execCompleted.length, totalRuns, skippedRuns);
 
     // Human feedback metrics
     const reviewed = runs.filter(r => r.hasHumanFeedback);

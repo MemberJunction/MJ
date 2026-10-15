@@ -25,6 +25,7 @@ import {
     RecordProcessorContext,
     RecordRef,
     RecordResult,
+    RecordIDs,
 } from '@memberjunction/record-set-processor-base';
 import {
     DataFeatureSpec,
@@ -54,9 +55,11 @@ import {
     FeaturePipelineVersionService,
     type RecordFeatureValuesOutcome,
     type TypedFeatureValue,
+    ConfidenceFloor,
+    type BelowConfidenceOutput,
 } from '@memberjunction/feature-pipelines';
 import { EntityDocumentCache, EntityDocumentTemplateParser } from '@memberjunction/entity-documents';
-import type { HumanValueGuard, HumanValueGuardSource, OutputMappingConfig } from '../writeBack';
+import type { HumanValueGuard, HumanValueGuardSource, OutputMappingConfig, WithheldTargetSource, WithheldWriteBackTargets } from '../writeBack';
 import { FeaturePipelineHumanValueGuard } from './FeaturePipelineHumanValueGuard';
 import { EscalationTargetUnresolvableError, FeaturePipelineUnresolvableError } from './FeaturePipelineErrors';
 import type { DeferredFeatureValueSource } from './WriteBackProcessor';
@@ -149,7 +152,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
  * path does not call {@link ProcessRecord} once per record: an extension that overrides `ProcessRecord`
  * does not see those records.
  */
-export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, DeferredFeatureValueSource {
+export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, DeferredFeatureValueSource, WithheldTargetSource {
     /** The driver resolution, started on first use and shared by every record this processor runs. */
     private driverResolution?: Promise<BaseFeaturePipelineDriver>;
 
@@ -316,6 +319,16 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
      */
     public PreviousFeatureValues(recordID: string): Readonly<Record<string, TypedFeatureValue | null>> | undefined {
         return this.previousFeatureValues.get(recordID);
+    }
+
+    /**
+     * The spec outputs whose answers this processor records as `Source='Pipeline'` Feature Values: one row per output for
+     * every record it writes, an empty answer included (a null value, or `[]`). The watermark gate reads them to tell an
+     * output answered empty from one deleted since it was written. Empty when it records none (no spec, or
+     * {@link WritesHistory} off).
+     */
+    public RecordedAnswerOutputs(): DataFeatureOutput[] {
+        return this.WritesHistory ? this.spec?.Outputs || [] : [];
     }
 
     /**
@@ -628,10 +641,16 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         }
 
         // The payload carries the driver's own confidences, so the Dedup Cache stores them and a hit replays them
-        const payload = InferProcessor.WithDriverConfidence(
+        const floored = this.ApplyConfidenceFloors(InferProcessor.WithDriverConfidence(
             validationOutcome.payload,
             this.confidenceOfKeptValues(computed.Confidence, validationOutcome.replacedOutputs)
-        );
+        ));
+        if ('Rejected' in floored) {
+            // Like a constraint rejection: nothing is cached or recorded, and the run counts it apart from failures
+            return InferProcessor.BelowConfidenceFailure(floored.Rejected, aiPromptRunID, computed.ParameterFidelity);
+        }
+        // An output below a 'null' floor is withheld: the payload holds null for it and names it, so a cache hit replays that
+        const payload = floored.Payload;
         const annotations = this.RecordedAnnotations(payload);
         let featureValueCacheID: string | undefined;
 
@@ -1162,7 +1181,13 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             const message = DescribeEscalationFailure(outcome.EscalationReason, outcome.PipelineName, reason);
             return { Result: { Status: 'Failed', FailureKind: 'RejectedInvalid', ErrorMessage: message, AIPromptRunID: outcome.AIPromptRunID || decisionRunID, ParameterFidelity: outcome.ParameterFidelity } };
         }
-        const payload = checked.payload;
+        // The escalated answer is recorded under this pipeline's outputs, so it is held to their confidence floors too
+        const floored = this.ApplyConfidenceFloors(checked.payload);
+        if ('Rejected' in floored) {
+            const failure = InferProcessor.BelowConfidenceFailure(floored.Rejected, outcome.AIPromptRunID || decisionRunID, outcome.ParameterFidelity);
+            return { Result: { ...failure, ErrorMessage: DescribeEscalationFailure(outcome.EscalationReason, outcome.PipelineName, failure.ErrorMessage || '') } };
+        }
+        const payload = floored.Payload;
         try {
             await this.recordSupersededDecision(sample, decision, outcome, context, run);
         } catch (e) {
@@ -1270,7 +1295,16 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         const promptText = prompt.TemplateText ?? prompt.Description ?? prompt.Name ?? '';
         const outputsStr = spec?.Outputs ? JSON.stringify(spec.Outputs) : '';
         const constraintBlock = spec?.Outputs ? RenderConstraintBlock(spec.Outputs, resolved) : '';
-        return `${prompt.ID}::${promptText}::${outputsStr}::${constraintBlock}${this.pipelineTypeHashSuffix(spec)}${this.escalationHashSuffix(spec)}`;
+        return `${prompt.ID}::${promptText}::${outputsStr}::${constraintBlock}${this.pipelineTypeHashSuffix(spec)}${this.escalationHashSuffix(spec)}${this.userMessageHashSuffix(spec)}`;
+    }
+
+    /**
+     * The user-turn option's part of the prompt version hash: the record sent as its own JSON user message changes what
+     * the model reads, so an answer cached without it is never served with it (or the other way round). Empty when the
+     * option is off, so a pipeline that does not opt in keeps its hash and its Dedup Cache.
+     */
+    private userMessageHashSuffix(spec?: DataFeatureSpec): string {
+        return spec?.Context?.RecordAsUserMessage === true ? '::RecordAsUserMessage' : '';
     }
 
     /** The pipeline type's part of the prompt version hash: empty when the type is absent or `LLM`. */
@@ -1325,7 +1359,11 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             return { ...result, Status: 'Failed', ErrorMessage: this.FeatureValueWriteFailure(e, featureValues.Record) };
         }
         this.featureValueKeys.set(featureValues.Record.RecordID, { Pin: featureValues.Pin, InputHash: featureValues.InputHash });
-        const pinned: RecordResult = { ...result, PipelineVersion: this.PipelineVersion, PipelinePin: this.RunPinOf(featureValues.Pin) };
+        const withheld = InferProcessor.WithheldOutputsOf(featureValues.Payload).map((w) => w.OutputName);
+        const pinned: RecordResult = {
+            ...result, PipelineVersion: this.PipelineVersion, PipelinePin: this.RunPinOf(featureValues.Pin),
+            ...(withheld.length > 0 ? { BelowConfidenceOutputs: withheld } : {}),
+        };
         if (featureValues.Context.DryRun === true) {
             // Nothing was written, so the result claims no Outcome; it says it is a dry run instead
             const warnings = this.dryRunRefusal ? [...(result.Warnings || []), `A real run would be refused: ${this.dryRunRefusal}`] : result.Warnings;
@@ -1349,6 +1387,15 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
      */
     public CurrentRunPin(): FeaturePipelineRunPin | null {
         return this.resolvedPin ? this.RunPinOf(this.resolvedPin.Pin) : null;
+    }
+
+    /**
+     * On a dry run, why the version registry would refuse the real run (the version it resolved in `Preflight`), else
+     * null. The run result reports it, so the preview says that applying it would be refused even when every record
+     * was skipped on its watermark.
+     */
+    public CurrentRunRefusal(): string | null {
+        return this.dryRunRefusal;
     }
 
     /**
@@ -1405,9 +1452,13 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
 
         const outputsList: FeatureValueOutputItem[] = [];
         const sources = { $: params.Payload };
+        // An output withheld below its confidence floor records the abstention: its Feature Value row on this key holds
+        // no value (every value column null), so the record counts as answered (the watermark skip reads it) while
+        // write-back clears a target value the pipeline wrote and keeps a person's (WithheldWriteBackTargets)
+        const withheld = new Set(InferProcessor.WithheldOutputsOf(params.Payload).map((w) => w.OutputName));
 
         for (const output of outputs) {
-            const val = params.OmitValues ? null : resolveMappingRef(output.Ref, sources);
+            const val = params.OmitValues || withheld.has(output.Name) ? null : resolveMappingRef(output.Ref, sources);
             outputsList.push({
                 FeatureName: output.Name,
                 Value: val !== undefined ? val : null,
@@ -1596,6 +1647,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             BeforeBuildContext: (record, ctx) => this.beforeBuildContext(record, ctx),
             BeforePromptExecute: (params, record, ctx) => this.beforePromptExecute(params, record, ctx),
             AfterPromptExecute: (result, record, ctx) => this.afterPromptExecute(result, record, ctx),
+            BuildUserMessage: (record) => this.BuildUserMessage(record),
         };
     }
 
@@ -1711,6 +1763,89 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     }
 
     /**
+     * The payload key listing the outputs withheld below their confidence floor ({@link BelowConfidenceOutput}[]), so
+     * the Dedup Cache stores the decision with the outputs and a hit replays it. Reserved, like `_violations`.
+     */
+    public static readonly BELOW_CONFIDENCE_KEY = '_belowConfidence';
+
+    /**
+     * Applies each output's confidence floor (`MinConfidence` / `OnLowConfidence`) to a validated payload. The
+     * confidences are the ones the record's Feature Values carry ({@link RecordedAnnotations}): the driver's, else the
+     * answer's at each ConfidenceRef; an output the constraint check replaced has none, so it is below any floor. Any
+     * below-floor output with policy `fail` rejects the answer. Otherwise each below-floor output (policy `null`) is
+     * withheld: its value in the payload becomes null and the payload names it under {@link BELOW_CONFIDENCE_KEY}, so
+     * its Feature Value records the abstention (no value) and write-back clears a target value the pipeline wrote, keeping
+     * a person's ({@link WithheldWriteBackTargets}).
+     * @param payload - the validated payload; `unknown` on purpose, a model's answer of any shape
+     */
+    protected ApplyConfidenceFloors(payload: unknown): { Payload: unknown } | { Rejected: BelowConfidenceOutput[] } {
+        const below = ConfidenceFloor.FindBelow(this.spec?.Outputs || [], this.RecordedAnnotations(payload).OutputConfidence);
+        if (below.length === 0) {
+            return { Payload: payload };
+        }
+        const rejecting = below.filter((b) => b.Policy === 'fail');
+        if (rejecting.length > 0) {
+            return { Rejected: rejecting };
+        }
+        let withheld: Record<string, unknown> = isPlainRecord(payload) ? structuredClone(payload) : {};
+        for (const b of below) {
+            const ref = FindOutputByName(this.spec?.Outputs || [], b.OutputName)?.Ref;
+            if (ref === '$') {
+                withheld = {}; // the whole answer is the withheld output
+            } else if (ref?.startsWith('$.')) {
+                SetNestedValue(withheld, ref.substring(2), null);
+            }
+        }
+        return { Payload: { ...withheld, [InferProcessor.BELOW_CONFIDENCE_KEY]: below } };
+    }
+
+    /**
+     * The failed result of an answer rejected by a `fail` confidence floor: `FailureKind` `BelowConfidence`, naming each
+     * output with its confidence and floor.
+     */
+    protected static BelowConfidenceFailure(rejected: BelowConfidenceOutput[], aiPromptRunID: string | undefined,
+        parameterFidelity: RecordResult['ParameterFidelity']): RecordResult {
+        const detail = rejected.map((b) => `'${b.OutputName}' confidence ${b.Confidence === null ? 'missing' : b.Confidence} < ${b.MinConfidence}`);
+        return {
+            Status: 'Failed', FailureKind: 'BelowConfidence', BelowConfidenceOutputs: rejected.map((b) => b.OutputName),
+            ErrorMessage: `Answer below its confidence floor: ${detail.join('; ')}`, AIPromptRunID: aiPromptRunID, ParameterFidelity: parameterFidelity,
+        };
+    }
+
+    /**
+     * The outputs a payload withheld below their confidence floor ({@link BELOW_CONFIDENCE_KEY}); empty when none.
+     * @param payload - a validated or cached payload; `unknown` on purpose, a model's answer of any shape
+     */
+    public static WithheldOutputsOf(payload: unknown): BelowConfidenceOutput[] {
+        const stored = isPlainRecord(payload) ? payload[InferProcessor.BELOW_CONFIDENCE_KEY] : undefined;
+        if (!Array.isArray(stored)) {
+            return [];
+        }
+        return stored.flatMap((v: unknown): BelowConfidenceOutput[] => {
+            if (!isPlainRecord(v) || typeof v.OutputName !== 'string' || typeof v.MinConfidence !== 'number' || (v.Policy !== 'null' && v.Policy !== 'fail')) {
+                return [];
+            }
+            return [{ OutputName: v.OutputName, Confidence: typeof v.Confidence === 'number' ? v.Confidence : null, MinConfidence: v.MinConfidence, Policy: v.Policy }];
+        });
+    }
+
+    /**
+     * The write-back targets a successful result withheld: the field of each withheld output with a field target (mapped
+     * to null through the human-value guard), and the child entity of each one with a child target (its mapping skipped). Undefined when the result withheld nothing.
+     */
+    public WithheldWriteBackTargets(result: RecordResult): WithheldWriteBackTargets | undefined {
+        const names = result.Status === 'Succeeded' ? result.BelowConfidenceOutputs || [] : [];
+        if (names.length === 0) {
+            return undefined;
+        }
+        const outputs = names.flatMap((n) => FindOutputByName(this.spec?.Outputs || [], n) || []);
+        return {
+            Fields: outputs.flatMap((o) => (o.Target.Mode === 'field' ? [o.Target.EntityFieldName] : [])),
+            ChildEntities: outputs.flatMap((o) => (o.Target.Mode === 'child' ? [o.Target.EntityName] : [])),
+        };
+    }
+
+    /**
      * The model's reasoning ({@link ModelAnswer.Reasoning}: a "reasoning" key in any case, empty or whitespace-only
      * being none); undefined when capture is off.
      * @param rawResult - the driver's raw result; `unknown` on purpose, a model's parsed JSON answer of any shape
@@ -1809,10 +1944,10 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
 
     /**
      * The payload keys this processor reserves: `_violations` (the outputs the constraint check replaced, see
-     * {@link validateOutputs}) and {@link DRIVER_CONFIDENCE_KEY}. Both ride in the Dedup Cache's stored payload and in
-     * the result payload, so a write-back that maps the whole payload (`$`) carries them too.
+     * {@link validateOutputs}), {@link DRIVER_CONFIDENCE_KEY} and {@link BELOW_CONFIDENCE_KEY}. All three ride in the Dedup Cache's stored payload and
+     * in the result payload, so a write-back that maps the whole payload (`$`) carries them too.
      */
-    public static readonly RESERVED_PAYLOAD_KEYS: readonly string[] = ['_violations', InferProcessor.DRIVER_CONFIDENCE_KEY];
+    public static readonly RESERVED_PAYLOAD_KEYS: readonly string[] = ['_violations', InferProcessor.DRIVER_CONFIDENCE_KEY, InferProcessor.BELOW_CONFIDENCE_KEY];
 
     /**
      * A model's answer without the reserved keys ({@link RESERVED_PAYLOAD_KEYS}), so an answer cannot claim a driver
@@ -1947,6 +2082,28 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         return promptData;
     }
 
+    /**
+     * The prompt's user turn: the record's `Context.Fields` values as one JSON object, in the spec's field order (field
+     * names matched case-insensitively; a field the record lacks is null). Opt-in: null (the prompt keeps the runner's
+     * default user turn, as before the option existed) unless the spec sets `Context.RecordAsUserMessage: true`. JSON-encoding fences each value: a value cannot close its string
+     * or add a key, whatever text it holds (an instruction, a closing tag, a quote). Record IDs are never included, so
+     * the turn depends only on the values the cache key and input hash also read.
+     */
+    protected async BuildUserMessage(record: RecordRef): Promise<string | null> {
+        const fields = this.spec?.Context?.Fields || [];
+        if (this.spec?.Context?.RecordAsUserMessage !== true || fields.length === 0) {
+            return null;
+        }
+        const data = this.recordToPlain(record);
+        const byLowerName = new Map(Object.keys(data).map((k) => [k.toLowerCase(), k]));
+        const values: Record<string, unknown> = {};
+        for (const field of fields) {
+            const key = byLowerName.get(field.toLowerCase());
+            values[field] = key === undefined || data[key] === undefined ? null : data[key];
+        }
+        return JSON.stringify(values);
+    }
+
     /** Extracts a plain field map from the record (BaseEntity → GetAll(), plain object → as-is). */
     protected recordToPlain(record: RecordRef): Record<string, unknown> {
         const r = record.Record as { GetAll?: () => Record<string, unknown> } | Record<string, unknown> | undefined;
@@ -2026,13 +2183,18 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                 }, context.contextUser);
 
                 if (result.Success && result.Results) {
+                    // Keyed by the normalised ID: the database returns a UUID in its own case (SQL Server: upper),
+                    // which a caller-supplied RecordID (a scope's lowercase IDs) need not match
                     const rowMap = new Map<string, Record<string, unknown>>();
                     for (const row of result.Results as Record<string, unknown>[]) {
-                        const idVal = String(row[pk]);
-                        rowMap.set(idVal, row);
+                        const key = row[pk];
+                        // a row without its key value cannot be matched (String(undefined) would key it as "undefined")
+                        if (key !== null && key !== undefined) {
+                            rowMap.set(RecordIDs.Key(String(key)), row);
+                        }
                     }
                     for (const r of chunk) {
-                        const row = rowMap.get(r.RecordID);
+                        const row = rowMap.get(RecordIDs.Key(r.RecordID));
                         if (row) {
                             r.Record = row;
                         }

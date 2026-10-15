@@ -745,3 +745,80 @@ describe('ToWhereClause quote escaping', () => {
     expect(key.ToWhereClause(true, 'double')).toBe('Name="say ""hi"""');
   });
 });
+
+describe('CompositeKey.URLSegmentsNameSameRecord', () => {
+  const LOWER = 'd8a9b7ab-7450-48e5-a0ea-acd1d86acf70';
+  const UPPER = 'D8A9B7AB-7450-48E5-A0EA-ACD1D86ACF70';
+  const OTHER = '11111111-2222-3333-4444-555555555555';
+  const same = (a: string, b: string): boolean => CompositeKey.URLSegmentsNameSameRecord(a, b);
+
+  it('matches a bare value with its single-field segment, whatever the field is called', () => {
+    expect(same(`ID|${UPPER}`, LOWER)).toBe(true);
+    expect(same(LOWER, `ID|${UPPER}`)).toBe(true);
+    expect(same(LOWER, `CustomerCode|${LOWER}`)).toBe(true);
+  });
+
+  it('folds case for string values, the way EqualsKey does', () => {
+    expect(same(UPPER, LOWER)).toBe(true);
+    expect(same(`ID|${LOWER}`, `ID|${UPPER}`)).toBe(true);
+    expect(same('Code|Abc', 'abc')).toBe(true);
+    expect(new CompositeKey([new KeyValuePair('Code', 'Abc')]).EqualsKey([new KeyValuePair('Code', 'abc')])).toBe(true);
+  });
+
+  it('separates different values', () => {
+    expect(same(`ID|${UPPER}`, OTHER)).toBe(false);
+    expect(same(LOWER, OTHER)).toBe(false);
+    expect(same('ID|x', 'Name|x')).toBe(false);
+  });
+
+  it('compares composite keys field by field in any order', () => {
+    expect(same('OrderID|1||LineNo|3', 'LineNo|3||OrderID|1')).toBe(true);
+    expect(same('OrderID|1||LineNo|3', 'OrderID|1||LineNo|4')).toBe(false);
+    expect(same('OrderID|1||LineNo|3', 'OrderID|1')).toBe(false);
+    expect(same('OrderID|1', 'OrderID|1||LineNo|3')).toBe(false);
+    expect(same('A|1', 'A|1||B|2')).toBe(false);
+    expect(same('A|1||B|2', 'A|1')).toBe(false);
+    expect(same('OrderID|1||LineNo|3', '3')).toBe(false);
+  });
+
+  it('is symmetric when a field name repeats', () => {
+    expect(same('A|1||A|1', 'A|1||A|2')).toBe(false);
+    expect(same('A|1||A|2', 'A|1||A|1')).toBe(false);
+    expect(same('A|1||A|2', 'A|2||A|1')).toBe(true);
+  });
+
+  it('keeps a value that itself contains a pipe intact', () => {
+    expect(same('Code|a|b', 'Code|a|b')).toBe(true);
+    expect(same('Code|a|b', 'Code|a')).toBe(false);
+  });
+
+  it('reads numeric keys as text', () => {
+    expect(same('ID|5', '5')).toBe(true);
+    expect(same('5', '50')).toBe(false);
+  });
+
+  it('does not read a segment with an empty field name as a bare value', () => {
+    expect(same('|abc', 'ID|abc')).toBe(false);
+    expect(same('ID|abc', '|abc')).toBe(false);
+    expect(same('|abc', 'abc')).toBe(false);
+    expect(same('abc', '|abc')).toBe(false);
+    expect(same('|abc', '|abc')).toBe(true);
+  });
+
+  it('copes with malformed segments without throwing', () => {
+    expect(same('|', '|')).toBe(true);
+    expect(same('ID|', '')).toBe(false);
+    expect(same('||', 'ID|1')).toBe(false);
+  });
+
+  it('trims, and treats two empty ids as the same and empty against non-empty as different', () => {
+    expect(same(` ID|${LOWER} `, LOWER)).toBe(true);
+    expect(same('', '  ')).toBe(true);
+    expect(same('', LOWER)).toBe(false);
+  });
+
+  it('is what RecordUrlMatchesTab uses for the record id', () => {
+    expect(RecordUrlMatchesTab('Widgets', LOWER, 'Widgets', `ID|${UPPER}`)).toBe(true);
+    expect(RecordUrlMatchesTab('Widgets', OTHER, 'Widgets', `ID|${UPPER}`)).toBe(false);
+  });
+});

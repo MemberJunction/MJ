@@ -423,6 +423,7 @@ describe('Feature Pipeline driver seam', () => {
                     BeforeBuildContext: async () => undefined,
                     BeforePromptExecute: async () => undefined,
                     AfterPromptExecute: async () => ({}),
+                    BuildUserMessage: async () => null,
                 },
             };
             expect(await driver.ComputeOutputs(request)).toEqual({ Success: false, ErrorMessage: 'AI prompt execution failed', AIPromptRunID: undefined });
@@ -433,7 +434,7 @@ describe('Feature Pipeline driver seam', () => {
             executePrompt.mockResolvedValue({ success: true, result: { a: 1 }, promptRun: { ID: 'r1' }, chatResult: { parameterFidelity: fidelity } });
             const request: FeaturePipelineComputeRequest = {
                 Record: makeRecord(), Context: context, Prompt: mockPrompt,
-                Hooks: { BuildPromptData: async () => ({}), BeforeBuildContext: async () => undefined, BeforePromptExecute: async () => undefined, AfterPromptExecute: async (r) => r.result ?? {} },
+                Hooks: { BuildPromptData: async () => ({}), BeforeBuildContext: async () => undefined, BeforePromptExecute: async () => undefined, AfterPromptExecute: async (r) => r.result || {}, BuildUserMessage: async () => null },
             };
             const out = await new LLMFeaturePipelineDriver().ComputeOutputs(request);
             const sent: AIPromptParams = executePrompt.mock.calls[0][0];
@@ -448,7 +449,7 @@ describe('Feature Pipeline driver seam', () => {
             executePrompt.mockResolvedValue({ success: false, errorMessage: error.message, promptRun: { ID: 'r2' }, chatResult: { success: false, exception: error } });
             const request: FeaturePipelineComputeRequest = {
                 Record: makeRecord(), Context: context, Prompt: mockPrompt,
-                Hooks: { BuildPromptData: async () => ({}), BeforeBuildContext: async () => undefined, BeforePromptExecute: async () => undefined, AfterPromptExecute: async () => ({}) },
+                Hooks: { BuildPromptData: async () => ({}), BeforeBuildContext: async () => undefined, BeforePromptExecute: async () => undefined, AfterPromptExecute: async () => ({}), BuildUserMessage: async () => null },
             };
             expect(await new LLMFeaturePipelineDriver().ComputeOutputs(request)).toEqual({
                 Success: false, ErrorMessage: error.message, AIPromptRunID: 'r2', ParameterFidelity: refused,
@@ -461,7 +462,7 @@ describe('Feature Pipeline driver seam', () => {
             executePrompt.mockResolvedValue({ success: false, errorMessage: 'model unavailable', chatResult: { success: false, exception: lookalike } });
             const request: FeaturePipelineComputeRequest = {
                 Record: makeRecord(), Context: context, Prompt: mockPrompt,
-                Hooks: { BuildPromptData: async () => ({}), BeforeBuildContext: async () => undefined, BeforePromptExecute: async () => undefined, AfterPromptExecute: async () => ({}) },
+                Hooks: { BuildPromptData: async () => ({}), BeforeBuildContext: async () => undefined, BeforePromptExecute: async () => undefined, AfterPromptExecute: async () => ({}), BuildUserMessage: async () => null },
             };
             const out = await new LLMFeaturePipelineDriver().ComputeOutputs(request);
             expect('ErrorMessage' in out ? out.ParameterFidelity : 'succeeded').toBeUndefined();

@@ -12,6 +12,17 @@ export interface ActionParamValue {
     Error?: string;
 }
 
+/**
+ * One param in a RunAction `ResultData` payload. A local type rather than `ActionParam` from
+ * `@memberjunction/actions-base`: that class types `Value` as `any`, and actions-base is only a devDependency here.
+ */
+export interface ResultParam {
+    Name: string;
+    Type?: 'Input' | 'Output' | 'Both';
+    /** unknown: an action output is any JSON value; the harness only formats it for display. */
+    Value: unknown;
+}
+
 export interface ActionResult {
     Success: boolean;
     Message?: string;
@@ -450,10 +461,46 @@ export class ActionTestHarnessComponent extends BaseAngularComponent implements 
         return this._actionParams.filter(p => p.Type === 'Output' || p.Type === 'Both');
     }
 
+    /**
+     * The value the last run returned for one declared output, formatted for display ('null' when absent).
+     * `RunAction.ResultData` is a JSON string holding an ARRAY of `{Name, Type, Value}` params (the
+     * Output/Both params ActionResolver returns), so the value is matched by param name — case-insensitively,
+     * as the action engine matches param names — never by indexing the payload with the name.
+     */
     public GetOutputParamValue(paramName: string): string {
-        if (!this.ExecutionResult?.ResultData) return 'null';
-        const data = this.ExecutionResult.ResultData as Record<string, unknown>;
-        return this.FormatResultData(data[paramName]);
+        const wanted = paramName.trim().toLowerCase();
+        const match = this.getResultParams().find(p => p.Name.trim().toLowerCase() === wanted);
+        return this.FormatResultData(match?.Value);
+    }
+
+    /** Parse cache for {@link getResultParams}: the template calls GetOutputParamValue on every change detection. */
+    private parsedResultData: { Source: unknown; Params: ResultParam[] } | null = null;
+
+    /** The `{Name, Value}` params in the last run's ResultData, parsed once per result. */
+    private getResultParams(): ResultParam[] {
+        const source = this.ExecutionResult?.ResultData;
+        if (!this.parsedResultData || this.parsedResultData.Source !== source) {
+            this.parsedResultData = { Source: source, Params: ActionTestHarnessComponent.ParseResultParams(source) };
+        }
+        return this.parsedResultData.Params;
+    }
+
+    /**
+     * Reads the RunAction `ResultData` payload (a JSON string, or an already-parsed value) into its params.
+     * Anything that is not an array of named params yields an empty list.
+     */
+    public static ParseResultParams(resultData: unknown): ResultParam[] {
+        let parsed: unknown = resultData; // unknown: ResultData is an untyped GraphQL string payload, narrowed below
+        if (typeof resultData === 'string') {
+            try {
+                parsed = JSON.parse(resultData);
+            } catch {
+                return [];
+            }
+        }
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter((p): p is ResultParam =>
+            typeof p === 'object' && p !== null && typeof (p as Record<string, unknown>)['Name'] === 'string');
     }
 
     public FormatResultData(data: unknown): string {

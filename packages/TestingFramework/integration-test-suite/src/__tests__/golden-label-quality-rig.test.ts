@@ -188,3 +188,29 @@ describe('label-quality rig: budget ceiling and labeler order', () => {
         expect(sorted).toEqual(['Top', 'Flash', 'Pro', 'Unpriced', 'Unpriced2', 'Old']);
     });
 });
+
+describe('GoldenLabelQualityRig.SpecificationCasesOf', () => {
+    let dir: string;
+    beforeEach(() => {
+        dir = mkdtempSync(join(tmpdir(), 'glq-spec-'));
+    });
+    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+    it('keeps the specification cases of the golden set being replaced, in order, so a re-run never drops them', () => {
+        const path = join(dir, 'golden.json');
+        const required = { ID: 'h01', Input: { CurrentJobTitle: 'asdf' }, Expected: { SeniorityLevel: ['Unknown'] }, ExpectAbstain: ['SeniorityLevel'], Required: true, LabelSource: 'specification' };
+        const labelled = { ID: 'g01', Input: { CurrentJobTitle: 'Owner' }, Expected: { SeniorityLevel: ['C-Level'] }, LabelSource: 'model-consensus' };
+        writeFileSync(path, JSON.stringify({ Cases: [labelled, required], LabelQuality: null }));
+        expect(GoldenLabelQualityRig.SpecificationCasesOf(path)).toEqual([required]);
+    });
+
+    it('has none when the golden set does not exist yet', () => {
+        expect(GoldenLabelQualityRig.SpecificationCasesOf(join(dir, 'missing.json'))).toEqual([]);
+    });
+
+    it('refuses a golden set whose specification case is malformed, rather than dropping it', () => {
+        const path = join(dir, 'golden.json');
+        writeFileSync(path, JSON.stringify({ Cases: [{ ID: 'h01', LabelSource: 'specification' }] }));
+        expect(() => GoldenLabelQualityRig.SpecificationCasesOf(path)).toThrow(/h01/);
+    });
+});

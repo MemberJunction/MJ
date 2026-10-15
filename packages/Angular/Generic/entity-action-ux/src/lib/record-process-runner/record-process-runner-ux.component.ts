@@ -10,6 +10,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import type { FieldRulesResultPayload, WriteBackResult, WriteBackRunPayload } from '@memberjunction/record-set-processor-base';
 import {
     RecordProcessRunNowOperation,
     type RecordProcessRunNowInput,
@@ -20,6 +21,7 @@ import type { RemoteOpResult } from '@memberjunction/core';
 import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, MJProgressBarComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { BaseEntityActionRuntimeUX } from '../base-entity-action-runtime-ux';
 import { BuildRecordProcessScope, DisplayValue } from '../scope';
+import { WriteBackPreviewModel, type PreviewChange } from '../write-back-preview';
 
 /** The run summary the runner renders, mapped from the operation's typed output. */
 interface RunSummary {
@@ -29,36 +31,29 @@ interface RunSummary {
     Succeeded: number;
     Errored: number;
     Skipped: number;
-    Status?: string;
+    Status?: RecordProcessRunNowOutput['status'];
     ErrorMessage?: string;
+    /** A dry run whose real run would be refused (e.g. its Feature Pipeline version is not activated): why. */
+    WouldRefuse?: string;
 }
 
 /** The driver's flow state. */
 type RunnerState = 'loading' | 'preview' | 'applying' | 'done' | 'error';
 
-/** One computed field change (mirrors the engine's `FieldChange` for the bits the UI shows). */
-interface DiffChange {
-    Field: string;
-    OldValue: unknown;
-    NewValue: unknown;
-    Applied: boolean;
-    Changed: boolean;
-    Error?: string;
-}
-
-/** The JSON payload persisted on each `MJ: Process Run Details.ResultPayload` for a FieldRules run. */
-interface DiffPayload {
-    DryRun: boolean;
-    Changes: DiffChange[];
-    ChangedFields: string[];
-}
+/** A run detail's payload: a FieldRules run's per-record diff, or a write-back run's `{ output, writeBack }`. Each carries only its own part. */
+type RunDetailPayload = Partial<FieldRulesResultPayload> & WriteBackRunPayload;
 
 /** A per-record row of the preview table. */
 interface RecordDiffRow {
     RecordID: string;
+    /** The record's display name, as the engine's dry run read it; absent when it read none (the ID is shown). */
+    RecordName?: string;
     Status: string;
-    Changes: DiffChange[];
-    ErrorMessage?: string;
+    Changes: PreviewChange[];
+    /** What the real write would fail on, or the run's own error for the record. */
+    Errors: string[];
+    /** Outputs the answer withheld below their confidence floor (not changes; see {@link WriteBackPreviewModel.WithheldLines}). */
+    Withheld: string[];
 }
 
 /** Raw `MJ: Process Run Details` projection used to build the diff. */
@@ -112,9 +107,19 @@ interface RawDetail {
                         </div>
                     }
                     @case ('preview') {
+                        @if (PreviewResult?.WouldRefuse) {
+                            <div class="rp-refusal" role="alert">
+                                <i class="fa-solid fa-ban"></i>
+                                <div>
+                                    <strong>Applying these changes would be refused</strong>
+                                    <p>{{ PreviewResult?.WouldRefuse }}</p>
+                                    <p>The preview below shows what this version would write once it may run.</p>
+                                </div>
+                            </div>
+                        }
                         <div class="rp-summary">
                             <span class="rp-pill rp-pill--primary">{{ ChangedRecordCount }} of {{ PreviewResult?.Processed ?? 0 }} {{ EntityLabel }} will change</span>
-                            <span class="rp-pill">{{ TotalChangeCount }} field update(s)</span>
+                            <span class="rp-pill">{{ TotalChangeCount }} change(s)</span>
                             @if (SkippedCount) { <span class="rp-pill rp-pill--muted">{{ SkippedCount }} unchanged</span> }
                             @if (ErroredCount) { <span class="rp-pill rp-pill--error">{{ ErroredCount }} error(s)</span> }
                         </div>
@@ -128,18 +133,27 @@ interface RawDetail {
                             <div class="rp-diff" role="table">
                                 @for (row of DiffRows; track row.RecordID) {
                                     <div class="rp-diff-record" role="row">
-                                        <div class="rp-diff-key" [title]="row.RecordID">{{ row.RecordID }}</div>
+                                        <div class="rp-diff-key" [class.rp-diff-key--named]="!!row.RecordName" [title]="row.RecordID">{{ row.RecordName || row.RecordID }}</div>
                                         <div class="rp-diff-changes">
-                                            @for (c of row.Changes; track c.Field) {
+                                            @for (c of row.Changes; track $index) {
                                                 <div class="rp-change">
                                                     <span class="rp-field">{{ c.Field }}</span>
-                                                    <span class="rp-old">{{ Display(c.OldValue) }}</span>
-                                                    <i class="fa-solid fa-arrow-right-long rp-arrow"></i>
-                                                    <span class="rp-new">{{ Display(c.NewValue) }}</span>
+                                                    @if (c.IsAddition) {
+                                                        <span class="rp-new" [attr.title]="c.NewValueName ? Display(c.NewValue) : null">{{ c.NewValueName || Display(c.NewValue) }}</span>
+                                                    } @else {
+                                                        <span class="rp-old" [attr.title]="c.OldValueName ? Display(c.OldValue) : null">{{ c.OldValueName || Display(c.OldValue) }}</span>
+                                                        <i class="fa-solid fa-arrow-right-long rp-arrow"></i>
+                                                        <span class="rp-new" [attr.title]="c.NewValueName ? Display(c.NewValue) : null">{{ c.NewValueName || Display(c.NewValue) }}</span>
+                                                    }
                                                 </div>
                                             }
-                                            @if (row.ErrorMessage) {
-                                                <div class="rp-change rp-change--error">{{ row.ErrorMessage }}</div>
+                                            @for (message of row.Errors; track $index) {
+                                                <div class="rp-change rp-change--error">{{ message }}</div>
+                                            }
+                                            @for (line of row.Withheld; track $index) {
+                                                <div class="rp-change rp-change--withheld">
+                                                    <i class="fa-solid fa-circle-info"></i>{{ line }}
+                                                </div>
                                             }
                                         </div>
                                     </div>
@@ -156,7 +170,7 @@ interface RawDetail {
             <mj-dialog-actions>
                 @switch (State) {
                     @case ('preview') {
-                        @if (HasChanges) {
+                        @if (CanApply) {
                             <button mjButton variant="primary" (click)="Apply()">
                                 <i class="fa-solid fa-check"></i> Apply {{ TotalChangeCount }} change(s)
                             </button>
@@ -179,6 +193,9 @@ interface RawDetail {
         .rp-error i, .rp-done i { font-size: 22px; margin-top: 2px; }
         .rp-error p, .rp-done p { margin: 4px 0 0; }
         .rp-warn { color: var(--mj-status-warning-text); }
+        .rp-refusal { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; margin-bottom: 14px; border-radius: var(--mj-radius-md, 8px); background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); }
+        .rp-refusal i { font-size: 20px; margin-top: 2px; }
+        .rp-refusal p { margin: 4px 0 0; }
         .rp-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
         .rp-pill { padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); }
         .rp-pill--primary { background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
@@ -190,8 +207,10 @@ interface RawDetail {
         .rp-diff-record { display: grid; grid-template-columns: 180px 1fr; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--mj-border-subtle); }
         .rp-diff-record:last-child { border-bottom: none; }
         .rp-diff-key { font-family: var(--mj-font-mono, monospace); font-size: 12px; color: var(--mj-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rp-diff-key--named { font-family: inherit; font-size: 13px; font-weight: 600; color: var(--mj-text-primary); }
         .rp-change { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 2px 0; font-size: 13px; }
         .rp-change--error { color: var(--mj-status-error-text); }
+        .rp-change--withheld { color: var(--mj-text-muted); }
         .rp-field { font-weight: 600; min-width: 120px; }
         .rp-old { color: var(--mj-text-muted); text-decoration: line-through; }
         .rp-new { color: var(--mj-status-success-text); font-weight: 600; }
@@ -218,6 +237,8 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
     get Title(): string { return this.Context?.ActionLabel || 'Run Record Process'; }
     get EntityLabel(): string { return this.Context?.EntityInfo?.DisplayName || this.Context?.EntityInfo?.Name || 'records'; }
     get HasChanges(): boolean { return this.ChangedRecordCount > 0; }
+    /** Apply is offered only for changes a real run would make: never when the real run would be refused. */
+    get CanApply(): boolean { return this.HasChanges && !this.PreviewResult?.WouldRefuse; }
     get SkippedCount(): number { return this.PreviewResult?.Skipped ?? 0; }
     get ErroredCount(): number { return this.PreviewResult?.Errored ?? 0; }
     get DoneMessage(): string {
@@ -249,10 +270,10 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
         }
     }
 
-    /** Step 2: the user confirmed — run for real. */
+    /** Step 2: the user confirmed — run for real. Never when the preview said the real run would be refused. */
     async Apply(): Promise<void> {
         const recordProcessID = this.recordProcessID();
-        if (!recordProcessID) return;
+        if (!recordProcessID || this.PreviewResult?.WouldRefuse) return;
         this.State = 'applying';
         this.cdr.detectChanges();
         try {
@@ -305,12 +326,17 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
             Skipped: o?.skipped ?? 0,
             Status: o?.status,
             ErrorMessage: result.ErrorMessage ?? o?.errorMessage ?? (o && o.status !== 'Completed' ? `Run ended with status '${o.status}'` : undefined),
+            WouldRefuse: o?.wouldRefuse || undefined,
         };
     }
 
-    /** Reads `MJ: Process Run Details` for the dry-run and builds the per-record diff rows. */
+    /**
+     * Reads `MJ: Process Run Details` for the dry-run and builds the per-record diff rows. A FieldRules run's detail
+     * carries its own `Changes`; a write-back run's carries the `writeBack` preview, which holds the real write's
+     * own decision (see {@link WriteBackPreviewModel}), so nothing is compared here.
+     */
     private async loadDiff(processRunID: string): Promise<void> {
-        const rv = await RunView.FromMetadataProvider(this.Context?.Provider ?? Metadata.Provider).RunView({
+        const rv = await RunView.FromMetadataProvider(this.Context?.Provider || Metadata.Provider).RunView<RawDetail>({
             EntityName: 'MJ: Process Run Details',
             ExtraFilter: `ProcessRunID='${processRunID}'`,
             Fields: ['RecordID', 'Status', 'ResultPayload', 'ErrorMessage'],
@@ -323,21 +349,48 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
         const rows: RecordDiffRow[] = [];
         let changedRecords = 0;
         let totalChanges = 0;
-        for (const detail of rv.Results as RawDetail[]) {
-            const payload = detail.ResultPayload ? SafeJSONParse<DiffPayload>(detail.ResultPayload) : undefined;
-            const changes = (payload?.Changes ?? []).filter((c) => c.Applied && c.Changed && !c.Error);
-            if (changes.length > 0) {
+        for (const detail of rv.Results) {
+            const payload = detail.ResultPayload ? SafeJSONParse<RunDetailPayload>(detail.ResultPayload) || undefined : undefined;
+            const row = payload?.writeBack ? this.writeBackRow(detail, payload.writeBack) : this.fieldRulesRow(detail, payload);
+            if (row.Changes.length > 0) {
                 changedRecords++;
-                totalChanges += changes.length;
+                totalChanges += row.Changes.length;
             }
-            if (changes.length > 0 || detail.ErrorMessage) {
-                rows.push({ RecordID: detail.RecordID, Status: detail.Status, Changes: changes, ErrorMessage: detail.ErrorMessage });
+            // a record whose only news is a withheld output is listed too: the dialog says why it does not change
+            if (row.Changes.length > 0 || row.Errors.length > 0 || row.Withheld.length > 0) {
+                rows.push(row);
             }
         }
         this.DiffRows = rows;
         this.ChangedRecordCount = changedRecords;
         this.TotalChangeCount = totalChanges;
-        this.Truncated = (this.PreviewResult?.Processed ?? 0) > RecordProcessRunnerUXComponent.MAX_PREVIEW_ROWS;
+        this.Truncated = (this.PreviewResult?.Processed || 0) > RecordProcessRunnerUXComponent.MAX_PREVIEW_ROWS;
+    }
+
+    /** A FieldRules run's row: the changes the engine computed that it would apply. */
+    private fieldRulesRow(detail: RawDetail, payload: RunDetailPayload | undefined): RecordDiffRow {
+        const changes: PreviewChange[] = (payload?.Changes || []).filter((c) => c.Applied && c.Changed && !c.Error);
+        return {
+            RecordID: detail.RecordID, RecordName: payload?.RecordName, Status: detail.Status, Changes: changes,
+            Errors: detail.ErrorMessage ? [detail.ErrorMessage] : [], Withheld: [],
+        };
+    }
+
+    /**
+     * A write-back run's row. What the real write would fail on is the record's error; the run detail's own message
+     * (which repeats it) is shown only when the preview names nothing.
+     */
+    private writeBackRow(detail: RawDetail, writeBack: WriteBackResult): RecordDiffRow {
+        const preview = WriteBackPreviewModel.Build(detail.RecordID, writeBack, (entity, field) => this.fieldLabel(entity, field));
+        const errors = preview.Errors.length > 0 ? preview.Errors : detail.ErrorMessage ? [detail.ErrorMessage] : [];
+        return { RecordID: detail.RecordID, RecordName: writeBack.RecordName, Status: detail.Status, Changes: preview.Changes, Errors: errors, Withheld: preview.Withheld };
+    }
+
+    /** A field's display name from metadata (in memory, no read); the field name when metadata does not know it. */
+    private fieldLabel(entityName: string, field: string): string {
+        const info = (this.Context?.Provider || Metadata.Provider).EntityByName(entityName);
+        const fieldInfo = info?.Fields.find((f) => f.Name.trim().toLowerCase() === field.trim().toLowerCase());
+        return fieldInfo?.DisplayNameOrName || field;
     }
 
     /** Builds the engine scope from the host-supplied context (delegates to the pure helper). */

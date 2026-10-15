@@ -5,6 +5,7 @@
  */
 
 export * from './spec/data-feature-spec.js';
+export * from './spec/confidence-floor.js';
 export * from './spec/value-constraint.js';
 export * from './spec/output-target.js';
 export * from './spec/feature-pipeline-driver-capabilities.js';

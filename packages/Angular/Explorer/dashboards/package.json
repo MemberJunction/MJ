@@ -182,6 +182,7 @@
     "@memberjunction/ng-versions": "6.2.0-edge.3",
     "@memberjunction/ng-word-cloud": "6.2.0-edge.3",
     "@memberjunction/predictive-studio-core": "6.2.0-edge.3",
+    "@memberjunction/record-set-processor-base": "6.2.0-edge.3",
     "@memberjunction/tag-engine-base": "6.2.0-edge.3",
     "@memberjunction/templates-base-types": "6.2.0-edge.3",
     "@memberjunction/testing-engine-base": "6.2.0-edge.3",

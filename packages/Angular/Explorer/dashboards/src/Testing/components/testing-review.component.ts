@@ -17,6 +17,7 @@ import {
   TestRunWithFeedbackSummary,
   EvaluationSummaryMetrics
 } from '../services/testing-instrumentation.service';
+import { TestingListBoundInfo, type TestingListBounds } from '../services/testing-list-bound';
 import { UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -145,6 +146,9 @@ interface ReviewFormState {
       <!-- Review Queue View -->
       @if (CurrentView === 'queue') {
         <div class="content-card">
+          @for (notice of QueueNotices; track notice) {
+            <div class="list-bound-notice"><i class="fa-solid fa-circle-info"></i> {{ notice }}</div>
+          }
           @if (PendingItems.length === 0) {
             <mj-empty-state Variant="success"
               Title="All caught up!"
@@ -271,6 +275,9 @@ interface ReviewFormState {
             </div>
           </div>
 
+          @if (HistoryNotice) {
+            <div class="list-bound-notice"><i class="fa-solid fa-circle-info"></i> {{ HistoryNotice }}</div>
+          }
           @if (FilteredHistoryItems.length === 0) {
             <mj-empty-state Icon="fa-solid fa-folder-open"
               Title="No reviewed items"
@@ -568,6 +575,18 @@ interface ReviewFormState {
     }
 
     /* Queue List */
+    .list-bound-notice {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      margin-bottom: 10px;
+      font-size: 12.5px;
+      color: var(--mj-text-secondary);
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: 6px;
+    }
     .queue-list {
       max-height: 600px;
       overflow-y: auto;
@@ -1168,7 +1187,12 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
   HistoryItems: TestRunWithFeedbackSummary[] = [];
   FilteredHistoryItems: TestRunWithFeedbackSummary[] = [];
   Metrics: EvaluationSummaryMetrics | null = null;
+  /** Exact number of runs awaiting review (both queue kinds), even when the queue list is capped. */
   PendingCount = 0;
+  /** "Showing the newest … of …" lines for queue lists the load capped. */
+  QueueNotices: string[] = [];
+  /** "Showing the newest … of …" for the run list the history is drawn from, when capped. */
+  HistoryNotice: string | null = null;
   Disagreement: DisagreementItem[] = [];
   DisagreementError = '';
 
@@ -1270,7 +1294,14 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(items => {
         this.PendingItems = items;
-        this.PendingCount = items.length;
+        this.emitState();
+        this.cdr.markForCheck();
+      });
+
+    this.instrumentationService.ListBounds$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(bounds => {
+        this.applyListBounds(bounds);
         this.emitState();
         this.cdr.markForCheck();
       });
@@ -1290,6 +1321,20 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
         this.applyHistoryFilters();
         this.cdr.markForCheck();
       });
+  }
+
+  /**
+   * The pending count is the exact total of both queue kinds; a capped queue list says how much of it is shown,
+   * so the badge and the list never disagree silently.
+   */
+  private applyListBounds(bounds: TestingListBounds): void {
+    this.PendingCount = bounds.PendingUnreviewed.Total + bounds.PendingDiscrepant.Total;
+    this.QueueNotices = [
+      TestingListBoundInfo.Notice(bounds.PendingUnreviewed, 'unreviewed runs'),
+      TestingListBoundInfo.Notice(bounds.PendingDiscrepant, 'reviewed runs whose result disagrees with their score')
+    ].filter((n): n is string => n !== null);
+    const historyNotice = TestingListBoundInfo.Notice(bounds.RunsWithFeedback, 'runs');
+    this.HistoryNotice = historyNotice ? `${historyNotice} Reviews of older runs are not listed.` : null;
   }
 
   // ------------------------------------------------------------------

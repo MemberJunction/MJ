@@ -236,6 +236,7 @@ function computeHooks(state: Record<string, string>): FeaturePipelineComputeHook
         BuildPromptData: vi.fn<FeaturePipelineComputeHooks['BuildPromptData']>(async () => state),
         BeforePromptExecute: vi.fn<FeaturePipelineComputeHooks['BeforePromptExecute']>(async () => undefined),
         AfterPromptExecute: vi.fn<FeaturePipelineComputeHooks['AfterPromptExecute']>(async (result) => result.result),
+        BuildUserMessage: vi.fn<FeaturePipelineComputeHooks['BuildUserMessage']>(async () => null),
     };
 }
 

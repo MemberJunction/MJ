@@ -69,7 +69,9 @@ export interface RunRecordProcessOptions {
     /**
      * Whether the run skips records its watermark says are unchanged (default: the Record Process's `SkipUnchanged`).
      * A run that must re-derive the records it names, such as a version backfill, passes false: the watermark would
-     * otherwise skip a record whose source row did not change, which is exactly the record a backfill is for.
+     * otherwise skip a record whose source row did not change, which is exactly the record a backfill is for. Such a
+     * run still refreshes the watermarks of the records it processes (Checksum, a processor that computes a basis hash),
+     * so the next skipping run skips them.
      */
     SkipUnchanged?: boolean;
 }

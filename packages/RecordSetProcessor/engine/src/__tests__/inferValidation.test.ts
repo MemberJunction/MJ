@@ -121,6 +121,22 @@ describe('the run keeps the version it resolved', () => {
         expect(result).toMatchObject({ Status: 'Succeeded', DryRun: true });
         expect(result.Warnings).toContain(`A real run would be refused: ${refusal}`);
     });
+
+    it('reports a dry run\'s refusal at run level, so a run whose records were all skipped still reports it (F16)', async () => {
+        const refusal = 'Feature Pipeline version v6 is not activated: run its golden-set test.';
+        vi.spyOn(FeaturePipelineVersionService.Instance, 'ResolveForRun').mockResolvedValue({ Version: null, Status: null, WouldRefuse: refusal });
+        const p = new InferProcessor('PROMPT-1', undefined, spec, null);
+        expect(p.CurrentRunRefusal()).toBeNull();
+        await p.Preflight({ ...context, DryRun: true });
+        expect(p.CurrentRunRefusal()).toBe(refusal);
+    });
+
+    it('reports no refusal when the dry run\'s version would run', async () => {
+        vi.spyOn(FeaturePipelineVersionService.Instance, 'ResolveForRun').mockResolvedValue({ Version: 5, Status: 'Active' });
+        const p = new InferProcessor('PROMPT-1', undefined, spec, null);
+        await p.Preflight({ ...context, DryRun: true });
+        expect(p.CurrentRunRefusal()).toBeNull();
+    });
 });
 
 describe('InferProcessor run pin and resolved constraints', () => {

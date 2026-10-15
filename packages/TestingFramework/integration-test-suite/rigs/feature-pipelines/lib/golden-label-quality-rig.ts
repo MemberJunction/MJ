@@ -1,7 +1,8 @@
 /**
  * golden-label-quality-rig.ts — the label-quality rig's logic, without side effects so it can be unit-tested; the
  * command line is `../golden-label-quality.ts`. Labels every golden case with labelers B (OpenAI) and C (Google) under
- * the written guide, adjudicates against labeler A, and writes the golden set with its label-quality record. No person
+ * the written guide, adjudicates against labeler A, and writes the golden set with its label-quality record (carrying
+ * over the set's unlabelled `specification` cases, after the labelled ones). No person
  * reviews labels: agreement, adjudication and exclusion are computed by GoldenLabelQualityCheck.Adjudicate, and the
  * golden-set driver re-checks the stored record before every evaluation.
  *
@@ -24,7 +25,7 @@ import { BaseLLM, ChatMessageRole, ChatParams, GetAIAPIKey, ModelUsage, type Cha
 import '@memberjunction/ai-gemini';
 import '@memberjunction/ai-openai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { GoldenLabelQualityCheck, type LabelerAnswer, type LabelerIdentity, type LabelledCase } from '@memberjunction/testing-engine';
+import { GoldenLabelQualityCheck, type GoldenCase, type LabelerAnswer, type LabelerIdentity, type LabelledCase } from '@memberjunction/testing-engine';
 import { BootstrapIntegrationServer, type IntegrationBootstrapContext } from '@memberjunction/testing-integration';
 import { RigUsageError } from '../../lib/rig-cli';
 
@@ -412,6 +413,34 @@ export class GoldenLabelQualityRig {
             && typeof v.Spend === 'object' && v.Spend !== null && 'Cost' in v.Spend && typeof v.Spend.Cost === 'number';
     }
 
+    /**
+     * The `specification` cases (fixed by the guide's rule, never labelled) of the golden set at `path`, in order; empty
+     * when the file does not exist. The rig rewrites the golden set from the labelled cases, so it carries these over.
+     * @throws Error naming a specification case that lacks an ID, an input or its expected labels: dropping it silently
+     * would remove a must-pass case from the gate
+     */
+    public static SpecificationCasesOf(path: string): GoldenCase[] {
+        if (!existsSync(path)) {
+            return [];
+        }
+        const parsed: unknown = JSON.parse(readFileSync(path, 'utf8')); // unknown: JSON from disk, checked below
+        const all: unknown[] = typeof parsed === 'object' && parsed !== null && 'Cases' in parsed && Array.isArray(parsed.Cases) ? parsed.Cases : [];
+        const specification = all.filter((c) => typeof c === 'object' && c !== null && 'LabelSource' in c && c.LabelSource === 'specification');
+        return specification.map((c) => {
+            if (!GoldenLabelQualityRig.IsGoldenCase(c)) {
+                const id = typeof c === 'object' && c !== null && 'ID' in c ? String(c.ID) : '(no ID)';
+                throw new Error(`${path}: specification case ${id} needs ID, Input and Expected`);
+            }
+            return c;
+        });
+    }
+
+    /** Whether a parsed value is a golden case (ID, Input, Expected, LabelSource). `unknown` because it comes from JSON.parse. */
+    protected static IsGoldenCase(c: unknown): c is GoldenCase {
+        return typeof c === 'object' && c !== null && 'ID' in c && typeof c.ID === 'string' && 'Input' in c && typeof c.Input === 'object'
+            && c.Input !== null && 'Expected' in c && typeof c.Expected === 'object' && c.Expected !== null && 'LabelSource' in c;
+    }
+
     /** Labels, adjudicates and writes. @returns the rig's exit code */
     public static async Run(args: GoldenLabelRigArgs): Promise<number> {
         const a = GoldenLabelQualityRig.ReadLabelerAFile(args.LabelerAPath);
@@ -435,7 +464,9 @@ export class GoldenLabelQualityRig {
             const labelled = await GoldenLabelQualityRig.LabelAll(a, labelers, instructions, allowed, spend, args.MaxCost, checkpoint, checkpointPath);
             const identities: LabelerIdentity[] = [LABELER_A_IDENTITY, ...labelers.map((l) => l.Identity)];
             const { cases, labelQuality } = await GoldenLabelQualityCheck.Adjudicate(labelled, [...GOLDEN_LABEL_OUTPUTS], identities);
-            writeFileSync(args.OutPath, JSON.stringify({ Cases: cases, LabelQuality: labelQuality }, null, 2) + '\n');
+            // The specification cases are not labelled: they are carried over from the set being replaced, after the labelled ones
+            const specification = GoldenLabelQualityRig.SpecificationCasesOf(args.OutPath);
+            writeFileSync(args.OutPath, JSON.stringify({ Cases: [...cases, ...specification], LabelQuality: labelQuality }, null, 2) + '\n');
             writeFileSync(args.AuditPath, JSON.stringify({ InstructionsSha256: sha, Instructions: instructions, Labelers: identities,
                 Labelled: labelled, Spend: spend }, null, 2) + '\n');
             rmSync(checkpointPath, { force: true });

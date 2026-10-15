@@ -87,10 +87,19 @@ export class FeaturePipelineHumanValueGuard implements HumanValueGuard {
         return (await FeatureValueCacheService.Instance.RetireHumanValue(this.RefOf(output, provider))) > 0;
     }
 
-    /** The spec output that writes this field (field targets only; names compared case-insensitively). */
+    /** The spec output that writes this field (see {@link OutputWritingField}). */
     protected OutputFor(fieldName: string): DataFeatureOutput | undefined {
+        return FeaturePipelineHumanValueGuard.OutputWritingField(this.Options.Spec.Outputs, fieldName);
+    }
+
+    /**
+     * The output that writes a field of the processed record: field targets only, names compared case-insensitively.
+     * @param outputs - the pipeline spec's outputs
+     * @param fieldName - the mapped (config-named) field
+     */
+    public static OutputWritingField(outputs: DataFeatureOutput[], fieldName: string): DataFeatureOutput | undefined {
         const wanted = fieldName.toLowerCase();
-        return this.Options.Spec.Outputs.find((o) => o.Target.Mode === 'field' && o.Target.EntityFieldName.toLowerCase() === wanted);
+        return outputs.find((o) => o.Target.Mode === 'field' && o.Target.EntityFieldName.toLowerCase() === wanted);
     }
 
     /** The record and feature an output's Feature Values are kept under, read and written on `provider`. */

@@ -68,6 +68,37 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         reg.Register({ Id: 'unitmix.B', Name: 'mixB', Fn: async () => { throw new Error('boom'); } });
         reg.Register({ Id: 'unitmut.A', Name: 'mutA', Fn: async () => { /* pass */ } });
         reg.Register({ Id: 'unitmut.M', Name: 'mutM', RequiresMutation: true, Fn: async () => { /* pass */ } });
+        reg.Register({ Id: 'unitcost.A', Name: 'costA', Fn: async (ctx) => { ctx.CostUSD = (ctx.CostUSD || 0) + 0.25; } });
+        reg.Register({ Id: 'unitcost.B', Name: 'costB', Fn: async (ctx) => { ctx.CostUSD = (ctx.CostUSD || 0) + 0.5; throw new Error('failed after spending'); } });
+        reg.Register({ Id: 'unitcost.C', Name: 'costC', Fn: async () => { /* no model call */ } });
+    });
+
+    it('sums the cost the checks reported into the result totalCost, a failed check included', async () => {
+        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitcost' }] }));
+        expect(result.totalCost).toBe(0.75);
+        const costOf = (id: string): number | undefined => {
+            const cost = (result.oracleResults.find(o => o.oracleType === id)?.details as Record<string, unknown> | undefined)?.CostUSD; // details is typed unknown by the engine
+            return typeof cost === 'number' ? cost : undefined;
+        };
+        expect(costOf('unitcost.A')).toBe(0.25);   // each check carries only its own cost, not the running total
+        expect(costOf('unitcost.B')).toBe(0.5);
+        expect(costOf('unitcost.C')).toBeUndefined();
+    });
+
+    it('counts the spend of a bundle fixture setup and teardown in the total, but on no check', async () => {
+        IntegrationCheckRegistry.Instance.Register({ Id: 'unitlife.A', Name: 'lifeA', Fn: async () => { /* no model call */ } });
+        IntegrationCheckRegistry.Instance.RegisterLifecycle('unitlife', {
+            Setup: async (ctx) => { ctx.CostUSD = (ctx.CostUSD || 0) + 0.125; },
+            Teardown: async (ctx) => { ctx.CostUSD = (ctx.CostUSD || 0) + 0.25; },
+        });
+        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitlife' }] }));
+        expect(result.totalCost).toBe(0.375);
+        expect((result.oracleResults[0].details as Record<string, unknown>).CostUSD).toBeUndefined();
+    });
+
+    it('a check that reports no cost contributes 0', async () => {
+        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitpass' }] }));
+        expect(result.totalCost).toBe(0);
     });
 
     it('expands a bundle and runs its checks in registration order → Passed, score 1', async () => {

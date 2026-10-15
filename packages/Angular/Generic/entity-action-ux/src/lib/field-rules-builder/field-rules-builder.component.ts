@@ -37,9 +37,9 @@ import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
                     <div class="frb-rule-head">
                         <span class="frb-rule-num">{{ $index + 1 }}</span>
                         <span class="frb-set">Set</span>
-                        <select class="mj-input frb-target" [value]="rule.TargetField" (change)="SetTarget($index, $event)">
+                        <select class="mj-input frb-target" (change)="SetTarget($index, $event)">
                             <option value="">— field —</option>
-                            @for (f of WritableFields; track f.Name) { <option [value]="f.Name">{{ f.DisplayNameOrName }}</option> }
+                            @for (f of WritableFields; track f.Name) { <option [value]="f.Name" [selected]="IsSameField(f.Name, rule.TargetField)">{{ f.DisplayNameOrName }}</option> }
                         </select>
                         <span class="frb-set">from</span>
                         <select class="mj-input frb-kind" [value]="rule.SourceKind" (change)="SetKind($index, $event)">
@@ -58,9 +58,9 @@ import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
                                 <input class="mj-input" placeholder="Value" [value]="rule.StaticValue" (input)="SetField($index, 'StaticValue', $event)" />
                             }
                             @case ('field') {
-                                <select class="mj-input" [value]="rule.SourceField" (change)="SetField($index, 'SourceField', $event)">
+                                <select class="mj-input frb-source-field" (change)="SetField($index, 'SourceField', $event)">
                                     <option value="">— source field —</option>
-                                    @for (f of AllFields; track f.Name) { <option [value]="f.Name">{{ f.DisplayNameOrName }}</option> }
+                                    @for (f of AllFields; track f.Name) { <option [value]="f.Name" [selected]="IsSameField(f.Name, rule.SourceField)">{{ f.DisplayNameOrName }}</option> }
                                 </select>
                             }
                             @case ('formula') {
@@ -185,6 +185,21 @@ export class FieldRulesBuilderComponent {
     RemoveRule(index: number): void {
         this.Rules = this.Rules.filter((_, i) => i !== index);
         this.emit();
+    }
+
+    // The field pickers mark the rule's stored field with [selected] on each <option>, not [value] on the <select>:
+    // their options come from @for, and a [value] set before those options exist leaves the picker on the wrong option,
+    // so a saved rule would show (and, once touched, save) another field. Same pattern as the record-process editor.
+    // A stored field the picker does not list marks no option, so the browser shows the first one: the placeholder.
+
+    /**
+     * Whether a listed field is the rule's stored field. Field names compare case-insensitively, as rules resolve
+     * them against entity metadata.
+     * @param listed - a field the picker lists
+     * @param stored - the rule's stored field name
+     */
+    public IsSameField(listed: string, stored: string): boolean {
+        return !!stored && listed.trim().toLowerCase() === stored.trim().toLowerCase();
     }
 
     SetTarget(index: number, event: Event): void {

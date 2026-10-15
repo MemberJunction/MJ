@@ -5,7 +5,8 @@
  * @module @memberjunction/feature-pipelines
  */
 
-import { ComputeContentHashAsync, IsValidUUID, NormalizeUUID, OrdinalCompare } from '@memberjunction/global';
+import { ComputeContentHashAsync, NormalizeUUID, OrdinalCompare } from '@memberjunction/global';
+import { RecordIDs } from '@memberjunction/record-set-processor-base';
 import type { MJAIPromptEntity, MJAIPromptModelEntity, MJFeatureValueEntity } from '@memberjunction/core-entities';
 import type { DataFeatureSpec } from './data-feature-spec.js';
 
@@ -134,7 +135,7 @@ export class FeatureValueKey {
     public static async ComputeHash(key: FeatureValueKeyInput): Promise<string> {
         return ComputeContentHashAsync({
             EntityID: NormalizeUUID(key.EntityID),
-            RecordID: FeatureValueKey.normalizeRecordID(key.RecordID),
+            RecordID: RecordIDs.Key(key.RecordID),
             FeatureName: key.FeatureName.toLowerCase(),
             PipelineVersion: key.PipelineVersion,
             PromptVersionHash: key.PromptVersionHash,
@@ -143,10 +144,5 @@ export class FeatureValueKey {
             InputHash: key.InputHash,
             Source: key.Source,
         });
-    }
-
-    /** A record ID as keyed: a UUID normalised by case, any other ID (e.g. a composite key) unchanged. */
-    private static normalizeRecordID(recordID: string): string {
-        return IsValidUUID(recordID) ? NormalizeUUID(recordID) : recordID;
     }
 }

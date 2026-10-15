@@ -65,7 +65,10 @@ export class GoldenLabelQualityCheck {
         return ys.includes(xs[0]) && xs.includes(ys[0]);
     }
 
-    /** SHA-256 of the scored cases (canonical JSON, MJ's content hash), so a record is valid only for those exact cases. */
+    /**
+     * SHA-256 of the labelled cases (canonical JSON, MJ's content hash), so a record is valid only for those exact cases.
+     * {@link Check} hashes {@link LabelledCases}, so adding a specification case leaves the record valid.
+     */
     public static async CasesSha256(cases: GoldenCase[]): Promise<string> {
         return ComputeContentHashAsync({ Cases: cases.map((c) => [c.ID, c.Input, c.Expected, c.LabelSource]) });
     }
@@ -108,18 +111,26 @@ export class GoldenLabelQualityCheck {
         if (cases.length === 0) {
             return ['the golden set has no cases'];
         }
+        // Specification cases are fixed by the pipeline's written rule, not labelled, so the record does not cover them.
+        // Each must be Required: a required case can only make the gate stricter (a wrong one fails the set), while an
+        // optional one with broad Expected labels would raise accuracy without any labeler's check.
+        const unrequired = cases.filter((c) => c.LabelSource === 'specification' && c.Required !== true);
+        if (unrequired.length > 0) {
+            return [`specification cases must be Required (they are not labelled): ${unrequired.map((c) => c.ID).join(', ')}`];
+        }
+        const labelled = GoldenLabelQualityCheck.LabelledCases(cases);
         // Labels an app user entered are product data, accepted as supplied; only model-made labels need the record.
-        if (cases.every((c) => c.LabelSource === 'human')) {
+        if (labelled.every((c) => c.LabelSource === 'human')) {
             return [];
         }
         if (!q) {
             return ['the golden set has model-made labels and no labelQuality record'];
         }
         const problems: string[] = [];
-        if (q.CasesSha256 !== (await GoldenLabelQualityCheck.CasesSha256(cases))) {
+        if (q.CasesSha256 !== (await GoldenLabelQualityCheck.CasesSha256(labelled))) {
             problems.push('the cases changed after the label-quality check (CasesSha256 mismatch)');
         }
-        problems.push(...GoldenLabelQualityCheck.CoverageProblems(cases, q));
+        problems.push(...GoldenLabelQualityCheck.CoverageProblems(labelled, q));
         problems.push(...GoldenLabelQualityCheck.AgreementProblems(q, policy));
         if (q.Excluded.length > policy.MaxExcluded) {
             problems.push(`${q.Excluded.length} cases excluded (all three labelers disagree) > ${policy.MaxExcluded}`);
@@ -130,6 +141,11 @@ export class GoldenLabelQualityCheck {
             problems.push('labelers B and C must come from two different vendors');
         }
         return problems;
+    }
+
+    /** The cases labels were given for: every case but the `specification` ones (see {@link Check}). */
+    public static LabelledCases(cases: GoldenCase[]): GoldenCase[] {
+        return cases.filter((c) => c.LabelSource !== 'specification');
     }
 
     /**

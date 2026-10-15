@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import { WatermarkService } from '../watermark/WatermarkService';
 import { RecordSetProcessor } from '../RecordSetProcessor';
 import { ArraySource, IRecordProcessor, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import { NoOpTracker } from '../trackers/NoOpTracker';
 import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
-import { UserInfo, RunView, IMetadataProvider } from '@memberjunction/core';
+import { UserInfo, RunView, IMetadataProvider, type RunViewResult } from '@memberjunction/core';
+import type { MJRecordProcessWatermarkEntity } from '@memberjunction/core-entities';
 
 // Mock RunView so we don't hit a real database in unit tests
 vi.mock('@memberjunction/core', async () => {
@@ -168,6 +169,23 @@ describe('WatermarkService', () => {
         expect(decisions.get('rec-2')?.basisHash).not.toBe('stale-hash-from-old-run');
     });
 
+    it('finds a watermark the database returns with an upper-case UUID for a record scoped with a lower-case one', async () => {
+        const scoped: RecordRef = { EntityID: entityID, RecordID: '5a5a0001-0000-4000-8000-000000000015', Record: { ID: '5a5a0001-0000-4000-8000-000000000015', Title: 'x' } };
+        const hash = await WatermarkService.Instance.computeRecordBasisHash(scoped, undefined, { contextUser: mockUser, provider: new EntitiesOnlyProvider([]) });
+        expect(hash).toBeTruthy();
+        const row: Pick<MJRecordProcessWatermarkEntity, 'RecordProcessID' | 'EntityID' | 'RecordID' | 'Hash'> = {
+            RecordProcessID: recordProcessID, EntityID: entityID, RecordID: '5A5A0001-0000-4000-8000-000000000015', Hash: hash || '',
+        };
+        const loaded: RunViewResult<Pick<MJRecordProcessWatermarkEntity, 'RecordProcessID' | 'EntityID' | 'RecordID' | 'Hash'>> = {
+            Success: true, Results: [row], RowCount: 1, TotalRowCount: 1, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '',
+        };
+        vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue(loaded);
+        const decisions = await WatermarkService.Instance.CheckBatchWatermarks({
+            recordProcessID, entityID, records: [scoped], strategy: 'Checksum', skipUnchanged: true, contextUser: mockUser,
+        });
+        expect(decisions.get(scoped.RecordID)?.shouldSkip).toBe(true);
+    });
+
     it('delegates basis hash computation to processor.ComputeBasisHash if supported', async () => {
         const customHash = 'custom-rendered-context-hash-12345';
         const mockProcessor = {
@@ -267,5 +285,257 @@ describe('WatermarkService', () => {
             expect.objectContaining({ RecordID: 'rec-run' }),
             expect.anything()
         );
+    });
+});
+
+describe('WatermarkService: what an unchanged watermark cannot vouch for', () => {
+    const user = new UserInfo();
+    const recordProcessID = 'rp-out';
+    const entityID = 'entity-out';
+    const kept: RecordRef = { EntityID: entityID, RecordID: 'rec-kept', Record: { Title: 'Nurse' } };
+    const cleared: RecordRef = { EntityID: entityID, RecordID: 'rec-cleared', Record: { Title: 'Surgeon' } };
+    const edited: RecordRef = { EntityID: entityID, RecordID: 'rec-edited', Record: { Title: 'Porter' } };
+    /** The stored watermark of each record: the kept and cleared records match their hash, the edited one does not. */
+    const watermarks = (): Array<{ RecordID: string; Hash: string; Save: () => Promise<boolean> }> => [
+        { RecordID: 'rec-kept', Hash: 'hash-rec-kept', Save: vi.fn(async () => true) },
+        { RecordID: 'rec-cleared', Hash: 'hash-rec-cleared', Save: vi.fn(async () => true) },
+        { RecordID: 'rec-edited', Hash: 'stale', Save: vi.fn(async () => true) },
+    ];
+
+    /** A processor whose basis hash is `hash-<RecordID>` and whose outputs exist for the kept record only. */
+    function processorWithOutputs(present: string[] = ['rec-kept']) {
+        const processor = {
+            ProcessRecord: vi.fn(async (_r: RecordRef): Promise<RecordResult> => ({ Status: 'Succeeded' })),
+            ComputeBasisHash: vi.fn(async (r: RecordRef) => `hash-${r.RecordID}`),
+            RecordsWithOutputs: vi.fn(async (rs: RecordRef[]) => new Set(rs.map((r) => r.RecordID).filter((id) => present.includes(id)))),
+        };
+        return processor;
+    }
+
+    function check(processor: IRecordProcessor, extra: { OverwriteHumanValues?: boolean; strategy?: 'Checksum' | 'UpdatedAt'; lastRunAt?: Date } = {}) {
+        return WatermarkService.Instance.CheckBatchWatermarks({
+            recordProcessID, entityID, records: [kept, cleared, edited], strategy: extra.strategy || 'Checksum', skipUnchanged: true,
+            lastRunAt: extra.lastRunAt, processor, contextUser: user, OverwriteHumanValues: extra.OverwriteHumanValues,
+        });
+    }
+
+    /** Serves the stored watermarks to the service's watermark read (the mocked RunView). */
+    function serve(rows: ReturnType<typeof watermarks>): void {
+        vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue({ Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '' });
+    }
+
+    beforeEach(() => serve(watermarks()));
+    afterEach(() => vi.restoreAllMocks());
+
+    it('processes an unchanged record whose outputs are gone, keeping its hash so the watermark is refreshed', async () => {
+        const decisions = await check(processorWithOutputs());
+        expect(decisions.get('rec-cleared')).toMatchObject({ shouldSkip: false, basisHash: 'hash-rec-cleared' });
+        expect(decisions.get('rec-cleared')?.existingWatermark).toBeDefined();
+    });
+
+    it('still skips an unchanged record whose outputs exist', async () => {
+        const decisions = await check(processorWithOutputs());
+        expect(decisions.get('rec-kept')?.shouldSkip).toBe(true);
+        expect(decisions.get('rec-edited')?.shouldSkip).toBe(false);
+    });
+
+    it('asks for outputs once per batch, about the unchanged records only', async () => {
+        const processor = processorWithOutputs();
+        await check(processor);
+        expect(processor.RecordsWithOutputs).toHaveBeenCalledTimes(1);
+        expect(processor.RecordsWithOutputs.mock.calls[0][0].map((r: RecordRef) => r.RecordID)).toEqual(['rec-kept', 'rec-cleared']);
+    });
+
+    it('processes the unchanged records when the outputs check fails', async () => {
+        const processor = processorWithOutputs();
+        processor.RecordsWithOutputs.mockRejectedValueOnce(new Error('view failed'));
+        const decisions = await check(processor);
+        expect(decisions.get('rec-kept')?.shouldSkip).toBe(false);
+        expect(decisions.get('rec-cleared')?.shouldSkip).toBe(false);
+    });
+
+    it('skips on the hash alone for a processor with no outputs to check', async () => {
+        const { RecordsWithOutputs: _none, ...withoutOutputs } = processorWithOutputs();
+        const decisions = await check(withoutOutputs);
+        expect(decisions.get('rec-kept')?.shouldSkip).toBe(true);
+        expect(decisions.get('rec-cleared')?.shouldSkip).toBe(true);
+    });
+
+    it('processes every unchanged record of a run that overwrites human values, keeping each hash', async () => {
+        const processor = processorWithOutputs(['rec-kept', 'rec-cleared']);
+        const decisions = await check(processor, { OverwriteHumanValues: true });
+        expect(decisions.get('rec-kept')).toMatchObject({ shouldSkip: false, basisHash: 'hash-rec-kept' });
+        expect(decisions.get('rec-cleared')).toMatchObject({ shouldSkip: false, basisHash: 'hash-rec-cleared' });
+        expect(processor.ComputeBasisHash).toHaveBeenCalledTimes(3);
+    });
+
+    it('applies both rules to the UpdatedAt strategy', async () => {
+        const lastRunAt = new Date('2026-10-01T00:00:00Z');
+        const old = (r: RecordRef): RecordRef => ({ ...r, Record: { __mj_UpdatedAt: new Date('2026-09-01T00:00:00Z') } });
+        const records = [old(kept), old(cleared)];
+        const processor = processorWithOutputs();
+        const params = { recordProcessID, entityID, records, strategy: 'UpdatedAt' as const, skipUnchanged: true, lastRunAt, processor, contextUser: user };
+        const byOutputs = await WatermarkService.Instance.CheckBatchWatermarks(params);
+        expect(byOutputs.get('rec-kept')?.shouldSkip).toBe(true);
+        expect(byOutputs.get('rec-cleared')?.shouldSkip).toBe(false);
+        const overwriting = await WatermarkService.Instance.CheckBatchWatermarks({ ...params, OverwriteHumanValues: true });
+        expect(overwriting.get('rec-kept')?.shouldSkip).toBe(false);
+    });
+
+    it('integrates with RecordSetProcessor: a run that overwrites human values processes the unchanged record and refreshes its watermark', async () => {
+        const stored = watermarks();
+        serve(stored);
+        const processor = processorWithOutputs(['rec-kept', 'rec-cleared']);
+        const result = await RecordSetProcessor.Instance.Process({
+            source: new ArraySource([kept], entityID), processor, tracker: new NoOpTracker(), contextUser: user,
+            recordProcessID, entityID, skipUnchanged: true, watermarkStrategy: 'Checksum', overwriteHumanValues: true,
+        });
+        expect(result.Skipped).toBe(0);
+        expect(result.Success).toBe(1);
+        expect(processor.ProcessRecord).toHaveBeenCalledTimes(1);
+        expect(stored[0].Save).toHaveBeenCalledTimes(1);
+        expect(stored[0].Hash).toBe('hash-rec-kept');
+    });
+
+    it('integrates with RecordSetProcessor: an unchanged record whose outputs are gone is processed, the others still skipped', async () => {
+        const processor = processorWithOutputs();
+        const result = await RecordSetProcessor.Instance.Process({
+            source: new ArraySource([kept, cleared], entityID), processor, tracker: new NoOpTracker(), contextUser: user,
+            recordProcessID, entityID, skipUnchanged: true, watermarkStrategy: 'Checksum',
+        });
+        expect(result.Skipped).toBe(1);
+        expect(processor.ProcessRecord).toHaveBeenCalledTimes(1);
+        expect(processor.ProcessRecord.mock.calls[0][0]).toMatchObject({ RecordID: 'rec-cleared' });
+    });
+});
+
+describe('RecordSetProcessor: a real run that does not skip refreshes its watermarks (QF-I1)', () => {
+    const user = new UserInfo();
+    const recordProcessID = 'rp-refresh';
+    const entityID = 'entity-refresh';
+    const matched: RecordRef = { EntityID: entityID, RecordID: 'rec-matched', Record: { Title: 'Nurse' } };
+    const stale: RecordRef = { EntityID: entityID, RecordID: 'rec-stale', Record: { Title: 'Surgeon' } };
+    const fresh: RecordRef = { EntityID: entityID, RecordID: 'rec-fresh', Record: { Title: 'Porter' } };
+    const failing: RecordRef = { EntityID: entityID, RecordID: 'rec-failing', Record: { Title: 'Clerk' } };
+    const records = [matched, stale, fresh, failing];
+
+    /** A stored watermark row, as the service's batch read returns it. */
+    type StoredWatermark = { RecordID: string; Hash: string };
+    /** The watermark store both runs share: read by the mocked RunView, written by the spied UpdateWatermark. */
+    let store: Map<string, StoredWatermark>;
+    let reads: MockInstance<RunView['RunView']>;
+    let writes: MockInstance<WatermarkService['UpdateWatermark']>;
+    /** The record IDs the run handed to its processor, by either path. */
+    let handed: string[];
+
+    /** Succeeds every record but the failing one (one `ProcessBatch` call, or one `ProcessRecord` call per record). */
+    function outcome(r: RecordRef): RecordResult {
+        handed.push(r.RecordID);
+        return r.RecordID === failing.RecordID ? { Status: 'Failed', ErrorMessage: 'model refused' } : { Status: 'Succeeded' };
+    }
+    function batchProcessor() {
+        return {
+            ProcessRecord: vi.fn(async (r: RecordRef): Promise<RecordResult> => outcome(r)),
+            ProcessBatch: vi.fn(async (rs: RecordRef[]): Promise<Map<string, RecordResult>> => new Map(rs.map((r) => [r.RecordID, outcome(r)]))),
+            ComputeBasisHash: vi.fn(async (r: RecordRef): Promise<string | undefined> => `hash-${r.RecordID}`),
+        };
+    }
+    function recordProcessor() {
+        return {
+            ProcessRecord: vi.fn(async (r: RecordRef): Promise<RecordResult> => outcome(r)),
+            ComputeBasisHash: vi.fn(async (r: RecordRef): Promise<string | undefined> => `hash-${r.RecordID}`),
+        };
+    }
+
+    function run(processor: IRecordProcessor, extra: { skipUnchanged?: boolean; dryRun?: boolean; watermarkStrategy?: 'Checksum' | 'UpdatedAt' } = {}) {
+        return RecordSetProcessor.Instance.Process({
+            source: new ArraySource(records, entityID), processor, tracker: new NoOpTracker(), contextUser: user,
+            recordProcessID, entityID, skipUnchanged: extra.skipUnchanged === true, dryRun: extra.dryRun,
+            watermarkStrategy: extra.watermarkStrategy || 'Checksum',
+        });
+    }
+
+    /** The record IDs whose watermark was written, with the hash each was written with. */
+    function written(): Array<[string, string]> {
+        return writes.mock.calls.map(([p]): [string, string] => [p.recordID, p.basisHash]);
+    }
+
+    beforeEach(() => {
+        handed = [];
+        store = new Map([
+            ['rec-matched', { RecordID: 'rec-matched', Hash: 'hash-rec-matched' }],
+            ['rec-stale', { RecordID: 'rec-stale', Hash: 'hash-from-the-previous-version' }],
+        ]);
+        reads = vi.spyOn(RunView.prototype, 'RunView').mockImplementation(async () => {
+            const rows = [...store.values()].map((r) => ({ ...r }));
+            return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '' };
+        });
+        writes = vi.spyOn(WatermarkService.Instance, 'UpdateWatermark').mockImplementation(async (p) => {
+            store.set(p.recordID, { RecordID: p.recordID, Hash: p.basisHash });
+        });
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    it.each([
+        ['ProcessBatch', batchProcessor],
+        ['ProcessRecord', recordProcessor],
+    ])('writes the watermark of every succeeded record with its basis hash, through one batch read (%s)', async (_path, make) => {
+        const processor = make();
+        const result = await run(processor);
+        expect(result.Skipped).toBe(0);
+        expect(result.Success).toBe(3);
+        expect(handed.sort()).toEqual(['rec-failing', 'rec-fresh', 'rec-matched', 'rec-stale']);
+        expect(written().sort()).toEqual([
+            ['rec-fresh', 'hash-rec-fresh'], ['rec-matched', 'hash-rec-matched'], ['rec-stale', 'hash-rec-stale'],
+        ]);
+        expect(reads).toHaveBeenCalledTimes(1);
+        const stored = writes.mock.calls.find(([p]) => p.recordID === 'rec-stale');
+        expect(stored?.[0].existingWatermark).toMatchObject({ RecordID: 'rec-stale' });
+    });
+
+    it('still processes a record whose watermark matches: only a SkipUnchanged run decides to skip', async () => {
+        await run(batchProcessor());
+        expect(handed).toContain('rec-matched');
+    });
+
+    it('writes no watermark for a failed record', async () => {
+        await run(batchProcessor());
+        expect(written().map(([id]) => id)).not.toContain('rec-failing');
+    });
+
+    it('writes no watermark on a dry run, and computes no basis hash for it', async () => {
+        const processor = batchProcessor();
+        await run(processor, { dryRun: true });
+        expect(writes).not.toHaveBeenCalled();
+        expect(processor.ComputeBasisHash).not.toHaveBeenCalled();
+        expect(reads).not.toHaveBeenCalled();
+    });
+
+    it('writes no watermark for a processor without a basis hash, not even a record-content one', async () => {
+        const { ComputeBasisHash: _none, ...withoutHash } = batchProcessor();
+        await run(withoutHash);
+        expect(writes).not.toHaveBeenCalled();
+        expect(reads).not.toHaveBeenCalled();
+    });
+
+    it('writes no watermark when the processor computes no hash for the record (a wrapper whose inner has none)', async () => {
+        const processor = batchProcessor();
+        processor.ComputeBasisHash.mockResolvedValue(undefined);
+        await run(processor);
+        expect(writes).not.toHaveBeenCalled();
+    });
+
+    it('writes no watermark under the UpdatedAt strategy, which stores none', async () => {
+        await run(batchProcessor(), { watermarkStrategy: 'UpdatedAt' });
+        expect(writes).not.toHaveBeenCalled();
+        expect(reads).not.toHaveBeenCalled();
+    });
+
+    it('lets the following SkipUnchanged run skip every record it wrote', async () => {
+        await run(batchProcessor());
+        handed = [];
+        const result = await run(batchProcessor(), { skipUnchanged: true });
+        expect(result.Skipped).toBe(3);
+        expect(handed).toEqual(['rec-failing']);
     });
 });

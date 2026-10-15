@@ -133,6 +133,21 @@ export class ComponentCacheManager {
     return info !== undefined && !info.isAttached;
   }
 
+  /**
+   * Whether the cache holds an entry at this resource identity, attached or not. A re-key is
+   * refused when the new identity is already occupied, and a caller checks this first so it can
+   * leave its own entry where it is.
+   *
+   * Detached entries count. A detached entry is a parked component that still owns its DOM and
+   * subscriptions until it is evicted or reused, and moving another entry onto its key would
+   * overwrite it and orphan that component. Declining the move is safe: the caller keeps its own
+   * entry under its old key, and the tab reload check compares record identity, so the differing
+   * spelling causes no reload.
+   */
+  HasEntry(resourceType: string, recordId: string, appId: string, discriminator?: string): boolean {
+    return this.cache.has(this.getCacheKey(resourceType, recordId, appId, discriminator));
+  }
+
   /** @deprecated Use {@link HasAvailableComponent}. */
   hasAvailableComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): boolean {
     return this.HasAvailableComponent(resourceType, recordId, appId, discriminator);
@@ -272,7 +287,8 @@ export class ComponentCacheManager {
    * the user expects to be blank.
    *
    * Preserves the live component instance — only the cache key + stored identity change.
-   * Returns true if a matching entry was found and re-keyed, false otherwise.
+   * Returns true if a matching entry was found and re-keyed, false otherwise (including when an
+   * entry already occupies the new key, which is left untouched).
    */
   RekeyComponent(
     resourceType: string,
@@ -292,6 +308,11 @@ export class ComponentCacheManager {
     // Default the new discriminator to undefined unless explicitly provided.
     const newKey = this.getCacheKey(resourceType, newRecordId, appId, newDiscriminator);
     if (oldKey === newKey) {
+      return false;
+    }
+    // An entry already lives at the new key (a workspace restored with two tabs on one record in
+    // different spellings). Overwriting it would orphan its component, which nothing would destroy.
+    if (this.cache.has(newKey)) {
       return false;
     }
 

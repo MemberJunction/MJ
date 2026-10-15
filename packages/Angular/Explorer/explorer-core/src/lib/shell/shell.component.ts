@@ -2622,9 +2622,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
       if (defaultNavItem.ResourceType && defaultNavItem.RecordID) {
         const tabResourceType = (config['resourceType'] as string)?.toLowerCase();
-        const tabRecordId = config['recordId'] || tab.resourceRecordId;
+        const tabRecordId = (config['recordId'] as string | undefined) || tab.resourceRecordId;
         return tabResourceType === defaultNavItem.ResourceType.toLowerCase() &&
-               tabRecordId === defaultNavItem.RecordID;
+               CompositeKey.URLSegmentsNameSameRecord(tabRecordId || '', defaultNavItem.RecordID);
       }
 
       return false;

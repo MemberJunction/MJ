@@ -61,6 +61,7 @@ export class RecordProcessRunNowServerOperation extends RecordProcessRunNowOpera
             error: result.Error,
             skipped: result.Skipped,
             errorMessage: result.ErrorMessage,
+            ...(result.FeaturePipeline?.WouldRefuse ? { wouldRefuse: result.FeaturePipeline.WouldRefuse } : {}),
         };
     }
 }

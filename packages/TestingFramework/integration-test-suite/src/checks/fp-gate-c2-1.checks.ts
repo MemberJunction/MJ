@@ -13,7 +13,7 @@ import type { FeaturePipelineRunPin } from '@memberjunction/record-set-processor
 import { Assert, AssertEqual, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration';
 import { FeaturePipelineGateFixtures as F } from './fp-gates/fp-gate-fixture';
 import { FeaturePipelineGateStubTable } from './fp-gates/feature-pipeline-gate-stub-driver';
-import { GOLDEN_TITLES, GoldenTitleCopy } from './fp-gates/golden-titles';
+import { ALL_GOLDEN_TITLES, GOLDEN_TITLES, GoldenTitleCopy } from './fp-gates/golden-titles';
 
 /** 52 people, 52 distinct titles. */
 const N = GOLDEN_TITLES.length;
@@ -191,7 +191,7 @@ export const FpGateC21Checks: NamedCheck[] = [
         // Read-only: gated only because the bundle runs in the mutation tier (its lifecycle Setup writes the fixture).
         Id: 'fp-gate-c2-1.G6', Name: 'golden titles: the gate copy equals the installed golden set', RequiresMutation: true,
         Fn: async (ctx) => {
-            const problems = GoldenTitleCopy.Differences(GOLDEN_TITLES, await F.InstalledGoldenCases(ctx));
+            const problems = GoldenTitleCopy.Differences(ALL_GOLDEN_TITLES, await F.InstalledGoldenCases(ctx));
             Assert(problems.length === 0, `the gates' golden titles drifted from the installed golden set: ${problems.slice(0, 5).join('; ')}`);
         },
     },

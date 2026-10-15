@@ -86,7 +86,9 @@ export class PredictiveStudioRunFeaturePipelineServerOperation extends Predictiv
   /**
    * Map the substrate's {@link ProcessRunResult} onto the operation's typed output.
    * `written` is the substrate's `Success` count — for a FieldRules feature pipeline
-   * those are the records whose feature values were written back (0 in dry-run).
+   * those are the records whose feature values were written back (0 in dry-run). A
+   * refused run is `status` `Failed` with its `errorMessage`; a dry run whose real run
+   * would be refused carries why in `wouldRefuse`.
    */
   protected toOutput(result: ProcessRunResult): PredictiveStudioRunFeaturePipelineOutput {
     return {
@@ -97,6 +99,7 @@ export class PredictiveStudioRunFeaturePipelineServerOperation extends Predictiv
       skipped: result.Skipped,
       error: result.Error,
       errorMessage: result.ErrorMessage,
+      ...(result.FeaturePipeline?.WouldRefuse ? { wouldRefuse: result.FeaturePipeline.WouldRefuse } : {}),
     };
   }
 
