@@ -67,6 +67,13 @@ export const WHITEBOARD_INTERACTION_TYPE_DEBOUNCE_MS = 800;
  *    (aria-label || name || id || trimmed textContent, ≤40 chars).
  *  - `change` — select / radio / checkbox / text fields: field label + new value
  *    (checkbox → 'checked'/'unchecked').
+ *
+ * The AUTO-SUBMIT fallback (inert agent HTML still submits) forwards `collectFields`: text,
+ * select and textarea values as strings, the checked radio as a string, and every ticked
+ * checkbox of a group as an ARRAY of their values under the group's label — one stable shape
+ * whatever the count, so the agent can react to a multi-select answer. Its submit-ish button
+ * test reads the type ATTRIBUTE: a typeless `<button>` reports `type === 'submit'` as a
+ * property, which auto-submitted "Show hint" / "Play" buttons.
  *  - `input` — debounced per-field (800 ms): field label + current value.
  *  - `focusin` / `focusout` — field label only.
  *  - PRIVACY: `type="password"` / `type="hidden"` fields are skipped entirely; every
@@ -106,10 +113,10 @@ document.addEventListener('input',function(e){try{var el=e.target;if(!isField(el
 document.addEventListener('focusin',function(e){try{var el=e.target;if(!isField(el)||isPrivate(el)){return;}push({kind:'focus',target:fieldLabel(el)});}catch(err){}});
 document.addEventListener('focusout',function(e){try{var el=e.target;if(!isField(el)||isPrivate(el)){return;}push({kind:'blur',target:fieldLabel(el)});}catch(err){}});
 var AUTO_DEDUPE_MS=600;
-function collectFields(scope){var out={},els=(scope&&scope.querySelectorAll?scope:document).querySelectorAll('input,select,textarea');for(var i=0;i<els.length;i++){var el=els[i];if(isPrivate(el)){continue;}var t=(el.type||'').toLowerCase();if((t==='radio'||t==='checkbox')&&!el.checked){continue;}var name=fieldLabel(el);if(t==='checkbox'){out[name]='checked';}else{out[name]=clip(el.value,VALUE_MAX);}}return out;}
+function collectFields(scope){var out={},els=(scope&&scope.querySelectorAll?scope:document).querySelectorAll('input,select,textarea');for(var i=0;i<els.length;i++){var el=els[i];if(isPrivate(el)){continue;}var t=(el.type||'').toLowerCase();if((t==='radio'||t==='checkbox')&&!el.checked){continue;}var name=fieldLabel(el);if(t==='checkbox'){(out[name]=Array.isArray(out[name])?out[name]:[]).push(clip(el.value,VALUE_MAX));}else{out[name]=clip(el.value,VALUE_MAX);}}return out;}
 function autoSubmit(scope,trigger){try{var last=window.MJWhiteboard.__lastSubmitAt||0;if(Date.now()-last<AUTO_DEDUPE_MS){return;}var fields=collectFields(scope);var payload={__auto:true,trigger:clip(trigger||'submit',LABEL_MAX),fields:fields};window.MJWhiteboard.submit(payload);}catch(err){}}
 document.addEventListener('submit',function(e){try{e.preventDefault();autoSubmit(e.target,'form');}catch(err){}},true);
-document.addEventListener('click',function(e){try{var b=e.target&&e.target.closest?e.target.closest('button,input[type="submit"],input[type="button"]'):null;if(!b){return;}var label=(labelOf(b)||'')+' '+(b.type||'');if(!/submit|send|done|go\\b|answer|check/i.test(label)){return;}setTimeout(function(){autoSubmit(b.form||document,labelOf(b)||'button');},150);}catch(err){}},true);
+document.addEventListener('click',function(e){try{var b=e.target&&e.target.closest?e.target.closest('button,input[type="submit"],input[type="button"]'):null;if(!b){return;}var label=(labelOf(b)||'')+' '+(b.getAttribute('type')||'');if(!/submit|send|done|go\\b|answer|check/i.test(label)){return;}setTimeout(function(){autoSubmit(b.form||document,labelOf(b)||'button');},150);}catch(err){}},true);
 })();</script>`;
 
 /** Max serialized payload size (chars) accepted from one `MJWhiteboard.submit` call. */
