@@ -391,7 +391,12 @@ export class BedrockLLM extends BaseLLM {
 
     // Forward the cancellation token so an abort cancels the streaming HTTP request instead of
     // letting the socket keep delivering events into an abandoned promise.
-    return this._client.send(command, this.buildSendOptions(params));
+    const response = await this._client.send(command, this.buildSendOptions(params));
+    // The command output is an envelope; the event stream the base class iterates is its `body`.
+    if (!response.body) {
+      throw new Error(`Bedrock returned no response stream for model ${modelId}`);
+    }
+    return response.body;
   }
   
   /**

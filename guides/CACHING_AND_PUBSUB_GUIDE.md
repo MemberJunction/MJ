@@ -29,6 +29,7 @@ This guide covers the complete caching, pub/sub, and real-time data synchronizat
 19. [Configuration Reference](#configuration-reference)
 20. [Troubleshooting](#troubleshooting)
 21. [Server-Side Dataset Caching](#server-side-dataset-caching)
+22. [Surviving a Redis Outage](#surviving-a-redis-outage)
 
 ---
 
@@ -2172,6 +2173,83 @@ Dataset caching is active when:
 - `TrustLocalCacheCompletely` is `true` (server-side default)
 
 On the client side (`TrustLocalCacheCompletely = false`), dataset requests pass through to the server without local cache checks.
+
+---
+
+
+---
+
+## Surviving a Redis Outage
+
+What a consumer may assume about cache correctness during, and immediately after, a loss of the
+shared cache. Implemented in `RedisLocalStorageProvider` for issue #4759, after an Azure Cache for
+Redis instance was unreachable for ~25 minutes and every running server went permanently cache-blind
+without saying so.
+
+### During an outage
+
+**Reads are correct, just slow.** `GetItem` / `GetItems` return `null` — a miss — and the caller
+refetches from the source of truth. `Exists` returns `false`, `GetTTL` and `GetCategoryKeys` report
+nothing cached. **Writes no-op.** The cache is simply not populated for the duration.
+
+Commands are *not* queued once a connection has been established and then lost. They fail
+immediately. This is deliberate: ioredis's offline queue would hold them with promises that never
+settle, so a multi-minute outage meant unbounded memory growth plus awaits that hung for the whole
+outage. A cache outage should cost latency, not liveness.
+
+**The exception is startup.** Before the first successful connection, commands *are* allowed to
+queue — at that point a brief wait is the difference between a warm cache and a cold one, and nothing
+can be stale because nothing is cached yet.
+
+**Reconnection never gives up.** The ceiling is on the delay between attempts
+(`maxRetryDelayMs`, default 30s), not on the number of attempts. Setting `maxRetries` reinstates a
+hard surrender and should only be done by a short-lived script that genuinely ought to fail rather
+than wait — for a server it reintroduces the original defect.
+
+### What you are told
+
+Connection state changes are operational events, not debug chatter, and `IsConnected` only reports
+the current state rather than that it changed. Register for the transitions:
+
+```typescript
+provider.OnConnectionLost(reason => health.markCacheDown(reason));
+provider.OnConnectionRestored(() => health.markCacheUp());
+provider.OnReconciliationRequired(() => myEngine.flushEverythingItHolds());
+```
+
+These are the primary signal **because logging cannot carry it in production**: `LogStatus` and
+`LogStatusEx` are both suppressed when `GetProductionStatus()` is true, so the lifecycle messages
+never reach a deployed log pipeline. Loss and recovery are therefore also logged on the error
+channel, which does survive.
+
+### Immediately after a reconnect
+
+**Reconnecting is not the same as being correct.** Redis pub/sub has no replay: a subscriber that was
+away receives nothing published during the gap. ioredis resubscribes automatically, so the channel
+works again, but every invalidation published while this process was disconnected is gone — and
+symmetrically, invalidations this process published while disconnected never reached its siblings.
+
+The provider reconciles this with a **fleet-wide epoch**: a Redis counter incremented once per
+shared-cache mutation, carried on every `CacheChangedEvent` as `Epoch`, and compared on reconnect.
+
+| On reconnect | What happens |
+|---|---|
+| Epoch unchanged | **The local cache is KEPT.** Nothing was invalidated anywhere while this process was away, so what it holds is still valid. |
+| Epoch advanced | **Everything local is dropped** and re-warmed — this process cannot know *what* it missed. |
+| This process mutated while disconnected | The epoch is bumped so **siblings** flush too, and this process flushes as well. |
+| The epoch cannot be read | **Flush.** If correctness cannot be established, the safe answer is the expensive one. |
+
+The first row is the reason the counter exists. A blind flush-on-every-reconnect is also correct, but
+it throws away a valid cache every time a connection blips.
+
+The flush is delivered as a `category_cleared` `CacheChangedEvent` per category — an action consumers
+already handle, rather than a new event type each would have to learn — plus
+`OnReconciliationRequired` for state the cache categories do not describe, such as an in-process
+engine or a memoized permission set.
+
+**What this does not cover:** a mutation made by a process that then dies before reconnecting never
+bumps the epoch, so its siblings will not learn of it from this mechanism. Metadata staleness checks
+and TTLs remain the backstop there.
 
 ---
 
