@@ -43,6 +43,204 @@ interface StoppedRecording {
   Peaks: number[];
 }
 
+/** The `UploadRealtimeRecordingSegment` mutation result; `true` only when the server stored the shard. */
+interface UploadRecordingSegmentResult {
+  UploadRealtimeRecordingSegment?: boolean;
+}
+
+/** Takes the audio recorded since the previous snapshot as base64, or null/'' when there is none. */
+type ShardSnapshot = () => Promise<string | null>;
+
+/** Resolves true when the server stored the shard; false or a throw are both failures. */
+type ShardUpload = (segmentIndex: number, audioBase64: string) => Promise<boolean>;
+
+/** Total upload attempts per shard (the first try plus retries) before it is dropped. */
+const MAX_SHARD_UPLOAD_ATTEMPTS = 3;
+
+/**
+ * Flushes allowed in flight at once. Ticks are 15 s apart, so overlap only happens when an upload is
+ * slower than a tick; an unbounded pile-up on a dead network would snapshot (and hold in memory) a
+ * new window every tick. A skipped tick costs nothing: the recorder keeps the audio and the next
+ * flush ships the larger window. While both slots are pinned the recorder cursor does not advance,
+ * so the next capture is one larger window (bounded by the upload timeout x attempts); if that
+ * shard is later dropped, recovery fills a correspondingly longer gap with silence.
+ */
+const MAX_CONCURRENT_FLUSHES = 2;
+
+/**
+ * Per-attempt upload deadline. A hung request would otherwise pin one of the
+ * {@link MAX_CONCURRENT_FLUSHES} slots forever and silently stop all later shards. A timeout counts
+ * as a failed attempt; if the request later succeeds anyway that is harmless, because the server
+ * key is per-index and a resend is an idempotent overwrite. The timeout is logical only:
+ * `ExecuteGQL` accepts no AbortSignal, so a timed-out request may still be on the wire. Requests
+ * stay rate-bounded regardless (at most {@link MAX_CONCURRENT_FLUSHES} flushes, each sending at
+ * most one batch, per timeout window), and a late success is an idempotent same-index overwrite.
+ */
+const SHARD_UPLOAD_TIMEOUT_MS = 60_000;
+
+/** One-line reason for a warn message; the raw value is still passed along for its stack. */
+function describeShardFailure(failure: Error | string): string {
+  return failure instanceof Error ? failure.message : failure;
+}
+
+interface PendingShard {
+  Index: number;
+  AudioBase64: string;
+  Attempts: number;
+}
+
+/**
+ * Assigns chronological indexes to crash-recovery shards, uploads them, and retains failures for
+ * retry on later flushes. Safe to call {@link Flush} from an overlapping timer (#5197).
+ */
+class RecordingShardQueue {
+  private nextIndex = 0;
+  private retained: PendingShard[] = [];
+  private inFlight = 0;
+  /** True once a capacity stall has been logged; cleared when a flush actually runs. */
+  private capacityWarned = false;
+  /** Set by {@link Close} when the recording ends; nothing is snapshotted, sent or retained after it. */
+  private closed = false;
+  /**
+   * Serializes "take a snapshot, then assign an index". The recorder advances its cursor
+   * synchronously but encodes asynchronously, so two overlapping snapshots could resolve out of
+   * order and give newer audio an older index. Never rejected: the link catches internally.
+   */
+  private captureChain: Promise<void> = Promise.resolve();
+
+  /** Shards awaiting a retry (for tests and diagnostics). */
+  public get RetainedCount(): number {
+    return this.retained.length;
+  }
+
+  /**
+   * Takes ownership of retained shards and uploads them oldest-first, then captures a new window
+   * and uploads it. Retained shards go first so a hung snapshot cannot strand them. A failure never
+   * stops the rest of the flush. Skips entirely (no snapshot) when
+   * {@link MAX_CONCURRENT_FLUSHES} are already running. Never rejects.
+   */
+  public async Flush(snapshot: ShardSnapshot, upload: ShardUpload): Promise<void> {
+    if (this.inFlight >= MAX_CONCURRENT_FLUSHES) {
+      this.warnCapacitySkip();
+      return;
+    }
+    this.capacityWarned = false;
+    this.inFlight++;
+    try {
+      // Swap the array out so a concurrent flush only sees shards nobody is currently sending.
+      const batch = this.retained;
+      this.retained = [];
+      // Retained shards go first, BEFORE the capture: a snapshot that never resolves must not strand
+      // shards that already failed. Index order is unaffected — indexes are assigned in capture order
+      // on the serialized chain, and every retained shard already has an older index.
+      // `closed` is re-checked before every send: a flush running when the recording ends must not
+      // keep uploading, or a resend could land after the end-of-call upload has deleted the shards.
+      for (const shard of batch) {
+        if (this.closed) {
+          return;
+        }
+        await this.send(shard, upload);
+      }
+      const fresh = this.closed ? null : await this.captureShard(snapshot);
+      if (fresh && !this.closed) {
+        await this.send(fresh, upload);
+      }
+    } finally {
+      this.inFlight--;
+    }
+  }
+
+  /**
+   * Ends the queue with its recording: discards retained shards and stops any flush in flight from
+   * sending more. An upload already on the wire cannot be aborted (`ExecuteGQL` takes no
+   * AbortSignal), so at most that one request can still land.
+   */
+  public Close(): void {
+    this.closed = true;
+    this.retained = [];
+  }
+
+  /** Warns once per stall so a wedged uploader is visible without logging every 15 s tick. */
+  private warnCapacitySkip(): void {
+    if (this.capacityWarned) {
+      return;
+    }
+    this.capacityWarned = true;
+    console.warn(
+      `[RealtimeSession] Recording flush skipped: at capacity with ${this.inFlight}/${MAX_CONCURRENT_FLUSHES} flushes in flight and ${this.retained.length} shard(s) retained. The recorder keeps the audio for the next flush.`,
+    );
+  }
+
+  private captureShard(snapshot: ShardSnapshot): Promise<PendingShard | null> {
+    const capture = this.captureChain.then(() => this.takeIndexedSnapshot(snapshot));
+    this.captureChain = capture.then(() => undefined);
+    return capture;
+  }
+
+  private async takeIndexedSnapshot(snapshot: ShardSnapshot): Promise<PendingShard | null> {
+    try {
+      const audio = await snapshot();
+      if (!audio) {
+        return null;
+      }
+      return { Index: this.nextIndex++, AudioBase64: audio, Attempts: 0 };
+    } catch (error) {
+      console.warn('[RealtimeSession] Failed to snapshot recording shard:', error);
+      return null;
+    }
+  }
+
+  private async uploadWithTimeout(upload: ShardUpload, shard: PendingShard): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`upload timed out after ${SHARD_UPLOAD_TIMEOUT_MS}ms`)), SHARD_UPLOAD_TIMEOUT_MS);
+    });
+    const attempt = Promise.resolve().then(() => upload(shard.Index, shard.AudioBase64));
+    // Attach a no-op rejection handler so a late rejection after timeout does not surface as unhandled.
+    void attempt.catch(() => undefined);
+    try {
+      return await Promise.race([attempt, deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async send(shard: PendingShard, upload: ShardUpload): Promise<void> {
+    shard.Attempts++;
+    let stored = false;
+    let failure: Error | string = 'server refused the shard';
+    try {
+      stored = await this.uploadWithTimeout(upload, shard);
+    } catch (error) {
+      failure = error instanceof Error ? error : String(error);
+    }
+    if (stored) {
+      return;
+    }
+    if (this.closed) {
+      console.warn(
+        `[RealtimeSession] Recording shard ${shard.Index} upload failed after the recording ended (${describeShardFailure(failure)}); not retried — the end-of-call upload supersedes it:`,
+        failure,
+      );
+      return;
+    }
+    if (shard.Attempts >= MAX_SHARD_UPLOAD_ATTEMPTS) {
+      console.warn(
+        `[RealtimeSession] Dropping recording shard ${shard.Index} after ${shard.Attempts}/${MAX_SHARD_UPLOAD_ATTEMPTS} failed uploads (${describeShardFailure(failure)}); recovery will fill the gap with silence:`,
+        failure,
+      );
+      return;
+    }
+    console.warn(
+      `[RealtimeSession] Recording shard ${shard.Index} upload failed (attempt ${shard.Attempts}/${MAX_SHARD_UPLOAD_ATTEMPTS}: ${describeShardFailure(failure)}); will retry next flush:`,
+      failure,
+    );
+    // Sorted re-insert: concurrent flushes can fail out of index order, and the oldest must go first.
+    this.retained.push(shard);
+    this.retained.sort((a, b) => a.Index - b.Index);
+  }
+}
+
 // Tree-shaking prevention: the OpenAI client is resolved dynamically through the
 // ClassFactory (by the server-reported Provider key), so this static call is what keeps
 // its @RegisterClass side effect from being eliminated by the bundler.
@@ -506,8 +704,8 @@ export class RealtimeSessionService {
   private recordingStartedAtIso: string | null = null;
   /** Interval that flushes ~15s crash-recovery shards to the server during a recording. */
   private segmentTimer: ReturnType<typeof setInterval> | null = null;
-  /** 0-based index of the next recording shard to upload. */
-  private segmentIndex = 0;
+  /** Per-recording queue that serializes shard numbering, upload, and bounded retry (#5197). */
+  private shardQueue: RecordingShardQueue | null = null;
   /** How often crash-recovery shards are flushed during a recording. */
   private static readonly SegmentFlushMs = 15000;
   /**
@@ -908,7 +1106,8 @@ export class RealtimeSessionService {
 
   /** Begins flushing ~15s crash-recovery shards to the server for the duration of the recording. */
   private startSegmentFlushing(): void {
-    this.segmentIndex = 0;
+    this.shardQueue?.Close();
+    this.shardQueue = new RecordingShardQueue();
     this.segmentTimer = setInterval(() => { void this.flushRecordingSegment(); }, RealtimeSessionService.SegmentFlushMs);
   }
 
@@ -922,42 +1121,63 @@ export class RealtimeSessionService {
 
   /**
    * Uploads the chunks captured since the last flush as one crash-recovery shard (durability only;
-   * the canonical file is still the full upload at teardown). Best-effort — never disturbs the call.
+   * the canonical file is still the full upload at teardown). Best-effort — never disturbs the call:
+   * a failed shard is retained by the queue and resent under its own index on later flushes, up to a
+   * bounded number of attempts (#5197).
    */
   private async flushRecordingSegment(): Promise<void> {
     const recorder = this.recorder;
     const agentSessionId = this.agentSessionId;
-    if (!recorder || !agentSessionId) {
+    const queue = this.shardQueue;
+    if (!recorder || !agentSessionId || !queue) {
       return;
     }
-    const segment = recorder.SnapshotNewSegment();
-    if (!segment || segment.size === 0) {
-      return;
-    }
-    try {
-      const audioBase64 = await this.blobToBase64(segment);
-      if (!audioBase64) {
-        return;
-      }
-      const index = this.segmentIndex++;
-      const mutation = `
-        mutation UploadRealtimeRecordingSegment($agentSessionId: String!, $segmentIndex: Int!, $audioBase64: String!, $mimeType: String!) {
-          UploadRealtimeRecordingSegment(agentSessionId: $agentSessionId, segmentIndex: $segmentIndex, audioBase64: $audioBase64, mimeType: $mimeType)
+    // Read once: a shard's sample rate is fixed at capture, and the recorder may be stopped by the
+    // time a retry of it runs.
+    const sampleRate = recorder.SampleRate;
+    await queue.Flush(
+      async () => {
+        const segment = recorder.SnapshotNewSegment();
+        if (!segment || segment.size === 0) {
+          return null;
         }
-      `;
-      // Shards are HEADER-LESS raw little-endian PCM16 (mime audio/L16 with the capture sample rate),
-      // NOT individually-playable WAV — recovery is concatenate-in-order then WAV-wrap. The canonical
-      // seekable WAV is the consolidated end-of-call upload below.
-      const shardMime = `audio/L16;rate=${recorder.SampleRate}`;
-      await this.gql().ExecuteGQL(mutation, { agentSessionId, segmentIndex: index, audioBase64, mimeType: shardMime });
-    } catch (error) {
-      console.warn('[RealtimeSession] Failed to flush recording shard:', error);
-    }
+        const audioBase64 = await this.blobToBase64(segment);
+        return audioBase64 || null;
+      },
+      (segmentIndex, audioBase64) => this.uploadRecordingShard(agentSessionId, sampleRate, segmentIndex, audioBase64),
+    );
+  }
+
+  /**
+   * Sends one shard and reports whether the server stored it. The resolver reports a failed
+   * ownership load or storage write as `false`, not as an error — that is how #5197 lost a shard
+   * without a single client-side log line — so the typed result must be checked, not just the absence
+   * of a throw.
+   */
+  private async uploadRecordingShard(agentSessionId: string, sampleRate: number, segmentIndex: number, audioBase64: string): Promise<boolean> {
+    const mutation = `
+      mutation UploadRealtimeRecordingSegment($agentSessionId: String!, $segmentIndex: Int!, $audioBase64: String!, $mimeType: String!) {
+        UploadRealtimeRecordingSegment(agentSessionId: $agentSessionId, segmentIndex: $segmentIndex, audioBase64: $audioBase64, mimeType: $mimeType)
+      }
+    `;
+    // Shards are HEADER-LESS raw little-endian PCM16 (mime audio/L16 with the capture sample rate),
+    // NOT individually-playable WAV — recovery is concatenate-in-order then WAV-wrap. The canonical
+    // seekable WAV is the consolidated end-of-call upload below.
+    const shardMime = `audio/L16;rate=${sampleRate}`;
+    const result = (await this.gql().ExecuteGQL(mutation, {
+      agentSessionId,
+      segmentIndex,
+      audioBase64,
+      mimeType: shardMime,
+    })) as UploadRecordingSegmentResult | null;
+    return result?.UploadRealtimeRecordingSegment === true;
   }
 
   /** Stops and encodes the recorder so the server can close before the slow upload. Never throws. */
   private async stopRecording(): Promise<StoppedRecording | null> {
     this.stopSegmentFlushing();
+    this.shardQueue?.Close();
+    this.shardQueue = null;
     const recorder = this.recorder;
     this.recorder = null;
     this.currentTurnStartMs = null;
@@ -2490,7 +2710,8 @@ export class RealtimeSessionService {
     this._captions$.next([]);
     this.SetMinimized(false);
     this.stopSegmentFlushing();
-    this.segmentIndex = 0;
+    this.shardQueue?.Close();
+    this.shardQueue = null;
     this.recorder = null;
     this.recordingStartedAtIso = null;
     this.currentTurnStartMs = null;
