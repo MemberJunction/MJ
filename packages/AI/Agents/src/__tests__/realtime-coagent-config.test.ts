@@ -648,6 +648,52 @@ describe('C1: GetSessionTuningSettings', () => {
     it('named effort levels pass through as strings', () => {
         expect(GetSessionTuningSettings({ realtime: { session: { effortLevel: 'xhigh' } } })).toEqual({ effortLevel: 'xhigh' });
     });
+    it('projects the voice-speed, keyterm and provider-hosted-tool knobs', () => {
+        expect(GetSessionTuningSettings({
+            realtime: {
+                session: {
+                    transcriptionKeyterms: [' MemberJunction ', '', 'Skip'],
+                    voiceSpeed: 1.2,
+                    providerTools: [{ type: 'web_search' }, { type: 'x_search', allowed_x_handles: ['xai'] }],
+                },
+            },
+        })).toEqual({
+            transcriptionKeyterms: ['MemberJunction', 'Skip'],
+            voiceSpeed: 1.2,
+            providerTools: [{ type: 'web_search' }, { type: 'x_search', allowed_x_handles: ['xai'] }],
+        });
+    });
+
+    it('drops a non-positive voice speed and an empty keyterm or hosted-tool list', () => {
+        expect(GetSessionTuningSettings({ realtime: { session: { voiceSpeed: 0 } } })).toBeNull();
+        expect(GetSessionTuningSettings({ realtime: { session: { transcriptionKeyterms: ['  '] } } })).toBeNull();
+        expect(GetSessionTuningSettings({ realtime: { session: { providerTools: [] } } })).toBeNull();
+    });
+
+    it('carries the new knobs and an idle timeout through the effective-config cascade', () => {
+        const cfg = ResolveEffectiveRealtimeConfig(null, JSON.stringify({
+            realtime: {
+                session: {
+                    voiceSpeed: 0.9,
+                    transcriptionKeyterms: ['Gruyère'],
+                    providerTools: [{ type: 'web_search' }, 'not-a-tool'],
+                    turnDetection: { Mode: 'serverVad', IdleTimeoutMs: 8000 },
+                },
+            },
+        }), null);
+        expect(cfg.realtime?.session?.voiceSpeed).toBe(0.9);
+        expect(cfg.realtime?.session?.transcriptionKeyterms).toEqual(['Gruyère']);
+        // A list with a non-object entry is rejected whole, like mcpTools.
+        expect(cfg.realtime?.session?.providerTools).toBeUndefined();
+        expect(cfg.realtime?.session?.turnDetection).toEqual({ Mode: 'serverVad', IdleTimeoutMs: 8000 });
+    });
+
+    it('drops a zero, negative or fractional IdleTimeoutMs from the cascade', () => {
+        for (const IdleTimeoutMs of [0, -1, 1.5]) {
+            const cfg = ResolveEffectiveRealtimeConfig(null, JSON.stringify({ realtime: { session: { turnDetection: { IdleTimeoutMs } } } }), null);
+            expect(cfg.realtime?.session?.turnDetection).toBeUndefined();
+        }
+    });
 
     it('returns null for an absent/empty section (bag construction skipped byte-for-byte)', () => {
         expect(GetSessionTuningSettings(undefined)).toBeNull();

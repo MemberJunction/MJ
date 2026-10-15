@@ -80,7 +80,13 @@ vi.mock('openai', () => ({
     }),
 }));
 
-import { xAIRealtime, xAIRealtimeSession, IxAIRealtimeConnection } from '../models/xaiRealtime';
+import {
+    xAIRealtime,
+    xAIRealtimeSession,
+    IxAIRealtimeConnection,
+    MapEffortLevelToGrokRealtime,
+    XAI_REALTIME_VOICES,
+} from '../models/xaiRealtime';
 import type { OpenAIRealtimeError } from 'openai/realtime/index';
 import type { RealtimeServerEvent, RealtimeClientEvent } from 'openai/resources/realtime/realtime';
 import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'openai/resources/realtime/client-secrets';
@@ -290,14 +296,12 @@ describe('xAIRealtime', () => {
             await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
             const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
             if (update?.type === 'session.update' && update.session.type === 'realtime') {
-                // input transcription (both-role parity) AND explicit server-VAD turn detection with
-                // create_response, so Grok commits the user's turn and auto-replies (+ barge-in interrupt).
-                expect(update.session.audio).toEqual({
-                    input: {
-                        transcription: { model: 'whisper-1' },
-                        turn_detection: { type: 'server_vad', create_response: true, interrupt_response: true },
-                    },
-                });
+                // input transcription (both-role parity) under `audio`, AND explicit server-VAD turn
+                // detection with create_response at the session TOP LEVEL (where Grok Voice reads it),
+                // so Grok commits the user's turn and auto-replies (+ barge-in interrupt).
+                expect(update.session.audio).toEqual({ input: { transcription: { model: 'grok-transcribe' } } });
+                expect((update.session as Record<string, unknown>).turn_detection)
+                    .toEqual({ type: 'server_vad', create_response: true, interrupt_response: true });
             } else {
                 throw new Error('expected realtime session.update');
             }
@@ -765,12 +769,12 @@ describe('xAIRealtime GA feature gating (profile-driven)', () => {
         driver = new TestablexAIRealtime('test-key');
     });
 
-    it('scrubs reasoningEffort/parallelToolCalls/mcpTools from the Config bag WITHOUT translating them (unconfirmed on Grok Voice)', async () => {
+    it('translates reasoningEffort and mcpTools, but still scrubs parallelToolCalls (undocumented on Grok Voice)', async () => {
         await driver.StartSession({
-            Model: 'grok-voice',
+            Model: 'grok-voice-3.0',
             SystemPrompt: 'sys',
             Config: {
-                reasoningEffort: 'high',
+                reasoningEffort: 'none',
                 parallelToolCalls: true,
                 mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com' }],
             },
@@ -778,11 +782,10 @@ describe('xAIRealtime GA feature gating (profile-driven)', () => {
         const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
         if (update?.type === 'session.update' && update.session.type === 'realtime') {
             const session = update.session as Record<string, unknown>;
-            // Not translated (profile gates are OFF until xAI documents support)…
-            expect(session.reasoning).toBeUndefined();
+            expect(session.reasoning).toEqual({ effort: 'none' });
+            expect(session.tools).toEqual([{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com' }]);
             expect(session.parallel_tool_calls).toBeUndefined();
-            expect(session.tools).toBeUndefined();
-            // …and never leaked raw (Grok would reject unknown fields).
+            // …and none of the MJ keys leak raw (Grok would reject unknown fields).
             expect(session.reasoningEffort).toBeUndefined();
             expect(session.parallelToolCalls).toBeUndefined();
             expect(session.mcpTools).toBeUndefined();
@@ -795,7 +798,7 @@ describe('xAIRealtime GA feature gating (profile-driven)', () => {
         await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
         const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
         if (update?.type === 'session.update' && update.session.type === 'realtime') {
-            const turnDetection = (update.session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+            const turnDetection = (update.session as Record<string, unknown>).turn_detection;
             expect(turnDetection).toMatchObject({ type: 'server_vad', create_response: true, interrupt_response: true });
         } else {
             throw new Error('expected realtime session.update');
@@ -808,8 +811,7 @@ describe('xAIRealtime GA feature gating (profile-driven)', () => {
         if (update?.type === 'session.update' && update.session.type === 'realtime') {
             const session = update.session as Record<string, unknown>;
             expect(session.disableAutoResponse).toBeUndefined();
-            const turnDetection = (session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
-            expect(turnDetection).toMatchObject({ type: 'server_vad', create_response: false, interrupt_response: true });
+            expect(session.turn_detection).toMatchObject({ type: 'server_vad', create_response: false, interrupt_response: true });
         } else {
             throw new Error('expected realtime session.update');
         }
@@ -841,26 +843,25 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
         }
     });
 
-    it('scrubs the MJ-normalized effortLevel key too (not just reasoningEffort) while gates are off', async () => {
-        await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys', Config: { effortLevel: 85 } });
+    it('maps the MJ-normalized effortLevel key onto the reasoning switch, and never sends it raw', async () => {
+        await driver.StartSession({ Model: 'grok-voice-3.0', SystemPrompt: 'sys', Config: { effortLevel: 85 } });
         const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
         if (update?.type === 'session.update' && update.session.type === 'realtime') {
             const session = update.session as Record<string, unknown>;
-            expect(session.reasoning).toBeUndefined();
+            expect(session.reasoning).toEqual({ effort: 'high' });
             expect(session.effortLevel).toBeUndefined();
         } else {
             throw new Error('expected realtime session.update');
         }
     });
 
-    it('keeps voice output OFF for Grok even when a voice is configured (unconfirmed on the endpoint)', async () => {
-        await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys', Config: { voice: 'sage' } });
+    it('sends a configured voice at the session TOP LEVEL, never under audio.output', async () => {
+        await driver.StartSession({ Model: 'grok-voice-3.0', SystemPrompt: 'sys', Config: { voice: 'ara' } });
         const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
         if (update?.type === 'session.update' && update.session.type === 'realtime') {
             const session = update.session as Record<string, unknown>;
-            const audio = session.audio as { output?: unknown };
-            expect(audio.output).toBeUndefined();
-            expect(session.voice).toBeUndefined(); // scrubbed, never raw
+            expect(session.voice).toBe('ara');
+            expect((session.audio as { output?: unknown }).output).toBeUndefined();
         } else {
             throw new Error('expected realtime session.update');
         }
@@ -870,8 +871,8 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
         const cd = new ClientDirectTestablexAI('k');
         const cfg = await cd.CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'sys', Config: { disableAutoResponse: true } });
         const sc = cfg.SessionConfig as Record<string, unknown>;
-        const td = (sc.audio as { input?: { turn_detection?: Record<string, unknown> } }).input?.turn_detection;
-        expect(td).toMatchObject({ type: 'server_vad', create_response: false, interrupt_response: true });
+        expect(sc.turn_detection).toMatchObject({ type: 'server_vad', create_response: false, interrupt_response: true });
+        expect((sc.audio as { input?: { turn_detection?: unknown } }).input?.turn_detection).toBeUndefined();
         expect(sc.disableAutoResponse).toBeUndefined();
     });
 
@@ -905,10 +906,279 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
         const frame = driver.Fake.Sent.slice(before)[0];
         if (frame.type === 'session.update' && frame.session.type === 'realtime') {
             const audio = frame.session.audio as { input?: { transcription?: { model?: string }; turn_detection?: Record<string, unknown> } };
-            expect(audio.input?.transcription?.model).toBe('whisper-1');
-            expect(audio.input?.turn_detection).toMatchObject({ create_response: false });
+            expect(audio.input?.transcription?.model).toBe('grok-transcribe');
+            expect(audio.input?.turn_detection).toBeUndefined();
+            expect((frame.session as Record<string, unknown>).turn_detection).toMatchObject({ create_response: false });
         } else {
             throw new Error('expected realtime session.update from Reconfigure');
         }
+    });
+});
+
+describe('MapEffortLevelToGrokRealtime (Grok Voice reasoning switch)', () => {
+    it('turns reasoning OFF for none, minimal and the 1–20 numeric band', () => {
+        expect(MapEffortLevelToGrokRealtime('none')).toBe('none');
+        expect(MapEffortLevelToGrokRealtime(' Minimal ')).toBe('none');
+        expect(MapEffortLevelToGrokRealtime('1')).toBe('none');
+        expect(MapEffortLevelToGrokRealtime('20')).toBe('none');
+    });
+
+    it('turns reasoning ON for every other recognized level', () => {
+        for (const level of ['low', 'medium', 'high', 'xhigh', '21', '50', '100']) {
+            expect(MapEffortLevelToGrokRealtime(level)).toBe('high');
+        }
+    });
+
+    it('drops values it cannot map rather than sending them raw', () => {
+        expect(MapEffortLevelToGrokRealtime('turbo')).toBeUndefined();
+        expect(MapEffortLevelToGrokRealtime('0')).toBeUndefined();
+        expect(MapEffortLevelToGrokRealtime('-5')).toBeUndefined();
+    });
+});
+
+describe('xAIRealtime Grok Voice 3.0 features', () => {
+    let driver: TestablexAIRealtime;
+
+    beforeEach(() => {
+        driver = new TestablexAIRealtime('test-key');
+    });
+
+    /** The first session.update the driver sent, as a plain record. */
+    function firstSessionUpdate(): Record<string, unknown> {
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type !== 'session.update') {
+            throw new Error('expected a session.update');
+        }
+        return update.session as Record<string, unknown>;
+    }
+
+    /** The input-transcription block of a session record. */
+    function transcriptionOf(session: Record<string, unknown>): Record<string, unknown> | undefined {
+        return (session.audio as { input?: { transcription?: Record<string, unknown> } } | undefined)?.input?.transcription;
+    }
+
+    it('lists the 26 built-in voices, labelled for the picker', () => {
+        const voices = new xAIRealtime('k').SupportedVoices;
+        expect(voices).toHaveLength(26);
+        expect(voices).toHaveLength(XAI_REALTIME_VOICES.length);
+        expect(voices).toContainEqual({ ID: 'eve', Name: 'Eve' });
+        expect(voices).toContainEqual({ ID: 'ara', Name: 'Ara' });
+    });
+
+    it('passes a custom voice ID through untouched (the picker list is not an allow-list)', async () => {
+        await driver.StartSession({ Model: 'grok-voice-3.0', SystemPrompt: 'sys', Config: { voice: 'my-cloned-voice-123' } });
+        expect(firstSessionUpdate().voice).toBe('my-cloned-voice-123');
+    });
+
+    it('sends voiceSpeed as audio.output.speed, clamped to Grok\'s 0.7–1.5 range', async () => {
+        await driver.StartSession({ Model: 'grok-voice-3.0', SystemPrompt: 'sys', Config: { voiceSpeed: 1.2 } });
+        expect((firstSessionUpdate().audio as { output?: unknown }).output).toEqual({ speed: 1.2 });
+
+        const slow = new TestablexAIRealtime('k');
+        await slow.StartSession({ Model: 'grok-voice-3.0', SystemPrompt: 'sys', Config: { voiceSpeed: 0.25 } });
+        const update = slow.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update') {
+            const session = update.session as Record<string, unknown>;
+            expect((session.audio as { output?: unknown }).output).toEqual({ speed: 0.7 });
+            expect(session.voiceSpeed).toBeUndefined();
+        } else {
+            throw new Error('expected a session.update');
+        }
+    });
+
+    it('adds the first expected language as language_hint and the keyterms to grok-transcribe', async () => {
+        await driver.StartSession({
+            Model: 'grok-voice-3.0',
+            SystemPrompt: 'sys',
+            Config: { transcriptionLanguages: ['es-MX', 'en-US'], transcriptionKeyterms: ['MemberJunction', 'Skip'] },
+        });
+        const session = firstSessionUpdate();
+        expect(transcriptionOf(session)).toEqual({ model: 'grok-transcribe', language_hint: 'es-MX', keyterms: ['MemberJunction', 'Skip'] });
+        expect(session.transcriptionLanguages).toBeUndefined();
+        expect(session.transcriptionKeyterms).toBeUndefined();
+    });
+
+    it('keeps keyterms within xAI\'s limits: at most 100, each at most 50 characters', async () => {
+        const many = Array.from({ length: 120 }, (_, i) => `term${i}`);
+        await driver.StartSession({
+            Model: 'grok-voice-3.0',
+            SystemPrompt: 'sys',
+            Config: { transcriptionKeyterms: ['x'.repeat(51), ...many] },
+        });
+        const keyterms = transcriptionOf(firstSessionUpdate())?.keyterms as string[];
+        expect(keyterms).toHaveLength(100);
+        expect(keyterms[0]).toBe('term0');
+        expect(keyterms.every((t) => t.length <= 50)).toBe(true);
+    });
+
+    it('maps IdleTimeoutMs onto top-level server VAD as idle_timeout_ms, even with no Mode set', async () => {
+        await driver.StartSession({ Model: 'grok-voice-3.0', SystemPrompt: 'sys', Config: { turnDetection: { IdleTimeoutMs: 8000 } } });
+        expect(firstSessionUpdate().turn_detection).toEqual({
+            type: 'server_vad', idle_timeout_ms: 8000, create_response: true, interrupt_response: true,
+        });
+    });
+
+    it('meeting mode still composes on top of an idle timeout', async () => {
+        await driver.StartSession({
+            Model: 'grok-voice-3.0',
+            SystemPrompt: 'sys',
+            Config: { disableAutoResponse: true, turnDetection: { Mode: 'serverVad', IdleTimeoutMs: 5000, SilenceDurationMs: 400 } },
+        });
+        expect(firstSessionUpdate().turn_detection).toEqual({
+            type: 'server_vad', silence_duration_ms: 400, idle_timeout_ms: 5000, create_response: false, interrupt_response: true,
+        });
+    });
+
+    it('ignores a non-integer or non-positive IdleTimeoutMs', async () => {
+        await driver.StartSession({ Model: 'grok-voice-3.0', SystemPrompt: 'sys', Config: { turnDetection: { IdleTimeoutMs: 0 } } });
+        expect(firstSessionUpdate().turn_detection).toEqual({ type: 'server_vad', create_response: true, interrupt_response: true });
+    });
+
+    it('appends the provider-hosted tools xAI documents after the function tools', async () => {
+        await driver.StartSession({
+            Model: 'grok-voice-3.0',
+            SystemPrompt: 'sys',
+            Tools: [{ Name: 'GetWeather', Description: 'weather', ParametersSchema: { type: 'object' } }],
+            Config: {
+                providerTools: [
+                    { type: 'web_search' },
+                    { type: 'x_search', allowed_x_handles: ['xai'] },
+                    { type: 'file_search', vector_store_ids: ['col-1'], max_num_results: 5 },
+                ],
+            },
+        });
+        const session = firstSessionUpdate();
+        const tools = session.tools as Array<Record<string, unknown>>;
+        expect(tools.map((t) => t.type)).toEqual(['function', 'web_search', 'x_search', 'file_search']);
+        expect(tools[2]).toEqual({ type: 'x_search', allowed_x_handles: ['xai'] });
+        expect(tools[3]).toEqual({ type: 'file_search', vector_store_ids: ['col-1'], max_num_results: 5 });
+        expect(session.providerTools).toBeUndefined();
+    });
+
+    it('drops a hosted tool type xAI does not document, and keeps the rest', async () => {
+        await driver.StartSession({
+            Model: 'grok-voice-3.0',
+            SystemPrompt: 'sys',
+            Config: { providerTools: [{ type: 'code_interpreter' }, { type: 'web_search' }, { no_type: true }] },
+        });
+        expect(firstSessionUpdate().tools).toEqual([{ type: 'web_search' }]);
+    });
+
+    it('drops a hosted tool whose function names an MJ tool already uses (xAI would fail the turn)', async () => {
+        await driver.StartSession({
+            Model: 'grok-voice-3.0',
+            SystemPrompt: 'sys',
+            Tools: [{ Name: 'web_search', Description: 'MJ web search', ParametersSchema: { type: 'object' } }],
+            Config: { providerTools: [{ type: 'web_search' }, { type: 'x_search' }] },
+        });
+        const tools = firstSessionUpdate().tools as Array<Record<string, unknown>>;
+        expect(tools.map((t) => t.type)).toEqual(['function', 'x_search']);
+        expect(tools[0].name).toBe('web_search');
+    });
+
+    it('RegisterTools re-appends the hosted tools the session config declared', async () => {
+        const session = (await driver.StartSession({
+            Model: 'grok-voice-3.0',
+            SystemPrompt: 'sys',
+            Config: {
+                providerTools: [{ type: 'web_search' }],
+                mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com' }],
+            },
+        })) as xAIRealtimeSession;
+        const before = driver.Fake.Sent.length;
+        await session.RegisterTools([{ Name: 'Lookup', Description: 'look up', ParametersSchema: { type: 'object' } }]);
+        const frame = driver.Fake.Sent.slice(before)[0];
+        if (frame.type !== 'session.update') {
+            throw new Error('expected a session.update from RegisterTools');
+        }
+        const tools = (frame.session as Record<string, unknown>).tools as Array<Record<string, unknown>>;
+        expect(tools.map((t) => t.type)).toEqual(['function', 'mcp', 'web_search']);
+    });
+
+    it('Reconfigure re-sends the WHOLE transcription block so the hint and keyterms survive', async () => {
+        const session = (await driver.StartSession({
+            Model: 'grok-voice-3.0',
+            SystemPrompt: 'sys',
+            Config: { transcriptionLanguages: ['fr-FR'], transcriptionKeyterms: ['Gruyère'], turnDetection: { IdleTimeoutMs: 6000 } },
+        })) as xAIRealtimeSession;
+        const before = driver.Fake.Sent.length;
+        session.Reconfigure({ DisableAutoResponse: true });
+        const frame = driver.Fake.Sent.slice(before)[0];
+        if (frame.type !== 'session.update') {
+            throw new Error('expected a session.update from Reconfigure');
+        }
+        const update = frame.session as Record<string, unknown>;
+        expect(transcriptionOf(update)).toEqual({ model: 'grok-transcribe', language_hint: 'fr-FR', keyterms: ['Gruyère'] });
+        expect(update.turn_detection).toEqual({ type: 'server_vad', idle_timeout_ms: 6000, create_response: false, interrupt_response: true });
+    });
+
+    it('client-direct: the minted SessionConfig carries every Grok Voice 3.0 setting in xAI\'s wire shape', async () => {
+        const cd = new ClientDirectTestablexAI('k');
+        const cfg = await cd.CreateClientSession({
+            Model: 'grok-voice-3.0',
+            SystemPrompt: 'sys',
+            Config: {
+                voice: 'rex',
+                voiceSpeed: 1.1,
+                effortLevel: 'minimal',
+                transcriptionLanguages: ['en-GB'],
+                turnDetection: { IdleTimeoutMs: 9000 },
+                providerTools: [{ type: 'web_search' }],
+            },
+        });
+        expect(cfg.SessionConfig).toEqual({
+            type: 'realtime',
+            model: 'grok-voice-3.0',
+            instructions: 'sys',
+            audio: { input: { transcription: { model: 'grok-transcribe', language_hint: 'en-GB' } }, output: { speed: 1.1 } },
+            voice: 'rex',
+            turn_detection: { type: 'server_vad', idle_timeout_ms: 9000, create_response: true, interrupt_response: true },
+            reasoning: { effort: 'none' },
+            tools: [{ type: 'web_search' }],
+        });
+    });
+
+    describe('inbound Grok Voice 3.0 frames', () => {
+        let session: xAIRealtimeSession;
+
+        beforeEach(async () => {
+            session = (await driver.StartSession({ Model: 'grok-voice-3.0', SystemPrompt: 'sys' })) as xAIRealtimeSession;
+        });
+
+        /** Fires a frame the OpenAI SDK union does not model (xAI-only event types). */
+        function fireXai(frame: Record<string, unknown>): void {
+            driver.Fake.Fire(frame as unknown as RealtimeServerEvent);
+        }
+
+        it('collapses streamed .updated caption snapshots and the final .completed into ONE in-place caption', () => {
+            const transcripts: Array<{ Role: string; Text: string; IsFinal: boolean; ReplacesPrevious?: boolean }> = [];
+            session.OnTranscript((t) => transcripts.push(t));
+            fireXai({ type: 'conversation.item.input_audio_transcription.updated', item_id: 'i', transcript: 'book a' });
+            fireXai({ type: 'conversation.item.input_audio_transcription.updated', item_id: 'i', transcript: 'book a table' });
+            driver.Fake.Fire({
+                type: 'conversation.item.input_audio_transcription.completed', transcript: 'Book a table for two.', content_index: 0, event_id: 'e', item_id: 'i',
+            } as RealtimeServerEvent);
+            expect(transcripts).toEqual([
+                { Role: 'user', Text: 'book a', IsFinal: true, ReplacesPrevious: false },
+                { Role: 'user', Text: 'book a table', IsFinal: true, ReplacesPrevious: true },
+                { Role: 'user', Text: 'Book a table for two.', IsFinal: true, ReplacesPrevious: true },
+            ]);
+        });
+
+        it('ignores a blank caption snapshot', () => {
+            const transcripts: unknown[] = [];
+            session.OnTranscript((t) => transcripts.push(t));
+            fireXai({ type: 'conversation.item.input_audio_transcription.updated', item_id: 'i', transcript: '   ' });
+            expect(transcripts).toEqual([]);
+        });
+
+        it('treats the idle-timeout notice as diagnostic: no transcript, no error, no interruption', () => {
+            const seen: string[] = [];
+            session.OnTranscript(() => seen.push('transcript'));
+            session.OnError(() => seen.push('error'));
+            session.OnInterruption(() => seen.push('interruption'));
+            driver.Fake.Fire({ type: 'input_audio_buffer.timeout_triggered', audio_start_ms: 0, audio_end_ms: 8000, event_id: 'e', item_id: 'i' } as RealtimeServerEvent);
+            expect(seen).toEqual([]);
+        });
     });
 });
