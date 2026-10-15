@@ -26,6 +26,7 @@ import {
     WorkingRecordEntity,
 } from '@memberjunction/content-pipeline-base';
 
+import { NormalizeUUID } from '@memberjunction/global';
 import { GetEntityName } from './EntityFieldMap.js';
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { ChildCommitDefaults, WorkingRecordCommitter } from './WorkingRecordCommitter.js';
@@ -565,7 +566,7 @@ export class PipelineProcessor implements IRecordProcessor {
     private entityIDFor(entity: WorkingRecordEntity, context: RecordProcessorContext): string | undefined {
         try {
             const name = GetEntityName(entity);
-            return context.provider.Entities?.find((e) => e.Name === name)?.ID;
+            return context.provider.EntityByName(name)?.ID;
         } catch {
             return undefined;
         }
@@ -696,7 +697,7 @@ export class PipelineProcessor implements IRecordProcessor {
         context: RecordProcessorContext,
     ): Promise<void> {
         const current = new Set(
-            working.Children.map((c) => c.Identity.RecordID).filter((id): id is string => !!id).map((id) => id.toUpperCase()),
+            working.Children.map((c) => c.Identity.RecordID).filter((id): id is string => !!id).map(NormalizeUUID),
         );
         const rv = RunView.FromMetadataProvider(context.provider);
         const live = await rv.RunView<{ ID: string }>(
@@ -711,7 +712,7 @@ export class PipelineProcessor implements IRecordProcessor {
         if (!live.Success) {
             return;
         }
-        const superseded = live.Results.filter((chunk) => !current.has(chunk.ID.toUpperCase()));
+        const superseded = live.Results.filter((chunk) => !current.has(NormalizeUUID(chunk.ID)));
         if (superseded.length === 0) {
             return;
         }

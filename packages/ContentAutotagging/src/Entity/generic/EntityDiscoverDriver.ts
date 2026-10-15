@@ -48,7 +48,12 @@ export class EntityDiscoverDriver extends BaseDiscoverDriver {
         }
 
         const rv = RunView.FromMetadataProvider(request.Provider);
-        let page = 0;
+        // Keyset pagination: a walk over every row of an entity is exactly the deep-paging case where
+        // StartRow degrades with each page. AfterKey needs a single-column key, so a composite-key
+        // entity falls back to StartRow.
+        const keyset = entityInfo.PrimaryKeys.length === 1;
+        let afterKey: CompositeKey | undefined;
+        let read = 0;
         for (;;) {
             if (request.Signal.aborted) {
                 return;
@@ -57,7 +62,7 @@ export class EntityDiscoverDriver extends BaseDiscoverDriver {
                 {
                     EntityName: entityInfo.Name,
                     ResultType: 'simple',
-                    StartRow: page * PageSize,
+                    ...(keyset ? { AfterKey: afterKey } : { StartRow: read }),
                     MaxRows: PageSize,
                 },
                 request.ContextUser,
@@ -71,19 +76,20 @@ export class EntityDiscoverDriver extends BaseDiscoverDriver {
                 }
                 // Identity for ANY key shape — the bare value for a single-column key, the compact
                 // composite form otherwise. Never the first column alone.
-                const recordID = CompositeKey.FromEntityRecord(entityInfo, record).ToCompactURLSegment();
+                const key = CompositeKey.FromEntityRecord(entityInfo, record);
                 const updatedAt = record.__mj_UpdatedAt;
                 yield {
-                    URL: recordID,
+                    URL: key.ToCompactURLSegment(),
                     Checksum: updatedAt instanceof Date ? String(updatedAt.getTime()) : (updatedAt as string | undefined),
                     Extensions: { EntityID: entityID, EntityName: entityInfo.Name, Record: record },
                 };
+                afterKey = key;
             }
+            read += result.Results.length;
             if (result.Results.length < PageSize) {
                 return;
             }
-            page++;
-            request.ReportProgress(`read ${page * PageSize} record(s)`);
+            request.ReportProgress(`read ${read} record(s)`);
         }
     }
 

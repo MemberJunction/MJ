@@ -128,12 +128,12 @@ export function ResolveContentVectorStorageConfig(
  * `VectorMetadata.FieldStrategy` selects the field set:
  * - unset ⇒ the curated content default (source ids + Title / Description / URL);
  * - 'all' / 'include' / 'exclude' / 'explicit' ⇒ ContentItem fields resolved by
- *   {@link getContentDisplayFields}, with per-field StoreAs coercion + truncation.
+ *   {@link GetContentDisplayFields}, with per-field StoreAs coercion + truncation.
  *
  * The identity keys are chunk-aware; under 'explicit' only `Entity` is kept so content search results
  * stay labeled — unless the source declares its vector entity, in which case `Entity` gives way to
  * `ContentSourceID` and search resolves the name from the declaration. See
- * {@link canOmitEntityMetadataKey} for the conditions and why each one exists.
+ * {@link CanOmitEntityMetadataKey} for the conditions and why each one exists.
  *
  * One instance per pass: it remembers which declarations it has already reported, so a refusal is
  * logged once rather than per vector.
@@ -142,7 +142,7 @@ export class ContentVectorMetadataBuilder {
     /** Declarations already reported as unresolvable, so the warning is once per pass, not per vector. */
     private readonly unresolvableDeclarations = new Set<string>();
 
-    constructor(protected readonly provider: IMetadataProvider) {}
+    constructor(protected readonly Provider: IMetadataProvider) {}
 
     /** The metadata for one vector. */
     public Build(
@@ -157,45 +157,45 @@ export class ContentVectorMetadataBuilder {
         const explicit = strategy === 'explicit';
         const meta: ContentVectorMetadata = {};
 
-        this.addContentSystemMetadata(meta, target, explicit, config);
+        this.AddContentSystemMetadata(meta, target, explicit, config);
 
         if (!strategy) {
-            this.addCuratedMetadata(meta, item, metaCfg);
+            this.AddCuratedMetadata(meta, item, metaCfg);
         } else {
             const all = item.GetAll() as Record<string, unknown>;
-            this.addEntityIconMetadata(meta, contentItemEntity, metaCfg, explicit);
-            this.addUpdatedAtMetadata(meta, all, metaCfg, explicit);
+            this.AddEntityIconMetadata(meta, contentItemEntity, metaCfg, explicit);
+            this.AddUpdatedAtMetadata(meta, all, metaCfg, explicit);
             // Display fields LAST so an explicitly-configured field (e.g. __mj_UpdatedAt with a
             // StoreAs override) wins over the toggle-driven default value — matches the entity side.
-            this.addStrategyDisplayFields(meta, all, contentItemEntity, metaCfg);
+            this.AddStrategyDisplayFields(meta, all, contentItemEntity, metaCfg);
         }
 
-        this.addTagsMetadata(meta, tags, metaCfg, explicit);
+        this.AddTagsMetadata(meta, tags, metaCfg, explicit);
 
         // Optional embedded-text copy (surfaces as the search snippet). Off by default — external
         // hydrators read the authoritative text from the row. Honored under every strategy.
         if (metaCfg?.IncludeText && target.Text) {
-            meta['Text'] = target.Text.substring(0, this.defaultTruncation(metaCfg));
+            meta['Text'] = target.Text.substring(0, this.DefaultTruncation(metaCfg));
         }
 
-        this.enforceAttributionKey(meta, target, explicit, config);
+        this.EnforceAttributionKey(meta, target, explicit, config);
         return meta;
     }
 
     /**
      * Add the identity/system keys. `Entity` is present unless the source declares its vector entity
-     * and {@link canOmitEntityMetadataKey} allows dropping it, in which case `ContentSourceID` takes
+     * and {@link CanOmitEntityMetadataKey} allows dropping it, in which case `ContentSourceID` takes
      * its place as the key search attributes through. Under 'explicit' the rest are omitted (minimal
      * metadata); otherwise `RecordID` — plus `ContentItemID` / `Sequence` for chunk vectors — are
      * included so an external hydrator can fetch the row(s).
      */
-    protected addContentSystemMetadata(
+    protected AddContentSystemMetadata(
         meta: ContentVectorMetadata,
         target: ContentVectorTarget,
         explicit: boolean,
         config: ResolvedVectorStorageConfig,
     ): void {
-        if (this.canOmitEntityMetadataKey(config, explicit, target.IsItemLevel)) {
+        if (this.CanOmitEntityMetadataKey(config, explicit, target.IsItemLevel)) {
             // The invariant that makes omission safe: a vector with no `Entity` key must still carry
             // the key attribution resolves THROUGH, or the match reaches search with nothing to resolve
             // and is discarded without being shown. Written unconditionally — a source configuring
@@ -222,13 +222,13 @@ export class ContentVectorMetadataBuilder {
      * that configures `ContentSourceID` with its own rules wins — up to the point where a rule would
      * break attribution (`StoreAs: 'boolean'` turns the id into `true`), and no further.
      */
-    protected enforceAttributionKey(
+    protected EnforceAttributionKey(
         meta: ContentVectorMetadata,
         target: ContentVectorTarget,
         explicit: boolean,
         config: ResolvedVectorStorageConfig,
     ): void {
-        if (!this.canOmitEntityMetadataKey(config, explicit, target.IsItemLevel)) {
+        if (!this.CanOmitEntityMetadataKey(config, explicit, target.IsItemLevel)) {
             return;
         }
         const current = meta['ContentSourceID'];
@@ -259,7 +259,7 @@ export class ContentVectorMetadataBuilder {
      *   own id as the only pointer back to a row — the chunk id under `'recordId'`, a digest under
      *   `'hash'` that resolves against no row.
      */
-    protected canOmitEntityMetadataKey(config: ResolvedVectorStorageConfig, explicit: boolean, isItemLevel: boolean): boolean {
+    protected CanOmitEntityMetadataKey(config: ResolvedVectorStorageConfig, explicit: boolean, isItemLevel: boolean): boolean {
         // Trimmed, because the reader trims before deciding whether a declaration exists.
         const declared = config.vectorEntityName?.trim();
         if (
@@ -271,7 +271,7 @@ export class ContentVectorMetadataBuilder {
         ) {
             return false;
         }
-        return this.declarationWillResolve(declared);
+        return this.DeclarationWillResolve(declared);
     }
 
     /**
@@ -283,13 +283,13 @@ export class ContentVectorMetadataBuilder {
      * It checks resolution and level only, not family membership — that refusal is the reader's
      * security decision, which the write side must not be able to pre-approve.
      */
-    protected declarationWillResolve(declared: string): boolean {
-        const entity = this.provider.EntityByName(declared);
+    protected DeclarationWillResolve(declared: string): boolean {
+        const entity = this.Provider.EntityByName(declared);
         if (!entity) {
             this.refuseDeclarationOnce(declared, `does not resolve in metadata (core entities carry the \`MJ: \` prefix)`);
             return false;
         }
-        if (!this.isChunkLevelEntity(entity)) {
+        if (!this.IsChunkLevelEntity(entity)) {
             this.refuseDeclarationOnce(
                 declared,
                 `is not "${CHUNK_ENTITY_NAME}" or a subtype of it, but this source stores chunk-level ` +
@@ -305,7 +305,7 @@ export class ContentVectorMetadataBuilder {
      * chain. Walks `ParentID` through this builder's provider rather than `EntityInfo.ParentChain`,
      * which resolves against the process-global provider.
      */
-    protected isChunkLevelEntity(entity: EntityInfo): boolean {
+    protected IsChunkLevelEntity(entity: EntityInfo): boolean {
         const visited = new Set<string>();
         let current: EntityInfo | undefined = entity;
         while (current) {
@@ -316,7 +316,7 @@ export class ContentVectorMetadataBuilder {
                 return false; // root reached, or a cycle in the metadata
             }
             visited.add(current.ID);
-            current = this.provider.EntityByID(current.ParentID) ?? undefined;
+            current = this.Provider.EntityByID(current.ParentID) ?? undefined;
         }
         return false;
     }
@@ -336,8 +336,8 @@ export class ContentVectorMetadataBuilder {
     }
 
     /** The curated default content metadata set (when no FieldStrategy is set). */
-    protected addCuratedMetadata(meta: ContentVectorMetadata, item: MJContentItemEntity, metaCfg: VectorMetadataConfig | undefined): void {
-        const limit = this.defaultTruncation(metaCfg);
+    protected AddCuratedMetadata(meta: ContentVectorMetadata, item: MJContentItemEntity, metaCfg: VectorMetadataConfig | undefined): void {
+        const limit = this.DefaultTruncation(metaCfg);
         meta['ContentSourceID'] = item.ContentSourceID;
         meta['ContentSourceTypeID'] = item.ContentSourceTypeID;
         if (item.Name) meta['Title'] = item.Name.substring(0, limit);
@@ -346,16 +346,16 @@ export class ContentVectorMetadataBuilder {
     }
 
     /** Add the strategy-selected ContentItem fields, with per-field StoreAs coercion + truncation. */
-    protected addStrategyDisplayFields(
+    protected AddStrategyDisplayFields(
         meta: ContentVectorMetadata,
         all: Record<string, unknown>,
         contentItemEntity: EntityInfo | undefined,
         metaCfg: VectorMetadataConfig | undefined,
     ): void {
-        for (const field of this.getContentDisplayFields(contentItemEntity, metaCfg)) {
+        for (const field of this.GetContentDisplayFields(contentItemEntity, metaCfg)) {
             const value = all[field.Name];
             if (value == null) continue;
-            this.setCoercedFieldValue(meta, field, value, metaCfg);
+            this.SetCoercedFieldValue(meta, field, value, metaCfg);
         }
     }
 
@@ -365,7 +365,7 @@ export class ContentVectorMetadataBuilder {
      * refused); 'all' / 'exclude' take the conservative eligible set (no PKs, uniqueidentifiers,
      * binary, or __mj_* fields) minus any marked Included:false.
      */
-    protected getContentDisplayFields(entityInfo: EntityInfo | undefined, metaCfg: VectorMetadataConfig | undefined): EntityFieldInfo[] {
+    protected GetContentDisplayFields(entityInfo: EntityInfo | undefined, metaCfg: VectorMetadataConfig | undefined): EntityFieldInfo[] {
         if (!entityInfo) return [];
         const strategy = metaCfg?.FieldStrategy;
         const overrides = metaCfg?.Fields ?? {};
@@ -388,7 +388,7 @@ export class ContentVectorMetadataBuilder {
     }
 
     /** Store one field's value with its configured/typed coercion (epoch/number/boolean/UUID/string). */
-    protected setCoercedFieldValue(
+    protected SetCoercedFieldValue(
         meta: ContentVectorMetadata,
         field: EntityFieldInfo,
         value: unknown,
@@ -408,26 +408,26 @@ export class ContentVectorMetadataBuilder {
         } else if (fieldType === 'uniqueidentifier' && typeof value === 'string' && IsValidUUID(value)) {
             meta[field.Name] = NormalizeUUID(value);
         } else {
-            meta[field.Name] = String(value).substring(0, this.resolveMetadataTruncationLimit(field, metaCfg));
+            meta[field.Name] = String(value).substring(0, this.ResolveMetadataTruncationLimit(field, metaCfg));
         }
     }
 
     /** Per-field truncation: explicit override → field MaxLength (if small) → configured default. */
-    protected resolveMetadataTruncationLimit(field: EntityFieldInfo, metaCfg: VectorMetadataConfig | undefined): number {
+    protected ResolveMetadataTruncationLimit(field: EntityFieldInfo, metaCfg: VectorMetadataConfig | undefined): number {
         const fieldCfg = metaCfg?.Fields?.[field.Name];
         if (fieldCfg?.TruncationLimit != null && fieldCfg.TruncationLimit > 0) return fieldCfg.TruncationLimit;
         if (field.MaxLength && field.MaxLength > 0 && field.MaxLength <= 5000) return field.MaxLength;
-        return this.defaultTruncation(metaCfg);
+        return this.DefaultTruncation(metaCfg);
     }
 
     /** `VectorMetadata.DefaultTruncationLimit`, or the default the JSONType documents. */
-    protected defaultTruncation(metaCfg: VectorMetadataConfig | undefined): number {
+    protected DefaultTruncation(metaCfg: VectorMetadataConfig | undefined): number {
         const configured = metaCfg?.DefaultTruncationLimit;
         return configured != null && configured > 0 ? configured : DOCUMENTED_DEFAULT_TRUNCATION;
     }
 
     /** Add the content entity's icon: default on under a set strategy, opt-in under 'explicit'. */
-    protected addEntityIconMetadata(
+    protected AddEntityIconMetadata(
         meta: ContentVectorMetadata,
         entityInfo: EntityInfo | undefined,
         metaCfg: VectorMetadataConfig | undefined,
@@ -438,7 +438,7 @@ export class ContentVectorMetadataBuilder {
     }
 
     /** Add __mj_UpdatedAt for recency: default on under a set strategy, opt-in under 'explicit'. */
-    protected addUpdatedAtMetadata(
+    protected AddUpdatedAtMetadata(
         meta: ContentVectorMetadata,
         all: Record<string, unknown>,
         metaCfg: VectorMetadataConfig | undefined,
@@ -452,7 +452,7 @@ export class ContentVectorMetadataBuilder {
      * Add the item's Tags array. Tags aren't a ContentItem field (they're derived), so they're a toggle
      * like icon/updatedAt: on by default (and under the curated default), opt-in under 'explicit'.
      */
-    protected addTagsMetadata(
+    protected AddTagsMetadata(
         meta: ContentVectorMetadata,
         tags: readonly string[] | undefined,
         metaCfg: VectorMetadataConfig | undefined,
