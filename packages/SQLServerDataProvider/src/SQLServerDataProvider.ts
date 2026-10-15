@@ -861,7 +861,7 @@ export class SQLServerDataProvider
     // Build array of SQL statements for batch execution
     const sqlStatements: string[] = [];
     for (const { query } of items) {
-      // CacheValidationSQL should return MaxUpdatedAt and RowCount
+      // CacheValidationSQL returns MaxUpdatedAt and a row count (TotalRows or RowCount)
       sqlStatements.push(query.CacheValidationSQL!);
     }
 
@@ -874,16 +874,8 @@ export class SQLServerDataProvider
         const { index } = items[i];
         const resultSet = resultSets[i];
 
-        if (resultSet && resultSet.length > 0) {
-          const row = resultSet[0] as { MaxUpdatedAt: Date | string | null; RowCount: number };
-          results.set(index, {
-            success: true,
-            rowCount: row.RowCount,
-            maxUpdatedAt: row.MaxUpdatedAt ? new Date(row.MaxUpdatedAt).toISOString() : undefined,
-          });
-        } else {
-          results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
-        }
+        // Shared reader: accepts the documented `TotalRows` as well as `RowCount`.
+        results.set(index, this.QueryCacheStatusFromRow(resultSet?.[0] as Record<string, unknown> | undefined));
       }
     } catch (e) {
       // If batch fails, mark all items as failed
@@ -1595,13 +1587,13 @@ export class SQLServerDataProvider
                                                                                         @Source='Clone',
                                                                                         @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
-    const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entity.EntityInfo.Name}',
+    const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entity.EntityInfo.Name}',
                                                                                         @RecordID=@ID,
                                                                                         @UserID='${payload.userID}',
                                                                                         @Type='${payload.type}',
-                                                                                        @ChangesJSON='${payload.changesJSON}',
-                                                                                        @ChangesDescription='${payload.changesDescription}',
-                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
+                                                                                        @ChangesJSON=N'${payload.changesJSON}',
+                                                                                        @ChangesDescription=N'${payload.changesDescription}',
+                                                                                        @FullRecordJSON=N'${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
                                                                                         @Comments=null${lineageClause}`;
 
@@ -1839,7 +1831,6 @@ export class SQLServerDataProvider
     );
     if (!payload) return null;
 
-    const quotes = wrapRecordIdInQuotes ? "'" : '';
     const lineageClause = payload.source === 'Restore'
       ? `,
                                                                                         @Source='Restore',
@@ -1851,13 +1842,13 @@ export class SQLServerDataProvider
                                                                                         @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
 
-    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
-                                                                                        @RecordID=${quotes}${recordID}${quotes},
+    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entityName}',
+                                                                                        @RecordID=${wrapRecordIdInQuotes ? `N'${recordID}'` : recordID},
                                                                                         @UserID='${payload.userID}',
                                                                                         @Type='${payload.type}',
-                                                                                        @ChangesJSON='${payload.changesJSON}',
-                                                                                        @ChangesDescription='${payload.changesDescription}',
-                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
+                                                                                        @ChangesJSON=N'${payload.changesJSON}',
+                                                                                        @ChangesDescription=N'${payload.changesDescription}',
+                                                                                        @FullRecordJSON=N'${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
                                                                                         @Comments=null${lineageClause}`;
   }
@@ -2882,12 +2873,12 @@ DECLARE ${varName} NVARCHAR(MAX) = (
 );
 IF ${varName} IS NOT NULL
     EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal
-        @EntityName='${safeEntityName}',
-        @RecordID='${recordID}',
+        @EntityName=N'${safeEntityName}',
+        @RecordID=N'${recordID}',
         @UserID='${safeUserId}',
         @Type='Update',
-        @ChangesJSON='${safeChangesJSON}',
-        @ChangesDescription='${safeChangesDesc}',
+        @ChangesJSON=N'${safeChangesJSON}',
+        @ChangesDescription=N'${safeChangesDesc}',
         @FullRecordJSON=${varName},
         @Status='Complete',
         @Comments=NULL${lineageClause};`;

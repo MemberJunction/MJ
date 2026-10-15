@@ -1,4 +1,4 @@
-import { Anthropic, APIUserAbortError } from "@anthropic-ai/sdk";
+import { Anthropic } from "@anthropic-ai/sdk";
 import { ContentBlock, MessageCreateParamsNonStreaming, MessageCreateParamsStreaming, MessageParam, RawMessageStreamEvent, Tool, ToolChoice } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
@@ -72,12 +72,6 @@ export class AnthropicLLM extends BaseLLM {
         outputTokens: number;
         cacheReadTokens: number;
         cacheWriteTokens: number;
-        // Cancellation token for the in-flight streaming request. The Anthropic SDK's raw `Stream`
-        // exits *silently* when its underlying request is aborted (it swallows the AbortError rather
-        // than throwing), so the base-class chunk loop simply ends. We keep the signal here so
-        // finalizeStreamingResponse() can tell "the model finished" from "we cancelled it" and
-        // report a failed/cancelled result instead of a truncated success.
-        cancellationToken?: AbortSignal;
     } = {
         accumulatedThinking: '',
         inThinkingBlock: false,
@@ -86,8 +80,7 @@ export class AnthropicLLM extends BaseLLM {
         inputTokens: 0,
         outputTokens: 0,
         cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-        cancellationToken: undefined
+        cacheWriteTokens: 0
     };
 
     constructor(apiKey: string) {
@@ -652,47 +645,6 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
-     * Was this error produced by the caller aborting the request?
-     *
-     * The Anthropic SDK raises {@link APIUserAbortError} when the `signal` we hand it fires (and it
-     * does NOT retry an aborted request — `makeRequest` throws the abort before any retry decision).
-     * We also treat "the token is aborted" as cancellation, which covers the raw `Stream` path where
-     * the SDK swallows the abort instead of surfacing an error.
-     */
-    private isCancellation(error: unknown, token?: AbortSignal): boolean {
-        if (token?.aborted) {
-            return true;
-        }
-        if (error instanceof APIUserAbortError) {
-            return true;
-        }
-        return error instanceof Error && error.name === 'AbortError';
-    }
-
-    /**
-     * Build the failed ChatResult returned when a request is cancelled (caller abort or the
-     * timeout composed into `cancellationToken` by AIPromptRunner). Shaped like every other
-     * failure this driver reports, so callers keep using `success === false` + `errorMessage`.
-     */
-    private buildCancelledResult(startTime: Date, endTime: Date): ChatResult {
-        const message = 'Anthropic request was cancelled';
-        return {
-            data: {
-                choices: [],
-                usage: new ModelUsage(0, 0)
-            },
-            success: false,
-            statusText: 'cancelled',
-            startTime,
-            endTime,
-            timeElapsed: endTime.getTime() - startTime.getTime(),
-            errorMessage: message,
-            exception: new APIUserAbortError(),
-            errorInfo: ErrorAnalyzer.analyzeError(new Error(message), 'Anthropic')
-        };
-    }
-
-    /**
      * What a non-streaming request sends. When BUDGET-form thinking is enabled, max_tokens must be greater than
      * budget_tokens, so a smaller cap is raised. Adaptive-thinking models (Claude 4.6+, all of Claude 5) have no
      * budget: they take `thinking.type = 'adaptive'` + `output_config.effort` and reject the budget form with
@@ -753,10 +705,6 @@ export class AnthropicLLM extends BaseLLM {
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
         let result: any = null;
-        if (params.cancellationToken?.aborted) {
-            // Already cancelled before we opened a socket — don't bother the API.
-            return this.buildCancelledResult(startTime, new Date());
-        }
         try {
             // Find system message and non-system messages
             const systemMsgs = params.messages.filter(m => m.role === "system");
@@ -956,8 +904,9 @@ export class AnthropicLLM extends BaseLLM {
         }
         catch (e) {
             const endTime = new Date();
-            if (this.isCancellation(e, params.cancellationToken)) {
-                return this.buildCancelledResult(startTime, endTime);
+            // The SDK raises APIUserAbortError when the signal fires, and never retries an abort.
+            if (this.IsCancellationError(e, params.cancellationToken)) {
+                return this.BuildCancelledChatResult(startTime, { error: e, signal: params.cancellationToken });
             }
             return {
                 data: {
@@ -993,8 +942,7 @@ export class AnthropicLLM extends BaseLLM {
             inputTokens: 0,
             outputTokens: 0,
             cacheReadTokens: 0,
-            cacheWriteTokens: 0,
-            cancellationToken: undefined
+            cacheWriteTokens: 0
         };
     }
 
@@ -1004,9 +952,6 @@ export class AnthropicLLM extends BaseLLM {
     protected async createStreamingRequest(params: ChatParams): Promise<AsyncIterable<RawMessageStreamEvent>> {
         // Reset streaming state for new request
         this.resetStreamingState();
-        // Remember the caller's cancellation token so finalizeStreamingResponse() can distinguish
-        // a cancelled stream from a completed one (the SDK's Stream ends silently on abort).
-        this._streamingState.cancellationToken = params.cancellationToken;
         // Find system message and non-system messages
         const systemMsg = params.messages.find(m => m.role === "system");
         const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
@@ -1244,14 +1189,6 @@ export class AnthropicLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
-        // A cancelled stream ends silently (the SDK's Stream swallows the abort), so the base-class
-        // chunk loop would otherwise hand us a truncated response and we'd report it as a success.
-        // Detect it here and report the same cancelled failure the non-streaming path returns.
-        if (this._streamingState.cancellationToken?.aborted) {
-            const now = new Date();
-            return this.buildCancelledResult(now, now);
-        }
-
         // Handle possible null/undefined values. Token usage is read from streaming state, which
         // accumulated input/output/cache counts across the message_start + message_delta events
         // (the `usage` param from the base loop only reflects the last chunk that carried usage and

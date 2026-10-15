@@ -1705,6 +1705,14 @@ export type RunQueryCacheStatus = {
      * Used to detect if any records have been deleted.
      */
     rowCount: number;
+    /**
+     * The query definition hash the client's slot was written under, as the server returned it
+     * (`RunQueryWithCacheCheckResult.definitionHash`). When it differs from the server's own, the
+     * server answers `stale` with fresh rows, whatever the query's CacheValidationSQL says. An empty
+     * string means the slot has no hash, which also counts as different. Omitted by older clients,
+     * for which the server skips the definition check.
+     */
+    definitionHash?: string;
 }
 
 /**
@@ -1761,6 +1769,11 @@ export type RunQueryWithCacheCheckResult<T = unknown> = {
      * Error message if status is 'error'
      */
     errorMessage?: string;
+    /**
+     * The server's definition hash for the query, returned with every non-error result. The client
+     * stores it with the slot and sends it back in `RunQueryCacheStatus.definitionHash`.
+     */
+    definitionHash?: string;
 }
 
 /**

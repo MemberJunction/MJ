@@ -1,6 +1,6 @@
-import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, type VendorCallParameters } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, type VendorCallParameters } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
-import { HttpPost, HttpRequestConfig, IsHttpError, IsCancellationError } from '@memberjunction/network-utils';
+import { HttpPost, HttpRequestConfig, IsHttpError, IsCancellationError as IsHttpCancellation } from '@memberjunction/network-utils';
 import * as Config from '../config';
 import { BettyResponse, SettingsResponse } from '../generic/BettyBot.types';
 
@@ -34,44 +34,11 @@ export class BettyBotLLM extends BaseLLM {
     }
 
     /**
-     * Determines whether an error (or the current state of the signal) represents a caller-initiated
-     * cancellation rather than a genuine API failure. Fetch rejects with an AbortError when the
-     * request config carries a signal that aborts.
+     * `HttpPost` wraps an aborted request in an `HttpError` flagged `IsCancelled`; a timeout is
+     * flagged `IsTimeout` instead and is not a cancellation, so it stays retriable.
      */
-    private isCancellation(error: unknown, signal?: AbortSignal): boolean {
-        if (signal?.aborted) {
-            return true;
-        }
-        if (IsCancellationError(error)) {
-            return true;
-        }
-        return error instanceof Error && error.name === 'AbortError';
-    }
-
-    /**
-     * Builds the ChatResult returned when a request is cancelled through ChatParams.cancellationToken
-     * (caller abort or AIPromptRunner timeout). Marked Fatal / non-failover so no layer retries a request
-     * the caller explicitly gave up on.
-     */
-    private buildCancelledResult(startTime: Date): ChatResult {
-        const errorInfo: AIErrorInfo = {
-            errorType: 'Unknown',
-            severity: 'Fatal',
-            canFailover: false,
-            providerErrorCode: 'request_cancelled',
-            context: { provider: 'BettyBot', cancelled: true }
-        };
-
-        const result = new ChatResult(false, startTime, new Date());
-        result.statusText = 'cancelled';
-        result.errorMessage = 'Request cancelled via cancellationToken';
-        result.exception = null;
-        result.errorInfo = errorInfo;
-        result.data = {
-            choices: [],
-            usage: new ModelUsage(0, 0)
-        };
-        return result;
+    protected override IsProviderAbortError(error: unknown): boolean {
+        return IsHttpCancellation(error);
     }
 
     /**
@@ -79,14 +46,8 @@ export class BettyBotLLM extends BaseLLM {
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const cancellationToken = params.cancellationToken;
+        const startTime = new Date();
         try{
-            const startTime = new Date();
-
-            // Already cancelled before we even dial out — don't open a socket at all
-            if (cancellationToken?.aborted) {
-                return this.buildCancelledResult(startTime);
-            }
-
             //ensure the jwt token is up to date
             const jwtResponse = await this.GetJWTToken(false, cancellationToken);
             if(!jwtResponse || jwtResponse.status !== 'SUCCESS'){
@@ -192,8 +153,8 @@ export class BettyBotLLM extends BaseLLM {
         catch(ex){
             // A caller-initiated abort (or AIPromptRunner timeout) is not a Betty failure — report it
             // as a cancellation so no layer retries a request the caller gave up on.
-            if(this.isCancellation(ex, cancellationToken)){
-                return this.buildCancelledResult(new Date());
+            if(this.IsCancellationError(ex, cancellationToken)){
+                return this.BuildCancelledChatResult(startTime, { error: ex, signal: cancellationToken });
             }
 
             if(IsHttpError(ex)){
@@ -292,7 +253,7 @@ export class BettyBotLLM extends BaseLLM {
         } 
         catch (error) {
             // Don't swallow a cancellation as a generic token failure — let the caller report it as one
-            if(this.isCancellation(error, cancellationToken)){
+            if(this.IsCancellationError(error, cancellationToken)){
                 throw error;
             }
 

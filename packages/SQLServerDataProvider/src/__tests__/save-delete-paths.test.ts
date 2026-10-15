@@ -246,7 +246,7 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     expect(sql).toContain('DECLARE @ResultChangesTable TABLE');
     expect(sql).toContain('[RecordID] nvarchar(750) NOT NULL'); // record-changes entity columns
     expect(sql).toContain('spCreateRecordChange_Internal');
-    expect(sql).toContain(`@EntityName='Widgets'`);
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
     expect(sql).toContain(`@UserID='${TEST_USER.ID}'`);
     expect(sql).toContain(`@Type='Create'`);
 
@@ -465,7 +465,7 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     expect(sql).toContain(`EXEC [dbo].[spDeleteWidget] @ID='w-0001'`);
     expect(sql).toContain('spCreateRecordChange_Internal');
     expect(sql).toContain(`@Type='Delete'`);
-    expect(sql).toContain(`@EntityName='Widgets'`);
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
     expect(sql).toContain('SELECT @ID AS [ID]'); // PK echoed back for delete validation
   });
 
@@ -972,4 +972,64 @@ describe('TransactionGroup with a failed item (NULL-key delete, or a save that r
       expect(afterHooks).toBe(0);
     });
   }
+});
+
+describe('SQLServerDataProvider Record Change text is sent as Unicode (N\'…\') literals', () => {
+  // spCreateRecordChange_Internal declares @EntityName, @RecordID, @ChangesJSON, @ChangesDescription
+  // and @FullRecordJSON as NVARCHAR. A plain '…' literal is read in the database's code page first,
+  // so on a SQL_Latin1_General_CP1 database every character outside code page 1252 (emoji, CJK,
+  // Greek, Cyrillic, …) is stored in the audit row as '?'. The record itself saves correctly.
+  const UNICODE_NAME = 'Zoë 😀 日本 Ωμέγα';
+
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  it('CREATE: every text argument of the record-change EXEC is an N literal and carries the text intact', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([MakeRecordChangesEntityInfo()]);
+    const entity = MakeNewWidgetEntity(MakeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
+    entity.Set('Name', UNICODE_NAME);
+    entity.Set('IsActive', true);
+    mssqlState.QueueResult({ rows: [{ ...SavedWidgetRow(), Name: UNICODE_NAME }] });
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    const sql = mssqlState.Queries[0].sql;
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
+    expect(sql).toMatch(/@ChangesJSON=N'/);
+    expect(sql).toMatch(/@ChangesDescription=N'/);
+    expect(sql).toMatch(/@FullRecordJSON=N'[^']*Zoë 😀 日本 Ωμέγα/);
+    expect(sql).not.toMatch(/@(EntityName|ChangesJSON|ChangesDescription|FullRecordJSON)='/);
+  });
+
+  it('DELETE: the quoted RecordID and the JSON arguments are N literals', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([MakeRecordChangesEntityInfo()]);
+    const entity = MakeSavedWidgetEntity(MakeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
+    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] });
+
+    await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
+
+    const sql = mssqlState.Queries[0].sql;
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
+    expect(sql).toMatch(/@RecordID=N'ID\|w-0001'/);
+    expect(sql).toMatch(/@ChangesJSON=N'/);
+    expect(sql).toMatch(/@ChangesDescription=N'/);
+    expect(sql).toMatch(/@FullRecordJSON=N'/);
+    expect(sql).not.toMatch(/@(EntityName|RecordID|ChangesJSON|ChangesDescription|FullRecordJSON)='/);
+  });
+
+  it('IS-A sibling propagation: the entity name, record id and change text are N literals', () => {
+    const provider = makeProvider();
+    const sibling = provider as unknown as {
+      BuildSiblingRecordChangeSQL: (varName: string, entityInfo: EntityInfo, changesJSON: string, changesDesc: string, pkValue: string, userId: string) => string;
+    };
+    const sql = sibling.BuildSiblingRecordChangeSQL('@_rc_prop_0', MakeWidgetEntityInfo(), `{"Name":"${UNICODE_NAME}"}`, `Name changed to ${UNICODE_NAME}`, 'w-0001', TEST_USER.ID);
+
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
+    expect(sql).toContain(`@RecordID=N'ID|w-0001'`);
+    expect(sql).toContain(`@ChangesJSON=N'{"Name":"${UNICODE_NAME}"}'`);
+    expect(sql).toContain(`@ChangesDescription=N'Name changed to ${UNICODE_NAME}'`);
+  });
 });

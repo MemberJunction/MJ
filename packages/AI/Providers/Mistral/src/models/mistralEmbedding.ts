@@ -35,7 +35,7 @@ export class MistralEmbedding extends BaseEmbeddings {
             };
 
             params.model = params.model || "mistral-embed";
-            const response: EmbeddingResponse = await this.Client.embeddings.create(request);
+            const response: EmbeddingResponse = await this.Client.embeddings.create(request, { signal: params.CancellationToken });
             let vector: number[] = [];
             if (response.data.length > 0){
                 vector = response.data[0].embedding;
@@ -47,6 +47,8 @@ export class MistralEmbedding extends BaseEmbeddings {
                 vector: vector
             };
         } catch (error) {
+            // An aborted request is reported as cancelled, not as an empty (failed) result.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             // Log error details for debugging
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'Mistral');
             console.error('Mistral embedding error:', errorInfo);
@@ -74,7 +76,7 @@ export class MistralEmbedding extends BaseEmbeddings {
             };
 
             params.model = params.model || "mistral-embed";
-            const response: EmbeddingResponse = await this.Client.embeddings.create(request);
+            const response: EmbeddingResponse = await this.Client.embeddings.create(request, { signal: params.CancellationToken });
             return {
                 object: response.object as "object" | "list",
                 model: response.model,
@@ -82,6 +84,8 @@ export class MistralEmbedding extends BaseEmbeddings {
                 vectors: response.data.map((data) => data.embedding)
             }
         } catch (error) {
+            // An aborted request is reported as cancelled, not as an empty (failed) result.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             // Log error details for debugging
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'Mistral');
             console.error('Mistral embedding error:', errorInfo);

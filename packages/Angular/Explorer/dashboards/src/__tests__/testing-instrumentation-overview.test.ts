@@ -179,7 +179,7 @@ function seedRuns(): void {
         StartedAt: minutesAgo(600 + i), CompletedAt: minutesAgo(599 + i),
     }));
     state.runs.push(
-        { ID: 'z-1', TestID: 'T-it124', Status: 'Passed', Score: 1, CostUSD: 0.107134, StartedAt: minutesAgo(110), CompletedAt: minutesAgo(107) },
+        { ID: 'z-1', TestID: 'T-it125', Status: 'Passed', Score: 1, CostUSD: 0.107134, StartedAt: minutesAgo(110), CompletedAt: minutesAgo(107) },
         { ID: 'z-2', TestID: 'T-golden', Status: 'Passed', Score: 0.9, CostUSD: 0.035711, StartedAt: minutesAgo(16), CompletedAt: minutesAgo(15) },
         { ID: 'z-3', TestID: 'T-golden', Status: 'Failed', Score: 0.2, CostUSD: 0.035609, StartedAt: minutesAgo(18), CompletedAt: minutesAgo(17) },
     );
@@ -220,7 +220,7 @@ describe('TestingInstrumentationService — Overview (F17)', () => {
             { ID: 'S-gates', Name: 'Predictive Studio Gates — Feature Pipelines', ParentID: null, Status: 'Active' },
             { ID: 'S-empty', Name: 'Integration Tests', ParentID: null, Status: 'Active' },
         ];
-        state.members.set('S-gates', ['T-it124', 'T-golden', 'T-a', 'T-b', 'T-c', 'T-d']);
+        state.members.set('S-gates', ['T-it125', 'T-golden', 'T-a', 'T-b', 'T-c', 'T-d']);
         const nodes = await firstValueFrom(new TestingInstrumentationService().SuiteHierarchy$);
         const gates = nodes.find((n) => n.id === 'S-gates')!;
         expect(gates.testCount).toBe(6);
@@ -239,7 +239,7 @@ describe('TestingInstrumentationService — Overview (F17)', () => {
         const sub = service.Kpis$.subscribe((k) => seen.push(k.TotalTestRuns));
         await vi.waitFor(() => expect(seen.length).toBe(1));
         const later = new Date(NOW.getTime() + 60 * 60_000);
-        state.runs.push({ ID: 'z-9', TestID: 'T-it124', Status: 'Passed', Score: 1, CostUSD: 0.1, StartedAt: new Date(later.getTime() - 60_000).toISOString(), CompletedAt: later.toISOString() });
+        state.runs.push({ ID: 'z-9', TestID: 'T-it125', Status: 'Passed', Score: 1, CostUSD: 0.1, StartedAt: new Date(later.getTime() - 60_000).toISOString(), CompletedAt: later.toISOString() });
         vi.setSystemTime(later);
         service.Refresh();
         await vi.waitFor(() => expect(seen.length).toBe(2));
@@ -259,7 +259,7 @@ describe('TestingInstrumentationService — Overview (F17)', () => {
         state.testTypes.set('T-golden', 'Feature Pipeline Golden Set');
         const analytics = await firstValueFrom(new TestingInstrumentationService().Analytics$);
         expect(state.queries.map((q) => q.QueryName)).toEqual(['TestRunTotalsByTest']);
-        expect(analytics.mostExpensiveTests[0]).toEqual({ testName: 'Test T-it124', totalCost: 0.107134, avgCost: 0.107134 });
+        expect(analytics.mostExpensiveTests[0]).toEqual({ testName: 'Test T-it125', totalCost: 0.107134, avgCost: 0.107134 });
         expect(analytics.topFailingTests[0]).toMatchObject({ testName: 'Test T-golden', failureCount: 1, failureRate: 50 });
         expect(analytics.costByType.find((t) => t.testType === 'Integration Test')).toMatchObject({ testCount: 1201 });
         expect(analytics.passingRateByType[0]).toMatchObject({ testType: 'Feature Pipeline Golden Set', passRate: 50, totalTests: 2 });

@@ -841,8 +841,8 @@ coverage loss):
 | `ai-skills` | AS1–AS21 (21) | server | 4 skills + grants/junctions | IT12 | Skills gates, resolution, SKILL.md round-trip, activation governance — no LLM |
 | `api-keys` | AK1–AK3 (3) | server | key fixtures | IT13 | API Keys engine `Config` + end-to-end `Authorize` allow/deny |
 | `predictive-studio` | PS1–PS5 (5) | server | Pipeline → Model → Binding chain | IT14 | PS stack seams (entities, work-type registration, Actions) — no sidecar |
-| `feature-pipeline-core` | Feature Value key, Dedup Cache, version gate, dry run and breaker (mutation-gated) | server | stub driver, pipeline, prompt | IT123 | Feature Pipelines against MJ core tables only, no model calls, self-cleaning; member of the deterministic suite |
-| `fp-live-jobtitle` | job-title consistency (live-model) | server | bizapps-common people + pipeline | IT124 | Live consistency of a Feature Pipeline over repeated runs; needs bizapps-common and a model key; member of `Predictive Studio Gates — Feature Pipelines` |
+| `feature-pipeline-core` | Feature Value key, Dedup Cache, version gate, dry run and breaker (mutation-gated) | server | stub driver, pipeline, prompt | IT124 | Feature Pipelines against MJ core tables only, no model calls, self-cleaning; member of the deterministic suite |
+| `fp-live-jobtitle` | job-title consistency (live-model) | server | bizapps-common people + pipeline | IT125 | Live consistency of a Feature Pipeline over repeated runs; needs bizapps-common and a model key; member of `Predictive Studio Gates — Feature Pipelines` |
 | `remote-op-wire-progress` | WIRE1 (1) | client | over-the-wire fixtures | IT15 | Remote Operation progress streamed over GraphQL |
 | `prompt-runner` | PR1 (1) | server | lifecycle | IT16 (live-model) | Real prompt run + persisted `MJ: AI Prompt Runs` verification |
 | `agent-runner` | AR1 (1) | server | lifecycle | IT17 (live-model) | Real agent run, deep-verified (steps → prompt runs → action logs → sub-agents) |
@@ -861,7 +861,7 @@ coverage loss):
 | `self-test` | cache-warm (1) | server | — | smoke script | Proves the instrumented cache observes RunView traffic (lives in the framework package) |
 
 
-**Predictive Studio gate suite.** `Predictive Studio Gates — Feature Pipelines` holds the Phase 7 gates (`C1 → C2.1` first) and `IT124`. It needs bizapps-common installed and `RUN_MUTATION_TESTS=1` (the C2 gates are mutation-tier and report Skipped without it). `IT123` also runs in the deterministic suite (`RUN_MUTATION_TESTS=1` enables its mutation checks). The gates write bizapps-common rows, so the CLI process must load the same entity classes MJAPI loads; a run that does not logs `ClassFactory: no registration found … 'MJ_BizApps_Common: …'` for every fixture write. Run the gates from the MJAPI directory, which declares the host-generated entities package, and give that directory its own `.env` (the CLI reads `.env` from the working directory; copy the repo-root one):
+**Predictive Studio gate suite.** `Predictive Studio Gates — Feature Pipelines` holds the Phase 7 gates (`C1 → C2.1` first) and `IT125`. It needs bizapps-common installed and `RUN_MUTATION_TESTS=1` (the C2 gates are mutation-tier and report Skipped without it). `IT123` also runs in the deterministic suite (`RUN_MUTATION_TESTS=1` enables its mutation checks). The gates write bizapps-common rows, so the CLI process must load the same entity classes MJAPI loads; a run that does not logs `ClassFactory: no registration found … 'MJ_BizApps_Common: …'` for every fixture write. Run the gates from the MJAPI directory, which declares the host-generated entities package, and give that directory its own `.env` (the CLI reads `.env` from the working directory; copy the repo-root one):
 
 ```bash
 cd packages/MJAPI

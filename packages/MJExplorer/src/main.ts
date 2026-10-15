@@ -1,5 +1,5 @@
 import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
-import { AuthProviderCatalog } from '@memberjunction/ng-auth-services';
+import { AuthProviderCatalog, LoginScreenLoader } from '@memberjunction/ng-auth-services';
 import { environment } from './environments/environment';
 
 async function initAndBootstrap() {
@@ -9,7 +9,13 @@ async function initAndBootstrap() {
   // hand before that module is evaluated. Preload never rejects: on any failure it yields an
   // empty catalog and the app falls back to the compiled `AUTH_TYPE`, so a slow or older server
   // delays the login screen briefly but never blocks it.
-  await AuthProviderCatalog.Preload(environment.GRAPHQL_URI);
+  //
+  // The sign-in page published in Login Studio is fetched alongside it, so the login screen's first
+  // paint is already designed. It never rejects either; the explorer app awaits the same request.
+  await Promise.all([
+    AuthProviderCatalog.Preload(environment.GRAPHQL_URI),
+    LoginScreenLoader.Load(environment.GRAPHQL_URI),
+  ]);
 
   // Dynamic import is REQUIRED here, not a convenience. A static import is hoisted, so AppModule
   // — and with it AuthServicesModule.forRoot — would evaluate before the await above ever ran,

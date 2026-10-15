@@ -1,6 +1,6 @@
-import { AIErrorInfo, BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities, ChatToolCall, getToolResultBlocks, CHAT_FINISH_REASON_TOOL_CALLS,
+import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities, ChatToolCall, getToolResultBlocks, CHAT_FINISH_REASON_TOOL_CALLS,
     buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, extractOpenAICompatibleToolCalls, VendorCallParameters } from "@memberjunction/ai";
-import { APIUserAbortError, OpenAI } from "openai";
+import { OpenAI } from "openai";
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageFunctionToolCall, ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionSystemMessageParam, ChatCompletionTool, ChatCompletionUserMessageParam } from "openai/resources";
 
@@ -228,7 +228,7 @@ export class OpenAILLM extends BaseLLM {
      * This is honored on BOTH the streaming and non-streaming paths.
      *
      * The SDK's own retry loop checks `options.signal.aborted` before every attempt and throws
-     * {@link APIUserAbortError} rather than retrying, so a cancelled request stays cancelled.
+     * `APIUserAbortError` rather than retrying, so a cancelled request stays cancelled.
      *
      * Returned as a structural literal (rather than the SDK's `RequestOptions`, which is not
      * exported from the package root) — every field of `RequestOptions` is optional, so this is
@@ -236,57 +236,6 @@ export class OpenAILLM extends BaseLLM {
      */
     protected buildRequestOptions(params: ChatParams): { signal?: AbortSignal } {
         return params.cancellationToken ? { signal: params.cancellationToken } : {};
-    }
-
-    /**
-     * True when `error` represents a cancellation of the request rather than a provider failure.
-     * Covers the SDK's typed {@link APIUserAbortError}, the DOM-standard `AbortError`, and the
-     * belt-and-braces case where the token is already aborted but the underlying transport
-     * surfaced some other error shape.
-     */
-    protected isCancellationError(error: unknown, cancellationToken?: AbortSignal): boolean {
-        if (error instanceof APIUserAbortError) {
-            return true;
-        }
-        if (error instanceof Error && error.name === 'AbortError') {
-            return true;
-        }
-        return cancellationToken?.aborted === true;
-    }
-
-    /**
-     * Structured error info for a cancelled request. Cancellation is deliberate, so it is marked
-     * Fatal and non-failover-able — retrying or failing over to another vendor would defeat the
-     * cancellation. (`AIErrorType` has no dedicated cancellation member, so `Unknown` is used with
-     * an explicit provider error code.)
-     */
-    protected buildCancellationErrorInfo(error: unknown): AIErrorInfo {
-        return {
-            errorType: 'Unknown',
-            severity: 'Fatal',
-            canFailover: false,
-            providerErrorCode: 'request_cancelled',
-            context: { provider: 'openai', cancelled: true },
-            error
-        };
-    }
-
-    /**
-     * Build the ChatResult returned when a request is cancelled mid-flight. Mirrors the shape of a
-     * failed ChatResult so callers see a clean, typed failure (`success === false`) instead of an
-     * unhandled rejection.
-     */
-    protected buildCancelledChatResult(error: unknown, startTime: Date): ChatResult {
-        const result = new ChatResult(false, startTime, new Date());
-        result.data = {
-            choices: [],
-            usage: new ModelUsage(0, 0)
-        };
-        result.statusText = 'cancelled';
-        result.errorMessage = error instanceof Error ? error.message : 'Request was cancelled';
-        result.exception = error;
-        result.errorInfo = this.buildCancellationErrorInfo(error);
-        return result;
     }
 
     /**
@@ -391,8 +340,8 @@ export class OpenAILLM extends BaseLLM {
         try {
             result = await this.OpenAI.chat.completions.create(openAIParams, this.buildRequestOptions(params));
         } catch (error) {
-            if (this.isCancellationError(error, params.cancellationToken)) {
-                return this.buildCancelledChatResult(error, startTime);
+            if (this.IsCancellationError(error, params.cancellationToken)) {
+                return this.BuildCancelledChatResult(startTime, { error, signal: params.cancellationToken });
             }
             throw error; // every other failure is thrown: see this method's JSDoc for why
         }
@@ -595,26 +544,10 @@ export class OpenAILLM extends BaseLLM {
         // non-streaming path. The OpenAI SDK forwards unknown body keys unchanged.
         Object.assign(openAIParams, this.getProviderRequestExtras(params));
 
-        // Remember the token for this request so finalizeStreamingResponse can report a cancellation.
-        // Set AFTER resetStreamingState() above (which clears it); cleared again by the reset that
-        // BaseLLM.handleStreamingChatCompletion runs in its `finally`.
-        this.activeStreamCancellationToken = params.cancellationToken;
-
         // Same request-option channel as the non-streaming path: aborting the signal cancels the
         // in-flight HTTP request AND the SSE stream, so we stop pulling chunks off a dead socket.
         return this.OpenAI.chat.completions.create(openAIParams, this.buildRequestOptions(params));
     }
-
-    /**
-     * Cancellation token for the in-flight streaming request, captured in createStreamingRequest so
-     * finalizeStreamingResponse can tell "the stream ended" from "the stream was aborted".
-     *
-     * `protected` rather than private because a subclass may override `createStreamingRequest`
-     * without calling `super` (Inception does, to send Mercury's divergent request payload). Such a
-     * subclass still inherits this class's `finalizeStreamingResponse`, so it must be able to stash
-     * the token — otherwise an aborted stream would finalize as a truncated success.
-     */
-    protected activeStreamCancellationToken: AbortSignal | undefined = undefined;
 
     // State tracking for streaming thinking extraction
     private _streamingState: {
@@ -639,7 +572,6 @@ export class OpenAILLM extends BaseLLM {
      * audit R2-C5.
      */
     protected resetStreamingState(): void {
-        this.activeStreamCancellationToken = undefined;
         this._streamingState = {
             accumulatedThinking: '',
             inThinkingBlock: false,
@@ -807,14 +739,6 @@ export class OpenAILLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
-        // A mid-stream abort surfaces as an APIUserAbortError inside BaseLLM's for-await loop, which
-        // that loop logs and swallows — so without this check a cancelled stream would be finalized
-        // as a truncated SUCCESS. Report it as a clean, typed failure instead.
-        const cancellationToken = this.activeStreamCancellationToken;
-        if (cancellationToken?.aborted) {
-            return this.buildCancelledChatResult(cancellationToken.reason, new Date());
-        }
-
         // Handle possible null/undefined values
         const content = accumulatedContent || '';
         const promptTokens = usage?.promptTokens || 0;

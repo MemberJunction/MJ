@@ -165,10 +165,11 @@ export interface SQLParserDialect {
      *  `null` when the platform has none. SQL Server: 'OPTION', PostgreSQL: null */
     QueryHintKeyword: string | null;
     /**
-     * Functions SQL a caller supplied (ad-hoc SQL, `TestQuerySQL`, query specs) may not call,
-     * lower case; a trailing `*` matches every name with that prefix. They run SQL passed as a
-     * string, read files or other databases, or act on the server, so neither the check of which
-     * tables the SQL reads nor a read-only transaction stops them.
+     * Functions SQL a caller supplied (ad-hoc SQL, `TestQuerySQL`, query specs, client RunView
+     * clauses) may not call, lower case; a trailing `*` matches every name with that prefix. They
+     * run SQL passed as a string, read files or other databases, act on the server, or pause the
+     * query, so neither the check of which tables the SQL reads nor a read-only transaction stops
+     * them.
      */
     CallerSQLForbiddenFunctions: readonly string[];
 }

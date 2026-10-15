@@ -9,6 +9,7 @@
  */
 
 import type { ModelUsage } from './baseModel';
+import type { AIErrorInfo } from './errorTypes.js';
 
 /**
  * A document to be reranked.
@@ -85,6 +86,15 @@ export interface RerankParams {
      * Provider-specific options (passed through to the reranker implementation)
      */
     options?: Record<string, unknown>;
+
+    /**
+     * Optional signal for cancelling the request. `BaseReranker.Rerank()` refuses a call whose
+     * signal is already aborted, without calling the driver; once the driver is running, the driver
+     * is responsible for honoring it by handing it to the provider's HTTP client or prompt run. A
+     * call the signal ends resolves with `success: false`, and its `errorInfo` classifies a caller
+     * cancellation as `Cancelled`, which is never failed over.
+     */
+    CancellationToken?: AbortSignal;
 }
 
 /**
@@ -105,6 +115,13 @@ export interface RerankResponse {
      * Error message if the operation failed
      */
     errorMessage?: string;
+
+    /**
+     * The classification of the failure, when the reranker knows it. Set for a request its
+     * `CancellationToken` ended: `Cancelled` for a caller cancellation, a retriable network error
+     * when the signal was aborted by a timeout.
+     */
+    errorInfo?: AIErrorInfo;
 
     /**
      * Time taken to perform the reranking in milliseconds

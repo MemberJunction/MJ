@@ -5,7 +5,7 @@ import { BettyLLM } from '../models/BettyLLM';
 import { BettyEndpoint } from '../config';
 
 // PARTIAL mock: only the network call is faked. Automocking the whole module also stubs
-// `IsHttpError` / `IsCancellationError` to return undefined, so `describe()` and `isCancellation()`
+// `IsHttpError` / `IsCancellationError` to return undefined, so `describe()` and `IsProviderAbortError()`
 // silently take their fallback branches and the real error-shape handling is never executed — which
 // is exactly how an empty error message survived review.
 vi.mock('@memberjunction/network-utils', async (importOriginal) => ({
@@ -388,28 +388,72 @@ describe('BettyLLM', () => {
     });
 
     describe('cancellation', () => {
-        it('does not open a socket when the token is already aborted', async () => {
-            const p = paramsWith([{ role: ChatMessageRole.user, content: 'q' }]);
-            p.cancellationToken = AbortSignal.abort();
-
-            const result = await run(new BettyLLM('key'), p);
-
+        /** The cancelled contract: Fatal, never failed over, so no layer retries it. */
+        function expectCancelled(result: import('@memberjunction/ai').ChatResult): void {
+            expect(result.success).toBe(false);
             expect(result.statusText).toBe('cancelled');
+            expect(result.errorInfo).toMatchObject({
+                errorType: 'Cancelled', severity: 'Fatal', canFailover: false, providerErrorCode: 'request_cancelled',
+            });
+        }
+
+        function cancellableParams(signal: AbortSignal): ChatParams {
+            const p = paramsWith([{ role: ChatMessageRole.user, content: 'q' }]);
+            p.cancellationToken = signal;
+            return p;
+        }
+
+        it('does not open a socket when the token is already aborted', async () => {
+            const result = await new BettyLLM('key').ChatCompletion(cancellableParams(AbortSignal.abort()));
+
+            expectCancelled(result);
             expect(vi.mocked(HttpPost)).not.toHaveBeenCalled();
         });
 
-        it('reports an abort as cancelled, not as a Betty failure', async () => {
-            // Marked non-failover so no layer retries a request the caller gave up on.
+        it('forwards the token to the HTTP request', async () => {
+            vi.mocked(HttpPost).mockResolvedValue(reply());
             const controller = new AbortController();
-            vi.mocked(HttpPost).mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }));
 
-            const p = paramsWith([{ role: ChatMessageRole.user, content: 'q' }]);
-            p.cancellationToken = controller.signal;
-            const result = await run(new BettyLLM('key'), p);
+            await new BettyLLM('key').ChatCompletion(cancellableParams(controller.signal));
+
+            const cfg = vi.mocked(HttpPost).mock.calls[0][2] as { Signal?: AbortSignal };
+            expect(cfg.Signal).toBe(controller.signal);
+        });
+
+        it('reports an abort as cancelled, not as a Betty failure', async () => {
+            const controller = new AbortController();
+            vi.mocked(HttpPost).mockImplementation(async () => {
+                controller.abort();
+                throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+            });
+
+            const result = await new BettyLLM('key').ChatCompletion(cancellableParams(controller.signal));
+
+            expectCancelled(result);
+        });
+
+        it('recognizes the HttpError an aborted request is wrapped in', async () => {
+            vi.mocked(HttpPost).mockRejectedValue(new HttpError(
+                `Request to ${BASE}/messages was cancelled`,
+                { Url: `${BASE}/messages`, Method: 'POST', IsCancelled: true },
+            ));
+
+            const result = await new BettyLLM('key').ChatCompletion(cancellableParams(new AbortController().signal));
+
+            expectCancelled(result);
+        });
+
+        it('keeps its own timeout a failure, not a cancellation', async () => {
+            vi.mocked(HttpPost).mockRejectedValue(new HttpError(
+                `Request to ${BASE}/messages timed out after 120000ms`,
+                { Url: `${BASE}/messages`, Method: 'POST', IsTimeout: true },
+            ));
+
+            const result = await new BettyLLM('key').ChatCompletion(cancellableParams(new AbortController().signal));
 
             expect(result.success).toBe(false);
-            expect(result.statusText).toBe('cancelled');
-            expect(result.errorInfo?.canFailover).toBe(false);
+            expect(result.statusText).toBe('error');
+            expect(result.errorInfo?.errorType).not.toBe('Cancelled');
         });
     });
 

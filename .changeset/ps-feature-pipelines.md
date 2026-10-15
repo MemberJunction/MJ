@@ -74,7 +74,7 @@ resumes by itself once the class is loaded; embedding templates render raw and e
 failed prompt calls record their own error and no longer leave prompt runs Running, and parallel prompt execution
 completes; Gemini, Vertex and Bedrock send temperature 0 as 0, strict calls refuse a changed parameter and a refusal
 stops the prompt without failover; Bedrock accepts inference-profile model IDs; OpenAI and Azure drop parameters
-reasoning models reject. Migration `V202610140050__v6.2.x__Feature_Value_Key_And_Versions.sql`.
+reasoning models reject. Migration `V202610151119__v6.2.x__Feature_Value_Key_And_Versions.sql`.
 
 API move: `WriteBackResult` and `TagWriteBackPreview` now live in `@memberjunction/record-set-processor-base` (with the new `WriteBackRunPayload`,
 `WriteBackFieldChange`, `WriteBackChildChange` and `FeaturePipelineRunResults`) so the Explorer can use them; they are no longer exported from
@@ -90,3 +90,5 @@ The Feature Pipelines card reads a run that skipped records on their watermark a
 `EntityInfo.RecordNameFields` and `EntityInfo.CanUserReadRecordName(user)` (MJCore) are the one record-name rule: the name fields in order, and whether a user may see a record's name (every name field readable, so a name is shown whole or not at all); the database provider's record-name read delegates to them and the dry-run preview applies the same gate to names it reads and to names from already-loaded rows. Processors may implement `IRecordProcessor.CompleteDryRunBatch`, which the record loop calls once per dry-run batch before recording its results (FieldRules and write-back processors name their previews there); real runs still record each record as it finishes.
 
 A RunAction result's `ResultData` is a JSON array of the run's Output/Both params (`ActionResolver.SerializeOutputParams`); it used to arrive as an index-keyed object (`{"0": …}`), so clients that look params up by name (the Action Test Harness, the Communication dashboard) showed nothing. The Database Designer's workaround for the old shape is removed.
+
+A user view saved through a network provider (a process that saves over GraphQL with the server entity classes registered, such as the integration test runner) is no longer refused by the client-SQL screen in that process; MJAPI screens the stored clauses before writing and on every run, as before. A database provider that cannot screen still fails closed.

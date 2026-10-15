@@ -13,6 +13,8 @@ import {
 import { QueryParameterEnricher } from "./enrich";
 import { SyncParameters, SyncFields, SyncEntities, SyncDependencies, RemoveAllRecords } from "./sync";
 import { QueryEngine } from "@memberjunction/core-entities";
+import { BaseEntity, LocalCacheManager } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 
 /**
  * Result of running the full extraction pipeline.
@@ -53,8 +55,8 @@ export async function RunExtractionPipeline(ctx: QuerySyncContext): Promise<Pipe
     // ── STAGE 4: MERGE ──
     const { finalParams, finalFields } = merge(resolveResult, aiResult, parseResult, ctx);
 
-    // ── STAGE 5: SYNC (parallel DB writes) ──
-    await sync(ctx, finalParams, finalFields, resolveResult);
+    // ── STAGE 5: SYNC (parallel DB writes, cache slots rewritten once at the end) ──
+    await runInEntityEventBatches(syncBatchOwners(ctx), () => sync(ctx, finalParams, finalFields, resolveResult));
 
     return {
         UsesTemplate: resolveResult.AllDeterministicParams.length > 0,
@@ -139,6 +141,49 @@ function merge(
     return { finalParams, finalFields };
 }
 
+/**
+ * The objects the sync stage's saves raise their events through. New rows use the pipeline's
+ * provider. Existing rows come from `QueryEngine`'s cache and keep whatever provider they were
+ * loaded or saved through: the engine's own, or, for a row an earlier request created, that
+ * request's provider instance. Each distinct one gets a batch, or its saves would rewrite and
+ * publish their slots one save at a time.
+ */
+function syncBatchOwners(ctx: QuerySyncContext): object[] {
+    const engine = QueryEngine.Instance;
+    const owners = new Set<object>([ctx.metadataProvider]);
+    if (engine.ProviderToUse) {
+        owners.add(engine.ProviderToUse);
+    }
+    if (engine.Loaded) {
+        const existingRows: BaseEntity[] = [
+            ...engine.GetQueryParameters(ctx.queryID),
+            ...engine.GetQueryFields(ctx.queryID),
+            ...engine.QueryEntities.filter(e => UUIDsEqual(e.QueryID, ctx.queryID)),
+            ...engine.Dependencies.filter(d => UUIDsEqual(d.QueryID, ctx.queryID)),
+        ];
+        for (const row of existingRows) {
+            if (row.ProviderToUse) {
+                owners.add(row.ProviderToUse);
+            }
+        }
+    }
+    return [...owners];
+}
+
+/**
+ * Runs `work` inside an entity-event batch for every owner. Each row save would otherwise rewrite
+ * and publish its entity's whole shared cache slot (every field of every query, for Query Fields);
+ * in a batch each slot is rewritten once when the batch closes. When `work` fails the batch closes
+ * as failed and the touched slots are invalidated instead, so every server reloads them.
+ */
+async function runInEntityEventBatches(owners: object[], work: () => Promise<void>): Promise<void> {
+    if (owners.length === 0) {
+        return work();
+    }
+    const [owner, ...rest] = owners;
+    return LocalCacheManager.Instance.RunInEntityEventBatch(owner, () => runInEntityEventBatches(rest, work));
+}
+
 async function sync(
     ctx: QuerySyncContext,
     finalParams: ExtractedParameter[] | null,
@@ -171,7 +216,13 @@ async function sync(
     // Dependencies
     syncPromises.push(SyncDependencies(ctx.queryID, resolveResult.ResolvedCompositionRefs, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
 
-    await Promise.all(syncPromises);
+    // Wait for every write before failing, so the enclosing event batch closes after the last one
+    // instead of while some are still in flight.
+    const outcomes = await Promise.allSettled(syncPromises);
+    const failure = outcomes.find((o): o is PromiseRejectedResult => o.status === 'rejected');
+    if (failure) {
+        throw failure.reason;
+    }
 }
 
 /**

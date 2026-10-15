@@ -355,6 +355,14 @@ interface QueuedEngineLoadRequest {
     ReadOptions?: Readonly<DatasetReadOptions>;
 }
 
+/** A reload of one engine property started by a peer's cache change. */
+interface ExternalChangeReload {
+    /** Another event arrived while this reload was running, so it must run once more. */
+    Again: boolean;
+    /** Settles when the last requested reload has finished. */
+    Done: Promise<void>;
+}
+
 export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
@@ -435,6 +443,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * reconciles it. Keyed by config PropertyName. See {@link beginConfigRefresh}.
      */
     private _configRefreshGeneration: Map<string, number> = new Map();
+
+    /**
+     * Reloads started by {@link OnExternalCacheChange}, keyed by config PropertyName. While one is
+     * running, further events for that property set `Again` instead of starting another, so a
+     * burst of peer events costs at most two reloads per property. See {@link reloadAfterExternalChange}.
+     */
+    private _externalChangeReloads: Map<string, ExternalChangeReload> = new Map();
 
     /**
      * Returns an Observable for a specific engine array property. Subscribers receive the
@@ -2530,6 +2545,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                         LogStatusEx({ message: `BaseEngine.OnExternalCacheChange: '${config.PropertyName}' already holds the payload's rows — skipped`, verboseOnly: true });
                         return;
                     }
+                    // Rows written under a different field list (a server on the other side of a
+                    // migration) lack columns this process has, or carry ones it does not. Loading
+                    // them would blank the missing columns on every row, so read the rows instead.
+                    if (this.payloadSchemaDiffers(config, parsed.schemaHash)) {
+                        LogStatusEx({ message: `BaseEngine.OnExternalCacheChange: payload for '${config.PropertyName}' was written under a different schema — reloading instead`, verboseOnly: true });
+                        await this.reloadAfterExternalChange(config);
+                        return;
+                    }
                     // Claim a refresh generation BEFORE the awaited materialization — the same
                     // protocol LoadSingleConfig uses around its awaited RunView. Without it, two
                     // overlapping cache events (or an event racing a full reload) can resolve out
@@ -2581,13 +2604,57 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 LogWarning(`BaseEngine.OnExternalCacheChange: payload for '${config.PropertyName}' could not be applied (${e instanceof Error ? e.message : String(e)}) — falling back to full reload`, 'Cache');
             }
         }
-        // Fallback: reload this config from the database. This also replaces the property, so the
-        // derived state has to be rebuilt here too — and the reload must NOT emit on its own, or a
-        // subscriber wakes between the new rows and the rebuild and reads derived state still
-        // pointing at the instances this reload discarded.
-        await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true, BaseEngine.BackgroundReloadReads);
-        await this.RebuildDerivedState(this._contextUser);
-        this.emitPropertyChange(config.PropertyName);
+        // Fallback: reload this config from the database (on the pool, see BackgroundReloadReads).
+        await this.reloadAfterExternalChange(config);
+    }
+
+    /**
+     * True when a cache-change payload carries a schema hash and it differs from this engine's
+     * hash for the config's entity. A payload without a hash, or an entity this process cannot
+     * resolve, does not count as differing.
+     */
+    private payloadSchemaDiffers(config: BaseEnginePropertyConfig, payloadSchemaHash: unknown): boolean {
+        if (typeof payloadSchemaHash !== 'string' || !payloadSchemaHash || !config.EntityName) {
+            return false;
+        }
+        const ownHash = LocalCacheManager.Instance.ComputeSchemaHash(this.ProviderToUse, config.EntityName);
+        return ownHash !== undefined && ownHash !== payloadSchemaHash;
+    }
+
+    /**
+     * Reloads a config after a peer's cache change, coalescing overlapping requests: an event that
+     * arrives while a reload for the same property is running asks for one more reload after it
+     * instead of starting its own. Every caller's promise settles only after a reload that began
+     * after its event, so no change is missed, but N events in a burst cost at most two reloads.
+     */
+    private reloadAfterExternalChange(config: BaseEnginePropertyConfig): Promise<void> {
+        const running = this._externalChangeReloads.get(config.PropertyName);
+        if (running) {
+            running.Again = true;
+            return running.Done;
+        }
+        const reload: ExternalChangeReload = { Again: false, Done: Promise.resolve() };
+        this._externalChangeReloads.set(config.PropertyName, reload);
+        reload.Done = this.runExternalChangeReloads(config, reload);
+        return reload.Done;
+    }
+
+    /** Runs reloads for {@link reloadAfterExternalChange} until no further event asked for one. */
+    private async runExternalChangeReloads(config: BaseEnginePropertyConfig, reload: ExternalChangeReload): Promise<void> {
+        try {
+            do {
+                reload.Again = false;
+                // The reload replaces the property, so the derived state has to be rebuilt too —
+                // and the reload must NOT emit on its own, or a subscriber wakes between the new
+                // rows and the rebuild and reads derived state still pointing at the instances
+                // this reload discarded.
+                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true, BaseEngine.BackgroundReloadReads);
+                await this.RebuildDerivedState(this._contextUser);
+                this.emitPropertyChange(config.PropertyName);
+            } while (reload.Again);
+        } finally {
+            this._externalChangeReloads.delete(config.PropertyName);
+        }
     }
 
     /**

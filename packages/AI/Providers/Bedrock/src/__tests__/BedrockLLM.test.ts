@@ -41,6 +41,8 @@ vi.mock('@memberjunction/ai', () => {
     protected _additionalSettings: Record<string, unknown> = {};
     constructor(_apiKey: string) {}
     get SupportsStreaming() { return true; }
+    // Cancellation itself is covered against the real BaseLLM in BedrockLLM.cancellation.test.ts.
+    protected IsCancellationError(_error: unknown, signal?: AbortSignal | null): boolean { return signal?.aborted === true; }
   }
   class MockChatResult {
     success: boolean;
@@ -531,52 +533,6 @@ describe('BedrockLLM', () => {
       await fn({ ...baseParams, cancellationToken: controller.signal });
 
       expect(mockSend.mock.calls[0][1]).toEqual({ abortSignal: controller.signal });
-    });
-
-    it('should short-circuit without calling the API when already aborted', async () => {
-      const controller = new AbortController();
-      controller.abort();
-
-      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['nonStreamingChatCompletion']
-        .bind(llm);
-      const result = await fn({ ...baseParams, cancellationToken: controller.signal }) as Record<string, unknown>;
-
-      expect(mockSend).not.toHaveBeenCalled();
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('cancelled');
-      expect(result.errorMessage).toBe('Bedrock request was cancelled');
-    });
-
-    it('should report an AbortError from the SDK as a cancelled result', async () => {
-      const abortError = new Error('Request aborted');
-      abortError.name = 'AbortError';
-      mockSend.mockRejectedValueOnce(abortError);
-
-      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['nonStreamingChatCompletion']
-        .bind(llm);
-      const result = await fn(baseParams) as Record<string, unknown>;
-
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('cancelled');
-    });
-
-    it('should report a cancelled stream as a failure, not a truncated success', async () => {
-      mockSend.mockResolvedValueOnce({ body: [] });
-      const controller = new AbortController();
-
-      const create = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['createStreamingRequest']
-        .bind(llm);
-      await create({ ...baseParams, cancellationToken: controller.signal });
-
-      // Caller cancels mid-stream; the AWS event stream just stops yielding.
-      controller.abort();
-
-      const finalize = (llm as unknown as Record<string, (...args: unknown[]) => unknown>)['finalizeStreamingResponse']
-        .bind(llm);
-      const result = finalize('partial text', null, null) as Record<string, unknown>;
-
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('cancelled');
     });
   });
 });

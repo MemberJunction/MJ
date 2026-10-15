@@ -3,7 +3,7 @@
  * error-rate breaker, against MJ core tables only (no bizapps-common), on the gate stub driver — deterministic,
  * self-cleaning, no model calls.
  *
- * The pipeline runs on `MJ: Entities` over in-memory records (their IDs and names start with `it123-`), straight
+ * The pipeline runs on `MJ: Entities` over in-memory records (their IDs and names start with `it124-`), straight
  * through `RecordSetProcessor` with no write-back, so nothing outside the pipeline's own rows (Feature Values, cache
  * rows, watermarks, versions, process runs) is written. Setup deletes what an interrupted run left; teardown deletes
  * everything the bundle created.
@@ -39,9 +39,9 @@ type PipelineRowEntity = 'MJ: Feature Values' | 'MJ: Feature Value Caches' | 'MJ
 /** The bundle's pipeline: its rows, runs and reads. State carried between checks lives here and is reset by Setup. */
 class FeaturePipelineCoreBundle {
     /** Name of the prompt, its template and the Record Process (teardown deletes every row named from it). */
-    public static readonly NAME = 'it123-feature-pipeline-core';
+    public static readonly NAME = 'it124-feature-pipeline-core';
     /** Name of the bundle's stub `MJ: Feature Pipeline Types` row. */
-    public static readonly TYPE_NAME = 'it123-stub';
+    public static readonly TYPE_NAME = 'it124-stub';
     /** Description of the bundle's spec and Record Process. */
     public static readonly DESCRIPTION = 'Integration test pipeline (stub driver, MJ core only).';
     /** The answer the stub gives an input it has no table entry for. */
@@ -117,7 +117,7 @@ class FeaturePipelineCoreBundle {
 
     /** An in-memory `MJ: Entities` record the pipeline reads `Name` from. */
     public static Ref(ctx: IntegrationCheckContext, n: number | string, name: string): RecordRef {
-        const id = `it123-${n}`;
+        const id = `it124-${n}`;
         return { EntityID: F.Require(ctx).EntityID, RecordID: id, Record: { ID: id, Name: name } };
     }
 

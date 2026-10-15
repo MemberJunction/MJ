@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT124 - Job-title classifier consistency (live)",
+    "Name": "IT125 - Job-title classifier consistency (live)",
     "Description": "Live-model bundle 'fp-live-jobtitle': the installed job-title Feature Pipeline (bizapps-common), at temperature 0 with seed 42, classifies the 58 golden titles (52 labelled, 6 required injection and non-title cases) three times as a dry run with the Dedup Cache bypassed, so the model answers every time. Passes when seniority and the primary job function are identical across the three runs on 58/58 titles, an abstention (a seniority withheld below its confidence floor, an empty function list) counting as an answer; it also reports how many full function lists (with confidences) were identical. Writes only AI Prompt Runs. Needs bizapps-common installed and a key for the pipeline's model vendor.",
     "Status": "Active",
     "InputDefinition": {},

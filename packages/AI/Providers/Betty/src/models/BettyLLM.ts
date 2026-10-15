@@ -1,9 +1,9 @@
 import {
-    AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult,
+    BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult,
     SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, getTextFromContent, type VendorCallParameters,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
-import { HttpPost, HttpRequestConfig, IsHttpError, IsCancellationError } from '@memberjunction/network-utils';
+import { HttpPost, HttpRequestConfig, IsHttpError, IsCancellationError as IsHttpCancellation } from '@memberjunction/network-utils';
 import { BETTY_BASE_URL_VAR, BettyEndpoint, GetBettyBaseURL } from '../config';
 import { BettyChatRequest, BettyChatResponse, BettyReference } from '../generic/Betty.types';
 
@@ -104,9 +104,6 @@ export class BettyLLM extends BaseLLM {
         const startTime = new Date();
         const cancellationToken = params.cancellationToken;
 
-        // Already cancelled before we dial out — don't open a socket at all.
-        if (cancellationToken?.aborted) return this.cancelled(startTime);
-
         const baseURL = GetBettyBaseURL();
         if (!baseURL) {
             return this.failure(startTime, `${BETTY_BASE_URL_VAR} is not set. Point it at the Betty `
@@ -144,7 +141,9 @@ export class BettyLLM extends BaseLLM {
         } catch (ex) {
             // A caller-initiated abort (or an AIPromptRunner timeout) is not a Betty failure —
             // report it as a cancellation so no layer retries a request the caller gave up on.
-            if (this.isCancellation(ex, cancellationToken)) return this.cancelled(startTime);
+            if (this.IsCancellationError(ex, cancellationToken)) {
+                return this.BuildCancelledChatResult(startTime, { error: ex, signal: cancellationToken });
+            }
             return this.failure(startTime, this.describe(ex), ex);
         }
     }
@@ -258,13 +257,11 @@ export class BettyLLM extends BaseLLM {
     }
 
     /**
-     * Is this a caller-initiated cancellation rather than a genuine API failure? Fetch rejects with
-     * an AbortError when the request config carries a signal that aborts.
+     * `HttpPost` wraps an aborted request in an `HttpError` flagged `IsCancelled`. Its own timeout is
+     * flagged `IsTimeout` instead and is not a cancellation, so it stays retriable.
      */
-    private isCancellation(error: unknown, signal?: AbortSignal): boolean {
-        if (signal?.aborted) return true;
-        if (IsCancellationError(error)) return true;
-        return error instanceof Error && error.name === 'AbortError';
+    protected override IsProviderAbortError(error: unknown): boolean {
+        return IsHttpCancellation(error);
     }
 
     /** Surface the server's own message where it sent one — Betty's errors name the cause. */
@@ -281,25 +278,6 @@ export class BettyLLM extends BaseLLM {
             return ex.Status ? `Betty returned ${ex.Status}: ${detail}` : `Could not reach Betty: ${detail}`;
         }
         return ex instanceof Error ? ex.message : 'Unknown error calling Betty.';
-    }
-
-    /** Marked Fatal / non-failover so no layer retries a request the caller explicitly gave up on. */
-    private cancelled(startTime: Date): ChatResult {
-        const errorInfo: AIErrorInfo = {
-            errorType: 'Unknown',
-            severity: 'Fatal',
-            canFailover: false,
-            providerErrorCode: 'request_cancelled',
-            context: { provider: 'Betty', cancelled: true },
-        };
-
-        const result = new ChatResult(false, startTime, new Date());
-        result.statusText = 'cancelled';
-        result.errorMessage = 'Request cancelled via cancellationToken';
-        result.exception = null;
-        result.errorInfo = errorInfo;
-        result.data = { choices: [], usage: new ModelUsage(0, 0) };
-        return result;
     }
 
     private failure(startTime: Date, message: string, ex?: unknown): ChatResult {

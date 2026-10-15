@@ -92,15 +92,18 @@ describe('dataset reads and the ambient transaction (MJ#4514)', () => {
     });
 
     it('any other dataset keeps joining the ambient transaction', async () => {
-        await provider.GetDatasetByName('AI_Metadata', undefined, user);
-        await provider.GetDatasetStatusByName('AI_Metadata', undefined, user);
+        // No context user: this covers transaction routing, not per-user scope (dataset-caller-scope.test.ts).
+        await provider.GetDatasetByName('AI_Metadata', undefined, undefined);
+        await provider.GetDatasetStatusByName('AI_Metadata', undefined, undefined);
+        expect(provider.batchOptions).toHaveLength(2);
         expect(provider.sqlOptions.every(o => !o?.ignoreAmbientTransaction)).toBe(true);
         expect(provider.batchOptions.every(o => !o?.ignoreAmbientTransaction)).toBe(true);
     });
 
     it('any dataset reads on the pool when the read carries ReadOnPool (an event-driven engine reload)', async () => {
-        await provider.GetDatasetByName('Template_Metadata', undefined, user, undefined, true, { ReadOnPool: true });
-        await provider.GetDatasetStatusByName('Template_Metadata', undefined, user, undefined, { ReadOnPool: true });
+        // No context user: this covers transaction routing, not per-user scope (dataset-caller-scope.test.ts).
+        await provider.GetDatasetByName('Template_Metadata', undefined, undefined, undefined, true, { ReadOnPool: true });
+        await provider.GetDatasetStatusByName('Template_Metadata', undefined, undefined, undefined, { ReadOnPool: true });
         expect(provider.sqlOptions.map(o => o?.ignoreAmbientTransaction)).toEqual([true, true]);
         expect(provider.batchOptions.map(o => o?.ignoreAmbientTransaction)).toEqual([true, true]);
     });

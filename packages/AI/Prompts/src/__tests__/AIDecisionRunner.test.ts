@@ -1228,6 +1228,56 @@ describe('AIDecisionRunner', () => {
     expect(result.cancelled).toBe(true);
   });
 
+  describe('13b. a driver that throws when its call is aborted', () => {
+    /** Throws an AbortError the moment the call's signal aborts, as fetch-based drivers do. */
+    const throwWhenAborted = async (driverParams: DecisionParams): Promise<DecisionResult> => {
+      await new Promise<void>(resolve => {
+        const signal = driverParams.CancellationToken;
+        if (!signal || signal.aborted) {
+          resolve();
+          return;
+        }
+        signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+      throw Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
+    };
+
+    function abortParams(): AIDecisionParams {
+      const params = new AIDecisionParams();
+      params.prompt = makeDecisionPrompt({ FailoverStrategy: 'None' });
+      params.Questions = defaultQuestions;
+      params.State = 'Test state';
+      params.provider = fakeProvider;
+      return params;
+    }
+
+    it('is reported as Cancelled when the caller aborted', async () => {
+      const controller = new AbortController();
+      mockDriver.decideOverride = throwWhenAborted;
+      const params = abortParams();
+      params.cancellationToken = controller.signal;
+      setTimeout(() => controller.abort('user stopped'), 5);
+
+      const result = await runner.ExecuteDecision(params);
+
+      expect(result.success).toBe(false);
+      expect(result.cancelled).toBe(true);
+      expect(result.DecisionResult?.errorInfo).toMatchObject({ errorType: 'Cancelled', canFailover: false });
+    });
+
+    it("is reported as a retriable network error when the runner's timeout aborted it", async () => {
+      mockDriver.decideOverride = throwWhenAborted;
+      const params = abortParams();
+      params.timeoutMS = 10;
+
+      const result = await runner.ExecuteDecision(params);
+
+      expect(result.success).toBe(false);
+      expect(result.cancelled).toBe(false);
+      expect(result.DecisionResult?.errorInfo).toMatchObject({ errorType: 'NetworkError', canFailover: true });
+    });
+  });
+
   describe("14. a decision answered through a child run carries that run's cost", () => {
     /**
      * Makes LLMDecision the model that answers: the native model loses its credential (LLMDecision

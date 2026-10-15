@@ -5,7 +5,7 @@ import { RecordChangeFieldSecurityProjector } from "./recordChangeFieldSecurity"
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager, CachedRunViewResult, CacheCategory } from "./localCacheManager";
-import type { CacheChangedEvent } from "./localCacheManager";
+import type { CacheChangedEvent, QueryDefinitionSignature } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
@@ -116,6 +116,17 @@ export interface QueryCacheAuthorization {
     categoryPath?: string;
     /** Resolved query name — for log messages when the request was by ID only. */
     queryName?: string;
+    /**
+     * Resolved query ID. With `queryName`, the identity the RunQuery fingerprint is built from, so
+     * a request by ID, by name, or by both reaches the same slot.
+     */
+    queryId?: string;
+    /**
+     * The definition the provider would execute on a miss. Set by providers that execute queries
+     * themselves; a slot written under another definition is then a miss. Undefined where the
+     * provider cannot compute one (a client, whose slots the server validates instead).
+     */
+    definition?: QueryDefinitionSignature;
 }
 
 /**
@@ -584,6 +595,35 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
         this._lingerInvalidationWired = true;
         ProviderBase._invalidationTargets.add(new WeakRef(this));
+    }
+
+    /**
+     * Drops this provider's in-flight/lingered RunView dedup entries so the next identical
+     * RunView goes to the server instead of replaying a result from the last
+     * {@link DedupLingerMs}.
+     *
+     * Saves and deletes made through a `BaseEntity` in this process already invalidate the entries
+     * for their entity automatically. Call this after anything that can write on the SERVER
+     * without such an event reaching this process — a Remote Operation, an Action, an agent run,
+     * any other mutation. {@link RouteOperation} and the GraphQL client's mutation transport call
+     * it for you.
+     *
+     * Dropping an in-flight entry never affects the callers already waiting on it; it only stops
+     * later callers from joining (and stops the result from lingering), since that query may have
+     * read pre-write data.
+     *
+     * @param entityNames - entities known to have been written. Only entries touching them are
+     *   dropped. Omit (or pass an empty list) when the writes are unknown: every entry is dropped.
+     */
+    public InvalidateRunViewDedupCache(entityNames?: readonly string[]): void {
+        const names = (entityNames ?? []).map(n => n?.trim().toLowerCase()).filter((n): n is string => !!n);
+        if (names.length === 0) {
+            this._inflightViews.clear();
+            return;
+        }
+        for (const n of names) {
+            this.invalidateInflightViewsForEntity(n);
+        }
     }
 
     /**
@@ -1230,7 +1270,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!key) {
             return { Success: false, ResultCode: 'INVALID_OPERATION_KEY', ErrorMessage: 'operationKey is required' };
         }
-        return this.InternalRouteOperation<TInput, TOutput>(key, input, options ?? {});
+        try {
+            return await this.InternalRouteOperation<TInput, TOutput>(key, input, options ?? {});
+        }
+        finally {
+            // A Remote Operation executes server-side and can write any entity — none of which
+            // raises a BaseEntity event in THIS process. Without this, an identical RunView answered
+            // in the last DedupLingerMs would replay pre-operation rows. Runs on failure too: an
+            // operation that failed part-way may still have written.
+            this.InvalidateRunViewDedupCache();
+        }
     }
 
     /**
@@ -1747,7 +1796,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 return results as RunViewResult[];
             })
             .catch(err => {
-                this._inflightViews.delete(key);
+                // Only our own entry: an invalidation may have dropped it and a newer request for the
+                // same key taken the slot, which this rejection must not evict.
+                const entry = this._inflightViews.get(key);
+                if (entry && entry.promise === promise) {
+                    this._inflightViews.delete(key);
+                }
                 throw err;
             });
 
@@ -2419,7 +2473,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // the gate only consults `authorized` when a contextUser is present.
             authorized: !user || qInfo.UserCanRun(user),
             categoryPath: qInfo.CategoryPath,
-            queryName: qInfo.Name
+            queryName: qInfo.Name,
+            queryId: qInfo.ID
         };
     }
 
@@ -2454,6 +2509,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             && !IsMaterializedDataSource(params.DataSource)
             && LocalCacheManager.Instance.IsInitialized;
         let queryFingerprint: string | undefined;
+        let queryDefinition: QueryDefinitionSignature | undefined;
         if (queryCacheEngaged) {
             // Resolve + authorize ONCE, BEFORE fingerprinting (B45/B46 seam). The resolved
             // category feeds the fingerprint below, and the same result drives the permission
@@ -2468,14 +2524,21 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 __startRow: params.StartRow ?? 0
             };
             queryFingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(
-                params.QueryID, params.QueryName, fingerprintParams, this.InstanceConnectionString,
+                // The RESOLVED identity when metadata resolves, so a request by ID, by name, or by
+                // both shares one slot (and a query's slots can be found by its ID). The caller's
+                // identity otherwise.
+                queryAuth.resolvable ? queryAuth.queryId : params.QueryID,
+                queryAuth.resolvable ? queryAuth.queryName : params.QueryName,
+                fingerprintParams, this.InstanceConnectionString,
                 // B46: the full category path is a DISTINGUISHING element. Canonical resolved
                 // path when metadata resolves; the caller-stated path otherwise (runtime-created
                 // queries) — either way, same-named queries in different categories get
                 // different slots.
                 queryAuth.resolvable ? queryAuth.categoryPath : params.CategoryPath
             );
-            const cached = await LocalCacheManager.Instance.GetRunQueryResult(queryFingerprint); // TTL-enforced
+            queryDefinition = queryAuth.definition;
+            // TTL-enforced, and a miss when the slot was written under another query definition.
+            const cached = await LocalCacheManager.Instance.GetRunQueryResult(queryFingerprint, queryDefinition);
             if (cached) {
                 const serveFromSlot = (): RunQueryResult => ({
                     QueryID: cached.queryId ?? params.QueryID ?? '',
@@ -2555,7 +2618,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 } else {
                 const response = await checker([{
                     params,
-                    cacheStatus: { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount }
+                    // '' for a slot written without a hash: the server answers `stale` and returns
+                    // its hash, so the rewrite below stamps the slot.
+                    cacheStatus: { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount, definitionHash: cached.definitionHash ?? '' }
                 }], contextUser);
                 const check = response.results?.[0];
                 if (response.success && check) {
@@ -2568,7 +2633,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         LocalCacheManager.Instance.SetRunQueryResult(
                             queryFingerprint, params.QueryName ?? '', freshRows,
                             check.maxUpdatedAt ?? '', check.rowCount, check.queryId, params.CacheLocalTTL,
-                            contextUser?.ID
+                            contextUser?.ID,
+                            check.definitionHash ? { QueryID: check.queryId, Hash: check.definitionHash } : undefined
                         ).catch(e => LogError(`RunQuery cache rewrite failed: ${e}`));
                         return {
                             QueryID: check.queryId ?? params.QueryID ?? '',
@@ -2613,7 +2679,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             LocalCacheManager.Instance.SetRunQueryResult(
                 queryFingerprint, result.QueryName, result.Results,
                 '', result.TotalRowCount, result.QueryID, params.CacheLocalTTL,
-                contextUser?.ID
+                contextUser?.ID, queryDefinition
             ).catch(e => LogError(`RunQuery cache write failed: ${e}`));
         }
 
@@ -5251,6 +5317,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * were on the client's global provider): treat Info objects and everything
      * they own as read-only; copy before sorting.
      *
+     * Owning provider: the shared Info objects deliberately keep the
+     * {@link BaseInfo.OwningProvider} of the provider that built them (the source
+     * global provider); the shell does NOT re-stamp them. Re-stamping a shared
+     * instance would re-point it for every other provider holding it. The sibling
+     * lookups it drives (IS-A children, RLS filters, query fields, ...) therefore
+     * read the source provider's graph — the same immutable graph this shell
+     * points into, so the answers are identical. A provider that needs its own
+     * graph (a different database) must load its own metadata, not adopt a shell.
+     *
      * Override precedence: if a subclass overrides BOTH this method and the
      * deprecated {@link CloneAllMetadata}, the CloneAllMetadata override wins on
      * the fast path (see {@link CopyMetadataFromGlobalProvider}) — the
@@ -5555,7 +5630,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             if (organicKeys) {
                 e.EntityOrganicKeys = activeOrganicKeysByEntityId.get(entityIdKey) || [];
             }
-            result.push(new EntityInfo(e));
+            result.push(new EntityInfo(e, this));
         }
 
         // Check for schema name collision: if both 'MJ' and 'MJCustom' schemas exist,

@@ -143,4 +143,26 @@ export class MockCacheStorageProvider implements ILocalStorageProvider {
     public getStorageSize(category: string): number {
         return this.storage.get(category)?.size || 0;
     }
+
+    /**
+     * Writes a value straight into storage, bypassing call counting, delay and failure simulation (test setup).
+     * The value is stored as given, the way {@link SetItem} stores it.
+     */
+    public SetDirect<T>(key: string, value: T, category: string): void {
+        let categoryStorage = this.storage.get(category);
+        if (!categoryStorage) {
+            categoryStorage = new Map();
+            this.storage.set(category, categoryStorage);
+        }
+        categoryStorage.set(key, value);
+    }
+
+    /**
+     * Reads a value straight from storage, bypassing call counting, delay and failure simulation (test
+     * verification). The caller names the stored type, as with {@link GetItem}.
+     */
+    public GetDirect<T = unknown>(key: string, category: string): T | null {
+        const value = this.storage.get(category)?.get(key);
+        return value === undefined ? null : (value as T);
+    }
 }

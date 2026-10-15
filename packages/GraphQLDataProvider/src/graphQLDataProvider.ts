@@ -8,7 +8,7 @@
 import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult,
          EntityInfo, EntityFieldInfo, EntityFieldTSType, TenantContext,
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
-         ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError, LogStatus,
+         ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError, LogStatus, LogStatusEx,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameCache,
          EntityRecordNameResult, RecordDependency, RecordMergeRequest, RecordMergeResult,
          RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
@@ -29,6 +29,7 @@ import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 import { GraphQLAIClient } from "./graphQLAIClient";
 import { BrowserIndexedDBStorageProvider } from "./storage-providers";
 import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError";
+import { IsGraphQLMutation } from "./graphQLOperationKind";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -58,6 +59,41 @@ export type SocketConnectionState = 'connected' | 'disconnected' | 'unknown';
  * The client application should use this to notify the user and force re-authentication.
  */
 export type AuthenticationErrorCallback = (error: Error) => void;
+
+/** The RunQueriesWithCacheCheck response as it arrives over GraphQL. */
+interface RunQueriesCacheCheckGQLResponse {
+    success: boolean;
+    errorMessage?: string;
+    results: Array<{
+        queryIndex: number;
+        queryId: string;
+        status: string;
+        Results?: string;
+        maxUpdatedAt?: string;
+        rowCount?: number;
+        errorMessage?: string;
+        definitionHash?: string | null;
+    }>;
+}
+
+/**
+ * Options for {@link GraphQLDataProvider.ExecuteGQL}.
+ */
+export interface ExecuteGQLOptions {
+    /**
+     * The entities a mutation is known to write. After a mutation the provider drops its RunView
+     * dedup-linger entries; with this set, only the entries touching these entities are dropped
+     * instead of every entry. The entity `Save()`/`Delete()` paths pass their own entity — the same
+     * scope the local BaseEntity save/delete event already invalidates. Leave it unset for any
+     * mutation whose writes are not known up front (Remote Operations, Actions, agent runs): those
+     * drop everything, because a stale replay is worse than a re-query. Ignored for queries.
+     *
+     * Rows a server-side save hook writes to OTHER entities are outside the scope, exactly as they
+     * were before mutations invalidated at all; code that reads such rows right after the save can
+     * call `InvalidateRunViewDedupCache()` itself.
+     */
+    AffectedEntityNames?: readonly string[];
+}
 
 /**
  * One dispatcher lifecycle frame for a durable workflow run (task graph), as delivered by the
@@ -823,6 +859,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * using the Query's CacheValidationSQL. If current, returns status='current' with no data.
      * If stale, returns status='stale' with fresh data.
      *
+     * A server older than the query-definition check rejects the `definitionHash` field. The call
+     * is then retried once without it (the server falls back to data-only validation), and the field
+     * is left out of later calls for {@link DEFINITION_HASH_RETRY_MS} before it is tried again, so a
+     * client that outlives a rolling deploy picks the check up once the servers are upgraded.
+     *
      * @param params - Array of RunQuery requests with optional cache status
      * @param contextUser - Optional user context
      * @returns Response containing results for each query in the batch
@@ -832,100 +873,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         contextUser?: UserInfo
     ): Promise<RunQueriesWithCacheCheckResponse<T>> {
         try {
-            // Build the GraphQL input
-            const input = params.map(item => ({
-                params: {
-                    QueryID: item.params.QueryID || null,
-                    QueryName: item.params.QueryName || null,
-                    CategoryID: item.params.CategoryID || null,
-                    CategoryPath: item.params.CategoryPath || null,
-                    Parameters: item.params.Parameters || null,
-                    MaxRows: item.params.MaxRows ?? null,
-                    StartRow: item.params.StartRow ?? null,
-                    ForceAuditLog: item.params.ForceAuditLog || false,
-                    AuditLogDescription: item.params.AuditLogDescription || null,
-                    Enrichment: item.params.Enrichment || null,
-                    DataSource: item.params.DataSource || null,
-                },
-                cacheStatus: item.cacheStatus ? {
-                    maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
-                    rowCount: item.cacheStatus.rowCount,
-                } : null,
-            }));
-
-            const query = gql`
-                query RunQueriesWithCacheCheckQuery($input: [RunQueryWithCacheCheckInput!]!) {
-                    RunQueriesWithCacheCheck(input: $input) {
-                        success
-                        errorMessage
-                        results {
-                            queryIndex
-                            queryId
-                            status
-                            Results
-                            maxUpdatedAt
-                            rowCount
-                            errorMessage
-                        }
-                    }
+            const sendDefinition = this._definitionHashUnsupportedUntil == null || Date.now() >= this._definitionHashUnsupportedUntil;
+            try {
+                return await this.executeRunQueriesWithCacheCheck<T>(params, sendDefinition);
+            } catch (e) {
+                if (!sendDefinition || !GraphQLDataProvider.isUnsupportedDefinitionHashError(e)) {
+                    throw e;
                 }
-            `;
-
-            const responseData = await this.ExecuteGQL(query, { input });
-            const response = responseData?.['RunQueriesWithCacheCheck'] as {
-                success: boolean;
-                errorMessage?: string;
-                results: Array<{
-                    queryIndex: number;
-                    queryId: string;
-                    status: string;
-                    Results?: string;
-                    maxUpdatedAt?: string;
-                    rowCount?: number;
-                    errorMessage?: string;
-                }>;
-            };
-
-            if (!response) {
-                return {
-                    success: false,
-                    results: [],
-                    errorMessage: 'No response from server',
-                };
+                this._definitionHashUnsupportedUntil = Date.now() + GraphQLDataProvider.DEFINITION_HASH_RETRY_MS;
+                LogStatusEx({ message: 'RunQueriesWithCacheCheck: the server does not support query definition hashes — validating cached query results by data only', verboseOnly: true });
+                return await this.executeRunQueriesWithCacheCheck<T>(params, false);
             }
-
-            // Transform results - deserialize Results for stale/no_validation results
-            const transformedResults: RunQueryWithCacheCheckResult<T>[] = response.results.map(result => {
-                if ((result.status === 'stale' || result.status === 'no_validation') && result.Results) {
-                    // Deserialize the Results JSON string
-                    const deserializedResults: T[] = JSON.parse(result.Results);
-
-                    return {
-                        queryIndex: result.queryIndex,
-                        queryId: result.queryId,
-                        status: result.status as 'current' | 'stale' | 'no_validation' | 'error',
-                        results: deserializedResults,
-                        maxUpdatedAt: result.maxUpdatedAt,
-                        rowCount: result.rowCount,
-                        errorMessage: result.errorMessage,
-                    };
-                }
-
-                return {
-                    queryIndex: result.queryIndex,
-                    queryId: result.queryId,
-                    status: result.status as 'current' | 'stale' | 'no_validation' | 'error',
-                    maxUpdatedAt: result.maxUpdatedAt,
-                    rowCount: result.rowCount,
-                    errorMessage: result.errorMessage,
-                };
-            });
-
-            return {
-                success: response.success,
-                results: transformedResults,
-                errorMessage: response.errorMessage,
-            };
         } catch (e) {
             LogError(`Error in RunQueriesWithCacheCheck: ${e}`);
             return {
@@ -935,6 +893,133 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             };
         }
     }
+
+    /** How long, in milliseconds, to leave `definitionHash` out after a server rejected it. */
+    private static readonly DEFINITION_HASH_RETRY_MS = 5 * 60_000;
+
+    /**
+     * When a server last rejected `definitionHash`, the time (ms) until which it is left out of
+     * RunQueriesWithCacheCheck calls. Null while the server is assumed to support it.
+     */
+    private _definitionHashUnsupportedUntil: number | null = null;
+
+    /** True when the server's schema rejected the `definitionHash` field (a server that predates it). */
+    private static isUnsupportedDefinitionHashError(e: unknown): boolean {
+        const messages: string[] = e instanceof Error ? [e.message] : [];
+        const errors = (e as { response?: { errors?: Array<{ message?: string }> } } | null)?.response?.errors;
+        for (const error of errors ?? []) {
+            if (error.message) {
+                messages.push(error.message);
+            }
+        }
+        return messages.some(m => m.includes('definitionHash'));
+    }
+
+    /** One RunQueriesWithCacheCheck round trip; throws on a transport or GraphQL error. */
+    private async executeRunQueriesWithCacheCheck<T>(
+        params: RunQueryWithCacheCheckParams[],
+        includeDefinition: boolean
+    ): Promise<RunQueriesWithCacheCheckResponse<T>> {
+        const input = GraphQLDataProvider.buildRunQueriesCacheCheckInput(params, includeDefinition);
+        const query = includeDefinition
+            ? GraphQLDataProvider.RUN_QUERIES_CACHE_CHECK_GQL
+            : GraphQLDataProvider.RUN_QUERIES_CACHE_CHECK_GQL_WITHOUT_DEFINITION;
+        const responseData = await this.ExecuteGQL(query, { input });
+        const response = responseData?.['RunQueriesWithCacheCheck'] as RunQueriesCacheCheckGQLResponse | undefined;
+        if (!response) {
+            return {
+                success: false,
+                results: [],
+                errorMessage: 'No response from server',
+            };
+        }
+        return {
+            success: response.success,
+            results: response.results.map(result => GraphQLDataProvider.toRunQueryCacheCheckResult<T>(result)),
+            errorMessage: response.errorMessage,
+        };
+    }
+
+    /** The GraphQL input for a RunQueriesWithCacheCheck call. */
+    private static buildRunQueriesCacheCheckInput(params: RunQueryWithCacheCheckParams[], includeDefinition: boolean) {
+        return params.map(item => ({
+            params: {
+                QueryID: item.params.QueryID || null,
+                QueryName: item.params.QueryName || null,
+                CategoryID: item.params.CategoryID || null,
+                CategoryPath: item.params.CategoryPath || null,
+                Parameters: item.params.Parameters || null,
+                MaxRows: item.params.MaxRows ?? null,
+                StartRow: item.params.StartRow ?? null,
+                ForceAuditLog: item.params.ForceAuditLog || false,
+                AuditLogDescription: item.params.AuditLogDescription || null,
+                Enrichment: item.params.Enrichment || null,
+                DataSource: item.params.DataSource || null,
+            },
+            cacheStatus: item.cacheStatus ? {
+                maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
+                rowCount: item.cacheStatus.rowCount,
+                // Only sent when the slot has one (or '' for a slot without): the server skips
+                // the definition check when the field is absent.
+                ...(includeDefinition && item.cacheStatus.definitionHash != null ? { definitionHash: item.cacheStatus.definitionHash } : {}),
+            } : null,
+        }));
+    }
+
+    /** Converts one result row, deserializing the rows of a stale or no_validation result. */
+    private static toRunQueryCacheCheckResult<T>(result: RunQueriesCacheCheckGQLResponse['results'][number]): RunQueryWithCacheCheckResult<T> {
+        const converted: RunQueryWithCacheCheckResult<T> = {
+            queryIndex: result.queryIndex,
+            queryId: result.queryId,
+            status: result.status as 'current' | 'stale' | 'no_validation' | 'error',
+            maxUpdatedAt: result.maxUpdatedAt,
+            rowCount: result.rowCount,
+            errorMessage: result.errorMessage,
+            definitionHash: result.definitionHash ?? undefined,
+        };
+        if ((result.status === 'stale' || result.status === 'no_validation') && result.Results) {
+            converted.results = JSON.parse(result.Results) as T[];
+        }
+        return converted;
+    }
+
+    private static readonly RUN_QUERIES_CACHE_CHECK_GQL = gql`
+        query RunQueriesWithCacheCheckQuery($input: [RunQueryWithCacheCheckInput!]!) {
+            RunQueriesWithCacheCheck(input: $input) {
+                success
+                errorMessage
+                results {
+                    queryIndex
+                    queryId
+                    status
+                    Results
+                    maxUpdatedAt
+                    rowCount
+                    errorMessage
+                    definitionHash
+                }
+            }
+        }
+    `;
+
+    /** The same request for a server that predates query definition hashes. */
+    private static readonly RUN_QUERIES_CACHE_CHECK_GQL_WITHOUT_DEFINITION = gql`
+        query RunQueriesWithCacheCheckQuery($input: [RunQueryWithCacheCheckInput!]!) {
+            RunQueriesWithCacheCheck(input: $input) {
+                success
+                errorMessage
+                results {
+                    queryIndex
+                    queryId
+                    status
+                    Results
+                    maxUpdatedAt
+                    rowCount
+                    errorMessage
+                }
+            }
+        }
+    `;
 
     /**************************************************************************/
     // END ---- IRunQueryProvider
@@ -2249,8 +2334,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 return true; // part of a TG always return true after we setup the transaction group item above
             }
             else {
-                // not part of a transaction group, so just go for it and send across our GQL
-                const d = await this.ExecuteGQL(outer, vars)
+                // not part of a transaction group, so just go for it and send across our GQL. The
+                // mutation writes this entity, so only its dedup-linger entries are dropped.
+                const d = await this.ExecuteGQL(outer, vars, true, { AffectedEntityNames: [entity.EntityInfo.Name] })
                 if (d && d[mutationName]) {
                     result.Success = true;
                     result.EndedAt = new Date();
@@ -2503,8 +2589,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 return true;
             }
             else {
-                // no transaction just go for it
-                const d = await this.ExecuteGQL(query, vars)
+                // no transaction just go for it (scoped like Save: the delete writes this entity)
+                const d = await this.ExecuteGQL(query, vars, true, { AffectedEntityNames: [entity.EntityInfo.Name] })
                 if (d && d[queryName]) {
                     const data: Record<string, unknown> = d[queryName];
                     // The returned row must report THIS record's keys: non-NULL, UUIDs compared
@@ -2944,8 +3030,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param refreshTokenIfNeeded 
      * @returns 
      */
-    public static async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
-        return GraphQLDataProvider.Instance.ExecuteGQL(query, variables, refreshTokenIfNeeded);
+    public static async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true, options?: ExecuteGQLOptions): Promise<any> {
+        return GraphQLDataProvider.Instance.ExecuteGQL(query, variables, refreshTokenIfNeeded, options);
     }
 
     /**
@@ -2976,6 +3062,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         const url = this._configData.URL;
         const payload = JSON.stringify({ query, variables });
+        const isMutation = IsGraphQLMutation(query);
+        const settle = () => {
+            // see ExecuteGQL — a mutation can write server-side without a local BaseEntity event
+            if (isMutation) {
+                this.InvalidateRunViewDedupCache();
+            }
+        };
 
         return new Promise<T>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
@@ -3035,7 +3128,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             xhr.onabort = () => reject(new Error('Request aborted'));
 
             xhr.send(payload);
-        });
+        }).finally(settle);
     }
 
     /**
@@ -3043,9 +3136,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param query 
      * @param variables 
      * @param refreshTokenIfNeeded 
+     * @param options - see {@link ExecuteGQLOptions}
      * @returns 
      */
-    public async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
+    public async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true, options?: ExecuteGQLOptions): Promise<any> {
+        const isMutation = IsGraphQLMutation(query);
         try {
             const data = await this._client.request(query, variables);
             return data;
@@ -3087,7 +3182,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     if (refreshTokenIfNeeded) {
                         // token expired, so we need to refresh it and try again
                         await this.RefreshToken();
-                        return await this.ExecuteGQL(query, variables, false/*don't attempt to refresh again*/);
+                        return await this.ExecuteGQL(query, variables, false/*don't attempt to refresh again*/, options);
                     }
                     else {
                         // token expired but the caller doesn't want a refresh, so just return the error
@@ -3103,6 +3198,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // for the raw error class yields the full serialised request.
                 LogError(JSON.stringify(safeError));
                 throw safeToThrow; // force the caller to handle the error
+            }
+        }
+        finally {
+            // A mutation can write server-side (Remote Operations, Actions, agent runs, server-side
+            // save hooks) without a BaseEntity event ever reaching this process, so drop the RunView
+            // dedup-linger entries — otherwise an identical RunView in the next DedupLingerMs replays
+            // pre-mutation rows. Runs on failure too: a failed mutation may have written part-way.
+            // A caller that knows exactly what it wrote (entity Save/Delete) scopes the drop.
+            if (isMutation) {
+                this.InvalidateRunViewDedupCache(options?.AffectedEntityNames);
             }
         }
     }

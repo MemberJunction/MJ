@@ -119,6 +119,23 @@ const subject = await engine.RenderTemplateSimple(
 // subject.Output: "Acme & Co — your invite"  (no entity encoding)
 ```
 
+### Variables a Template Reads
+
+`GetReferencedVariables()` parses a template's text and returns the top-level variable names it reads:
+
+```typescript
+const result = engine.GetReferencedVariables('{% for r in rows %}{{ r.name }}{% endfor %}{{ user.email }}');
+// result.Names: rows, r, user
+// result.Complete: true
+```
+
+- `Names` holds top-level names only: `{{ user.email }}` gives `user`. It also holds loop, `set`, filter and keyword-argument names, so treat it as a superset of the data keys the template reads.
+- The analysis follows stored templates named by a string literal in `{% include %}`, `{% import %}`, `{% from %}`, `{% extends %}` and `{% template %}`, and reads every content of each one. It does not follow a template named by an expression.
+- Of the custom tags, the analysis follows `{% template %}` and reads the arguments and body of `{% AIPrompt %}`. A tag from any other extension makes the result incomplete, because the extension's code can read data that the template text does not show.
+- `Complete: false` means "unknown", not "none". `Reason` tells why: a template is named by an expression, a named template does not exist or cannot be loaded, the text does not parse, or a tag comes from an extension the analysis does not know. A caller that keeps only the referenced data must keep all of it when the result is incomplete.
+- The engine returns the same frozen result for the same template text until `ClearTemplateCache()`. It does not cache a result with `ParseFailed: true` (the text, or a template it pulls in, does not parse).
+- The method sets up the Nunjucks environment and the registered extensions first, so it gives the same answer before and after the first `Config()`.
+
 ### Custom Nunjucks Filters
 
 The engine provides built-in filters for JSON operations:
@@ -225,9 +242,10 @@ graph LR
 | `Config()` | method | Load metadata and initialize Nunjucks environment |
 | `RenderTemplate()` | method | Render a stored template with validation; `options.autoescape: false` renders without HTML escaping |
 | `RenderTemplateSimple()` | method | Render an ad-hoc template string |
+| `GetReferencedVariables()` | method | List the top-level variables a template's text reads |
 | `AddTemplate()` | method | Add a template to the Nunjucks loader |
 | `SetupNunjucks()` | method | Re-initialize the Nunjucks environment |
-| `ClearTemplateCache()` | method | Clear cached compiled templates |
+| `ClearTemplateCache()` | method | Clear cached compiled templates and variable analysis results |
 
 ### Rendering Process
 

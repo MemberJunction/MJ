@@ -1,6 +1,7 @@
 import { BaseInfo } from "./baseInfo"
 import { Metadata } from "./metadata"
 import { IMetadataProvider } from "./interfaces"
+import { MetadataProviderFor } from "./infoProviderResolution"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
@@ -477,11 +478,16 @@ export class EntityPermissionInfo extends BaseInfo{
                 break;
         }
         if (fID && fID.length > 0) 
-            return Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, fID));  // global-provider-ok: stateless info class — proxies to global metadata
+            return MetadataProviderFor(this)?.RowLevelSecurityFilters?.find(f => UUIDsEqual(f.ID, fID));
     }
 
-    constructor (initData: any) {
+    /**
+     * @param initData - the raw permission row
+     * @param md - the provider that owns this metadata; RLS filters resolve through it (see {@link BaseInfo.OwningProvider})
+     */
+    constructor (initData: any, md?: IMetadataProvider) {
         super();
+        this.SetOwningProvider(md);
         this.copyInitData(initData);
     }
 }
@@ -3834,7 +3840,7 @@ export class EntityInfo extends BaseInfo {
      */
     get ParentEntityInfo(): EntityInfo | null {
         if (!this.ParentID) return null;
-        const p = Metadata.Provider;  // global-provider-ok: stateless info class — proxies to global metadata
+        const p = MetadataProviderFor(this);
         if (p?.EntityByID) {
             return p.EntityByID(this.ParentID) ?? null;
         }
@@ -3851,7 +3857,7 @@ export class EntityInfo extends BaseInfo {
      * only one child type is allowed per parent record (disjoint subtypes).
      */
     get ChildEntities(): EntityInfo[] {
-        return Metadata.Provider?.Entities?.filter(e => UUIDsEqual(e.ParentID, this.ID)) ?? [];  // global-provider-ok: stateless info class — proxies to global metadata
+        return MetadataProviderFor(this)?.Entities?.filter(e => UUIDsEqual(e.ParentID, this.ID)) ?? [];
     }
 
     /**
@@ -4274,7 +4280,7 @@ export class EntityInfo extends BaseInfo {
         const clauses = [...mine]
             .sort((a, b) => a.FilterID.localeCompare(b.FilterID)) // deterministic order for the cache fingerprint (INV-2)
             .map(b => {
-                const filter = Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, b.FilterID)); // global-provider-ok: same resolution path as RLSFilter() above — stateless info class proxying to global metadata
+                const filter = MetadataProviderFor(this)?.RowLevelSecurityFilters?.find(f => UUIDsEqual(f.ID, b.FilterID));
                 if (!filter) {
                     LogError(`API-key row filter ${b.FilterID} for entity ${this.Name} not found in metadata — resolving to (1=0)`);
                     return '(1=0)';
@@ -4475,7 +4481,7 @@ export class EntityInfo extends BaseInfo {
 
         // Resolve the spoke entity's own organic key (matching by Name) to pull its
         // per-column normalization. Falls back to the hub's expression if not found.
-        const spokeOrganicKey = EntityInfo.resolveSpokeOrganicKey(relatedEntity, organicKey);
+        const spokeOrganicKey = EntityInfo.resolveSpokeOrganicKey(relatedEntity, organicKey, record.EntityInfo?.OwningProvider);
 
         for (let i = 0; i < matchFields.length; i++) {
             const value = record.Get(matchFields[i]);
@@ -4636,8 +4642,15 @@ export class EntityInfo extends BaseInfo {
     }
 
 
-    constructor(initData: any = null) {
+    /**
+     * @param initData - the raw entity row (or another EntityInfo being re-instantiated)
+     * @param md - the provider that owns this metadata. Sibling lookups ({@link ParentEntityInfo},
+     *   {@link ChildEntities}, RLS filters) resolve through it rather than the global provider, so
+     *   they stay correct in a multi-provider process. Optional for backward compatibility.
+     */
+    constructor(initData: any = null, md?: IMetadataProvider) {
         super();
+        this.SetOwningProvider(md);
         if (initData) {
             this.copyInitData(initData);
 
@@ -4672,7 +4685,9 @@ export class EntityInfo extends BaseInfo {
             const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {
-                    this._fields.push(new EntityFieldInfo(ef[j]));
+                    const field = new EntityFieldInfo(ef[j]);
+                    field.SetOwningProvider(md);
+                    this._fields.push(field);
                 }
             }
 
@@ -4681,7 +4696,7 @@ export class EntityInfo extends BaseInfo {
             const ep = initData.EntityPermissions || initData._Permissions || initData.Permissions;
             if (ep) {
                 for (let j = 0; j < ep.length; j++) {
-                    this._permissions.push(new EntityPermissionInfo(ep[j]));
+                    this._permissions.push(new EntityPermissionInfo(ep[j], md));
                 }
             }
 
