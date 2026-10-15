@@ -22,7 +22,8 @@ const SIGNIFICANT_STEPS = ['prompt_execution', 'action_execution', 'subagent_exe
 /** The run fields the published messages read. Entities and test fakes both satisfy this. */
 interface StatusRun {
     ID?: string;
-    ConversationDetailID?: string;
+    ConversationDetailID?: string | null;
+    Agent?: string | null;
     ErrorMessage?: string;
     Steps?: Array<{ StepName?: string }>;
     GetAll?: () => unknown;
@@ -93,7 +94,11 @@ export class AgentRunStatusPublisher {
                 sessionId: this.sessionId,
                 agentRunId: agentRun.ID,
                 type: 'streaming',
-                agentRun: agentRun.GetAll ? agentRun.GetAll() : agentRun,
+                // Only what a chunk's consumers read. Every chunk used to carry `GetAll()`: the whole
+                // run tree, with each step's full prompt and conversation history: megabytes serialized
+                // per token on the main thread, of which the chat reads two fields (MJ #5510).
+                // Progress events still carry the tree; they run once per step.
+                agentRun: { ID: agentRun.ID, ConversationDetailID: agentRun.ConversationDetailID, Agent: agentRun.Agent },
                 streaming: {
                     content: chunk.content,
                     isPartial: !chunk.isComplete,

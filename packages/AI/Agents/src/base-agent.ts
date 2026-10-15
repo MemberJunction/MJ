@@ -2226,7 +2226,7 @@ export class BaseAgent {
                 if (this._agentRun) {
                     this._agentRun.Status = 'Failed';
                     this._agentRun.ErrorMessage = errorMessage;
-                    await this._agentRun.Save();
+                    this.releaseFinishedRun(await this._agentRun.Save());
                 }
                 throw new Error(errorMessage);
             }
@@ -17991,7 +17991,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for failed runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save();
+            this.releaseFinishedRun(await this._agentRun.Save());
         }
 
         return {
@@ -18073,6 +18073,19 @@ The context is now within limits. Please retry your request with the recovered c
         const ordered = [...steps].sort((a, b) => (b.StepNumber ?? 0) - (a.StepNumber ?? 0));
         const withPayload = ordered.find(s => typeof s.PayloadAtEnd === 'string' && s.PayloadAtEnd.length > 0);
         return withPayload?.PayloadAtEnd ?? null;
+    }
+
+    /**
+     * Stops the watchdog guarding this run once its final state is saved. MJAPI's event-loop
+     * stall warning names the runs "in flight" from the watchdog's tracked set, and the periodic
+     * prune only drops finished runs every few minutes, so without this the warning would name
+     * runs that ended long before the stall (MJ #5510). A failed save keeps the run tracked: the
+     * watchdog's heartbeat and sweep still own a run whose final state never reached the database.
+     */
+    private releaseFinishedRun(saved: boolean): void {
+        if (saved && this._agentRun?.ID && this._agentRun.Status !== 'Running') {
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+        }
     }
 
     /**
@@ -18163,6 +18176,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
             const ok = await this._agentRun.Save();
+            this.releaseFinishedRun(ok);
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
             }

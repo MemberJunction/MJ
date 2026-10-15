@@ -9,6 +9,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { BaseAgent } from '../base-agent';
 import { PriorTurnToolResultCache } from '../prior-turn-tool-result-cache';
+import { AgentRunWatchdog } from '../agent-run-watchdog';
 
 /** The fire-and-forget save queue's Flush result shape. */
 type FlushResult = { failures: number; rejections: number };
@@ -383,5 +384,56 @@ describe('BaseAgent.finalizeAgentRun — pending-save drain + run status', () =>
     await finalize(agent, { step: 'Success', message: 'done' });
     // Steps is empty → the cached [] is the negative-cache entry that spares the next turn its DB lookups.
     expect(PriorTurnToolResultCache.Instance.Get(conversationId, agentId, null)).toEqual([]);
+  });
+});
+
+/**
+ * MJAPI's event-loop stall warning names the agent runs "in flight" from AgentRunWatchdog's tracked
+ * set (MJ #5510). A run must leave that set as soon as its terminal state is saved, or the warning
+ * names runs that finished minutes ago (the periodic prune only runs every 5 minutes).
+ */
+describe('BaseAgent terminal saves — release the run from the watchdog', () => {
+  const RUN_ID = 'a1b2c3d4-0000-4000-8000-000000005510';
+  const trackedSet = () => (AgentRunWatchdog.Instance as unknown as { _trackedRuns: Set<string> })._trackedRuns;
+
+  function trackedAgent(saveResult = true) {
+    const made = makeFinalizeAgent({ failures: 0, rejections: 0 });
+    made.run.ID = RUN_ID.toUpperCase(); // SQL Server hands IDs back upper-case
+    made.run.Save = async () => { made.run.saved = true; return saveResult; };
+    (made.agent as unknown as { startPostTurnCompaction(): void }).startPostTurnCompaction = () => undefined;
+    trackedSet().add(RUN_ID);
+    return made;
+  }
+  const isTracked = () => AgentRunWatchdog.Instance.TrackedRunIDs.includes(RUN_ID);
+
+  it('a Completed run is no longer tracked once finalize saves it', async () => {
+    const { agent } = trackedAgent();
+    await finalize(agent, { step: 'Success', message: 'done' });
+    expect(isTracked()).toBe(false);
+  });
+
+  it('a Failed final step is no longer tracked', async () => {
+    const { agent } = trackedAgent();
+    await finalize(agent, { step: 'Failed', errorMessage: 'boom' });
+    expect(isTracked()).toBe(false);
+  });
+
+  it('a cancelled run is no longer tracked', async () => {
+    const { agent } = trackedAgent();
+    await (agent as unknown as { createCancelledResult(m: string): Promise<unknown> }).createCancelledResult('stop');
+    expect(isTracked()).toBe(false);
+  });
+
+  it('a run ended by createFailureResult is no longer tracked', async () => {
+    const { agent } = trackedAgent();
+    await (agent as unknown as { createFailureResult(m: string): Promise<unknown> }).createFailureResult('bad');
+    expect(isTracked()).toBe(false);
+  });
+
+  it('stays tracked when the terminal save fails, so the watchdog still owns it', async () => {
+    const { agent } = trackedAgent(false);
+    await finalize(agent, { step: 'Success', message: 'done' });
+    expect(isTracked()).toBe(true);
+    trackedSet().delete(RUN_ID);
   });
 });

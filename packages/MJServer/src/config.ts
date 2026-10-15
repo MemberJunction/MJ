@@ -168,6 +168,19 @@ const scheduledJobsSchema = z.object({
 });
 
 /**
+ * Event-loop stall monitor (MJ #5510). MJAPI serves HTTP, WebSockets, scheduled jobs and agent runs
+ * from one event loop, so a synchronous phase of background work stalls every interactive user.
+ * When a sampling window's worst event-loop delay reaches `warnThresholdMs`, one warning is logged
+ * with the lag, the heap and the agent runs / scheduled jobs in flight; `/healthcheck` reports the
+ * latest window's lag (not the heap: `/healthcheck` is unauthenticated).
+ */
+const eventLoopMonitorSchema = z.object({
+  enabled: z.boolean().optional().default(true),
+  warnThresholdMs: z.number().optional().default(1000),
+  sampleIntervalMs: z.number().optional().default(5000),
+});
+
+/**
  * Integration sync worker (PR 1 item 8). When enabled, this process polls
  * `CompanyIntegrationRun` for `Status='Queued'` rows, atomically claims them, executes
  * the sync, and releases. The claim sproc is the mutual exclusion, so any number of
@@ -843,6 +856,7 @@ const configInfoSchema = z.object({
   authProviders: z.array(authProviderSchema).optional(),
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
+  eventLoopMonitor: eventLoopMonitorSchema.optional().default({}),
   integrationSyncWorker: integrationSyncWorkerSchema.optional().default({}),
   workQueue: WorkQueueSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
@@ -907,6 +921,7 @@ export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
 export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
+export type EventLoopMonitorConfig = z.infer<typeof eventLoopMonitorSchema>;
 export type IntegrationSyncWorkerConfig = z.infer<typeof integrationSyncWorkerSchema>;
 export type { WorkQueueConfig } from './services/workQueueConfig.js';
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
@@ -1033,6 +1048,13 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     maxConcurrentJobs: 5,
     defaultLockTimeout: 600000,
     staleLockCleanupInterval: 300000
+  },
+
+  // Event-loop stall monitor defaults (MJ #5510) — on; warns on a >=1s stall, 5s sampling window
+  eventLoopMonitor: {
+    enabled: true,
+    warnThresholdMs: 1000,
+    sampleIntervalMs: 5000
   },
 
   // Integration sync worker defaults (off — syncs run inline unless a worker is enabled)
