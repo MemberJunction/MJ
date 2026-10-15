@@ -858,6 +858,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         try {
             const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
             const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+            // The consolidated recording already landed and its upload deleted the shards; a shard
+            // arriving now (one still on the wire at hang-up) would be an orphan nothing deletes.
+            if (session.RecordingFileID != null && String(session.RecordingFileID).trim().length > 0) {
+                LogStatus(`RealtimeClientSessionResolver.UploadRealtimeRecordingSegment: shard ${segmentIndex} for session ${agentSessionId} refused — the session already has its consolidated recording`);
+                return false;
+            }
             // Scoped-anonymous elevation (issue #3371) — same rationale as UploadRealtimeRecording.
             const runUser = ResolveScopedAnonymousRunUser(contextUser);
             const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', runUser);
