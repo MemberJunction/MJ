@@ -1954,6 +1954,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database.
      *   Uses {@link IMetadataProvider.GetDatasetByName} with `forceRefresh` to skip all cache reads,
      *   then {@link IMetadataProvider.CacheDataset} to store fresh results for subsequent non-forced calls.
+     *
+     * The dataset is read without a context user on both paths. An engine's data is shared by every
+     * caller of the process, so it must not be narrowed to the read permissions and row filter of
+     * whichever user triggered the load. Client dataset reads are checked for the caller in the
+     * dataset resolver, not here.
      */
     protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         const p = this.ProviderToUse;
@@ -1962,7 +1967,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // Otherwise, use GetAndCacheDatasetByName which validates staleness before returning cached data.
         let result: DatasetResultType;
         if (bypassCache) {
-            result = await p.GetDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser, undefined, true);
+            result = await p.GetDatasetByName(config.DatasetName, config.DatasetItemFilters, undefined, undefined, true);
             await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
         } else {
             result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
