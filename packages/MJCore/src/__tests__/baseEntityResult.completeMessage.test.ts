@@ -118,6 +118,10 @@ class RefusingEntity extends BaseEntity {
     public override CheckPermissions(): boolean {
         return true;
     }
+    /** On this line Save() runs ValidateAsync only when the subclass opts in. */
+    public override get DefaultSkipAsyncValidation(): boolean {
+        return false;
+    }
     public override async ValidateAsync(): Promise<ValidationResult> {
         const result = await super.ValidateAsync();
         result.Success = false;
