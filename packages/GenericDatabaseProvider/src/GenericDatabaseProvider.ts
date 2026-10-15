@@ -1423,9 +1423,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * Throws unless a caller-supplied WHERE piece (ExtraFilter, OverrideExcludeFilter, a stored view
      * WhereClause) stays inside the parentheses this provider puts around it, read with this
      * provider's SQL dialect (see `IsBalancedSQLFragment`). The pieces are ANDed with row-level
-     * security, which also carries API-key row filters and guest scope; a piece that closes its
-     * parentheses early, such as `1=1) OR (1=1`, would leave those filters on one side of an OR the
-     * caller controls.
+     * security, which also carries guest scope; a piece that closes its parentheses early, such as
+     * `1=1) OR (1=1`, would leave those filters on one side of an OR the caller controls.
      */
     protected AssertClauseBalanced(clause: string, label: string, options?: BalancedFragmentOptions): void {
         const check = IsBalancedSQLFragment(clause, this.Dialect, options);

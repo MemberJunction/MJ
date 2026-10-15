@@ -772,7 +772,7 @@ export class ResolverBase {
    * Before that parse, the fragment must be balanced on its own (`IsBalancedSQLFragment`). The
    * provider and the tenant hook splice it inside parentheses and AND their own filters after
    * it, so a fragment that closes those parentheses (`1=1) OR (1=1`) would leave row-level
-   * security, API-key row filters and tenant scope on one side of an OR the caller controls.
+   * security and tenant scope on one side of an OR the caller controls.
    * The parse wraps the fragment in parentheses too, which is why it cannot catch this alone.
    * A backslash inside a quoted string or identifier is refused as well: the parser reads `\'`
    * inside a plain literal as an escaped quote, but SQL Server and PostgreSQL end the literal

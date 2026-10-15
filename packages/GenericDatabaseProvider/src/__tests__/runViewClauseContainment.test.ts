@@ -1,7 +1,7 @@
 /**
  * The provider builds a view's WHERE clause by wrapping each piece in parentheses and ANDing them:
  * `(<view WhereClause>) AND (<ExtraFilter>) AND (<exclusion>) AND (<row-level security>)`. Row-level
- * security here also carries API-key row filters and widget-guest scope.
+ * security here also carries widget-guest scope.
  *
  * A caller-supplied piece that closes a parenthesis it did not open, such as `1=1) OR (1=1`, turns
  * that into `(1=1) OR (1=1) AND (<rls>)`. AND binds tighter than OR, so row-level security would then
@@ -19,36 +19,26 @@ vi.mock('@memberjunction/encryption', () => ({
     },
 }));
 
-import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
+import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
 import type { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '../saveTypes.js';
 import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 import {
     ClearAllDataHooks,
-    CompositeKey,
-    UserInfo,
     BaseEntity,
-    type DatasetResultType,
-    type DatasetStatusResultType,
+    UserInfo,
     type DeleteSQLResult,
     type EntityInfo,
-    type EntityRecordNameResult,
-    type ILocalStorageProvider,
     type IMetadataProvider,
-    type PotentialDuplicateResponse,
-    type ProviderType,
-    type QueryExecutionSpec,
-    type RecordMergeResult,
-    type RunQueryResult,
     type RunViewParams,
     type RunViewResult,
+    type RunViewWithCacheCheckResult,
     type SaveSQLResult,
-    type TransactionGroupBase,
 } from '@memberjunction/core';
 
 const RLS_CLAUSE = "UserID = 'me'";
 
 /** Runs the real view path over one entity fixture and records every statement it executes. */
-class ContainmentTestProvider extends GenericDatabaseProviderTestBase {
+class ContainmentTestProvider extends GenericDatabaseProvider {
     private static readonly _uuidPattern = /^\s*newid\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*getdate\s*\(\s*\)\s*$/i;
 
@@ -69,6 +59,17 @@ class ContainmentTestProvider extends GenericDatabaseProviderTestBase {
 
     public RunViewAs(params: RunViewParams, user: UserInfo): Promise<RunViewResult> {
         return this.InternalRunView(params, user);
+    }
+
+    /**
+     * Runs one view through the cache-check WHERE builder. lts/5 has no GetRunViewsDatabaseStatus;
+     * an item with a cacheStatus makes RunViewsWithCacheCheck build that WHERE clause (the server
+     * cache is not initialized here). The empty cacheStatus matches the empty status this double
+     * returns, so only the status query runs.
+     */
+    public async CacheCheckAs(params: RunViewParams, user: UserInfo): Promise<RunViewWithCacheCheckResult<unknown>> {
+        const response = await this.RunViewsWithCacheCheck([{ params, cacheStatus: { maxUpdatedAt: '', rowCount: 0 } }], user);
+        return response.results[0];
     }
 
     protected get UUIDFunctionPattern(): RegExp { return ContainmentTestProvider._uuidPattern; }
@@ -92,30 +93,6 @@ class ContainmentTestProvider extends GenericDatabaseProviderTestBase {
     async BeginTransaction(): Promise<void> {}
     async CommitTransaction(): Promise<void> {}
     async RollbackTransaction(): Promise<void> {}
-    protected get AllowRefresh(): boolean { return false; }
-    public get ProviderType(): ProviderType { return 'Database'; }
-    public get DatabaseConnection(): object { return {}; }
-    protected async InternalGetEntityRecordName(): Promise<string> { return ''; }
-    protected async InternalGetEntityRecordNames(): Promise<EntityRecordNameResult[]> { return []; }
-    public async GetRecordFavoriteStatus(): Promise<boolean> { return false; }
-    public async SetRecordFavoriteStatus(): Promise<void> {}
-    protected async InternalRunQuery(): Promise<RunQueryResult> { return { Success: true, Results: [] } as unknown as RunQueryResult; }
-    protected async InternalRunQueries(): Promise<RunQueryResult[]> { return []; }
-    protected async InternalExecuteQueryFromSpec(_spec: QueryExecutionSpec, _user?: UserInfo): Promise<RunQueryResult> {
-        throw new Error('Not supported');
-    }
-    protected async GetCurrentUser(): Promise<UserInfo> { return new UserInfo(null as unknown as IMetadataProvider, {}); }
-    public async GetRecordDependencies(): Promise<{ EntityName: string; RelatedEntityName: string; FieldName: string; PrimaryKey: CompositeKey }[]> { return []; }
-    public async GetRecordDuplicates(): Promise<PotentialDuplicateResponse> { return {} as PotentialDuplicateResponse; }
-    public async MergeRecords(): Promise<RecordMergeResult> { return {} as RecordMergeResult; }
-    public async GetDatasetByName(): Promise<DatasetResultType> { return {} as DatasetResultType; }
-    public async GetDatasetStatusByName(): Promise<DatasetStatusResultType> { return {} as DatasetStatusResultType; }
-    public get InstanceConnectionString(): string { return 'containment-test'; }
-    public async CreateTransactionGroup(): Promise<TransactionGroupBase> { return {} as TransactionGroupBase; }
-    public get LocalStorageProvider(): ILocalStorageProvider {
-        return { GetItem: async () => null, SetItem: async () => {}, Remove: async () => {} } as unknown as ILocalStorageProvider;
-    }
-    protected get Metadata(): IMetadataProvider { return this as unknown as IMetadataProvider; }
 }
 
 /** A readable entity whose rows are narrowed for the caller by row-level security. */
@@ -133,10 +110,9 @@ function rlsProtectedEntity(): EntityInfo {
         DatetimeFields: [],
         ExternalDataSourceID: null,
         UserViewMaxRows: 0,
-        EnableFieldLevelSecurity: false,
         AuditViewRuns: false,
         GetUserPermisions: () => ({ CanRead: true }),
-        GetEffectiveRowFilterWhereClause: () => RLS_CLAUSE,
+        GetUserRowLevelSecurityWhereClause: () => RLS_CLAUSE,
     } as unknown as EntityInfo;
 }
 
@@ -239,19 +215,19 @@ describe('GenericDatabaseProvider — a caller-supplied WHERE piece cannot close
     it('the cache-check WHERE builder refuses an ExtraFilter that closes the wrapper, and runs no SQL', async () => {
         const provider = new ContainmentTestProvider([rlsProtectedEntity()]);
 
-        const statuses = await provider.GetRunViewsDatabaseStatus([{ EntityName: 'Conversations', ExtraFilter: '1=1) OR (1=1' }], user());
+        const status = await provider.CacheCheckAs({ EntityName: 'Conversations', ExtraFilter: '1=1) OR (1=1' }, user());
 
         expect(provider.ExecutedSQL).toEqual([]);
-        expect(statuses[0].Success).toBe(false);
-        expect(statuses[0].ErrorMessage).toMatch(/ExtraFilter.*parenthesis/);
+        expect(status.status).toBe('error');
+        expect(status.errorMessage).toMatch(/ExtraFilter.*parenthesis/);
     });
 
     it('the cache-check WHERE builder keeps a balanced ExtraFilter ANDed with row-level security', async () => {
         const provider = new ContainmentTestProvider([rlsProtectedEntity()]);
 
-        const statuses = await provider.GetRunViewsDatabaseStatus([{ EntityName: 'Conversations', ExtraFilter: "Name = 'a' OR Name = 'b'" }], user());
+        const status = await provider.CacheCheckAs({ EntityName: 'Conversations', ExtraFilter: "Name = 'a' OR Name = 'b'" }, user());
 
-        expect(statuses[0].Success).toBe(true);
+        expect(status.status).toBe('current');
         expect(provider.ExecutedSQL[0]).toContain(`WHERE (Name = 'a' OR Name = 'b') AND (${RLS_CLAUSE})`);
     });
 
@@ -319,9 +295,9 @@ describe('GenericDatabaseProvider — a platform rewrite of the ExtraFilter stay
     it('does the same in the cache-check WHERE builder', async () => {
         const provider = new RewritingTestProvider([rlsProtectedEntity()]);
 
-        const statuses = await provider.GetRunViewsDatabaseStatus([{ EntityName: 'Conversations', ExtraFilter: tenantShaped }], user());
+        const status = await provider.CacheCheckAs({ EntityName: 'Conversations', ExtraFilter: tenantShaped }, user());
 
-        expect(statuses[0].Success).toBe(true);
+        expect(status.status).toBe('current');
         expect(provider.ExecutedSQL[0]).toContain(`WHERE (((Flag = TRUE)) AND ((OrganizationID = 't1'))) AND (${RLS_CLAUSE})`);
     });
 
