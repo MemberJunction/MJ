@@ -45,17 +45,6 @@ class NestingProvider extends SQLServerDataProvider {
     }
 }
 
-/**
- * The pool as the provider's connection-source type. Under the mocked mssql module, `sql.ConnectionPool` IS
- * MockConnectionPool, so the instanceof check narrows without a cast (and fails loudly if the mock is not active).
- */
-function asConnectionSource(pool: MockConnectionPool): sql.ConnectionPool {
-    if (!(pool instanceof sql.ConnectionPool)) {
-        throw new Error('the mssql mock is not active: the pool is not the module\'s ConnectionPool');
-    }
-    return pool;
-}
-
 describe('SQLServerDataProvider nested transactions (real class, mocked mssql)', () => {
     let provider: NestingProvider;
     let pool: MockConnectionPool;
@@ -94,14 +83,11 @@ describe('SQLServerDataProvider nested transactions (real class, mocked mssql)',
     });
 
     it('outer rollback of an aborted handle unpublishes so the next begin is a new physical TX (B2)', async () => {
-        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         await provider.BeginTransaction();
         const first = provider.Handle();
         first!.abortServerSide();
-        // The server already rolled the transaction back, so mssql's EABORT is the expected answer,
-        // not a failure: the rollback resolves and the state is cleared.
+        // the server already rolled the transaction back, so mssql's EABORT means the rollback is done
         await expect(provider.RollbackTransaction()).resolves.toBeUndefined();
-        errorSpy.mockRestore();
         expect(provider.TransactionDepth).toBe(0);
         expect(provider.Handle()).toBeNull();
         expect(provider.isTransactionActive).toBe(false);
@@ -112,59 +98,15 @@ describe('SQLServerDataProvider nested transactions (real class, mocked mssql)',
         await provider.RollbackTransaction();
     });
 
-    it('a failed cascading delete settles once: rolling back a server-aborted transaction neither throws EABORT nor leaves a second rollback to report "No active transaction to rollback"', async () => {
+    it('rollback of a server-aborted transaction does not wait on mssql\'s stale in-flight marker', async () => {
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        // What the generated CascadeDeletes Delete() saw: begin, the delete statement fails and the
-        // server aborts the transaction, then the override rolls back.
         await provider.BeginTransaction();
         provider.Handle()!.abortServerSide();
-        await expect(provider.ExecuteSQL('EXEC [__mj].[spDeleteAIPrompt] @ID=1')).rejects.toBeTruthy();
-        let firstRollbackError: unknown = null;
-        try {
-            await provider.RollbackTransaction();
-        } catch (e) {
-            firstRollbackError = e;
-        }
-        // Previously this was mssql's EABORT; the old template's catch then rolled back AGAIN and
-        // surfaced "No active transaction to rollback" instead of the delete's real error.
-        expect(firstRollbackError).toBeNull();
-        expect(provider.TransactionDepth).toBe(0);
-        expect(provider.Handle()).toBeNull();
-        expect(provider.isTransactionActive).toBe(false);
-        const logged = errorSpy.mock.calls.flat().map(String).join(' ');
-        // The already-rolled-back rollback is routine (verbose-only); no error line, and no second rollback.
-        expect(logged).not.toMatch(/already rolled back by the server/);
-        expect(logged).not.toMatch(/No active transaction to rollback/);
-        errorSpy.mockRestore();
-    });
-
-    it('rollback of a statement-aborted transaction does not wait on mssql\'s stale in-flight marker', async () => {
-        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        await provider.BeginTransaction();
-        const handle = provider.Handle()!;
-        handle.abortServerSide();
-        expect(handle._activeRequest).not.toBeNull(); // what real mssql leaves behind after the abort
         const started = Date.now();
         await expect(provider.RollbackTransaction()).resolves.toBeUndefined();
-        // Before the fix this waited the full 2000 ms request budget and then threw "did not go through the
-        // instance SQL queue" — a request that can never finish, because the server already ended the transaction.
-        expect(Date.now() - started).toBeLessThan(1000);
-        const logged = errorSpy.mock.calls.flat().map(String).join(' ');
-        expect(logged).not.toMatch(/did not go through the instance SQL queue/);
-        expect(logged).not.toMatch(/already rolled back by the server/); // verbose-only, not an error
-        expect(provider.TransactionDepth).toBe(0);
-        expect(provider.Handle()).toBeNull();
+        expect(Date.now() - started).toBeLessThan(1000); // not the full in-flight request wait
+        expect(errorSpy.mock.calls.flat().map(String).join(' ')).not.toMatch(/did not go through the instance SQL queue/);
         errorSpy.mockRestore();
-    });
-
-    it('commit of a statement-aborted transaction reports EABORT at once, not the in-flight timeout', async () => {
-        await provider.BeginTransaction();
-        provider.Handle()!.abortServerSide();
-        const started = Date.now();
-        await expect(provider.CommitTransaction()).rejects.toMatchObject({ code: 'EABORT' });
-        expect(Date.now() - started).toBeLessThan(1000);
-        expect(provider.TransactionDepth).toBe(0);
-        expect(provider.Handle()).toBeNull();
     });
 
     it('outer commit of an aborted handle unpublishes (B2 commit path)', async () => {
@@ -193,7 +135,7 @@ describe('SQLServerDataProvider nested transactions (real class, mocked mssql)',
         await expect(provider.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
         await expect(provider.ExecuteSQL('UPDATE Orders SET Status=Confirmed')).rejects.toBeInstanceOf(DoomedTransactionError);
         expect(mssqlState.Queries.filter((q) => !q.viaTransaction && /UPDATE Orders/.test(q.sql))).toEqual([]);
-        await provider.ExecuteSQL('SELECT 1 AS ok', undefined, { connectionSource: asConnectionSource(pool) });
+        await provider.ExecuteSQL('SELECT 1 AS ok', undefined, { connectionSource: pool });
         expect(mssqlState.Queries.some((q) => !q.viaTransaction && /SELECT 1/.test(q.sql))).toBe(true);
         await provider.RollbackTransaction();
     });

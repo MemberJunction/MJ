@@ -253,27 +253,14 @@ await item.Save();
 const results = await transaction.Submit();
 ```
 
-**All-or-nothing.** An item fails the whole group — the transaction rolls back, nothing commits, and
-`Submit()` returns false with every item reported failed — when its statement throws, **and** when it
-runs without doing its work: a save that returns no row (its record was not persisted, e.g. a
-concurrent delete), or a delete whose returned row does not report the record's primary key (the
-generated `spDelete` answers a no-op with NULL keys). Deletes are judged by
-`BaseEntity.DeleteResultMatchesEntity` — keys present and non-NULL, UUIDs compared case-insensitively —
-the same test the direct delete path and the PostgreSQL and GraphQL providers use. This holds on the
-sequential paths (with and without transaction variables) and on the batched path, which judges every
-item before reporting any. Each item's rows are processed with its own entity's provider
-(`ProviderToUse`), not the process-wide default.
+An item that runs without doing its work — a save that returns no row, or a delete that does not report the record's
+key — rolls the whole group back, like a statement that throws. Each item's result is the last result set its
+statement returned.
 
-**Cascading, record-change-tracked deletes.** For an entity with `CascadeDeletes` and
-`TrackRecordChanges`, the delete procedure returns one result set per cascaded child call before the
-record's own, so the provider does not capture the procedure's output. Instead it checks the row
-exists before the `EXEC` and is gone after it, writes the Delete record change only then, and selects
-the record's key last (NULL keys when nothing was deleted). The before-check reads the row
-`WITH (UPDLOCK, HOLDLOCK)` and check + `EXEC` + re-check run in one transaction (the batch joins an open
-one, or opens and commits its own), so a concurrent delete cannot be credited to this caller. The
-pieces are protected and overridable (`RenderRowVisibleSQL`, `CascadingDeleteLockHints`,
-`RenderDeleteRecordChangeBlock`, …). The generated `Delete()` override of such an entity runs inside
-`BaseEntity.DeleteWithinEntityTransaction`, which opens the transaction on the record's own provider.
+**Cascading, record-change-tracked deletes.** The delete procedure of a `CascadeDeletes` entity returns one result
+set per cascaded child call before its own, so its output is not captured with `INSERT … EXEC`. The provider checks
+that the row exists before the `EXEC` (`WITH (UPDLOCK, HOLDLOCK)`, inside one transaction) and is gone after it, then
+writes the Delete record change and selects the record's key last (NULL keys when nothing was deleted).
 
 ### Instance-Level Transactions
 
@@ -517,7 +504,7 @@ graph TD
 
 The provider supports two transaction mechanisms:
 
-**Transaction Groups** (`SQLServerTransactionGroup`) -- bundle multiple entity save/delete operations and execute them within a single SQL Server transaction. If any operation fails — a statement that throws, a save that returns no row, or a delete that does not report the record's keys — the entire group is rolled back (see "All-or-nothing" above). Transaction groups also support inter-entity variable references, allowing a newly created entity's ID to be passed to dependent entities in the same batch.
+**Transaction Groups** (`SQLServerTransactionGroup`) -- bundle multiple entity save/delete operations and execute them within a single SQL Server transaction. If any operation fails, the entire group is rolled back. Transaction groups also support inter-entity variable references, allowing a newly created entity's ID to be passed to dependent entities in the same batch.
 
 **Instance-Level Transactions** -- the depth machine lives on `GenericDatabaseProvider`. Depth 1 is a physical `sql.Transaction.begin()` (published only after begin resolves). Depth 2+ is `SAVE TRANSACTION`. When a transaction is active, queries without an explicit `connectionSource` are serialized through an RxJS `concatMap` queue onto that handle. Non-transactional queries bypass the queue. A server abort is not recoverable (`DoomedTransactionError`); `ResetTransactionState()` is the public recovery path. `InTransaction` is depth > 0, `InNestedTransaction` is depth > 1, `isTransactionActive` is the published-handle bit (`_transactionState$`). `IsInTransaction` stays false so `RunMaybeSerial` can fan out.
 

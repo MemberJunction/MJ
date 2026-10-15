@@ -18,7 +18,7 @@ export class MockCacheStorageProvider implements ILocalStorageProvider {
      */
     public readonly SharesReferences = true;
 
-    private storage: Map<string, Map<string, unknown>> = new Map();
+    private storage: Map<string, Map<string, string>> = new Map();
     private _getCallCount = 0;
     private _setCallCount = 0;
     private _removeCallCount = 0;
@@ -34,7 +34,7 @@ export class MockCacheStorageProvider implements ILocalStorageProvider {
         this.storage.set(CacheCategory.Default, new Map());
     }
 
-    async GetItem<T = unknown>(key: string, category?: string): Promise<T | null> {
+    async GetItem(key: string, category?: string): Promise<string | null> {
         this._getCallCount++;
 
         if (this._simulateDelay > 0) {
@@ -46,9 +46,8 @@ export class MockCacheStorageProvider implements ILocalStorageProvider {
         }
 
         const cat = category || CacheCategory.Default;
-        const value = this.storage.get(cat)?.get(key);
-        // the caller names the stored type, exactly as InMemoryLocalStorageProvider.GetItem does
-        return value === undefined ? null : (value as T);
+        const categoryStorage = this.storage.get(cat);
+        return categoryStorage?.get(key) ?? null;
     }
 
     async GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>> {
@@ -56,12 +55,12 @@ export class MockCacheStorageProvider implements ILocalStorageProvider {
         // required by LocalCacheManager.GetRunViewResults (smart-cache flow).
         const out = new Map<string, T | null>();
         for (const key of new Set(keys)) {
-            out.set(key, await this.GetItem<T>(key, category));
+            out.set(key, (await this.GetItem(key, category)) as unknown as T | null);
         }
         return out;
     }
 
-    async SetItem<T>(key: string, value: T, category?: string): Promise<void> {
+    async SetItem(key: string, value: string, category?: string): Promise<void> {
         this._setCallCount++;
 
         if (this._simulateDelay > 0) {
@@ -141,14 +140,13 @@ export class MockCacheStorageProvider implements ILocalStorageProvider {
     }
 
     public getStorageSize(category: string): number {
-        return this.storage.get(category)?.size || 0;
+        return this.storage.get(category)?.size ?? 0;
     }
 
     /**
-     * Writes a value straight into storage, bypassing call counting, delay and failure simulation (test setup).
-     * The value is stored as given, the way {@link SetItem} stores it.
+     * Directly set a value in storage (for test setup)
      */
-    public SetDirect<T>(key: string, value: T, category: string): void {
+    public setDirect(key: string, value: string, category: string): void {
         let categoryStorage = this.storage.get(category);
         if (!categoryStorage) {
             categoryStorage = new Map();
@@ -158,11 +156,9 @@ export class MockCacheStorageProvider implements ILocalStorageProvider {
     }
 
     /**
-     * Reads a value straight from storage, bypassing call counting, delay and failure simulation (test
-     * verification). The caller names the stored type, as with {@link GetItem}.
+     * Directly get a value from storage (for test verification)
      */
-    public GetDirect<T = unknown>(key: string, category: string): T | null {
-        const value = this.storage.get(category)?.get(key);
-        return value === undefined ? null : (value as T);
+    public getDirect(key: string, category: string): string | null {
+        return this.storage.get(category)?.get(key) ?? null;
     }
 }

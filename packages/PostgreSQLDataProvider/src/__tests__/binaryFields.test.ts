@@ -10,7 +10,7 @@
  *  - the transaction group post-processes returned rows through the provider (Buffer → base64),
  *    on both the sequential and the batched path, and the batched path inlines a bytea literal.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('pg', () => {
     const mockClient = {
@@ -25,10 +25,9 @@ vi.mock('pg', () => {
     return { default: { Pool: vi.fn(() => mockPool) } };
 });
 
-import { BaseEntity, EntityFieldInfo, EntityInfo } from '@memberjunction/core';
-import type { TransactionItem, TransactionResult } from '@memberjunction/core';
+import { BaseEntity, EntityFieldInfo, EntityInfo, Metadata } from '@memberjunction/core';
+import type { IMetadataProvider, TransactionItem } from '@memberjunction/core';
 import type { SaveCallBinding } from '@memberjunction/generic-database-provider';
-import type pg from 'pg';
 import { PostgreSQLDataProvider } from '../PostgreSQLDataProvider.js';
 import { PostgreSQLTransactionGroup } from '../PostgreSQLTransactionGroup.js';
 import { PGQueryParameterProcessor } from '../queryParameterProcessor.js';
@@ -231,7 +230,6 @@ describe('PostgreSQLDataProvider.RenderSaveCallBinding — JSON-arg binary value
 // PostgreSQLTransactionGroup — returned rows are post-processed; bytea literal
 // ═══════════════════════════════════════════════════════════════════════════
 type QueryCall = { text: string; params?: unknown[] };
-type FakeClient = ReturnType<typeof makeClient>['client'];
 
 function makeClient(answer: (text: string) => unknown) {
     const calls: QueryCall[] = [];
@@ -246,11 +244,9 @@ function makeClient(answer: (text: string) => unknown) {
     return { client, calls };
 }
 
-function makeItem(entityInfo: EntityInfo, params: unknown[], operation: 'Create' | 'Update' | 'Delete' = 'Create', provider: PostgreSQLDataProvider = new BinaryPGProvider()): TransactionItem {
+function makeItem(entityInfo: EntityInfo, params: unknown[], operation: 'Create' | 'Update' | 'Delete' = 'Create'): TransactionItem {
     return {
-        // The group processes an item's rows with the item's own provider (its entity's ProviderToUse).
-        // A delete is judged by the entity's key match; these rows report the record's key.
-        BaseEntity: { EntityInfo: entityInfo, ContextCurrentUser: undefined, ProviderToUse: provider, DeleteResultMatches: () => true },
+        BaseEntity: { EntityInfo: entityInfo, ContextCurrentUser: undefined },
         Instruction: 'SELECT * FROM docs.spcreate_document($1, $2)',
         Vars: params,
         OperationType: operation,
@@ -258,36 +254,34 @@ function makeItem(entityInfo: EntityInfo, params: unknown[], operation: 'Create'
     } as unknown as TransactionItem;
 }
 
-/** Exposes the batched and sequential paths so they can be driven against a fake client, without a live pool. */
-class BinaryTestGroup extends PostgreSQLTransactionGroup {
-    constructor(batched: boolean) {
-        super();
-        this.BatchedSubmit = batched;
-    }
-    /** The fake client implements only `query`, `release` and `escapeLiteral` — all these paths use. */
-    public RunBatched(items: TransactionItem[], client: FakeClient, results: TransactionResult[]): Promise<void> {
-        return this.ExecuteBatched(items, client as unknown as pg.PoolClient, results);
-    }
-    public RunSequential(items: TransactionItem[], client: FakeClient, results: TransactionResult[]): Promise<void> {
-        return this.ExecuteWithoutVariables(items, client as unknown as pg.PoolClient, results);
-    }
-}
+type GroupInternals = {
+    executeBatched: (items: TransactionItem[], client: unknown, provider: unknown, results: unknown[]) => Promise<void>;
+    executeWithoutVariables: (items: TransactionItem[], client: unknown, provider: unknown, results: unknown[]) => Promise<void>;
+};
 
-function makeGroup(batched: boolean): BinaryTestGroup {
-    return new BinaryTestGroup(batched);
+function makeGroup(batched: boolean): GroupInternals {
+    const g = new PostgreSQLTransactionGroup();
+    g.BatchedSubmit = batched;
+    return g as unknown as GroupInternals;
 }
 
 describe('PostgreSQLTransactionGroup — binary values', () => {
+    let previousProvider: IMetadataProvider;
     let entityInfo: EntityInfo;
 
     beforeEach(() => {
+        previousProvider = Metadata.Provider;
+        Metadata.Provider = new BinaryPGProvider();
         entityInfo = makeDocumentEntityInfo();
+    });
+    afterEach(() => {
+        Metadata.Provider = previousProvider;
     });
 
     it('sequential path: converts a returned bytea Buffer to base64 and binds bytes as a parameter', async () => {
         const { client, calls } = makeClient(() => ({ rows: [{ ID: 'd1', Content: Buffer.from([1, 2, 255]), Raw: null }] }));
-        const results: TransactionResult[] = [];
-        await makeGroup(false).RunSequential([makeItem(entityInfo, ['Doc', Buffer.from([1, 2, 255])])], client, results);
+        const results: Array<{ Success: boolean; Result: Row }> = [];
+        await makeGroup(false).executeWithoutVariables([makeItem(entityInfo, ['Doc', Buffer.from([1, 2, 255])])], client, Metadata.Provider, results);
 
         expect(calls).toHaveLength(1);
         expect(Buffer.isBuffer(calls[0].params?.[1])).toBe(true);
@@ -299,8 +293,8 @@ describe('PostgreSQLTransactionGroup — binary values', () => {
     it('sequential path: leaves Delete results alone (no entity row to process)', async () => {
         const raw = Buffer.from([1]);
         const { client } = makeClient(() => ({ rows: [{ ID: 'd1', Content: raw }] }));
-        const results: TransactionResult[] = [];
-        await makeGroup(false).RunSequential([makeItem(entityInfo, ['d1'], 'Delete')], client, results);
+        const results: Array<{ Success: boolean; Result: Row }> = [];
+        await makeGroup(false).executeWithoutVariables([makeItem(entityInfo, ['d1'], 'Delete')], client, Metadata.Provider, results);
         expect(results[0].Result.Content).toBe(raw);
     });
 
@@ -309,8 +303,8 @@ describe('PostgreSQLTransactionGroup — binary values', () => {
             { rows: [{ __mj_batch_item: 0 }] },
             { rows: [{ ID: 'd1', Content: Buffer.from([0xab, 0x01]) }] },
         ]);
-        const results: TransactionResult[] = [];
-        await makeGroup(true).RunBatched([makeItem(entityInfo, ['Doc', new Uint8Array([0xab, 0x01])])], client, results);
+        const results: Array<{ Success: boolean; Result: Row }> = [];
+        await makeGroup(true).executeBatched([makeItem(entityInfo, ['Doc', new Uint8Array([0xab, 0x01])])], client, Metadata.Provider, results);
 
         expect(calls).toHaveLength(1);
         expect(calls[0].params).toBeUndefined();
@@ -320,7 +314,7 @@ describe('PostgreSQLTransactionGroup — binary values', () => {
 
     it('batched path: an empty byte array inlines as an empty bytea literal', async () => {
         const { client, calls } = makeClient(() => [{ rows: [{ __mj_batch_item: 0 }] }, { rows: [{ ID: 'd1' }] }]);
-        await makeGroup(true).RunBatched([makeItem(entityInfo, ['Doc', new Uint8Array(0)])], client, []);
+        await makeGroup(true).executeBatched([makeItem(entityInfo, ['Doc', new Uint8Array(0)])], client, Metadata.Provider, []);
         expect(calls[0].text).toContain("'\\x'::bytea");
     });
 
@@ -331,10 +325,11 @@ describe('PostgreSQLTransactionGroup — binary values', () => {
             { rows: [{ __mj_batch_item: 1 }] },
             { rows: [{ ID: 'd2', Content: Buffer.from([2]) }] },
         ]);
-        const results: TransactionResult[] = [];
-        await makeGroup(true).RunBatched(
+        const results: Array<{ Success: boolean; Result: Row }> = [];
+        await makeGroup(true).executeBatched(
             [makeItem(entityInfo, ['A', 'AQ==']), makeItem(entityInfo, ['B', 'Ag=='])],
             client,
+            Metadata.Provider,
             results,
         );
         expect(results.map(r => r.Success)).toEqual([true, true]);
@@ -342,13 +337,13 @@ describe('PostgreSQLTransactionGroup — binary values', () => {
         expect(results[1].Result.Content).toBe('Ag==');
     });
 
-    it('batched path: an item that returned no rows fails the group and is reported unsuccessful', async () => {
+    it('batched path: an item that returned no rows is reported unsuccessful and not processed', async () => {
         const { client } = makeClient(() => [
             { rows: [{ __mj_batch_item: 0 }] },
             { rows: [] },
         ]);
-        const results: TransactionResult[] = [];
-        await expect(makeGroup(true).RunBatched([makeItem(entityInfo, ['A', null])], client, results)).rejects.toThrow(/did not persist the record/);
+        const results: Array<{ Success: boolean; Result: unknown }> = [];
+        await makeGroup(true).executeBatched([makeItem(entityInfo, ['A', null])], client, Metadata.Provider, results);
         expect(results[0].Success).toBe(false);
     });
 });

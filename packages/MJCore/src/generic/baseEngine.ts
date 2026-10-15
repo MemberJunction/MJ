@@ -344,17 +344,6 @@ export class PermissionConstrainedError extends Error {
     }
 }
 
-/**
- * The arguments of a forced {@link BaseEngine.Load} call that arrived while another load was in flight; the one
- * coalesced follow-up load runs with the latest of them.
- */
-interface QueuedEngineLoadRequest {
-    Configs: Partial<BaseEnginePropertyConfig>[];
-    Provider: IMetadataProvider;
-    ContextUser?: UserInfo;
-    ReadOptions?: Readonly<DatasetReadOptions>;
-}
-
 /** A reload of one engine property started by a peer's cache change. */
 interface ExternalChangeReload {
     /** Another event arrived while this reload was running, so it must run once more. */
@@ -366,14 +355,8 @@ interface ExternalChangeReload {
 export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
-    /**
-     * The forced reloads queued behind the load in flight, ONE per distinct set of dataset read options, each shared
-     * by every `Load(…, true)` call with those options made while that load runs (its arguments are the latest such
-     * call's). Requests with different read options never share a reload: an event-driven reload's pool reads
-     * (`ReadOnPool`) must not be dropped by a plain `Config(true)` queued after it, nor forced onto a caller that did
-     * not ask for them. See {@link Load}.
-     */
-    private _queuedForcedReloads = new Map<string, { Args: QueuedEngineLoadRequest; Run: Promise<void> }>();
+    /** The one forced load queued behind the load in flight (see {@link Load}). */
+    private _queuedForcedReload: { Args: Parameters<BaseEngine<T>['Load']>; Run: Promise<void> } | null = null;
     private _contextUser: UserInfo;
     /**
      * True once {@link ResolveContextUser} has put this engine on the MJ system user. Makes the
@@ -386,7 +369,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _metadataConfigs: BaseEnginePropertyConfig[] = [];
     private _dynamicConfigs: Map<string, BaseEnginePropertyConfig> = new Map();
     private _dataMap: Map<string, EngineDataMapEntry> = new Map();
-    /** The entities each loaded dataset config holds (lower-cased names), by property name. See {@link DatasetEntityNames}. */
+    /** Lower-cased names of the entities each loaded dataset config holds, by property name. */
     private _datasetEntityNames: Map<string, ReadonlySet<string>> = new Map();
     private _expirationTimers: Map<string, number> = new Map();
     private _entityEventSubjects: Map<string, Subject<BaseEntityEvent>> = new Map();
@@ -713,36 +696,24 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
-     * Loads the engine's data. Sub-classes call this (usually from `Config`) with their property configs; for more
-     * complex loading or post-processing, override {@link AdditionalLoading}.
+     * This method should be called by sub-classes to load up their specific metadata requirements. For more complex metadata
+     * loading or for post-processing of metadata loading done here, overide the AdditionalLoading method to add your logic.
      *
-     * Concurrency contract while another load of this engine is in flight:
-     * - a plain load (`forceRefresh` false) JOINS it and resolves when it finishes — the data it loads is what the
-     *   caller asked for;
-     * - a forced load (`forceRefresh` true) does NOT join: the load in flight may have read the data before the change
-     *   that asked for the reload. It queues ONE follow-up forced load that runs after the load in flight. Every forced
-     *   request made while that load runs shares the same follow-up (a burst costs one extra load), and the follow-up
-     *   uses the arguments of the latest request. A forced request made after the follow-up started queues behind it.
-     *
-     * @param configs The property configs to load (entities and datasets).
-     * @param provider The metadata provider to load through; becomes this engine's provider.
-     * @param forceRefresh Reload even when already loaded, bypassing the join described above.
-     * @param contextUser The user to load as. Required server-side (a `Database` provider); see
-     * {@link ResolveContextUser} for which identity the engine finally acts as.
-     * @param readOptions Where a forced load's dataset reads run (see {@link DatasetReadOptions}). An event-driven
-     * reload passes `ReadOnPool`: it runs detached from the write that raised the event, so it must never join a
-     * transaction that happens to be open on the provider when its reads are issued.
-     * @returns Resolves when the load this call started, joined or queued has finished.
+     * While another load is in flight, a plain load joins it. A forced load does not (the load in flight may have read
+     * before the change that asked for the reload): it queues one follow-up load, shared by every forced request made
+     * meanwhile, which runs with the latest request's arguments once the load in flight finishes.
+     * @param configs
+     * @param contextUser
+     * @param readOptions where dataset configs read (see {@link DatasetReadOptions})
+     * @returns
      */
     protected async Load(configs: Partial<BaseEnginePropertyConfig>[], provider: IMetadataProvider, forceRefresh: boolean = false, contextUser?: UserInfo, readOptions?: Readonly<DatasetReadOptions>): Promise<void> {
         if (this.ProviderToUse?.ProviderType === ProviderType.Database && !contextUser)
             throw new Error('For server-side use of all engine classes, you must provide the contextUser parameter')
         if (this._loadingSubject.value) {
-            // A plain load joins the one in flight. A forced reload cannot: the load in flight may have read the
-            // data before the change that asked for the reload, so joining it would lose the request.
             return forceRefresh
-                ? this.QueueForcedReloadAfterInFlightLoad(configs, provider, contextUser, readOptions)
-                : this.WaitForInFlightLoad();
+                ? this.queueForcedReload([configs, provider, forceRefresh, contextUser, readOptions])
+                : this.waitForInFlightLoad();
         }
 
         if (!this._loaded || forceRefresh) {
@@ -811,8 +782,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
     }
 
-    /** Resolves when the load in flight finishes. Call only while a load is in flight. */
-    protected WaitForInFlightLoad(): Promise<void> {
+    private waitForInFlightLoad(): Promise<void> {
         return new Promise<void>((resolve) => {
             const subscription = this._loadingSubject.subscribe((loading) => {
                 if (!loading) {
@@ -823,49 +793,22 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         });
     }
 
-    /**
-     * Runs one more forced load once the load in flight finishes. Every forced request with the same dataset read
-     * options made while that load runs shares one follow-up load (a burst coalesces into at most one extra load per
-     * set of read options), and each caller resolves after its follow-up. Requests with different read options get
-     * separate follow-ups, run one after another. A request made after its follow-up has started queues behind it in
-     * turn, so no request is lost.
-     */
-    protected QueueForcedReloadAfterInFlightLoad(configs: Partial<BaseEnginePropertyConfig>[], provider: IMetadataProvider, contextUser?: UserInfo, readOptions?: Readonly<DatasetReadOptions>): Promise<void> {
-        const key = BaseEngine.ReadOptionsKey(readOptions);
-        const args: QueuedEngineLoadRequest = { Configs: configs, Provider: provider, ContextUser: contextUser, ReadOptions: readOptions };
-        const queued = this._queuedForcedReloads.get(key);
+    private queueForcedReload(args: Parameters<BaseEngine<T>['Load']>): Promise<void> {
+        const queued = this._queuedForcedReload;
         if (queued) {
-            queued.Args = args; // the latest request's arguments; its read options are the same by key
+            // a forced reload may always read on the pool, so a queued request's pool reads are never dropped
+            const readOnPool = queued.Args[4]?.ReadOnPool === true || args[4]?.ReadOnPool === true;
+            queued.Args = readOnPool ? [args[0], args[1], args[2], args[3], { ...args[4], ReadOnPool: true }] : args;
             return queued.Run;
         }
         const entry = { Args: args, Run: Promise.resolve() };
-        entry.Run = this.runQueuedForcedReload(key);
-        this._queuedForcedReloads.set(key, entry);
+        entry.Run = (async () => {
+            await this.waitForInFlightLoad();
+            this._queuedForcedReload = null; // a request arriving from now on queues behind this load
+            await this.Load(...entry.Args);
+        })();
+        this._queuedForcedReload = entry;
         return entry.Run;
-    }
-
-    /**
-     * The identity of a set of dataset read options, for {@link QueueForcedReloadAfterInFlightLoad}: requests coalesce
-     * only when every option that changes where the reads run is the same.
-     */
-    protected static ReadOptionsKey(readOptions: Readonly<DatasetReadOptions> | undefined): string {
-        return `pool=${readOptions?.ReadOnPool === true}|join=${readOptions?.JoinAmbientTransaction === true}`;
-    }
-
-    /**
-     * The follow-up load {@link QueueForcedReloadAfterInFlightLoad} queues for one set of read options: waits for the
-     * load in flight, then runs one forced load with the latest queued arguments of that set. Its slot is cleared
-     * before that load starts, so a forced request arriving during it queues a new follow-up behind it instead of
-     * joining one that already read. When several sets are queued, the first to start runs and the others queue
-     * behind it again (Load is single-flight), so they run one after another.
-     */
-    private async runQueuedForcedReload(key: string): Promise<void> {
-        await this.WaitForInFlightLoad();
-        const entry = this._queuedForcedReloads.get(key);
-        this._queuedForcedReloads.delete(key);
-        if (entry) {
-            await this.Load(entry.Args.Configs, entry.Args.Provider, true, entry.Args.ContextUser, entry.Args.ReadOptions);
-        }
     }
 
     /**
@@ -1132,32 +1075,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
     }
 
-    /**
-     * Where a background reload's reads run: on the pool. A reload an entity event, a cross-server invalidation, a
-     * retry timer, an expiration timer or a sweep starts runs detached from the write that caused it; a transaction another unit of work
-     * opens on the same provider while the reload is in flight is not the reload's, so its reads — dataset items
-     * (`GetDatasetByName`) and entity views (`RunViewParams.ReadOnPool`) alike — must never land on that transaction's
-     * connection (they would see uncommitted rows, or fail once the transaction ends first).
-     */
+    /** Read options for a reload that runs detached from the write that caused it: on the pool. */
     protected static readonly BackgroundReloadReads: Readonly<DatasetReadOptions> = { ReadOnPool: true };
 
     /**
-     * Runs a cache update an entity event asks for once the write that raised it is durable: after the commit of the
-     * transaction the write ran in (and never, on rollback), or now when no transaction is open. The entity raises
-     * save/delete as soon as its own write returns, while an enclosing transaction may still be open; updating the
-     * cache then would keep a rolled-back row (or read the pre-write state) for the life of the process.
-     *
-     * Call it before the handler's first `await`: it runs synchronously inside the save that raised the event, which is
-     * when the post-commit token of that save's transaction can still be captured.
-     *
-     * Whether the write is inside a transaction is decided by that token, not by the provider's depth: on a shared
-     * provider an open transaction belongs to the async scope that began it, and a save from any other scope ran on the
-     * pool and is already durable. Such a caller gets a token with a `null` epoch, and its update runs inline (awaited),
-     * so it can read the cache right after its own save — a depth check would hand it to the provider as detached,
-     * fire-and-forget work instead.
-     * @param event - The entity event that asks for the update.
-     * @param description - Names the task in the provider's post-commit diagnostics.
-     * @param task - The update.
+     * Runs a cache update an entity event asks for after the commit of the transaction the event's write ran in (never
+     * on rollback), or now when the write is in no transaction: updating the cache while that transaction is open would
+     * keep a rolled-back row. Call it before the handler's first `await`, while the save's post-commit token can still
+     * be captured. The token decides, not the provider's depth: on a shared provider an open transaction belongs to the
+     * async scope that began it, and a save from another scope is already durable, so its update runs inline.
      */
     protected async RunAfterCommitOrNow(event: BaseEntityEvent, description: string, task: () => Promise<void>): Promise<void> {
         const provider = event.baseEntity?.ProviderToUse;
@@ -1171,10 +1097,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         await task();
     }
 
-    /**
-     * The entities this engine's loaded dataset configs hold, as lower-cased entity names, read from the datasets
-     * themselves (so the set follows the dataset's definition). Empty until a dataset config has loaded.
-     */
+    /** Lower-cased names of the entities this engine's loaded dataset configs hold; empty before the first load. */
     protected DatasetEntityNames(): ReadonlySet<string> {
         const names = new Set<string>();
         for (const set of this._datasetEntityNames.values()) {
@@ -1237,7 +1160,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             // re-sync the pre-write snapshot.
             let refreshCount = 0;
             for (const config of matchingConfigs) {
-                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true, false, BaseEngine.BackgroundReloadReads);
+                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true);
                 if (!this.configLoadedSuccessfully(config.PropertyName)) {
                     // Same one-shot hazard as the debounced path: the invalidation event is
                     // consumed, so a transient failure here needs a bounded retry too.
@@ -1480,7 +1403,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                             // updated in place, e.g. UserInfoEngine's per-user '_UserApplications')
                             // re-syncs the PRE-write snapshot and the UI sits "one operation behind"
                             // until a full page reload repopulates the cache.
-                            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true, false, BaseEngine.BackgroundReloadReads);
+                            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true);
                             if (!this.configLoadedSuccessfully(config.PropertyName)) {
                                 this.scheduleEventRefreshRetry(config, 1);
                             }
@@ -1695,7 +1618,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Bypass the cache: this retries an event-triggered refresh, so the cache is
                 // still the stale copy the original write invalidated — reading through it
                 // could "succeed" with stale data and reinstate the one-operation-behind bug.
-                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true, false, BaseEngine.BackgroundReloadReads);
+                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true);
                 if (this.configLoadedSuccessfully(key)) {
                     await this.AdditionalLoading(this._contextUser);
                 } else {
@@ -2034,26 +1957,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
-     * Adopts configs without loading them: from then on the engine's own reloads — entity events, cross-server
-     * invalidations, expiration timers, {@link RefreshItem} — work on these. For an engine whose data arrives some other
-     * way than {@link LoadConfigs} (a test double, a subclass seeding its data itself); a normal engine calls
-     * {@link Load}, which adopts its configs and loads them.
-     * @param configs - The configs to adopt; plain objects are upgraded to {@link BaseEnginePropertyConfig}
-     */
-    protected AdoptConfigs(configs: Partial<BaseEnginePropertyConfig>[]): void {
-        this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
-    }
-
-    /**
      * Loads the specified metadata configurations.
      * @param configs - The metadata configurations to load
      * @param contextUser - The context user information
      * @param bypassCache - When true, bypasses all server-side caching (RunView and dataset) to fetch fresh data
      *   directly from the database. Passed through from {@link Load} when `forceRefresh` is true (i.e., `Config(true)`).
-     * @param readOptions - Where the dataset configs' reads run; passed through from {@link Load}.
+     * @param readOptions - Where the dataset configs read; passed through from {@link Load}.
      */
     protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo, bypassCache: boolean = false, readOptions?: Readonly<DatasetReadOptions>): Promise<void> {
-        this.AdoptConfigs(configs);
+        this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
 
         // now, break up the configs into two chunks, datasets and views of entities so we can load all the views in a single network call via RunViews()
         const entityConfigs = this._metadataConfigs.filter(c => c.Type === 'entity');
@@ -2066,7 +1978,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const entityConfigsToLoad = this.CheckPermissionsOrSkipAll(entityConfigs, contextUser);
 
         await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache, readOptions)),
-                           this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache, readOptions)]);
+                           this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
 
         // Register cross-server cache change callbacks for entity configs
         this.RegisterCacheChangeCallbacks(entityConfigs);
@@ -2142,14 +2054,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param config - The metadata configuration to load
      * @param contextUser - The context user information
      * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
-     * @param suppressEmit - When true, the caller emits the property change itself
-     * @param readOptions - Where the reads run; background reloads pass {@link BackgroundReloadReads}
      */
-    protected async LoadSingleConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false, suppressEmit: boolean = false, readOptions?: Readonly<DatasetReadOptions>): Promise<void> {
+    protected async LoadSingleConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false, suppressEmit: boolean = false): Promise<void> {
         if (config.Type === 'dataset')
-            return await this.LoadSingleDatasetConfig(config, contextUser, bypassCache, readOptions);
+            return await this.LoadSingleDatasetConfig(config, contextUser, bypassCache);
         else
-            return await this.LoadSingleEntityConfig(config, contextUser, bypassCache, suppressEmit, readOptions);
+            return await this.LoadSingleEntityConfig(config, contextUser, bypassCache, suppressEmit);
     }
 
     /**
@@ -2200,7 +2110,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * `syncLocalCacheForConfig` would target a different slot. Pass the RLS clause here if such an
      * engine is ever needed.
      */
-    protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false, readOptions?: Readonly<DatasetReadOptions>): RunViewParams {
+    protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false): RunViewParams {
         return {
             EntityName: config.EntityName,
             ResultType: config.ResultType || this.EngineDefaultResultType,
@@ -2214,8 +2124,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             // fingerprints are unaffected, and an engine that never asked for binary fields sends
             // the same request shape it always did (a network provider forwards any key that is set).
             ...(this.ResolveConfigIncludeBinaryFields(config) ? { IncludeBinaryFields: true } : {}),
-            // Present only when true, like IncludeBinaryFields: a background reload's reads run on the pool
-            ...(readOptions?.ReadOnPool === true ? { ReadOnPool: true } : {}),
             BypassCache: bypassCache
         } as RunViewParams;
     }
@@ -2226,7 +2134,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param contextUser
      * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
-    protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false, suppressEmit: boolean = false, readOptions?: Readonly<DatasetReadOptions>): Promise<void> {
+    protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false, suppressEmit: boolean = false): Promise<void> {
         // Claim a refresh generation BEFORE the awaited RunView. If another full refresh for
         // this same property starts while our RunView is in flight, ours becomes stale and must
         // not commit — otherwise concurrent refreshes (the filtered/OrderBy path, e.g.
@@ -2235,7 +2143,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const generation = this.beginConfigRefresh(config.PropertyName);
         const p = this.RunViewProviderToUse;
         const rv = new RunView(p);
-        const result = await rv.RunView(this.BuildRunViewParamsForConfig(config, bypassCache, readOptions), contextUser);
+        const result = await rv.RunView(this.BuildRunViewParamsForConfig(config, bypassCache), contextUser);
 
         // A newer full refresh superseded us while we awaited — drop this (staler) snapshot
         // rather than clobber the newer one. The newer refresh owns the assignment, the
@@ -2352,11 +2260,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param contextUser
      * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
-    protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo, bypassCache: boolean = false, readOptions?: Readonly<DatasetReadOptions>): Promise<void> {
+    protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         if (configs && configs.length > 0) {
             const p = this.RunViewProviderToUse;
             const rv = new RunView(p);
-            const viewConfigs = configs.map(c => this.BuildRunViewParamsForConfig(c, bypassCache, readOptions));
+            const viewConfigs = configs.map(c => this.BuildRunViewParamsForConfig(c, bypassCache));
             const results = await rv.RunViews(viewConfigs, contextUser);
 
             // Process results and record entity loads for redundancy detection
@@ -2385,8 +2293,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database.
      *   Uses {@link IMetadataProvider.GetDatasetByName} with `forceRefresh` to skip all cache reads,
      *   then {@link IMetadataProvider.CacheDataset} to store fresh results for subsequent non-forced calls.
-     * @param readOptions - Where a bypassing read runs (see {@link DatasetReadOptions}); a cached read
-     *   (`bypassCache` false) is served by the provider's dataset cache and ignores it.
+     * @param readOptions - Where a bypassing read runs; a cached read ignores it.
      */
     protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false, readOptions?: Readonly<DatasetReadOptions>): Promise<void> {
         const p = this.ProviderToUse;
@@ -2604,7 +2511,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 LogWarning(`BaseEngine.OnExternalCacheChange: payload for '${config.PropertyName}' could not be applied (${e instanceof Error ? e.message : String(e)}) — falling back to full reload`, 'Cache');
             }
         }
-        // Fallback: reload this config from the database (on the pool, see BackgroundReloadReads).
         await this.reloadAfterExternalChange(config);
     }
 
@@ -2648,7 +2554,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // and the reload must NOT emit on its own, or a subscriber wakes between the new
                 // rows and the rebuild and reads derived state still pointing at the instances
                 // this reload discarded.
-                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true, BaseEngine.BackgroundReloadReads);
+                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true);
                 await this.RebuildDerivedState(this._contextUser);
                 this.emitPropertyChange(config.PropertyName);
             } while (reload.Again);
@@ -2873,7 +2779,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     /** Reloads each stale config from the database, stores it once, then rebuilds derived state. */
     private async reloadStaleConfigs(stale: BaseEnginePropertyConfig[], result: EngineSweepResult): Promise<void> {
         for (const config of stale) {
-            await this.LoadSingleConfig(config, this._contextUser, true, /*suppressEmit*/ true, BaseEngine.BackgroundReloadReads);
+            await this.LoadSingleConfig(config, this._contextUser, true, /*suppressEmit*/ true);
             if (!this._dataMap.get(config.PropertyName)?.loadedSuccessfully) {
                 result.Errors.push(`${config.PropertyName}: reload failed`);
                 continue;
@@ -3017,7 +2923,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (this._expirationTimers.has(propertyName)) {
             clearTimeout(this._expirationTimers.get(propertyName));
         }
-        const timer = setTimeout(() => void this.refreshExpiredItem(propertyName), expiration);
+        const timer = setTimeout(() => this.RefreshItem(propertyName), expiration);
         this._expirationTimers.set(propertyName, timer as unknown as number);
     }
 
@@ -3051,43 +2957,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      *
      * Rebuilds derived state before notifying subscribers: this replaces the property's array, so
      * anything a subclass derived from the previous instances — grouped child collections, memoized
-     * lookups — refers to objects the engine has just discarded.
-     *
-     * This is the caller's own refresh: its reads run where the caller does (inside the caller's
-     * transaction when one is open). A config's expiration timer runs the same reload, rebuild and
-     * notification through `refreshExpiredItem`, which reads on the pool ({@link BackgroundReloadReads})
-     * because the timer fires detached from whatever is running on the provider at that moment.
+     * lookups — refers to objects the engine has just discarded. This is also the callback the
+     * expiration timer fires, so without the rebuild a config with an expiry quietly served stale
+     * derived state until something else happened to rebuild it.
      *
      * @param propertyName - The name of the property to refresh
      */
     public async RefreshItem(propertyName: string): Promise<void> {
-        await this.refreshItemWith(propertyName);
-    }
-
-    /**
-     * The expiration timer's refresh: {@link RefreshItem} with its reads on the pool ({@link BackgroundReloadReads}).
-     * The timer fires detached from whatever is running on the provider at that moment, so a transaction another unit
-     * of work has open then is not this reload's. Never throws: nothing awaits a timer callback, so a failure is logged
-     * here instead of surfacing as an unhandled rejection.
-     */
-    private async refreshExpiredItem(propertyName: string): Promise<void> {
-        try {
-            await this.refreshItemWith(propertyName, BaseEngine.BackgroundReloadReads);
-        }
-        catch (e) {
-            LogError(`BaseEngine: refreshing expired property ${propertyName} failed: ${e instanceof Error ? e.message : String(e)}`);
-        }
-    }
-
-    /**
-     * Reloads one property, rebuilds derived state, then notifies subscribers (see {@link RefreshItem}).
-     * @param readOptions - Where the reads run: omitted for a caller's own refresh (which runs where the caller does),
-     *   {@link BackgroundReloadReads} for the expiration timer's
-     */
-    private async refreshItemWith(propertyName: string, readOptions?: Readonly<DatasetReadOptions>): Promise<void> {
         const config = this._metadataConfigs.find(c => c.PropertyName === propertyName) || this._dynamicConfigs.get(propertyName);
         if (config) {
-            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true, readOptions);
+            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true);
             await this.RebuildDerivedState(this._contextUser);
             this.emitPropertyChange(config.PropertyName);
         }

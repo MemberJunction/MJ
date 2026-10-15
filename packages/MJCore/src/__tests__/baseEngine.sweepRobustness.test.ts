@@ -53,22 +53,24 @@ class SweepEngine extends BaseEngine<SweepEngine> {
     }
 
     private installConfig(rows: Array<Record<string, unknown>>): void {
-        this.AdoptConfigs([{ Type: 'entity', EntityName: ENTITY, PropertyName: '_models' }]);
+        const config: BaseEnginePropertyConfig = { Type: 'entity', EntityName: ENTITY, PropertyName: '_models' };
         const self = this as unknown as {
+            _metadataConfigs: BaseEnginePropertyConfig[];
             _dataMap: Map<string, unknown>;
             _loaded: boolean;
         };
+        self._metadataConfigs = [config];
         self._dataMap = new Map([['_models', { entityName: ENTITY, data: rows, loadedSuccessfully: true }]]);
         self._loaded = true;
     }
 
     public override get Loaded(): boolean { return true; }
 
-    public override get ProviderToUse() {
+    protected override get ProviderToUse() {
         return { EntityByName: () => entityInfo(this.HasUpdatedAtColumn) } as never;
     }
 
-    public override get RunViewProviderToUse() {
+    protected override get RunViewProviderToUse() {
         return {
             EntityByName: () => entityInfo(this.HasUpdatedAtColumn),
             GetRunViewsDatabaseStatus: async () => [this.Status],
@@ -94,12 +96,12 @@ class SweepEngine extends BaseEngine<SweepEngine> {
         this.EmitOrder.push(`emit:${propertyName}`);
     }
 
-    public override async Config(): Promise<void> { /* pre-loaded */ }
+    protected override async Config(): Promise<void> { /* pre-loaded */ }
 }
 
 describe('the sweep compares the way the database does', () => {
     beforeEach(() => {
-        delete GetGlobalObjectStore()?.['___SINGLETON__LocalCacheManager'];
+        delete GetGlobalObjectStore()['___SINGLETON__LocalCacheManager'];
     });
 
     it('does not call a config stale forever because one held row has no timestamp', async () => {
@@ -144,7 +146,7 @@ describe('the sweep compares the way the database does', () => {
 
 describe('the sweep emits after the rebuild', () => {
     beforeEach(() => {
-        delete GetGlobalObjectStore()?.['___SINGLETON__LocalCacheManager'];
+        delete GetGlobalObjectStore()['___SINGLETON__LocalCacheManager'];
     });
 
     it('never lets a subscriber see the property before its derived state is rebuilt', async () => {
@@ -160,7 +162,7 @@ describe('the sweep emits after the rebuild', () => {
 
 describe('the sweep writes the shared slot under its lock', () => {
     beforeEach(() => {
-        delete GetGlobalObjectStore()?.['___SINGLETON__LocalCacheManager'];
+        delete GetGlobalObjectStore()['___SINGLETON__LocalCacheManager'];
     });
 
     it('routes the refreshed rows through the cross-process lock, not a bare write', async () => {

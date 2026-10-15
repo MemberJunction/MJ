@@ -65,7 +65,7 @@ function useMetadata(metadata: EntityMetadata): void {
 }
 
 function storedSlot(storage: MockCacheStorageProvider): CachedRunViewData | null {
-    return storage.GetDirect<CachedRunViewData>(FP, CacheCategory.RunViewCache);
+    return storage.getDirect(FP, CacheCategory.RunViewCache) as unknown as CachedRunViewData | null;
 }
 
 function hashOf(manager: LocalCacheManager, metadata: EntityMetadata): string {
@@ -169,7 +169,7 @@ describe('LocalCacheManager schema mismatch on a shared store', () => {
     it('treats a slot with no schema stamp as written under older metadata', async () => {
         const manager = await newManager(storage);
         const legacy: CachedRunViewData = { results: ROWS, maxUpdatedAt: '', schemaHash: hashOf(manager, OLD_METADATA) };
-        storage.SetDirect(FP, legacy, CacheCategory.RunViewCache);
+        storage.setDirect(FP, legacy as unknown as string, CacheCategory.RunViewCache);
 
         await readThrough(manager, NEW_METADATA);
         now += INTERVAL;
@@ -211,7 +211,7 @@ describe('LocalCacheManager schema mismatch on a shared store', () => {
                 await storage.Remove(FP, CacheCategory.RunViewCache);
             }
             if (!storedSlot(storage)) {
-                storage.SetDirect(FP, { results: ROWS, maxUpdatedAt: '', schemaHash: oldHash }, CacheCategory.RunViewCache);
+                storage.setDirect(FP, { results: ROWS, maxUpdatedAt: '', schemaHash: oldHash } as unknown as string, CacheCategory.RunViewCache);
             }
         };
 
@@ -245,7 +245,7 @@ describe('LocalCacheManager schema mismatch on a shared store', () => {
         await newer.SetRunViewResult(otherFP, PARAMS, ROWS, '');
         await newer.SetRunViewResult(otherFP, PARAMS, [{ ID: '2', Name: 'Bob' }], '');
 
-        expect(storage.GetDirect<CachedRunViewData>(otherFP, CacheCategory.RunViewCache)?.results)
+        expect((storage.getDirect(otherFP, CacheCategory.RunViewCache) as unknown as CachedRunViewData).results)
             .toEqual([{ ID: '2', Name: 'Bob' }]);
     });
 

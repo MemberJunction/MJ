@@ -9,7 +9,7 @@
  * packages/GenericDatabaseProvider/src/__tests__/GenericDatabaseProvider.test.ts,
  * upgraded to real metadata classes.
  */
-import { BaseEntity, EntityInfo, IEntityDataProvider, UserInfo } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 
 /** Concrete BaseEntity for tests — BaseEntity has no abstract members, so this is a full real entity object. */
 export class TestEntity extends BaseEntity {}
@@ -71,12 +71,7 @@ function widgetFieldInitData(): Record<string, unknown>[] {
  * (spCreateWidget / spUpdateWidget / spDeleteWidget) from BaseTableCodeName —
  * exercising the real GetCreateUpdateSPName fallback.
  */
-export function MakeWidgetEntityInfo(options?: {
-  trackRecordChanges?: boolean;
-  updateProc?: boolean;
-  cascadeDeletes?: boolean;
-  deleteType?: EntityInfo['DeleteType'];
-}): EntityInfo {
+export function makeWidgetEntityInfo(options?: { trackRecordChanges?: boolean; updateProc?: boolean; cascadeDeletes?: boolean }): EntityInfo {
   return new EntityInfo({
     ID: WIDGET_ENTITY_ID,
     Name: 'Widgets',
@@ -92,7 +87,6 @@ export function MakeWidgetEntityInfo(options?: {
     spUpdateGenerated: options?.updateProc ?? true,
     TrackRecordChanges: options?.trackRecordChanges ?? false,
     CascadeDeletes: options?.cascadeDeletes ?? false,
-    DeleteType: options?.deleteType ?? 'Hard',
     spCreate: null,
     spUpdate: null,
     spDelete: null,
@@ -108,7 +102,7 @@ export function MakeWidgetEntityInfo(options?: {
  * Minimal-but-real EntityInfo for 'MJ: Record Changes' — used by the provider's
  * record-change wrappers to declare the @ResultChangesTable columns.
  */
-export function MakeRecordChangesEntityInfo(): EntityInfo {
+export function makeRecordChangesEntityInfo(): EntityInfo {
   const base = {
     EntityID: RECORD_CHANGES_ENTITY_ID,
     Precision: 0,
@@ -150,7 +144,7 @@ export function MakeRecordChangesEntityInfo(): EntityInfo {
 }
 
 /** Plain data for a saved widget row — used to load fixtures into the "existing record" state. */
-export function SavedWidgetRow(): Record<string, unknown> {
+export function savedWidgetRow(): Record<string, unknown> {
   return {
     ID: 'w-0001',
     Name: 'Widget One',
@@ -165,26 +159,19 @@ export function SavedWidgetRow(): Record<string, unknown> {
   };
 }
 
-/**
- * Creates a REAL BaseEntity in the "loaded / previously saved" state (IsSaved === true).
- * @param provider The provider the record saves and deletes through (its ProviderToUse). Omitted, the
- * record falls back to the process-wide provider.
- */
-export function MakeSavedWidgetEntity(entityInfo: EntityInfo, contextUser: UserInfo, overrides?: Record<string, unknown>, provider?: IEntityDataProvider): TestEntity {
-  const entity = new TestEntity(entityInfo, provider || null);
+/** Creates a REAL BaseEntity in the "loaded / previously saved" state (IsSaved === true). */
+export function makeSavedWidgetEntity(entityInfo: EntityInfo, contextUser: UserInfo): TestEntity {
+  const entity = new TestEntity(entityInfo);
   entity.ContextCurrentUser = contextUser;
   // replaceOldValues=true marks the entity saved once all PKs are populated —
   // the same path IS-A parent hydration uses in production.
-  entity.SetMany({ ...SavedWidgetRow(), ...overrides }, false, true, true);
+  entity.SetMany(savedWidgetRow(), false, true, true);
   return entity;
 }
 
-/**
- * Creates a REAL BaseEntity in the "new record" state (IsSaved === false).
- * @param provider The provider the record saves through (its ProviderToUse); see {@link MakeSavedWidgetEntity}.
- */
-export function MakeNewWidgetEntity(entityInfo: EntityInfo, contextUser: UserInfo, provider?: IEntityDataProvider): TestEntity {
-  const entity = new TestEntity(entityInfo, provider || null);
+/** Creates a REAL BaseEntity in the "new record" state (IsSaved === false). */
+export function makeNewWidgetEntity(entityInfo: EntityInfo, contextUser: UserInfo): TestEntity {
+  const entity = new TestEntity(entityInfo);
   entity.ContextCurrentUser = contextUser;
   entity.NewRecord();
   return entity;

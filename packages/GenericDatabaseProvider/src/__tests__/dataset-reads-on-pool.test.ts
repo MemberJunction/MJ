@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
-import { SaveSQLResult, DeleteSQLResult, UserInfo, LocalCacheManager, ExecuteSQLOptions, ProviderConfigDataBase, IMetadataProvider, AllMetadata, MetadataReloadPass } from '@memberjunction/core';
+import { SaveSQLResult, DeleteSQLResult, UserInfo, LocalCacheManager, ExecuteSQLOptions, ProviderConfigDataBase, IMetadataProvider, AllMetadata, DatasetReadOptions } from '@memberjunction/core';
 import type { ExecuteSQLBatchOptions } from '../GenericDatabaseProvider';
 
 vi.mock('sql-formatter', () => ({ format: (sql: string) => sql }));
@@ -54,12 +54,9 @@ class TestProvider extends GenericDatabaseProviderTestBase {
         return queries.map(() => [{ ID: 'row' }]);
     }
     override get TrustLocalCacheCompletely(): boolean { return false; }
-    /**
-     * The metadata pass's dataset read, with the pass's read options, without building a metadata
-     * graph from the stub rows (the base GetAllMetadata passes the same options — MJCore tests that).
-     */
-    protected override async GetAllMetadata(pass: MetadataReloadPass, _providerToUse?: IMetadataProvider, forceRefresh?: boolean): Promise<AllMetadata> {
-        await this.GetDatasetByName('MJ_Metadata', undefined, user, undefined, forceRefresh, pass.ReadOptions);
+    /** The metadata dataset read with the pass's read options, without building a metadata graph from the stub rows. */
+    protected override async GetAllMetadata(_providerToUse?: IMetadataProvider, forceRefresh?: boolean, readOptions?: Readonly<DatasetReadOptions>): Promise<AllMetadata> {
+        await this.GetDatasetByName('MJ_Metadata', undefined, user, undefined, forceRefresh, readOptions);
         return new AllMetadata();
     }
 }
@@ -108,11 +105,6 @@ describe('dataset reads and the ambient transaction (MJ#4514)', () => {
         expect(provider.batchOptions.map(o => o?.ignoreAmbientTransaction)).toEqual([true, true]);
     });
 
-    it('ReadOnPool wins over JoinAmbientTransaction', async () => {
-        await provider.GetDatasetByName('MJ_Metadata', undefined, user, undefined, true, { ReadOnPool: true, JoinAmbientTransaction: true });
-        expect(provider.sqlOptions.map(o => o?.ignoreAmbientTransaction)).toEqual([true]);
-    });
-
     it('RefreshWithinTransaction reads MJ_Metadata inside the transaction (MJ#4836)', async () => {
         await provider.RefreshWithinTransaction();
         expect(provider.configCalls).toBe(0); // its own reload pass, not a Config() run
@@ -129,19 +121,4 @@ describe('dataset reads and the ambient transaction (MJ#4514)', () => {
         expect(provider.batchOptions.every(o => o?.ignoreAmbientTransaction === true)).toBe(true);
     });
 
-    it('joining the transaction is per call: only reads that carry JoinAmbientTransaction join', async () => {
-        await provider.GetDatasetByName('MJ_Metadata', undefined, user, undefined, true, { JoinAmbientTransaction: true });
-        await provider.GetDatasetStatusByName('MJ_Metadata', undefined, user, undefined, { JoinAmbientTransaction: true });
-        expect(provider.sqlOptions.map(o => o?.ignoreAmbientTransaction)).toEqual([false, false]);
-        expect(provider.batchOptions.map(o => o?.ignoreAmbientTransaction)).toEqual([false, false]);
-
-        // Interleaved with those, a read of the same dataset without the option stays on the pool.
-        provider.sqlOptions = [];
-        provider.batchOptions = [];
-        const joined = provider.GetDatasetByName('MJ_Metadata', undefined, user, undefined, true, { JoinAmbientTransaction: true });
-        const pool = provider.GetDatasetByName('MJ_Metadata', undefined, user, undefined, true);
-        await Promise.all([joined, pool]);
-        expect(provider.sqlOptions.map(o => o?.ignoreAmbientTransaction)).toEqual([false, true]);
-        expect(provider.batchOptions.map(o => o?.ignoreAmbientTransaction).sort()).toEqual([false, true]);
-    });
 });

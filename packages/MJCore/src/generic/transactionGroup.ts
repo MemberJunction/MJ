@@ -65,63 +65,6 @@ export class TransactionItem {
 }
 
 /**
- * One item of a transaction group ran without an error but did not do its work: a save that
- * returned no row did not persist its record (e.g. a concurrent delete), and a delete whose row did
- * not report the record's keys did not delete it. Thrown by
- * {@link TransactionGroupBase.ThrowIfItemFailsGroup} so the group fails as a whole, exactly as if the
- * statement had thrown.
- */
-export class TransactionItemFailedError extends Error {
-    /** The item that failed. */
-    public readonly Item: TransactionItem;
-
-    constructor(item: TransactionItem) {
-        const what = item.OperationType === 'Delete'
-            ? 'did not delete the record (the delete returned no matching primary key)'
-            : 'did not persist the record (the save returned no row)';
-        super(`${item.OperationType} of ${item.BaseEntity.EntityInfo.Name} ${what}`);
-        this.name = 'TransactionItemFailedError';
-        this.Item = item;
-    }
-}
-
-/**
- * A transaction group failed because one of its items failed (a statement threw, or a
- * {@link TransactionItemFailedError}), and its transaction is rolled back as a whole. A provider's
- * submit throws this from its per-item failure path. The SQL Server group has already rolled back
- * there, so its outer handler recognizes this with `instanceof` and does not roll back a second
- * time; the PostgreSQL group rolls back in its outer handler. `Submit()` then reports every item as
- * failed.
- */
-export class TransactionGroupRolledBackError extends Error {
-    /** The failure that caused the rollback. */
-    public readonly ItemError: Error;
-
-    /**
-     * @param itemError What the failing item threw. A catch variable is `unknown` by definition (a
-     * driver may throw a non-Error); a non-Error value is wrapped so the message survives.
-     */
-    constructor(itemError: unknown) {
-        const cause = itemError instanceof Error ? itemError : new Error(String(itemError));
-        super(`Transaction rolled back due to operation failure: ${cause.message}`);
-        this.name = 'TransactionGroupRolledBackError';
-        this.ItemError = cause;
-    }
-}
-
-/**
- * A transaction group cannot run its items as one database transaction: an item's record saves
- * through a provider of another kind, or the items do not all run on the same connection pool.
- * Raised before the transaction begins, so nothing is written.
- */
-export class TransactionGroupProviderError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'TransactionGroupProviderError';
-    }
-}
-
-/**
  * Tracks the individual transactions within a transaction group and their commit results
  */
 export class TransactionResult {
@@ -357,50 +300,13 @@ export abstract class TransactionGroupBase {
     protected abstract HandleSubmit(): Promise<TransactionResult[]>;
 
     /**
-     * Whether one item's (processed) result row means it succeeded. A save succeeds when it returned
-     * its row. A delete returns a row even when nothing was deleted (a generated delete answers with
-     * NULL keys), so a delete succeeds only when that row reports THIS record's keys — the same
-     * {@link BaseEntity.DeleteResultMatchesEntity} test every provider's direct path applies.
-     * Platform-neutral, so every database provider's group judges its items the same way.
-     * @param item The item whose statement ran.
-     * @param row The first row the item's statement returned, after the provider's row processing;
-     * null/undefined when it returned none.
+     * Whether an item's statement did its work, judged from the first row it returned: a save must return its row, and
+     * a delete's row must report the record's keys ({@link BaseEntity.DeleteResultMatchesEntity}). A provider fails the
+     * whole group on an item that did not.
      */
     protected static ItemSucceeded(item: TransactionItem, row: Record<string, unknown> | null | undefined): boolean {
         if (!row) return false;
-        if (item.OperationType === 'Delete') {
-            return item.BaseEntity.DeleteResultMatches(row);
-        }
-        return true;
-    }
-
-    /**
-     * An item that failed {@link ItemSucceeded} fails the whole group, exactly like a statement that
-     * threw: the provider's failure path rolls the transaction back and `Submit()` reports every item
-     * as failed. Committing the other items while the group reports failure would break its
-     * all-or-nothing contract.
-     * @throws TransactionItemFailedError when `succeeded` is false.
-     */
-    protected static ThrowIfItemFailsGroup(item: TransactionItem, succeeded: boolean): void {
-        if (!succeeded) {
-            throw new TransactionItemFailedError(item);
-        }
-    }
-
-    /**
-     * Every item of a database provider's group must run on the one transaction the group opens on
-     * the first item's connection pool (`ExtraData.dataSource`). An item queued by a provider on
-     * another pool would otherwise have its statement run against the wrong database.
-     * @throws TransactionGroupProviderError naming the first item on another data source.
-     */
-    protected static AssertItemsShareDataSource(items: TransactionItem[]): void {
-        const dataSource = items[0]?.ExtraData?.dataSource;
-        const stray = items.find((item) => item.ExtraData?.dataSource !== dataSource);
-        if (stray) {
-            throw new TransactionGroupProviderError(
-                `${stray.OperationType} of ${stray.BaseEntity.EntityInfo.Name} was queued on another connection pool than the rest of the group; one transaction group runs on one pool`,
-            );
-        }
+        return item.OperationType !== 'Delete' || BaseEntity.DeleteResultMatchesEntity(item.BaseEntity, row);
     }
 
     /**

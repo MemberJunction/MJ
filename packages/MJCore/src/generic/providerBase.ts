@@ -129,41 +129,6 @@ export interface QueryCacheAuthorization {
     definition?: QueryDefinitionSignature;
 }
 
-/**
- * One metadata reload pass — a read of the MJ_Metadata dataset (and, on a hard reload, its status)
- * that may end in swapping the snapshot in. See `ProviderBase.BeginMetadataReloadPass`.
- */
-export interface MetadataReloadPass {
-    /**
-     * Taken when the pass's reads start, from a counter that only increases. The pass's snapshot
-     * is adopted only if no pass with a higher generation has been adopted already, so a pass
-     * that started earlier and finished later can never overwrite a newer snapshot.
-     */
-    readonly Generation: number;
-    /**
-     * The pass's own dataset reads join the ambient transaction (only the pass of
-     * `ProviderBase.RefreshWithinTransaction`, MJ#4836). Carried per pass, never as provider
-     * state, so a pool pass running at the same time keeps reading on the pool.
-     */
-    readonly ReadOptions: Readonly<DatasetReadOptions>;
-    /**
-     * The pin this pass's reads belong to: set only for a transaction-joined pass that started while
-     * the metadata was pinned to the open transaction (see `ProviderBase.RefreshWithinTransaction`);
-     * null for every other pass. Such a pass may replace the metadata only while that pin is still
-     * held — once its transaction has ended, the rows it read may never have committed. Whether it
-     * is still held is decided by generation (the pass started before the pin's release); the number
-     * identifies the pin in diagnostics.
-     */
-    readonly PinEpoch: number | null;
-}
-
-/**
- * How a metadata reload pass ended (see `ProviderBase.RunMetadataReloadPass`): its snapshot was
- * adopted; it was read but held back (a newer pass was adopted, or the metadata is pinned to an open
- * transaction the pass does not belong to, or it started before a pin release); or the read failed.
- */
-export type MetadataReloadPassOutcome = 'adopted' | 'held-back' | 'failed';
-
 export const AllMetadataArrays = [
     { key: 'AllEntities', class: EntityInfo  },
     { key: 'AllApplications', class: ApplicationInfo  },
@@ -346,31 +311,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _metadataReloadInFlight: Promise<void> | null = null;
     /** Set when a refresh request arrives while a reload is in flight; the reload loop reruns once. */
     private _metadataReloadQueued = false;
-    /**
-     * Generation handed to the most recently started metadata reload pass. A pass takes the next
-     * number when its reads start — see {@link BeginMetadataReloadPass}.
-     */
+    /** Generation of the most recently started metadata reload pass, and of the pass adopted now. */
     private _metadataReloadGeneration = 0;
-    /** Generation of the pass whose snapshot is adopted now; 0 before the first adoption. */
     private _adoptedMetadataGeneration = 0;
-    /**
-     * The pin held now: set from the moment {@link RefreshWithinTransaction} starts inside an open
-     * ambient transaction until that transaction ends ({@link OnAmbientTransactionEnded}); null when
-     * nothing is pinned. While pinned, the in-memory metadata is the transaction's own view, so
-     * nothing read OUTSIDE the transaction — a pool reload pass, or a stored snapshot — may replace
-     * it: under read committed snapshot isolation (RCSI) such a read does not wait for the commit and
-     * returns the state from before the transaction's writes. Each pin gets a new number, so a
-     * transaction-joined pass can tell whether the pin it started under is still the one held.
-     */
-    private _metadataPinEpoch: number | null = null;
-    /** The number handed to the most recent pin; only increases. */
-    private _lastMetadataPinEpoch = 0;
-    /**
-     * The last generation handed out when a pin was released. Every pass at or below it started
-     * before that release — a pool pass that read while the transaction was open, or the
-     * transaction's own pass — so none of them may replace the metadata the release reloads.
-     */
-    private _metadataReleasedThroughGeneration = 0;
 
     // ── Metadata Refresh Check Debounce ────────────────────────────────
     /**
@@ -4984,75 +4927,50 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // while we are waiting for the async call to finish, we dont do it again
             this._refresh = false;
 
-            // SINGLE-FLIGHT: at most one full metadata reload runs on the pool at a time. Without
-            // this, a second refresh request arriving while a reload is still awaiting its queries
-            // starts a CONCURRENT reload, and whichever finishes LAST wins the swap. A joiner must
-            // not simply await and return, either: the in-flight reload's queries may predate the
-            // write that prompted the joiner, so it flags ONE follow-up; the loop below reruns
-            // after the current pass, guaranteeing the final swap comes from a read that started
-            // after the last request. (RefreshWithinTransaction never joins this flight — see it.)
+            // SINGLE-FLIGHT: at most one full metadata reload runs at a time. Without this, a
+            // second refresh request arriving while a reload is still awaiting its queries starts
+            // a CONCURRENT reload, and whichever finishes LAST wins the atomic swap — an older
+            // snapshot can overwrite a newer one. A joiner must not simply await and return,
+            // either: the in-flight reload's queries may predate the write that prompted the
+            // joiner, so it flags ONE follow-up; the loop below reruns after the current pass,
+            // guaranteeing the final swap comes from a read that started after the last request.
             if (this._metadataReloadInFlight) {
                 this._metadataReloadQueued = true;
                 await this._metadataReloadInFlight;
                 return true;
             }
-            const flight: Promise<void> = (async () => {
-                try {
-                    let effectiveHardRefresh = hardRefresh;
-                    do {
-                        this._metadataReloadQueued = false;
-                        if (await this.RunMetadataReloadPass(providerToUse, effectiveHardRefresh, {}) === 'adopted') {
-                            this._configLoadedFromServer = true;
-                        }
-                        // A queued follow-up exists only because another refresh request arrived
-                        // mid-reload; rerun hard so the re-read cannot be served by any cache layer.
-                        effectiveHardRefresh = true;
-                    } while (this._metadataReloadQueued);
-                }
-                finally {
-                    // Cleared in the same synchronous step that saw no follow-up queued, so a
-                    // request arriving after it starts a new flight instead of flagging a
-                    // follow-up that no loop would ever run.
-                    if (this._metadataReloadInFlight === flight) {
-                        this._metadataReloadInFlight = null;
+            this._metadataReloadInFlight = (async () => {
+                let effectiveHardRefresh = hardRefresh;
+                do {
+                    this._metadataReloadQueued = false;
+                    if (await this.runMetadataReloadPass(providerToUse, effectiveHardRefresh, {})) {
+                        this._configLoadedFromServer = true;
                     }
-                }
+                    // A queued follow-up exists only because another refresh request arrived
+                    // mid-reload; rerun hard so the re-read cannot be served by any cache layer.
+                    effectiveHardRefresh = true;
+                } while (this._metadataReloadQueued);
             })();
-            this._metadataReloadInFlight = flight;
-            await flight;
+            try {
+                await this._metadataReloadInFlight;
+            }
+            finally {
+                this._metadataReloadInFlight = null;
+            }
         }
 
         return true;
     }
 
     /**
-     * Starts a metadata reload pass: takes the next generation (call this right before the pass's
-     * first read), records where the pass's reads run and, for a transaction-joined pass that starts
-     * while the metadata is pinned, the pin its reads belong to.
+     * One full metadata reload: on a hard reload the status read first, then the MJ_Metadata
+     * dataset, then the swap. Passes can overlap ({@link RefreshWithinTransaction} runs its own),
+     * so each takes a generation when it starts and is adopted only if no newer pass was adopted
+     * first.
+     * @returns true when the pass's snapshot was adopted
      */
-    protected BeginMetadataReloadPass(readOptions: Readonly<DatasetReadOptions>): MetadataReloadPass {
-        this._metadataReloadGeneration++;
-        return {
-            Generation: this._metadataReloadGeneration,
-            ReadOptions: readOptions,
-            PinEpoch: readOptions.JoinAmbientTransaction === true ? this._metadataPinEpoch : null,
-        };
-    }
-
-    /**
-     * One full metadata reload: on a hard reload, the status read that stamps the snapshot first,
-     * then the MJ_Metadata dataset, then the generation-checked swap. The single-flight loop in
-     * {@link Config}, {@link backgroundValidateAndRefresh} and {@link preValidateAndRefresh} run pool
-     * passes through here; {@link RefreshWithinTransaction} runs its own transaction-joined pass
-     * through here without joining that flight.
-     *
-     * @param hardRefresh Re-read the status first and bypass every cache layer on the dataset read.
-     * When false, the snapshot is stamped with the remote timestamps the caller's staleness check
-     * just fetched.
-     * @returns How the pass ended — see {@link MetadataReloadPassOutcome}.
-     */
-    protected async RunMetadataReloadPass(providerToUse: IMetadataProvider | undefined, hardRefresh: boolean, readOptions: Readonly<DatasetReadOptions>): Promise<MetadataReloadPassOutcome> {
-        const pass = this.BeginMetadataReloadPass(readOptions);
+    private async runMetadataReloadPass(providerToUse: IMetadataProvider | undefined, hardRefresh: boolean, readOptions: Readonly<DatasetReadOptions>): Promise<boolean> {
+        const generation = ++this._metadataReloadGeneration;
 
         // The local timestamps must describe the snapshot about to be loaded. On the hard-refresh
         // path the staleness check was SKIPPED, so the cached remote timestamps predate this
@@ -5060,139 +4978,44 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // once more for nothing. Re-read them (one cheap status query, authoritative) BEFORE the
         // load, not after: a write landing DURING the load then leaves the stamped timestamps
         // looking stale and the next tick reloads — the safe direction. Reading after could stamp
-        // the snapshot as containing a write it does not. The pass keeps its own copy: another
-        // pass's status read may replace the shared field before this one adopts.
-        let timestamps = this._latestRemoteMetadataTimestamps;
+        // the snapshot as containing a write it does not.
         if (hardRefresh) {
-            const fetched = await this.GetLatestMetadataUpdates(providerToUse, pass.ReadOptions);
-            if (fetched) {
-                timestamps = fetched;
-                // A pass that will not be adopted must not move the provider's view of the server
-                // either: its read may predate the one already adopted, or (pinned) not see the
-                // transaction's writes at all.
-                if (!this.IsMetadataReloadPassHeldBack(pass)) {
-                    this._latestRemoteMetadataTimestamps = fetched;
-                }
-            }
+            await this.RefreshRemoteMetadataTimestamps(providerToUse, readOptions);
         }
+        // this pass's own copy: an overlapping pass may replace the field before this one adopts
+        const timestamps = this._latestRemoteMetadataTimestamps;
 
         // Fetch new metadata without clearing current metadata
         // This ensures readers always see valid data (old until new is ready)
         const start = new Date().getTime();
-        const res = await this.GetAllMetadata(pass, providerToUse, hardRefresh);
+        const res = await this.GetAllMetadata(providerToUse, hardRefresh, readOptions);
         const end = new Date().getTime();
         LogStatusEx({ message: `GetAllMetadata() took ${end - start} ms`, verboseOnly: true });
         if (!res) {
             // GetAllMetadata failed - log error but keep existing metadata
             LogError('GetAllMetadata() returned undefined - metadata not updated');
-            return 'failed';
+            return false;
         }
-        return await this.AdoptServerMetadata(res, pass, timestamps) ? 'adopted' : 'held-back';
-    }
-
-    /**
-     * Whether a pass with a higher generation than `pass` has already been adopted — the pass's
-     * snapshot is then older than the one in use and must not replace it.
-     */
-    protected IsMetadataReloadPassSuperseded(pass: MetadataReloadPass): boolean {
-        return pass.Generation <= this._adoptedMetadataGeneration;
-    }
-
-    /** Whether the metadata is pinned to an open ambient transaction now (see {@link RefreshWithinTransaction}). */
-    protected get IsMetadataPinnedToTransaction(): boolean {
-        return this._metadataPinEpoch !== null;
-    }
-
-    /**
-     * Whether `pass` is the transaction's own pass under the pin held now — the only pass whose
-     * snapshot may replace pinned metadata. A transaction-joined pass carries the pin it started
-     * under; one from a pin that has since been released is caught earlier by
-     * {@link StartedBeforeLastPinRelease} (it started before that release), so comparing pin numbers
-     * here would decide nothing the release generation has not already decided.
-     */
-    protected IsPassUnderCurrentPin(pass: MetadataReloadPass): boolean {
-        return pass.PinEpoch !== null && this.IsMetadataPinnedToTransaction;
-    }
-
-    /**
-     * Whether `pass` started before the most recent pin release. A pool pass that started then read
-     * while the transaction was open (under RCSI: state from before its writes), and a
-     * transaction-joined pass that started then read rows that may never have committed. The
-     * release's own reload is newer than both.
-     */
-    protected StartedBeforeLastPinRelease(pass: MetadataReloadPass): boolean {
-        return pass.Generation <= this._metadataReleasedThroughGeneration;
-    }
-
-    /**
-     * Whether a pass's result must not reach any provider state:
-     * - it started before the last pin release ({@link StartedBeforeLastPinRelease});
-     * - the metadata is pinned and the pass is not the transaction's own pass under that pin;
-     * - a pass with a higher generation was adopted already ({@link IsMetadataReloadPassSuperseded}).
-     *
-     * The transaction's own pass needs no exemption from the generation rule: a pool pass that
-     * started after it started after the pin, so it is held back while pinned and can never have
-     * raised the adopted generation past it.
-     */
-    protected IsMetadataReloadPassHeldBack(pass: MetadataReloadPass): boolean {
-        return this.MetadataReloadPassHoldBackReason(pass) !== null;
-    }
-
-    /** Why {@link IsMetadataReloadPassHeldBack} holds `pass` back, for the verbose log; null when it does not. */
-    protected MetadataReloadPassHoldBackReason(pass: MetadataReloadPass): string | null {
-        if (this.StartedBeforeLastPinRelease(pass)) {
-            const whose = pass.PinEpoch !== null ? `the transaction of pin ${pass.PinEpoch}` : 'the transaction its metadata was pinned to';
-            return `it started before ${whose} ended (released through pass ${this._metadataReleasedThroughGeneration})`;
+        if (generation <= this._adoptedMetadataGeneration) {
+            return false; // a pass that started after this one was adopted first
         }
-        if (this.IsMetadataPinnedToTransaction && !this.IsPassUnderCurrentPin(pass)) {
-            return 'the metadata is pinned to an open transaction; the reload after it ends replaces this read';
-        }
-        if (this.IsMetadataReloadPassSuperseded(pass)) {
-            return `pass ${this._adoptedMetadataGeneration} started after it and is already adopted`;
-        }
-        return null;
+        this._adoptedMetadataGeneration = generation;
+        await this.adoptServerMetadata(res, timestamps);
+        return true;
     }
 
     /**
-     * Whether a pass's result may be written to SHARED storage (the dataset cache, the metadata
-     * snapshot). Never for a held-back pass, and never while pinned: the only pass adopted then is
-     * the transaction's own, whose snapshot holds rows that are not committed and may never be, and
-     * a shared store would hand them to other processes. The release after the transaction ends
-     * reloads and persists.
-     */
-    protected MayPersistMetadataReloadPass(pass: MetadataReloadPass): boolean {
-        return !this.IsMetadataReloadPassHeldBack(pass) && !this.IsMetadataPinnedToTransaction;
-    }
-
-    /**
-     * Adopts a metadata snapshot just loaded from the server — unless the pass is held back
-     * ({@link IsMetadataReloadPassHeldBack}), in which case the snapshot is discarded. Otherwise
-     * swaps it in, records the timestamps it was loaded at, and persists it to local storage when
-     * {@link MayPersistMetadataReloadPass} allows.
+     * Adopts a metadata snapshot just loaded from the server: swaps it in, records the server
+     * timestamps it was loaded at, and persists it to local storage.
      *
      * The swap goes through UpdateLocalMetadata — a single property assignment, atomic in
      * JavaScript, so readers see the old snapshot until the new one is complete — which keeps
      * it consistent with LoadLocalMetadataFromStorage() and lets subclasses override it.
-     *
-     * @param timestamps The server timestamps read before this pass's dataset read.
-     * @returns true when the snapshot was adopted, false when it was discarded.
      */
-    protected async AdoptServerMetadata(res: AllMetadata, pass: MetadataReloadPass, timestamps: MetadataInfo[]): Promise<boolean> {
-        const holdBackReason = this.MetadataReloadPassHoldBackReason(pass);
-        if (holdBackReason !== null) {
-            LogStatusEx({ message: `[Metadata] Discarded reload pass ${pass.Generation}: ${holdBackReason}`, verboseOnly: true });
-            return false;
-        }
-        const persist = this.MayPersistMetadataReloadPass(pass);
-        // Claimed before the first await, so a pass that finishes while this one saves is compared
-        // against this generation. The hold-back check above guarantees it is higher than the mark.
-        this._adoptedMetadataGeneration = pass.Generation;
+    private async adoptServerMetadata(res: AllMetadata, timestamps: MetadataInfo[]): Promise<void> {
         this.UpdateLocalMetadata(res);
         this._latestLocalMetadataTimestamps = timestamps;
-        if (persist) {
-            await this.SaveLocalMetadataToStorage();
-        }
-        return true;
+        await this.SaveLocalMetadataToStorage();
     }
 
     /**
@@ -5207,7 +5030,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             if (needsRefresh) {
                 LogStatusEx({ message: `⚡ [Metadata Cache] Background check: metadata is stale — refreshing...`, verboseOnly: false });
                 const start = Date.now();
-                if (await this.RunMetadataReloadPass(providerToUse, false, {}) === 'adopted') {
+                if (await this.runMetadataReloadPass(providerToUse, false, {})) {
                     LogStatusEx({ message: `⚡ [Metadata Cache] Background refresh complete (${Date.now() - start}ms) — metadata updated in place`, verboseOnly: false });
                 }
             } else {
@@ -5258,7 +5081,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             if (needsRefresh) {
                 LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata is stale — refreshing before engine startup`, verboseOnly: false });
                 const start = Date.now();
-                if (await this.RunMetadataReloadPass(providerToUse, false, {}) === 'adopted') {
+                if (await this.runMetadataReloadPass(providerToUse, false, {})) {
                     LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation refresh complete (${Date.now() - start}ms)`, verboseOnly: false });
                 }
             } else {
@@ -5420,14 +5243,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Retrieves all metadata from the server and constructs typed instances.
      * Uses the MJ_Metadata dataset for efficient bulk loading.
-     * @param pass The reload pass this read belongs to: where its dataset reads run, and whether it
-     * is held back (its result is then not written to the dataset cache or the membership set). See
-     * {@link BeginMetadataReloadPass}.
-     * @param providerToUse The provider to read through, for multi-provider clients.
-     * @param forceRefresh Bypass every cache layer on the dataset read (a hard {@link Refresh}).
      * @returns Complete metadata collection with all relationships
      */
-    protected async GetAllMetadata(pass: MetadataReloadPass, providerToUse?: IMetadataProvider, forceRefresh?: boolean): Promise<AllMetadata> {
+    protected async GetAllMetadata(providerToUse?: IMetadataProvider, forceRefresh?: boolean, readOptions?: Readonly<DatasetReadOptions>): Promise<AllMetadata> {
         try {
             // we are now using datasets instead of the custom metadata to GraphQL to simplify GraphQL's work as it was very slow preivously
             // NOTE: Schema filters (IncludeSchemas/ExcludeSchemas) are for CodeGen only, not for runtime
@@ -5435,7 +5253,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Get the dataset and cache it for anyone else who wants to use it
             // When forceRefresh is true (from a hard Refresh() call), bypass LocalCacheManager
-            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, null, this.CurrentUser, providerToUse, forceRefresh, pass.ReadOptions);
+            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, null, this.CurrentUser, providerToUse, forceRefresh, readOptions);
             // A dataset with no entities is a failed read, whatever its Success flag says: there
             // is no deployment in which MJ_Metadata legitimately holds zero entities. Returning
             // undefined here keeps the metadata already loaded (Config() treats undefined as
@@ -5447,21 +5265,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 this.recordMetadataLoadFailure(new Error(`GetAllMetadata() - the ${ProviderBase._mjMetadataDatasetName} dataset returned no entities; keeping the metadata already loaded`));
             }
             else if (d && d.Success) {
-                // cache the dataset for anyone who wants to use it — unless this pass may not
-                // persist: a newer pass was adopted already (this older read would overwrite its
-                // copy), the metadata is pinned to a transaction this read cannot see, or this is
-                // that transaction's own uncommitted read (see MayPersistMetadataReloadPass)
-                if (this.MayPersistMetadataReloadPass(pass)) {
-                    await this.CacheDataset(ProviderBase._mjMetadataDatasetName, null, d);
-                }
+                // cache the dataset for anyone who wants to use it
+                await this.CacheDataset(ProviderBase._mjMetadataDatasetName, null, d);
 
                 // Record which entities this metadata is built from, so a write to any of them
                 // schedules a debounced refresh of this provider's metadata (see
                 // registerMetadataDatasetMembership — membership is the dataset definition, not a list).
-                // A held-back pass leaves it alone, like everything else it read.
-                if (!this.IsMetadataReloadPassHeldBack(pass)) {
-                    this.registerMetadataDatasetMembership(d);
-                }
+                this.registerMetadataDatasetMembership(d);
 
                 // got the results, let's build our response in the format we need
                 const simpleMetadata: any = {};
@@ -5822,216 +5632,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * one case that has to see its uncommitted metadata rows, and it waits for this call, so
      * the read cannot race the commit.
      *
-     * It runs its OWN reload pass, now, and never awaits the pool reload {@link Config} may have
-     * in flight. That reload's reads block on the row locks this caller's transaction holds, so
-     * joining it made the caller wait for a reload that waited for the caller's commit — a
-     * self-deadlock the database cannot detect (`mj sync push` hung in IT94). A pool pass could
-     * not serve this caller anyway: it cannot see uncommitted rows.
-     *
-     * Inside an open transaction the metadata is PINNED to it, from before this pass starts
-     * until the transaction ends: no pool reload pass and no stored snapshot may replace the
-     * transaction's view, whichever finishes first or started later, and nothing is written to
-     * shared storage. Under read committed snapshot isolation a pool read does not wait for the
-     * commit and returns the state from before this caller's writes; adopting it mid-push would
-     * hide those rows again. {@link OnAmbientTransactionEnded}, which the database provider calls
-     * when the transaction commits, rolls back or is abandoned, releases the pin and reloads; a
-     * pass of this method still running then is not adopted, because the rows it read may never
-     * have committed. Outside a transaction nothing is pinned and an in-flight pool reload gets
-     * one queued follow-up, as for any other caller.
-     *
+     * It runs its own reload pass and never awaits a pool reload in flight: that reload's reads
+     * block on this caller's row locks, so waiting for it would wait for the caller's own commit.
+     * The pool reload is rerun once afterwards, since it may have read before the caller's writes.
      * Subclasses that do extra work on {@link Refresh} must mirror it here.
-     *
-     * @returns true when this pass's snapshot was adopted (or, outside a transaction, when a newer
-     * pass was adopted first); false when the reload failed or, inside a transaction, was not
-     * adopted (logged) — the metadata then does not show the transaction's own rows.
+     * @returns true when this reload was adopted
      */
     public async RefreshWithinTransaction(providerToUse?: IMetadataProvider): Promise<boolean> {
         if (!this.AllowRefresh) {
-            return true; // the same answer Refresh gives while the subclass suspends refreshes
+            return true; // subclass is telling us not to do any refresh ops right now
         }
-        // Pin BEFORE the pass starts: a pool pass that starts after this point and finishes
-        // first (it does not wait for the commit under RCSI) must not be adopted over this one.
-        // A second call inside the same transaction keeps the pin it already holds.
-        const pinned = this.HasOpenAmbientTransaction;
-        if (pinned && this._metadataPinEpoch === null) {
-            this._metadataPinEpoch = ++this._lastMetadataPinEpoch;
-        }
-        const pinEpoch = this._metadataPinEpoch;
-        const outcome = await this.RunMetadataReloadPass(providerToUse, true, { JoinAmbientTransaction: true });
-        if (outcome === 'adopted') {
+        const adopted = await this.runMetadataReloadPass(providerToUse, true, { JoinAmbientTransaction: true });
+        if (adopted) {
             this._configLoadedFromServer = true;
         }
-        // Pinned, the flight's passes are held back and the release reloads; unpinned, the flight
-        // may have read before this caller's writes, so it reruns once.
-        if (this._metadataReloadInFlight && !pinned) {
+        if (this._metadataReloadInFlight) {
             this._metadataReloadQueued = true;
         }
-        // A held-back pass still leaves the metadata current when a NEWER pass superseded it and
-        // that pass saw at least what this one would have: outside a transaction any newer pass
-        // does; inside one, while the same pin is still held, only this transaction's own passes can
-        // be adopted, so the newer pass is an overlapping RefreshWithinTransaction of the same
-        // transaction. If the pin was released under it, the rows it read may never have committed.
-        const samePinStillHeld = pinned && this._metadataPinEpoch === pinEpoch;
-        const current = outcome === 'adopted' || (outcome === 'held-back' && (!pinned || samePinStillHeld));
-        if (!current) {
-            LogError('RefreshWithinTransaction: the in-transaction metadata reload was not adopted; metadata does not show the transaction\'s own rows (MJ#4836)');
-        }
-        return current;
-    }
-
-    /**
-     * Whether this provider is inside an ambient database transaction now. The base has no
-     * transactions; database providers override it. {@link RefreshWithinTransaction} pins the
-     * metadata only when this is true, because only then will
-     * {@link OnAmbientTransactionEnded} be called to release it.
-     */
-    protected get HasOpenAmbientTransaction(): boolean {
-        return false;
-    }
-
-    /**
-     * Called by a database provider each time its ambient transaction has fully ended — depth 0
-     * and no physical transaction — after a commit, a rollback, a failed commit, or an abandoned
-     * handle. Releases the pin {@link RefreshWithinTransaction} set and reloads from the pool:
-     * - after a rollback (or any end that is not a commit) the pinned snapshot holds rows that
-     *   never committed;
-     * - after a commit, the pinned snapshot was never written to shared storage (it held
-     *   uncommitted rows at the time), and any pool reload or stored snapshot held back while
-     *   pinned has to run now.
-     *
-     * Every pass that started before the release — pool passes that read while the transaction was
-     * open, and the transaction's own pass if it is still running — is discarded when it finishes
-     * (see {@link StartedBeforeLastPinRelease}); the reload started here is newer than all of them.
-     *
-     * A no-op when nothing was pinned. Never throws: it runs on the transaction's settle paths.
-     * The release succeeds only when a pass that started after it was adopted; anything else — a
-     * failed read, a held-back pass, a false or thrown {@link Refresh} — is logged as an error and
-     * retried once (see {@link ReloadAfterPinRelease}).
-     *
-     * @param committed true when the transaction ended with a successful outermost commit.
-     */
-    protected async OnAmbientTransactionEnded(committed: boolean): Promise<void> {
-        if (!this.IsMetadataPinnedToTransaction) {
-            return;
-        }
-        this._metadataPinEpoch = null;
-        this._metadataReleasedThroughGeneration = this._metadataReloadGeneration;
-        LogStatusEx({
-            message: `[Metadata] Transaction ${committed ? 'committed' : 'ended without a commit'}; reloading the metadata that was pinned to it`,
-            verboseOnly: true,
-        });
-        await this.ReloadAfterPinRelease(committed);
-    }
-
-    /**
-     * The reload {@link OnAmbientTransactionEnded} runs, judged by its outcome
-     * ({@link ReloadSinceLastPinRelease}), not by {@link Refresh}'s boolean: Refresh → Config
-     * answers true even when the reload pass's read failed, because a background refresh keeps the
-     * last good graph. Here the "last good graph" is the transaction's snapshot — after a rollback it
-     * shows rows that never committed — so a failure is logged as an error naming that consequence,
-     * and ONE more reload is scheduled ({@link ScheduleReloadAfterPinReleaseRetry}). A failed retry
-     * is logged and not re-armed: a provider that cannot reload at all waits for the next metadata
-     * change or periodic check instead of retrying forever. On SQL Server a false Refresh means it
-     * gave up waiting for in-flight saves; a short delay is what lets those finish.
-     *
-     * @param committed The transaction ended with a commit (only the error text differs).
-     * @param isRetry This is the one retry; a failure is final.
-     */
-    protected async ReloadAfterPinRelease(committed: boolean, isRetry: boolean = false): Promise<void> {
-        const failure = await this.ReloadSinceLastPinRelease();
-        if (failure === null) {
-            return;
-        }
-        const consequence = committed
-            ? 'the metadata in memory is still the snapshot read inside the transaction'
-            : 'the metadata in memory may show rows that never committed';
-        if (isRetry) {
-            LogError(`Metadata reload after the pinned transaction ended failed again on retry (${failure}); ${consequence} until the next metadata change or periodic check reloads it.`);
-            return;
-        }
-        LogError(`Metadata reload after the pinned transaction ended failed (${failure}); ${consequence}. Retrying once after ${this.MetadataMemberRefreshDelayMs}ms.`);
-        this.ScheduleReloadAfterPinReleaseRetry(committed);
-    }
-
-    /**
-     * Runs {@link Refresh} and checks that the metadata now comes from a reload pass that started
-     * after the last pin release — the only proof the pinned snapshot was replaced.
-     *
-     * A new transaction on this provider may pin the metadata while this reload runs (the release
-     * runs outside the transaction lock). Its passes then hold the release pass back, and that is not
-     * a failure: the new pin's own release reloads — the same state the retry timer skips as harmless.
-     * @returns null on success (or when a new pin took over), otherwise why the reload did not replace
-     * the pinned snapshot: a read error only when a pass actually ran during this call and failed, never
-     * an older load error.
-     */
-    protected async ReloadSinceLastPinRelease(): Promise<string | null> {
-        const generationBefore = this._metadataReloadGeneration;
-        try {
-            if (!(await this.Refresh())) {
-                return 'the reload reported failure';
-            }
-        } catch (e) {
-            return e instanceof Error ? e.message : String(e);
-        }
-        if (this._adoptedMetadataGeneration > this._metadataReleasedThroughGeneration) {
-            return null;
-        }
-        if (this.IsMetadataPinnedToTransaction) {
-            LogStatusEx({
-                message: '[Metadata] A new transaction pinned the metadata while the release reload ran; that pin\'s own release reloads it',
-                verboseOnly: true,
-            });
-            return null;
-        }
-        if (this._metadataReloadGeneration === generationBefore) {
-            return 'no reload pass ran (the provider did not allow a refresh)';
-        }
-        // || not ??: an Error with an empty message explains nothing either.
-        return this._lastMetadataLoadError?.message || 'no reload pass that started after the release was adopted';
-    }
-
-    /** Timer of the one pending {@link ReloadAfterPinRelease} retry; null when none is pending. */
-    private _pinReleaseRetryTimer: ReturnType<typeof setTimeout> | null = null;
-    /** Windows the pending retry has waited for an ambient transaction to end. */
-    private _pinReleaseRetryWaits = 0;
-
-    /**
-     * Schedules the one retry of a failed release reload after {@link MetadataMemberRefreshDelayMs}.
-     * Like the member-change refresh it never runs inside an ambient transaction: it re-arms while
-     * {@link MetadataMemberRefreshMustWait} holds, and after {@link MaxMetadataMemberRefreshWaits}
-     * windows it is dropped with an error, as the member-change refresh is (the next metadata change
-     * or periodic check reloads instead). It does nothing when the pinned snapshot was already
-     * replaced by then, or when a new pin is held (that pin's own release reloads). The timer does
-     * not hold the process open.
-     */
-    protected ScheduleReloadAfterPinReleaseRetry(committed: boolean): void {
-        if (this._pinReleaseRetryTimer) {
-            clearTimeout(this._pinReleaseRetryTimer);
-        }
-        const timer = setTimeout(() => {
-            this._pinReleaseRetryTimer = null;
-            if (this._adoptedMetadataGeneration > this._metadataReleasedThroughGeneration || this.IsMetadataPinnedToTransaction) {
-                this._pinReleaseRetryWaits = 0;
-                return;
-            }
-            if (this.MetadataMemberRefreshMustWait) {
-                if (this._pinReleaseRetryWaits < ProviderBase.MaxMetadataMemberRefreshWaits) {
-                    this._pinReleaseRetryWaits++;
-                    this.ScheduleReloadAfterPinReleaseRetry(committed);
-                    return;
-                }
-                const waited = this._pinReleaseRetryWaits;
-                this._pinReleaseRetryWaits = 0;
-                LogError(`Metadata reload retry after the pinned transaction ended is still waiting on an ambient transaction after ${waited} windows of ${this.MetadataMemberRefreshDelayMs}ms; dropping it — the next metadata change or periodic check reloads the metadata`);
-                return;
-            }
-            this._pinReleaseRetryWaits = 0;
-            void this.ReloadAfterPinRelease(committed, true);
-        }, this.MetadataMemberRefreshDelayMs);
-        if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
-            (timer as { unref(): void }).unref();
-        }
-        this._pinReleaseRetryTimer = timer;
+        return adopted;
     }
 
     /**
@@ -6114,12 +5732,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      *.
      */
     private async syncLocalMetadataFromStorage(): Promise<void> {
-        if (this.IsMetadataPinnedToTransaction) {
-            // The stored snapshot was written outside the open transaction that owns the
-            // in-memory metadata; swapping it in would revert that transaction's view. The release
-            // reloads once the transaction ends.
-            return;
-        }
         const ls = this.LocalStorageProvider;
         if (ls && this._storedTimestampsRaw !== undefined && this._localMetadata?.AllEntities?.length) {
             try {
@@ -6338,14 +5950,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param contextUser
      * @param providerToUse
      * @param forceRefresh When true, bypasses all caching and fetches fresh data from the database
-     * @param readOptions Per-call read options — see {@link DatasetReadOptions}
      */
     public abstract GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider, forceRefresh?: boolean, readOptions?: Readonly<DatasetReadOptions>): Promise<DatasetResultType>;
     /**
      * Retrieves the date status information for a dataset and all its items from the server. This method will match the datasetName and itemFilters to the server's dataset and item filters to determine a match
      * @param datasetName 
      * @param itemFilters 
-     * @param readOptions Per-call read options — see {@link DatasetReadOptions}
      */
     public abstract GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider, readOptions?: Readonly<DatasetReadOptions>): Promise<DatasetStatusResultType>;
 
@@ -6653,10 +6263,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * Retrieves the latest metadata update timestamps from the server.
-     * @param providerToUse The provider to read through, for multi-provider clients.
-     * @param readOptions Where the status read runs — see {@link DatasetReadOptions}. Only the
-     * transaction-joined pass of {@link RefreshWithinTransaction} sets `JoinAmbientTransaction`;
-     * omitted, the read stays on the pool.
      * @returns Array of metadata update information
      */
     protected async GetLatestMetadataUpdates(providerToUse?: IMetadataProvider, readOptions?: Readonly<DatasetReadOptions>): Promise<MetadataInfo[]> {
@@ -6688,8 +6294,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Updates the internal cache of remote timestamps.
      * @returns True if timestamps were successfully refreshed
      */
-    public async RefreshRemoteMetadataTimestamps(providerToUse?: IMetadataProvider): Promise<boolean> {
-        const mdTimeStamps = await this.GetLatestMetadataUpdates(providerToUse);  
+    public async RefreshRemoteMetadataTimestamps(providerToUse?: IMetadataProvider, readOptions?: Readonly<DatasetReadOptions>): Promise<boolean> {
+        const mdTimeStamps = await this.GetLatestMetadataUpdates(providerToUse, readOptions);  
         if (mdTimeStamps) {
             this._latestRemoteMetadataTimestamps = mdTimeStamps;
             return true;
@@ -7018,19 +6624,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Saves current metadata to local storage for caching.
      * Serializes both timestamps and full metadata collections.
-     *
-     * Does nothing while the metadata is pinned to an open transaction
-     * ({@link RefreshWithinTransaction}): the in-memory snapshot then holds that transaction's
-     * uncommitted rows, and the stored snapshot is shared — in a fleet, writing its timestamps key is
-     * the notice that makes other servers adopt it. The gate is here, in the sink, so every caller
-     * (a reload pass, {@link RefreshCurrentUser}, a direct call) is covered. The release reloads and
-     * saves once the transaction ends.
      */
     public async SaveLocalMetadataToStorage() {
-        if (this.IsMetadataPinnedToTransaction) {
-            LogStatusEx({ message: '[Metadata Cache] Snapshot not saved: the metadata is pinned to an open transaction', verboseOnly: true });
-            return;
-        }
         try {
             const ls = this.LocalStorageProvider;
             if (!ls) return;
@@ -7050,22 +6645,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // obsolete on the next boot — which is what makes the save retry. Writing timestamps
             // before the payload left the cache claiming freshness with no payload behind it, and
             // that state was never retried.
-            // The payload, the membership set and the timestamps are captured together, before
-            // any await: another pass may adopt while these writes are in flight, and the
-            // timestamps stored must be the claim for THIS payload, not for that one.
             const jsonString = JSON.stringify(this._localMetadata);
-            const membershipRaw = this._metadataDatasetEntityNames?.size ? JSON.stringify([...this._metadataDatasetEntityNames]) : null;
-            const timestampsRaw = JSON.stringify(this._latestLocalMetadataTimestamps);
             const snapshot = await this.writeMetadataSnapshot(ls, jsonString);
 
             // Persist the metadata-member entity set beside the snapshot it belongs to, so the
             // event-driven refresh survives a warm boot (see LoadLocalMetadataFromStorage).
-            if (membershipRaw) {
-                await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageDatasetMembershipKey, membershipRaw);
+            if (this._metadataDatasetEntityNames?.size) {
+                await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageDatasetMembershipKey, JSON.stringify([...this._metadataDatasetEntityNames]));
             }
 
             // Timestamps LAST: they are the freshness claim for everything written above, so they
             // must be the final thing to land.
+            const timestampsRaw = JSON.stringify(this._latestLocalMetadataTimestamps);
             await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, timestampsRaw);
             this._storedTimestampsRaw = timestampsRaw;
 

@@ -2070,39 +2070,12 @@ describe('GenericDatabaseProvider nested transactions', () => {
             }
         }
 
-        it('EABORT: is treated as already rolled back — resolves, logs it verbose-only with the driver code, ends at depth 0', async () => {
-            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-            const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-            vi.stubEnv('MJ_VERBOSE', 'true');
+        it('EABORT: resolves as already rolled back and ends at depth 0', async () => {
             const p = new ServerAbortedRollback();
-            await p.BeginTransaction();
-            await expect(p.RollbackTransaction()).resolves.toBeUndefined();
-            vi.unstubAllEnvs();
-            expect(p.TransactionDepth).toBe(0);
-            expect(p.physicalOpen).toBe(false);
-            // Routine, not a failure: no error line (the failed statement reported itself), only the
-            // verbose diagnostic, which keeps the driver code.
-            expect(errorSpy.mock.calls.flat().map(String).join(' ')).not.toMatch(/already rolled back by the server/);
-            expect(logSpy.mock.calls.flat().map(String).join(' ')).toMatch(/already rolled back by the server \(driver code EABORT/);
-            logSpy.mockRestore();
-            // The next begin is a fresh outermost transaction, not a leaked frame.
-            p.rollbackError = new Error('unused');
-            await p.BeginTransaction();
-            expect(p.TransactionDepth).toBe(1);
-            expect(p.beginCount).toBe(2);
-            errorSpy.mockRestore();
-        });
-
-        it('ENOTBEGUN nested in a cause chain: same — resolves at depth 0', async () => {
-            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-            const p = new ServerAbortedRollback();
-            p.rollbackError = new Error('wrapper', {
-                cause: Object.assign(new Error('Transaction has not begun. Call begin() first.'), { code: 'ENOTBEGUN' }),
-            });
             await p.BeginTransaction();
             await expect(p.RollbackTransaction()).resolves.toBeUndefined();
             expect(p.TransactionDepth).toBe(0);
-            errorSpy.mockRestore();
+            expect(p.physicalOpen).toBe(false);
         });
 
         it('a rollback failure that is NOT a server abort still rejects with that error', async () => {

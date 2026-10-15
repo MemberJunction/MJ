@@ -1,4 +1,4 @@
-import { TransactionGroupBase, TransactionGroupProviderError, TransactionGroupRolledBackError, TransactionItem, TransactionResult, LogError } from "@memberjunction/core";
+import { Metadata, TransactionGroupBase, TransactionItem, TransactionResult, LogError } from "@memberjunction/core";
 import sql from 'mssql';
 import { SQLServerDataProvider } from "./SQLServerDataProvider";
 import { GenericDatabaseProvider } from "@memberjunction/generic-database-provider";
@@ -7,87 +7,200 @@ import { GenericDatabaseProvider } from "@memberjunction/generic-database-provid
  * SQL Server implementation of the TransactionGroupBase
  */
 export class SQLServerTransactionGroup extends TransactionGroupBase {
-    /**
-     * The result set that answers one item's statement: the LAST one it returned. A generated save
-     * wrapper returns exactly one, but a delete of an entity with `CascadeDeletes` does not — its
-     * spDelete returns one result set per cascaded child spUpdate/spDelete call before its own, and
-     * the provider's wrapper appends the deleted record's keys after all of them (see
-     * SQLServerDataProvider's cascading delete SQL). The record itself is always last; reading the
-     * first set would hand the item a child's row.
-     */
-    public static ItemResultSet(queryResult: sql.IResult<Record<string, unknown>>): Record<string, unknown>[] | undefined {
+    /** An item's result is its LAST result set: a cascading delete returns its children's sets before its own. */
+    private static lastRecordset(queryResult: sql.IResult<Record<string, unknown>>): Record<string, unknown>[] | undefined {
         const sets = queryResult.recordsets;
-        if (Array.isArray(sets) && sets.length > 0) {
-            return sets[sets.length - 1];
-        }
-        return queryResult.recordset;
-    }
-
-    /**
-     * The provider an item's rows belong to: its own entity's provider. The item was queued by that
-     * provider's save/delete path, so it is a SQLServerDataProvider, and its connection, metadata and
-     * encryption context are the ones the item's rows must be processed (decrypted, timezone-adjusted)
-     * and its SQL regenerated with — not the process-wide default provider, which in a multi-provider
-     * process may be another database entirely.
-     * @throws TransactionGroupProviderError when the record's provider is not a SQLServerDataProvider.
-     */
-    protected ProviderFor(item: TransactionItem): SQLServerDataProvider {
-        const provider = item.BaseEntity.ProviderToUse;
-        if (provider instanceof SQLServerDataProvider) {
-            return provider;
-        }
-        throw new TransactionGroupProviderError(
-            `${item.OperationType} of ${item.BaseEntity.EntityInfo.Name} cannot run in a SQL Server transaction group: its record's provider is not a SQLServerDataProvider`,
-        );
+        return Array.isArray(sets) && sets.length > 0 ? sets[sets.length - 1] : queryResult.recordset;
     }
 
     protected async HandleSubmit(): Promise<TransactionResult[]> {
         const returnResults: TransactionResult[] = [];
         const items = this.PendingTransactions;
+        const sqlProvider = <SQLServerDataProvider>Metadata.Provider; // global-provider-ok: data provider implementation, owns its provider context
         if (items.length > 0) {
-            // Checked before BEGIN, so a group that cannot run as one transaction writes nothing.
-            SQLServerTransactionGroup.AssertItemsShareDataSource(items);
-            items.forEach((item) => this.ProviderFor(item));
             const pool: sql.ConnectionPool = items[0].ExtraData.dataSource; // Now expects a ConnectionPool
             // start a transaction, if anything fails we'll handle the rollback
             const transaction = new sql.Transaction(pool);
-
+            
             try {
                 await transaction.begin();
-
+                
                 if (this.Variables.length > 0) {
                     // need to execute in order since there are dependencies between the transaction items for the given variables
                     for (const item of items) {
-                        await this.ExecuteSequentialItem(item, transaction, true, returnResults);
-                    }
+                        // execute the individual query
+                        let result, bSuccess: boolean = false;
+                        try {
+                            const numValueSet = this.SetEntityValuesFromVariables(item.BaseEntity); // set the variables that this item needs
+                            if (numValueSet > 0 && item.OperationType !== 'Delete') {
+                                // for creates/updates where we set 1+ variable into the entity, we need to update the instruction
+                                // GetSaveSQL is async because it may need to encrypt field values
+                                const bCreate = item.OperationType === 'Create';
+                                const spName = sqlProvider.GetCreateUpdateSPName(item.BaseEntity, bCreate);
+                                const newInstruction = await sqlProvider.GetSaveSQL(item.BaseEntity, bCreate, spName, item.BaseEntity.ContextCurrentUser);
+                                item.Instruction = newInstruction; // update the instruction with the new values
+                            }
+                            
+                            // Create a request for this transaction
+                            const request = new sql.Request(transaction);
+                            
+                            // Add parameters if any
+                            if (item.Vars && Array.isArray(item.Vars)) {
+                                item.Vars.forEach((value, index) => {
+                                    request.input(`p${index}`, value);
+                                });
+                                // Replace ? with @p0, @p1, etc. in the query
+                                let paramIndex = 0;
+                                item.Instruction = item.Instruction.replace(/\?/g, () => `@p${paramIndex++}`);
+                            }
+                            
+                            // Log the SQL statement before execution
+                            const description = `${item.OperationType} ${item.ExtraData?.entityName || 'entity'} (Transaction Group)`;
+                            await GenericDatabaseProvider.LogSQLStatement(
+                                item.Instruction,
+                                item.Vars,
+                                description,
+                                true, // isMutation
+                                item.ExtraData?.simpleSQLFallback
+                            );
+                            
+                            const queryResult = await request.query(item.Instruction);
+                            const rawResult = SQLServerTransactionGroup.lastRecordset(queryResult);
+                            
+                            if (rawResult && rawResult.length > 0) {
+                                // Process the result to handle timezone conversions and decryption
+                                result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser);
+                                this.SetVariableValuesFromEntity(item.BaseEntity, result[0]); // set the variables that this item defines after the save is done
+                            }
+                            bSuccess = SQLServerTransactionGroup.ItemSucceeded(item, result?.[0]);
+                            if (!bSuccess) {
+                                throw new Error(`${item.OperationType} of ${item.BaseEntity.EntityInfo.Name} did not return its record`);
+                            }
+                        }
+                        catch (e) {
+                            result = e; // push the exception to the result
+                            bSuccess = false; // mark as failed
+                            
+                            // CRITICAL FIX: Immediately rollback on first failure
+                            try {
+                                await transaction.rollback();
+                            } catch (rollbackError) {
+                                LogError(`Failed to rollback after operation error: ${rollbackError}`);
+                            }
+                            
+                            // Create result for the failed operation
+                            returnResults.push(new TransactionResult(item, result, bSuccess));
+                            
+                            // Throw error immediately to stop processing
+                            const errorMessage = e instanceof Error ? e.message : String(e);
+                            throw new Error(`Transaction rolled back due to operation failure: ${errorMessage}`);
+                        }
+                        // save the results
+                        returnResults.push(new TransactionResult(item, result && result.length > 0 ? result[0] : result, bSuccess));
+                    }    
                 }
                 else if (this.BatchedSubmit) {
-                    await this.ExecuteBatchedNoVars(items, transaction, returnResults);
+                    await this.executeBatchedNoVars(items, transaction, sqlProvider, returnResults);
                 }
                 else {
-                    // execute individually since there are no variable dependencies, but we want to avoid
+                    // execute individually since there are no variable dependencies, but we want to avoid 
                     // variable conflicts between different stored procedure calls that might use same variable names
                     for (const item of items) {
-                        await this.ExecuteSequentialItem(item, transaction, false, returnResults);
+                        let result: any = null, bSuccess: boolean = false;
+                        try {
+                            // Create a request for this transaction
+                            const request = new sql.Request(transaction);
+                            
+                            // Add parameters if any
+                            if (item.Vars && Array.isArray(item.Vars)) {
+                                item.Vars.forEach((value, index) => {
+                                    request.input(`p${index}`, value);
+                                });
+                                // Replace ? with @p0, @p1, etc. in the query
+                                let paramIndex = 0;
+                                const modifiedInstruction = item.Instruction.replace(/\?/g, () => `@p${paramIndex++}`);
+                                
+                                // Log the SQL statement before execution
+                                const description = `${item.OperationType} ${item.ExtraData?.entityName || 'entity'} (Transaction Group)`;
+                                await GenericDatabaseProvider.LogSQLStatement(
+                                    modifiedInstruction,
+                                    item.Vars,
+                                    description,
+                                    true, // isMutation
+                                    item.ExtraData?.simpleSQLFallback
+                                );
+                                
+                                const queryResult = await request.query(modifiedInstruction);
+                                const rawResult = SQLServerTransactionGroup.lastRecordset(queryResult);
+
+                                if (rawResult && rawResult.length > 0) {
+                                    // Process the result to handle timezone conversions and decryption
+                                    result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser);
+                                }
+                            } else {
+                                // Log the SQL statement before execution
+                                const description = `${item.OperationType} ${item.ExtraData?.entityName || 'entity'} (Transaction Group)`;
+                                await GenericDatabaseProvider.LogSQLStatement(
+                                    item.Instruction,
+                                    item.Vars,
+                                    description,
+                                    true, // isMutation
+                                    item.ExtraData?.simpleSQLFallback
+                                );
+
+                                const queryResult = await request.query(item.Instruction);
+                                const rawResult = SQLServerTransactionGroup.lastRecordset(queryResult);
+
+                                if (rawResult && rawResult.length > 0) {
+                                    // Process the result to handle timezone conversions and decryption
+                                    result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser);
+                                }
+                            }
+                            bSuccess = SQLServerTransactionGroup.ItemSucceeded(item, result?.[0]);
+                            if (!bSuccess) {
+                                throw new Error(`${item.OperationType} of ${item.BaseEntity.EntityInfo.Name} did not return its record`);
+                            }
+                        }
+                        catch (e) {
+                            result = e; // push the exception to the result
+                            bSuccess = false; // mark as failed
+                            
+                            // CRITICAL FIX: Immediately rollback on first failure
+                            try {
+                                await transaction.rollback();
+                            } catch (rollbackError) {
+                                LogError(`Failed to rollback after operation error: ${rollbackError}`);
+                            }
+                            
+                            // Create result for the failed operation
+                            returnResults.push(new TransactionResult(item, result, bSuccess));
+                            
+                            // Throw error immediately to stop processing
+                            const errorMessage = e instanceof Error ? e.message : String(e);
+                            throw new Error(`Transaction rolled back due to operation failure: ${errorMessage}`);
+                        }
+                        // save the results
+                        returnResults.push(new TransactionResult(item, result && result.length > 0 ? result[0] : result, bSuccess));
                     }
                 }
-
-                // Every exception, and every item that failed ItemSucceeded (ThrowIfItemFailsGroup), has
-                // already rolled back and thrown above. Reaching this point means every statement ran
-                // and every item returned its record, so the whole group commits.
-
+                
+                // NOTE: Failure checking is now handled immediately in catch blocks above
+                // If we reach this point, all operations succeeded
+                
                 await transaction.commit();
             } catch (error) {
-                // A TransactionGroupRolledBackError comes from an item's failure path, which has
-                // already rolled back; anything else (begin or commit failed) still needs the rollback.
-                if (!(error instanceof TransactionGroupRolledBackError)) {
-                    try {
+                // Enhanced error handling for commit failures or operation failures
+                // Note: If this is an operation failure, the transaction may already be rolled back
+                try {
+                    // Only attempt rollback if the error doesn't indicate transaction was already rolled back
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    if (!errorMessage.includes('Transaction rolled back due to operation failure')) {
                         await transaction.rollback();
-                    } catch (rollbackError) {
-                        LogError(`Failed to rollback after commit error: ${rollbackError}`);
                     }
+                } catch (rollbackError) {
+                    LogError(`Failed to rollback after commit error: ${rollbackError}`);
                 }
-
+                
                 // Re-throw the original error (which may already indicate rollback occurred)
                 if (error instanceof Error) {
                     throw error;
@@ -97,91 +210,6 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
             }
         }
         return returnResults;
-    }
-
-    /**
-     * Runs one item on the group's transaction (the sequential paths) and records its result. A
-     * failure — a statement that threw, or an item that ran but did not do its work
-     * ({@link TransactionGroupBase.ItemSucceeded}) — rolls the whole transaction back at once, records
-     * the item as failed, and throws {@link TransactionGroupRolledBackError} so no later item runs.
-     * @param withVariables The group uses transaction variables: this item's variable inputs are set
-     * (regenerating a save's SQL when any were) and its outputs captured for the items after it.
-     */
-    protected async ExecuteSequentialItem(item: TransactionItem, transaction: sql.Transaction, withVariables: boolean, returnResults: TransactionResult[]): Promise<void> {
-        let row: Record<string, unknown> | null = null;
-        try {
-            if (withVariables) {
-                await this.ApplyVariableInputs(item);
-            }
-            row = await this.RunItemStatement(item, transaction);
-            if (withVariables && row) {
-                this.SetVariableValuesFromEntity(item.BaseEntity, row); // set the variables that this item defines after the save is done
-            }
-            SQLServerTransactionGroup.ThrowIfItemFailsGroup(item, SQLServerTransactionGroup.ItemSucceeded(item, row));
-        }
-        catch (e) {
-            // Immediately roll back on the first failure
-            try {
-                await transaction.rollback();
-            } catch (rollbackError) {
-                LogError(`Failed to rollback after operation error: ${rollbackError}`);
-            }
-            returnResults.push(new TransactionResult(item, e, false));
-            throw new TransactionGroupRolledBackError(e);
-        }
-        returnResults.push(new TransactionResult(item, row, true));
-    }
-
-    /**
-     * Sets the transaction-variable values this item uses; when any were set on a create/update, the
-     * item's save SQL is regenerated with them (GetSaveSQL is async because it may encrypt values).
-     */
-    protected async ApplyVariableInputs(item: TransactionItem): Promise<void> {
-        const numValueSet = this.SetEntityValuesFromVariables(item.BaseEntity);
-        if (numValueSet > 0 && item.OperationType !== 'Delete') {
-            const provider = this.ProviderFor(item);
-            const bCreate = item.OperationType === 'Create';
-            const spName = provider.GetCreateUpdateSPName(item.BaseEntity, bCreate);
-            item.Instruction = await provider.GetSaveSQL(item.BaseEntity, bCreate, spName, item.BaseEntity.ContextCurrentUser);
-        }
-    }
-
-    /**
-     * Executes one item's statement on the transaction — binding positional `?` placeholders as
-     * `@p0..@pN` and logging it for SQL capture — and returns the first row of its result set
-     * ({@link ItemResultSet}) after the provider's row processing; null when it returned none.
-     */
-    protected async RunItemStatement(item: TransactionItem, transaction: sql.Transaction): Promise<Record<string, unknown> | null> {
-        const request = new sql.Request(transaction);
-        let instruction = item.Instruction;
-        if (item.Vars && Array.isArray(item.Vars)) {
-            item.Vars.forEach((value, index) => {
-                request.input(`p${index}`, value);
-            });
-            let paramIndex = 0;
-            instruction = instruction.replace(/\?/g, () => `@p${paramIndex++}`);
-            if (this.Variables.length > 0) {
-                item.Instruction = instruction; // the variables path keeps the bound form on the item
-            }
-        }
-
-        const description = `${item.OperationType} ${item.ExtraData?.entityName || 'entity'} (Transaction Group)`;
-        await GenericDatabaseProvider.LogSQLStatement(
-            instruction,
-            item.Vars,
-            description,
-            true, // isMutation
-            item.ExtraData?.simpleSQLFallback
-        );
-
-        const queryResult = await request.query(instruction);
-        const rawResult = SQLServerTransactionGroup.ItemResultSet(queryResult);
-        if (!rawResult || rawResult.length === 0) {
-            return null;
-        }
-        // Process the result to handle timezone conversions and decryption
-        const processed = await this.ProviderFor(item).ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser);
-        return processed && processed.length > 0 ? processed[0] : null;
     }
 
     /**
@@ -369,9 +397,10 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
      * Parameters: one request carries ONE parameter namespace, so per-item `?` placeholders are
      * renumbered into a single global @p sequence.
      */
-    protected async ExecuteBatchedNoVars(
+    private async executeBatchedNoVars(
         items: TransactionItem[],
         transaction: sql.Transaction,
+        sqlProvider: SQLServerDataProvider,
         returnResults: TransactionResult[]
     ): Promise<void> {
         const SENTINEL = '__mj_batch_item';
@@ -435,32 +464,29 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                     if (Number.isFinite(idx)) current = idx;
                     continue;
                 }
-                // OWNERSHIP RULE: an item owns the LAST recordset between its sentinel and the
-                // next one, empty or not (see ItemResultSet). A generated save wrapper emits
-                // exactly one recordset; a delete of a CascadeDeletes entity emits one per
-                // cascaded child call ahead of the record's own, which is always last. Bounding
-                // the search by the next sentinel means a statement that returned zero rows is
-                // reported as "no result" (Success false) rather than silently adopting the NEXT
-                // item's rows. The PostgreSQL sibling takes the first NON-EMPTY result instead —
-                // documented there for the same reason.
+                // OWNERSHIP RULE: an item owns the LAST recordset before the next sentinel, empty
+                // or not. A generated save emits exactly one recordset; a cascading delete emits
+                // its children's first and its own last. Bounding by the next sentinel means a
+                // procedure that returned zero rows is reported as "no result" (Success false)
+                // rather than silently adopting the NEXT item's rows.
                 if (current >= 0 && current < items.length) {
                     perItem[current] = rs;
                 }
             }
-            // Judge every item before reporting any: a failed item fails the whole batch (thrown into
-            // the catch below, which rolls back), so no sibling may be reported as a success first.
+            // Judge every item before reporting any: one that did not do its work fails the whole batch.
             const itemResults: TransactionResult[] = [];
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
                 const raw = perItem[i];
                 let result: Record<string, unknown> | null = null;
                 if (raw && raw.length > 0) {
-                    const processed = await this.ProviderFor(item).ProcessEntityRows(raw, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser);
+                    const processed = await sqlProvider.ProcessEntityRows(raw, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser);
                     result = processed && processed.length > 0 ? processed[0] : null;
                 }
-                const success = SQLServerTransactionGroup.ItemSucceeded(item, result);
-                SQLServerTransactionGroup.ThrowIfItemFailsGroup(item, success);
-                itemResults.push(new TransactionResult(item, result, success));
+                if (!SQLServerTransactionGroup.ItemSucceeded(item, result)) {
+                    throw new Error(`${item.OperationType} of ${item.BaseEntity.EntityInfo.Name} did not return its record`);
+                }
+                itemResults.push(new TransactionResult(item, result, true));
             }
             returnResults.push(...itemResults);
         }
@@ -476,7 +502,8 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
             }
             for (const item of items)
                 returnResults.push(new TransactionResult(item, e, false));
-            throw new TransactionGroupRolledBackError(e);
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            throw new Error(`Transaction rolled back due to operation failure: ${errorMessage}`);
         }
     }
 }

@@ -154,32 +154,15 @@ describe('BaseEngine: event-driven reloads read on the pool', () => {
         expect(reads.map((r) => r.ReadOptions)).toEqual([undefined, { ReadOnPool: true }]);
     });
 
-    it('never coalesces a queued event reload with a plain forced reload: each keeps its own read options', async () => {
-        for (const order of [['pool', 'plain'], ['plain', 'pool']] as const) {
-            const reads: DatasetRead[] = [];
-            const gate = heldProvider(reads);
-            const engine = freshEngine();
-            const inFlight = engine.Config(true, undefined, gate.Provider); // holds its read until released
-            await gate.FirstReadStarted;
-            const queued = order.map((kind) => (kind === 'pool' ? engine.EventReload(gate.Provider) : engine.Config(true, undefined, gate.Provider)));
-            gate.Release();
-            await Promise.all([inFlight, ...queued]);
-            // the load in flight, then one follow-up per distinct read-option set — neither request lost or rewritten
-            expect(reads).toHaveLength(3);
-            expect(reads[0].ReadOptions).toBeUndefined();
-            expect(reads.slice(1).map((r) => r.ReadOptions?.ReadOnPool === true).sort()).toEqual([false, true]);
-        }
-    });
-
-    it('still coalesces a burst of forced reloads with the same read options into one follow-up', async () => {
+    it('keeps the pool reads when a plain forced reload is queued after an event reload', async () => {
         const reads: DatasetRead[] = [];
         const gate = heldProvider(reads);
         const engine = freshEngine();
-        const inFlight = engine.Config(true, undefined, gate.Provider);
+        const inFlight = engine.Config(true, undefined, gate.Provider); // holds its read until released
         await gate.FirstReadStarted;
-        const burst = [engine.EventReload(gate.Provider), engine.EventReload(gate.Provider), engine.EventReload(gate.Provider)];
+        const queued = [engine.EventReload(gate.Provider), engine.Config(true, undefined, gate.Provider)];
         gate.Release();
-        await Promise.all([inFlight, ...burst]);
+        await Promise.all([inFlight, ...queued]);
         expect(reads.map((r) => r.ReadOptions)).toEqual([undefined, { ReadOnPool: true }]);
     });
 
@@ -192,13 +175,6 @@ describe('BaseEngine: event-driven reloads read on the pool', () => {
 });
 
 describe('BaseEngine.RunAfterCommitOrNow', () => {
-    it('runs the task now when no transaction is open', async () => {
-        const { provider } = providerAtDepth(0);
-        const task = vi.fn().mockResolvedValue(undefined);
-        await freshEngine().Defer(saveOn(provider), task);
-        expect(task).toHaveBeenCalledTimes(1);
-    });
-
     it('runs the task now, awaited, when a transaction is open but the caller is not a member of it', async () => {
         // the caller's write ran on the pool and is durable; deferring it would leave the cache stale after its save
         const { provider, queuedCount } = providerAtDepth(1, false);

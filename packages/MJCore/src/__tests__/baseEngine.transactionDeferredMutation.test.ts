@@ -26,7 +26,7 @@ class ItemsEngine extends BaseEngine<ItemsEngine> {
     }
 
     public UseConfigs(configs: BaseEnginePropertyConfig[]): void {
-        this.AdoptConfigs(configs);
+        (this as unknown as { _metadataConfigs: BaseEnginePropertyConfig[] })._metadataConfigs = configs;
     }
 
     public Handle(event: BaseEntityEvent): Promise<boolean> {
@@ -37,11 +37,7 @@ class ItemsEngine extends BaseEngine<ItemsEngine> {
     // one also rebinds the provider, which is not what this test is about).
     protected override async cloneEntityForCache(source: BaseEntity): Promise<BaseEntity | null> {
         const id = (source as unknown as { ID: string }).ID;
-        const provider = source.ProviderToUse;
-        if (!(provider instanceof DatabaseProviderBase)) {
-            throw new Error('the cached entity must be bound to a database provider');
-        }
-        return createdItem(id, provider).baseEntity;
+        return createdItem(id, source.ProviderToUse as DatabaseProviderBase).baseEntity;
     }
 }
 
@@ -50,8 +46,7 @@ function providerAtDepth(depth: number): { provider: DatabaseProviderBase; commi
     const queued: PostCommitTask[] = [];
     const provider = Object.create(DatabaseProviderBase.prototype) as DatabaseProviderBase;
     Object.defineProperty(provider, 'TransactionDepth', { get: () => depth });
-    provider.CapturePostCommitToken = (): PostCommitToken =>
-        depth > 0 ? { Epoch: 1, FrameIds: Array.from({ length: depth }, (_, i) => i + 1) } : { Epoch: null, FrameIds: [] };
+    provider.CapturePostCommitToken = () => (depth > 0 ? ({ frames: depth } as unknown as PostCommitToken) : undefined);
     provider.RunAfterCommit = (task: PostCommitTask) => {
         if (depth === 0) void task();
         else queued.push(task);
@@ -82,14 +77,6 @@ function createdItem(id: string, provider: DatabaseProviderBase): BaseEntityEven
 }
 
 /** What BaseEntity.NewRecord() does to the deleted object: same reference, new primary key. */
-/** The record an event was raised for; every event these tests raise carries one. */
-function recordOf(event: BaseEntityEvent): BaseEntity {
-    if (!event.baseEntity) {
-        throw new Error('the event carries no record');
-    }
-    return event.baseEntity;
-}
-
 function resetToNewRecord(entity: BaseEntity, newId: string): void {
     const mutable = entity as unknown as { ID: string; PrimaryKey: { KeyValuePairs: { FieldName: string; Value: unknown }[] } };
     mutable.ID = newId;
@@ -131,11 +118,11 @@ describe('BaseEngine — cache mutations follow the saving transaction', () => {
     // matched on the live entity found nothing, so every committed delete left its row cached.
     it('removes a row deleted inside a transaction once it commits, though the entity was reset since', async () => {
         const engine = engineCachingItems();
-        const cached = recordOf(createdItem('deleted-row', providerAtDepth(0).provider));
+        const cached = createdItem('deleted-row', providerAtDepth(0).provider).baseEntity;
         engine._items = [cached];
         const tx = providerAtDepth(1);
 
-        const deleting = recordOf(createdItem('deleted-row', tx.provider));
+        const deleting = createdItem('deleted-row', tx.provider).baseEntity;
         await engine.Handle({ type: 'delete', baseEntity: deleting, payload: { OldValues: { ID: 'deleted-row' } } } as BaseEntityEvent);
         resetToNewRecord(deleting, 'regenerated-by-NewRecord');
         await tx.commit();
@@ -152,7 +139,7 @@ describe('BaseEngine — cache mutations follow the saving transaction', () => {
         const created = createdItem('short-lived', tx.provider);
         await engine.Handle(created);
         await engine.Handle({ type: 'delete', baseEntity: created.baseEntity, payload: { OldValues: { ID: 'short-lived' } } } as BaseEntityEvent);
-        resetToNewRecord(recordOf(created), 'regenerated-by-NewRecord');
+        resetToNewRecord(created.baseEntity, 'regenerated-by-NewRecord');
         await tx.commit();
 
         expect(ids(engine)).toEqual([]);

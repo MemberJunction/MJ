@@ -888,11 +888,8 @@ const results = await txGroup.Submit();
 ```
 
 Each `TransactionResult` in the returned array contains a `Success` flag. If any operation fails, all are rolled back.
-A database provider's group also fails as a whole when an item runs without doing its work — a save
-that returns no row, or a delete whose row does not report the record's keys
-(`BaseEntity.DeleteResultMatchesEntity`). The shared judgement lives on `TransactionGroupBase`
-(`ItemSucceeded` / `ThrowIfItemFailsGroup`, protected statics) and fails with the typed
-`TransactionItemFailedError` / `TransactionGroupRolledBackError`, so providers never match error text.
+An item that runs without doing its work — a save that returns no row, or a delete whose row does not report the
+record's keys (`BaseEntity.DeleteResultMatchesEntity`) — fails the group the same way.
 
 > **A TransactionGroup is an *arbitrary batch* facility, not a composite-save engine.** Under a
 > transaction group `Save()` **defers**: the provider only registers an instruction, so the entity
@@ -1430,64 +1427,16 @@ See [Transactions, Batching & Entity Graphs](../../guides/TRANSACTIONS_AND_BATCH
 the difference between provider transactions, Transaction Groups, and entity graphs — and for why
 the `BeginISATransaction` trio was retired in 6.2.
 
-`RunInEntityTransaction(provider, work, commitWhen?)` takes an optional predicate for work that reports
-failure through its result rather than by throwing: a result it rejects rolls back and is returned
-unchanged. `BaseEntity.DeleteWithinEntityTransaction(deleteRecord)` (protected) is built on it — the
-generated `Delete()` override of every `CascadeDeletes` entity is one line,
-`return this.DeleteWithinEntityTransaction(() => super.Delete(options));`, so the transaction lifecycle
-exists once instead of once per generated class. Inside a `TransactionGroup` it opens no transaction
-(the group supplies atomicity); on a provider without entity transactions the delete runs as-is.
+`RunInEntityTransaction(provider, work, commitWhen?)` takes an optional predicate for work that reports failure
+through its result: a result it rejects rolls back and is returned unchanged. The generated `Delete()` override of a
+`CascadeDeletes` entity uses it through `BaseEntity.DeleteWithinEntityTransaction`.
 
-#### Background engine reloads read on the pool
-
-A `BaseEngine` reload that an entity event, a cross-server invalidation, a retry timer, a config's expiration
-timer (`BaseEnginePropertyConfig.Expiration`) or a sweep starts runs detached from the write that caused it. A transaction another unit of work opens on the same provider
-while the reload is in flight is not the reload's, so every such reload reads with
-`BaseEngine.BackgroundReloadReads` (`{ ReadOnPool: true }`): dataset configs pass it to `GetDatasetByName`
-(`DatasetReadOptions.ReadOnPool`, which wins over `JoinAmbientTransaction`), entity configs put
-`RunViewParams.ReadOnPool` on their views; the database provider runs those reads on the pool whatever
-transaction is open. A caller's own `RefreshItem(name)` / `Config(true)` is not a background reload and runs where
-the caller does. `TemplateEngineBase` reloads its dataset through `BaseEngine.Load(configs, provider,
-true, user, BaseEngine.BackgroundReloadReads)`. Forced reloads queued behind a load in flight coalesce only
-with requests that have the same read options, so a later `Config(true)` never drops (or imposes) pool reads. `BaseEngine.RunAfterCommitOrNow(event, ...)` is
-the shared deferral for such updates (after the commit of the write's transaction, never on rollback),
-and `BaseEngine.DatasetEntityNames()` names the entities an engine's loaded datasets hold.
-
-#### Metadata reloads inside a transaction
-
-`ProviderBase.RefreshWithinTransaction()` reloads metadata with reads that **join** the open ambient
-transaction (`DatasetReadOptions.JoinAmbientTransaction`), so a caller that wrote metadata rows inside
-its transaction — `mj sync push`, between directories — sees them (MJ#4836). It runs its own reload
-pass and never waits for a pool reload in flight (that reload's reads would block on the caller's own
-locks). Every pass takes a generation; an older pass finishing after a newer one is discarded.
-
-Inside a transaction the metadata is **pinned** to it until it ends:
-
-- no pool reload pass and no stored snapshot may replace it (under read committed snapshot isolation
-  a pool read returns the state from before the transaction's writes);
-- nothing is written to shared storage — `SaveLocalMetadataToStorage` returns early while pinned, for
-  every caller — because the snapshot holds uncommitted rows, and in a fleet the stored timestamps key
-  is the notice that makes other servers adopt it.
-
-The database provider calls the protected `OnAmbientTransactionEnded(committed)` on every path that
-ends the transaction (see `@memberjunction/generic-database-provider`). It releases the pin and reloads
-from the pool after every pinned transaction — after a rollback the pinned snapshot holds rows that
-never committed; after a commit it was never persisted. Every pass that started before the release
-(a pool pass that read while the transaction was open, or the transaction's own pass if it is still
-running) is discarded when it finishes. The release counts as done only when a reload pass that started
-after it was adopted — `Refresh()` itself answers `true` even when its read failed, so its boolean
-is not the test. Anything else (a failed or held-back read, a `false` or thrown `Refresh`) is
-logged as an error naming the consequence (after a rollback: metadata may show rows that never
-committed) and retried once after the member-change window. The retry never runs inside an ambient
-transaction: it waits while one is open, at most `MaxMetadataMemberRefreshWaits` windows, and is then
-dropped with an error, as the member-change refresh is. A failed retry is logged again and not re-armed.
-A release reload held back because a new transaction pinned the metadata meanwhile is not a failure
-(that pin's own release reloads), and a read error is reported only when a pass ran during the reload. **Cost:** a commit or rollback of a transaction that called
-`RefreshWithinTransaction` awaits one full metadata reload (about 4 s on a full MJ install; on SQL
-Server up to 30 s more if saves are in flight). Transactions that never called it pay nothing.
-
-Providers with transactions override the protected `HasOpenAmbientTransaction` getter (false in the
-base); `RefreshWithinTransaction` pins only when it is true, because only then will a release come.
+`ProviderBase.RefreshWithinTransaction()` reloads metadata with reads that join the open ambient transaction
+(`DatasetReadOptions.JoinAmbientTransaction`), so `mj sync push` sees the metadata rows it has not committed yet. It
+runs its own reload pass and never waits for a pool reload in flight, whose reads would block on the caller's own
+locks; every pass takes a generation, and a pass that finishes after a newer one was adopted is discarded. An engine
+reload that runs detached from the write that caused it can read a dataset on the pool instead
+(`BaseEngine.Load(…, BaseEngine.BackgroundReloadReads)`).
 
 ---
 

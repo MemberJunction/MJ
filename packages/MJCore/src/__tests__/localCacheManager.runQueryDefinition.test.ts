@@ -22,7 +22,7 @@ class IndexedMockCacheStorageProvider extends MockCacheStorageProvider {
     public readonly writeOptions = new Map<string, LocalStorageWriteOptions | undefined>();
     private readonly groups = new Map<string, Set<string>>();
 
-    override async SetItem<T>(key: string, value: T, category?: string, options?: LocalStorageWriteOptions): Promise<void> {
+    override async SetItem(key: string, value: string, category?: string, options?: LocalStorageWriteOptions): Promise<void> {
         await super.SetItem(key, value, category);
         this.writeOptions.set(key, options);
         if (options?.IndexGroup) {
@@ -34,7 +34,7 @@ class IndexedMockCacheStorageProvider extends MockCacheStorageProvider {
     }
 
     async GetIndexGroupKeys(category: string, group: string): Promise<string[]> {
-        return [...(this.groups.get(`${category}|${group}`) ?? [])].filter(key => this.GetDirect(key, category) !== null);
+        return [...(this.groups.get(`${category}|${group}`) ?? [])].filter(key => this.getDirect(key, category) !== null);
     }
 }
 
@@ -70,7 +70,7 @@ async function newManager(storage: MockCacheStorageProvider): Promise<LocalCache
 }
 
 function storedSlot(storage: MockCacheStorageProvider, fingerprint: string = FP): StoredRunQuerySlot | null {
-    return storage.GetDirect<StoredRunQuerySlot>(fingerprint, CacheCategory.RunQueryCache);
+    return storage.getDirect(fingerprint, CacheCategory.RunQueryCache) as unknown as StoredRunQuerySlot | null;
 }
 
 function write(manager: LocalCacheManager, rows: unknown[], definition?: QueryDefinitionSignature, fingerprint: string = FP): Promise<void> {
@@ -129,7 +129,7 @@ describe('LocalCacheManager RunQuery slots and query definitions', () => {
     it('treats a slot with no definition hash as a miss when a definition is expected', async () => {
         const storage = new IndexedMockCacheStorageProvider();
         const manager = await newManager(storage);
-        storage.SetDirect(FP, { results: OLD_ROWS, maxUpdatedAt: '', rowCount: 1 }, CacheCategory.RunQueryCache);
+        storage.setDirect(FP, { results: OLD_ROWS, maxUpdatedAt: '', rowCount: 1 } as unknown as string, CacheCategory.RunQueryCache);
 
         expect(await manager.GetRunQueryResult(FP, NEW)).toBeNull();
     });
@@ -174,7 +174,7 @@ describe('LocalCacheManager RunQuery slots and query definitions', () => {
             expect(storedSlot(storage)?.definitionHash).toBe('new-hash');
 
             // The lagging server puts its rows back: it does not know its definition is older.
-            storage.SetDirect(FP, { results: OLD_ROWS, maxUpdatedAt: '', definitionHash: 'old-hash', definitionStamp: OLD.Stamp }, CacheCategory.RunQueryCache);
+            storage.setDirect(FP, { results: OLD_ROWS, maxUpdatedAt: '', definitionHash: 'old-hash', definitionStamp: OLD.Stamp } as unknown as string, CacheCategory.RunQueryCache);
             await readThrough(newer, NEW, NEW_ROWS);
             expect(storedSlot(storage)?.definitionHash).toBe('old-hash');
 

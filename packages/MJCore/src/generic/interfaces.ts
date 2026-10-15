@@ -262,10 +262,7 @@ export class PotentialDuplicateResponse {
 export interface IEntityDataProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
-    /**
-     * Reads the row of `entity`'s record with the given key (and the named relationships).
-     * @returns the row, or null when no row matches the key (BaseEntity then reports that the load found no row)
-     */
+    /** @returns the record's row, or null when no row matches the key */
     Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{} | null>
 
     Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>
@@ -1081,16 +1078,14 @@ export interface IMetadataProvider {
      * @param contextUser
      * @param providerToUse
      * @param forceRefresh When true, bypasses all caching and fetches fresh data from the database
-     * @param readOptions Per-call read options — see {@link DatasetReadOptions}. Providers without an
-     * ambient transaction ignore them.
+     * @param readOptions Where the reads run — see {@link DatasetReadOptions}
      */
     GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider, forceRefresh?: boolean, readOptions?: Readonly<DatasetReadOptions>): Promise<DatasetResultType>;
     /**
      * Retrieves the date status information for a dataset and all its items from the server. This method will match the datasetName and itemFilters to the server's dataset and item filters to determine a match
      * @param datasetName 
      * @param itemFilters 
-     * @param readOptions Per-call read options — see {@link DatasetReadOptions}. Providers without an
-     * ambient transaction ignore them.
+     * @param readOptions Where the reads run — see {@link DatasetReadOptions}
      */
     GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider, readOptions?: Readonly<DatasetReadOptions>): Promise<DatasetStatusResultType>;
 
@@ -1980,28 +1975,11 @@ export type DatasetItemFilterType = {
     Filter: string;
 }
 
-/**
- * Per-call options for a provider's dataset reads ({@link ProviderBase.GetDatasetByName},
- * {@link ProviderBase.GetDatasetStatusByName}).
- */
+/** Per-call options for a provider's dataset reads. Providers without database transactions ignore them. */
 export type DatasetReadOptions = {
-    /**
-     * Run the reads inside the caller's ambient transaction, even for a dataset the provider
-     * otherwise reads on the pool (the metadata dataset, #4514). Set only by the reload pass of
-     * {@link ProviderBase.RefreshWithinTransaction}, and only on that pass's own reads, so it can
-     * see the caller's uncommitted metadata rows (MJ#4836). A pool reload running at the same time
-     * never sees it. Providers without database transactions ignore it.
-     */
+    /** Read inside the ambient transaction, even the metadata dataset (only {@link ProviderBase.RefreshWithinTransaction} sets it). */
     JoinAmbientTransaction?: boolean;
-    /**
-     * Run the reads on the pool even while a transaction is open on the provider, for any dataset.
-     * Set by event-driven engine reloads ({@link BaseEngine} subclasses reloading a dataset because an
-     * entity changed): such a reload runs detached from the write that raised the event, so a
-     * transaction that another unit of work opens on the same provider while the reload is in flight
-     * is not the reload's, and its reads must never land on that transaction's connection (where they
-     * would see uncommitted rows, or fail once the transaction ends first). Wins over
-     * `JoinAmbientTransaction`. Providers without database transactions ignore it.
-     */
+    /** Read on the pool even while a transaction is open (a detached engine reload). Wins over `JoinAmbientTransaction`. */
     ReadOnPool?: boolean;
 }
 

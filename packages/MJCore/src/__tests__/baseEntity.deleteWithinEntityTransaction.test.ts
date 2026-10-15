@@ -7,12 +7,6 @@ import { UserInfo } from '../generic/securityInfo';
 import { EntityTransactionScope } from '../generic/entityTransactionScope';
 import { TransactionGroupBase, TransactionResult } from '../generic/transactionGroup';
 
-/**
- * BaseEntity.DeleteWithinEntityTransaction — the one copy of the transaction lifecycle that every
- * generated CascadeDeletes `Delete()` override delegates to (it used to be emitted, verbatim, into
- * each generated class).
- */
-
 /** A server-side provider double that records how its entity-transaction scopes are settled. */
 class ScopeRecordingProvider implements IEntityDataProvider {
     public SupportsEntityTransactions = true;
@@ -73,13 +67,6 @@ describe('BaseEntity.DeleteWithinEntityTransaction', () => {
         expect(provider.Settles).toEqual(['begin', 'rollback']);
     });
 
-    it('rolls back a delete that threw, and rethrows it', async () => {
-        const thrown = new Error('FK violation');
-        entity.InnerResult = thrown;
-        await expect(entity.Delete()).rejects.toBe(thrown);
-        expect(provider.Settles).toEqual(['begin', 'rollback']);
-    });
-
     it('inside a TransactionGroup opens no transaction: the group supplies atomicity on Submit', async () => {
         entity.TransactionGroup = new NeverSubmittedGroup();
         await expect(entity.Delete()).resolves.toBe(true);
@@ -87,10 +74,4 @@ describe('BaseEntity.DeleteWithinEntityTransaction', () => {
         expect(provider.Settles).toEqual([]);
     });
 
-    it('on a provider without entity transactions (client side) runs the delete as-is', async () => {
-        provider.SupportsEntityTransactions = false;
-        await expect(entity.Delete()).resolves.toBe(true);
-        expect(entity.InnerCalls).toBe(1);
-        expect(provider.Settles).toEqual([]);
-    });
 });

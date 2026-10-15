@@ -421,52 +421,6 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(entity.LatestResult.Message).toContain('Primary key value mismatch');
         });
 
-        it('accepts the record\'s key echoed in another letter case (UUIDs compare case-insensitively)', async () => {
-            const entity = loadedCustomer();
-            GraphQLWire.EnqueueResponse({ DeleteCRMCustomer: { ID: 'cust-0001' } });
-
-            expect(await provider.Delete(entity, new EntityDeleteOptions(), user)).toBe(true);
-            expect(entity.LatestResult.Success).toBe(true);
-        });
-
-        it('fails when the server echoes a NULL key (nothing was deleted)', async () => {
-            const entity = loadedCustomer();
-            GraphQLWire.EnqueueResponse({ DeleteCRMCustomer: { ID: null } });
-
-            expect(await provider.Delete(entity, new EntityDeleteOptions(), user)).toBe(false);
-            expect(entity.LatestResult.Message).toContain('Primary key value mismatch');
-        });
-
-        describe('inside a transaction group, the queued delete is judged by the same key match', () => {
-            class InspectableTransactionGroup extends GraphQLTransactionGroup {
-                public get Pending(): TransactionItem[] {
-                    return this.PendingTransactions;
-                }
-            }
-
-            async function queuedDelete(): Promise<{ entity: TestCustomerEntity; item: TransactionItem }> {
-                const group = new InspectableTransactionGroup(provider);
-                const entity = loadedCustomer();
-                entity.TransactionGroup = group;
-                expect(await provider.Delete(entity, new EntityDeleteOptions(), user)).toBe(true); // queued, not sent
-                expect(GraphQLWire.Requests).toHaveLength(0);
-                return { entity, item: group.Pending[0] };
-            }
-
-            it('the record\'s key in another letter case succeeds', async () => {
-                const { entity, item } = await queuedDelete();
-                await item.CallBack({ ID: 'cust-0001' }, true);
-                expect(entity.LatestResult.Success).toBe(true);
-            });
-
-            it('a NULL key fails the delete', async () => {
-                const { entity, item } = await queuedDelete();
-                await item.CallBack({ ID: null }, true);
-                expect(entity.LatestResult.Success).toBe(false);
-                expect(entity.LatestResult.Message).toBe('Transaction failed to commit');
-            });
-        });
-
         it('fails when the response lacks the mutation key', async () => {
             const entity = loadedCustomer();
             GraphQLWire.EnqueueResponse({ SomethingElse: {} });
@@ -540,9 +494,9 @@ describe("GraphQLDataProvider rehydrates a refusal's validationErrors extension"
         expect(entity.LatestResult.Success).toBe(false);
         expect(entity.LatestResult.Message).toBe(REFUSAL_PROSE);
         expect(entity.LatestResult.Errors).toHaveLength(2);
-        expect(entity.LatestResult.Errors?.every((e: unknown) => e instanceof ValidationErrorInfo)).toBe(true);
-        expect(entity.LatestResult.Errors?.[0]).toMatchObject({ Source: 'Tier', Message: REFUSAL_PROSE, Value: 'Platinum', Type: 'Failure' });
-        expect(entity.LatestResult.Errors?.[1]).toMatchObject({ Source: '', Message: 'Reviewed by the tier policy', Type: 'Warning' });
+        expect(entity.LatestResult.Errors.every((e: unknown) => e instanceof ValidationErrorInfo)).toBe(true);
+        expect(entity.LatestResult.Errors[0]).toMatchObject({ Source: 'Tier', Message: REFUSAL_PROSE, Value: 'Platinum', Type: 'Failure' });
+        expect(entity.LatestResult.Errors[1]).toMatchObject({ Source: '', Message: 'Reviewed by the tier policy', Type: 'Warning' });
     });
 
     it('Save: CompleteMessage carries the refusal text ONCE — Message is the server\'s CompleteMessage, Errors are the same entries', async () => {
@@ -622,8 +576,8 @@ describe("GraphQLDataProvider rehydrates a refusal's validationErrors extension"
         expect(ok).toBe(false);
         expect(entity.LatestResult.Message).toBe('Customer has open orders.');
         expect(entity.LatestResult.Errors).toHaveLength(1);
-        expect(entity.LatestResult.Errors?.[0]).toBeInstanceOf(ValidationErrorInfo);
-        expect(entity.LatestResult.Errors?.[0]).toMatchObject({ Source: 'ID', Message: 'Customer has open orders.' });
+        expect(entity.LatestResult.Errors[0]).toBeInstanceOf(ValidationErrorInfo);
+        expect(entity.LatestResult.Errors[0]).toMatchObject({ Source: 'ID', Message: 'Customer has open orders.' });
         expect(entity.LatestResult.CompleteMessage, 'once, not twice').toBe('Customer has open orders.');
     });
 });

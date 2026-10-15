@@ -117,9 +117,6 @@ export interface EntityTransactionScope {
  *     for (const line of lines) await line.Save();
  *     return lines.length;
  * });
- *
- * // A unit of work that reports failure by returning false rather than throwing:
- * const deleted = await RunInEntityTransaction(provider, () => record.Delete(), (ok) => ok);
  * ```
  *
  * @param provider - The provider to obtain the scope from. When it does not support entity
@@ -127,10 +124,8 @@ export interface EntityTransactionScope {
  *                   callers needing atomicity must check `SupportsEntityTransactions` first and
  *                   route the unit of work to the server instead.
  * @param work - The work to perform inside the scope.
- * @param commitWhen - Optional. Decides from the work's result whether to commit. When it returns
- *                     false the scope is rolled back and the result is returned as-is (not thrown):
- *                     for work that reports failure through its result, such as `Save()`/`Delete()`
- *                     returning false. Omitted, every result that is not a throw commits.
+ * @param commitWhen - Optional. When it rejects the work's result (e.g. `Delete()` returned false),
+ *                     the scope is rolled back and the result returned as-is.
  * @returns Whatever `work` returns.
  * @throws Re-throws whatever `work` throws, after rolling the scope back.
  */
@@ -162,7 +157,6 @@ export async function RunInEntityTransaction<T>(
         await rollbackKeepingCallerError(scope, 'the work threw');
         throw e;
     }
-    // The work reported failure through its result: undo it, and hand the result back unchanged.
     await rollbackKeepingCallerError(scope, 'the work reported failure');
     return result;
 }

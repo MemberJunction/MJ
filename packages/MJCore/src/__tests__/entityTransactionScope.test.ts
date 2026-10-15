@@ -200,43 +200,4 @@ describe('RunInEntityTransaction', () => {
         expect(provider.Calls).toEqual(['begin:1', 'rollback:1']);
     });
 
-    it('commitWhen: a result it accepts commits', async () => {
-        const provider = new RecordingProvider();
-
-        const result = await RunInEntityTransaction(provider, async () => true, (ok) => ok);
-
-        expect(result).toBe(true);
-        expect(provider.Calls).toEqual(['begin:1', 'commit:1']);
-    });
-
-    it('a rollback that fails after a rejected result is logged, and the result still comes back', async () => {
-        const provider = new RecordingProvider();
-        provider.RollbackTransaction = async () => {
-            throw new Error('No active transaction to rollback');
-        };
-        const logged = vi.spyOn(Logging, 'LogError').mockImplementation(() => undefined);
-
-        const result = await RunInEntityTransaction(provider, async () => false, (ok) => ok);
-
-        expect(result).toBe(false);
-        expect(logged.mock.calls.flat().map(String).join(' ')).toMatch(/rollback failed after the work reported failure.*No active transaction to rollback/);
-        logged.mockRestore();
-    });
-
-    it('a falsy thrown value is still rethrown after the rollback', async () => {
-        const provider = new RecordingProvider();
-        let caught: unknown = 'not reached';
-        let threw = false;
-        try {
-            await RunInEntityTransaction(provider, async (): Promise<boolean> => {
-                throw undefined;
-            }, (ok) => ok);
-        } catch (e) {
-            threw = true;
-            caught = e;
-        }
-        expect(threw).toBe(true);
-        expect(caught).toBeUndefined();
-        expect(provider.Calls).toEqual(['begin:1', 'rollback:1']);
-    });
 });

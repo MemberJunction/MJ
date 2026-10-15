@@ -1,10 +1,3 @@
-/**
- * `EntityInfo.RecordNameFields` and `EntityInfo.CanUserReadRecordName`: the one record-name rule every reader
- * uses (the database provider's record-name read, and the Record Set Processor's dry-run preview). A name is
- * built from every `IsNameField` field by `Sequence`, else the entity's `NameField`; a user sees it only when
- * every one of those fields is readable to them (whole or not at all).
- */
-
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, FieldPermissionAccess } from '../generic/entityInfo';
 import { UserInfo, UserRoleInfo } from '../generic/securityInfo';
@@ -53,32 +46,12 @@ describe('EntityInfo.RecordNameFields', () => {
         expect(tags.RecordNameFields.map((f) => f.Name)).toEqual(['Name']);
     });
 
-    it('is empty for an entity without name fields', () => {
-        const links = new EntityInfo({ ID: 'E-L', Name: 'Links', Fields: [{ Name: 'ID', Type: 'int', IsPrimaryKey: true }, { Name: 'Weight', Type: 'int' }] });
-        expect(links.RecordNameFields).toEqual([]);
-    });
 });
 
 describe('EntityInfo.CanUserReadRecordName', () => {
-    it('lets anyone read names when field security is off', () => {
-        expect(people(false).CanUserReadRecordName(user(INTERN))).toBe(true);
-        expect(people(false).CanUserReadRecordName(undefined)).toBe(true);
-    });
-
     it('lets a user read a name only when every name field is readable (never part of it)', () => {
         expect(people(true).CanUserReadRecordName(user(STAFF))).toBe(true);
         expect(people(true).CanUserReadRecordName(user(INTERN))).toBe(false);
     });
 
-    it('ignores fields that are not part of the name', () => {
-        const entity = people(true);
-        entity.Fields.find((f) => f.Name === 'LastName')!.IsNameField = false;
-        // the intern may read FirstName, the whole name now; Email stays denied and does not matter
-        expect(entity.CanUserReadRecordName(user(INTERN))).toBe(true);
-    });
-
-    it('fails closed for a missing user when field security is on', () => {
-        expect(people(true).CanUserReadRecordName(undefined)).toBe(false);
-        expect(people(true).CanUserReadRecordName(null)).toBe(false);
-    });
 });

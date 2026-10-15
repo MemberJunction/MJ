@@ -1062,11 +1062,8 @@ record_change AS (
     INSERT INTO ${this._schemaName}."RecordChange"
         ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
     SELECT $${s}::uuid, $${s+1}::varchar, $${s+2}::uuid, 'Delete', $${s+3}::varchar, '', 'Record Deleted', $${s+4}::text, 'Complete', $${s+5}::uuid, $${s+6}::text${cc.value}
-    FROM delete_result AS deleted
-    -- A whole-row IS NOT NULL holds only when EVERY returned key is non-NULL: a NULL-key row is the
-    -- delete function reporting that nothing was deleted, so it must not produce a Delete audit row.
-    -- (Works for both result shapes — PK-named columns and the legacy "_result_id".)
-    WHERE deleted IS NOT NULL
+    FROM delete_result
+    WHERE EXISTS (SELECT 1 FROM delete_result)
     RETURNING "ID"
 )
 SELECT * FROM delete_result`;
@@ -1100,14 +1097,30 @@ SELECT * FROM delete_result`;
     ): boolean {
         if (!rawResult || rawResult.length === 0) return false;
         const deletedRecord = rawResult[0];
-        // Legacy single-PK shape: the key comes back as `_result_id` instead of the PK's name. Map it
-        // onto the PK name, then judge with the shared predicate every delete path uses (all keys
-        // present, non-NULL and equal; UUIDs case-insensitively). A NULL key means the function
-        // reported zero rows affected — the record was already gone.
-        const keys = entity.PrimaryKeys;
-        const legacyKeyName = keys.length === 1 && !(keys[0].Name in deletedRecord) && '_result_id' in deletedRecord ? keys[0].Name : undefined;
-        const row = legacyKeyName ? { ...deletedRecord, [legacyKeyName]: deletedRecord['_result_id'] } : deletedRecord;
-        return PostgreSQLDataProvider.CheckDeleteResultRow(entity, row, entityResult);
+
+        // Compound PK: every PK column must be present and match. Legacy `_result_id`
+        // shape doesn't apply here — only single-PK entities use it.
+        if (entity.PrimaryKeys.length > 1) {
+            for (const key of entity.PrimaryKeys) {
+                if (key.Value !== deletedRecord[key.Name]) {
+                    entityResult.Message = `Delete failed: record with primary key ${key.Name}=${key.Value} not found`;
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Single PK: accept either the PK-named column (current codegen) or `_result_id`
+        // (legacy baseline sproc). A null value in either means the sproc reported zero
+        // rows affected — record was already gone.
+        const pk = entity.FirstPrimaryKey; // first-pk-ok: the PrimaryKeys.length > 1 branch above already returned; this is the single-key path
+        const pkValue = deletedRecord[pk.Name];
+        const legacyValue = deletedRecord['_result_id'];
+        if (pkValue === pk.Value || legacyValue === pk.Value) {
+            return true;
+        }
+        entityResult.Message = `Delete failed: record with primary key ${pk.Name}=${pk.Value} not found`;
+        return false;
     }
 
     // ─── SQL Building Helpers ────────────────────────────────────────

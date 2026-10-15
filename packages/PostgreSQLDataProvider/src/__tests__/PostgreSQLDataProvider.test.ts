@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PostgreSQLDataProvider } from '../PostgreSQLDataProvider.js';
-import { BaseEntity, CompositeKey, EntityInfo, EntityFieldTSType } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, EntityFieldTSType } from '@memberjunction/core';
 import { DoomedTransactionError } from '@memberjunction/generic-database-provider';
 
 /**
@@ -687,16 +687,9 @@ describe('PostgreSQLDataProvider', () => {
             ): boolean;
         };
 
-        function buildEntity(pks: { Name: string; Value: unknown }[], isUUID = true) {
-            // Each key carries the EntityFieldInfo flag the shared delete-result predicate reads; the
-            // entity's own DeleteResultMatches is the real BaseEntity predicate over those keys.
-            const keys = pks.map((pk) => ({ ...pk, EntityFieldInfo: { IsUniqueIdentifier: isUUID } }));
-            const entity = {
-                PrimaryKeys: keys,
-                FirstPrimaryKey: keys[0],
-                DeleteResultMatches: (row: Record<string, unknown> | null | undefined): boolean => BaseEntity.DeleteResultMatchesEntity(entity, row),
-            } as unknown as BaseEntity;
-            return entity as Parameters<Validator['ValidateDeleteResult']>[0];
+        function buildEntity(pks: { Name: string; Value: unknown }[]) {
+            // FirstPrimaryKey mirrors BaseEntity's accessor, which the single-PK path reads.
+            return { PrimaryKeys: pks, FirstPrimaryKey: pks[0] } as unknown as Parameters<Validator['ValidateDeleteResult']>[0];
         }
 
         let validator: Validator;
@@ -728,12 +721,6 @@ describe('PostgreSQLDataProvider', () => {
             const result: { Message?: string } = {};
             expect(validator.ValidateDeleteResult(entity, [{ _result_id: null }], result)).toBe(false);
             expect(result.Message).toContain('ID=abc');
-        });
-
-        it('compares UUID keys case-insensitively (PG returns lower case) and non-UUID keys exactly', () => {
-            const upper = 'A6DA423E-F36B-1410-8DAC-00021F8B792E';
-            expect(validator.ValidateDeleteResult(buildEntity([{ Name: 'ID', Value: upper }]), [{ ID: upper.toLowerCase() }], { Message: '' })).toBe(true);
-            expect(validator.ValidateDeleteResult(buildEntity([{ Name: 'Code', Value: 'AB' }], false), [{ Code: 'ab' }], { Message: '' })).toBe(false);
         });
 
         it('returns false on empty result', () => {

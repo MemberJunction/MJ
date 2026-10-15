@@ -3792,9 +3792,7 @@ export class EntityInfo extends BaseInfo {
     /**
      * The fields a record's display name is built from, in order: every `IsNameField` field by
      * `Sequence` (so FirstName + LastName gives "Elizabeth Rodriguez"), else the entity's single
-     * {@link NameField}. Empty when the entity has neither. The one rule every record-name reader
-     * uses: the database provider's record-name read and the Record Set Processor's dry-run preview.
-     * A new array on each call (callers may keep it).
+     * {@link NameField}. Empty when the entity has neither.
      */
     public get RecordNameFields(): EntityFieldInfo[] {
       const nameFields = this.Fields
@@ -3808,11 +3806,8 @@ export class EntityInfo extends BaseInfo {
 
     /**
      * Whether a user may see this entity's record names: every field in {@link RecordNameFields}
-     * must be readable to them, so a name is shown whole or not at all (never part of it). On an
-     * entity with field-level security on, a missing user may not, because there is nobody to
-     * check against (unlike {@link IsFieldReadableByUser}, which fails open for display chrome:
-     * a record name is data a reader could not otherwise see).
-     * @param user the acting user
+     * must be readable to them. On an entity with field-level security on, a missing user may not,
+     * because there is nobody to check against.
      */
     public CanUserReadRecordName(user: UserInfo | null | undefined): boolean {
       if (!this.EnableFieldLevelSecurity) {
