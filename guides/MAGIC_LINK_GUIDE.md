@@ -360,6 +360,20 @@ No new mechanism — it's reads over existing data:
   for Owner callers — broadening it is an explicit, per-deployment opt-in.
 - **The restricted role is the real boundary** — entity permissions are enforced
   server-side. UI confinement is cosmetic.
+- **Execution entry points refuse scope-limited sessions** — an anonymous guest or a
+  resource-scoped session is confined by RLS tokens, which exist only on paths that go
+  through entity permissions. Entry points that run server work instead — actions,
+  AI prompts and agents, templates, stored and ad-hoc queries, MCP tools, integrations,
+  entity communications, API-key creation — refuse these sessions, mostly through
+  `@RefuseScopeLimitedPrincipals()` in `MJServer/src/auth/scopeLimitedAccess.ts`
+  (`RunAction`, `ExecuteAdhocQuery` and `RunDecision` refuse inline with
+  `IsScopeLimitedPrincipal`). Two
+  paths serve guests on purpose: the public web widget's agent dispatch (the agent is
+  pinned by the widget instance and runs under a server principal) and Remote Operations
+  that set `AllowScopeLimitedPrincipals` and check the scope in `Authorize`
+  ([Remote Operations Guide](REMOTE_OPERATIONS_GUIDE.md#serving-magic-link-guests)).
+  A custom resolver that does server work on a guest's request should carry the same
+  decorator.
 - **Revocation** — set an invite's `Status` to `Revoked` to kill an unredeemed
   link. To cut off already-issued sessions, rotate the RS256 key (invalidates all
   outstanding magic-link sessions; internal SSO is unaffected).

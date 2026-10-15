@@ -9,6 +9,7 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 import { z } from 'zod';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 @InputType()
 export class CommunicationProviderMessageType {
@@ -166,6 +167,7 @@ export class RunEntityCommunicationResultType {
   public Results?: any;
 }
 
+@RefuseScopeLimitedPrincipals()
 @Resolver(RunEntityCommunicationResultType)
 export class ReportResolver extends ResolverBase {
   @Query(() => RunEntityCommunicationResultType)

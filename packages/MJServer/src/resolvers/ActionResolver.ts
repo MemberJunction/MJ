@@ -12,6 +12,7 @@ import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IsScopeLimitedPrincipal } from "../auth/scopeLimitedPrincipal.js";
 import { EvaluateActionRunAuthorization, IsOwner } from "../auth/actionAuthorization.js";
+import { RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
 
 /**
  * Input type for action parameters
@@ -395,6 +396,7 @@ export class ActionResolver extends ResolverBase {
    * @param ctx The GraphQL context containing user authentication information
    * @returns The result of running the entity action
    */
+  @RefuseScopeLimitedPrincipals()
   @Mutation(() => ActionResultOutput)
   async RunEntityAction(
     @Arg("input") input: EntityActionInput,

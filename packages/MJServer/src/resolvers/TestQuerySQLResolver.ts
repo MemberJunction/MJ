@@ -4,6 +4,7 @@ import { RunQuery, IRunQueryProvider, LogError, LogStatus, QueryExecutionSpec } 
 import { AppContext } from '../types.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 /**
  * GraphQL input type for inline dependency queries.
@@ -93,6 +94,7 @@ export class TestQuerySQLResult {
  *
  * @see https://github.com/MemberJunction/MJ/issues/2172
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class TestQuerySQLResolver extends ResolverBase {
     @Query(() => TestQuerySQLResult, {

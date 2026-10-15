@@ -13,6 +13,8 @@ import { StartLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolveWidgetGuestRunContext, ElevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -533,6 +535,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Public mutation for regular users to run AI agents with authentication.
      * Supports fire-and-forget mode to avoid Azure proxy timeouts on long-running agent executions.
      */
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => AIAgentRunResult)
     async RunAIAgent(
         @Arg('agentId') agentId: string,
@@ -956,6 +959,14 @@ export class RunAIAgentResolver extends ResolverBase {
         // own ConversationDetail through the Widget Guest RLS filters, so a detail id from another
         // session resolves to "not found" before any elevated work happens.
         const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
+        // Every OTHER scope-limited session (resource-scoped magic links, anonymous guests without a
+        // resolvable widget) is refused: its RLS scope does not bound which agent runs or what the
+        // agent does, so only the pinned-agent widget path above may dispatch for a guest.
+        if (!widgetElevation && IsScopeLimitedPrincipal(currentUser) && !userPayload.isSystemUser) {
+            const errorMessage = 'RunAIAgentFromConversationDetail is not available to scope-limited sessions';
+            LogStatus(`[Auth] Refused RunAIAgentFromConversationDetail for a scope-limited session (user ${currentUser.ID}).`);
+            return { success: false, errorMessage, result: JSON.stringify({ success: false, errorMessage }) };
+        }
         const effectiveAgentId = widgetElevation ? widgetElevation.PinnedAgentId : agentId;
         const effectiveUserPayload = widgetElevation ? ElevateUserPayload(userPayload, widgetElevation.ElevatedUser) : userPayload;
 
@@ -1076,6 +1087,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Updates the request record with the response and optionally spawns a
      * new agent run to resume execution with the human's input.
      */
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => AIAgentRunResult)
     async RespondToAgentRequest(
         @Arg('requestId') requestId: string,
@@ -1153,6 +1165,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Reassign an agent request to a different user.
      * Updates RequestForUserID and sends a notification to the new assignee.
      */
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => AIAgentRunResult)
     async ReassignAgentRequest(
         @Arg('requestId') requestId: string,
