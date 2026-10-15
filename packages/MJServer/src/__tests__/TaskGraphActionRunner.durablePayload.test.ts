@@ -82,7 +82,9 @@ describe('TaskGraphActionRunner — durable payload round-trips by param name (#
     beforeEach(() => {
         // vitest's `restoreMocks: true` clears mock implementations before every test, including
         // the ones assigned inside the `vi.mock` factory above — so the return value is (re)armed here.
+        // Call history on a vi.fn created inside vi.mock survives that restore, so clear it too.
         vi.mocked(ActionEngineServer.Instance.Config).mockResolvedValue(undefined);
+        vi.mocked(ActionEngineServer.Instance.RunAction, { partial: true }).mockClear();
         vi.mocked(ActionEngineServer.Instance.RunAction, { partial: true }).mockResolvedValue({
             Success: true,
             Params: [],
