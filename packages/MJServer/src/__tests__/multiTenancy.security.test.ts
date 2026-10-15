@@ -518,6 +518,57 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
   });
 
+  // ─── Client ExtraFilter containment ───────────────────────────────────
+
+  describe('client ExtraFilter must stay inside its parentheses', () => {
+    // The hook builds `(<ExtraFilter>) AND (<tenant>)`. A filter that closes a parenthesis it did
+    // not open turns that into `(1=1) OR (1=1) AND (<tenant>)`: AND binds tighter than OR, so the
+    // tenant predicate would narrow only one side of an OR the caller controls.
+    const escapes = [
+      '1=1) OR (1=1',
+      "Name = 'a') OR (Name = 'b'",
+      '1=1)) OR ((1=1',
+    ];
+
+    it.each(escapes)('refuses the ExtraFilter %j instead of ANDing the tenant predicate onto it', (extraFilter) => {
+      const hook = CreateTenantPreRunViewHook(makeConfig());
+      const params = { EntityName: 'Customers', ExtraFilter: extraFilter } as RunViewParams;
+
+      expect(() => hook(params, makeUser('tenant-abc'))).toThrow(/parenthesis/);
+    });
+
+    it('refuses an ExtraFilter that ends inside an unterminated string literal', () => {
+      const hook = CreateTenantPreRunViewHook(makeConfig());
+      const params = { EntityName: 'Customers', ExtraFilter: "Name = 'a" } as RunViewParams;
+
+      expect(() => hook(params, makeUser('tenant-abc'))).toThrow(/unterminated/);
+    });
+
+    it('refuses an ExtraFilter that contains a comment', () => {
+      const hook = CreateTenantPreRunViewHook(makeConfig());
+      const params = { EntityName: 'Customers', ExtraFilter: "Name = 'a' -- note\n" } as RunViewParams;
+
+      expect(() => hook(params, makeUser('tenant-abc'))).toThrow(/comment/);
+    });
+
+    it('applies the PostgreSQL rules too when the provider dialect is unknown', () => {
+      // The mocked Metadata.Provider here is not a database provider, so the hook reads the filter
+      // with every supported dialect.
+      const hook = CreateTenantPreRunViewHook(makeConfig());
+      const params = { EntityName: 'Customers', ExtraFilter: 'Name = $$x$$' } as RunViewParams;
+
+      expect(() => hook(params, makeUser('tenant-abc'))).toThrow(/dollar/);
+    });
+
+    it('keeps a balanced ExtraFilter and the tenant predicate as separate parenthesized terms', () => {
+      const hook = CreateTenantPreRunViewHook(makeConfig());
+      const params = { EntityName: 'Customers', ExtraFilter: "Name = 'a) OR (b' OR Name = 'c'" } as RunViewParams;
+
+      const result = hook(params, makeUser('tenant-abc')) as RunViewParams;
+      expect(result.ExtraFilter).toBe("(Name = 'a) OR (b' OR Name = 'c') AND ([OrganizationID] = 'tenant-abc')");
+    });
+  });
+
   // ─── PreSave security edge cases ──────────────────────────────────────
 
   describe('PreSave security', () => {
