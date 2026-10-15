@@ -12530,6 +12530,9 @@ The context is now within limits. Please retry your request with the recovered c
         if (params.targetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.targetId)) {
             console.warn(`Invalid target ID format: ${params.targetId}`);
         }
+        // A start payload that repeats an earlier step's end is stored as a pointer to that step.
+        const payloadAtStart = this.serializePayloadAtStart(params.payloadAtStart);
+        const payloadAtStartSource = this.findPayloadAtStartSource(payloadAtStart);
         // Populate the started fields via the shared single-source-of-truth helper. Instance-specific
         // concerns (hierarchy breadcrumb, InputData context, payload serialization) are computed here.
         initAgentRunStep(stepEntity, {
@@ -12540,7 +12543,8 @@ The context is now within limits. Please retry your request with the recovered c
             TargetID: params.targetId,
             TargetLogID: params.targetLogId,
             ParentID: params.parentId,  // Link to parent step (e.g., loop step)
-            PayloadAtStart: this.serializePayloadAtStart(params.payloadAtStart),
+            PayloadAtStart: payloadAtStartSource ? null : payloadAtStart,
+            PayloadAtStartSourceStepID: payloadAtStartSource?.ID ?? null,
             PayloadAtEnd: this.serializePayloadAtEnd(params.payloadAtEnd),
             InputData: params.inputData
                 ? JSON.stringify({
@@ -12581,6 +12585,8 @@ The context is now within limits. Please retry your request with the recovered c
         // When the step has a parent, chain the INSERT AFTER the parent's INSERT to satisfy the
         // self-referencing FK_AIAgentRunStep_ParentID constraint — without this, a child INSERT that
         // races the parent INSERT hits an FK violation (especially under large-payload parent INSERTs).
+        // FK_AIAgentRunStep_PayloadAtStartSourceStepID needs no chaining: the payload source is always a
+        // step whose INSERT has already landed (see findPayloadAtStartSource).
         const parentStepEntity = params.parentId && this._agentRun?.Steps
             ? this._agentRun.Steps.find(s => UUIDsEqual(s.ID, params.parentId))
             : undefined;
@@ -12592,6 +12598,44 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         return stepEntity;
+    }
+
+    /**
+     * Finds the step whose `PayloadAtEnd` a new step's start payload repeats, so the new step stores a
+     * pointer to it (`PayloadAtStartSourceStepID`) instead of a second copy. Call it before the new step
+     * is added to the run's `Steps`.
+     *
+     * The candidate is the latest step in the run that is not `Running` and has a `PayloadAtEnd`. Only that
+     * step is compared, with `===` on its in-memory `PayloadAtEnd`, and it is used only when its INSERT has
+     * landed (`IsSaved`). Otherwise the start payload is stored; no older step is compared.
+     * - Running steps are skipped because their end can still change: parallel sub-agent siblings write
+     *   their own result as `PayloadAtEnd` when they finish, and a ForEach step writes its end after all
+     *   of its child steps.
+     * - Finished steps with no end (tool, compaction and finish-check steps) are skipped because they never
+     *   get one, and would hide the step that produced the payload.
+     * - An unsaved candidate is not used because the new step's INSERT does not wait for it. If the
+     *   candidate's INSERT were still in flight, or failed, the pointer's foreign key would reject the new row.
+     *
+     * Rule: a step's `PayloadAtEnd` must not change after a later step points at it, because readers take
+     * the pointing step's start payload from it. The comparison uses the in-memory end, so the saved end
+     * must match it: `finalizeStepEntity` re-applies the end after the INSERT lands, and an end set after
+     * `finalizeStepEntity` is saved with `queueStepSave`.
+     *
+     * @param serializedStart The new step's start payload, already serialized.
+     * @returns The step to point at, or undefined when the start payload must be stored.
+     */
+    private findPayloadAtStartSource(serializedStart: string | null): MJAIAgentRunStepEntityExtended | undefined {
+        if (serializedStart == null) {
+            return undefined;
+        }
+        const steps = this._agentRun?.Steps ?? [];
+        for (let i = steps.length - 1; i >= 0; i--) {
+            const step = steps[i];
+            if (step.Status !== 'Running' && step.PayloadAtEnd != null) {
+                return step.IsSaved && step.PayloadAtEnd === serializedStart ? step : undefined;
+            }
+        }
+        return undefined;
     }
 
     /**
@@ -12654,6 +12698,9 @@ The context is now within limits. Please retry your request with the recovered c
      * populated consistently and the UPDATE is sequenced behind the INSERT via
      * `queueStepSave`.
      *
+     * Set `PayloadAtEnd` before calling it: the queued UPDATE re-applies the end the step has now.
+     * An end set later must be saved with `queueStepSave`.
+     *
      * @protected
      */
     protected async finalizeStepEntity(stepEntity: MJAIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
@@ -12670,6 +12717,9 @@ The context is now within limits. Please retry your request with the recovered c
                 // reload could leave it null on a fast step.
                 targetLogID: stepEntity.TargetLogID ?? undefined
             };
+            // Capture the end the step finished with for the same reason: a later step may point at this
+            // step after comparing this end, so the saved row must end with it.
+            const payloadAtEnd = stepEntity.PayloadAtEnd;
 
             // Apply to the in-memory entity NOW so the run's Steps array / UI see the terminal state
             // immediately. This in-memory copy can be reverted by the INSERT's post-save reload if the step
@@ -12677,10 +12727,13 @@ The context is now within limits. Please retry your request with the recovered c
             // post-INSERT continuation below (idempotent — same completedAt).
             finalizeAgentRunStep(stepEntity, finalizeOpts);
 
-            // Fire-and-forget the UPDATE, but re-assert the finalize state AFTER the INSERT (and its reload)
-            // lands so the force-persisted UPDATE never writes stale pre-finalize values. The agent flow
-            // never blocks on this UPDATE.
-            this.queueStepSave(stepEntity, (s) => finalizeAgentRunStep(s, finalizeOpts));
+            // Fire-and-forget the UPDATE, but re-assert the finalize state and the end AFTER the INSERT (and
+            // its reload) lands so the force-persisted UPDATE never writes stale pre-finalize values. The
+            // agent flow never blocks on this UPDATE.
+            this.queueStepSave(stepEntity, (s) => {
+                finalizeAgentRunStep(s, finalizeOpts);
+                s.PayloadAtEnd = payloadAtEnd;
+            });
         }
         catch (e) {
             LogError(`Failed to update agent run step record: ${(e as Error)?.message ?? e}`, undefined, e);
@@ -13813,8 +13866,6 @@ The context is now within limits. Please retry your request with the recovered c
                 scopedPayload = subAgentPayloadOverride; // we received a payload override, use it
             }
 
-            stepEntity.PayloadAtStart = this.serializePayloadAtStart(previousDecision.newPayload);
-
             // Execute sub-agent with scoped payload
             // Child sub-agents don't use context messages (they inherit payload directly)
             const subAgentResult = await this.ExecuteSubAgent<SC, SR>(
@@ -13986,6 +14037,11 @@ The context is now within limits. Please retry your request with the recovered c
                 })
             }; 
 
+            // Set PayloadAtEnd with the merged payload
+            if (stepEntity) {
+                stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
+            }
+
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, subAgentResult.success,
                 subAgentResult.agentRun?.ErrorMessage, outputData);
@@ -14048,11 +14104,6 @@ The context is now within limits. Please retry your request with the recovered c
                 }], subAgentMetadata) as AgentChatMessage);
             } else {
                 params.conversationMessages.push({ role: 'user', content: resultMessage, metadata: subAgentMetadata } as AgentChatMessage);
-            }
-
-            // Set PayloadAtEnd with the merged payload
-            if (stepEntity) {
-                stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
             }
 
             // Update the agent run's current payload with the merged result
@@ -14819,7 +14870,6 @@ The context is now within limits. Please retry your request with the recovered c
             // Related agents can receive parent data in two ways:
             // 1. SubAgentInputMapping: Maps parent payload → sub-agent payload (structural data)
             // 2. SubAgentContextPaths: Parent payload → sub-agent conversation context (LLM awareness)
-            stepEntity.PayloadAtStart = this.serializePayloadAtStart(previousDecision.newPayload);
 
             // Prepare initial payload via input mapping (if configured)
             let initialSubAgentPayload: SR | undefined = subAgentPayloadOverride;
@@ -15657,8 +15707,10 @@ The context is now within limits. Please retry your request with the recovered c
                     
                     finalPayload = changeResult.result;
                     if (lastStep) {
-                        lastStep.PayloadAtEnd = this.serializePayloadAtEnd(finalPayload);
-                        await lastStep.Save();
+                        const payloadAtEnd = this.serializePayloadAtEnd(finalPayload);
+                        lastStep.PayloadAtEnd = payloadAtEnd;
+                        // Queued behind the step's earlier saves, so the saved row ends with this end.
+                        this.queueStepSave(lastStep, (s) => { s.PayloadAtEnd = payloadAtEnd; });
                     }
                     
                     if (changeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
@@ -18096,10 +18148,8 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.Status = 'Completed';
             }
 
-            // Serialize the (largest-it-ever-gets) final payload ONCE and reuse for both
-            // Result and FinalPayload instead of stringifying the same object three times.
+            // Serialize the (largest-it-ever-gets) final payload once for FinalPayload.
             const finalPayloadJson = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
-            this._agentRun.Result = finalPayloadJson;
             this._agentRun.FinalStep = finalStep.step;
             this._agentRun.Message = finalStep.message;
 

@@ -78,7 +78,7 @@ import {
     QueryInfo,
 } from '@memberjunction/core';
 
-import { BytesToBase64, IsByteArray, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { BytesToBase64, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -111,6 +111,7 @@ import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-
 import { TransactionFrameTracker } from './TransactionFrameTracker';
 import { TransactionAffinity, type TransactionMembership } from './TransactionAffinity.js';
 import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
+import { ClientClauseScreen, type ClientClauseScreeningProvider } from './clientClauseScreen.js';
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -180,7 +181,7 @@ export class DoomedTransactionError extends Error {
     }
 }
 
-export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
+export abstract class GenericDatabaseProvider extends DatabaseProviderBase implements ClientClauseScreeningProvider {
     // Composition engine is now owned by RenderPipeline
 
     /**************************************************************************/
@@ -1997,6 +1998,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const excludeUserViewRunID: string = params.ExcludeUserViewRunID ?? '';
             const overrideExcludeFilter: string = params.OverrideExcludeFilter ?? '';
             const saveViewResults: boolean = params.SaveViewResults ?? false;
+            this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
+            this.AssertClauseFragmentIsSingleStatement(overrideExcludeFilter, 'OverrideExcludeFilter');
 
             // ── TOP / pagination mode ──
             // Keyset (AfterKey) takes precedence: validate now so failures are early, predictable,
@@ -2059,14 +2062,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // 1. View where clause
             if (viewEntity?.WhereClause && viewEntity.WhereClause.length > 0) {
                 const renderedWhere = await this.RenderViewWhereClause(viewEntity, user);
-                // SECURITY: a stored view WhereClause originates from a client save, so pass the
-                // rendered clause through the same screen ExtraFilter gets. The one exemption is
-                // CustomWhereClause views: those are admin-authored (MJUserViewEntityServer's save
-                // gate restricts setting/changing them to Owner-type users) and may legitimately
-                // contain constructs the screen blocks. Auto-generated clauses (FilterState /
-                // SmartFilter / nested {%UserView%} templates) always pass — the screen permits
-                // plain SELECT subqueries and blocks only stacked statements, DML, comments,
-                // UNION and WAITFOR.
+                // SECURITY: a stored view WhereClause originates from a client save, so the rendered
+                // clause passes the full client-clause screen (ScreenStoredViewWhereClause) and the
+                // keyword denylist ExtraFilter gets. The one exemption is CustomWhereClause views:
+                // those are admin-authored (MJUserViewEntityServer's save gate restricts setting/
+                // changing them to Owner-type users) and may legitimately contain constructs the
+                // screens block. Auto-generated clauses (FilterState / SmartFilter / nested
+                // {%UserView%} templates) are written against entity base views, which the screens
+                // permit when the running user reads each of those entities unscoped.
+                this.ScreenStoredViewWhereClause(viewEntity, renderedWhere, user);
                 const isCustomWhereClause = !!viewEntity.CustomWhereClause; // truthy — the DB may hand back true or 1
                 if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {
                     throw new Error(`Invalid view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}': contains one or more forbidden keywords`);
@@ -2118,8 +2122,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // first column's value with a prior run — refuse rather than return the wrong rows.
                 this.assertSingleColumnPrimaryKey(entityInfo, 'ExcludeUserViewRunID / ExcludeDataFromAllPriorViewRuns');
                 let sExcludeSQL = `${this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name)} NOT IN (SELECT RecordID FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwUserViewRunDetails')} WHERE EntityID='${viewEntity?.EntityID}' AND`; // first-pk-ok: guarded above — view-run RecordID is a single bare key value, PrimaryKeys.length === 1 enforced
-                if (params.ExcludeDataFromAllPriorViewRuns === true)
+                if (params.ExcludeDataFromAllPriorViewRuns === true) {
+                    // SECURITY: the view ID is interpolated; a loaded view's ID is always a GUID.
+                    if (!IsValidUUID(String(viewEntity?.ID ?? '')))
+                        throw new Error(`ExcludeDataFromAllPriorViewRuns requires a saved view with a GUID ID`);
                     sExcludeSQL += ` UserViewID=${viewEntity?.ID})`;
+                }
                 else {
                     // SECURITY: excludeUserViewRunID is user-supplied (GraphQL input) and is
                     // interpolated directly into SQL here. Unlike ExtraFilter/OrderBy/
@@ -2200,6 +2208,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const orderBy: string = rawOrderBy.length > 0
                 ? (usingKeyset || orderByIsPkFallback ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
                 : '';
+            if (orderBy.length > 0 && !usingKeyset && !orderByIsPkFallback) {
+                this.AssertClauseFragmentIsSingleStatement(orderBy, 'OrderBy');
+                // No caller OrderBy means the sort came from the saved view's stored sort state.
+                if (!params.OrderBy && viewEntity) this.ScreenStoredViewOrderBy(orderBy, user);
+            }
 
             // View run logging (SQL Server-specific, others return null)
             let userViewRunID = '';
@@ -2658,6 +2671,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 sUserSearchSQL = '(1=0)';
             }
         }
+        // A UserSearchParamFormatAPI format may splice the term outside quotes; the term must not end the statement there.
+        this.AssertClauseFragmentIsSingleStatement(sUserSearchSQL, 'UserSearchString');
         return sUserSearchSQL;
     }
 
@@ -2763,6 +2778,54 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (t !== 'nvarchar' && t !== 'varchar' && t !== 'char' && t !== 'nchar') return false;
         if (field.Length === -1) return false;
         return true;
+    }
+
+    /**************************************************************************/
+    // Client clause screening
+    /**************************************************************************/
+
+    /**
+     * SECURITY — refuses a statement separator or comment in a filter, sort or search fragment.
+     * Runs for every RunView caller, server-internal ones included, and cannot refuse a legitimate
+     * fragment. The full base-view screen runs at the client entry points; see {@link ClientClauseScreen}.
+     */
+    protected AssertClauseFragmentIsSingleStatement(clause: string, label: string): void {
+        ClientClauseScreen.AssertSingleStatementFragment(clause, label, this.Dialect);
+    }
+
+    /**
+     * SECURITY — the full client-clause screen ({@link ClientClauseScreen.AssertClauseUsesEntityBaseViews})
+     * against this provider's entities and dialect, with `contextUser` as the acting user. With
+     * `entityInfo`, the clause is screened in the form this provider runs a client clause for that
+     * entity ({@link TransformExternalSQLClause}). Server code that hands client SQL text to RunView
+     * outside the API entry points calls this: ad-hoc list sources (`ListOperations`) and the
+     * saved-view save gate (`MJUserViewEntityServer`).
+     */
+    public ScreenClientClause(clause: string | null | undefined, label: string, contextUser?: UserInfo, entityInfo?: EntityInfo): void {
+        const text = clause && entityInfo ? this.TransformExternalSQLClause(clause, entityInfo) : clause;
+        ClientClauseScreen.AssertClauseUsesEntityBaseViews(text, label, this.Entities, this.Dialect, contextUser);
+    }
+
+    /**
+     * SECURITY — screens a saved view's rendered WhereClause with the full client-clause screen.
+     * Any user who can save a view can write its WhereClause, directly or through FilterState or a
+     * Smart Filter. Exempt: a CustomWhereClause view loaded as an entity, whose clause only an Owner
+     * can set (MJUserViewEntityServer). The flag on any other object, such as one built from a
+     * request body, is not trusted. The exemption tests `instanceof BaseEntity`, so a second copy of
+     * `@memberjunction/core` in the process makes loaded custom views fail closed, not open.
+     */
+    protected ScreenStoredViewWhereClause(viewEntity: MJUserViewEntityExtended, renderedWhere: string, user: UserInfo): void {
+        if (viewEntity instanceof BaseEntity && !!viewEntity.CustomWhereClause) return; // truthy — the DB may hand back true or 1
+        this.AssertClauseFragmentIsSingleStatement(renderedWhere, 'view WhereClause');
+        this.ScreenClientClause(renderedWhere, 'view WhereClause', user);
+    }
+
+    /**
+     * SECURITY — screens the ORDER BY a saved view builds from its stored SortState / GridState with
+     * the full client-clause screen. Any user who can save a view can write those.
+     */
+    protected ScreenStoredViewOrderBy(orderBy: string, user: UserInfo): void {
+        this.ScreenClientClause(orderBy, 'OrderBy', user);
     }
 
     /**************************************************************************/
@@ -3288,6 +3351,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         let bHasWhere = false;
 
         const extraFilter = this.TransformExternalSQLClause((params.ExtraFilter as string) || '', entityInfo);
+        this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
         if (extraFilter.length > 0) {
             if (!this.ValidateUserProvidedSQLClause(extraFilter))
                 throw new Error(`Invalid Extra Filter: ${extraFilter}`);
@@ -3768,6 +3832,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (orderBy.length > 0) {
                 if (!this.ValidateUserProvidedSQLClause(orderBy))
                     throw new Error(`Invalid OrderBy clause: ${orderBy}`);
+                this.AssertClauseFragmentIsSingleStatement(orderBy, 'OrderBy');
                 sql += ` ORDER BY ${orderBy}`;
             }
 
@@ -5336,6 +5401,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Checks whether a new record's field values pass the Create RLS filter.
      * Builds a synthetic single-row subquery from entity field values, then tests the RLS filter against it.
+     * Null fields are projected as typed NULLs (see {@link BuildRLSSyntheticRowProjections}), so a
+     * filter that references a column the new row leaves NULL evaluates instead of failing to bind.
+     * The row is what the caller sends: a column the database fills on insert (a non-literal default
+     * or a trigger) is seen as NULL here.
      */
     protected override async CheckCreateRLS(
         entity: BaseEntity,
@@ -5347,7 +5416,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return true;
         }
 
-        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo, false);
+        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo);
         const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
         const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
         return result && result.length > 0 && Number(result[0]['pass']) === 1;
@@ -5388,7 +5457,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
 
-        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo);
         const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
         const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
         return result && result.length > 0 && Number(result[0]['pass']) === 1;
@@ -5426,21 +5495,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Builds field projections for an RLS synthetic-row subquery (Create post-image and
      * Update post-image checks).
      *
-     * @param includeNulls - The Update post-image REQUIRES null fields to be projected as
-     * typed NULLs: a filter referencing a column the caller just nulled must see SQL NULL,
-     * not a missing column. A bare `SELECT NULL AS Col` is untyped and can evaluate
-     * differently from a real row, so nulls are emitted as `CAST(NULL AS <sqltype>)` using
-     * the field's metadata-resolved type. An unresolvable type fails the save (throw)
-     * rather than emitting an untyped NULL. The Create check keeps its historical
-     * skip-nulls behavior (includeNulls=false).
+     * Every non-virtual field is projected, null fields included: a filter referencing a
+     * column the row leaves NULL must see SQL NULL, not a missing column (which fails to
+     * bind with `Invalid column name` instead of evaluating). A bare `SELECT NULL AS Col` is
+     * untyped and can evaluate differently from a real row, so nulls are emitted as
+     * `CAST(NULL AS <sqltype>)` using the field's metadata-resolved type. An unresolvable
+     * type fails the save (throw) rather than emitting an untyped NULL.
      */
-    protected BuildRLSSyntheticRowProjections(entity: BaseEntity, entityInfo: EntityInfo, includeNulls: boolean): string {
+    protected BuildRLSSyntheticRowProjections(entity: BaseEntity, entityInfo: EntityInfo): string {
         const parts: string[] = [];
         for (const field of entityInfo.Fields) {
             if (field.IsVirtual) continue;
             const val = entity.Get(field.Name);
-            if (val == null && !includeNulls) continue;
-
             parts.push(`${this.renderRLSProjectionValue(field, val)} AS ${this.QuoteIdentifier(field.Name)}`);
         }
         return parts.join(', ');
@@ -5471,7 +5537,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const baseType = field.Type;
             if (!baseType || baseType.trim().length === 0) {
                 throw new Error(
-                    `Cannot build RLS post-image projection: field ${field.Name} has no resolvable SQL type for a typed NULL`
+                    `Cannot build RLS row projection: field ${field.Name} has no resolvable SQL type for a typed NULL`
                 );
             }
             // `field.Length` is the SYSTEM (byte) length from `sys.columns`, but
