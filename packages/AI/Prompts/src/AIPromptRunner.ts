@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ChatMessageContentBlock, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration, CredentialScopeAllows, type AICredentialScope } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ChatMessageContentBlock, ErrorAnalyzer, AIErrorInfo, ParameterFidelityError, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration, CredentialScopeAllows, type AICredentialScope } from '@memberjunction/ai';
 import {
   BaseModelRunner,
   type ExecutionBound,
@@ -3068,8 +3068,8 @@ export class AIPromptRunner extends BaseModelRunner {
           throw error;
         }
         lastError = error;
-        // A thrown Fatal error (a strict-parameter refusal, missing credentials) cannot be resolved by another attempt
-        const fatal = ErrorAnalyzer.AnalyzeError(error).severity === 'Fatal';
+        // A strict-parameter refusal cannot be resolved by another attempt
+        const fatal = error instanceof ParameterFidelityError;
         this.logError(error, {
           category: 'ExecutionRetry',
           severity: attempt < maxRetries && !fatal ? 'warning' : 'error',

@@ -849,6 +849,7 @@ describe('ExecutePrompt — strict parameters and failed-call errors', () => {
   };
   const runs = {
     refusal: BuildPromptRunRecord('run-refusal'),
+    fatalRetried: BuildPromptRunRecord('run-fatal-retried'),
     driverFailure: BuildPromptRunRecord('run-driver-failure'),
     refusalWithFailover: BuildPromptRunRecord('run-refusal-failover'),
     toolCallTurn: BuildPromptRunRecord('run-tool-call'),
@@ -888,6 +889,18 @@ describe('ExecutePrompt — strict parameters and failed-call errors', () => {
     expect(result.chatResult.exception).toBeInstanceOf(ParameterFidelityError);
   });
 
+  it('retries any other thrown Fatal error up to MaxRetries, as before', async () => {
+    const fatal = (): Error => Object.assign(new Error('invalid request'), { errorInfo: { errorType: 'InvalidRequest', severity: 'Fatal', canFailover: false } });
+    testLLM.Script({ kind: 'throw', error: fatal() }, { kind: 'throw', error: fatal() }, { kind: 'throw', error: fatal() });
+    const retryingRunner = new InMemoryRunRecordRunner(runs.fatalRetried);
+
+    const result = await retryingRunner.ExecutePrompt(BuildPromptParams(prompts.strictWithRetries));
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CallCount).toBe(3);
+    expect(retryingRunner.RetryDelays).toBe(2);
+  });
+
   it('records a driver failure on ErrorMessage and ErrorDetails', async () => {
     testLLM.Script({ kind: 'fail', error: new Error('fetch failed: network socket disconnected') });
     const failingRunner = new InMemoryRunRecordRunner(runs.driverFailure);
@@ -910,6 +923,7 @@ describe('ExecutePrompt — strict parameters and failed-call errors', () => {
     await failoverRunner.ExecutePrompt(params);
     await failoverRunner.WaitForPendingPromptRunSaves();
 
+    expect(testLLM.CallCount).toBe(1); // the refusal is not failed over to another vendor
     expect(runs.refusalWithFailover.Status).toBe('Failed');
     expect(runs.refusalWithFailover.ErrorMessage).toContain('would not send the configured parameters');
   });
