@@ -5,6 +5,8 @@
 
 import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, ColumnDefinition, ValueListVerdict } from '../types/state.js';
 import { EnsureArray } from "../utils/ensureArray.js";
+import type { BaseAutoDocDriver } from "../drivers/BaseAutoDocDriver.js";
+import { CheckPKProposal } from "./PKProposalGate.js";
 import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext, EnumCandidateContext } from '../types/analysis.js';
 import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
 import {
@@ -40,7 +42,9 @@ export class AnalysisEngine {
     private promptEngine: PromptEngine,
     private stateManager: StateManager,
     private iterationTracker: IterationTracker,
-    onProgress?: (message: string, data?: Record<string, unknown>) => void
+    onProgress?: (message: string, data?: Record<string, unknown>) => void,
+    /** Database access for checks the LLM's proposals must pass (composite PK uniqueness). Optional: without it, composite PK proposals are rejected. */
+    private driver?: BaseAutoDocDriver
   ) {
     this.onProgress = onProgress || (() => {});
     this.backpropagationEngine = new BackpropagationEngine(
@@ -636,7 +640,7 @@ export class AnalysisEngine {
 
       // Process PK proposal from LLM — verify eligibility deterministically
       if (state.phases.keyDetection && result.result.primaryKey) {
-        this.processPKInsightFromLLM(
+        await this.processPKInsightFromLLM(
           state,
           tableNode.schema,
           tableNode.table,
@@ -1341,16 +1345,17 @@ export class AnalysisEngine {
   }
 
   /**
-   * Process PK proposal from LLM. The LLM can propose a PK, but ALL proposed columns
-   * must pass deterministic eligibility: zero nulls, zero blanks, 100% unique values.
-   * If any column fails, the entire proposal is rejected.
+   * Process PK proposal from LLM. The LLM can propose a PK, but it must pass deterministic
+   * eligibility: every column exists and has no nulls, and the key is unique — a single column
+   * by its own statistics, a composite key as a combination (checked in the database).
+   * If any check fails, the entire proposal is rejected.
    */
-  private processPKInsightFromLLM(
+  private async processPKInsightFromLLM(
     state: DatabaseDocumentation,
     schemaName: string,
     tableName: string,
     pkProposal: import('../types/prompts.js').PrimaryKeyPromptResult
-  ): void {
+  ): Promise<void> {
     const discoveryPhase = state.phases.keyDetection;
     if (!discoveryPhase || !pkProposal || !pkProposal.columns || pkProposal.columns.length === 0) return;
 
@@ -1404,39 +1409,16 @@ export class AnalysisEngine {
       return;
     }
 
-    // New PK proposal — verify ALL columns are PK-eligible deterministically
+    // New PK proposal — verify it deterministically
     const table = this.stateManager.findTable(state, schemaName, tableName);
     if (!table) return;
-
-    for (const colName of columns) {
-      const column = table.columns.find(c => c.name.toLowerCase() === colName.toLowerCase());
-      if (!column) {
-        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName} — column "${colName}" not found`);
-        return;
-      }
-
-      // Check PK eligibility from stats
-      const stats = column.statistics;
-      if (!stats) {
-        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName}.${colName} — no statistics available`);
-        return;
-      }
-
-      // Safety: prefer pre-computed uniquenessRatio if available (totalRows can be 0 due to field naming bug)
-      const uniqueness = stats.uniquenessRatio != null && stats.uniquenessRatio > 0
-        ? stats.uniquenessRatio
-        : (stats.totalRows > 0 ? stats.distinctCount / stats.totalRows : 0);
-      const hasNulls = (stats.nullCount || 0) > 0;
-
-      if (hasNulls) {
-        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName}.${colName} — has ${stats.nullCount} nulls`);
-        return;
-      }
-
-      if (uniqueness < 1.0) {
-        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName}.${colName} — uniqueness ${(uniqueness * 100).toFixed(1)}% (must be 100%)`);
-        return;
-      }
+    const sampleSize = this.config.analysis.relationshipDiscovery?.sampling?.maxRowsPerTable ?? 1000;
+    const driver = this.driver;
+    const verdict = await CheckPKProposal(table, columns,
+      driver ? (cols) => driver.checkColumnCombinationUniqueness(schemaName, tableName, cols, sampleSize) : undefined);
+    if (!verdict.Eligible) {
+      console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName} ${verdict.Reason}`);
+      return;
     }
 
     // All columns pass — create new PK candidate

@@ -291,7 +291,7 @@ export class AnalysisOrchestrator {
       await promptEngine.initialize();
 
       const iterationTracker = new IterationTracker();
-      const analysisEngine = new AnalysisEngine(this.config, promptEngine, stateManager, iterationTracker, this.onProgress);
+      const analysisEngine = new AnalysisEngine(this.config, promptEngine, stateManager, iterationTracker, this.onProgress, db.getDriver());
 
       // Create analysis run
       const run = stateManager.createAnalysisRun(
