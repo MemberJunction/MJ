@@ -1240,7 +1240,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (47 classes)
+// @memberjunction/core-entities-server (48 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1265,6 +1265,7 @@ import {
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
+    MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
@@ -2363,6 +2364,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
+    MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
@@ -2514,11 +2516,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
-    SendSingleMessageAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
     SlackWebhookAction,
@@ -2574,7 +2576,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1039;
+export const CLASS_REGISTRATIONS_COUNT = 1040;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

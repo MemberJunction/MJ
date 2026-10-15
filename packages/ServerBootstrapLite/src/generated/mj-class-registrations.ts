@@ -1023,7 +1023,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (47 classes)
+// @memberjunction/core-entities-server (48 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1048,6 +1048,7 @@ import {
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
+    MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
@@ -2037,6 +2038,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
+    MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
@@ -2061,11 +2063,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
-    APIRateLimiterAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    APIRateLimiterAction,
     ActionSmithAgent,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
@@ -2235,7 +2237,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 954;
+export const CLASS_REGISTRATIONS_COUNT = 955;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
