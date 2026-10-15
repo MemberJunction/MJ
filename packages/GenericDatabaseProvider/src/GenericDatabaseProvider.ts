@@ -1660,7 +1660,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const orderBy: string = rawOrderBy.length > 0
                 ? (usingKeyset ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
                 : '';
-            if (orderBy.length > 0 && !usingKeyset && !orderByIsPkFallback) {
+            if (orderBy.length > 0 && !usingKeyset) {
                 this.AssertClauseFragmentIsSingleStatement(orderBy, 'OrderBy');
                 // No caller OrderBy means the sort came from the saved view's stored sort state.
                 if (!params.OrderBy && viewEntity) this.ScreenStoredViewOrderBy(orderBy, user);

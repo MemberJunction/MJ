@@ -35,8 +35,7 @@ function fakeProvider(snapshotWhere = `Status = 'Active'`) {
         BaseView: 'vwContacts',
         PrimaryKeys: [{ Name: 'ID' }],
         GetUserPermisions: () => ({ CanRead: true }),
-        GetEffectiveRowFilterWhereClause: () => '',
-        GetDeniedReadFields: () => new Set<string>(),
+        GetUserRowLevelSecurityWhereClause: () => '',
     } as unknown as EntityInfo;
     const snapshotList = {
         ID: 'list-1',

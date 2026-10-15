@@ -18,8 +18,7 @@ const { mockRunViewFn, mockRunViewsFn, mockEntityList } = vi.hoisted(() => ({
         SchemaName: string;
         BaseView: string;
         GetUserPermisions: (u: unknown) => { CanRead: boolean };
-        GetEffectiveRowFilterWhereClause: () => string;
-        GetDeniedReadFields: () => Set<string>;
+        GetUserRowLevelSecurityWhereClause: () => string;
     }>,
 }));
 
@@ -53,7 +52,7 @@ const OK_RESULT = { Success: true, Results: [{ ID: '1' }] };
 beforeEach(() => {
     vi.clearAllMocks();
     mockEntityList.length = 0;
-    const unscoped = { GetEffectiveRowFilterWhereClause: () => '', GetDeniedReadFields: () => new Set<string>() };
+    const unscoped = { GetUserRowLevelSecurityWhereClause: () => '' };
     mockEntityList.push(
         { Name: 'Customers', SchemaName: 'sales', BaseView: 'vwCustomers', GetUserPermisions: () => ({ CanRead: true }), ...unscoped },
         { Name: 'Ledger', SchemaName: 'sales', BaseView: 'vwLedger', GetUserPermisions: () => ({ CanRead: false }), ...unscoped },
@@ -62,8 +61,7 @@ beforeEach(() => {
             SchemaName: 'sales',
             BaseView: 'vwOrders',
             GetUserPermisions: () => ({ CanRead: true }),
-            GetEffectiveRowFilterWhereClause: () => "(OwnerID = 'user-1')",
-            GetDeniedReadFields: () => new Set<string>(),
+            GetUserRowLevelSecurityWhereClause: () => "(OwnerID = 'user-1')",
         },
     );
     mockRunViewFn.mockResolvedValue(OK_RESULT);
@@ -72,7 +70,7 @@ beforeEach(() => {
 
 describe('ViewOperationsHandler — REST clause screen', () => {
     it('RunView refuses a stacked statement hidden behind a bracket identifier, before RunView', async () => {
-        const outcome = await ViewOperationsHandler.RunView({ EntityName: 'Customers', ExtraFilter: BRACKET_STACKED }, USER);
+        const outcome = await ViewOperationsHandler.runView({ EntityName: 'Customers', ExtraFilter: BRACKET_STACKED }, USER);
 
         expect(mockRunViewFn).not.toHaveBeenCalled();
         expect(outcome.success).toBe(false);
@@ -85,7 +83,7 @@ describe('ViewOperationsHandler — REST clause screen', () => {
             { EntityName: 'Customers', OverrideExcludeFilter: BRACKET_STACKED },
         ];
         for (const params of cases) {
-            const outcome = await ViewOperationsHandler.RunView(params, USER);
+            const outcome = await ViewOperationsHandler.runView(params, USER);
             expect(outcome.success).toBe(false);
         }
         expect(mockRunViewFn).not.toHaveBeenCalled();
@@ -96,14 +94,14 @@ describe('ViewOperationsHandler — REST clause screen', () => {
             `EXISTS (SELECT 1 FROM __mj.[User] WHERE [Type] = 'Owner')`,
             `ID IN (SELECT CustomerID FROM sales.vwLedger)`,
         ]) {
-            const outcome = await ViewOperationsHandler.RunView({ EntityName: 'Customers', ExtraFilter: filter }, USER);
+            const outcome = await ViewOperationsHandler.runView({ EntityName: 'Customers', ExtraFilter: filter }, USER);
             expect(outcome.success).toBe(false);
         }
         expect(mockRunViewFn).not.toHaveBeenCalled();
     });
 
     it('RunView refuses a subquery over an entity that is row-level-security filtered for the caller', async () => {
-        const outcome = await ViewOperationsHandler.RunView({ EntityName: 'Customers', ExtraFilter: `ID IN (SELECT CustomerID FROM sales.vwOrders)` }, USER);
+        const outcome = await ViewOperationsHandler.runView({ EntityName: 'Customers', ExtraFilter: `ID IN (SELECT CustomerID FROM sales.vwOrders)` }, USER);
 
         expect(mockRunViewFn).not.toHaveBeenCalled();
         expect(outcome.success).toBe(false);
@@ -113,14 +111,14 @@ describe('ViewOperationsHandler — REST clause screen', () => {
     it('RunView screens every variant of a platform-specific filter', async () => {
         const filter: PlatformSQL = { default: `Name = 'x'`, sqlserver: BRACKET_STACKED };
 
-        const outcome = await ViewOperationsHandler.RunView({ EntityName: 'Customers', ExtraFilter: filter }, USER);
+        const outcome = await ViewOperationsHandler.runView({ EntityName: 'Customers', ExtraFilter: filter }, USER);
 
         expect(mockRunViewFn).not.toHaveBeenCalled();
         expect(outcome.success).toBe(false);
     });
 
     it('RunViews refuses the whole batch when one entry carries a payload', async () => {
-        const outcome = await ViewOperationsHandler.RunViews(
+        const outcome = await ViewOperationsHandler.runViews(
             [{ EntityName: 'Customers' }, { EntityName: 'Customers', ExtraFilter: BRACKET_STACKED }],
             USER,
         );
@@ -131,7 +129,7 @@ describe('ViewOperationsHandler — REST clause screen', () => {
 
     it('ListEntities refuses a payload in the query-string filter', async () => {
         await expect(
-            ViewOperationsHandler.ListEntities({ EntityName: 'Customers', ExtraFilter: BRACKET_STACKED }, USER),
+            ViewOperationsHandler.listEntities({ EntityName: 'Customers', ExtraFilter: BRACKET_STACKED }, USER),
         ).rejects.toThrow(/multiple statements/);
         expect(mockRunViewFn).not.toHaveBeenCalled();
     });
@@ -139,7 +137,7 @@ describe('ViewOperationsHandler — REST clause screen', () => {
     it('refuses a ViewEntity that was not loaded as an entity (its ID would be spliced into SQL)', async () => {
         const forged = { ID: '0) ; SELECT 1 AS [x] ; SELECT 1 WHERE (1=1', EntityID: 'any' } as unknown as BaseEntity;
 
-        const outcome = await ViewOperationsHandler.RunView({ EntityName: 'Customers', ViewEntity: forged, ExcludeDataFromAllPriorViewRuns: true }, USER);
+        const outcome = await ViewOperationsHandler.runView({ EntityName: 'Customers', ViewEntity: forged, ExcludeDataFromAllPriorViewRuns: true }, USER);
 
         expect(mockRunViewFn).not.toHaveBeenCalled();
         expect(outcome.success).toBe(false);
@@ -149,7 +147,7 @@ describe('ViewOperationsHandler — REST clause screen', () => {
     it('passes a filter that only reads entity base views through to RunView', async () => {
         const filter = `Name = 'O''Brien' AND ID IN (SELECT ID FROM sales.vwCustomers WHERE Region = 'West')`;
 
-        const outcome = await ViewOperationsHandler.RunView({ EntityName: 'Customers', ExtraFilter: filter, OrderBy: '[Name] DESC' }, USER);
+        const outcome = await ViewOperationsHandler.runView({ EntityName: 'Customers', ExtraFilter: filter, OrderBy: '[Name] DESC' }, USER);
 
         expect(outcome.success).toBe(true);
         expect((mockRunViewFn.mock.calls[0][0] as RunViewParams).ExtraFilter).toBe(filter);

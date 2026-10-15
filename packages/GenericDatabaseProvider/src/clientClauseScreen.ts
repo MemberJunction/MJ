@@ -109,7 +109,7 @@ interface ClauseVariant {
  * {@link ClientClauseScreen.AssertClauseUsesEntityBaseViews} is the full screen: one statement,
  * parsed as a read-only fragment, that calls no function the dialect forbids in caller SQL and
  * whose table references are only entity base views the acting user can read unscoped (no row
- * filter and no denied fields). Base tables and system catalogs are refused. Apply it at every
+ * filter). Base tables and system catalogs are refused. Apply it at every
  * point where client text enters RunView: the GraphQL and REST entry points, ad-hoc list sources,
  * and the clauses a saved view stores (at save and when the view runs).
  *
@@ -339,20 +339,18 @@ export class ClientClauseScreen {
     }
 
     /**
-     * Refuses an entity whose read `user` holds under a row filter (role row-level security or an
-     * API-key row filter) or with denied fields. SQL that reads the entity's base view directly, such
-     * as a subquery in a client clause or an ad-hoc query, applies neither; RunView on that entity
-     * does. For any other entity, a granted read covers every row and field of its base view.
+     * Refuses an entity whose read `user` holds under a row filter (role row-level security). SQL
+     * that reads the entity's base view directly, such as a subquery in a client clause or an ad-hoc
+     * query, does not apply it; RunView on that entity does. For any other entity, a granted read
+     * covers every row and field of its base view.
+     *
+     * lts/5: row-level security is the only read narrowing on this line (no field-level security and
+     * no API-key row filters), so GetUserRowLevelSecurityWhereClause is the full read filter.
      */
     public static AssertUnscopedRead(entity: EntityInfo, user: UserInfo, label: string): void {
-        if (entity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '').length > 0) {
+        if (entity.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '').length > 0) {
             throw new Error(
                 `Invalid ${label}: entity '${entity.Name}' is row-level-security filtered for you — SQL that reads its base view directly cannot apply that filter; read that entity with RunView`,
-            );
-        }
-        if (entity.GetDeniedReadFields(user).size > 0) {
-            throw new Error(
-                `Invalid ${label}: entity '${entity.Name}' has fields you are not permitted to read — SQL that reads its base view directly cannot project them away; read that entity with RunView`,
             );
         }
     }

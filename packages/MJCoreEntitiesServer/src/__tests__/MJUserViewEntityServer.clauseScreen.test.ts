@@ -77,8 +77,7 @@ const CONTACTS = {
     SchemaName: 'crm',
     BaseView: 'vwContacts',
     GetUserPermisions: () => ({ CanRead: true }),
-    GetEffectiveRowFilterWhereClause: () => '',
-    GetDeniedReadFields: () => new Set<string>(),
+    GetUserRowLevelSecurityWhereClause: () => '',
 } as unknown as EntityInfo;
 
 /** A provider double that screens with the real `GenericDatabaseProvider.ScreenClientClause`. */
@@ -152,6 +151,21 @@ describe('MJUserViewEntityServer — stored clauses pass the clause screen at sa
         const result = view({ where: `ID IN (SELECT ContactID FROM crm.ContactAudit)`, custom: true, user: OWNER, dirty: ['WhereClause', 'CustomWhereClause'] }).Validate();
 
         expect(result.Success).toBe(true);
+    });
+
+    // lts/5: the Owner gate arrives with this port (next added it in 021a1ba92b); pin its refusal here.
+    it('refuses a CustomWhereClause view saved by a user who is not an Owner', () => {
+        const result = view({ where: `ID IN (SELECT ContactID FROM crm.ContactAudit)`, custom: true, user: USER, dirty: ['WhereClause', 'CustomWhereClause'] }).Validate();
+
+        expect(result.Success).toBe(false);
+        expect(messages(result)).toMatch(/Owner-type/);
+    });
+
+    it('refuses a non-Owner turning CustomWhereClause on for a saved view', () => {
+        const result = view({ saved: true, where: `Status = 'Active'`, custom: true, user: USER, dirty: ['CustomWhereClause'] }).Validate();
+
+        expect(result.Success).toBe(false);
+        expect(messages(result)).toMatch(/Owner-type/);
     });
 
     it('does not throw when SortState is not valid JSON (no ORDER BY can be built from it)', () => {

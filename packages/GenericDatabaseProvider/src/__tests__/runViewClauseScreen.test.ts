@@ -19,7 +19,7 @@ vi.mock('@memberjunction/encryption', () => ({
     },
 }));
 
-import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
+import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
 import type { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '../saveTypes.js';
 import {
     BaseEntity,
@@ -41,10 +41,9 @@ const BASE_TABLE_PROBE = `EXISTS (SELECT 1 FROM __mj.[User] WHERE [Type] = 'Owne
 const ACCOUNTS_ID = '3f1f6b9e-0000-4000-8000-0000000000a1';
 const CODES_ID = '3f1f6b9e-0000-4000-8000-0000000000a2';
 
-/** How the user's read of an entity is narrowed: a row filter, denied fields, or neither. */
+/** How the user's read of an entity is narrowed: a row filter, or none (lts/5 has no field-level security). */
 interface ReadScope {
     RowFilter?: string;
-    DeniedFields?: string[];
 }
 
 /** An entity the user may read, with no external data source. `scope` narrows that read; by default it is unscoped. */
@@ -69,11 +68,9 @@ function readableEntity(
         DatetimeFields: [],
         ExternalDataSourceID: null,
         UserViewMaxRows: 0,
-        EnableFieldLevelSecurity: (scope.DeniedFields?.length ?? 0) > 0,
         FullTextSearchEnabled: false,
         GetUserPermisions: () => ({ CanRead: true }),
-        GetEffectiveRowFilterWhereClause: () => scope.RowFilter ?? '',
-        GetDeniedReadFields: () => new Set(scope.DeniedFields ?? []),
+        GetUserRowLevelSecurityWhereClause: () => scope.RowFilter ?? '',
     } as unknown as EntityInfo;
 }
 
@@ -105,7 +102,7 @@ class LoadedView extends BaseEntity {
 }
 
 /** Runs the real `RunViewCore` and `GetRunViewsDatabaseStatus` over the fixtures, recording `ExecuteSQL`. */
-class ClauseScreenTestProvider extends GenericDatabaseProviderTestBase {
+class ClauseScreenTestProvider extends GenericDatabaseProvider {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
 
@@ -324,13 +321,18 @@ describe('RunViewCore — caller clause slots reject statement separators for ev
         expect(result.Success).toBe(false);
     });
 
-    it('refuses a stacked ExtraFilter in the cache-status probe', async () => {
+    // lts/5 has no GetRunViewsDatabaseStatus. An item with a cacheStatus makes RunViewsWithCacheCheck
+    // build the same cache-check WHERE clause (the server cache is not initialized here).
+    it('refuses a stacked ExtraFilter in the cache check', async () => {
         const provider = new ClauseScreenTestProvider();
 
-        const statuses = await provider.GetRunViewsDatabaseStatus([{ EntityName: 'Accounts', ExtraFilter: BRACKET_STACKED }], USER);
+        const response = await provider.RunViewsWithCacheCheck(
+            [{ params: { EntityName: 'Accounts', ExtraFilter: BRACKET_STACKED }, cacheStatus: { maxUpdatedAt: '', rowCount: 0 } }],
+            USER,
+        );
 
         expect(provider.ExecutedSQL).toHaveLength(0);
-        expect(statuses[0].Success).toBe(false);
+        expect(response.results[0].status).toBe('error');
     });
 
     it('still runs ordinary clauses, including bracket identifiers and separators inside literals', async () => {
@@ -363,10 +365,6 @@ describe('ScreenClientClause — a subquery reads an entity only when the user m
         expect(screen(ORDERS_SUBQUERY, [accounts(), orders({ RowFilter: OWN_ROWS })])).toThrow(/'Orders' is row-level-security filtered for you/);
     });
 
-    it('refuses a subquery over an entity with a field the user may not read', () => {
-        expect(screen(ORDERS_SUBQUERY, [accounts(), orders({ DeniedFields: ['total'] })])).toThrow(/'Orders' has fields you are not permitted to read/);
-    });
-
     it('allows the same subquery when the user reads that entity unscoped', () => {
         expect(screen(ORDERS_SUBQUERY, [accounts(), orders()])).not.toThrow();
     });
@@ -384,7 +382,7 @@ describe('ScreenClientClause — a subquery reads an entity only when the user m
     });
 
     it('does not apply the rule to a clause that reads no table', () => {
-        expect(screen(`[Name] = 'Acme'`, [accounts({ RowFilter: OWN_ROWS, DeniedFields: ['secret'] }), orders()])).not.toThrow();
+        expect(screen(`[Name] = 'Acme'`, [accounts({ RowFilter: OWN_ROWS }), orders()])).not.toThrow();
     });
 
     it("refuses a saved view's stored subquery over a row-filtered entity, before any SQL runs", async () => {

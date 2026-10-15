@@ -21,7 +21,7 @@ vi.mock('@memberjunction/api-keys', async (importOriginal) => {
 });
 
 import type { DatabaseProviderBase, EntityInfo, RunViewWithCacheCheckParams, UserInfo } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { RunDynamicViewInput, RunViewResolver, RunViewWithCacheCheckInput } from '../generic/RunViewResolver.js';
 import type { AppContext, UserPayload } from '../types.js';
 
@@ -38,8 +38,7 @@ function entity(name: string, schema: string, baseView: string): EntityInfo {
         BaseView: baseView,
         PrimaryKeys: [{ Name: 'ID' }],
         GetUserPermisions: () => ({ CanRead: true }),
-        GetEffectiveRowFilterWhereClause: () => '',
-        GetDeniedReadFields: () => new Set<string>(),
+        GetUserRowLevelSecurityWhereClause: () => '',
     } as unknown as EntityInfo;
 }
 

@@ -19,8 +19,7 @@ function entity(name: string, schema: string, baseView: string, canRead = true):
         SchemaName: schema,
         BaseView: baseView,
         GetUserPermisions: () => ({ CanRead: canRead }),
-        GetEffectiveRowFilterWhereClause: () => '',
-        GetDeniedReadFields: () => new Set<string>(),
+        GetUserRowLevelSecurityWhereClause: () => '',
     } as unknown as EntityInfo;
 }
 
@@ -169,8 +168,7 @@ describe('ClientClauseScreen — every subquery position is screened', () => {
         SchemaName: '__mj',
         BaseView: 'vwOrders',
         GetUserPermisions: () => ({ CanRead: true }),
-        GetEffectiveRowFilterWhereClause: () => "(OwnerID = 'u1')",
-        GetDeniedReadFields: () => new Set<string>(),
+        GetUserRowLevelSecurityWhereClause: () => "(OwnerID = 'u1')",
     } as unknown as EntityInfo;
     const WITH_ORDERS = [...ENTITIES, ORDERS];
 

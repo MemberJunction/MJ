@@ -15,10 +15,9 @@ import type { UserPayload } from '../types.js';
  * rule the ad-hoc SQL screen applies) and still passes it when the read is not. Inputs are harmless.
  */
 
-/** How the caller's read of an entity is narrowed: a row filter, denied fields, or neither. */
+/** How the caller's read of an entity is narrowed: a row filter, or none (lts/5 has no field-level security). */
 interface ReadScope {
     RowFilter?: string;
-    DeniedFields?: string[];
 }
 
 /** What the resolver handed to RunView; null when the request never got there. */
@@ -36,8 +35,7 @@ function fakeProvider(captured: Captured, scopes: Record<string, ReadScope> = {}
         SchemaName: 'crm',
         BaseView: baseView,
         GetUserPermisions: () => ({ CanRead: true }),
-        GetEffectiveRowFilterWhereClause: () => scopes[name]?.RowFilter ?? '',
-        GetDeniedReadFields: () => new Set(scopes[name]?.DeniedFields ?? []),
+        GetUserRowLevelSecurityWhereClause: () => scopes[name]?.RowFilter ?? '',
     });
     return {
         Entities: [entity('E1', 'Accounts', 'vwAccounts'), entity('E2', 'Orders', 'vwOrders')],
@@ -64,15 +62,6 @@ describe('RunDynamicViewGeneric — a client subquery reads an entity only when 
         await expect(
             new Probe().RunDynamic({ ExtraFilter: ORDERS_SUBQUERY }, fakeProvider(captured, { Orders: { RowFilter: OWN_ROWS } })),
         ).rejects.toThrow(/'Orders' is row-level-security filtered for you/);
-        expect(captured.params).toBeNull();
-    });
-
-    it('refuses a subquery over an entity with a field the caller may not read, before RunView', async () => {
-        const captured: Captured = { params: null };
-
-        await expect(
-            new Probe().RunDynamic({ ExtraFilter: ORDERS_SUBQUERY }, fakeProvider(captured, { Orders: { DeniedFields: ['total'] } })),
-        ).rejects.toThrow(/'Orders' has fields you are not permitted to read/);
         expect(captured.params).toBeNull();
     });
 

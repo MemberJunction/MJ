@@ -34,8 +34,7 @@ function fakeProvider(captured: Captured, rows: Record<string, unknown>[] = [], 
         // the row filter and the denied fields for every subquery target, so the mock answers
         // them (an unscoped read).
         GetUserPermisions: () => ({ CanRead: !unreadableEntities.includes(e.Name as string) }),
-        GetEffectiveRowFilterWhereClause: () => '',
-        GetDeniedReadFields: () => new Set<string>(),
+        GetUserRowLevelSecurityWhereClause: () => '',
     });
     return {
         Entities: [
