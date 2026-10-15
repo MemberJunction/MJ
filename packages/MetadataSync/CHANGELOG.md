@@ -1,5 +1,82 @@
 # @memberjunction/metadata-sync
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 75814f5: Fix `mj sync push` treating a record created earlier in the same push as missing when a later file addresses it by `primaryKey`. On a preload-cache miss, `SyncEngine.LoadEntity` now confirms against the database on the push's own provider (which sees the open transaction's rows) instead of returning `null`.
+- 3f41313: `mj sync pull` backs up every file it rewrites, restores all of them if the pull fails, and warns
+  when an entity's class isn't registered.
+
+  `pull.backupBeforeUpdate` backups exist so a failed pull can put the files back. Files that only
+  gained new records (`appendRecordsToExistingFile`) weren't backed up at all, so a failure left them
+  half-written, and a backup that couldn't be written was skipped silently.
+  - Every existing file a pull rewrites — updated or appended to — is backed up once, just before the
+    write. As before, the backups are removed once the pull succeeds.
+  - A backup that can't be written stops the pull instead of being skipped silently.
+  - Rollback restores each backup to the file it came from, so a nested `backupDirectory` works.
+  - A `backupDirectory` that points outside the folder of the files it backs up (`../..`) is refused.
+
+  Pull also warns once per entity when the entity's subclass isn't registered in the process (push
+  already did), naming where the class should come from. Records still pull correctly — keys are read
+  through `Get()` — but values the class computes are missing from the files.
+
+- 63479a1: `mj sync push --dry-run` labels its output as a dry run (#5053). The changes recap header, the `--change-detail` report file and the completion line now say "DRY RUN" / "Dry run" and state that nothing was written. A dry run also records the records it would create, so the recap counts creates alongside updates and deletes.
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [432cb73]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [dde482c]
+- Updated dependencies [49f26d9]
+- Updated dependencies [10c2311]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [fcf8e1c]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [7316ac3]
+- Updated dependencies [91be34f]
+- Updated dependencies [0c68021]
+- Updated dependencies [c0ebd97]
+- Updated dependencies [7dc604e]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [20650af]
+- Updated dependencies [dbc3462]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [e1942c7]
+- Updated dependencies [bdea87a]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [b653746]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.4
+  - @memberjunction/core-entities-server@6.2.0-edge.4
+  - @memberjunction/generic-database-provider@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.4
+  - @memberjunction/sql-dialect@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/record-graph@6.2.0-edge.4
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.4
+  - @memberjunction/cli-core@6.2.0-edge.4
+  - @memberjunction/config@6.2.0-edge.4
+  - @memberjunction/network-utils@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes
