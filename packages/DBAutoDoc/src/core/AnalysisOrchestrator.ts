@@ -558,10 +558,12 @@ export class AnalysisOrchestrator {
     for (const f of failed) {
       this.onProgress(`Warning: could not read indexes for schema ${f.SchemaName}: ${f.Error}`, f);
     }
-    const tables = schemas.flatMap((s) => s.tables);
+    // Totals cover every table in the state, so a resumed run also counts tables loaded earlier.
+    const allTables = state.schemas.flatMap((s) => s.tables);
     this.onProgress('Existing indexes loaded', {
-      tables: tables.filter((t) => t.indexes !== undefined).length,
-      indexes: tables.reduce((sum, t) => sum + (t.indexes?.length ?? 0), 0)
+      tables: allTables.filter((t) => t.indexes !== undefined).length,
+      indexes: allTables.reduce((sum, t) => sum + (t.indexes?.length ?? 0), 0),
+      newlyLoadedTables: schemas.flatMap((s) => s.tables).filter((t) => t.indexes !== undefined).length
     });
     stateManager.updateSummary(state);
     await stateManager.save(state);
