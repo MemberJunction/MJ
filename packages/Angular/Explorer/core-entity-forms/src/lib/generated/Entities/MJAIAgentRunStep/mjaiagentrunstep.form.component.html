@@ -263,6 +263,15 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="PayloadAtStartSourceStepID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -316,25 +325,50 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- AI Agent Run Steps Section -->
+    <!-- AI Agent Run Steps (Parent Step) Section -->
     <mj-collapsible-panel
-        SectionKey="mJAIAgentRunSteps"
-        SectionName="AI Agent Run Steps"
+        SectionKey="mJAIAgentRunStepsParentID"
+        SectionName="AI Agent Run Steps (Parent Step)"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentRunSteps')"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentRunStepsParentID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Steps','ParentID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Steps','ParentID')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentRunSteps')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRunStepsParentID')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunSteps', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunStepsParentID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Run Steps (Payload At Start Source Step ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentRunStepsPayloadAtStartSourceStepID"
+        SectionName="AI Agent Run Steps (Payload At Start Source Step ID)"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentRunStepsPayloadAtStartSourceStepID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Steps','PayloadAtStartSourceStepID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Steps','PayloadAtStartSourceStepID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRunStepsPayloadAtStartSourceStepID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunStepsPayloadAtStartSourceStepID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

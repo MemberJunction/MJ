@@ -39,8 +39,9 @@ vi.mock('@memberjunction/ai', async () => {
     class BaseTextToSpeech extends BaseModel {}
     class BaseSpeechToText extends BaseModel {}
     class BaseImageGenerator extends BaseModel {}
-    // The OpenAI decision driver extends BaseDecision.
+    // The OpenAI Decisions driver extends BaseSystemOneDecision and registers against BaseDecision.
     class BaseDecision extends BaseModel {}
+    class BaseSystemOneDecision extends BaseDecision {}
     // Static-method error helper referenced by those modules' method bodies.
     class ErrorAnalyzer {
         public static analyzeError(): Record<string, never> {
@@ -61,7 +62,7 @@ vi.mock('@memberjunction/ai', async () => {
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
     // Same for RealtimeDroppedInputReporter, which the shared OpenAI-protocol session uses to report the input it drops.
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter };
+    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, BaseSystemOneDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's

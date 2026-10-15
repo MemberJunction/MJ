@@ -2,12 +2,12 @@
   {
     "fields": {
       "Name": "GPT-6 Luna Decisions",
-      "Description": "OpenAI's decision model: gpt-6-luna served by OpenAI's Decisions API (POST /v1/decisions), announced at DevDay on September 29, 2026 and in public beta. It answers Likelihood, Choice and Score questions about text or image input, in one call, with a probability for every allowed option, and writes no text. OpenAI may decline any question; MJ then fails the attempt and fails over. OpenAI reports a latency of about 150 ms and charges $0.10 per million input tokens, with no output or cache charge. OpenAI does not yet document per-request limits (questions, options or context). MJ reaches it directly through the OpenAIDecision driver, or through OpenRouter's Decisions API as openai/gpt-6-luna-decisions (pinned to the dated openai/gpt-6-luna-decisions-20261006, served by OpenAI with a 1,050,000-token context) through the OpenRouterDecision driver. MJ sends the state as text; image input is not used yet. Its raw probabilities are not calibrated to MJ's data, so set thresholds on calibrated values. This is a Decision model, separate from the GPT-6 Luna LLM.",
+      "Description": "OpenAI's Decisions API (POST https://api.openai.com/v1/decisions), public beta since October 6, 2026, served by GPT-6 Luna, the only model it supports. It answers Likelihood (predicate), Choice and Score questions with typed answers and a probability for every option or level, about text or image input; MJ sends text only. It writes no text. OpenAI has not published limits on questions per call, options, levels or input size. OpenAI states the API answers up to 10 times faster than GPT-6 Luna through the Responses API; that is OpenAI's claim, not an MJ measurement. Its raw probabilities are not calibrated to MJ's data, so set thresholds on calibrated values.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
-      "PowerRank": 57,
+      "PowerRank": 58,
       "IsActive": true,
-      "SpeedRank": 1,
-      "CostRank": 1,
+      "SpeedRank": 0,
+      "CostRank": 0,
       "InheritTypeModalities": true
     },
     "relatedEntities": {
@@ -24,14 +24,18 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "07866C26-32DE-4117-8F5C-4DBA50B34FFC"
+            "ID": "6CA6826C-3CC0-4476-9573-82510A0269C5"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:59.579Z",
+            "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
           }
         },
         {
           "fields": {
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
-            "Priority": 2,
+            "Priority": 1,
             "Status": "Active",
             "DriverClass": "OpenAIDecision",
             "APIName": "gpt-6-luna",
@@ -41,25 +45,11 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "18755357-57EE-47B8-99DD-8BF1A1AE39CB"
-          }
-        },
-        {
-          "fields": {
-            "ModelID": "@parent:ID",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
-            "Priority": 1,
-            "Status": "Active",
-            "DriverClass": "OpenRouterDecision",
-            "APIName": "openai/gpt-6-luna-decisions-20261006",
-            "MaxInputTokens": 1050000,
-            "SupportedResponseFormats": "Any",
-            "SupportsEffortLevel": false,
-            "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "ID": "5F91206F-5A91-419A-8793-CF329A1401A6"
           },
-          "primaryKey": {
-            "ID": "44FECD5C-63EA-44F6-95CC-E46F6A3D12A0"
+          "sync": {
+            "lastModified": "2026-10-13T18:59:59.596Z",
+            "checksum": "486f967e7cf734dc3813887e40abca5deed9b52d4248aa74c15cf14ea8d074cc"
           }
         }
       ],
@@ -68,24 +58,6 @@
           "fields": {
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
-            "StartedAt": "2026-10-07T00:00:00.000Z",
-            "Status": "Active",
-            "Currency": "USD",
-            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.1,
-            "OutputPricePerUnit": 0,
-            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
-            "ProcessingType": "Realtime",
-            "Comments": "gpt-6-luna on OpenAI's Decisions API (public beta), as checked on October 7, 2026: $0.10 per million input tokens; no output or cache charge. Source: https://developers.openai.com/api/docs/guides/decisions"
-          },
-          "primaryKey": {
-            "ID": "9910FCFF-8957-42A9-A2EA-B5EFCDE64594"
-          }
-        },
-        {
-          "fields": {
-            "ModelID": "@parent:ID",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "StartedAt": "2026-10-06T00:00:00.000Z",
             "Status": "Active",
             "Currency": "USD",
@@ -94,16 +66,24 @@
             "OutputPricePerUnit": 0,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "openai/gpt-6-luna-decisions-20261006 through OpenRouter's Decisions API, served by OpenAI, as listed by OpenRouter on October 7, 2026: $0.10 per million input tokens; output is free. A live call that day reported $0.0000406 for 406 input tokens. Source: https://openrouter.ai/openai/gpt-6-luna-decisions"
+            "Comments": "OpenAI Decisions API (gpt-6-luna), public beta, October 2026: $0.10 per million input tokens; no output, cache-read or cache-write charges. Regional processing and long-context multipliers apply. Beta pricing may change. Source: https://developers.openai.com/api/docs/guides/decisions"
           },
           "primaryKey": {
-            "ID": "2C0E5E43-8CF2-49DF-A229-E3E8BEFB5D6E"
+            "ID": "B76D472C-AB78-4EBA-B105-1393C13A3E70"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:59.614Z",
+            "checksum": "64f82a7d1e173dc7ffc2ecd972c53345035bc02dc409d780e6530dbeee16c18b"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "843DCA3D-EA98-4F46-9EC8-F5CF8A05A068"
+      "ID": "E3117BE6-E944-475E-B9CC-74C14D642206"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:59.562Z",
+      "checksum": "fec553cdee2983df1aadd2cafcdfd95f780ffa1457bf0d9a752bb546a4474d04"
     }
   }
 ]

@@ -52,7 +52,11 @@ import { Subscription } from 'rxjs';
  * do not track record changes: their server-side write rules compare against the prior state, which a client could
  * otherwise supply itself (lower-case names). See `ResolverBase.MustLoadTruthFromDatabase`.
  */
-const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set(['mj: record changes', 'mj: conversation details']);
+const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
+  'mj: record changes',
+  'mj: conversation details',
+  'mj: data context items',
+]);
 
 export class ResolverBase {
   private static _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
@@ -1956,6 +1960,11 @@ export class ResolverBase {
    * Comments is the one dirty field, and "dirty" compared against client-supplied OldValues lets a
    * caller pin forged audit columns as both old and new values. It doesn't track its own changes, so
    * nothing else forces the load.
+   *
+   * `MJ: Data Context Items` always loads from the database for the same reason: its server class
+   * lets only an administrator save an item that holds SQL, and decides that from the item's `Type`
+   * and `SQL`. Hydrated from OldValues, a client could leave both out, and the stored procedure would
+   * keep the stored SQL item while the rule saw none.
    *
    * `MJ: Conversation Details` always loads for the same reason: its write gate decides from the stored
    * row (who wrote a person's message, its role, the owner's rating), and an OldValues-hydrated entity
