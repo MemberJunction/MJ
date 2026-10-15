@@ -104,3 +104,15 @@ function readInvocation(raw: unknown): WorkflowRunInvocation {
     if ('context' in inv) out.context = inv['context'];
     return out;
 }
+
+/**
+ * Why a step failed, for the inspector — or `null` when there is nothing to say.
+ *
+ * Only a Failed step answers: a retried step that later completed can still carry an older attempt's
+ * message on a row nobody has cleared, and showing it would contradict the status beside it.
+ */
+export function StepFailureReason(status: string, errorMessage: string | null | undefined): string | null {
+    if (status !== 'Failed') return null;
+    const reason = errorMessage?.trim();
+    return reason ? reason : null;
+}

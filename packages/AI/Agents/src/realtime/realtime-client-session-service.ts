@@ -40,6 +40,8 @@ import {
     ChatMessage,
     ClientRealtimeSessionConfig,
     GetAIAPIKey,
+    CredentialScopeAllows,
+    type AICredentialScope,
     IRealtimeSession,
     JSONObject,
     RealtimeSessionParams,
@@ -96,6 +98,12 @@ import { SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtim
  * id — it is a runtime choice made when the voice session starts.
  */
 export interface PrepareClientSessionInput {
+    /**
+     * The starting run's credential scope (`ExecuteAgentParams.CredentialScope`). On this release line
+     * a realtime session is minted only on the platform's keys, so a `'RuntimeOnly'` session has no
+     * key it may use and is refused. Absent ⇒ `'Any'`.
+     */
+    CredentialScope?: AICredentialScope;
     /** The Realtime Co-Agent entity. Provide this OR {@link PrepareClientSessionInput.CoAgentID}. */
     CoAgent?: MJAIAgentEntityExtended;
     /** The Realtime Co-Agent id (resolved from cached metadata). Provide this OR {@link PrepareClientSessionInput.CoAgent}. */
@@ -1568,6 +1576,14 @@ export class RealtimeClientSessionService {
         coAgent: MJAIAgentEntityExtended,
         effectiveConfig?: RealtimeCoAgentConfig
     ): Promise<RealtimeModelResolutionOutcome> {
+        // Every key this service resolves is the platform's (getAPIKeyForDriver). A run restricted to
+        // its caller's keys therefore has none to mint on, and must not quietly use ours.
+        if (!CredentialScopeAllows(input.CredentialScope, 'Environment')) {
+            return {
+                ErrorMessage: `No credentials found for a realtime session: the credential scope is ${input.CredentialScope}, ` +
+                    `and realtime sessions cannot use the run's own API keys on this release line.`
+            };
+        }
         if (input.PreferredModelID) {
             return this.resolvePreferredRealtimeModel(input.PreferredModelID);
         }

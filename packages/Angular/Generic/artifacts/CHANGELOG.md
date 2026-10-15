@@ -1,5 +1,35 @@
 # @memberjunction/ng-artifacts
 
+## 6.1.5
+
+### Patch Changes
+
+- 3370dc7: ArtifactsModule no longer preloads React, ReactDOM and Babel from unpkg when it is constructed, so apps that only import a realtime overlay (e.g. a public voice widget) make no third-party CDN requests at bootstrap. MJ Explorer keeps the warm cache by calling AngularAdapterService.preload() after login. Other hosts that render interactive component artifacts and want a warm cache can call `inject(AngularAdapterService).preload()` (from `@memberjunction/ng-react`) after authentication; otherwise the runtime loads on first use.
+- Updated dependencies [3910bd5]
+- Updated dependencies [7baaf30]
+- Updated dependencies [13d92ac]
+- Updated dependencies [ad65a01]
+- Updated dependencies [c3d7e50]
+- Updated dependencies [ec5f382]
+  - @memberjunction/core@6.1.5
+  - @memberjunction/ng-base-forms@6.1.5
+  - @memberjunction/ng-query-viewer@6.1.5
+  - @memberjunction/core-entities@6.1.5
+  - @memberjunction/graphql-dataprovider@6.1.5
+  - @memberjunction/ng-base-types@6.1.5
+  - @memberjunction/ng-code-editor@6.1.5
+  - @memberjunction/ng-media-player@6.1.5
+  - @memberjunction/ng-notifications@6.1.5
+  - @memberjunction/ng-react@6.1.5
+  - @memberjunction/ng-shared-generic@6.1.5
+  - @memberjunction/ng-trees@6.1.5
+  - @memberjunction/interactive-component-types@6.1.5
+  - @memberjunction/ng-export-service@6.1.5
+  - @memberjunction/ng-markdown@6.1.5
+  - @memberjunction/ng-ui-components@6.1.5
+  - @memberjunction/ng-pagination@6.1.5
+  - @memberjunction/global@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes

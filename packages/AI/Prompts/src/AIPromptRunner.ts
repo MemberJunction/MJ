@@ -1,7 +1,7 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration, CredentialScopeAllows, type AICredentialScope } from '@memberjunction/ai';
 import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling, ResolveToolChoiceForRequest } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
-import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
+import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo, PickPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import { BaseEntitySaveQueue, LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
@@ -11,6 +11,9 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
+
+/** The `providerErrorCode` that marks a request the caller cancelled — the code the drivers use. */
+const CALLER_CANCELLATION_CODE = 'request_cancelled';
 import { ResultSelectionConfig, type IParallelExecutionCoordinator } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -232,6 +235,9 @@ export class AIPromptRunner {
    * runs INSIDE the post-INSERT task so a slow INSERT can never clobber the finalized row). Failures
    * stay in this runner's structured log stream via the queue's `onError` hook.
    */
+  /** Failover fields waiting to be re-applied after a prompt run's INSERT lands; see {@link recordFailoverFields}. */
+  private readonly _pendingFailoverFields = new WeakMap<MJAIPromptRunEntityExtended, (run: MJAIPromptRunEntityExtended) => void>();
+
   private _promptRunQueue = new BaseEntitySaveQueue({
     onError: (message) => this.logError(message, { category: 'PromptRunSave' }),
   });
@@ -418,6 +424,11 @@ export class AIPromptRunner {
    * IMPORTANT: When ANY credential ID is found (priorities 1-4), the system uses
    * the Credentials path and ignores legacy methods (priorities 5-6).
    *
+   * Each tier is consulted only if {@link CredentialScopeAllows} the run's
+   * {@link AIPromptParams.CredentialScope} to use its source. Under `'RuntimeOnly'` that leaves
+   * priority 1 and the `apiKeys` entry for this driver class; bindings, the vendor default and the
+   * environment are skipped.
+   *
    * @param driverClass - The driver class name (e.g., 'OpenAILLM')
    * @param promptId - The prompt ID for looking up AIPromptModel credentials
    * @param modelId - The model ID for looking up AIPromptModel and AIModelVendor credentials
@@ -439,6 +450,34 @@ export class AIPromptRunner {
       return await this.resolveCredentialById(params.credentialId, 'per-request override', params, verbose);
     }
 
+    // Priorities 2-5 are the platform's MJ Credentials; a scope that rules them out skips straight
+    // to the caller's keys (and, if the scope allows it, the environment).
+    if (CredentialScopeAllows(params.CredentialScope, 'PlatformCredential')) {
+      const platformCredential = await this.resolvePlatformCredential(promptId, modelId, vendorId, params, verbose);
+      if (platformCredential) return platformCredential;
+    }
+
+    // No credential bindings found - fall back to legacy methods
+    if (verbose) {
+      this.logStatus(`   Using legacy API key resolution for driver ${driverClass}`, true, params);
+    }
+
+    // Priority 6 & 7: Legacy apiKeys array and environment variables (the latter only if the scope allows)
+    return GetAIAPIKey(driverClass, params.apiKeys, verbose, params.CredentialScope);
+  }
+
+  /**
+   * Priorities 2-5 of {@link resolveCredentialForExecution}: the platform's MJ Credentials —
+   * `AICredentialBinding`s on the prompt-model, the model-vendor and the vendor, then the vendor's
+   * default credential. `undefined` when none resolves.
+   */
+  private async resolvePlatformCredential(
+    promptId: string | undefined,
+    modelId: string | undefined,
+    vendorId: string | undefined,
+    params: AIPromptParams,
+    verbose: boolean
+  ): Promise<string | undefined> {
     // Ensure CredentialEngine is configured for binding lookups
     await CredentialEngine.Instance.Config(false, params.contextUser);
 
@@ -485,13 +524,7 @@ export class AIPromptRunner {
       }
     }
 
-    // No credential bindings found - fall back to legacy methods
-    if (verbose) {
-      this.logStatus(`   Using legacy API key resolution for driver ${driverClass}`, true, params);
-    }
-
-    // Priority 6 & 7: Legacy apiKeys array and environment variables
-    return GetAIAPIKey(driverClass, params.apiKeys, verbose);
+    return undefined;
   }
 
   /**
@@ -651,6 +684,10 @@ export class AIPromptRunner {
    * 6. Legacy: params.apiKeys[] array
    * 7. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
    *
+   * Each tier counts only if {@link CredentialScopeAllows} the run's scope to use its source: under
+   * `'RuntimeOnly'` only 1 and 6 count, so a candidate the caller has no key for is unavailable —
+   * which is what keeps failover on the caller's keys.
+   *
    * @param driverClass - The driver class name (e.g., 'OpenAILLM')
    * @param promptId - The prompt ID for looking up AIPromptModel bindings
    * @param modelId - The model ID for looking up AIPromptModel and AIModelVendor bindings
@@ -671,6 +708,18 @@ export class AIPromptRunner {
       return true;
     }
 
+    // Priorities 2-5: the platform's MJ Credentials, when the scope allows them
+    if (CredentialScopeAllows(params?.CredentialScope, 'PlatformCredential') && this.hasPlatformCredential(promptId, modelId, vendorId)) {
+      return true;
+    }
+
+    // Priority 6 & 7: Legacy methods - check if API key is available (the environment only if the scope allows)
+    const apiKey = GetAIAPIKey(driverClass, params?.apiKeys, params?.verbose, params?.CredentialScope);
+    return this.isValidAPIKey(apiKey);
+  }
+
+  /** Priorities 2-5 of {@link hasCredentialsAvailable}: whether a platform MJ Credential applies. */
+  private hasPlatformCredential(promptId: string | undefined, modelId: string | undefined, vendorId: string | undefined): boolean {
     // Priority 2: PromptModel bindings
     if (promptId && modelId) {
       const promptModel = AIEngine.Instance.PromptModels.find(
@@ -708,9 +757,7 @@ export class AIPromptRunner {
       }
     }
 
-    // Priority 6 & 7: Legacy methods - check if API key is available
-    const apiKey = GetAIAPIKey(driverClass, params?.apiKeys, params?.verbose);
-    return this.isValidAPIKey(apiKey);
+    return false;
   }
 
   /**
@@ -796,7 +843,7 @@ export class AIPromptRunner {
         // Select model using the appropriate prompt — capture the FULL result
         selection = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
         if (!selection.model) {
-          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo));
+          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo, params.CredentialScope));
         }
 
         // Tell the template which path this run is actually taking, BEFORE it renders. The loop
@@ -882,7 +929,7 @@ export class AIPromptRunner {
 
         selection = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
         if (!selection.model) {
-          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo));
+          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo, params.CredentialScope));
         }
       }
 
@@ -904,14 +951,18 @@ export class AIPromptRunner {
       // Model selection info is now included in the result from both execution methods
       return result;
     } catch (error) {
-      this.logError(error, {
-        prompt: params.prompt,
-        metadata: {
-          executionPhase: 'main-execution',
-          hasChildPrompts: !!params.childPrompts?.length
-        },
-        maxErrorLength: params.maxErrorLength
-      });
+      if (this.isCancellation(error, params)) {
+        this.logStatus(`⏹️ Prompt "${params.prompt?.Name}" was cancelled: ${error.message}`, false, params);
+      } else {
+        this.logError(error, {
+          prompt: params.prompt,
+          metadata: {
+            executionPhase: 'main-execution',
+            hasChildPrompts: !!params.childPrompts?.length
+          },
+          maxErrorLength: params.maxErrorLength
+        });
+      }
 
       const endTime = new Date();
       const executionTimeMS = endTime.getTime() - startTime.getTime();
@@ -1020,7 +1071,7 @@ export class AIPromptRunner {
       allCandidates = modelResult.allCandidates || [];
       credentialAvailability = modelResult.credentialAvailability;
       if (!selectedModel) {
-        throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo));
+        throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, modelSelectionInfo, params.CredentialScope));
       }
     }
 
@@ -1078,8 +1129,11 @@ export class AIPromptRunner {
       errorMessage = `Validation failed: ${parsedResult.validationResult.Errors?.map(e => e.Message).join('; ')}`;
     }
 
+    const cancelled = !chatResult.success && this.isCallerCancellation(chatResult.errorInfo);
+
     return {
       success: chatResult.success,
+      ...(cancelled ? { status: 'Cancelled' as const, cancelled: true, cancellationReason: 'user_requested' as const } : {}),
       rawResult: chatResult.data?.choices?.[0]?.message?.content,
       result: parsedResult?.result ? parsedResult.result as T : parsedResult as T,
       errorMessage, // Include error message for proper error propagation
@@ -1213,7 +1267,7 @@ export class AIPromptRunner {
         selectorPromptId: prompt.ResultSelectorPromptID,
       };
 
-      const aiSelectedResult = await this.ParallelCoordinator.selectBestResult(successfulResults, selectionConfig, undefined, params.cancellationToken);
+      const aiSelectedResult = await this.ParallelCoordinator.selectBestResult(successfulResults, selectionConfig, undefined, params.cancellationToken, PickPromptExecutionScope(params));
       if (aiSelectedResult) {
         selectedResult = aiSelectedResult;
       }
@@ -2787,7 +2841,7 @@ export class AIPromptRunner {
    * Includes details about which models were considered and why they were unavailable
    * so the error message is actionable for end users (e.g., missing API credentials).
    */
-  private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo): string {
+  private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo, credentialScope?: AICredentialScope): string {
     const base = `No suitable model found for prompt ${promptName}`;
 
     if (!selectionInfo?.modelsConsidered || selectionInfo.modelsConsidered.length === 0) {
@@ -2803,9 +2857,14 @@ export class AIPromptRunner {
       }).join(', ');
 
       const suffix = unavailableModels.length > 5 ? ` (${unavailableModels.length} total)` : '';
+      // When the scope rules out the platform's credentials, "configure them" would point the reader
+      // at exactly the fallback the caller ruled out.
+      const platformAllowed = CredentialScopeAllows(credentialScope, 'Environment') || CredentialScopeAllows(credentialScope, 'PlatformCredential');
+      const remedy = platformAllowed
+        ? `Please configure API credentials in your environment or AI Credential settings.`
+        : `The credential scope is ${credentialScope}, so only the API keys supplied with this run count; supply a key for one of these vendors.`;
       return `${base}. No valid API credentials/keys are configured for any of the candidate model-vendor combinations. ` +
-        `Tried: ${triedSummary}${suffix}. ` +
-        `Please configure API credentials in your environment or AI Credential settings.`;
+        `Tried: ${triedSummary}${suffix}. ${remedy}`;
     }
 
     return `${base}. ${selectionInfo.selectionReason || 'Unknown reason'}`;
@@ -3208,6 +3267,11 @@ export class AIPromptRunner {
       const candidate = allCandidates[i];
       const attemptStartTime = Date.now();
 
+      // A caller that has cancelled wants no further model calls — not this candidate, not the next.
+      if (cancellationToken?.aborted) {
+        return this.stopFailoverForCancellation(prompt, this.buildCancellationError(), failoverAttempts, promptRun);
+      }
+
       // Skip candidates with no credentials configured. `allCandidates` is intentionally the
       // FULL priority-ordered list (see the DECISION note in selectModelWithAPIKeyTracked),
       // so it can include vendors that have no API key in this environment. Firing a live
@@ -3256,6 +3320,18 @@ export class AIPromptRunner {
           candidate.promptModelConfiguration
         );
 
+        // A failure caused by the caller cancelling is the caller's decision, not the model's, so it
+        // is neither failed over nor reported as a model failure. A result that already says it is
+        // not eligible for failover (a driver's own cancelled result) is returned as it is; one that
+        // would fail over is replaced by a cancellation.
+        if (!result.success && (cancellationToken?.aborted || this.isCallerCancellation(result.errorInfo))) {
+          if (result.errorInfo?.canFailover !== true) {
+            this.logFailoverCancellation(prompt, failoverAttempts, promptRun);
+            return result;
+          }
+          return this.stopFailoverForCancellation(prompt, this.buildCancellationError(), failoverAttempts, promptRun);
+        }
+
         // CRITICAL FIX: Check if result failed but is retriable (network errors, rate limits, etc.)
         // Provider drivers (GeminiLLM, OpenAILLM, etc.) catch errors internally and return ChatResult{success: false}
         // instead of throwing, so we must check result.success here.
@@ -3300,10 +3376,15 @@ export class AIPromptRunner {
         return result;
 
       } catch (error) {
-        lastError = error as Error;
+        lastError = this.asModelError(error as Error | ChatResult);
 
         // Analyze error to get error info
         const errorInfo = ErrorAnalyzer.analyzeError(lastError);
+
+        if (cancellationToken?.aborted || this.isCallerCancellation(errorInfo)) {
+          const cancellation = this.isCallerCancellation(errorInfo) ? lastError : this.buildCancellationError();
+          return this.stopFailoverForCancellation(prompt, cancellation, failoverAttempts, promptRun);
+        }
 
         // Use shared failover error handling logic
         const decision = await this.processFailoverError(
@@ -3432,23 +3513,16 @@ export class AIPromptRunner {
     currentModel: MJAIModelEntityExtended,
     currentVendorId: string | null
   ): void {
-    promptRun.FailoverAttempts = failoverAttempts.length;
-    promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
-      model: a.modelId,
-      vendor: a.vendorId,
-      error: a.error.message,
-      errorType: a.errorType
-    })));
-    promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
-    promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
-
-    // Update ModelID if we ended up using a different model
-    if (!UUIDsEqual(currentModel.ID, promptRun.OriginalModelID)) {
-      promptRun.ModelID = currentModel.ID;
-    }
-    if (currentVendorId && !UUIDsEqual(currentVendorId, promptRun.VendorID)) {
-      promptRun.VendorID = currentVendorId;
-    }
+    this.recordFailoverFields(promptRun, run => {
+      this.applyFailoverAttempts(run, failoverAttempts);
+      // Update ModelID if we ended up using a different model
+      if (!UUIDsEqual(currentModel.ID, run.OriginalModelID)) {
+        run.ModelID = currentModel.ID;
+      }
+      if (currentVendorId && !UUIDsEqual(currentVendorId, run.VendorID)) {
+        run.VendorID = currentVendorId;
+      }
+    });
   }
 
   /**
@@ -3458,6 +3532,11 @@ export class AIPromptRunner {
     promptRun: MJAIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[]
   ): void {
+    this.recordFailoverFields(promptRun, run => this.applyFailoverAttempts(run, failoverAttempts));
+  }
+
+  /** Writes the failover attempts onto a prompt run: their count, errors and durations. */
+  private applyFailoverAttempts(promptRun: MJAIPromptRunEntityExtended, failoverAttempts: FailoverAttempt[]): void {
     promptRun.FailoverAttempts = failoverAttempts.length;
     promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
       model: a.modelId,
@@ -3467,6 +3546,83 @@ export class AIPromptRunner {
     })));
     promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
     promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+  }
+
+  /**
+   * Sets a prompt run's failover fields now, and again in the queued finalize update. The run's
+   * 'Running' INSERT is queued without being awaited, and when it lands the entity reloads from what
+   * was inserted — undoing any field set while it was in flight. Writing the fields inside the
+   * finalize task, which runs after that reload, is what makes them persist.
+   */
+  private recordFailoverFields(promptRun: MJAIPromptRunEntityExtended, apply: (run: MJAIPromptRunEntityExtended) => void): void {
+    apply(promptRun);
+    this._pendingFailoverFields.set(promptRun, apply);
+  }
+
+  /**
+   * Whether a failure was caused by the caller cancelling the request. The drivers and
+   * {@link buildCancellationError} mark a cancellation the same way: not eligible for failover, with
+   * the `request_cancelled` provider error code.
+   */
+  private isCallerCancellation(errorInfo: AIErrorInfo | undefined): boolean {
+    return errorInfo?.canFailover === false && errorInfo?.providerErrorCode === CALLER_CANCELLATION_CODE;
+  }
+
+  /**
+   * The error for a model call the caller cancelled. It carries the same classification the drivers
+   * give a cancelled request — Fatal and not eligible for failover — so ErrorAnalyzer, the failover
+   * loop and the validation retries all stop on it rather than treating it as an unknown model error.
+   */
+  private buildCancellationError(message?: string): Error & { errorInfo: AIErrorInfo } {
+    const error = new Error(message || 'Chat completion was cancelled') as Error & { errorInfo: AIErrorInfo };
+    error.errorInfo = {
+      errorType: 'Unknown',
+      severity: 'Fatal',
+      canFailover: false,
+      providerErrorCode: CALLER_CANCELLATION_CODE,
+    };
+    return error;
+  }
+
+  /**
+   * Ends the failover loop for a caller cancellation: logs it once and returns the error result
+   * without trying another candidate.
+   */
+  private stopFailoverForCancellation(
+    prompt: MJAIPromptEntityExtended,
+    cancellation: Error,
+    failoverAttempts: FailoverAttempt[],
+    promptRun?: MJAIPromptRunEntityExtended
+  ): ChatResult {
+    this.logFailoverCancellation(prompt, failoverAttempts, promptRun);
+    return this.createFailoverErrorResult(cancellation, failoverAttempts);
+  }
+
+  /**
+   * Logs a caller cancellation that ended the failover loop, once and at info level, and records any
+   * real failures that came before it on the prompt run.
+   */
+  private logFailoverCancellation(
+    prompt: MJAIPromptEntityExtended,
+    failoverAttempts: FailoverAttempt[],
+    promptRun?: MJAIPromptRunEntityExtended
+  ): void {
+    LogStatusEx({
+      message: `⏹️ Prompt "${prompt.Name}" was cancelled by the caller — not trying any further model candidates`,
+      category: 'AI',
+      additionalArgs: [{ promptId: prompt.ID, priorFailures: failoverAttempts.length }]
+    });
+    if (promptRun && failoverAttempts.length > 0) {
+      this.updatePromptRunWithFailoverFailure(promptRun, failoverAttempts);
+    }
+  }
+
+  /**
+   * Whether an error ended a prompt run because the caller cancelled it: the caller's token is
+   * aborted, or the error is classified as a cancellation.
+   */
+  private isCancellation(error: Error, params: AIPromptParams): boolean {
+    return params.cancellationToken?.aborted === true || this.isCallerCancellation(ErrorAnalyzer.analyzeError(error));
   }
 
   /**
@@ -3499,7 +3655,7 @@ export class AIPromptRunner {
       errorMessage: lastError?.message || 'Unknown error',
       exception: lastError,
       errorInfo: errorInfo,
-      statusText: `Failover failed after ${failoverAttempts.length} attempts`,
+      statusText: this.isCallerCancellation(errorInfo) ? 'Cancelled' : `Failover failed after ${failoverAttempts.length} attempts`,
       timeElapsed: endTime.getTime() - startTime.getTime(),
       data: null
     };
@@ -3632,7 +3788,7 @@ export class AIPromptRunner {
       return false;
     }
     // A cancellation is the caller's decision, never a tool problem.
-    if (result.errorInfo?.canFailover === false && result.errorInfo?.providerErrorCode === 'request_cancelled') {
+    if (this.isCallerCancellation(result.errorInfo)) {
       return false;
     }
     return this.isToolSpecificFailureText(`${result.errorMessage ?? ''} ${result.statusText ?? ''}`);
@@ -3760,6 +3916,16 @@ export class AIPromptRunner {
       );
 
       // Create LLM instance with vendor-specific driver class
+      // No key under a scope that rules out the environment must not reach a driver: the OpenAI and
+      // Anthropic SDKs read OPENAI_API_KEY / ANTHROPIC_API_KEY themselves when handed none. Selection
+      // and failover already skip unkeyed candidates; parallel tasks are planned without the scope.
+      if (!apiKey?.trim() && !CredentialScopeAllows(params.CredentialScope, 'Environment')) {
+        throw new Error(
+          `No credentials found for driver class '${driverClass}': the credential scope is ${params.CredentialScope}, ` +
+          `and this run carries no API key for it.`
+        );
+      }
+
       llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
 
       // Prepare chat parameters
@@ -3929,6 +4095,10 @@ export class AIPromptRunner {
       return chatResult;
     } catch (error) {
       const errorInfo = ErrorAnalyzer.analyzeError(error, driverClass)
+      // A caller cancellation is not a model failure. Whoever handles it logs it once, at info level.
+      if (this.isCallerCancellation(errorInfo)) {
+        throw error;
+      }
       this.logError(error, {
         category: 'ModelExecution',
         model: model,
@@ -4053,17 +4223,24 @@ export class AIPromptRunner {
       return await llm.ChatCompletion(chatParams);
     }
 
-    return await Promise.race([
-      llm.ChatCompletion(chatParams),
-      new Promise<never>((_, reject) => {
-        const fail = () => reject(this.buildAbortError(signal, bound));
-        if (signal.aborted) {
-          fail();
-        } else {
-          signal.addEventListener('abort', fail, { once: true });
-        }
-      }),
-    ]);
+    let fail: (() => void) | undefined;
+    const aborted = new Promise<never>((_, reject) => {
+      fail = () => reject(this.buildAbortError(signal, bound));
+      if (signal.aborted) {
+        fail();
+      } else {
+        signal.addEventListener('abort', fail, { once: true });
+      }
+    });
+    try {
+      return await Promise.race([llm.ChatCompletion(chatParams), aborted]);
+    } finally {
+      // With no prompt timeout the signal is the caller's own token, which outlives this call: a
+      // listener left on it would pile up across every prompt the caller runs.
+      if (fail) {
+        signal.removeEventListener('abort', fail);
+      }
+    }
   }
 
   /**
@@ -4075,7 +4252,7 @@ export class AIPromptRunner {
       const reason = signal.reason;
       return reason instanceof AIPromptTimeoutError ? reason : new Error('Chat completion timed out');
     }
-    return new Error('Chat completion was cancelled');
+    return this.buildCancellationError();
   }
 
   /**
@@ -4688,6 +4865,10 @@ export class AIPromptRunner {
           };
         }
       } catch (error) {
+        // A cancellation ends the retries; the caller logs it and records the run as cancelled.
+        if (this.isCancellation(error, params)) {
+          throw error;
+        }
         lastError = error;
         this.logError(error, {
           category: 'ExecutionRetry',
@@ -4762,6 +4943,23 @@ export class AIPromptRunner {
     const delaySeconds = (delay / 1000).toFixed(1);
     LogStatus(`   Waiting ${delaySeconds}s before retry (strategy: ${prompt.RetryStrategy || 'Fixed'})...`);
     await new Promise(resolve => setTimeout(resolve, delay));
+  }
+
+  /**
+   * The Error a failover attempt records for a caught value. A streaming call rejects with its failed
+   * ChatResult (BaseLLM) rather than an Error, so its `.message` was undefined and every such failure
+   * reached the prompt run and the agent run as "Unknown error". Keeps the driver's classification on
+   * it, which ErrorAnalyzer then honours. Any other rejected value is classified as itself, with its
+   * `errorMessage` read as the message ErrorAnalyzer looks for — so a bare `{ status: 429 }` stays a
+   * RateLimit and `{ errorMessage: 'Invalid API key provided' }` stays an Authentication error.
+   */
+  private asModelError(caught: Error | ChatResult): Error {
+    if (caught instanceof Error) {
+      return caught;
+    }
+    const wrapped: Error & { errorInfo?: AIErrorInfo } = new Error(caught?.errorMessage || caught?.statusText || 'Model execution failed');
+    wrapped.errorInfo = caught?.errorInfo ?? ErrorAnalyzer.analyzeError({ ...caught, message: caught?.errorMessage });
+    return wrapped;
   }
 
   /**
@@ -5607,9 +5805,11 @@ export class AIPromptRunner {
         }
         
         // Run the repair prompt
+        // The repair runs inside the caller's run, so it runs on the caller's user, configuration and
+        // credentials — under RuntimeOnly it must not reach a key the caller's prompt could not.
         const repairResult = await this.ExecutePrompt({
+          ...PickPromptExecutionScope(params),
           parentPromptRunId: currentPromptRun.ID,
-          contextUser: params.contextUser,
           prompt: repairPrompt,
           data: {
             ERROR_MESSAGE: trueError,
@@ -6008,6 +6208,18 @@ export class AIPromptRunner {
       
       // Set final Status based on success
       promptRun.Status = promptRun.Success ? 'Completed' : 'Failed';
+
+      // A call the caller cancelled is recorded as cancelled, not as a failed model call.
+      if (!modelResult.success && this.isCallerCancellation(modelResult.errorInfo)) {
+        promptRun.Status = 'Cancelled';
+        promptRun.Cancelled = true;
+        promptRun.CancellationReason = 'user_requested';
+      }
+
+      // The failover fields were set while the INSERT may still have been in flight, and its reload
+      // would have undone them: set them again here, after the reload.
+      this._pendingFailoverFields.get(promptRun)?.(promptRun);
+      this._pendingFailoverFields.delete(promptRun);
       
       // Set ErrorDetails if failed
       if (!promptRun.Success) {

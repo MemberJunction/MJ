@@ -11,7 +11,7 @@
  */
 
 import { createHash } from 'crypto';
-import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
+import { BaseEntity, LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective } from '@memberjunction/ai-core-plus';
@@ -83,6 +83,16 @@ export function selectPrimaryArtifact(
  * ```
  */
 export class AgentRunner {
+    /**
+     * Why a conversation-detail `Save()` returned false, for an error or log line. The owner gate in
+     * `MJConversationDetailEntityExtended` refuses a non-owner's write (e.g. the elevated System user
+     * on a widget guest's conversation) and records the reason ONLY on `LatestResult` — it logs
+     * nothing itself — so a caller that reports a fixed string loses it (MJ#4791).
+     */
+    private static saveFailureReason(entity: BaseEntity): string {
+        return entity.LatestResult?.CompleteMessage?.trim() || 'no failure detail recorded';
+    }
+
     /** Fallback artifact type for agent payloads when the agent declares no DefaultArtifactTypeID. */
     private static readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
 
@@ -318,7 +328,7 @@ export class AgentRunner {
 
                     if (!conversationName && options.userMessage) {
                         // Try to generate a name using the "Name Conversation" prompt (same as UI)
-                        const nameResult = await this.GenerateConversationName(options.userMessage, contextUser, md);
+                        const nameResult = await this.GenerateConversationName(options.userMessage, contextUser, md, params);
                         if (nameResult) {
                             conversationName = nameResult.name;
                             conversationDescription = nameResult.description;
@@ -367,7 +377,7 @@ export class AgentRunner {
                 }
 
                 if (!(await userMessageDetail.Save())) {
-                    throw new Error('Failed to create user message conversation detail');
+                    throw new Error(`Failed to create user message conversation detail: ${AgentRunner.saveFailureReason(userMessageDetail)}`);
                 }
 
                 userMessageDetailId = userMessageDetail.ID;
@@ -393,7 +403,7 @@ export class AgentRunner {
                 }
 
                 if (!(await agentResponseDetail.Save())) {
-                    throw new Error('Failed to create agent response conversation detail');
+                    throw new Error(`Failed to create agent response conversation detail: ${AgentRunner.saveFailureReason(agentResponseDetail)}`);
                 }
 
                 agentResponseDetailId = agentResponseDetail.ID;
@@ -406,6 +416,13 @@ export class AgentRunner {
             // Flag to prevent late progress callbacks from overwriting final status
             // Progress callbacks fire async and may complete AFTER agent returns
             let agentExecutionCompleted = false;
+            // Progress saves run one at a time on this chain, and the final update awaits it.
+            // EnsureSaveComplete() alone is not enough: it resolves on the entity's 'save' event,
+            // which BaseEntity raises before the save finishes committing, so a progress save
+            // can still be in flight when the final update calls Save(). BaseEntity.Save() hands
+            // a concurrent caller the in-flight save's promise, so the final status was dropped
+            // and the detail stayed 'In-Progress' with the last progress message.
+            let progressSaves: Promise<void> = Promise.resolve();
 
             // Wrap progress callback to update agent response detail
             const originalOnProgress = params.onProgress;
@@ -423,11 +440,20 @@ export class AgentRunner {
 
                     // Update the agent response detail with progress message
                     if (agentResponseDetail && progress.message) {
-                        agentResponseDetail.Message = progress.message;
-                        const saved = await agentResponseDetail.Save();
-                        if (!saved) {
-                            LogError('Failed to save agent response detail progress update');
-                        }
+                        const detail = agentResponseDetail;
+                        const message: string = progress.message;
+                        progressSaves = progressSaves.then(async () => {
+                            try {
+                                detail.Message = message;
+                                if (!(await detail.Save())) {
+                                    LogError(`Failed to save agent response detail progress update: ${AgentRunner.saveFailureReason(detail)}`);
+                                }
+                            } catch (error) {
+                                // A failed progress save must not break the chain the final update awaits
+                                LogError(`Failed to save agent response detail progress update: ${error}`, undefined, error);
+                            }
+                        });
+                        await progressSaves;
                     }
                     // Call original callback if provided
                     if (originalOnProgress) {
@@ -495,8 +521,9 @@ export class AgentRunner {
             // Step 5: Update agent response detail with final result.
             const updateDetail = async () => {
                 if (agentResponseDetail && agentResponseDetailId) {
-                    // Wait for any in-flight progress save to complete
-                    // EnsureSaveComplete() resolves immediately if no save in progress
+                    // Wait for every queued progress save (none can be added: the flag is set),
+                    // then for any other save still in flight on this entity
+                    await progressSaves;
                     await agentResponseDetail.EnsureSaveComplete();
 
                     LogStatus('Updating agent response detail with final result');
@@ -526,7 +553,7 @@ export class AgentRunner {
 
                     const saved = await agentResponseDetail.Save();
                     if (!saved) {
-                        LogError(`Failed to save agent response detail ${agentResponseDetailId} with final status`);
+                        LogError(`Failed to save agent response detail ${agentResponseDetailId} with final status: ${AgentRunner.saveFailureReason(agentResponseDetail)}`);
                     }
                     LogStatus(`Updated agent response detail ${agentResponseDetailId} with final status: ${agentResponseDetail.Status}`);
                 }
@@ -670,7 +697,9 @@ export class AgentRunner {
                     agentResponseDetail.Status = 'Error';
                     agentResponseDetail.Message = errorMessage;
                     agentResponseDetail.Error = errorMessage;
-                    await agentResponseDetail.Save();
+                    if (!(await agentResponseDetail.Save())) {
+                        LogError(`Failed to persist Error on conversation detail ${agentResponseDetail.ID}: ${AgentRunner.saveFailureReason(agentResponseDetail)}`);
+                    }
                 } catch (persistError) {
                     LogError(`Failed to persist Error on conversation detail after agent crash: ${persistError}`, undefined, persistError);
                 }
@@ -1350,13 +1379,16 @@ export class AgentRunner {
      *
      * @param userMessage - The first user message to base the name on
      * @param contextUser - User context for prompt execution
+     * @param credentials - The run's configuration, runtime keys and credential scope, so naming runs
+     *   on the same credentials as the agent run it names
      * @returns Generated conversation name and description, or null if generation failed
      * @private
      */
     private async GenerateConversationName(
         userMessage: string,
         contextUser: UserInfo,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        credentials?: Pick<ExecuteAgentParams, 'configurationId' | 'apiKeys' | 'CredentialScope'>
     ): Promise<{ name: string; description: string } | null> {
         try {
             // Import AIPromptRunner, AIPromptParams, and AIEngine
@@ -1380,6 +1412,9 @@ export class AgentRunner {
             promptParams.contextUser = contextUser;
             promptParams.conversationMessages = [{ role: 'user', content: userMessage }];
             promptParams.provider = provider || this._provider;
+            promptParams.configurationId = credentials?.configurationId;
+            promptParams.apiKeys = credentials?.apiKeys;
+            promptParams.CredentialScope = credentials?.CredentialScope;
 
             const runner = new AIPromptRunner();
             const result = await runner.ExecutePrompt(promptParams);

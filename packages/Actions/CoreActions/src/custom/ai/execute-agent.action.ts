@@ -112,6 +112,9 @@ export class ExecuteAgentAction extends BaseAction {
                 agent: agent as MJAIAgentEntityExtended,
                 conversationMessages,
                 contextUser: params.ContextUser,
+                // The calling run's credential scope; see execute-ai-prompt. Without keys, a 'RuntimeOnly'
+                // nested run fails rather than spending the platform's.
+                CredentialScope: params.CredentialScope,
                 data,
                 conversationDetailId: conversationDetailId ?? undefined,
                 lastRunId: lastRunId ?? undefined,

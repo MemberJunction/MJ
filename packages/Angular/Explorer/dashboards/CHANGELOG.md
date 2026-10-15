@@ -1,5 +1,84 @@
 # @memberjunction/ng-dashboards
 
+## 6.1.5
+
+### Patch Changes
+
+- 8ee1709: Follow-ups to the durable entity-action payload fix (#4794), found while verifying it end to end.
+  - `@memberjunction/actions`: a durable binding now redacts its payload against the engine's live `ActionParam` definitions, the same ones `ActionExecutionLog.Params` uses. Before, it read a per-action cached collection that keeps the old row after an in-place update, so setting a parameter's `LogValue` to 0 on a running server redacted the log while the value was still written to `Task.InputPayload` until a restart. The runtime parameters are now named from those same live definitions too: redaction matches definitions by name, so a parameter renamed on a running server was named from the stale copy, matched nothing, and was written to the payload unredacted, whole-record bindings included.
+  - `@memberjunction/task-graph`: a task whose `InputPayload` is not valid JSON now **fails** (`Task <id> has an InputPayload that is not valid JSON …`) instead of running with no inputs. A raw string reaches that column through `TaskGraph.RetryTask` / `UpdateTaskInput`.
+  - `@memberjunction/server`: `TaskGraphActionRunner` no longer adds one parameter per upstream task to an action step. That map is keyed by upstream task ID, so every step with a dependency received an extra parameter named by a GUID and holding the upstream step's whole output (logged in full). The dependency outputs still reach the step, merged by key, through the dispatcher.
+  - `@memberjunction/ng-dashboards`: the Workflows run view shows why a failed step failed ("Why it failed"). Before, the message was only in the JSON tab.
+
+- Updated dependencies [3910bd5]
+- Updated dependencies [7baaf30]
+- Updated dependencies [8ee1709]
+- Updated dependencies [13d92ac]
+- Updated dependencies [ad65a01]
+- Updated dependencies [c3d7e50]
+- Updated dependencies [ec5f382]
+  - @memberjunction/core@6.1.5
+  - @memberjunction/ng-entity-viewer@6.1.5
+  - @memberjunction/ng-base-forms@6.1.5
+  - @memberjunction/export-engine@6.1.5
+  - @memberjunction/ng-query-viewer@6.1.5
+  - @memberjunction/actions-base@6.1.5
+  - @memberjunction/core-entities@6.1.5
+  - @memberjunction/graphql-dataprovider@6.1.5
+  - @memberjunction/ng-conversations@6.1.5
+  - @memberjunction/ng-dashboard-viewer@6.1.5
+  - @memberjunction/ai-engine-base@6.1.5
+  - @memberjunction/ai-core-plus@6.1.5
+  - @memberjunction/tag-engine-base@6.1.5
+  - @memberjunction/api-keys-base@6.1.5
+  - @memberjunction/ng-base-application@6.1.5
+  - @memberjunction/ng-core-entity-forms@6.1.5
+  - @memberjunction/ng-explorer-settings@6.1.5
+  - @memberjunction/ng-shared@6.1.5
+  - @memberjunction/ng-testing@6.1.5
+  - @memberjunction/ng-action-gallery@6.1.5
+  - @memberjunction/ng-actions@6.1.5
+  - @memberjunction/ng-agent-requests@6.1.5
+  - @memberjunction/ng-agents@6.1.5
+  - @memberjunction/ng-ai-test-harness@6.1.5
+  - @memberjunction/ng-archive-manager@6.1.5
+  - @memberjunction/ng-base-types@6.1.5
+  - @memberjunction/ng-clustering@6.1.5
+  - @memberjunction/ng-code-editor@6.1.5
+  - @memberjunction/ng-composer@6.1.5
+  - @memberjunction/ng-container-directives@6.1.5
+  - @memberjunction/ng-credentials@6.1.5
+  - @memberjunction/ng-entity-relationship-diagram@6.1.5
+  - @memberjunction/ng-filter-builder@6.1.5
+  - @memberjunction/ng-list-management@6.1.5
+  - @memberjunction/ng-media-player@6.1.5
+  - @memberjunction/ng-map-view@6.1.5
+  - @memberjunction/ng-notifications@6.1.5
+  - @memberjunction/ng-react@6.1.5
+  - @memberjunction/ng-record-process-studio@6.1.5
+  - @memberjunction/ng-resource-permissions@6.1.5
+  - @memberjunction/ng-scheduling@6.1.5
+  - @memberjunction/ng-search@6.1.5
+  - @memberjunction/ng-shared-generic@6.1.5
+  - @memberjunction/ng-task-graph-editor@6.1.5
+  - @memberjunction/ng-trees@6.1.5
+  - @memberjunction/ng-user-routines@6.1.5
+  - @memberjunction/ng-versions@6.1.5
+  - @memberjunction/credentials@6.1.5
+  - @memberjunction/integration-engine-base@6.1.5
+  - @memberjunction/interactive-component-types@6.1.5
+  - @memberjunction/templates-base-types@6.1.5
+  - @memberjunction/testing-engine-base@6.1.5
+  - @memberjunction/ng-export-service@6.1.5
+  - @memberjunction/ng-tabstrip@6.1.5
+  - @memberjunction/ng-markdown@6.1.5
+  - @memberjunction/ng-ui-components@6.1.5
+  - @memberjunction/ng-word-cloud@6.1.5
+  - @memberjunction/predictive-studio-core@6.1.5
+  - @memberjunction/lists-base@6.1.5
+  - @memberjunction/global@6.1.5
+  - @memberjunction/theme-engine@6.1.5
+
 ## 6.1.4
 
 ### Patch Changes
