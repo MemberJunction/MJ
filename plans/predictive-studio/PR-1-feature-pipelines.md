@@ -10,10 +10,10 @@
 | PR | 1 of 6 — Feature Pipeline correctness and vendor parameter fidelity |
 | Status | implementing |
 | Tier | Ready |
-| Anchored to | MJ `origin/next` @ `c92d4a47f9` (2026-10-12); anchors re-verified at `ac24ffeb8a` (2026-10-12) |
-| Last refresh | 2026-10-12, Claude Opus 5.5 (controller), `c2f9f59900` |
+| Anchored to | MJ `origin/next` @ `c92d4a47f9` (2026-10-12); anchors re-verified at `ac24ffeb8a` (2026-10-12), then re-anchored on the PR branch at `b99f9d49f7` (2026-10-15) |
+| Last refresh | 2026-10-15, Claude Sonnet 5.5 (anchors only), PR branch `ps/pr-1-feature-pipelines` @ `b99f9d49f7` (trigger c) |
 | Depends on | none. Runs in parallel with PR 2 (D-002, D-009). |
-| Unblocks | PR 5 (consumes `FeatureValueKey` columns, `MJ: Feature Pipeline Versions`, `FeaturePipelineRunResult`; adds `EffectiveAsOf`, D-018) |
+| Unblocks | PR 3 (adds `EffectiveAsOf`, D-018); PR 5 (consumes `FeatureValueKey` columns, `MJ: Feature Pipeline Versions`, `FeaturePipelineRunResult`; makes Feature Pipelines write effective-dated values, D-018) |
 | Branch | `ps/pr-1-feature-pipelines` (companions: `MemberJunction/bizapps-common`: same name) |
 | MJ destination | `plans/predictive-studio/PR-1-feature-pipelines.md` |
 | Gates owned | 5 (listed in §4) |
@@ -283,7 +283,8 @@ F-FP-11 (version pin in PS) belongs to PR 5; F-L3-* and other PS findings belong
 - **Key** (`FeatureValueKey`): entity, recordId, featureName, `effectiveAsOf`, a `FeatureVersionPin` (pipeline version,
   prompt hash, LLM model ID, parameters hash) and an `inputHash`. That key is also the cache key. **PR 1** implements the
   key minus `effectiveAsOf` (record, pipeline version, prompt fingerprint, LLM model, parameters hash, input
-  fingerprint); **PR 5** adds `effectiveAsOf`.
+  fingerprint); **PR 3** adds the `EffectiveAsOf` column (D-018); **PR 5** makes Feature Pipelines write and key on
+  it.
 - **PR 1**: outputs validated against a declared taxonomy, range or type before write (`FeatureOutputValidation`);
   rejects counted, never stored; writes upsert on the key; human-entered values never overwritten; a run with failed or
   rejected records is `failed`, and skipped records are not counted as processed (`FeaturePipelineRunResult`); an
@@ -296,7 +297,8 @@ F-FP-11 (version pin in PS) belongs to PR 5; F-L3-* and other PS findings belong
 (`FeaturePipelineRunResult.parameterFidelity`). Every external call has a timeout and bounded retries.
 
 **Entities:** extended `MJ: Feature Values`: `PipelineVersion`, `AIModelID`, `ParametersHash`, `InputHash` (PR 1),
-`EffectiveAsOf` (PR 5). D-017 adds the source column; D-018 fixes which PR adds which column.
+`EffectiveAsOf` (PR 3; Feature Pipelines write it from PR 5). D-017 adds the source column; D-018 fixes which PR adds
+which column.
 
 Contract types (`reference/contracts/contracts.ts`, copied verbatim):
 
@@ -439,9 +441,10 @@ model is exercised by `fp-live-jobtitle` (§7).
 
 ### 4.3 Out of scope (owning PR)
 
-- Effective dating (`EffectiveAsOf`), PS reading Feature Values as of a decision date, version pins in model lineage,
-  refusing to score on a pin mismatch (F-FP-11, C2.4, S3.3) — **PR 5** (D-008, D-018).
-- The 110-gate registry, the planted-truth CI host, the install path fixes F-ENV-1/2/3/9 and F-ENV-12 — **PR 2**.
+- The `EffectiveAsOf` column — **PR 3** (D-018). Feature Pipelines writing effective-dated values, PS reading Feature
+  Values as of a decision date, version pins in model lineage, refusing to score on a pin mismatch (F-FP-11, C2.4,
+  S3.3) — **PR 5** (D-008, D-018).
+- The 111-gate registry, the planted-truth CI host, the install path fixes F-ENV-1/2/3/9 and F-ENV-12 — **PR 2**.
 - Regenerating MoreCheese's catalog labels with provenance, MoreCheese taxonomy extensions (Production, Retail,
   Agriculture), the member-panel framing (F-UI-7) — **PR 6** (more-cheese companion).
 - A Knowledge Hub UI for version activation and the `overwriteHumanValues` switch (backend option only here) — follow-up
@@ -472,7 +475,7 @@ shipped — CQ-5 synced it to the file after the coding-standards waves: `AIMode
 --    ProcessRunDetail.Warnings: a record's non-fatal problems, kept out of ErrorMessage.
 -- 4. FeaturePipelineVersion: one row per distinct pipeline pin; golden-set activation (C2.5, F-FP-12, F-FP-6) and the
 --    unattended steward's backfill marker (BackfilledAt, D-PR1-18).
--- PR 5 adds FeatureValue.EffectiveAsOf (D-018).
+-- PR 3 adds FeatureValue.EffectiveAsOf (D-018).
 -- =====================================================================================
 
 -- -------------------------------------------------------------------------------------
@@ -900,75 +903,83 @@ run through the steward job (M6.5). A dedicated version UI is §9 Q-4.
 
 ```anchors
 [
-  { "id": "c9-cache-key", "file": "packages/AI/Knowledge/FeaturePipelines/src/cache/FeatureValueCacheService.ts", "symbol": "public async ComputeCacheKey(", "pattern": "const keyHash = await ComputeContentHashAsync(keyObj);", "lineHint": 123, "atCommit": "ac24ffeb8a" },
-  { "id": "c9-cache-expired", "file": "packages/AI/Knowledge/FeaturePipelines/src/cache/FeatureValueCacheService.ts", "symbol": "public async BatchLookup(", "pattern": "if (entry.ExpiresAt != null && new Date(entry.ExpiresAt).getTime() <= now) {", "lineHint": 200, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-cache-store-insert", "file": "packages/AI/Knowledge/FeaturePipelines/src/cache/FeatureValueCacheService.ts", "symbol": "public async Store(", "pattern": "entry.NewRecord();", "lineHint": 227, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-fv-insert", "file": "packages/AI/Knowledge/FeaturePipelines/src/cache/FeatureValueCacheService.ts", "symbol": "public async RecordFeatureValues(", "pattern": "fv.NewRecord();", "lineHint": 263, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-spec-capture-reasoning", "file": "packages/AI/Knowledge/FeaturePipelines/src/spec/data-feature-spec.ts", "symbol": "export interface DataFeatureSpec", "pattern": "CaptureReasoning?: boolean;", "lineHint": 53, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-spec-output-constraint", "file": "packages/AI/Knowledge/FeaturePipelines/src/spec/data-feature-spec.ts", "symbol": "export interface DataFeatureOutput", "pattern": "  Constraint?: ValueConstraint;", "lineHint": 94, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-render-constraint-block", "file": "packages/AI/Knowledge/FeaturePipelines/src/spec/data-feature-spec.ts", "symbol": "RenderConstraintBlock", "pattern": "export function RenderConstraintBlock(", "lineHint": 709, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-lookup-constraint-type", "file": "packages/AI/Knowledge/FeaturePipelines/src/spec/value-constraint.ts", "symbol": "export type ValueConstraint", "pattern": "| { Type: 'lookup'; Entity?: string; MatchField?: string; OnViolation: ViolationPolicy }", "lineHint": 11, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-lookup-validation", "file": "packages/AI/Knowledge/FeaturePipelines/src/validation/constraint-validator.ts", "symbol": "export function ValidateOutputValue(", "pattern": "// Lookup validation at runtime verifies non-empty match string", "lineHint": 56, "atCommit": "ac24ffeb8a" },
-  { "id": "n-fp-save-check", "file": "packages/AI/Knowledge/FeaturePipelines/src/entities/MJRecordProcessEntityExtended.ts", "symbol": "export class MJRecordProcessEntityExtended", "pattern": "public override Validate(): ValidationResult {", "lineHint": 83, "atCommit": "ac24ffeb8a" },
-  { "id": "n-infer-from-rp", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "private static parseSpec(", "pattern": "public static FromRecordProcess(rp: MJRecordProcessEntity, provider?: IMetadataProvider): InferProcessor {", "lineHint": 145, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-infer-reasoning", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "private async finalizeComputed(", "pattern": "(rawResult as Record<string, unknown>).reasoning as string | undefined", "lineHint": 360, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-infer-swallowed-store", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "private async finalizeComputed(", "pattern": "LogError(`InferProcessor: failed storing cache entry:", "lineHint": 383, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-infer-processbatch", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "InferProcessor", "pattern": "public async ProcessBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>> {", "lineHint": 416, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-infer-runstate", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "InferProcessor", "pattern": "private async resolveRunState(context: RecordProcessorContext): Promise<PipelineRunState | { ErrorMessage: string }> {", "lineHint": 532, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-infer-prompt-hash", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "protected computePromptVersionHash(", "pattern": "const promptText = prompt.TemplateText ?? prompt.Description ?? prompt.Name ?? '';", "lineHint": 840, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-infer-history", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "InferProcessor", "pattern": "protected async recordFeatureValuesHistory(params: {", "lineHint": 885, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-infer-basis-hash", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "InferProcessor", "pattern": "public async ComputeBasisHash(record: RecordRef, context: RecordProcessorContext): Promise<string> {", "lineHint": 941, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-infer-validate-skip", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "protected async validateOutputs(", "pattern": "if (!output.Constraint) {", "lineHint": 1117, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-infer-constraint-block", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "protected async buildPromptData(", "pattern": "promptData.ConstraintBlock = constraintBlock;", "lineHint": 1291, "atCommit": "ac24ffeb8a" },
-  { "id": "n-fp-llm-driver", "file": "packages/RecordSetProcessor/engine/src/feature-pipeline-drivers/LLMFeaturePipelineDriver.ts", "symbol": "LLMFeaturePipelineDriver extends BaseFeaturePipelineDriver", "pattern": "@RegisterClass(BaseFeaturePipelineDriver, 'LLMFeaturePipelineDriver')", "lineHint": 20, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-llm-driver-params", "file": "packages/RecordSetProcessor/engine/src/feature-pipeline-drivers/LLMFeaturePipelineDriver.ts", "symbol": "private async buildPromptParams(", "pattern": "params.data = await hooks.BuildPromptData(record, context);", "lineHint": 88, "atCommit": "ac24ffeb8a" },
-  { "id": "n-fp-base-driver", "file": "packages/RecordSetProcessor/engine/src/feature-pipeline-drivers/BaseFeaturePipelineDriver.ts", "symbol": "public abstract ComputeOutputs(", "pattern": "export abstract class BaseFeaturePipelineDriver {", "lineHint": 93, "atCommit": "ac24ffeb8a" },
-  { "id": "c9-child-insert", "file": "packages/RecordSetProcessor/engine/src/writeBack.ts", "symbol": "export async function ApplyOutputMapping(", "pattern": "child.NewRecord();", "lineHint": 407, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-writeback-parent-first", "file": "packages/RecordSetProcessor/engine/src/writeBack.ts", "symbol": "export async function ApplyOutputMapping(", "pattern": "out.updatedRecord = true;", "lineHint": 340, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-writeback-preview-children", "file": "packages/RecordSetProcessor/engine/src/writeBack.ts", "symbol": "export async function ApplyOutputMapping(", "pattern": "out.previewChildren = childRecordsToCreate.map((c) => c.data);", "lineHint": 397, "atCommit": "ac24ffeb8a" },
-  { "id": "n-writeback-array", "file": "packages/RecordSetProcessor/engine/src/processors/WriteBackProcessor.ts", "symbol": "WriteBackProcessor", "pattern": "private toResultMap(records: RecordRef[]", "lineHint": 175, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-writeback-processor-apply", "file": "packages/RecordSetProcessor/engine/src/processors/WriteBackProcessor.ts", "symbol": "WriteBackProcessor", "pattern": "const writeBack = await ApplyOutputMapping({", "lineHint": 79, "atCommit": "ac24ffeb8a" },
-  { "id": "c9-skipped-counted", "file": "packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts", "symbol": "private async processBatch(", "pattern": "const skipResult: RecordResult = { Status: 'Skipped', DurationMs: 0 };", "lineHint": 247, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-breaker", "file": "packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts", "symbol": "private async runBatchLoop(", "pattern": "const errorRate = (counts.Error / counts.Processed) * 100;", "lineHint": 183, "atCommit": "ac24ffeb8a" },
-  { "id": "n-preflight-rsp", "file": "packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts", "symbol": "public async Process(", "pattern": "if (processor.Preflight) {", "lineHint": 90, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-record-context", "file": "packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts", "symbol": "private async processBatch(", "pattern": "const recordContext = {", "lineHint": 202, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-dryrun-claim", "file": "packages/RecordSetProcessor/engine/src/RecordProcessExecutor.ts", "symbol": "public BuildProcessor(", "pattern": "dry-run is side-effect-free, not just FieldRules.", "lineHint": 179, "atCommit": "ac24ffeb8a" },
-  { "id": "n-infer-from-rp-executor", "file": "packages/RecordSetProcessor/engine/src/RecordProcessExecutor.ts", "symbol": "RecordProcessExecutor", "pattern": "const infer = InferProcessor.FromRecordProcess(rp, provider);", "lineHint": 206, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-executor-writeback", "file": "packages/RecordSetProcessor/engine/src/RecordProcessExecutor.ts", "symbol": "public BuildProcessor(", "pattern": "return new WriteBackProcessor(base, outputMapping, dryRun, run);", "lineHint": 245, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-tracker-complete", "file": "packages/RecordSetProcessor/engine/src/trackers/GenericProcessRunTracker.ts", "symbol": "public async CompleteRun(", "pattern": "run.SkippedCount = summary.Skipped;", "lineHint": 131, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-base-context", "file": "packages/RecordSetProcessor/base/src/interfaces.ts", "symbol": "IRecordProcessor", "pattern": "export interface RecordProcessorContext {", "lineHint": 54, "atCommit": "ac24ffeb8a" },
-  { "id": "n-fp-recordresult-confidence", "file": "packages/RecordSetProcessor/base/src/types.ts", "symbol": "export interface RecordResult", "pattern": "Confidence?: Record<string, number>;", "lineHint": 82, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-base-runsummary", "file": "packages/RecordSetProcessor/base/src/types.ts", "symbol": "export interface RunCounts", "pattern": "export interface ProcessRunSummary extends RunCounts {", "lineHint": 106, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-template-render-cache", "file": "packages/Templates/engine/src/TemplateEngine.ts", "symbol": "public async RenderTemplate(templateEntity: MJTemplateEntityExtended", "pattern": "const template = this.getNunjucksTemplate(templateContent.ID, templateContent.TemplateText, true);", "lineHint": 265, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-template-base-dataset", "file": "packages/Templates/base-types/src/TemplateEngineBase.ts", "symbol": "export class TemplateEngineBase", "pattern": "DatasetName: 'Template_Metadata',", "lineHint": 44, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-prompt-template-text-once", "file": "packages/AI/CorePlus/src/MJAIPromptEntityExtended.ts", "symbol": "protected async LoadTemplateText()", "pattern": "if (this.TemplateID && !this.TemplateText) {", "lineHint": 90, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-prompt-params-class", "file": "packages/AI/CorePlus/src/prompt.types.ts", "symbol": "AIPromptParams", "pattern": "export class AIPromptParams extends AIModelRunParams {", "lineHint": 355, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-runner-render-template", "file": "packages/AI/Prompts/src/AIPromptRunner.ts", "symbol": "private async renderPromptTemplate(", "pattern": "return await this._templateEngine.RenderTemplate(template, templateContent, mergedData, true, false);", "lineHint": 1759, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-runner-seed", "file": "packages/AI/Prompts/src/AIPromptRunner.ts", "symbol": "protected async executeModel(", "pattern": "if (resolvedParams.seed !== undefined) chatParams.seed = resolvedParams.seed;", "lineHint": 2211, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-basellm-dispatch", "file": "packages/AI/Core/src/generic/baseLLM.ts", "symbol": "public async ChatCompletion(params: ChatParams): Promise<ChatResult> {", "pattern": "const result = await this.nonStreamingChatCompletion(params);", "lineHint": 119, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-chat-result", "file": "packages/AI/Core/src/generic/chat.types.ts", "symbol": "export class ChatParams extends BaseParams  {", "pattern": "export class ChatResult extends BaseResult {", "lineHint": 553, "atCommit": "ac24ffeb8a" },
-  { "id": "c9-gemini-temp-chat", "file": "packages/AI/Providers/Gemini/src/index.ts", "symbol": "GeminiLLM", "pattern": "temperature: params.temperature || 0.5,", "lineHint": 325, "atCommit": "ac24ffeb8a" },
-  { "id": "c9-gemini-temp-stream", "file": "packages/AI/Providers/Gemini/src/index.ts", "symbol": "GeminiLLM", "pattern": "temperature: params.temperature || 0.5,", "lineHint": 820, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-vertex-inherits", "file": "packages/AI/Providers/Vertex/src/models/vertexLLM.ts", "symbol": "protected async createClient(): Promise<GoogleGenAI> {", "pattern": "export class VertexLLM extends GeminiLLM {", "lineHint": 95, "atCommit": "ac24ffeb8a" },
-  { "id": "c9-bedrock-temp", "file": "packages/AI/Providers/Bedrock/src/models/bedrockLLM.ts", "symbol": "BedrockLLM", "pattern": "temperature: params.temperature || 0.7,", "lineHint": 157, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-bedrock-temp-stream", "file": "packages/AI/Providers/Bedrock/src/models/bedrockLLM.ts", "symbol": "protected async createStreamingRequest(params: ChatParams)", "pattern": "temperature: params.temperature || 0.7,", "lineHint": 341, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-fv-migration-cache-index", "file": "migrations/v6/V202609212241__v6.2.x__Feature_Pipelines.sql", "symbol": "FeatureValueCache", "pattern": "CREATE UNIQUE NONCLUSTERED INDEX [UQ_FeatureValueCache_Scoped]", "lineHint": 57, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-fv-migration-table", "file": "migrations/v6/V202609212241__v6.2.x__Feature_Pipelines.sql", "symbol": "FeatureValue", "pattern": "CREATE TABLE [${flyway:defaultSchema}].[FeatureValue] (", "lineHint": 70, "atCommit": "ac24ffeb8a" },
-  { "id": "n-fp-types-table", "file": "migrations/v6/V202609300220__v6.2.x__Feature_Pipeline_Types.sql", "symbol": "MJ: Feature Pipeline Types", "pattern": "CREATE TABLE [${flyway:defaultSchema}].[FeaturePipelineType] (", "lineHint": 16, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-env6-core-prompt-marker", "file": "metadata/prompts/.job-function-seniority-prompt.json", "symbol": "Job Function and Seniority Derivation", "pattern": "\"ID\": \"7C46041F-0412-4C2E-9B9E-3ED61D32210C\"", "lineHint": 21, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-env6-core-template-marker", "file": "metadata/templates/.job-function-seniority-template.json", "symbol": "Job Function and Seniority Derivation", "pattern": "\"ID\": \"FE0A363B-4EF6-4CCA-A7E3-93E3C015F3AF\"", "lineHint": 3, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-env6-migration-delete", "file": "migrations/v6/V202610022141__v6.2.x__Metadata_Sync.sql", "symbol": "spDeleteAIPrompt", "pattern": "EXEC [${flyway:defaultSchema}].[spDeleteAIPrompt] @ID = '7C46041F-0412-4C2E-9B9E-3ED61D32210C';", "lineHint": 68273, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-env11-action-job", "file": "packages/Scheduling/engine/src/drivers/ActionScheduledJobDriver.ts", "symbol": "export class ActionScheduledJobDriver extends BaseScheduledJob {", "pattern": "const actionResult = await ActionEngineServer.Instance.RunAction({", "lineHint": 64, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-it-context-fixtures", "file": "packages/TestingFramework/testing-integration/src/check.ts", "symbol": "export interface IntegrationCheckContext", "pattern": "PredictiveStudioFixture?: PredictiveStudioFixture;", "lineHint": 662, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-it-suite-barrel", "file": "packages/TestingFramework/integration-test-suite/src/index.ts", "symbol": "record-process.checks", "pattern": "export * from './checks/record-process.checks';", "lineHint": 39, "atCommit": "ac24ffeb8a" },
-  { "id": "pr1-bc-scope-filter", "repo": "bizapps-common", "file": "metadata/record-processes/.job-function-seniority-pipeline.json", "symbol": "Job Function and Seniority Derivation", "pattern": "WHERE pjf.PersonID = ID))", "lineHint": 11, "atCommit": "339c6f5570" },
-  { "id": "pr1-bc-prompt", "repo": "bizapps-common", "file": "metadata/prompts/.job-function-seniority-prompt.json", "symbol": "Job Function and Seniority Derivation", "pattern": "\"TemplateText\": \"@file:templates/job-function-seniority.template.md\",", "lineHint": 7, "atCommit": "339c6f5570" },
-  { "id": "pr1-bc-template-table", "repo": "bizapps-common", "file": "metadata/prompts/templates/job-function-seniority.template.md", "symbol": "Job Function Taxonomy", "pattern": "| Job Function | JobFunctionID | Description |", "lineHint": 20, "atCommit": "339c6f5570" },
-  { "id": "pr1-bc-activity-sync-job", "repo": "bizapps-common", "file": "metadata/scheduled-jobs/.common-scheduled-jobs.json", "symbol": "Common — Activity Sync (hourly)", "pattern": "\"Status\": \"Active\",", "lineHint": 32, "atCommit": "339c6f5570" },
-  { "id": "pr1-bc-clean-room-gate", "repo": "bizapps-common", "file": ".github/workflows/clean-room-gate.yml", "symbol": "Clean-Room Metadata Gate", "pattern": "pnpm exec mj migrate --schema __mj_BizAppsCommon --dir ./migrations --verbose", "lineHint": 137, "atCommit": "339c6f5570" },
-  { "id": "pr1-bc-tags-displayname", "repo": "bizapps-common", "file": "metadata/tags/.activity-sentiment-tags.json", "symbol": "Sentiment", "pattern": "\"DisplayName\":", "atCommit": "339c6f5570" }
+  { "id": "c9-cache-key", "file": "packages/AI/Knowledge/FeaturePipelines/src/cache/FeatureValueCacheService.ts", "symbol": "public async ComputeCacheKey(", "pattern": "const keyHash = await ComputeContentHashAsync(keyObj);", "lineHint": 243, "atCommit": "b99f9d49f7" },
+  { "id": "c9-cache-expired", "file": "packages/AI/Knowledge/FeaturePipelines/src/cache/FeatureValueCacheService.ts", "symbol": "public async BatchLookup(", "pattern": "if (entry.ExpiresAt != null && new Date(entry.ExpiresAt).getTime() <= now) {", "lineHint": 305, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-cache-store-insert", "file": "packages/AI/Knowledge/FeaturePipelines/src/cache/FeatureValueCacheService.ts", "symbol": "public async Store(", "pattern": "entry.NewRecord();", "lineHint": 344, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-fv-insert", "file": "packages/AI/Knowledge/FeaturePipelines/src/cache/FeatureValueCacheService.ts", "symbol": "public async RecordFeatureValues(", "pattern": "fv.NewRecord();", "lineHint": 474, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-spec-capture-reasoning", "file": "packages/AI/Knowledge/FeaturePipelines/src/spec/data-feature-spec.ts", "symbol": "export interface DataFeatureSpec", "pattern": "CaptureReasoning?: boolean;", "lineHint": 63, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-spec-output-constraint", "file": "packages/AI/Knowledge/FeaturePipelines/src/spec/data-feature-spec.ts", "symbol": "export interface DataFeatureOutput", "pattern": "  Constraint?: ValueConstraint;", "lineHint": 131, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-render-constraint-block", "file": "packages/AI/Knowledge/FeaturePipelines/src/spec/data-feature-spec.ts", "symbol": "RenderConstraintBlock", "pattern": "export function RenderConstraintBlock(", "lineHint": 864, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-lookup-constraint-type", "file": "packages/AI/Knowledge/FeaturePipelines/src/spec/value-constraint.ts", "symbol": "export type ValueConstraint", "pattern": "| { Type: 'lookup'; Entity?: string; MatchField?: string; DisplayFields?: string[]; Filter?: string; ItemRef?: string; OnViolation: ViolationPolicy }", "lineHint": 11, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-lookup-validation", "file": "packages/AI/Knowledge/FeaturePipelines/src/validation/constraint-validator.ts", "symbol": "public static ValidateOutputValue(", "pattern": "return validateLookup(rawValue, policy, options);", "lineHint": 61, "atCommit": "b99f9d49f7" },
+  { "id": "n-fp-save-check", "file": "packages/AI/Knowledge/FeaturePipelines/src/entities/MJRecordProcessEntityExtended.ts", "symbol": "export class MJRecordProcessEntityExtended", "pattern": "public override Validate(): ValidationResult {", "lineHint": 99, "atCommit": "b99f9d49f7" },
+  { "id": "n-infer-from-rp", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "private static parseSpec(", "pattern": "public static FromRecordProcess(rp: MJRecordProcessEntity, provider?: IMetadataProvider): InferProcessor {", "lineHint": 240, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-infer-reasoning", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "protected RecordedAnnotations(", "pattern": "Reasoning: InferProcessor.ExtractReasoning(payload, this.captureReasoning) || null,", "lineHint": 1917, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-infer-swallowed-store", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "private async finalizeComputed(", "pattern": "const message = `failed storing cache entry: ${e instanceof Error ? e.message : String(e)}`;", "lineHint": 681, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-infer-processbatch", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "InferProcessor", "pattern": "public async ProcessBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>> {", "lineHint": 716, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-infer-runstate", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "InferProcessor", "pattern": "private async resolveRunState(context: RecordProcessorContext): Promise<PipelineRunState | { ErrorMessage: string }> {", "lineHint": 842, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-infer-prompt-hash", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "protected computePromptVersionHash(", "pattern": "const promptText = prompt.TemplateText ?? prompt.Description ?? prompt.Name ?? '';", "lineHint": 1295, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-infer-history", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "InferProcessor", "pattern": "protected async WriteFeatureValues(params: FeatureValueWriteParams): Promise<RecordFeatureValuesOutcome> {", "lineHint": 1445, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-infer-basis-hash", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "InferProcessor", "pattern": "public async ComputeBasisHash(record: RecordRef, context: RecordProcessorContext): Promise<string> {", "lineHint": 1515, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-infer-validate-skip", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "protected async validateOutputs(", "pattern": "if (!output.Constraint) {", "lineHint": 1695, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-infer-constraint-block", "file": "packages/RecordSetProcessor/engine/src/processors/InferProcessor.ts", "symbol": "protected async buildPromptData(", "pattern": "promptData.ConstraintBlock = constraintBlock;", "lineHint": 2078, "atCommit": "b99f9d49f7" },
+  { "id": "n-fp-llm-driver", "file": "packages/RecordSetProcessor/engine/src/feature-pipeline-drivers/LLMFeaturePipelineDriver.ts", "symbol": "LLMFeaturePipelineDriver extends BaseFeaturePipelineDriver", "pattern": "@RegisterClass(BaseFeaturePipelineDriver, 'LLMFeaturePipelineDriver')", "lineHint": 21, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-llm-driver-params", "file": "packages/RecordSetProcessor/engine/src/feature-pipeline-drivers/LLMFeaturePipelineDriver.ts", "symbol": "private async buildPromptParams(", "pattern": "params.data = await hooks.BuildPromptData(record, context);", "lineHint": 103, "atCommit": "b99f9d49f7" },
+  { "id": "n-fp-base-driver", "file": "packages/RecordSetProcessor/engine/src/feature-pipeline-drivers/BaseFeaturePipelineDriver.ts", "symbol": "public abstract ComputeOutputs(", "pattern": "export abstract class BaseFeaturePipelineDriver {", "lineHint": 103, "atCommit": "b99f9d49f7" },
+  { "id": "c9-child-insert", "file": "packages/RecordSetProcessor/engine/src/writeBack.ts", "symbol": "export async function ApplyOutputMapping(", "pattern": "child.NewRecord();", "lineHint": 801, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-writeback-parent-first", "file": "packages/RecordSetProcessor/engine/src/writeBack.ts", "symbol": "export async function ApplyOutputMapping(", "pattern": "await unitWriter.WriteRecordFields(fieldEntity, fieldsToWrite);", "lineHint": 1509, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-writeback-preview-children", "file": "packages/RecordSetProcessor/engine/src/writeBack.ts", "symbol": "export async function ApplyOutputMapping(", "pattern": "out.previewChildren = childRows.map((c) => c.Data);", "lineHint": 1479, "atCommit": "b99f9d49f7" },
+  { "id": "n-writeback-array", "file": "packages/RecordSetProcessor/engine/src/processors/WriteBackProcessor.ts", "symbol": "WriteBackProcessor", "pattern": "private toResultMap(records: RecordRef[]", "lineHint": 320, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-writeback-processor-apply", "file": "packages/RecordSetProcessor/engine/src/processors/WriteBackProcessor.ts", "symbol": "WriteBackProcessor", "pattern": "const writeBack = await ApplyOutputMapping({", "lineHint": 214, "atCommit": "b99f9d49f7" },
+  { "id": "c9-skipped-counted", "file": "packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts", "symbol": "private async processBatch(", "pattern": "const skipResult: RecordResult = { Status: 'Skipped', DurationMs: 0 };", "lineHint": 300, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-breaker", "file": "packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts", "symbol": "private async runBatchLoop(", "pattern": "const errorRate = (counts.Error / attempted) * 100;", "lineHint": 227, "atCommit": "b99f9d49f7" },
+  { "id": "n-preflight-rsp", "file": "packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts", "symbol": "public async Process(", "pattern": "if (processor.Preflight) {", "lineHint": 115, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-record-context", "file": "packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts", "symbol": "private async processBatch(", "pattern": "const recordContext: RecordProcessorContext = {", "lineHint": 246, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-dryrun-claim", "file": "packages/RecordSetProcessor/engine/src/RecordProcessExecutor.ts", "symbol": "public BuildProcessor(", "pattern": "processors also skip the Dedup Cache store, Feature Value history and watermark writes", "lineHint": 209, "atCommit": "b99f9d49f7" },
+  { "id": "n-infer-from-rp-executor", "file": "packages/RecordSetProcessor/engine/src/RecordProcessExecutor.ts", "symbol": "RecordProcessExecutor", "pattern": "const infer = InferProcessor.FromRecordProcess(rp, provider);", "lineHint": 239, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-executor-writeback", "file": "packages/RecordSetProcessor/engine/src/RecordProcessExecutor.ts", "symbol": "public BuildProcessor(", "pattern": "return new WriteBackProcessor(base, outputMapping, dryRun, run);", "lineHint": 278, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-tracker-complete", "file": "packages/RecordSetProcessor/engine/src/trackers/GenericProcessRunTracker.ts", "symbol": "public async CompleteRun(", "pattern": "run.SkippedCount = summary.Skipped;", "lineHint": 133, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-base-context", "file": "packages/RecordSetProcessor/base/src/interfaces.ts", "symbol": "IRecordProcessor", "pattern": "export interface RecordProcessorContext {", "lineHint": 55, "atCommit": "b99f9d49f7" },
+  { "id": "n-fp-recordresult-confidence", "file": "packages/RecordSetProcessor/base/src/types.ts", "symbol": "export interface RecordResult", "pattern": "Confidence?: Record<string, number>;", "lineHint": 107, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-base-runsummary", "file": "packages/RecordSetProcessor/base/src/types.ts", "symbol": "export interface RunCounts", "pattern": "export interface ProcessRunSummary extends RunCounts {", "lineHint": 198, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-template-render-cache", "file": "packages/Templates/engine/src/TemplateEngine.ts", "symbol": "public async RenderTemplate(templateEntity: MJTemplateEntityExtended", "pattern": "const template = this.getNunjucksTemplate(templateContent.ID, templateContent.TemplateText, true, env);", "lineHint": 315, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-template-base-dataset", "file": "packages/Templates/base-types/src/TemplateEngineBase.ts", "symbol": "export class TemplateEngineBase", "pattern": "DatasetName: 'Template_Metadata',", "lineHint": 50, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-prompt-template-text-once", "file": "packages/AI/CorePlus/src/MJAIPromptEntityExtended.ts", "symbol": "protected async LoadTemplateText()", "pattern": "return this.linkedTemplateText.Load(this.CurrentTemplateContent());", "lineHint": 127, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-prompt-params-class", "file": "packages/AI/CorePlus/src/prompt.types.ts", "symbol": "AIPromptParams", "pattern": "export class AIPromptParams extends AIModelRunParams {", "lineHint": 355, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-runner-render-template", "file": "packages/AI/Prompts/src/AIPromptRunner.ts", "symbol": "private async renderPromptTemplate(", "pattern": "return await this._templateEngine.RenderTemplate(template, templateContent, mergedData, true, false, { autoescape: false });", "lineHint": 1743, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-runner-seed", "file": "packages/AI/Prompts/src/AIPromptRunner.ts", "symbol": "protected async executeModel(", "pattern": "if (resolvedParams.seed !== undefined) chatParams.seed = resolvedParams.seed;", "lineHint": 2195, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-basellm-dispatch", "file": "packages/AI/Core/src/generic/baseLLM.ts", "symbol": "public async ChatCompletion(params: ChatParams): Promise<ChatResult> {", "pattern": "const result = await this.nonStreamingChatCompletion(params);", "lineHint": 152, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-chat-result", "file": "packages/AI/Core/src/generic/chat.types.ts", "symbol": "export class ChatParams extends BaseParams  {", "pattern": "export class ChatResult extends BaseResult {", "lineHint": 560, "atCommit": "b99f9d49f7" },
+  { "id": "c9-gemini-temp-chat", "file": "packages/AI/Providers/Gemini/src/index.ts", "symbol": "protected async nonStreamingChatCompletion(", "pattern": "const modelOptions = this.buildGenerationOptions(params, modelName);", "lineHint": 271, "atCommit": "b99f9d49f7" },
+  { "id": "c9-gemini-temp-stream", "file": "packages/AI/Providers/Gemini/src/index.ts", "symbol": "protected async createStreamingRequest(", "pattern": "const modelOptions = this.buildGenerationOptions(params, modelName);", "lineHint": 788, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-vertex-inherits", "file": "packages/AI/Providers/Vertex/src/models/vertexLLM.ts", "symbol": "protected async createClient(): Promise<GoogleGenAI> {", "pattern": "export class VertexLLM extends GeminiLLM {", "lineHint": 66, "atCommit": "b99f9d49f7" },
+  { "id": "c9-bedrock-temp", "file": "packages/AI/Providers/Bedrock/src/models/bedrockLLM.ts", "symbol": "protected async nonStreamingChatCompletion(", "pattern": "const requestBody = this.buildRequestBody(params);", "lineHint": 190, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-bedrock-temp-stream", "file": "packages/AI/Providers/Bedrock/src/models/bedrockLLM.ts", "symbol": "protected async createStreamingRequest(", "pattern": "const requestBody = this.buildRequestBody(params);", "lineHint": 315, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-bedrock-resolve-temperature", "file": "packages/AI/Providers/Bedrock/src/models/bedrockLLM.ts", "symbol": "BedrockLLM", "pattern": "private resolveTemperature(params: ChatParams): number | undefined {", "lineHint": 446, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-gemini-resolve-temperature", "file": "packages/AI/Providers/Gemini/src/index.ts", "symbol": "GeminiLLM", "pattern": "return params.temperature ?? 0.5;", "lineHint": 626, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-fv-migration-cache-index", "file": "migrations/v6/V202609212241__v6.2.x__Feature_Pipelines.sql", "symbol": "FeatureValueCache", "pattern": "CREATE UNIQUE NONCLUSTERED INDEX [UQ_FeatureValueCache_Scoped]", "lineHint": 57, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-fv-migration-table", "file": "migrations/v6/V202609212241__v6.2.x__Feature_Pipelines.sql", "symbol": "FeatureValue", "pattern": "CREATE TABLE [${flyway:defaultSchema}].[FeatureValue] (", "lineHint": 70, "atCommit": "b99f9d49f7" },
+  { "id": "n-fp-types-table", "file": "migrations/v6/V202609300220__v6.2.x__Feature_Pipeline_Types.sql", "symbol": "MJ: Feature Pipeline Types", "pattern": "CREATE TABLE [${flyway:defaultSchema}].[FeaturePipelineType] (", "lineHint": 16, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-env6-guard-bizapps-owns", "file": "migrations/v6/V202610022141__v6.2.x__Metadata_Sync.sql", "symbol": "spDeleteAIPrompt", "pattern": "IF @PR1Env6_BizAppsOwnsPrompt = 0", "lineHint": 68301, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-env6-template-delete-guard", "file": "migrations/v6/V202610022141__v6.2.x__Metadata_Sync.sql", "symbol": "spDeleteTemplate", "pattern": "-- Delete MJ: Template Contents, Template Params, Templates (core SP call only)", "lineHint": 68323, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-env6-migration-delete", "file": "migrations/v6/V202610022141__v6.2.x__Metadata_Sync.sql", "symbol": "spDeleteAIPrompt", "pattern": "EXEC [${flyway:defaultSchema}].[spDeleteAIPrompt] @ID = '7C46041F-0412-4C2E-9B9E-3ED61D32210C';", "lineHint": 68320, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-env11-action-job", "file": "packages/Scheduling/engine/src/drivers/ActionScheduledJobDriver.ts", "symbol": "export class ActionScheduledJobDriver extends BaseScheduledJob {", "pattern": "const actionResult = await ActionEngineServer.Instance.RunAction({", "lineHint": 90, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-it-context-fixtures", "file": "packages/TestingFramework/testing-integration/src/check.ts", "symbol": "export interface IntegrationCheckContext", "pattern": "PredictiveStudioFixture?: PredictiveStudioFixture;", "lineHint": 680, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-it-suite-barrel", "file": "packages/TestingFramework/integration-test-suite/src/index.ts", "symbol": "record-process.checks", "pattern": "export * from './checks/record-process.checks';", "lineHint": 41, "atCommit": "b99f9d49f7" },
+  { "id": "pr1-bc-scope-filter", "repo": "bizapps-common", "file": "metadata/record-processes/.job-function-seniority-pipeline.json", "symbol": "Job Function and Seniority Derivation", "pattern": "WHERE pjf.PersonID = ID))", "lineHint": 11, "atCommit": "b19675abee" },
+  { "id": "pr1-bc-prompt", "repo": "bizapps-common", "file": "metadata/prompts/.job-function-seniority-prompt.json", "symbol": "Job Function and Seniority Derivation", "pattern": "\"TemplateText\": \"@file:templates/job-function-seniority.template.md\",", "lineHint": 7, "atCommit": "b19675abee" },
+  { "id": "pr1-bc-template-table", "repo": "bizapps-common", "file": "metadata/prompts/templates/job-function-seniority.template.md", "symbol": "Job Function Taxonomy", "pattern": "| Job Function | JobFunctionID | Description |", "lineHint": 20, "atCommit": "b19675abee" },
+  { "id": "pr1-bc-activity-sync-job", "repo": "bizapps-common", "file": "metadata/scheduled-jobs/.common-scheduled-jobs.json", "symbol": "Common — Activity Sync (hourly)", "pattern": "\"Status\": \"Active\",", "lineHint": 32, "atCommit": "b19675abee" },
+  { "id": "pr1-bc-clean-room-gate", "repo": "bizapps-common", "file": ".github/workflows/clean-room-gate.yml", "symbol": "Clean-Room Metadata Gate", "pattern": "pnpm exec mj migrate --schema __mj_BizAppsCommon --dir ./migrations --verbose", "lineHint": 137, "atCommit": "b19675abee" },
+  { "id": "pr1-bc-tags-displayname", "repo": "bizapps-common", "file": "metadata/tags/.activity-sentiment-tags.json", "symbol": "Sentiment", "pattern": "\"DisplayName\":", "atCommit": "b19675abee" }
 ]
 ```
+
+Anchors are verified at the PR branch (`ps/pr-1-feature-pipelines`), not `next`: where this PR reshaped a seam, the
+anchor names the seam as the PR leaves it (for example the Gemini/Bedrock temperature anchors now name the `??` paths that
+replaced the `|| 0.5` / `|| 0.7` sites cited in F-FP-13, and `pr1-env6-guard-bizapps-owns` / `pr1-env6-template-delete-guard`
+replace the two deleted `deleteRecord` marker files). Run against `origin/next`, those anchors report `changed` or
+`moved` by design; the findings tables describe the code on `next`.
 
 The six `repo: "bizapps-common"` anchors are reported `skipped` by `tools/check-anchors.mjs`; verify them with the
 commands in §8 (A10, A11, A18) and `gh api 'repos/MemberJunction/bizapps-common/contents/<file>?ref=next'`.
@@ -9833,8 +9844,8 @@ Sequence 6, tier `live-model`).
     that runs the evaluation and the backfill without a person (and the `Unattended` opt-outs), the golden set's
     label-quality record (two model labelers' agreement, adjudication, exclusion; the driver refuses a set that
     fails it), output constraints (lookup rows rendered as the
-    taxonomy, `ItemRef`), strict vendor parameters; and "PR 5 adds `EffectiveAsOf` and PS reads values as of decision
-    dates" (no forward claims beyond that).
+    taxonomy, `ItemRef`), strict vendor parameters; and "PR 3 adds `EffectiveAsOf`; PR 5 makes Feature Pipelines write
+    effective-dated values and PS reads values as of decision dates" (no forward claims beyond that).
   - `INTEGRATION_TESTING_QUICKSTART.md` §2.7: IT123 in the deterministic list; the `Predictive Studio Gates — Feature Pipelines`
     suite (needs bizapps-common; `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Feature Pipelines"`).
   - `.changeset/ps-feature-pipelines.md` (hand-written; `minor` because the branch has a migration and metadata):
@@ -9914,7 +9925,7 @@ Sequence 6, tier `live-model`).
   - **#5185 (§9 Q-6).** `gh pr view 5185 --json state --jq .state`; when `OPEN`, post the guard:
     `gh pr comment 5185 --body "PS PR 1 (ps/pr-1-feature-pipelines) changes the same Gemini temperature lines and adds ResolveTemperature / DescribeSentParameters with tests 'parameter fidelity (F-FP-13)' in GeminiLLM.test.ts and vertexLLM.test.ts; after PR 1 merges, update this branch from next and keep those tests green."`
     and record the comment URL in §11.
-  - **PR 2 reconciliation (D-009).** PR 2 ships the 110-gate registry as
+  - **PR 2 reconciliation (D-009).** PR 2 ships the 111-gate registry as
     `packages/AI/PredictiveStudio/TruthSuite/gates/gates.json` (entries `G7.1`, `G7.2`, `G7.3`, `G7.5`, `G7.8` owned by PR 1,
     `Status: "expected-fail"`, `Implementation: { Kind: "stub" }`), run by vitest through `TruthGate.Define(testName, body)`
     (`TruthSuite/src/gates/define-gate.ts`; PR 2 plan §5.2; program D-037, D-039, D-043). PR 1's gates are `mj test` rows, so the bridge is a
@@ -10020,13 +10031,13 @@ Sequence 6, tier `live-model`).
         g.Implementation = { Kind: "body" };   // found by the titles gates/feature-pipelines.gates.test.ts declares
       }
       fs.writeFileSync(file, JSON.stringify(reg, null, 2) + "\n");'
-      pnpm run truth:registry      # → registry OK: 110 gates (required 0, expected-fail 110) — before M-final.1
+      pnpm run truth:registry      # → registry OK: 111 gates (required 0, expected-fail 111) — before M-final.1
       ```
       Measure on a host with bizapps-common installed (PR 2's `GateRequirement` has `'bizapps-common'`, enabled by
       `TRUTH_BIZAPPS_COMMON=1`; PR 2 decision D2-22):
       `TRUTH_RUN_MODE=nightly TRUTH_BIZAPPS_COMMON=1 pnpm --filter @memberjunction/predictive-studio-truth-suite exec vitest run gates/feature-pipelines.gates.test.ts`
       → 5 passed, five result files written. Then set the five entries to `"Status": "required"` and
-      `pnpm run truth:registry` → `registry OK: 110 gates (required <n>, expected-fail <m>)` with `<n>` grown by 5.
+      `pnpm run truth:registry` → `registry OK: 111 gates (required <n>, expected-fail <m>)` with `<n>` grown by 5.
       Keep this PR's `mj test` rows and suite (the bridge runs them). Record the mapping in §9 and §11.
       **CI pin (PR 2 decision D2-32).** PR 2's nightly/weekly lanes install bizapps-common at `BIZAPPS_COMMON_REF` in
       `.github/workflows/ps-truth-suite.yml` (pre-companion pin `172b99a5fef78352dbfa54784eaa34149423f802`). The
@@ -10134,24 +10145,24 @@ node tools/check-anchors.mjs plans/PR-1-feature-pipelines.md ~/repos/MJ_PR1 orig
 Assumption checks (run from the MJ repo unless a path says otherwise):
 
 - [ ] A1 `git rev-parse --short origin/next` → record the SHA in §12.
-- [ ] A2 `grep -c "temperature: params.temperature || 0.5" packages/AI/Providers/Gemini/src/index.ts` → `2` (F-FP-13 still present; `0` after #5185 or M5.2).
-- [ ] A3 `grep -c "temperature: params.temperature || 0.7" packages/AI/Providers/Bedrock/src/models/bedrockLLM.ts` → `8`.
+- [ ] A2 `grep -c "temperature: params.temperature || 0.5" packages/AI/Providers/Gemini/src/index.ts` → `0` at HEAD (satisfied by M5.2 after #5185 merged; `0` on `origin/next` too, since #5185 replaced the `||` with `??`). Re-run at each refresh; a non-zero count is a regression.
+- [ ] A3 `grep -c "temperature: params.temperature || 0.7" packages/AI/Providers/Bedrock/src/models/bedrockLLM.ts` → `0` at HEAD (satisfied by M5.3; still `8` on `origin/next`).
 - [ ] A4 `grep -c "export class VertexLLM extends GeminiLLM" packages/AI/Providers/Vertex/src/models/vertexLLM.ts` → `1` (Vertex inherits the Gemini fix).
-- [ ] A5 `gh pr view 5185 --json state --jq .state` → `OPEN` at writing. `MERGED` → M5.2's merged branch; `CLOSED` → no change.
-- [ ] A6 `ls migrations/v6 | grep '^V' | sort | tail -1` → `V202610111907__v6.2.x__Scoped_Notification_Configs.sql`; a newer file → re-time this PR's migration to a later timestamp.
-- [ ] A7 `git show origin/next:metadata/prompts/.job-function-seniority-prompt.json | grep -c '"deleteRecord"'` → `1` (F-ENV-6 residue still present).
-- [ ] A8 `grep -c "Re-deleting" packages/MetadataSync/src/services/PushService.ts` → `1` (sync push re-deletes a marked record that exists).
-- [ ] A9 `grep -c "SkipValidation?: boolean, SuppressWarnings?: boolean): Promise<TemplateRenderResult>" packages/Templates/engine/src/TemplateEngine.ts` → `1` (RenderTemplate has no autoescape option yet).
-- [ ] A10 `gh api 'repos/MemberJunction/bizapps-common/contents/metadata/record-processes/.job-function-seniority-pipeline.json?ref=next' --jq .content | base64 -d | grep -c "pjf.PersonID = ID))"` → `1` (F-FP-1 still shipped).
-- [ ] A11 `gh api 'repos/MemberJunction/bizapps-common/contents/migrations?ref=next' --jq '.[].name' | sort | tail -1` → `V202610091200__v5.52.x__Restore_Person_PhotoURL_SP_Width.sql` (re-time the companion migration if newer).
-- [ ] A12 `grep -c "HandleIndividualBaseEntityEvent" packages/Templates/base-types/src/TemplateEngineBase.ts` → `0` and `grep -c "DatasetName: 'Template_Metadata'" packages/Templates/base-types/src/TemplateEngineBase.ts` → `1` (template saves still do not refresh the dataset).
-- [ ] A13 `grep -c '"@memberjunction/testing-engine"' packages/RecordSetProcessor/engine/package.json` → `0` and `grep -rc '"@memberjunction/record-set-processor"' packages/TestingFramework/Engine/package.json` → `0` (the M6.2 edge is new and acyclic).
-- [ ] A14 `ls -a metadata-optional/integration-test/tests/integration | grep -oE "IT[0-9]+" | sort -t T -k2 -n | tail -1` → at most `IT122` (IT115 locally; `origin/next` holds IT113–IT115 and IT122 as of 2026-10-14); higher → renumber IT123/IT124 to the next free numbers everywhere in this plan.
-- [ ] A15 `gh pr list --repo MemberJunction/MJ --search "head:ps/pr-2-truth-suite-containment" --state all --json number,state` → `[]` or a state; `MERGED` → trigger (b).
-- [ ] A16 `grep -c "const errorRate = (counts.Error / counts.Processed) \* 100;" packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts` → `1` (F-FP-10 still present).
-- [ ] A17 `gh api 'repos/MemberJunction/bizapps-common/contents/mj-app.json?ref=next' --jq .content | base64 -d | grep mjVersionRange` → `">=6.1.5 <7.0.0"` on `next`; on the companion branch after M7.5 it is `">=<V> <7.0.0"` with `<V>` recomputed by M7.5's `mjVersionRange` bullet (a different value → apply the new one).
-- [ ] A18 `gh api 'repos/MemberJunction/bizapps-common/contents/metadata/tags/.activity-sentiment-tags.json?ref=next' --jq .content | base64 -d | grep -c '"DisplayName"'` → `6` (F-ENV-5's data fix is upstream; M2.5 adds the CI push).
-- [ ] A19 `git ls-tree -r --name-only origin/next packages/AI/PredictiveStudio/TruthSuite/gates/gates.json | wc -l` → `0` (PR 2's registry not merged; `1` → M7.5's "merged first" branch).
+- [ ] A5 `gh pr view 5185 --json state --jq .state` → `MERGED` (merged before 2026-10-15; M5.2's merged branch was taken and is satisfied at HEAD; A2 confirms). No further action.
+- [ ] A6 `ls migrations/v6 | grep '^V' | sort | tail -1` → at HEAD the newest file is this PR's `V202610140050__v6.2.x__Feature_Value_Key_And_Versions.sql`; on `origin/next` it is `V202610141513__v6.2.x__Theme_Login_Screen.sql` (2026-10-14 15:13, later than ours: **open, Q-8**). Run with `git ls-tree --name-only origin/next migrations/v6/ | sed 's#.*/##' | grep '^V' | sort | tail -1`; a `next` file newer than this PR's migration → re-time this PR's migration to a later timestamp when `next` is merged.
+- [ ] A7 `git show origin/next:metadata/prompts/.job-function-seniority-prompt.json | grep -c '"deleteRecord"'` → `1` on `origin/next` (F-ENV-6 residue on `next`); at HEAD the file is deleted by M2.3 (`git show HEAD:metadata/prompts/.job-function-seniority-prompt.json` fails; satisfied by PR 1).
+- [ ] A8 `grep -c "Re-deleting" packages/MetadataSync/src/services/PushService.ts` → `1` (unchanged at HEAD and on `next`).
+- [ ] A9 `grep -c "SkipValidation?: boolean, SuppressWarnings?: boolean): Promise<TemplateRenderResult>" packages/Templates/engine/src/TemplateEngine.ts` → `1` on `origin/next`, `0` at HEAD (satisfied by M3.3: `RenderTemplate` now takes `options?: { autoescape?: boolean }`).
+- [ ] A10 `gh api 'repos/MemberJunction/bizapps-common/contents/metadata/record-processes/.job-function-seniority-pipeline.json?ref=next' --jq .content | base64 -d | grep -c "pjf.PersonID = ID))"` → `1` on bizapps-common `next` (F-FP-1 still shipped there); `0` on the companion branch (`~/repos/bizapps-common` HEAD: the scope filter uses `vwPeople.[ID]`; satisfied by M2.1).
+- [ ] A11 `gh api 'repos/MemberJunction/bizapps-common/contents/migrations?ref=next' --jq '.[].name' | sort | tail -1` → `V202610141644__v5.53.x__Metadata_Sync.sql` on bizapps-common `next`; the companion branch's newest is `V202610121300__v5.53.x__Restamp_Pipeline_Job_Functions.sql`, which sorts before it (**open, Q-8**: re-time the companion migration when the companion merges `next`).
+- [ ] A12 `grep -c "HandleIndividualBaseEntityEvent" packages/Templates/base-types/src/TemplateEngineBase.ts` → `0` on `origin/next` and `2` at HEAD (satisfied by M1.6: template saves now refresh the dataset), and `grep -c "DatasetName: 'Template_Metadata'" packages/Templates/base-types/src/TemplateEngineBase.ts` → `1`.
+- [ ] A13 `grep -c '"@memberjunction/testing-engine"' packages/RecordSetProcessor/engine/package.json` → `0` and `grep -rc '"@memberjunction/record-set-processor"' packages/TestingFramework/Engine/package.json` → `1` at HEAD (M6.2's edge, now present and acyclic; the first grep stays `0`); `0` on `origin/next`.
+- [ ] A14 `ls -a metadata-optional/integration-test/tests/integration | grep -oE "IT[0-9]+" | sort -t T -k2 -n | tail -1` → at HEAD `IT123` (this PR's own `.IT123-feature-pipeline-core.json`); on `origin/next` `IT123` is taken by `.IT123-search-scope-bound.json` (**open, Q-8**: IT123/IT124 must become the next free numbers in the plan, the test files and the suite when `next` is merged). Compare the highest `next` number, not HEAD's.
+- [ ] A15 `gh pr list --repo MemberJunction/MJ --search "head:ps/pr-2-truth-suite-containment" --state all --json number,state` → `[]` (PR 2 has no PR; unchanged).
+- [ ] A16 `grep -c "const errorRate = (counts.Error / counts.Processed) \* 100;" packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts` → `1` on `origin/next`, `0` at HEAD (satisfied by M4.3: the rate is over `attempted`, anchor `pr1-breaker`).
+- [ ] A17 `gh api 'repos/MemberJunction/bizapps-common/contents/mj-app.json?ref=next' --jq .content | base64 -d | grep mjVersionRange` → `">=6.1.5 <7.0.0"` on bizapps-common `next`; `">=6.2.0 <7.0.0"` on the companion branch (M7.5's recomputed value, satisfied). A different value on re-run → apply M7.5's `mjVersionRange` bullet again.
+- [ ] A18 `gh api 'repos/MemberJunction/bizapps-common/contents/metadata/tags/.activity-sentiment-tags.json?ref=next' --jq .content | base64 -d | grep -c '"DisplayName"'` → `6` on `next` and on the companion branch (F-ENV-5's data fix is upstream; M2.5 adds the CI push).
+- [ ] A19 `git ls-tree -r --name-only origin/next packages/AI/PredictiveStudio/TruthSuite/gates/gates.json | wc -l` → `0` on `origin/next` and at HEAD (PR 2's registry not merged; `1` → M7.5's "merged first" branch).
 
 ## 9. Risks, open questions, decisions
 
@@ -10321,6 +10332,16 @@ Assumption checks (run from the MJ repo unless a path says otherwise):
 - **Q-7** The companion's `mjVersionRange` lower bound. Default (implemented): M7.5 computes the first stable MJ
   version carrying PR 1 from `pnpm changeset status` (prerelease suffix stripped) and writes `">=<V> <7.0.0"`; A17
   re-checks it at each refresh.
+
+- **Q-8** (open, found by the 2026-10-15 refresh) Three orderings changed on `next` after the last merge into this branch
+  (A6, A11, A14). (1) `next` has `V202610141513__v6.2.x__Theme_Login_Screen.sql`, later than this PR's
+  `V202610140050__v6.2.x__Feature_Value_Key_And_Versions.sql`: re-time this PR's migration after it. (2) `next` has
+  `.IT123-search-scope-bound.json`, so this PR's IT123 and IT124 become the next free numbers (rename the test files, the
+  suite registration and every mention in this plan together). (3) bizapps-common `next` has
+  `V202610141644__v5.53.x__Metadata_Sync.sql`, later than the companion's `V202610121300__v5.53.x__Restamp_Pipeline_Job_Functions.sql`:
+  re-time the companion migration after it. Default: each is done in the commit that merges `origin/next` (or the
+  companion's `next`) into the branch, with the check that detects it re-run afterwards. Nothing was renamed by the
+  refresh, which edits the plan only.
 
 **Risks.**
 
@@ -10585,3 +10606,56 @@ _(The agent opening the PR adds its own tool attribution line here, per its harn
   same process, so the guard covers them; M3.3 adds one test that the raw environment still refuses a sandbox escape
   (`TemplateSandboxError`), so the new path cannot reopen what #5268 closed.
 - **Dependency changes consumed (trigger b):** none.
+
+### 2026-10-15 — D-058 (prediction materialization) incorporated — Claude Opus 5.5
+
+- **Plan edits:** §1 Unblocks, §3.3 (C9b key, Entities), §4.3, §5 migration header comment, M7 guide bullet: the
+  `EffectiveAsOf` column is PR 3's (D-018), not PR 5's; PR 5 makes Feature Pipelines write effective-dated values.
+  §4.3 and Task M7.5 (PR 2 reconciliation): PR 2's registry holds 111 gates (G5.6 added for PR 4, D-060; counted from
+  `ps-rebuild-plans/reference/gates.json`). No code, task or anchor changed.
+
+### 2026-10-15 — refresh (c, PR branch) — Claude Sonnet 5.5
+
+- **Checked against:** `ps/pr-1-feature-pipelines` (HEAD) @ `b99f9d49f7`; also `origin/next` @ `c49b1800b9`. bizapps-common `next` @ `b19675abee`; companion
+  branch `ps/pr-1-feature-pipelines` @ `cd38ffe`.
+- **Anchors:** before, at HEAD: ok 4 · moved 38 · changed 17 · missing 2 · skipped 6. After, at HEAD:
+  `# ok 63 · moved 0 · changed 0 · missing 0 · skipped 6` (69 anchors; every `lineHint` and `atCommit` set to `b99f9d49f7`).
+  The 38 moved were line shifts only. Changed or missing, and what was done:
+  `pr1-lookup-constraint-type` (lookup member gained `DisplayFields`, `Filter`, `ItemRef`: pattern updated);
+  `pr1-lookup-validation` (now the `OutputValidator.ValidateOutputValue` static method: symbol and pattern);
+  `pr1-infer-reasoning` (now `RecordedAnnotations` via `ExtractReasoning`, honouring `CaptureReasoning`);
+  `pr1-infer-swallowed-store` (a failed cache store is now a recorded warning);
+  `pr1-infer-history` (now `WriteFeatureValues`);
+  `pr1-writeback-parent-first` (unit work and children first, then `WriteRecordFields`);
+  `pr1-writeback-preview-children` (`childRows` built from `childAnswers`);
+  `pr1-breaker` (error rate over attempted records, F-FP-10 fixed);
+  `pr1-record-context` (typed `RecordProcessorContext` carrying `DryRun`);
+  `pr1-dryrun-claim` (`BuildProcessor` doc now states what a dry run skips);
+  `pr1-template-render-cache` (cache keyed per environment, `env` passed);
+  `pr1-prompt-template-text-once` (now `LinkedTemplateText.Load`);
+  `pr1-runner-render-template` (renders with `{ autoescape: false }`);
+  `c9-gemini-temp-chat`, `c9-gemini-temp-stream`, `c9-bedrock-temp`, `pr1-bedrock-temp-stream` (the `||` sites are gone: the
+  anchors now name the `buildGenerationOptions` / `buildRequestBody` calls, and new `pr1-gemini-resolve-temperature` and
+  `pr1-bedrock-resolve-temperature` name the `??` resolvers);
+  `pr1-env6-core-prompt-marker` and `pr1-env6-core-template-marker` (files deleted by M2.3, as the plan intends: replaced by
+  `pr1-env6-guard-bizapps-owns` and `pr1-env6-template-delete-guard` in the guarded migration).
+  In each case the code at HEAD does what the plan says PR 1 makes it do; no design or task changed.
+  Against `origin/next`: ok 5 · moved 38 · changed 20 · missing 0 · skipped 6. The 20 changed are the seams listed above
+  that this PR reshapes (including `pr1-basellm-dispatch`, which is only line-shifted at HEAD but reshaped against `next`)
+  and the four new anchors; every other anchor is `ok` or `moved` there. The six bizapps-common anchors were
+  checked with the checker's `classify()` against bizapps-common `next` @ `b19675abee` (6 ok; `atCommit` updated) and, for
+  information, the companion branch (4 ok or moved; `pr1-bc-scope-filter` and `pr1-bc-template-table` differ because the
+  companion fixes the scope filter and the taxonomy table, as designed).
+- **Assumptions:** A1 `c49b1800b9`; A2 0 and A3 0 (satisfied by M5.2/M5.3; `next` 0 / 8); A4 1; A5 MERGED (#5185; M5.2's
+  merged branch, satisfied); A6 HEAD newest is this PR's `V202610140050`, `next` newest `V202610141513__v6.2.x__Theme_Login_Screen.sql`
+  (**re-time needed, Q-8**); A7 HEAD file deleted (satisfied by M2.3), `next` 1; A8 1; A9 HEAD 0 (satisfied by M3.3), `next` 1;
+  A10 `next` 1, companion 0 (satisfied by M2.1); A11 `next` `V202610141644__v5.53.x__Metadata_Sync.sql`, companion newest
+  `V202610121300` (**re-time needed, Q-8**); A12 0 / 1 on `next`, 2 / 1 at HEAD (satisfied by M1.6); A13 0 / 1 at HEAD
+  (M6.2's edge, satisfied); A14 HEAD `IT123`, `next` `IT123` taken by `.IT123-search-scope-bound.json` (**renumber needed, Q-8**);
+  A15 `[]`; A16 HEAD 0 (satisfied by M4.3), `next` 1; A17 `next` `">=6.1.5 <7.0.0"`, companion `">=6.2.0 <7.0.0"` (satisfied);
+  A18 6 and 6; A19 0 / 0. The expected values in §8 were updated to these states. No check changed a design statement;
+  the three **Q-8** items are renames and re-timings for the next merge of `next`, left undone because this refresh edits
+  the plan only.
+- **Dependency changes consumed (trigger b):** none.
+- **Plan edits:** §1 header (Anchored to, Last refresh); §5.5 anchors block and the note after it; §8 expected values; §9 Q-8.
+- **Decisions recorded:** none.

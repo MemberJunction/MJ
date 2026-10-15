@@ -753,8 +753,8 @@ parameters those models reject. The driver reports what it actually sent (`Param
 their values as written (no HTML escaping, so `&` stays `&`). Existing vectors escaped under the old rule are
 re-vectorized automatically, and Content Autotagging heals its entity documents once per document.
 
-**Planned.** PR 5 adds `EffectiveAsOf` to the Feature Value key and Predictive Studio reads values as of decision
-dates.
+**Planned.** PR 3 adds `EffectiveAsOf` to Feature Values and Predictive Studio reads values as of decision dates; PR 5
+makes Feature Pipelines write effective-dated values.
 
 ---
 
