@@ -1,4 +1,13 @@
 import { ExtractActualDefaultValue } from "./util";
+import type { IMetadataProvider } from "./interfaces";
+
+/**
+ * Back-references from Info objects to the metadata provider that built them. Held OUTSIDE the
+ * instances (a WeakMap rather than a field) so the reference can never leak into `toJSON()`,
+ * `Object.keys()`, `copyInitData` of a clone, or the local metadata cache — and so an Info object
+ * never keeps its provider reachable on its own account.
+ */
+const owningProviders = new WeakMap<BaseInfo, IMetadataProvider>();
 
 /**
  * Base class for all MemberJunction metadata info classes.
@@ -10,6 +19,35 @@ export abstract class BaseInfo {
      * Primary Key
      */
     ID: any = null
+
+    /**
+     * The metadata provider that built this Info object, when known.
+     *
+     * Info getters that resolve sibling metadata (an entity's IS-A children, a permission's RLS
+     * filter, a query's fields, an authorization's roles, …) must read from the SAME provider the
+     * object came from. In a multi-provider process — several `GraphQLDataProvider` instances with
+     * `separateConnection`, or a server servicing several connections — the global
+     * `Metadata.Provider` is a different provider or not set at all. Providers pass themselves to
+     * every Info constructor (`new m.class(row, provider)`), and container Info objects hand it to
+     * the child Info objects they construct.
+     *
+     * `undefined` for an Info object built outside a provider (tests, ad-hoc construction). Callers
+     * then fall back to the global provider, which is exactly the pre-existing behavior.
+     */
+    public get OwningProvider(): IMetadataProvider | undefined {
+        return owningProviders.get(this);
+    }
+
+    /**
+     * Records the provider that owns this Info object. A null/undefined provider is ignored, so
+     * passing an optional constructor argument straight through is always safe.
+     * @param provider - the provider whose metadata this object belongs to
+     */
+    public SetOwningProvider(provider: IMetadataProvider | null | undefined): void {
+        if (provider) {
+            owningProviders.set(this, provider);
+        }
+    }
 
     /**
      * Whether `key` resolves to a settable accessor somewhere on the prototype chain.

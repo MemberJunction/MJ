@@ -527,6 +527,35 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Drops this provider's in-flight/lingered RunView dedup entries so the next identical
+     * RunView goes to the server instead of replaying a result from the last
+     * {@link DedupLingerMs}.
+     *
+     * Saves and deletes made through a `BaseEntity` in this process already invalidate the entries
+     * for their entity automatically. Call this after anything that can write on the SERVER
+     * without such an event reaching this process — a Remote Operation, an Action, an agent run,
+     * any other mutation. {@link RouteOperation} and the GraphQL client's mutation transport call
+     * it for you.
+     *
+     * Dropping an in-flight entry never affects the callers already waiting on it; it only stops
+     * later callers from joining (and stops the result from lingering), since that query may have
+     * read pre-write data.
+     *
+     * @param entityNames - entities known to have been written. Only entries touching them are
+     *   dropped. Omit (or pass an empty list) when the writes are unknown: every entry is dropped.
+     */
+    public InvalidateRunViewDedupCache(entityNames?: readonly string[]): void {
+        const names = (entityNames ?? []).map(n => n?.trim().toLowerCase()).filter((n): n is string => !!n);
+        if (names.length === 0) {
+            this._inflightViews.clear();
+            return;
+        }
+        for (const n of names) {
+            this.invalidateInflightViewsForEntity(n);
+        }
+    }
+
+    /**
      * Drops every in-flight/lingered RunView entry whose params touch the given
      * entity (lowercased name). Called on BaseEntity save/delete/remote-invalidate.
      */
@@ -1185,7 +1214,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!key) {
             return { Success: false, ResultCode: 'INVALID_OPERATION_KEY', ErrorMessage: 'operationKey is required' };
         }
-        return this.InternalRouteOperation<TInput, TOutput>(key, input, options ?? {});
+        try {
+            return await this.InternalRouteOperation<TInput, TOutput>(key, input, options ?? {});
+        }
+        finally {
+            // A Remote Operation executes server-side and can write any entity — none of which
+            // raises a BaseEntity event in THIS process. Without this, an identical RunView answered
+            // in the last DedupLingerMs would replay pre-operation rows. Runs on failure too: an
+            // operation that failed part-way may still have written.
+            this.InvalidateRunViewDedupCache();
+        }
     }
 
     /**
@@ -1702,7 +1740,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 return results as RunViewResult[];
             })
             .catch(err => {
-                this._inflightViews.delete(key);
+                // Only our own entry: an invalidation may have dropped it and a newer request for the
+                // same key taken the slot, which this rejection must not evict.
+                const entry = this._inflightViews.get(key);
+                if (entry && entry.promise === promise) {
+                    this._inflightViews.delete(key);
+                }
                 throw err;
             });
 
@@ -1860,7 +1903,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             ].join('|');
             return `${base}|${extras}`;
         });
-        return parts.join('||');
+        return `${parts.join('||')}|||${this.RunViewDedupScope}`;
+    }
+
+    /**
+     * What, besides the request itself and the user, decides whether two identical RunViews may
+     * share one execution (in flight or lingering). Empty by default. A provider whose callers can
+     * see different data for the same query — a database provider whose open transaction belongs
+     * to one async scope only (#4786) — returns a value that differs between those callers, so a
+     * transaction member never awaits an outsider's pool read (missing its own writes, or on
+     * SQL Server waiting on its own row lock) and an outsider never receives uncommitted rows.
+     * Read synchronously while the dedup key is built, in the caller's async context.
+     */
+    protected get RunViewDedupScope(): string {
+        return '';
     }
 
     /**
@@ -5061,6 +5117,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * were on the client's global provider): treat Info objects and everything
      * they own as read-only; copy before sorting.
      *
+     * Owning provider: the shared Info objects deliberately keep the
+     * {@link BaseInfo.OwningProvider} of the provider that built them (the source
+     * global provider); the shell does NOT re-stamp them. Re-stamping a shared
+     * instance would re-point it for every other provider holding it. The sibling
+     * lookups it drives (IS-A children, RLS filters, query fields, ...) therefore
+     * read the source provider's graph — the same immutable graph this shell
+     * points into, so the answers are identical. A provider that needs its own
+     * graph (a different database) must load its own metadata, not adopt a shell.
+     *
      * Override precedence: if a subclass overrides BOTH this method and the
      * deprecated {@link CloneAllMetadata}, the CloneAllMetadata override wins on
      * the fast path (see {@link CopyMetadataFromGlobalProvider}) — the
@@ -5352,7 +5417,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             if (organicKeys) {
                 e.EntityOrganicKeys = activeOrganicKeysByEntityId.get(entityIdKey) || [];
             }
-            result.push(new EntityInfo(e));
+            result.push(new EntityInfo(e, this));
         }
 
         // Check for schema name collision: if both 'MJ' and 'MJCustom' schemas exist,

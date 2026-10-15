@@ -1,5 +1,47 @@
 # @memberjunction/postgresql-dataprovider
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 68a7e3b: A transaction opened on a shared database provider no longer captures unrelated callers (#4786).
+
+  The transaction now belongs to the async scope that began it (tracked with `AsyncLocalStorage` in `GenericDatabaseProvider`): that scope and everything it starts run on the transaction; any other caller on the same provider instance — another request on the global `Metadata.Provider`, a background timer — runs on the pool. Previously every query issued through the instance while `_transaction` was set ran inside it, so an unrelated read ran on the transaction's connection, an unrelated write was rolled back with it, and reads that queued behind its COMMIT failed with "The ambient transaction ended before this query ran".
+  - SQL Server (`ExecuteSQL`, `ExecuteSQLBatch`) and PostgreSQL (`ExecuteSQL`, `RunColocatedSQL`) route to the transaction only for callers in its scope; `ignoreAmbientTransaction` keeps working inside the scope.
+  - Savepoint SQL always reaches the handle, whichever scope settles a frame.
+  - `RunAfterCommit` / `CapturePostCommitToken` from a caller outside the transaction no longer tie that caller's work to a transaction it is not part of — that work runs now, detached, on the pool, outside every transaction on the instance. If such a task opens its own transaction while another is open on the instance, it joins that one as a savepoint (logged); use an independent instance for that. `PendingIdlePostCommitTaskCount` is deprecated and always 0.
+  - A caller outside the scope that _begins_ a transaction while one is open still joins it as a savepoint, now logged once per transaction; it stays in that transaction until the owner ends it.
+  - A begin that fails no longer leaves a pending claim behind that would make work forked from the same scope a member of that scope's next transaction.
+  - A begin that runs synchronously inside un-awaited work or an event listener makes the launcher part of the transaction (see "Who is in the transaction" in the transactions guide).
+  - Work launched inside the scope that runs after it ends runs on the pool, as before, and never joins a later transaction.
+
+- Updated dependencies [dde482c]
+- Updated dependencies [49f26d9]
+- Updated dependencies [88e6902]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [fcf8e1c]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [20650af]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [e1942c7]
+- Updated dependencies [bdea87a]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [b653746]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/generic-database-provider@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/sql-dialect@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/query-processor@6.2.0-edge.4
+  - @memberjunction/ai-vectordb@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Minor Changes

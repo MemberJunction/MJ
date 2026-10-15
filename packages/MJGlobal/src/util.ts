@@ -1480,6 +1480,27 @@ export function stripTrailingChars(s: string, charsToStrip: string, skipIfExactM
   return StripTrailingChars(s, charsToStrip, skipIfExactMatch);
 }
 
+/**
+ * Removes every trailing `/` from a string, typically a base URL before a path is joined onto it.
+ *
+ * Linear in the length of the input. The regex `/\/+$/` is not: on a string holding many slashes that
+ * are NOT at the end, it backtracks quadratically, which makes it a denial-of-service vector on any
+ * caller-supplied URL.
+ *
+ * @example
+ * ```typescript
+ * TrimTrailingSlashes('http://localhost:4000///'); // 'http://localhost:4000'
+ * TrimTrailingSlashes('/');                        // ''
+ * ```
+ */
+export function TrimTrailingSlashes(s: string): string {
+    let end = s.length;
+    while (end > 0 && s.charCodeAt(end - 1) === 47 /* '/' */) {
+        end--;
+    }
+    return end === s.length ? s : s.substring(0, end);
+}
+
 
 /**
  * Recursively removes all spaces from a given string.

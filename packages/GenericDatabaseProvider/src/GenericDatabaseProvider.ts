@@ -78,7 +78,7 @@ import {
     QueryInfo,
 } from '@memberjunction/core';
 
-import { BytesToBase64, IsByteArray, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { BytesToBase64, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -86,7 +86,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser, IsReadOnlyQuery } from '@memberjunction/sql-parser';
+import { SQLParser, IsReadOnlyQuery, CheckAggregateExpression } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
@@ -109,8 +109,10 @@ import { QueueManager } from '@memberjunction/queue';
 import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
 import { TransactionFrameTracker } from './TransactionFrameTracker';
+import { TransactionAffinity, type TransactionMembership } from './TransactionAffinity.js';
 import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
-import { EncryptionEngine } from '@memberjunction/encryption';
+import { ClientClauseScreen, type ClientClauseScreeningProvider } from './clientClauseScreen.js';
+import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
 /**
@@ -142,6 +144,16 @@ interface PostCommitEntry {
     Depth: number;
 }
 
+/** How one dataset item reads for the caller, or why it is refused. */
+interface DatasetItemScope {
+    /** The item's stored WhereClause AND'd with the caller's ItemFilter; '' when neither applies. */
+    Filter: string;
+    /** The context user's effective read row filter for the item's entity; '' when none applies. */
+    RowFilter: string;
+    /** Why the item is refused, or null when it may run. */
+    Refusal: string | null;
+}
+
 /**
  * GenericDatabaseProvider is an intermediate abstract class that implements shared
  * entity action, AI action, encryption, and view WHERE clause rendering logic.
@@ -169,7 +181,7 @@ export class DoomedTransactionError extends Error {
     }
 }
 
-export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
+export abstract class GenericDatabaseProvider extends DatabaseProviderBase implements ClientClauseScreeningProvider {
     // Composition engine is now owned by RenderPipeline
 
     /**************************************************************************/
@@ -880,6 +892,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         const decryptedValue = await encryptionEngine.Decrypt(fieldValue, user);
                         processedRow[field.Name] = decryptedValue;
                     } catch (decryptError) {
+                        // A key this install wasn't given (an app's own key) is configuration, not a
+                        // fault: one warning per key, and the value stays encrypted.
+                        if (IsEncryptionKeyUnavailable(decryptError)) {
+                            ReportEncryptionKeyUnavailable(decryptError);
+                            continue;
+                        }
                         const message = decryptError instanceof Error ? decryptError.message : String(decryptError);
                         LogError(
                             `Failed to decrypt field "${field.Name}" on entity "${entityInfo.Name}": ${message}. ` +
@@ -1361,6 +1379,32 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Optional replay form of an UPDATE for the SQL log only (never executed). Receives just the
+     * fields this save CHANGED. A recording that carried the whole row would, on replay, overwrite
+     * every column of the target row with the recording database's values — including settings a
+     * deploying application tuned on purpose (an MJ metadata sync that only flipped
+     * `AllowUserSearchAPI` on 'MJ: Content Items' also reset that consumer's
+     * `TrustServerCacheCompletely`). Dialects whose update procs keep unpassed columns override
+     * this. Default: no replay form, the plain save SQL is logged.
+     */
+    protected RenderReplayUpdateSQL(
+        _binding: SaveCallBinding,
+        _entity: BaseEntity,
+        _changedFieldValues: Map<EntityFieldInfo, unknown>,
+    ): string | undefined {
+        return undefined;
+    }
+
+    /** The entries of a save's parameter map whose fields this save actually changed. */
+    private changedFieldValues(entity: BaseEntity, fieldValues: Map<EntityFieldInfo, unknown>): Map<EntityFieldInfo, unknown> {
+        const changed = new Map<EntityFieldInfo, unknown>();
+        for (const [f, value] of fieldValues) {
+            if (entity.GetFieldByName(f.Name)?.Dirty) changed.set(f, value);
+        }
+        return changed;
+    }
+
+    /**
      * Concrete implementation of the abstract save-SQL builder defined on
      * `DatabaseProviderBase`. Iterates fields via the single `IsSPParameter`
      * predicate, applies provider-specific value coercion, encrypts, then
@@ -1434,9 +1478,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const baseSaveSQL = this.WrapSaveCallForResult(binding, entity, spName);
         let saveSQL = baseSaveSQL;
         // A CREATE's logged form is guarded on the primary key so a migration replay of
-        // the recording converges on a database that already holds the row (#4503).
-        // Updates and dialects without a replay form log the plain save SQL.
-        const replaySQL = isNew ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap) : undefined;
+        // the recording converges on a database that already holds the row (#4503). An
+        // UPDATE's logged form carries only the fields this save changed, so a replay never
+        // resets the target's other columns. A forced save (IgnoreDirtyState, e.g. MetadataSync's
+        // `alwaysPush`) asked to re-impose the whole row, so it keeps the full-row form. Dialects
+        // without a replay form log the plain save SQL.
+        const replaySQL = isNew
+            ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
+            : options?.IgnoreDirtyState
+              ? undefined
+              : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap));
         const simpleSQL = replaySQL ?? baseSaveSQL.sql;
 
         // 5. Optionally wrap with record-change emission.
@@ -1947,6 +1998,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const excludeUserViewRunID: string = params.ExcludeUserViewRunID ?? '';
             const overrideExcludeFilter: string = params.OverrideExcludeFilter ?? '';
             const saveViewResults: boolean = params.SaveViewResults ?? false;
+            this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
+            this.AssertClauseFragmentIsSingleStatement(overrideExcludeFilter, 'OverrideExcludeFilter');
 
             // ── TOP / pagination mode ──
             // Keyset (AfterKey) takes precedence: validate now so failures are early, predictable,
@@ -2009,14 +2062,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // 1. View where clause
             if (viewEntity?.WhereClause && viewEntity.WhereClause.length > 0) {
                 const renderedWhere = await this.RenderViewWhereClause(viewEntity, user);
-                // SECURITY: a stored view WhereClause originates from a client save, so pass the
-                // rendered clause through the same screen ExtraFilter gets. The one exemption is
-                // CustomWhereClause views: those are admin-authored (MJUserViewEntityServer's save
-                // gate restricts setting/changing them to Owner-type users) and may legitimately
-                // contain constructs the screen blocks. Auto-generated clauses (FilterState /
-                // SmartFilter / nested {%UserView%} templates) always pass — the screen permits
-                // plain SELECT subqueries and blocks only stacked statements, DML, comments,
-                // UNION and WAITFOR.
+                // SECURITY: a stored view WhereClause originates from a client save, so the rendered
+                // clause passes the full client-clause screen (ScreenStoredViewWhereClause) and the
+                // keyword denylist ExtraFilter gets. The one exemption is CustomWhereClause views:
+                // those are admin-authored (MJUserViewEntityServer's save gate restricts setting/
+                // changing them to Owner-type users) and may legitimately contain constructs the
+                // screens block. Auto-generated clauses (FilterState / SmartFilter / nested
+                // {%UserView%} templates) are written against entity base views, which the screens
+                // permit when the running user reads each of those entities unscoped.
+                this.ScreenStoredViewWhereClause(viewEntity, renderedWhere, user);
                 const isCustomWhereClause = !!viewEntity.CustomWhereClause; // truthy — the DB may hand back true or 1
                 if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {
                     throw new Error(`Invalid view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}': contains one or more forbidden keywords`);
@@ -2068,8 +2122,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // first column's value with a prior run — refuse rather than return the wrong rows.
                 this.assertSingleColumnPrimaryKey(entityInfo, 'ExcludeUserViewRunID / ExcludeDataFromAllPriorViewRuns');
                 let sExcludeSQL = `${this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name)} NOT IN (SELECT RecordID FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwUserViewRunDetails')} WHERE EntityID='${viewEntity?.EntityID}' AND`; // first-pk-ok: guarded above — view-run RecordID is a single bare key value, PrimaryKeys.length === 1 enforced
-                if (params.ExcludeDataFromAllPriorViewRuns === true)
+                if (params.ExcludeDataFromAllPriorViewRuns === true) {
+                    // SECURITY: the view ID is interpolated; a loaded view's ID is always a GUID.
+                    if (!IsValidUUID(String(viewEntity?.ID ?? '')))
+                        throw new Error(`ExcludeDataFromAllPriorViewRuns requires a saved view with a GUID ID`);
                     sExcludeSQL += ` UserViewID=${viewEntity?.ID})`;
+                }
                 else {
                     // SECURITY: excludeUserViewRunID is user-supplied (GraphQL input) and is
                     // interpolated directly into SQL here. Unlike ExtraFilter/OrderBy/
@@ -2150,6 +2208,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const orderBy: string = rawOrderBy.length > 0
                 ? (usingKeyset || orderByIsPkFallback ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
                 : '';
+            if (orderBy.length > 0 && !usingKeyset && !orderByIsPkFallback) {
+                this.AssertClauseFragmentIsSingleStatement(orderBy, 'OrderBy');
+                // No caller OrderBy means the sort came from the saved view's stored sort state.
+                if (!params.OrderBy && viewEntity) this.ScreenStoredViewOrderBy(orderBy, user);
+            }
 
             // View run logging (SQL Server-specific, others return null)
             let userViewRunID = '';
@@ -2350,6 +2413,45 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
     // InternalRunView Helpers
     /**************************************************************************/
+
+    /**
+     * Builds the aggregate query without running the caller's text. Each expression must be a single
+     * aggregate function call over this entity's columns: the query runs the SQL that
+     * {@link CheckAggregateExpression} rebuilds from the checked parse tree (with this provider's
+     * dialect), once the keyword validator has also accepted that SQL. A refused expression becomes a
+     * per-aggregate error in request order. The accepted ones are aliased `Agg_0`, `Agg_1`, … in
+     * request order, which is how `RunViewCore` reads their values back.
+     */
+    protected override BuildAggregateSQL(
+        aggregates: { expression: string; alias?: string }[],
+        entityInfo: EntityInfo,
+        schemaName: string,
+        baseView: string,
+        whereSQL: string,
+    ): { aggregateSQL: string | null; validationErrors: AggregateResult[] } {
+        const columns = entityInfo.Fields.map((f) => f.Name);
+        const items: string[] = [];
+        const validationErrors: AggregateResult[] = [];
+        for (const agg of aggregates ?? []) {
+            const screened = this.screenAggregateExpression(agg.expression, columns);
+            if ('SQL' in screened) {
+                items.push(`${screened.SQL} AS ${this.QuoteIdentifier(`Agg_${items.length}`)}`);
+            } else {
+                validationErrors.push({ expression: agg.expression, alias: agg.alias || agg.expression, value: null, error: screened.Error });
+            }
+        }
+        if (items.length === 0) return { aggregateSQL: null, validationErrors };
+        const where = whereSQL ? ` WHERE ${whereSQL}` : '';
+        return { aggregateSQL: `SELECT ${items.join(', ')} FROM ${this.QuoteSchemaAndView(schemaName, baseView)}${where}`, validationErrors };
+    }
+
+    /** The SQL to run for one caller aggregate expression, or why it is refused. */
+    private screenAggregateExpression(expression: string, columns: string[]): { SQL: string } | { Error: string } {
+        const check = CheckAggregateExpression(expression, this.Dialect, columns);
+        if (!check.IsAllowed || check.SQL === null) return { Error: `Invalid aggregate expression: ${check.Reason}` };
+        const keywordCheck = SQLExpressionValidator.Instance.validate(check.SQL, { context: 'aggregate', entityFields: columns });
+        return keywordCheck.valid ? { SQL: check.SQL } : { Error: keywordCheck.error || 'Validation failed' };
+    }
 
     /**
      * Returns the SELECT list for a single-record load: `*` normally, or an explicit list of
@@ -2569,6 +2671,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 sUserSearchSQL = '(1=0)';
             }
         }
+        // A UserSearchParamFormatAPI format may splice the term outside quotes; the term must not end the statement there.
+        this.AssertClauseFragmentIsSingleStatement(sUserSearchSQL, 'UserSearchString');
         return sUserSearchSQL;
     }
 
@@ -2674,6 +2778,54 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (t !== 'nvarchar' && t !== 'varchar' && t !== 'char' && t !== 'nchar') return false;
         if (field.Length === -1) return false;
         return true;
+    }
+
+    /**************************************************************************/
+    // Client clause screening
+    /**************************************************************************/
+
+    /**
+     * SECURITY — refuses a statement separator or comment in a filter, sort or search fragment.
+     * Runs for every RunView caller, server-internal ones included, and cannot refuse a legitimate
+     * fragment. The full base-view screen runs at the client entry points; see {@link ClientClauseScreen}.
+     */
+    protected AssertClauseFragmentIsSingleStatement(clause: string, label: string): void {
+        ClientClauseScreen.AssertSingleStatementFragment(clause, label, this.Dialect);
+    }
+
+    /**
+     * SECURITY — the full client-clause screen ({@link ClientClauseScreen.AssertClauseUsesEntityBaseViews})
+     * against this provider's entities and dialect, with `contextUser` as the acting user. With
+     * `entityInfo`, the clause is screened in the form this provider runs a client clause for that
+     * entity ({@link TransformExternalSQLClause}). Server code that hands client SQL text to RunView
+     * outside the API entry points calls this: ad-hoc list sources (`ListOperations`) and the
+     * saved-view save gate (`MJUserViewEntityServer`).
+     */
+    public ScreenClientClause(clause: string | null | undefined, label: string, contextUser?: UserInfo, entityInfo?: EntityInfo): void {
+        const text = clause && entityInfo ? this.TransformExternalSQLClause(clause, entityInfo) : clause;
+        ClientClauseScreen.AssertClauseUsesEntityBaseViews(text, label, this.Entities, this.Dialect, contextUser);
+    }
+
+    /**
+     * SECURITY — screens a saved view's rendered WhereClause with the full client-clause screen.
+     * Any user who can save a view can write its WhereClause, directly or through FilterState or a
+     * Smart Filter. Exempt: a CustomWhereClause view loaded as an entity, whose clause only an Owner
+     * can set (MJUserViewEntityServer). The flag on any other object, such as one built from a
+     * request body, is not trusted. The exemption tests `instanceof BaseEntity`, so a second copy of
+     * `@memberjunction/core` in the process makes loaded custom views fail closed, not open.
+     */
+    protected ScreenStoredViewWhereClause(viewEntity: MJUserViewEntityExtended, renderedWhere: string, user: UserInfo): void {
+        if (viewEntity instanceof BaseEntity && !!viewEntity.CustomWhereClause) return; // truthy — the DB may hand back true or 1
+        this.AssertClauseFragmentIsSingleStatement(renderedWhere, 'view WhereClause');
+        this.ScreenClientClause(renderedWhere, 'view WhereClause', user);
+    }
+
+    /**
+     * SECURITY — screens the ORDER BY a saved view builds from its stored SortState / GridState with
+     * the full client-clause screen. Any user who can save a view can write those.
+     */
+    protected ScreenStoredViewOrderBy(orderBy: string, user: UserInfo): void {
+        this.ScreenClientClause(orderBy, 'OrderBy', user);
     }
 
     /**************************************************************************/
@@ -3199,6 +3351,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         let bHasWhere = false;
 
         const extraFilter = this.TransformExternalSQLClause((params.ExtraFilter as string) || '', entityInfo);
+        this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
         if (extraFilter.length > 0) {
             if (!this.ValidateUserProvidedSQLClause(extraFilter))
                 throw new Error(`Invalid Extra Filter: ${extraFilter}`);
@@ -3679,6 +3832,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (orderBy.length > 0) {
                 if (!this.ValidateUserProvidedSQLClause(orderBy))
                     throw new Error(`Invalid OrderBy clause: ${orderBy}`);
+                this.AssertClauseFragmentIsSingleStatement(orderBy, 'OrderBy');
                 sql += ` ORDER BY ${orderBy}`;
             }
 
@@ -5247,6 +5401,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Checks whether a new record's field values pass the Create RLS filter.
      * Builds a synthetic single-row subquery from entity field values, then tests the RLS filter against it.
+     * Null fields are projected as typed NULLs (see {@link BuildRLSSyntheticRowProjections}), so a
+     * filter that references a column the new row leaves NULL evaluates instead of failing to bind.
+     * The row is what the caller sends: a column the database fills on insert (a non-literal default
+     * or a trigger) is seen as NULL here.
      */
     protected override async CheckCreateRLS(
         entity: BaseEntity,
@@ -5258,7 +5416,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return true;
         }
 
-        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo, false);
+        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo);
         const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
         const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
         return result && result.length > 0 && Number(result[0]['pass']) === 1;
@@ -5299,7 +5457,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
 
-        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+        const projections = this.BuildRLSSyntheticRowProjections(entity, entityInfo);
         const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
         const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
         return result && result.length > 0 && Number(result[0]['pass']) === 1;
@@ -5337,21 +5495,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Builds field projections for an RLS synthetic-row subquery (Create post-image and
      * Update post-image checks).
      *
-     * @param includeNulls - The Update post-image REQUIRES null fields to be projected as
-     * typed NULLs: a filter referencing a column the caller just nulled must see SQL NULL,
-     * not a missing column. A bare `SELECT NULL AS Col` is untyped and can evaluate
-     * differently from a real row, so nulls are emitted as `CAST(NULL AS <sqltype>)` using
-     * the field's metadata-resolved type. An unresolvable type fails the save (throw)
-     * rather than emitting an untyped NULL. The Create check keeps its historical
-     * skip-nulls behavior (includeNulls=false).
+     * Every non-virtual field is projected, null fields included: a filter referencing a
+     * column the row leaves NULL must see SQL NULL, not a missing column (which fails to
+     * bind with `Invalid column name` instead of evaluating). A bare `SELECT NULL AS Col` is
+     * untyped and can evaluate differently from a real row, so nulls are emitted as
+     * `CAST(NULL AS <sqltype>)` using the field's metadata-resolved type. An unresolvable
+     * type fails the save (throw) rather than emitting an untyped NULL.
      */
-    protected BuildRLSSyntheticRowProjections(entity: BaseEntity, entityInfo: EntityInfo, includeNulls: boolean): string {
+    protected BuildRLSSyntheticRowProjections(entity: BaseEntity, entityInfo: EntityInfo): string {
         const parts: string[] = [];
         for (const field of entityInfo.Fields) {
             if (field.IsVirtual) continue;
             const val = entity.Get(field.Name);
-            if (val == null && !includeNulls) continue;
-
             parts.push(`${this.renderRLSProjectionValue(field, val)} AS ${this.QuoteIdentifier(field.Name)}`);
         }
         return parts.join(', ');
@@ -5382,7 +5537,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const baseType = field.Type;
             if (!baseType || baseType.trim().length === 0) {
                 throw new Error(
-                    `Cannot build RLS post-image projection: field ${field.Name} has no resolvable SQL type for a typed NULL`
+                    `Cannot build RLS row projection: field ${field.Name} has no resolvable SQL type for a typed NULL`
                 );
             }
             // `field.Length` is the SYSTEM (byte) length from `sys.columns`, but
@@ -5450,11 +5605,61 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Resolves how one dataset item reads for the caller. A caller's ItemFilter must pass the same
+     * denylist as a RunView ExtraFilter. With a context user, the item's entity must be readable by
+     * that user and the user's effective read row filter applies. MJ_Metadata is exempt from the
+     * user checks: every authenticated client loads it to learn the schema, including principals
+     * (widget guests, magic-link sessions) whose roles hold no read grant on the metadata entities.
+     */
+    private resolveDatasetItemScope(
+        datasetName: string,
+        item: Record<string, unknown>,
+        itemFilters: DatasetItemFilterType[] | undefined,
+        contextUser: UserInfo | undefined,
+    ): DatasetItemScope {
+        const code = String(item['Code']);
+        const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
+        const clientFilter = itemFilters?.find(f => f?.ItemCode === code)?.Filter ?? '';
+        if (clientFilter && !this.ValidateUserProvidedSQLClause(clientFilter)) {
+            return { Filter: '', RowFilter: '', Refusal: `Invalid ItemFilter for dataset item '${code}': contains one or more forbidden keywords` };
+        }
+        const filter = whereClause && clientFilter ? `${whereClause} AND (${clientFilter})` : (whereClause || clientFilter);
+        if (!contextUser || datasetName === GenericDatabaseProvider._mjMetadataDatasetName) {
+            return { Filter: filter, RowFilter: '', Refusal: null };
+        }
+
+        const entityName = String(item['Entity']);
+        const entity = this.EntityByName(entityName);
+        if (!entity) {
+            return { Filter: filter, RowFilter: '', Refusal: `Entity '${entityName}' of dataset item '${code}' not found in metadata` };
+        }
+        if (!entity.GetUserPermisions(contextUser)?.CanRead) {
+            return { Filter: filter, RowFilter: '', Refusal: `User ${contextUser.Email} does not have read permissions on ${entity.Name}` };
+        }
+        return { Filter: filter, RowFilter: entity.GetEffectiveRowFilterWhereClause(contextUser, EntityPermissionType.Read, ''), Refusal: null };
+    }
+
+    /**
+     * The WHERE text for a dataset item: the caller's row filter AND'd with the item's filter. The
+     * item's filter sits two parentheses deep because a client ItemFilter is screened inside one
+     * level, so an OR it reaches by closing a parenthesis still cannot widen the row filter.
+     */
+    private datasetItemWhereClause(scope: DatasetItemScope): string {
+        if (!scope.RowFilter) return scope.Filter;
+        if (!scope.Filter) return scope.RowFilter;
+        return `(${scope.RowFilter}) AND ((${scope.Filter}))`;
+    }
+
+    /**
      * Retrieves a dataset by name, executing all item queries via ExecuteSQLBatch
      * and aggregating results. Uses dialect-neutral quoting for all SQL construction.
      *
      * ExecuteSQLBatch gives SQL Server true multi-result-set batching automatically,
      * while PG (and the default) use parallel individual queries.
+     *
+     * An ItemFilter that fails the denylist refuses its item. With a context user, each item needs
+     * CanRead on its entity and gets the user's read row filter (MJ_Metadata excepted). A refused
+     * item runs no SQL and fails the dataset.
      */
     public async GetDatasetByName(
         datasetName: string,
@@ -5514,7 +5719,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const code = String(item['Code']);
             const entityName = String(item['Entity']);
             const entityID = String(item['EntityID']);
-            const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
 
             // External-data-source entities have no MJ base view — their data is proxied live and
             // can't be served through the dataset's batched MJ-DB SQL path. Fail loud for that item
@@ -5533,23 +5737,30 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 continue;
             }
 
-            // Build effective filter (WhereClause + optional runtime ItemFilter)
-            let effectiveFilter = whereClause;
-            if (itemFilters && itemFilters.length > 0) {
-                const filter = itemFilters.find(f => f.ItemCode === code);
-                if (filter) {
-                    effectiveFilter = whereClause
-                        ? `${whereClause} AND (${filter.Filter})`
-                        : filter.Filter;
-                }
+            // The item's filter and the caller's row filter, or why it is refused. A refused item
+            // never reaches the cache or the database.
+            const scope = provider.resolveDatasetItemScope(datasetName, item, itemFilters, contextUser);
+            if (scope.Refusal) {
+                errorResults.push({
+                    EntityID: entityID,
+                    EntityName: entityName,
+                    Code: code,
+                    Results: [],
+                    LatestUpdateDate: undefined,
+                    Status: scope.Refusal,
+                    Success: false,
+                });
+                continue;
             }
+            // The row filter keys the slot, so one user's filtered rows are never served to another.
+            const rowFilterKey = scope.RowFilter || undefined;
 
             // Try cache first
             if (cacheAvailable) {
                 const fingerprint = cache.GenerateRunViewFingerprint(
-                    { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
+                    { EntityName: entityName, ExtraFilter: scope.Filter } as RunViewParams,
                     this.InstanceConnectionString,
-                    undefined,
+                    rowFilterKey,
                     this.datasetCacheSegment(datasetName, code)
                 );
                 const cached = await cache.GetRunViewResult(fingerprint);
@@ -5585,15 +5796,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 continue;
             }
 
-            const filterSQL = effectiveFilter ? 'WHERE ' + effectiveFilter : '';
+            const whereSQL = this.datasetItemWhereClause(scope);
+            const filterSQL = whereSQL ? 'WHERE ' + whereSQL : '';
             uncachedQueries.push(`SELECT ${columns} FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)} ${filterSQL}`);
             uncachedItems.push(item);
             // Store fingerprint for write-through caching after SQL
             const fp = cacheAvailable
                 ? cache.GenerateRunViewFingerprint(
-                    { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
+                    { EntityName: entityName, ExtraFilter: scope.Filter } as RunViewParams,
                     this.InstanceConnectionString,
-                    undefined,
+                    rowFilterKey,
                     this.datasetCacheSegment(datasetName, code)
                 )
                 : '';
@@ -5744,6 +5956,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Retrieves status information for a dataset by name: per-entity row count and
      * latest update date. Uses ExecuteSQLBatch for per-item status queries.
+     *
+     * Items read with the same scope as {@link GetDatasetByName}. When any item is refused, the
+     * status fails with the refusal and no status SQL runs.
      */
     public async GetDatasetStatusByName(
         datasetName: string,
@@ -5794,13 +6009,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const updateDates: DatasetStatusEntityUpdateDateType[] = [];
         let overallLatestDate = new Date(1900, 1, 1);
 
+        // Same scope as GetDatasetByName's data read — the stored item WhereClause, the caller's
+        // ItemFilter and the caller's row filter — so status and data describe the same row set.
+        // (Every shipped MJ_Metadata item has a NULL WhereClause and no row filter, so for
+        // metadata this is an unfiltered aggregate.)
+        const scopes = items.map(item => provider.resolveDatasetItemScope(datasetName, item, itemFilters, contextUser));
+        const refusal = scopes.find(scope => scope.Refusal)?.Refusal;
+        if (refusal) {
+            return {
+                DatasetID: String(items[0]['DatasetID']),
+                DatasetName: datasetName,
+                Success: false,
+                Status: refusal,
+                LatestUpdateDate: new Date(0),
+                EntityUpdateDates: [],
+            };
+        }
+
         const itemMeta: Array<{ entityID: string; entityName: string }> = [];
-        const queries = items.map((item) => {
+        const queries = items.map((item, index) => {
             const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
             const entityBaseView = String(item['EntityBaseView']);
-            const code = String(item['Code']);
             const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
-            const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
 
             itemMeta.push({ entityID: String(item['EntityID']), entityName: String(item['Entity']) });
 
@@ -5810,20 +6040,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const datasetUpdatedAt = new Date(String(item['DatasetUpdatedAt']));
             const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime())).toISOString();
 
-            // Same filter composition as GetDatasetByName's data read — the stored item
-            // WhereClause AND'd with any runtime filter — so status and data describe the same
-            // row set. (Every shipped MJ_Metadata item has a NULL WhereClause, so for metadata
-            // this is identical to an unfiltered aggregate.)
-            let effectiveFilter = whereClause;
-            if (itemFilters && itemFilters.length > 0) {
-                const filter = itemFilters.find(f => f.ItemCode === code);
-                if (filter) {
-                    effectiveFilter = whereClause
-                        ? `${whereClause} AND (${filter.Filter})`
-                        : filter.Filter;
-                }
-            }
-            const filterSQL = effectiveFilter ? ' WHERE ' + effectiveFilter : '';
+            const whereSQL = this.datasetItemWhereClause(scopes[index]);
+            const filterSQL = whereSQL ? ' WHERE ' + whereSQL : '';
 
             return `SELECT ` +
                 `CASE ` +
@@ -6122,15 +6340,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * release hands them to the enclosing frame.
      */
     private _postCommitTasks: PostCommitEntry[] = [];
-    /**
-     * Tasks whose own transaction already settled, held back because an UNRELATED transaction is
-     * open on this instance. Running them now would enlist their writes in it — on one connection,
-     * that means a rollback of work that has nothing to do with them. Drained when this provider
-     * goes idle, whichever way that transaction ends.
-     */
-    private _idlePostCommitTasks: PostCommitEntry[] = [];
     /** Identity of each open frame and the fate of recent transactions, for {@link PostCommitToken}s. */
     private readonly _frameTracker = new TransactionFrameTracker();
+    /** Which async scope the open transaction belongs to (#4786). See {@link IsCallerInAmbientTransaction}. */
+    private readonly _affinity = new TransactionAffinity();
+    /** Epoch whose foreign join was already reported, so a transaction reports at most one (#4786). */
+    private _foreignJoinReportedEpoch: number | null = null;
 
     protected override get CurrentTransactionDepth(): number {
         return this._transactionDepth;
@@ -6152,12 +6367,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Throw if a statement would run on the pool while frames are still open
-     * after a server abort. Keyed on `_doomed`, not "depth > 0 with no handle"
-     * — outermost begin has depth 1 before the handle is published, and
-     * concurrent reads on SQL Server legitimately use the pool in that window.
-     */
-    /**
      * A debounced metadata refresh is timer-driven, so it can fire at any point of a caller's
      * unit of work — including the microtask window while the ambient transaction is being
      * committed. Joining that transaction puts the metadata batch on the transaction's single
@@ -6166,23 +6375,49 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Metadata reads are not part of anyone's unit of work, so wait for the transaction to end
      * before starting one (#4486).
      *
-     * This narrows the window rather than closing it: the check runs when the timer fires, and
-     * the batch is issued several round trips later, so a transaction that begins in between
-     * is still joined. That case is now harmless to the process — the batch fails, the dataset
-     * reports it, and the loaded metadata stays — but the refresh itself is lost until the next
-     * member write. Running the metadata batch on the pool regardless of the ambient
-     * transaction is #4514 (alongside #4454, the commit-side half of the same window).
+     * Under scope affinity (#4786) the timer inherits the membership of the code that scheduled it
+     * (re-arms included), so the refresh can only ever join the transaction whose scope scheduled
+     * it — and only if that transaction is still open when the batch is issued, several round trips
+     * after this check ran. It never joins a transaction someone else begins later. That remaining
+     * window is harmless to the process — the batch fails, the dataset reports it, and the loaded
+     * metadata stays — but the refresh itself is lost until the next member write. The check is
+     * instance-wide, so an unrelated transaction also defers the refresh. Running the metadata
+     * batch on the pool regardless of the ambient transaction is #4514 (alongside #4454, the
+     * commit-side half of the same window).
      */
     protected override get MetadataMemberRefreshMustWait(): boolean {
         return this.CurrentTransactionDepth > 0 || this.HasPhysicalTransaction;
     }
 
+    /**
+     * Throw if a statement from a member of the ambient transaction would run on the pool while its
+     * frames are still open after a server abort. Keyed on `_doomed`, not "depth > 0 with no handle"
+     * — outermost begin has depth 1 before the handle is published, and concurrent reads on SQL
+     * Server legitimately use the pool in that window. Callers outside the transaction's scope
+     * (see {@link IsCallerInAmbientTransaction}) do not use its handle, so a subclass should apply
+     * this check only to members' statements.
+     */
     protected AssertAmbientTransactionUsable(): void {
         if (this._doomed) {
             throw new DoomedTransactionError(
                 `SQL issued at depth ${this._transactionDepth} while the ambient transaction is doomed would autocommit on the pool`,
             );
         }
+    }
+
+    /**
+     * Whether the calling async scope is part of this provider's ambient transaction (#4786). A shared
+     * provider's open transaction belongs to the scope that began it and its descendants; every other
+     * caller must run on the pool, as if no transaction were open. Subclasses consult this — not merely
+     * "is a handle open" — before routing a statement to the transaction handle.
+     */
+    protected IsCallerInAmbientTransaction(): boolean {
+        return this._affinity.IsCallerMember;
+    }
+
+    /** Members of the open transaction share RunViews only with each other (see {@link ProviderBase.RunViewDedupScope}). */
+    protected override get RunViewDedupScope(): string {
+        return this.IsCallerInAmbientTransaction() ? `tx:${this._affinity.CurrentEpoch}` : '';
     }
 
     /**
@@ -6245,8 +6480,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Queue `task` until the outermost commit of the ambient transaction, or start it now when
-     * there is none. See {@link DatabaseProviderBase.RunAfterCommit} for the contract.
+     * Queue `task` until the outermost commit of the caller's transaction, or start it now when
+     * there is none. See {@link DatabaseProviderBase.RunAfterCommit} for the contract. Work
+     * registered by a caller outside the open transaction's scope (#4786) is not tied to that
+     * transaction: it starts now, detached, on the pool, whether or not that transaction is open.
      *
      * - Queued tasks run once, in registration order, after the outermost commit succeeds and the
      *   transaction lock is released — so a task may begin its own transaction. The committer
@@ -6260,27 +6497,38 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      *   token was captured in, rolled back — including a savepoint rolled back inside a transaction
      *   that went on to commit — or if the token matches nothing this provider knows; otherwise it
      *   is queued at the deepest captured frame that is still open. A token captured outside any
-     *   transaction always runs. "Runs" means immediately when this provider is idle, and otherwise
-     *   once it is: a task must never have its own writes rolled back by an unrelated transaction.
+     *   transaction always runs.
+     * - "Starts now" means fire-and-forget under {@link TransactionAffinity.RunDetached}: the task is
+     *   in no transaction on this provider (its statements run on the pool), the caller never awaits
+     *   it, and a `BeginTransaction` in the task's synchronous prefix stays in the task's own scope.
+     *   If the task begins a transaction while another is open on this instance, it joins that one as
+     *   a savepoint (logged) — a task that needs its own transaction belongs on an independent instance.
      */
     public override RunAfterCommit(task: PostCommitTask, description: string = 'post-commit task', token?: PostCommitToken): void {
         if (token) {
             this.registerPostCommitTaskWithToken(task, description, token);
             return;
         }
-        if (this._transactionDepth === 0 && !this.HasPhysicalTransaction) {
-            super.RunAfterCommit(task, description);
+        if (!this.IsCallerInAmbientTransaction()) {
+            // No transaction open, or not the caller's: either way the task is not tied to one.
+            this.runDetachedTask(task, description);
             return;
         }
         this._postCommitTasks.push({ Task: task, Description: description, Depth: this._transactionDepth });
     }
 
     /**
-     * Snapshot of the open transaction frames. Synchronous, and never `undefined` on this provider:
-     * outside a transaction it returns a token whose epoch is `null`, which says the work is already
-     * durable rather than saying nothing. See {@link DatabaseProviderBase.CapturePostCommitToken}.
+     * Snapshot of the caller's transaction frames. Synchronous, and never `undefined` on this
+     * provider: outside a transaction it returns a token whose epoch is `null`, which says the work
+     * is already durable rather than saying nothing. See
+     * {@link DatabaseProviderBase.CapturePostCommitToken}. Work registered by a caller outside the
+     * open transaction's scope (#4786) is not tied to that transaction, so such a caller gets the
+     * same `null`-epoch token.
      */
     public override CapturePostCommitToken(): PostCommitToken {
+        if (!this.IsCallerInAmbientTransaction()) {
+            return { Epoch: null, FrameIds: [] };
+        }
         return this._frameTracker.Capture();
     }
 
@@ -6310,35 +6558,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         return this._postCommitTasks.length;
     }
 
-    /** Number of tasks waiting only for this provider to go idle. */
+    /**
+     * @deprecated Always 0. Post-commit work not tied to the caller's transaction used to be held
+     * until this provider went idle; with scope affinity (#4786) it starts immediately on the pool, so
+     * there is no idle queue left to count. Kept for one release.
+     */
     public get PendingIdlePostCommitTaskCount(): number {
-        return this._idlePostCommitTasks.length;
+        return 0;
     }
 
     /**
-     * Run work whose own transaction has already settled. Immediate when this provider is idle;
-     * otherwise held until it is, so the task's writes cannot join — and be rolled back with — a
-     * transaction it has nothing to do with.
+     * Start work that is not tied to the caller's transaction now, fire-and-forget; never throws.
+     * Detached so it is in no transaction on this provider — its statements run on the pool, even
+     * while an unrelated transaction is open — and so a begin in its synchronous prefix cannot make
+     * the caller a member (see {@link TransactionAffinity.Claim}).
      */
     private runDetachedTask(task: PostCommitTask, description: string): void {
-        if (this._transactionDepth === 0 && !this.HasPhysicalTransaction) {
-            super.RunAfterCommit(task, description);
-            return;
-        }
-        this._idlePostCommitTasks.push({ Task: task, Description: description, Depth: 0 });
-    }
-
-    /** Run everything that was waiting for this provider to go idle. Never throws. */
-    private async drainIdlePostCommitTasks(): Promise<void> {
-        if (this._idlePostCommitTasks.length === 0 || this._transactionDepth > 0 || this.HasPhysicalTransaction) {
-            return;
-        }
-        const tasks = this._idlePostCommitTasks;
-        this._idlePostCommitTasks = [];
-        LogStatus(`Running ${tasks.length} post-commit task(s) held back by an unrelated transaction`);
-        for (const entry of tasks) {
-            await this.RunPostCommitTaskSafely(entry.Task, entry.Description);
-        }
+        void this._affinity.RunDetached(() => this.RunPostCommitTaskSafely(task, description));
     }
 
     /** Run tasks detached from a committed transaction, one at a time, in order. Never throws. */
@@ -6348,7 +6584,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
         LogStatus(`Running ${tasks.length} post-commit task(s) after transaction commit`);
         for (const entry of tasks) {
-            await this.RunPostCommitTaskSafely(entry.Task, entry.Description);
+            // Detached from the committer's (now stale) membership explicitly, not merely by epoch mismatch.
+            await this._affinity.RunDetached(() => this.RunPostCommitTaskSafely(entry.Task, entry.Description));
         }
     }
 
@@ -6414,7 +6651,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     public async ResetTransactionState(): Promise<void> {
         await this.WithTransactionLock(() => this.abandonDoomedTransaction());
-        await this.drainIdlePostCommitTasks();
         // The frames are gone, so no settle will ever close this instance's batch. Drop it here or
         // its entities count as pending forever and every cached read of them misses.
         this._openBatchLevels = 0;
@@ -6436,7 +6672,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * outermost settle, either way.
      */
     public async BeginTransaction(): Promise<void> {
-        await this.WithTransactionLock(() => this.beginTransactionCore());
+        // Claimed before the first await (the lock's): see TransactionAffinity.Claim for why.
+        const membership = this._affinity.Claim();
+        try {
+            await this.WithTransactionLock(() => this.beginTransactionCore(membership));
+        } catch (e) {
+            // Every failure path, including a begin refused while doomed. A no-op for a membership
+            // already bound (a member's failed nested begin): see TransactionAffinity.Release.
+            this._affinity.Release(membership);
+            throw e;
+        }
         LocalCacheManager.Instance.BeginEntityEventBatch(this);
         this._openBatchLevels++;
     }
@@ -6483,7 +6728,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             await this.runPostCommitTasks(committedTasks);
             await this.AfterPhysicalCommit();
         }
-        await this.drainIdlePostCommitTasks();
     }
 
     public async RollbackTransaction(): Promise<void> {
@@ -6492,10 +6736,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         } finally {
             await this.endBatchLevelIfOpen(false);
         }
-        await this.drainIdlePostCommitTasks();
     }
 
-    private async beginTransactionCore(): Promise<void> {
+    private async beginTransactionCore(membership: TransactionMembership): Promise<void> {
         if (this._doomed) {
             throw new DoomedTransactionError();
         }
@@ -6505,6 +6748,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (this._transactionDepth === 1) {
                 this._abandonedByFailedCommit = false;
                 await this.BeginPhysicalTransaction();
+                this._affinity.OpenEpoch();
+                this._affinity.Bind(membership);
                 return;
             }
             if (!this.HasPhysicalTransaction) {
@@ -6521,6 +6766,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 this._savepointCounter--;
                 throw savepointError;
             }
+            // Only once the savepoint exists (as the outermost binds only after BEGIN): a begin that
+            // failed to join must not leave its caller's statements routed to the transaction handle.
+            this.bindJoiningMembership(membership);
         } catch (e) {
             if (this._transactionDepth > 0) {
                 this._transactionDepth--;
@@ -6539,14 +6787,40 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
     }
 
+    /**
+     * A nested begin joins the open transaction as a savepoint. When the caller was not already part of
+     * it, that is an unrelated unit of work entangling itself with someone else's transaction on a shared
+     * instance: its savepoint commits only if the owner commits, and settling out of order corrupts both.
+     * Joining keeps pre-#4786 behaviour — waiting for the owner instead can deadlock when the owner is
+     * itself waiting on this work (a coalesced entity-action rerun) — so it is reported, once per
+     * transaction, instead of silently happening. The joiner stays bound to the owner's transaction
+     * after its own savepoint is released: its later plain statements keep running on that
+     * transaction until the owner ends it.
+     */
+    private bindJoiningMembership(membership: TransactionMembership): void {
+        const epoch = this._affinity.CurrentEpoch;
+        if (membership.Epoch !== epoch && this._foreignJoinReportedEpoch !== epoch) {
+            this._foreignJoinReportedEpoch = epoch;
+            LogError(
+                `${this.constructor.name}: a transaction was begun by code outside the async scope of the transaction ` +
+                `already open on this provider instance, so it joins that transaction as a savepoint. Its writes now ` +
+                `commit or roll back with a unit of work it is not part of, and its later statements keep running ` +
+                `in that transaction until its owner ends it. Run independent units of work on ` +
+                `CreateIndependentInstance() or a per-request provider (#4786).`,
+            );
+        }
+        this._affinity.Bind(membership);
+    }
+
+    /** Savepoint SQL is the provider's own bookkeeping: it must reach the handle whichever scope settles the frame. */
+    private async executeTransactionControlSQL(sql: string, description: string): Promise<void> {
+        await this._affinity.RunAsMember(() => this.ExecuteSQL(sql, undefined, { description, ignoreLogging: true }));
+    }
+
     private async createSavepoint(savepointName: string): Promise<void> {
         const sql = this.Dialect.CreateSavepointSQL(savepointName);
-        const options: ExecuteSQLOptions = {
-            description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`,
-            ignoreLogging: true,
-        };
         try {
-            await this.ExecuteSQL(sql, undefined, options);
+            await this.executeTransactionControlSQL(sql, `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`);
         } catch (savepointError) {
             if (this.HasPhysicalTransaction && this.isDoomedPhysicalTransactionError(savepointError)) {
                 await this.AbandonPhysicalTransaction();
@@ -6623,10 +6897,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const releaseSQL = this.Dialect.ReleaseSavepointSQL(savepointName);
         if (releaseSQL) {
             try {
-                await this.ExecuteSQL(releaseSQL, undefined, {
-                    description: `Releasing savepoint ${savepointName}`,
-                    ignoreLogging: true,
-                });
+                await this.executeTransactionControlSQL(releaseSQL, `Releasing savepoint ${savepointName}`);
             } catch (e) {
                 await this.AbandonPhysicalTransaction();
                 this.markDoomed();
@@ -6670,16 +6941,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
         }
         try {
-            await this.ExecuteSQL(this.Dialect.RollbackToSavepointSQL(savepointName), undefined, {
-                description: `Rolling back to savepoint ${savepointName}`,
-                ignoreLogging: true,
-            });
+            await this.executeTransactionControlSQL(
+                this.Dialect.RollbackToSavepointSQL(savepointName),
+                `Rolling back to savepoint ${savepointName}`,
+            );
             const releaseSQL = this.Dialect.ReleaseSavepointSQL(savepointName);
             if (releaseSQL) {
-                await this.ExecuteSQL(releaseSQL, undefined, {
-                    description: `Releasing savepoint ${savepointName} after rollback`,
-                    ignoreLogging: true,
-                });
+                await this.executeTransactionControlSQL(releaseSQL, `Releasing savepoint ${savepointName} after rollback`);
             }
             this.discardPostCommitTasks(this._transactionDepth, `savepoint ${savepointName} was rolled back`);
             this._savepointStack.pop();
@@ -6712,10 +6980,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Back to depth 0. A successful commit detaches the post-commit queue first, so anything still
-     * queued here belongs to a transaction that rolled back, failed, or was abandoned.
+     * Back to depth 0 — every ending of the transaction goes through here, so it is also where the
+     * transaction's memberships go stale. A successful commit detaches the post-commit queue first, so
+     * anything still queued here belongs to a transaction that rolled back, failed, or was abandoned.
      */
     private clearTransactionState(): void {
+        this._affinity.CloseEpoch();
         this._transactionDepth = 0;
         this._doomed = false;
         this.clearSavepointState();

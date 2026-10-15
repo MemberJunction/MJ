@@ -1,7 +1,7 @@
 import { Component, ViewContainerRef, ViewChild, AfterViewInit, OnDestroy, inject } from '@angular/core';
 import { MJActionEntity, MJAIAgentActionEntity, MJAIAgentLearningCycleEntity, MJAIAgentNoteEntity, MJAIAgentPromptEntity, MJAIAgentTypeEntity, MJAIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
-import { RegisterClass, MJGlobal , UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { RegisterClass, MJGlobal , UUIDsEqual, NormalizeUUID, FilterByUUIDs } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
@@ -1196,6 +1196,18 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     }
 
     /**
+     * The prompts and actions linked to this agent, in engine order. Gathers the agent's links once,
+     * rather than re-filtering every agent's links for each prompt and action.
+     */
+    private resolveLinkedPromptsAndActions(): void {
+        const agentPromptIDs = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID)).map(ap => ap.PromptID);
+        this.AgentPrompts = FilterByUUIDs(AIEngineBase.Instance.Prompts, agentPromptIDs);
+
+        const agentActionIDs = AIEngineBase.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, this.record.ID)).map(aa => aa.ActionID);
+        this.AgentActions = FilterByUUIDs(ActionEngineBase.Instance.Actions, agentActionIDs);
+    }
+
+    /**
      * Loads counts and preview data for all related entities including sub-agents,
      * prompts, actions, learning cycles, notes, and execution history. 
      * This data populates the various expander panels in the enhanced form interface.
@@ -1309,15 +1321,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             // totalSubAgentCount changes exactly once against settled state (no NG0100).
             this.allSubAgents = newSubAgents;
 
-            this.AgentPrompts = AIEngineBase.Instance.Prompts.filter(p => {
-                const filteredAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID));
-                return filteredAgentPrompts.some(ap => UUIDsEqual(ap.PromptID, p.ID));
-            });
-
-            this.AgentActions = ActionEngineBase.Instance.Actions.filter(a => {
-                const filteredAgentActions = AIEngineBase.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, this.record.ID));
-                return filteredAgentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID));
-            });
+            this.resolveLinkedPromptsAndActions();
 
             // Execute all queries in a single batch for better performance
             const results = await rv.RunViews([
@@ -1342,7 +1346,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     Fields: [ // limit what we take from runs as this is where we can have a LOT come down if we include JSON fields
                         "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
                         "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp",
-                        "Configuration","ConversationID","Result","ErrorMessage","__mj_CreatedAt"
+                        "Configuration","ConversationID","FinalPayload","Result","ErrorMessage","__mj_CreatedAt"
                     ],
                     ExtraFilter: `AgentID='${this.record.ID}'`,
                     OrderBy: '__mj_CreatedAt DESC',
@@ -1494,7 +1498,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     Fields: [
                         "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
                         "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp",
-                        "Configuration","ConversationID","Result","ErrorMessage","__mj_CreatedAt"
+                        "Configuration","ConversationID","FinalPayload","Result","ErrorMessage","__mj_CreatedAt"
                     ],
                     ExtraFilter: `AgentID='${this.record.ID}'`,
                     OrderBy: '__mj_CreatedAt DESC',
@@ -2777,7 +2781,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 Fields: [
                     "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
                     "Success","TotalTokensUsed","TotalCost","TotalCostRollUp","TotalTokensUsedRollUp",
-                    "Configuration","ConversationID","Result","ErrorMessage","__mj_CreatedAt"
+                    "Configuration","ConversationID","FinalPayload","Result","ErrorMessage","__mj_CreatedAt"
                 ],
                 ExtraFilter: `AgentID='${this.record.ID}' AND ID LIKE '%${searchText}%'`,
                 OrderBy: '__mj_CreatedAt DESC',
@@ -2809,14 +2813,28 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     }
     
     /**
+     * Whether to show a run's result: the run is no longer Running and has a result. A running run can
+     * already have a partial `FinalPayload`.
+     */
+    public HasExecutionResult(execution: MJAIAgentRunEntityExtended): boolean {
+        return execution.Status !== 'Running' && !!this.executionResultJSON(execution);
+    }
+
+    /** A run's result JSON: `FinalPayload`, or `Result` on older runs. */
+    private executionResultJSON(execution: MJAIAgentRunEntityExtended): string | null {
+        return execution.FinalPayload ?? execution.Result;
+    }
+
+    /**
      * Gets a preview of the execution result for collapsed view
      */
     public GetExecutionResultPreview(execution: MJAIAgentRunEntityExtended, trimLongMessages: boolean): string {
+        const resultJSON = this.executionResultJSON(execution);
         try {
-            if (!execution.Result) return 'No result';
+            if (!resultJSON) return 'No result';
             
             // Try to parse the result as JSON
-            const parsed = JSON.parse(execution.Result);
+            const parsed = JSON.parse(resultJSON);
             
             // Extract the user message if it exists
             if (parsed.returnValue?.nextStep?.userMessage) {
@@ -2835,7 +2853,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 return stringified;
         } catch {
             // If not JSON, just return the string
-            const result = execution.Result || '';
+            const result = resultJSON || '';
             if (trimLongMessages)
                 return result.length > 120 ? result.substring(0, 120) + '...' : result;
             else
@@ -2852,11 +2870,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Gets the full execution result message for expanded view
      */
     public GetExecutionResultMessage(execution: MJAIAgentRunEntityExtended): string {
+        const resultJSON = this.executionResultJSON(execution);
         try {
-            if (!execution.Result) return 'No result';
+            if (!resultJSON) return 'No result';
             
             // Try to parse the result as JSON
-            const parsed = JSON.parse(execution.Result);
+            const parsed = JSON.parse(resultJSON);
             
             // Extract the user message if it exists
             if (parsed.returnValue?.nextStep?.userMessage) {
@@ -2867,7 +2886,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             return JSON.stringify(parsed, null, 2);
         } catch {
             // If not JSON, just return the string
-            return execution.Result || '';
+            return resultJSON || '';
         }
     }
 
