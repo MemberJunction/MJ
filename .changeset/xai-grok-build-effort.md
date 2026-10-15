@@ -1,5 +1,5 @@
 ---
-"@memberjunction/ai-xai": minor
+"@memberjunction/ai-xai": patch
 ---
 
 Grok Build 0.1 no longer fails when a prompt or agent sets an effort level. Metadata only, no code change.
