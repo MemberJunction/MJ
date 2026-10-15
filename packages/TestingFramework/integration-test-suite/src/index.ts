@@ -122,6 +122,7 @@ export * from './checks/ai-providers.checks';
 export * from './checks/cloudflare-clef.checks';
 export * from './checks/systemone-kev.checks';
 export * from './checks/perplexity-decider.checks';
+export * from './checks/subq-mercury-decisions.checks';
 export * from './checks/app-behavioral.checks';
 export * from './checks/content-vectorization.checks';
 export * from './checks/materialized-read.checks';
