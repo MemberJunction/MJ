@@ -11,6 +11,9 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
+
+/** The `providerErrorCode` that marks a request the caller cancelled — the code the drivers use. */
+const CALLER_CANCELLATION_CODE = 'request_cancelled';
 import { ResultSelectionConfig, type IParallelExecutionCoordinator } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -232,6 +235,9 @@ export class AIPromptRunner {
    * runs INSIDE the post-INSERT task so a slow INSERT can never clobber the finalized row). Failures
    * stay in this runner's structured log stream via the queue's `onError` hook.
    */
+  /** Failover fields waiting to be re-applied after a prompt run's INSERT lands; see {@link recordFailoverFields}. */
+  private readonly _pendingFailoverFields = new WeakMap<MJAIPromptRunEntityExtended, (run: MJAIPromptRunEntityExtended) => void>();
+
   private _promptRunQueue = new BaseEntitySaveQueue({
     onError: (message) => this.logError(message, { category: 'PromptRunSave' }),
   });
@@ -945,14 +951,18 @@ export class AIPromptRunner {
       // Model selection info is now included in the result from both execution methods
       return result;
     } catch (error) {
-      this.logError(error, {
-        prompt: params.prompt,
-        metadata: {
-          executionPhase: 'main-execution',
-          hasChildPrompts: !!params.childPrompts?.length
-        },
-        maxErrorLength: params.maxErrorLength
-      });
+      if (this.isCancellation(error, params)) {
+        this.logStatus(`⏹️ Prompt "${params.prompt?.Name}" was cancelled: ${error.message}`, false, params);
+      } else {
+        this.logError(error, {
+          prompt: params.prompt,
+          metadata: {
+            executionPhase: 'main-execution',
+            hasChildPrompts: !!params.childPrompts?.length
+          },
+          maxErrorLength: params.maxErrorLength
+        });
+      }
 
       const endTime = new Date();
       const executionTimeMS = endTime.getTime() - startTime.getTime();
@@ -1119,8 +1129,11 @@ export class AIPromptRunner {
       errorMessage = `Validation failed: ${parsedResult.validationResult.Errors?.map(e => e.Message).join('; ')}`;
     }
 
+    const cancelled = !chatResult.success && this.isCallerCancellation(chatResult.errorInfo);
+
     return {
       success: chatResult.success,
+      ...(cancelled ? { status: 'Cancelled' as const, cancelled: true, cancellationReason: 'user_requested' as const } : {}),
       rawResult: chatResult.data?.choices?.[0]?.message?.content,
       result: parsedResult?.result ? parsedResult.result as T : parsedResult as T,
       errorMessage, // Include error message for proper error propagation
@@ -3254,6 +3267,11 @@ export class AIPromptRunner {
       const candidate = allCandidates[i];
       const attemptStartTime = Date.now();
 
+      // A caller that has cancelled wants no further model calls — not this candidate, not the next.
+      if (cancellationToken?.aborted) {
+        return this.stopFailoverForCancellation(prompt, this.buildCancellationError(), failoverAttempts, promptRun);
+      }
+
       // Skip candidates with no credentials configured. `allCandidates` is intentionally the
       // FULL priority-ordered list (see the DECISION note in selectModelWithAPIKeyTracked),
       // so it can include vendors that have no API key in this environment. Firing a live
@@ -3301,6 +3319,18 @@ export class AIPromptRunner {
           candidate.effortLevel,
           candidate.promptModelConfiguration
         );
+
+        // A failure caused by the caller cancelling is the caller's decision, not the model's, so it
+        // is neither failed over nor reported as a model failure. A result that already says it is
+        // not eligible for failover (a driver's own cancelled result) is returned as it is; one that
+        // would fail over is replaced by a cancellation.
+        if (!result.success && (cancellationToken?.aborted || this.isCallerCancellation(result.errorInfo))) {
+          if (result.errorInfo?.canFailover !== true) {
+            this.logFailoverCancellation(prompt, failoverAttempts, promptRun);
+            return result;
+          }
+          return this.stopFailoverForCancellation(prompt, this.buildCancellationError(), failoverAttempts, promptRun);
+        }
 
         // CRITICAL FIX: Check if result failed but is retriable (network errors, rate limits, etc.)
         // Provider drivers (GeminiLLM, OpenAILLM, etc.) catch errors internally and return ChatResult{success: false}
@@ -3350,6 +3380,11 @@ export class AIPromptRunner {
 
         // Analyze error to get error info
         const errorInfo = ErrorAnalyzer.analyzeError(lastError);
+
+        if (cancellationToken?.aborted || this.isCallerCancellation(errorInfo)) {
+          const cancellation = this.isCallerCancellation(errorInfo) ? lastError : this.buildCancellationError();
+          return this.stopFailoverForCancellation(prompt, cancellation, failoverAttempts, promptRun);
+        }
 
         // Use shared failover error handling logic
         const decision = await this.processFailoverError(
@@ -3478,23 +3513,16 @@ export class AIPromptRunner {
     currentModel: MJAIModelEntityExtended,
     currentVendorId: string | null
   ): void {
-    promptRun.FailoverAttempts = failoverAttempts.length;
-    promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
-      model: a.modelId,
-      vendor: a.vendorId,
-      error: a.error.message,
-      errorType: a.errorType
-    })));
-    promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
-    promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
-
-    // Update ModelID if we ended up using a different model
-    if (!UUIDsEqual(currentModel.ID, promptRun.OriginalModelID)) {
-      promptRun.ModelID = currentModel.ID;
-    }
-    if (currentVendorId && !UUIDsEqual(currentVendorId, promptRun.VendorID)) {
-      promptRun.VendorID = currentVendorId;
-    }
+    this.recordFailoverFields(promptRun, run => {
+      this.applyFailoverAttempts(run, failoverAttempts);
+      // Update ModelID if we ended up using a different model
+      if (!UUIDsEqual(currentModel.ID, run.OriginalModelID)) {
+        run.ModelID = currentModel.ID;
+      }
+      if (currentVendorId && !UUIDsEqual(currentVendorId, run.VendorID)) {
+        run.VendorID = currentVendorId;
+      }
+    });
   }
 
   /**
@@ -3504,6 +3532,11 @@ export class AIPromptRunner {
     promptRun: MJAIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[]
   ): void {
+    this.recordFailoverFields(promptRun, run => this.applyFailoverAttempts(run, failoverAttempts));
+  }
+
+  /** Writes the failover attempts onto a prompt run: their count, errors and durations. */
+  private applyFailoverAttempts(promptRun: MJAIPromptRunEntityExtended, failoverAttempts: FailoverAttempt[]): void {
     promptRun.FailoverAttempts = failoverAttempts.length;
     promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
       model: a.modelId,
@@ -3513,6 +3546,83 @@ export class AIPromptRunner {
     })));
     promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
     promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+  }
+
+  /**
+   * Sets a prompt run's failover fields now, and again in the queued finalize update. The run's
+   * 'Running' INSERT is queued without being awaited, and when it lands the entity reloads from what
+   * was inserted — undoing any field set while it was in flight. Writing the fields inside the
+   * finalize task, which runs after that reload, is what makes them persist.
+   */
+  private recordFailoverFields(promptRun: MJAIPromptRunEntityExtended, apply: (run: MJAIPromptRunEntityExtended) => void): void {
+    apply(promptRun);
+    this._pendingFailoverFields.set(promptRun, apply);
+  }
+
+  /**
+   * Whether a failure was caused by the caller cancelling the request. The drivers and
+   * {@link buildCancellationError} mark a cancellation the same way: not eligible for failover, with
+   * the `request_cancelled` provider error code.
+   */
+  private isCallerCancellation(errorInfo: AIErrorInfo | undefined): boolean {
+    return errorInfo?.canFailover === false && errorInfo?.providerErrorCode === CALLER_CANCELLATION_CODE;
+  }
+
+  /**
+   * The error for a model call the caller cancelled. It carries the same classification the drivers
+   * give a cancelled request — Fatal and not eligible for failover — so ErrorAnalyzer, the failover
+   * loop and the validation retries all stop on it rather than treating it as an unknown model error.
+   */
+  private buildCancellationError(message?: string): Error & { errorInfo: AIErrorInfo } {
+    const error = new Error(message || 'Chat completion was cancelled') as Error & { errorInfo: AIErrorInfo };
+    error.errorInfo = {
+      errorType: 'Unknown',
+      severity: 'Fatal',
+      canFailover: false,
+      providerErrorCode: CALLER_CANCELLATION_CODE,
+    };
+    return error;
+  }
+
+  /**
+   * Ends the failover loop for a caller cancellation: logs it once and returns the error result
+   * without trying another candidate.
+   */
+  private stopFailoverForCancellation(
+    prompt: MJAIPromptEntityExtended,
+    cancellation: Error,
+    failoverAttempts: FailoverAttempt[],
+    promptRun?: MJAIPromptRunEntityExtended
+  ): ChatResult {
+    this.logFailoverCancellation(prompt, failoverAttempts, promptRun);
+    return this.createFailoverErrorResult(cancellation, failoverAttempts);
+  }
+
+  /**
+   * Logs a caller cancellation that ended the failover loop, once and at info level, and records any
+   * real failures that came before it on the prompt run.
+   */
+  private logFailoverCancellation(
+    prompt: MJAIPromptEntityExtended,
+    failoverAttempts: FailoverAttempt[],
+    promptRun?: MJAIPromptRunEntityExtended
+  ): void {
+    LogStatusEx({
+      message: `⏹️ Prompt "${prompt.Name}" was cancelled by the caller — not trying any further model candidates`,
+      category: 'AI',
+      additionalArgs: [{ promptId: prompt.ID, priorFailures: failoverAttempts.length }]
+    });
+    if (promptRun && failoverAttempts.length > 0) {
+      this.updatePromptRunWithFailoverFailure(promptRun, failoverAttempts);
+    }
+  }
+
+  /**
+   * Whether an error ended a prompt run because the caller cancelled it: the caller's token is
+   * aborted, or the error is classified as a cancellation.
+   */
+  private isCancellation(error: Error, params: AIPromptParams): boolean {
+    return params.cancellationToken?.aborted === true || this.isCallerCancellation(ErrorAnalyzer.analyzeError(error));
   }
 
   /**
@@ -3545,7 +3655,7 @@ export class AIPromptRunner {
       errorMessage: lastError?.message || 'Unknown error',
       exception: lastError,
       errorInfo: errorInfo,
-      statusText: `Failover failed after ${failoverAttempts.length} attempts`,
+      statusText: this.isCallerCancellation(errorInfo) ? 'Cancelled' : `Failover failed after ${failoverAttempts.length} attempts`,
       timeElapsed: endTime.getTime() - startTime.getTime(),
       data: null
     };
@@ -3678,7 +3788,7 @@ export class AIPromptRunner {
       return false;
     }
     // A cancellation is the caller's decision, never a tool problem.
-    if (result.errorInfo?.canFailover === false && result.errorInfo?.providerErrorCode === 'request_cancelled') {
+    if (this.isCallerCancellation(result.errorInfo)) {
       return false;
     }
     return this.isToolSpecificFailureText(`${result.errorMessage ?? ''} ${result.statusText ?? ''}`);
@@ -3985,6 +4095,10 @@ export class AIPromptRunner {
       return chatResult;
     } catch (error) {
       const errorInfo = ErrorAnalyzer.analyzeError(error, driverClass)
+      // A caller cancellation is not a model failure. Whoever handles it logs it once, at info level.
+      if (this.isCallerCancellation(errorInfo)) {
+        throw error;
+      }
       this.logError(error, {
         category: 'ModelExecution',
         model: model,
@@ -4109,17 +4223,24 @@ export class AIPromptRunner {
       return await llm.ChatCompletion(chatParams);
     }
 
-    return await Promise.race([
-      llm.ChatCompletion(chatParams),
-      new Promise<never>((_, reject) => {
-        const fail = () => reject(this.buildAbortError(signal, bound));
-        if (signal.aborted) {
-          fail();
-        } else {
-          signal.addEventListener('abort', fail, { once: true });
-        }
-      }),
-    ]);
+    let fail: (() => void) | undefined;
+    const aborted = new Promise<never>((_, reject) => {
+      fail = () => reject(this.buildAbortError(signal, bound));
+      if (signal.aborted) {
+        fail();
+      } else {
+        signal.addEventListener('abort', fail, { once: true });
+      }
+    });
+    try {
+      return await Promise.race([llm.ChatCompletion(chatParams), aborted]);
+    } finally {
+      // With no prompt timeout the signal is the caller's own token, which outlives this call: a
+      // listener left on it would pile up across every prompt the caller runs.
+      if (fail) {
+        signal.removeEventListener('abort', fail);
+      }
+    }
   }
 
   /**
@@ -4131,7 +4252,7 @@ export class AIPromptRunner {
       const reason = signal.reason;
       return reason instanceof AIPromptTimeoutError ? reason : new Error('Chat completion timed out');
     }
-    return new Error('Chat completion was cancelled');
+    return this.buildCancellationError();
   }
 
   /**
@@ -4744,6 +4865,10 @@ export class AIPromptRunner {
           };
         }
       } catch (error) {
+        // A cancellation ends the retries; the caller logs it and records the run as cancelled.
+        if (this.isCancellation(error, params)) {
+          throw error;
+        }
         lastError = error;
         this.logError(error, {
           category: 'ExecutionRetry',
@@ -6083,6 +6208,18 @@ export class AIPromptRunner {
       
       // Set final Status based on success
       promptRun.Status = promptRun.Success ? 'Completed' : 'Failed';
+
+      // A call the caller cancelled is recorded as cancelled, not as a failed model call.
+      if (!modelResult.success && this.isCallerCancellation(modelResult.errorInfo)) {
+        promptRun.Status = 'Cancelled';
+        promptRun.Cancelled = true;
+        promptRun.CancellationReason = 'user_requested';
+      }
+
+      // The failover fields were set while the INSERT may still have been in flight, and its reload
+      // would have undone them: set them again here, after the reload.
+      this._pendingFailoverFields.get(promptRun)?.(promptRun);
+      this._pendingFailoverFields.delete(promptRun);
       
       // Set ErrorDetails if failed
       if (!promptRun.Success) {
