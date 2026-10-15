@@ -42,22 +42,6 @@ export interface PushAbortedDetails {
 }
 
 /**
- * The metadata reload inside the push transaction was not adopted (MJ#4836): the next directory
- * would resolve lookups and dependencies against metadata that does not contain the rows this push
- * just wrote. `PushService` throws it to stop and roll back the push; it reaches the caller as the
- * `cause` of the {@link PushAbortedError}.
- */
-export class MetadataReloadNotAdoptedError extends Error {
-  constructor() {
-    super(
-      'Metadata could not be reloaded inside the push transaction, so the rows this push wrote to ' +
-        'metadata entities would be invisible to the directories that follow (MJ#4836). The push was stopped.'
-    );
-    this.name = 'MetadataReloadNotAdoptedError';
-  }
-}
-
-/**
  * Thrown by `PushService.push()` whenever a push fails after it started writing.
  * The message is the original failure's message, so existing callers keep working;
  * the extra fields let a caller say exactly what is and is not in the database.

@@ -83,12 +83,7 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
 
     /**
      * Adds a validation failure on `field` when the provider's client-clause screen refuses `clause`,
-     * or when the provider cannot screen (fails closed).
-     *
-     * A network provider (a process that saves over GraphQL and has registered this server class, such
-     * as the integration test runner) is not screened here: it has no SQL to screen with, and the save
-     * reaches MJAPI, whose database provider runs this same validation before writing, and screens the
-     * stored clause again on every run. Failing closed there would refuse every view saved over the wire.
+     * or when the provider cannot screen (fails closed). A network provider is skipped: MJAPI screens its save.
      */
     private screenStoredClause(result: ValidationResult, field: string, clause: string, label: string, entityInfo?: EntityInfo): void {
         if (!clause.trim()) return;

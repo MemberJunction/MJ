@@ -2,11 +2,6 @@
 // loaded. MUST precede any import that pulls in the resolver file.
 import 'reflect-metadata';
 
-/**
- * A RunAction result carries its Output/Both params in `ResultData` as a JSON array of `{Name, Type, Value}`.
- * Clients look the params up by name (the Action Test Harness, the Communication dashboard), so the payload must be
- * an array, never the index-keyed object that copying the whole array as one object produced.
- */
 import { describe, it, expect, vi } from 'vitest';
 
 // As in ActionResolver.authorization.test.ts: the decorators are no-ops so the resolver loads as a plain class.

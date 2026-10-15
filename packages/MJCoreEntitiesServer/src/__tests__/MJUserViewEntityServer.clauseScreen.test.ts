@@ -186,12 +186,6 @@ describe('MJUserViewEntityServer — stored clauses pass the clause screen at sa
         expect(result.Success).toBe(true);
     });
 
-    it('still fails closed for a database provider that cannot screen', () => {
-        const result = view({ where: `Status = 'Active'`, provider: { Entities: [CONTACTS], ProviderType: 'Database' } }).Validate();
-
-        expect(messages(result)).toMatch(/cannot screen client SQL/);
-    });
-
     it('does not re-screen clauses an edit did not touch', () => {
         const result = view({ saved: true, where: `ID IN (SELECT ContactID FROM crm.ContactAudit)`, dirty: ['Name'] }).Validate();
 

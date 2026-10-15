@@ -68,8 +68,7 @@ export class ScheduledJobsService {
 
         try {
             // Wire engine tunables from MJServer's scheduledJobs config block.
-            // These fields have schema defaults (maxConcurrentJobs=5, defaultLockTimeout=600000ms,
-            // pausedJobResumeInterval=3600000ms),
+            // Both fields have schema defaults (maxConcurrentJobs=5, defaultLockTimeout=600000ms),
             // but apply explicitly so the values are visible in startup logs and
             // a future config change is picked up without an engine code change.
             if (this.config.maxConcurrentJobs != null) {
@@ -77,9 +76,6 @@ export class ScheduledJobsService {
             }
             if (this.config.defaultLockTimeout != null) {
                 this.engine.LeaseTimeoutMs = this.config.defaultLockTimeout;
-            }
-            if (this.config.pausedJobResumeInterval != null) {
-                this.engine.PausedJobResumeIntervalMs = this.config.pausedJobResumeInterval;
             }
 
             await this.engine.StartPolling(this.systemUser);

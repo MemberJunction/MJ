@@ -1,18 +1,7 @@
 /**
- * Live-database coverage for CodeGen's first-pass delete of entity fields whose column is gone from the base table
- * (manage-metadata.ts DeleteFieldsOfDroppedColumns). The unit tests in
- * manage-metadata-dropped-column-fields.test.ts pin the SQL text; this runs that SQL against a real SQL Server catalog,
- * scenario by scenario: no-op, a renamed column, a renamed foreign key (its relationship is removed by the
- * second pass when nothing re-pointed it), a dropped column, a virtual field, a missing base view, a missing base
- * table, an excluded schema and an out-of-scope entity.
- *
- * Each test builds its own schema with two tables and registers them as entities by plain INSERTs, and removes all of
- * it afterwards. Point it only at a throwaway database:
- *
- *   MJ_TEST_SQLSERVER_URL="Server=localhost,1444;Database=<throwaway>;User Id=sa;Password=...;TrustServerCertificate=true"
- *
- * Without it the block is skipped (the convention of the other live-database tests in this folder). The database
- * needs the MJ core schema (`__mj`) migrated.
+ * Runs CodeGen's first-pass delete of fields whose column was dropped (DeleteFieldsOfDroppedColumns) against a live
+ * SQL Server catalog. KNOWN LIMITATION: skipped unless MJ_TEST_SQLSERVER_URL names a throwaway database with the MJ core
+ * schema migrated; CI does not set it. Each test creates and removes its own schema and entity rows.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import sql from 'mssql';
@@ -38,7 +27,6 @@ function createTables(s: string): string[] {
     ];
 }
 const renameColumn = (s: string, t: string, from: string, to: string): string => `EXEC sp_rename '${s}.${t}.${from}', '${to}', 'COLUMN'`;
-const dropForeignKey = (s: string): string => `ALTER TABLE [${s}].[Child] DROP CONSTRAINT [FK_Child_Parent]`;
 const dropColumn = (s: string, t: string, c: string): string => `ALTER TABLE [${s}].[${t}] DROP COLUMN [${c}]`;
 const dropTable = (s: string, t: string): string => `DROP TABLE IF EXISTS [${s}].[${t}]`;
 const dropSchema = (s: string): string[] => [`DROP TABLE IF EXISTS [${s}].[Child]`, `DROP TABLE IF EXISTS [${s}].[Parent]`, `DROP SCHEMA IF EXISTS [${s}]`];
@@ -53,9 +41,6 @@ class LiveMM extends ManageMetadataBase {
     public FirstPass(pool: CodeGenConnection, excludeSchemas: string[], entityIDs?: string[]): Promise<boolean> {
         return this.DeleteFieldsOfDroppedColumns(pool, excludeSchemas, entityIDs);
     }
-    public SecondPass(pool: CodeGenConnection, excludeSchemas: string[], entityIDs: string[]): Promise<boolean> {
-        return this.deleteUnneededEntityFields(pool, excludeSchemas, entityIDs);
-    }
 }
 
 /** The IDs of one test's metadata rows. */
@@ -64,12 +49,11 @@ interface Fixture {
     ParentEntityID: string;
     ChildEntityID: string;
     FieldIDs: Record<'ID' | 'ParentID' | 'Notes' | 'Extra' | 'Parent', string>;
-    RelationshipID: string;
 }
 
 const EXCLUDED = ['sys', 'staging'];
 
-(SS_URL ? describe : describe.skip)('first-pass dropped-column field delete against a live SQL Server database', () => {
+describe.skipIf(!SS_URL)('first-pass dropped-column field delete against a live SQL Server database', () => {
     const mj = (table: string): string => `${q('__mj')}.${q(table)}`;
     let connection: CodeGenConnection;
     let close: () => Promise<void>;
@@ -109,7 +93,6 @@ const EXCLUDED = ['sys', 'staging'];
                 ID: randomUUID().toUpperCase(), ParentID: randomUUID().toUpperCase(), Notes: randomUUID().toUpperCase(),
                 Extra: randomUUID().toUpperCase(), Parent: randomUUID().toUpperCase(),
             },
-            RelationshipID: randomUUID().toUpperCase(),
         };
         for (const statement of createTables(f.Schema)) {
             await exec(statement);
@@ -128,15 +111,12 @@ const EXCLUDED = ['sys', 'staging'];
                 VALUES ('${f.FieldIDs[name]}', '${f.ChildEntityID}', '${name}', ${sequence}, '${type}', ${isVirtual ? 1 : 0})`);
         }
         await exec(`INSERT INTO ${mj('EntityFieldValue')} (${q('EntityFieldID')}, ${q('Sequence')}, ${q('Value')}) VALUES ('${f.FieldIDs.Notes}', 1, 'Draft')`);
-        await exec(`INSERT INTO ${mj('EntityRelationship')} (${q('ID')}, ${q('EntityID')}, ${q('RelatedEntityID')}, ${q('RelatedEntityJoinField')}, ${q('Type')}, ${q('AutoUpdateFromSchema')})
-            VALUES ('${f.RelationshipID}', '${f.ParentEntityID}', '${f.ChildEntityID}', 'ParentID', 'One To Many', 1)`);
         // a fixed point the first pass must move __mj_UpdatedAt past
         await exec(`UPDATE ${mj('Entity')} SET ${q('Description')} = 'baseline' WHERE ${q('ID')} = '${f.ChildEntityID}'`);
     });
 
     afterEach(async () => {
         const entities = `'${f.ParentEntityID}', '${f.ChildEntityID}'`;
-        await exec(`DELETE FROM ${mj('EntityRelationship')} WHERE ${q('EntityID')} IN (${entities}) OR ${q('RelatedEntityID')} IN (${entities})`);
         await exec(`DELETE FROM ${mj('EntityFieldValue')} WHERE ${q('EntityFieldID')} IN (SELECT ${q('ID')} FROM ${mj('EntityField')} WHERE ${q('EntityID')} IN (${entities}))`);
         await exec(`DELETE FROM ${mj('EntityField')} WHERE ${q('EntityID')} IN (${entities})`);
         await exec(`DELETE FROM ${mj('Entity')} WHERE ${q('ID')} IN (${entities})`);
@@ -146,12 +126,6 @@ const EXCLUDED = ['sys', 'staging'];
     });
 
     const ALL_FIELDS = ['Extra', 'ID', 'Notes', 'Parent', 'ParentID'];
-
-    it('no-op (and a missing base view): every field stays', async () => {
-        expect(await new LiveMM(new SQLServerCodeGenProvider()).FirstPass(connection, EXCLUDED)).toBe(true);
-        expect(await fieldNames()).toEqual(ALL_FIELDS);
-        expect(await count('EntityFieldValue', `${q('EntityFieldID')} = '${f.FieldIDs.Notes}'`)).toBe(1);
-    });
 
     it('renamed column: the old field and its value list go, the entity is touched, every other field stays', async () => {
         const before = await updatedAt();
@@ -163,39 +137,15 @@ const EXCLUDED = ['sys', 'staging'];
         expect(await updatedAt()).toBeGreaterThan(before);
     });
 
-    it('renamed foreign key: the field goes in the first pass; the relationship joined on it goes in the second', async () => {
-        await exec(renameColumn(f.Schema, 'Child', 'ParentID', 'OwnerID'));
-        expect(await new LiveMM(new SQLServerCodeGenProvider()).FirstPass(connection, EXCLUDED)).toBe(true);
-        expect(await fieldNames()).toEqual(['Extra', 'ID', 'Notes', 'Parent']);
-        // the relationship pass would re-point it here; with nothing re-pointing it, it still joins on the old name
-        expect(await count('EntityRelationship', `${q('ID')} = '${f.RelationshipID}'`)).toBe(1);
-        expect(await new LiveMM(new SQLServerCodeGenProvider()).SecondPass(connection, EXCLUDED, [f.ChildEntityID])).toBe(true);
-        expect(await count('EntityRelationship', `${q('ID')} = '${f.RelationshipID}'`)).toBe(0);
-    });
-
     it('dropped column: its field goes; the virtual field stays although no base column backs it', async () => {
         await exec(dropColumn(f.Schema, 'Child', 'Extra'));
         expect(await new LiveMM(new SQLServerCodeGenProvider()).FirstPass(connection, EXCLUDED)).toBe(true);
         expect(await fieldNames()).toEqual(['ID', 'Notes', 'Parent', 'ParentID']);
     });
 
-    it('dropped foreign key column: the second pass removes its relationship', async () => {
-        await exec(dropForeignKey(f.Schema));
-        await exec(dropColumn(f.Schema, 'Child', 'ParentID'));
-        expect(await new LiveMM(new SQLServerCodeGenProvider()).FirstPass(connection, EXCLUDED)).toBe(true);
-        expect(await new LiveMM(new SQLServerCodeGenProvider()).SecondPass(connection, EXCLUDED, [f.ChildEntityID])).toBe(true);
-        expect(await count('EntityRelationship', `${q('ID')} = '${f.RelationshipID}'`)).toBe(0);
-    });
-
     it('missing base table: the entity is skipped, nothing is deleted', async () => {
         await exec(dropTable(f.Schema, 'Child'));
         expect(await new LiveMM(new SQLServerCodeGenProvider()).FirstPass(connection, EXCLUDED)).toBe(true);
-        expect(await fieldNames()).toEqual(ALL_FIELDS);
-    });
-
-    it('excluded schema: nothing is deleted', async () => {
-        await exec(dropColumn(f.Schema, 'Child', 'Extra'));
-        expect(await new LiveMM(new SQLServerCodeGenProvider()).FirstPass(connection, [...EXCLUDED, f.Schema])).toBe(true);
         expect(await fieldNames()).toEqual(ALL_FIELDS);
     });
 

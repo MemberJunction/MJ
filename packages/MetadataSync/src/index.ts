@@ -44,7 +44,7 @@ export type { PullOptions, PullCallbacks, PullResult } from './services/PullServ
 
 export { PushService } from './services/PushService';
 export type { PushOptions, PushCallbacks, PushResult } from './services/PushService';
-export { PushAbortedError, MetadataReloadNotAdoptedError, DescribeRollbackOutcome, describeRollbackOutcome, DescribeCommittedWrites, describeCommittedWrites, DescribeCommitFailure, describeCommitFailure } from './lib/push-outcome';
+export { PushAbortedError, DescribeRollbackOutcome, describeRollbackOutcome, DescribeCommittedWrites, describeCommittedWrites, DescribeCommitFailure, describeCommitFailure } from './lib/push-outcome';
 export type { CommittedWrite, PushAbortedDetails, PushPartialTotals } from './lib/push-outcome';
 export { ResolveDirectoryMode, resolveDirectoryMode, GraphBatchSizeFor, graphBatchSizeFor, IsolatedModeWarning, isolatedModeWarning, UnusedBatchSizeWarning, unusedBatchSizeWarning, DEFAULT_PARALLEL_BATCH_SIZE } from './lib/push-write-mode';
 export type { PushWriteMode, PushWriteModeInput, PushWriteModeSource, PushDirectoryMode } from './lib/push-write-mode';

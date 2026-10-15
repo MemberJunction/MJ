@@ -75,10 +75,12 @@ vi.mock('mssql', () => ({
     default: {}
 }));
 
-vi.mock('../Misc/status_logging', () => {
-    const LogWarning = vi.fn();
-    return { logError: vi.fn(), logStatus: vi.fn(), LogWarning, logWarning: LogWarning };
-});
+vi.mock('../Misc/status_logging', () => ({
+    logError: vi.fn(),
+    logStatus: vi.fn(),
+    LogWarning: vi.fn(),
+    get logWarning() { return this.LogWarning; }
+}));
 
 vi.mock('../Database/manage-metadata', () => ({
     ValidatorResult: class {},
@@ -87,42 +89,30 @@ vi.mock('../Database/manage-metadata', () => ({
     }
 }));
 
-vi.mock('../Config/config', () => {
-    const ResolveEntityPackageName = (): string => 'mj_generatedentities';
-    const ResolveEntityImportPackage = (): never => {
+vi.mock('../Config/config', () => ({
+    MjCoreSchema: '__mj',
+    get mj_core_schema() { return this.MjCoreSchema; },
+    configInfo: {},
+    ResolveEntityPackageName: () => 'mj_generatedentities',
+    get resolveEntityPackageName() { return this.ResolveEntityPackageName; },
+    ResolveEntityImportPackage: () => {
         throw new Error('resolveEntityImportPackage should not be called without peer embeds/collections');
-    };
-    return {
-        MjCoreSchema: '__mj',
-        mj_core_schema: '__mj',
-        configInfo: {},
-        ResolveEntityPackageName,
-        resolveEntityPackageName: ResolveEntityPackageName,
-        ResolveEntityImportPackage,
-        resolveEntityImportPackage: ResolveEntityImportPackage,
-    };
-});
+    },
+    get resolveEntityImportPackage() { return this.ResolveEntityImportPackage; },
+}));
 
 vi.mock('./sql_logging', () => ({
     SQLLogging: class {}
 }));
 
-vi.mock('../Misc/util', () => {
-    const MakeDir = vi.fn();
-    const SortBySequenceAndCreatedAt = vi.fn((items: unknown[]) => [...items]);
-    return { MakeDir, makeDir: MakeDir, SortBySequenceAndCreatedAt, sortBySequenceAndCreatedAt: SortBySequenceAndCreatedAt };
-});
+vi.mock('../Misc/util', () => ({
+    MakeDir: vi.fn(),
+    get makeDir() { return this.MakeDir; },
+    SortBySequenceAndCreatedAt: vi.fn((items: unknown[]) => [...items]),
+    get sortBySequenceAndCreatedAt() { return this.SortBySequenceAndCreatedAt; }
+}));
 
-import { EntityInfo } from '@memberjunction/core';
 import { EntitySubClassGeneratorBase } from '../Misc/entity_subclasses_codegen';
-
-/**
- * An entity-metadata test double: an `EntityInfo` (this file's mock of it) carrying the members a fixture sets — the
- * generator reads only those.
- */
-function entityDouble(partial: object): EntityInfo {
-    return Object.assign(new EntityInfo(), partial);
-}
 
 describe('EntitySubClassGeneratorBase', () => {
     let generator: EntitySubClassGeneratorBase;
@@ -136,50 +126,50 @@ describe('EntitySubClassGeneratorBase', () => {
         vi.mocked(fs.readdirSync).mockReturnValue([]);
     });
 
-    describe('GenerateEntitySubClassFileHeader', () => {
+    describe('generateEntitySubClassFileHeader', () => {
         it('should include BaseEntity import', () => {
-            const header = generator.GenerateEntitySubClassFileHeader();
+            const header = generator.generateEntitySubClassFileHeader();
             expect(header).toContain('BaseEntity');
         });
 
         it('should include RegisterClass import', () => {
-            const header = generator.GenerateEntitySubClassFileHeader();
+            const header = generator.generateEntitySubClassFileHeader();
             expect(header).toContain('RegisterClass');
         });
 
         it('should include zod import', () => {
-            const header = generator.GenerateEntitySubClassFileHeader();
+            const header = generator.generateEntitySubClassFileHeader();
             expect(header).toContain('import { z } from "zod"');
         });
 
         it('should include loadModule export', () => {
-            const header = generator.GenerateEntitySubClassFileHeader();
+            const header = generator.generateEntitySubClassFileHeader();
             expect(header).toContain('export const loadModule');
         });
 
         it('omits loadModule from a per-schema file so the barrel owns the symbol', () => {
-            const header = generator.GenerateEntitySubClassFileHeader(false);
+            const header = generator.generateEntitySubClassFileHeader(false);
             expect(header).not.toContain('export const loadModule');
             expect(header).toContain('import { z } from "zod"');
         });
 
         it('should import from @memberjunction/core', () => {
-            const header = generator.GenerateEntitySubClassFileHeader();
+            const header = generator.generateEntitySubClassFileHeader();
             expect(header).toContain('@memberjunction/core');
         });
 
         it('should import from @memberjunction/global', () => {
-            const header = generator.GenerateEntitySubClassFileHeader();
+            const header = generator.generateEntitySubClassFileHeader();
             expect(header).toContain('@memberjunction/global');
         });
 
         it('should include EntitySaveOptions import', () => {
-            const header = generator.GenerateEntitySubClassFileHeader();
+            const header = generator.generateEntitySubClassFileHeader();
             expect(header).toContain('EntitySaveOptions');
         });
 
         it('should include ValidationResult import', () => {
-            const header = generator.GenerateEntitySubClassFileHeader();
+            const header = generator.generateEntitySubClassFileHeader();
             expect(header).toContain('ValidationResult');
         });
     });
@@ -194,7 +184,7 @@ describe('EntitySubClassGeneratorBase', () => {
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
             const result = await generator.generateEntitySubClass(
                 {} as Parameters<typeof generator.generateEntitySubClass>[0],
-                entityDouble(entity),
+                entity as Parameters<typeof generator.generateEntitySubClass>[1],
                 false,
                 false
             );
@@ -228,7 +218,7 @@ describe('EntitySubClassGeneratorBase', () => {
 
             const result = await generator.generateEntitySubClass(
                 {} as Parameters<typeof generator.generateEntitySubClass>[0],
-                entityDouble(entity),
+                entity as Parameters<typeof generator.generateEntitySubClass>[1],
                 false,
                 true
             );
@@ -267,7 +257,7 @@ describe('EntitySubClassGeneratorBase', () => {
 
             const result = await generator.generateEntitySubClass(
                 {} as Parameters<typeof generator.generateEntitySubClass>[0],
-                entityDouble(entity),
+                entity as Parameters<typeof generator.generateEntitySubClass>[1],
                 false,
                 true
             );
@@ -308,7 +298,7 @@ describe('EntitySubClassGeneratorBase', () => {
             const generateBinary = () =>
                 generator.generateEntitySubClass(
                     {} as Parameters<typeof generator.generateEntitySubClass>[0],
-                    entityDouble(binaryEntity()),
+                    binaryEntity() as Parameters<typeof generator.generateEntitySubClass>[1],
                     false,
                     true
                 );
@@ -376,7 +366,7 @@ describe('EntitySubClassGeneratorBase', () => {
         const generate = async (entity: Record<string, unknown>) =>
             generator.generateEntitySubClass(
                 {} as Parameters<typeof generator.generateEntitySubClass>[0],
-                entityDouble(entity),
+                entity as Parameters<typeof generator.generateEntitySubClass>[1],
                 true,
                 true
             );
@@ -416,7 +406,7 @@ describe('EntitySubClassGeneratorBase', () => {
             const bronze2 = makeEntity({ Name: 'Bronze Quotes', ClassName: 'BronzeQuotes', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'quotes', SchemaName: 'bronze', BaseTable: 'quotes', BaseView: 'vwBronzeQuotes' });
             const ok = await generator.generateAllEntitySubClasses(
                 {} as Parameters<typeof generator.generateAllEntitySubClasses>[0],
-                [bronze, bronze2].map(entityDouble),
+                [bronze, bronze2] as Parameters<typeof generator.generateAllEntitySubClasses>[1],
                 '/out',
                 true
             );
@@ -438,7 +428,7 @@ describe('EntitySubClassGeneratorBase', () => {
             const silver = makeEntity({ Name: 'Silver Sales', ClassName: 'SilverSales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'silver', BaseTable: 'sales', BaseView: 'vwSilverSales' });
             const ok = await generator.generateAllEntitySubClasses(
                 {} as Parameters<typeof generator.generateAllEntitySubClasses>[0],
-                [bronze, silver].map(entityDouble),
+                [bronze, silver] as Parameters<typeof generator.generateAllEntitySubClasses>[1],
                 '/out',
                 true
             );
@@ -456,7 +446,7 @@ describe('EntitySubClassGeneratorBase', () => {
             const bronze = makeEntity({ Name: 'Bronze Sales', ClassName: 'BronzeSales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'bronze', BaseTable: 'sales', BaseView: 'vwBronzeSales' });
             const ok = await generator.generateAllEntitySubClasses(
                 {} as Parameters<typeof generator.generateAllEntitySubClasses>[0],
-                [bronze].map(entityDouble),
+                [bronze] as Parameters<typeof generator.generateAllEntitySubClasses>[1],
                 '/out',
                 true,
                 { dirtySchemas: new Set() },
@@ -473,7 +463,7 @@ describe('EntitySubClassGeneratorBase', () => {
             const bronze = makeEntity({ Name: 'Bronze Sales', ClassName: 'BronzeSales', ExternalDataSourceID: 'ds-1', ExternalObjectName: 'sales', SchemaName: 'bronze', BaseTable: 'sales', BaseView: 'vwBronzeSales' });
             const ok = await generator.generateAllEntitySubClasses(
                 {} as Parameters<typeof generator.generateAllEntitySubClasses>[0],
-                [bronze].map(entityDouble),
+                [bronze] as Parameters<typeof generator.generateAllEntitySubClasses>[1],
                 '/out',
                 true,
                 { perSchema: false },
@@ -487,61 +477,32 @@ describe('EntitySubClassGeneratorBase', () => {
     });
 
     describe('CascadeDeletes Delete() override', () => {
-        const makeCascadeEntity = (): Record<string, unknown> => ({
-            Name: 'MJ: Cascade Parents',
-            ClassName: 'MJCascadeParent',
-            PrimaryKeys: [{ Name: 'ID', CodeName: 'ID', TSType: 'string', IsPrimaryKey: true, AutoIncrement: false }],
-            Fields: [
-                { Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', AllowsNull: false, ReadOnly: false, IsPrimaryKey: true, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true },
-            ],
-            EntityObjectSubclassName: '',
-            EntityObjectSubclassImport: '',
-            ExternalDataSourceID: null,
-            ExternalObjectName: null,
-            AllowDeleteAPI: true,
-            AllowCreateAPI: true,
-            AllowUpdateAPI: true,
-            CascadeDeletes: true,
-            IsChildType: false,
-            Status: 'Active',
-            SchemaName: '__mj',
-            BaseTable: 'CascadeParent',
-            BaseView: 'vwCascadeParents',
-            Description: '',
-        });
-
-        /** The generated Delete() override, from its signature to the closing brace of the method. */
-        const deleteOverride = async (): Promise<string> => {
+        it('delegates the transaction to BaseEntity.DeleteWithinEntityTransaction', async () => {
+            const entity = {
+                Name: 'MJ: Cascade Parents',
+                ClassName: 'MJCascadeParent',
+                PrimaryKeys: [{ Name: 'ID', CodeName: 'ID', TSType: 'string', IsPrimaryKey: true, AutoIncrement: false }],
+                Fields: [
+                    { Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', AllowsNull: false, ReadOnly: false, IsPrimaryKey: true, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true },
+                ],
+                EntityObjectSubclassName: '',
+                EntityObjectSubclassImport: '',
+                AllowDeleteAPI: true,
+                CascadeDeletes: true,
+                Status: 'Active',
+                SchemaName: '__mj',
+                BaseTable: 'CascadeParent',
+                BaseView: 'vwCascadeParents',
+                Description: '',
+            };
             const code = await generator.generateEntitySubClass(
                 {} as Parameters<typeof generator.generateEntitySubClass>[0],
-                entityDouble(makeCascadeEntity()),
+                entity as Parameters<typeof generator.generateEntitySubClass>[1],
                 false,
                 true
             );
-            const start = code.indexOf('public override async Delete(');
-            expect(start).toBeGreaterThan(-1);
-            const end = code.indexOf('\n    }', start);
-            return code.slice(start, end + '\n    }'.length);
-        };
-
-        it('delegates the whole transaction lifecycle to BaseEntity.DeleteWithinEntityTransaction, passing its own super.Delete', async () => {
-            const body = await deleteOverride();
-            expect(body).toMatch(/public override async Delete\(options\?: EntityDeleteOptions\): Promise<boolean> \{\s*return this\.DeleteWithinEntityTransaction\(\(\) => super\.Delete\(options\)\);\s*\}$/);
-        });
-
-        it('emits no transaction lifecycle of its own (one copy lives in BaseEntity, not one per generated class)', async () => {
-            const body = await deleteOverride();
-            expect(body).not.toMatch(/BeginEntityTransaction|BeginTransaction|scope\.(Commit|Rollback)|LogError|unknown|Metadata\.Provider/);
-        });
-
-        it('imports nothing from @memberjunction/core that no emitted fragment uses (Metadata, ProviderType, DatabaseProviderBase, LogError)', () => {
-            const coreImport = /import \{([^}]*)\} from "@memberjunction\/core";/.exec(generator.GenerateEntitySubClassFileHeader());
-            expect(coreImport).not.toBeNull();
-            const names = (coreImport?.[1] ?? '').split(',').map((n) => n.trim());
-            expect(names).not.toContain('Metadata');
-            expect(names).not.toContain('ProviderType');
-            expect(names).not.toContain('DatabaseProviderBase');
-            expect(names).not.toContain('LogError');
+            expect(code).toMatch(/public override async Delete\(options\?: EntityDeleteOptions\): Promise<boolean> \{\s*return this\.DeleteWithinEntityTransaction\(\(\) => super\.Delete\(options\)\);\s*\}/);
+            expect(code).not.toContain('Metadata.Provider');
         });
     });
 
@@ -557,7 +518,7 @@ describe('EntitySubClassGeneratorBase', () => {
             };
 
             const result = generator.GenerateSchemaAndType(
-                entityDouble(entity)
+                entity as Parameters<typeof generator.GenerateSchemaAndType>[0]
             );
 
             // Zod key should use Config_ to match the getter/setter

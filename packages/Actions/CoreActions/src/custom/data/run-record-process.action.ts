@@ -47,8 +47,7 @@ export class RunRecordProcessAction extends BaseAction {
                 try {
                     scope = JSON.parse(scopeStr) as RecordProcessScopeOverride;
                 } catch (e) {
-                    const reason = e instanceof Error ? e.message : String(e);
-                    return { Success: false, ResultCode: "INVALID_JSON", Message: `Failed to parse Scope JSON: ${reason}` };
+                    return { Success: false, ResultCode: "INVALID_JSON", Message: `Failed to parse Scope JSON: ${(e as Error).message}` };
                 }
             }
 
@@ -57,7 +56,6 @@ export class RunRecordProcessAction extends BaseAction {
 
             const result = await new RecordProcessExecutor().RunByID(recordProcessID, {
                 contextUser: params.ContextUser,
-                // RunActionParams.Provider is optional by the action contract (absent = the server's default provider).
                 provider: params.Provider || Metadata.Provider, // global-provider-ok: the RunActionParams.Provider contract's documented fallback
                 scope,
                 dryRun,
@@ -72,16 +70,13 @@ export class RunRecordProcessAction extends BaseAction {
             this.pushOutput(params, 'Skipped', result.Skipped);
 
             const succeeded = result.Status === 'Completed';
-            // Params carries the merged set (inputs + the outputs above) back to the engine, the same contract
-            // every other CoreActions action follows — callers read the run summary from result.Params.
             return {
                 Success: succeeded,
                 ResultCode: succeeded ? "SUCCESS" : "FAILED",
                 Params: params.Params,
                 Message: succeeded
                     ? `${dryRun ? 'Previewed' : 'Processed'} ${result.Processed} record(s): ${result.Success} ok, ${result.Error} error, ${result.Skipped} skipped`
-                    // `||`, not `??`: an empty ErrorMessage says nothing, so the status is the better message.
-                    : (result.ErrorMessage || `Run ended with status '${result.Status}'`),
+                    : (result.ErrorMessage ?? `Run ended with status '${result.Status}'`),
             };
         } catch (error) {
             return {
@@ -111,11 +106,7 @@ export class RunRecordProcessAction extends BaseAction {
         return defaultValue;
     }
 
-    /**
-     * Sets an Output param: replaces a same-name param already on the list (a caller may pass the declared
-     * outputs as placeholders; a duplicate would leave readers that take the first match on the stale value),
-     * otherwise appends one.
-     */
+    /** Adds (or replaces) an Output param. */
     private pushOutput(params: RunActionParams, name: string, value: unknown): void {
         const output: ActionParam = { Name: name, Type: 'Output', Value: value };
         const index = params.Params.findIndex(p => p.Name.trim().toLowerCase() === name.toLowerCase());

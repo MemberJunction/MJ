@@ -22,16 +22,16 @@ const {
     mockSyncEntities,
     mockSyncDependencies,
     mockRemoveAllRecords,
-    mockRunAIEnrichment,
-    mockMergeParameters,
+    mockRunLLMEnrichment,
+    mockMergeParametersWithLLM,
 } = vi.hoisted(() => ({
     mockSyncParameters: vi.fn().mockResolvedValue(undefined),
     mockSyncFields: vi.fn().mockResolvedValue(undefined),
     mockSyncEntities: vi.fn().mockResolvedValue(undefined),
     mockSyncDependencies: vi.fn().mockResolvedValue(undefined),
     mockRemoveAllRecords: vi.fn().mockResolvedValue(undefined),
-    mockRunAIEnrichment: vi.fn().mockResolvedValue(null),
-    mockMergeParameters: vi.fn().mockReturnValue([]),
+    mockRunLLMEnrichment: vi.fn().mockResolvedValue(null),
+    mockMergeParametersWithLLM: vi.fn().mockReturnValue([]),
 }));
 
 // Mock the sync module
@@ -43,15 +43,13 @@ vi.mock('../custom/query-extraction/sync', () => ({
     RemoveAllRecords: mockRemoveAllRecords,
 }));
 
-// Mock the enrich module (AI calls)
+// Mock the enrich module (LLM calls)
 vi.mock('../custom/query-extraction/enrich', () => ({
-    QueryParameterEnricher: {
-        RunAIEnrichment: mockRunAIEnrichment,
-        MergeParameters: mockMergeParameters,
-        GenerateParameterDescription: vi.fn(),
-        BuildPassthroughDescription: vi.fn(),
-        GenerateSampleValue: vi.fn(),
-    },
+    RunLLMEnrichment: mockRunLLMEnrichment,
+    MergeParametersWithLLM: mockMergeParametersWithLLM,
+    GenerateParameterDescription: vi.fn(),
+    BuildPassthroughDescription: vi.fn(),
+    GenerateSampleValue: vi.fn(),
 }));
 
 // Mock Metadata.Provider.Queries (used by resolve stage for composition refs)
@@ -79,8 +77,7 @@ function buildCtx(sqlOverride?: string): QuerySyncContext {
     return {
         queryID: QUERY_ID,
         queryName: 'Test Query',
-        sql: sqlOverride || 'SELECT col1 FROM SomeTable WHERE x = 1',
-        platform: 'sqlserver',
+        sql: sqlOverride ?? 'SELECT col1 FROM SomeTable WHERE x = 1',
         isSaved: true,
         contextUser: { ID: 'user-1' } as UserInfo,
         metadataProvider: {
@@ -103,7 +100,7 @@ describe('Pipeline sync stage — stale record cleanup', () => {
         it('should preserve existing fields (NOT call RemoveAllRecords) when finalFields is null', async () => {
             // Use a SQL statement that produces no parseable SELECT columns (e.g., EXEC)
             // so that both deterministic extraction AND LLM return null.
-            mockRunAIEnrichment.mockResolvedValue(null);
+            mockRunLLMEnrichment.mockResolvedValue(null);
 
             const ctx = buildCtx('EXEC sp_SomeStoredProc @Param1 = 1');
             await RunExtractionPipeline(ctx);
@@ -120,7 +117,7 @@ describe('Pipeline sync stage — stale record cleanup', () => {
     describe('when deterministic extraction produces fields (even without LLM)', () => {
         it('should call SyncFields with deterministic fields when LLM is null', async () => {
             // SELECT col1 produces deterministic fields via BuildFieldsFromSelectColumns
-            mockRunAIEnrichment.mockResolvedValue(null);
+            mockRunLLMEnrichment.mockResolvedValue(null);
 
             const ctx = buildCtx('SELECT col1 FROM SomeTable WHERE x = 1');
             await RunExtractionPipeline(ctx);
@@ -138,7 +135,7 @@ describe('Pipeline sync stage — stale record cleanup', () => {
     describe('when extraction produces fields', () => {
         it('should call SyncFields and NOT RemoveAllRecords for fields', async () => {
             // LLM returns a selectClause → finalFields will be populated
-            mockRunAIEnrichment.mockResolvedValue({
+            mockRunLLMEnrichment.mockResolvedValue({
                 selectClause: [
                     { name: 'ID', type: 'string', description: 'Primary key' },
                     { name: 'Name', type: 'string', description: 'Display name' },
@@ -162,7 +159,7 @@ describe('Pipeline sync stage — stale record cleanup', () => {
     describe('when extraction produces no entities', () => {
         it('should call RemoveAllRecords for Query Entities', async () => {
             // SQL references no real tables (or tables don't match metadata)
-            mockRunAIEnrichment.mockResolvedValue(null);
+            mockRunLLMEnrichment.mockResolvedValue(null);
 
             const ctx = buildCtx('SELECT 1 AS Value');
             await RunExtractionPipeline(ctx);
@@ -175,7 +172,7 @@ describe('Pipeline sync stage — stale record cleanup', () => {
         });
 
         it('should NOT call SyncEntities when there are no entities', async () => {
-            mockRunAIEnrichment.mockResolvedValue(null);
+            mockRunLLMEnrichment.mockResolvedValue(null);
 
             const ctx = buildCtx('SELECT 1 AS Value');
             await RunExtractionPipeline(ctx);
@@ -187,7 +184,7 @@ describe('Pipeline sync stage — stale record cleanup', () => {
     describe('when extraction produces no parameters', () => {
         it('should call RemoveAllRecords for Query Parameters (existing behavior)', async () => {
             // Plain SQL with no template parameters
-            mockRunAIEnrichment.mockResolvedValue(null);
+            mockRunLLMEnrichment.mockResolvedValue(null);
 
             const ctx = buildCtx('SELECT col1 FROM SomeTable WHERE x = 1');
             await RunExtractionPipeline(ctx);
@@ -200,7 +197,7 @@ describe('Pipeline sync stage — stale record cleanup', () => {
         });
 
         it('should NOT call SyncParameters when there are no parameters', async () => {
-            mockRunAIEnrichment.mockResolvedValue(null);
+            mockRunLLMEnrichment.mockResolvedValue(null);
 
             const ctx = buildCtx('SELECT col1 FROM SomeTable WHERE x = 1');
             await RunExtractionPipeline(ctx);
@@ -211,10 +208,10 @@ describe('Pipeline sync stage — stale record cleanup', () => {
 
     describe('when extraction produces parameters', () => {
         it('should call SyncParameters and NOT RemoveAllRecords for params', async () => {
-            mockMergeParameters.mockReturnValue([
+            mockMergeParametersWithLLM.mockReturnValue([
                 { name: 'State', type: 'string', isRequired: false },
             ]);
-            mockRunAIEnrichment.mockResolvedValue({ parameters: [], selectClause: [] });
+            mockRunLLMEnrichment.mockResolvedValue({ parameters: [], selectClause: [] });
 
             const ctx = buildCtx(`SELECT * FROM t WHERE State = {{ State | sqlString }}`);
             await RunExtractionPipeline(ctx);
@@ -230,7 +227,7 @@ describe('Pipeline sync stage — stale record cleanup', () => {
 
     describe('dependencies always sync', () => {
         it('should always call SyncDependencies regardless of composition refs', async () => {
-            mockRunAIEnrichment.mockResolvedValue(null);
+            mockRunLLMEnrichment.mockResolvedValue(null);
 
             const ctx = buildCtx('SELECT 1 AS Value');
             await RunExtractionPipeline(ctx);
@@ -245,18 +242,18 @@ describe('Pipeline enrich stage — SkipAIEnrichment', () => {
         vi.clearAllMocks();
     });
 
-    it('skips the AI enrichment call and still syncs the deterministic parameters', async () => {
+    it('skips the LLM enrichment call and still syncs the deterministic result', async () => {
         const ctx: QuerySyncContext = { ...buildCtx('SELECT col1 FROM SomeTable WHERE x = {{ X }}'), SkipAIEnrichment: true };
         const result = await RunExtractionPipeline(ctx);
 
-        expect(mockRunAIEnrichment).not.toHaveBeenCalled();
+        expect(mockRunLLMEnrichment).not.toHaveBeenCalled();
         expect(mockSyncParameters).toHaveBeenCalled();
         expect(mockSyncDependencies).toHaveBeenCalled();
         expect(result.UsesTemplate).toBe(true);
     });
 
-    it('calls the AI enrichment by default', async () => {
+    it('calls the LLM enrichment by default', async () => {
         await RunExtractionPipeline(buildCtx());
-        expect(mockRunAIEnrichment).toHaveBeenCalledTimes(1);
+        expect(mockRunLLMEnrichment).toHaveBeenCalledTimes(1);
     });
 });

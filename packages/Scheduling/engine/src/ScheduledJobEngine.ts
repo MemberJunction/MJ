@@ -27,12 +27,6 @@ import { NotificationManager } from './NotificationManager';
 import { ActionScheduledJobDriver } from './drivers/ActionScheduledJobDriver';
 
 /**
- * Default for {@link SchedulingEngine.PausedJobResumeIntervalMs}: one hour, the cadence of the hourly jobs this pause
- * most often hits, so a job paused by a server without its action class misses at most about one run.
- */
-export const DEFAULT_PAUSED_JOB_RESUME_INTERVAL_MS = 60 * 60 * 1000;
-
-/**
  * Engine for managing scheduled job execution
  *
  * This engine uses composition to delegate metadata operations to SchedulingEngineBase
@@ -79,14 +73,6 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * `isPolling` is set; this flag turns that re-entry into a no-op so only one poll timer is armed.
      */
     private startingPolling: boolean = false;
-
-    /**
-     * Repeating timer that resumes jobs paused because their action class was not loaded (see
-     * {@link PausedJobResumeIntervalMs}). Armed once by StartPolling and kept through the internal "all jobs removed"
-     * stop — the paused job may be the only one, so dispatch polling is suspended — and cleared only on full service
-     * shutdown.
-     */
-    private pausedJobResumeTimer?: NodeJS.Timeout;
 
     /**
      * Subscription to the base engine's {@link SchedulingEngineBase.JobsChanged$}. Created
@@ -161,13 +147,6 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * low causes healthy long jobs to be reclaimed and re-dispatched.
      */
     private _leaseTimeoutMs: number = 10 * 60 * 1000;
-
-    /**
-     * How often this server re-checks jobs paused because their action class was not loaded. Default
-     * {@link DEFAULT_PAUSED_JOB_RESUME_INTERVAL_MS}. Configurable via MJServer's
-     * `scheduledJobs.pausedJobResumeInterval` config.
-     */
-    private _pausedJobResumeIntervalMs: number = DEFAULT_PAUSED_JOB_RESUME_INTERVAL_MS;
 
     /**
      * Promises for jobs currently dispatched but not yet settled. Keyed by job ID.
@@ -254,28 +233,6 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // Only log a genuine change — a no-op set (old === new) logs nothing.
         if (old !== value) {
             this.log(`LeaseTimeoutMs changed from ${old} to ${value}`);
-        }
-    }
-
-    /**
-     * How often, in milliseconds, this server re-checks jobs that a server without their action's class paused, and
-     * resumes those whose class this server loads. Besides the check at StartPolling, this bounds how long such a job
-     * stays paused in a mixed fleet (e.g. during a rolling deploy of the app's server package, an old instance that
-     * lacks the class pauses it; a new instance resumes it within one interval). Default one hour; matches the ms unit
-     * of MJServer's `scheduledJobs.pausedJobResumeInterval` config. Set before StartPolling — the timer is armed with
-     * the value current at that point.
-     */
-    public get PausedJobResumeIntervalMs(): number {
-        return this._pausedJobResumeIntervalMs;
-    }
-    public set PausedJobResumeIntervalMs(value: number) {
-        if (!Number.isFinite(value) || value <= 0) {
-            throw new Error(`PausedJobResumeIntervalMs must be a positive number, got ${value}`);
-        }
-        const old = this._pausedJobResumeIntervalMs;
-        this._pausedJobResumeIntervalMs = value;
-        if (old !== value) {
-            this.log(`PausedJobResumeIntervalMs changed from ${old} to ${value}`);
         }
     }
 
@@ -387,7 +344,6 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // jobs), a later activation still fires JobsChanged$ and wakes the timer.
         this._pollingContextUser = contextUser;
         this.ensureJobChangeSubscription();
-        this.ensurePausedJobResumeTimer(contextUser);
 
         await this.initializeNextRunTimes(contextUser);
         await this.cleanupStaleLocks(contextUser);
@@ -446,29 +402,6 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
-     * Arms the repeating resume check ({@link PausedJobResumeIntervalMs}) once per engine lifetime, so a job paused by
-     * another server that lacks the class is resumed here without a restart.
-     * @private
-     */
-    private ensurePausedJobResumeTimer(contextUser: UserInfo): void {
-        if (this.pausedJobResumeTimer) {
-            return;
-        }
-        this.pausedJobResumeTimer = setInterval(() => {
-            // resumeJobsPausedForMissingClass logs its own failures and never throws.
-            void this.resumeJobsPausedForMissingClass(contextUser);
-        }, this._pausedJobResumeIntervalMs);
-    }
-
-    /** Clears the repeating resume check. Called only on full service shutdown. @private */
-    private releasePausedJobResumeTimer(): void {
-        if (this.pausedJobResumeTimer) {
-            clearInterval(this.pausedJobResumeTimer);
-            this.pausedJobResumeTimer = undefined;
-        }
-    }
-
-    /**
      * Sets jobs that were paused because their action's class was not loaded back to Active once this server loads
      * the class, so no person has to re-enable them. A failed read is logged and never stops polling: the other jobs
      * must still run.
@@ -505,7 +438,6 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // This runs before the isPolling guard so an already-suspended engine still tears down.
         if (opts?.waitForInflight) {
             this.releaseJobChangeSubscription();
-            this.releasePausedJobResumeTimer();
         }
 
         if (!this.isPolling) return;

@@ -466,7 +466,6 @@ describe('IdentityClaimEngineServer', () => {
 
         // Make driver throw
         mockDriver.OnClaim = vi.fn().mockRejectedValue(new Error('Transient downstream payment API timeout'));
-        const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
         const user = createMockUser({ ID: 'user-456', Email: 'claimant@example.com' });
         const res = await engine.RedeemClaim('claim-err-1', user, testProvider);
@@ -476,8 +475,6 @@ describe('IdentityClaimEngineServer', () => {
         // Verify revert SQL was executed
         const revertCall = mockExecuteSQL.mock.calls.find(c => c[0].includes("[Status] = 'Pending'") && c[0].includes("[Status] = 'Claimed'"));
         expect(revertCall).toBeDefined();
-        expect(errorLog.mock.calls.some(c => String(c[0]).includes('driver.OnClaim threw exception for claim claim-err-1'))).toBe(true);
-        errorLog.mockRestore();
     });
 
     it('AutoClaimForUser redeems each pending claim through the full RedeemClaim gate', async () => {
@@ -523,15 +520,12 @@ describe('IdentityClaimEngineServer', () => {
         const engine = IdentityClaimEngineServer.Instance;
         const mockClaim = createMockClaim({ Status: 'Pending' });
         mockClaim.Save = vi.fn().mockResolvedValue(false);
-        const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
         vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
 
         await engine.RevokeClaim('claim-123');
         // The claim is still live in the database — running teardown against it would be wrong.
         expect(mockDriver.onRevokeCalled).toBe(false);
-        expect(errorLog.mock.calls.some(c => String(c[0]).includes('RevokeClaim failed to save claim claim-123'))).toBe(true);
-        errorLog.mockRestore();
     });
 
     describe('IsActive enforcement', () => {

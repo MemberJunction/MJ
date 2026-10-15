@@ -371,11 +371,7 @@ export class ActionResolver extends ResolverBase {
     };
   }
 
-  /**
-   * The `ResultData` payload of a RunAction result: a JSON ARRAY of the run's Output/Both params, or undefined when
-   * there are none. Each param is copied on its own — copying the array as one object would turn it into an
-   * index-keyed object (`{"0": …, "1": …}`), which clients that look params up by name cannot read.
-   */
+  /** `ResultData`: a JSON array of the Output/Both params (copied one by one, so it stays an array), or undefined. */
   public static SerializeOutputParams(params: ActionParam[]): string | undefined {
     const outputs = params.filter(p => p.Type.trim().toLowerCase() === 'output' || p.Type.trim().toLowerCase() === 'both');
     return outputs.length > 0 ? JSON.stringify(outputs.map(p => CopyScalarsAndArrays(p))) : undefined;

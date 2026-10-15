@@ -148,6 +148,7 @@ function makeStub(entityName: string, fields: Record<string, unknown>): BatchCon
     EntityInfo: {
       Name: entityName,
       PrimaryKeys: [{ Name: 'ID' }],
+      FirstPrimaryKey: { Name: 'ID' },
       Fields: Object.keys(fields).map((name) => ({ Name: name })),
     },
     Get: (field: string) => fields[field],
@@ -257,15 +258,12 @@ describe('SyncEngine reference resolution (processFieldValue / resolveLookup)', 
       expect(runViewInvocations[0].ExtraFilter).toBe("LOWER(Name) = LOWER('O''Brien')");
     });
 
-    it('writes a value with characters outside ASCII as a Unicode literal on SQL Server', async () => {
-      // A plain literal goes through the database code page: '→' is not in CP1252 and becomes '?', so the
-      // lookup of a row named 'C1 → C2.1' would find nothing.
+    it('writes a value outside ASCII as a Unicode literal on SQL Server', async () => {
       runViewHandler = () => ({ Success: true, Results: [{ ID: 'cat-arrow' }] });
 
       expect(await engine.processFieldValue('@lookup:MJ: AI Prompt Categories.Name=C1 → C2.1', tmpDir)).toBe('cat-arrow');
       expect(runViewInvocations[0].ExtraFilter).toBe("LOWER(Name) = LOWER(N'C1 → C2.1')");
     });
-
 
     it('throws the not-found error when no record matches', async () => {
       await expect(
@@ -649,31 +647,6 @@ describe('SyncEngine reference resolution (processFieldValue / resolveLookup)', 
       expect(await engine.processFieldValue(42, tmpDir)).toBe(42);
       expect(await engine.processFieldValue(true, tmpDir)).toBe(true);
       expect(await engine.processFieldValue(null, tmpDir)).toBeNull();
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // LoadEntity primary-key filter
-  // ---------------------------------------------------------------------------
-
-  describe('LoadEntity primary-key filter', () => {
-    it('writes a text key outside ASCII as a Unicode literal on SQL Server, escaping quotes', async () => {
-      registerEntity('Coded Things', [fieldDef('ID', 'nvarchar', true), fieldDef('Name', 'nvarchar', true)]);
-
-      const loaded = await engine.LoadEntity('Coded Things', { ID: "C1 → O'Brien" });
-
-      expect(loaded).toBeNull();
-      expect(runViewInvocations[0].ExtraFilter).toBe("ID = N'C1 → O''Brien'");
-    });
-
-    it('keeps an ASCII text key a plain literal and an unquoted key unquoted', async () => {
-      registerEntity('Coded Things', [fieldDef('ID', 'nvarchar', true)]);
-      registerEntity('Numbered Things', [fieldDef('ID', 'int', false)]);
-
-      await engine.LoadEntity('Coded Things', { ID: 'abc' });
-      await engine.LoadEntity('Numbered Things', { ID: 7 });
-
-      expect(runViewInvocations.map((i) => i.ExtraFilter)).toEqual(["ID = 'abc'", 'ID = 7']);
     });
   });
 

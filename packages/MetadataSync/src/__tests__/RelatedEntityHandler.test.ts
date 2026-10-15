@@ -26,10 +26,8 @@ const runViewInvocations: RunViewInvocation[] = [];
 let runViewHandler: (params: RunViewInvocation, callIndex: number) => RunViewResult =
   () => ({ Success: true, Results: [] });
 
-vi.mock('@memberjunction/core', async (importOriginal) => {
-  // The real module's other exports stay (the dialect helpers' imports need them); only these are replaced.
+vi.mock('@memberjunction/core', () => {
   return {
-    ...(await importOriginal<typeof import('@memberjunction/core')>()),
     RunView: vi.fn().mockImplementation(function () {
       return {
         RunView: vi.fn().mockImplementation(async (params: RunViewInvocation) => {
@@ -132,14 +130,6 @@ describe('RelatedEntityHandler.batchQueryRelatedEntities', () => {
     expect(runViewInvocations[0].ExtraFilter).toBe(
       "OrderID IN ('o''malley', 'rob''ert', 'plain')",
     );
-  });
-
-  it('writes a parent key outside ASCII as a Unicode literal on SQL Server', async () => {
-    vi.stubEnv('DB_PLATFORM', 'sqlserver');
-    await makeHandler().batchQueryRelatedEntities(['Café', 'p1'], baseRelationConfig);
-
-    expect(runViewInvocations[0].ExtraFilter).toBe("OrderID IN (N'Café', 'p1')");
-    vi.unstubAllEnvs();
   });
 
   it('appends optional filter with AND', async () => {
@@ -253,15 +243,5 @@ describe('RelatedEntityHandler.batchQueryRelatedEntities', () => {
 
     expect(result.size).toBe(1);
     expect(result.get('42')).toHaveLength(2);
-  });
-});
-
-describe('RelatedEntityHandler.BuildRelatedEntityFilter (single parent)', () => {
-  it('escapes quotes and writes a key outside ASCII as a Unicode literal on SQL Server', () => {
-    vi.stubEnv('DB_PLATFORM', 'sqlserver');
-    expect(RelatedEntityHandler.BuildRelatedEntityFilter("C1 → O'Brien", baseRelationConfig)).toBe("OrderID = N'C1 → O''Brien'");
-    expect(RelatedEntityHandler.BuildRelatedEntityFilter("o'malley", { ...baseRelationConfig, filter: "Status = 'Active'" }))
-      .toBe("OrderID = 'o''malley' AND (Status = 'Active')");
-    vi.unstubAllEnvs();
   });
 });

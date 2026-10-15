@@ -174,7 +174,7 @@ export class MJAIPromptEntityServer extends MJAIPromptEntityExtended {
                 throw new Error("Cannot update linked Template Contents because TemplateID is null.");
             }
             const rv = this.RunViewProviderToUse
-            // update the content the prompt runner renders and TemplateText reads (MJTemplateEntityExtended.SelectHighestPriorityContent)
+            // update the content the prompt runner renders
             const result = await rv.RunView<MJTemplateContentEntity>({
                 EntityName: "MJ: Template Contents",
                 ExtraFilter: `TemplateID='${this.TemplateID}'`,

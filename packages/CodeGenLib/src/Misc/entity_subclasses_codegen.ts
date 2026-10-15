@@ -636,15 +636,10 @@ ${loadModule}
         throw new Error('Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.');
     }`;
       } else if (entity.CascadeDeletes) {
-        // Entity has cascading deletes: run the delete as one unit of work on the record's own provider.
-        // The lifecycle (transaction-group bypass, capability check, begin/commit/rollback, rollback-error
-        // logging) lives once in BaseEntity.DeleteWithinEntityTransaction, not in every generated class.
+        // Entity has cascading deletes, wrap in transaction (BaseEntity.DeleteWithinEntityTransaction)
         deleteFunction = `    /**
     * ${entity.Name} - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override

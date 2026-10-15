@@ -33,16 +33,8 @@ export class MJTemplateEntityExtended extends MJTemplateEntity {
     }
 
     /**
-     * The content a template renders: the lowest `Priority` value (optionally of one content type); ties go to the
-     * oldest row, then the lowest ID — compared normalised and ordinally, so the choice depends neither on ID case
-     * (SQL Server stores UUIDs upper-case, PostgreSQL lower-case) nor on the runtime locale. Every caller therefore
-     * picks the same row whatever order the rows arrived in. This is the one selection used by
-     * {@link GetHighestPriorityContent} (what the AI prompt runner renders) and by an AI prompt's and an entity
-     * document's `TemplateText` (what a feature pipeline's prompt version hash reads), so the hash changes exactly when
-     * the rendered text does. Does not reorder `contents`.
-     * @param contents the template's content rows
-     * @param type if provided, only rows of this content type (case- and whitespace-insensitive)
-     * @returns the selected row, or undefined when none qualifies
+     * The content a template renders: lowest `Priority` (optionally of one type), ties to the oldest row, then the lowest
+     * normalised ID, so every caller picks the same row whatever order the rows arrived in.
      */
     public static SelectHighestPriorityContent<T extends TemplateContentSelectionFields>(contents: readonly T[], type?: string): T | undefined {
         const wanted = type?.trim().toLowerCase();
@@ -57,7 +49,7 @@ export class MJTemplateEntityExtended extends MJTemplateEntity {
     /**
      * Returns the highest priority content for the template (see {@link SelectHighestPriorityContent}).
      * @param type If provided, returns the highest priority content of the specified type
-     * @returns the selected content row; undefined when the template has no content (of that type)
+     * @returns
      */
     public GetHighestPriorityContent(type?: string): MJTemplateContentEntity | undefined {
         return MJTemplateEntityExtended.SelectHighestPriorityContent(this.Content, type);

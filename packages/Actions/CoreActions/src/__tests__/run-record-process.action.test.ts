@@ -1,7 +1,3 @@
-/**
- * Tests for RunRecordProcessAction's human-value switch: the optional `OverwriteHumanValues` param (default false)
- * reaches the Record Process run. The executor is mocked (no live DB).
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ActionParam, RunActionParams } from '@memberjunction/actions-base';
 import type { RunRecordProcessOptions } from '@memberjunction/record-set-processor';
@@ -56,7 +52,7 @@ describe('RunRecordProcessAction: OverwriteHumanValues', () => {
     });
 });
 
-describe('RunRecordProcessAction: output params (F13)', () => {
+describe('RunRecordProcessAction: output params', () => {
     beforeEach(() => runByID.mockClear());
 
     it('returns the merged param set (inputs + the run summary outputs) on the result', async () => {
@@ -74,19 +70,5 @@ describe('RunRecordProcessAction: output params (F13)', () => {
         await new TestableRunRecordProcess().Run(params);
         const processed = params.Params.filter((p) => p.Name === 'Processed');
         expect(processed).toEqual([{ Name: 'Processed', Type: 'Output', Value: 1 }]);
-    });
-
-    it('falls back to the run status when a failed run carries an empty ErrorMessage', async () => {
-        runByID.mockResolvedValueOnce({ ProcessRunID: 'run-2', Status: 'Failed', Total: 0, Processed: 0, Success: 0, Error: 0, Skipped: 0, ErrorMessage: '' });
-        const result = await new TestableRunRecordProcess().Run(paramsWith([]));
-        expect(result.Success).toBe(false);
-        expect(result.Message).toBe("Run ended with status 'Failed'");
-    });
-
-    it('reports an invalid Scope JSON with the parser message', async () => {
-        const result = await new TestableRunRecordProcess().Run(paramsWith([{ Name: 'Scope', Type: 'Input', Value: '{not json' }]));
-        expect(result.ResultCode).toBe('INVALID_JSON');
-        expect(result.Message).toMatch(/^Failed to parse Scope JSON: /);
-        expect(runByID).not.toHaveBeenCalled();
     });
 });

@@ -214,13 +214,12 @@ module.exports = {
         systemUserEmail: 'system@example.com',
         maxConcurrentJobs: 10,           // default 5
         defaultLockTimeout: 5 * 60_000,  // default 600000 (10 min)
-        pausedJobResumeInterval: 15 * 60_000, // default 3600000 (1 hour) — see "Action jobs whose class is not loaded"
     },
     // ...
 };
 ```
 
-`MJServer/services/ScheduledJobsService` reads these on startup and applies them to the engine via the `MaxConcurrentJobs`, `LeaseTimeoutMs` and `PausedJobResumeIntervalMs` setters.
+`MJServer/services/ScheduledJobsService` reads these on startup and applies them to the engine via `MaxConcurrentJobs` and `LeaseTimeoutMs` setters.
 
 ### Residual starvation window
 
@@ -291,21 +290,9 @@ loaded — the action would fail on every run. Instead, `ActionScheduledJobDrive
 `Status = 'Paused'`, writes `"PausedForMissingClass": "<class key>"` into the job's `Configuration`, and records one failed
 run whose message says which class is missing and how to install it. Runtime actions have no class and are never paused.
 
-The job comes back by itself — no person re-enables it:
-
-- **At server start**: `StartPolling` first sets every job marked `PausedForMissingClass` whose class this server now
-  loads back to `Active` and removes the marker (logged as `📅 Scheduled Jobs: resumed N job(s) …`).
-- **On an interval**: every server repeats that check every `PausedJobResumeIntervalMs` (MJServer
-  `scheduledJobs.pausedJobResumeInterval`, default one hour). The check runs even while dispatch polling is suspended
-  because no job is Active, and stops only on full service shutdown.
-
-**Mixed fleets.** The pause is stored in the database, but whether the class is loaded is a property of each server. In
-a fleet where some servers have the app's server package and some do not — typically during a rolling deploy — a server
-without the class that wins a run pauses the job for every server; a server with the class resumes it within one
-interval (at most `pausedJobResumeInterval` later), and a server without the class never resumes it. While both kinds of
-server remain, the job alternates between paused and active: each run a server without the class wins pauses it again
-instead of running the action, and it stays paused until the next resume check on a server with the class. Finish the deploy (every server loads the package), or shorten the interval while it is in progress;
-servers that will never load the package should not run scheduled jobs (`scheduledJobs.enabled: false`).
+A server that loads the class resumes the job at its next start: `StartPolling` first sets every job marked
+`PausedForMissingClass` whose class this server now loads back to `Active` and removes the marker (logged as
+`📅 Scheduled Jobs: resumed N job(s) …`).
 
 **Pausing such a job by hand.** The marker stays in `Configuration` until a resume removes it. A person who pauses an
 auto-paused job by hand, wanting it to stay paused, must also remove `PausedForMissingClass` from its `Configuration`;

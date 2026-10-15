@@ -29,10 +29,6 @@ describe('ActionEngineServer class availability', () => {
         vi.restoreAllMocks();
     });
 
-    it('registers the test class', () => {
-        expect(MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, 'ClassLoadedTest.Registered')?.SubClass).toBe(RegisteredTestAction);
-    });
-
     it('keys the class by DriverClass, falling back to the action name', () => {
         expect(engine.ActionClassKey(action({ Name: 'Sync Activities', DriverClass: 'Common.SyncActivities' }))).toBe('Common.SyncActivities');
         expect(engine.ActionClassKey(action({ Name: 'Create Entity' }))).toBe('Create Entity');

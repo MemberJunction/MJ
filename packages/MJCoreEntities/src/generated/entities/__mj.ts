@@ -45289,10 +45289,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
 
     /**
     * MJ: AI Agent Run Steps - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -45935,10 +45932,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * MJ: AI Agent Runs - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -48581,10 +48575,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
 
     /**
     * MJ: AI Agent Steps - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -49571,10 +49562,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * MJ: AI Agents - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -52223,10 +52211,7 @@ export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityT
 
     /**
     * MJ: AI Configurations - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -58623,10 +58608,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * MJ: AI Prompt Runs - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -60769,10 +60751,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * MJ: AI Prompts - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -67417,10 +67396,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
 
     /**
     * MJ: Actions - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -68495,10 +68471,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
 
     /**
     * MJ: Applications - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -80962,10 +80935,7 @@ export class MJConversationArtifactVersionEntity extends BaseEntity<MJConversati
 
     /**
     * MJ: Conversation Artifact Versions - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -81146,10 +81116,7 @@ export class MJConversationArtifactEntity extends BaseEntity<MJConversationArtif
 
     /**
     * MJ: Conversation Artifacts - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -81331,10 +81298,7 @@ export class MJConversationBranchEntity extends BaseEntity<MJConversationBranchE
 
     /**
     * MJ: Conversation Branches - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -82264,10 +82228,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * MJ: Conversation Details - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -83492,10 +83453,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * MJ: Conversations - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -85953,10 +85911,7 @@ export class MJDashboardEntity extends BaseEntity<MJDashboardEntityType> {
 
     /**
     * MJ: Dashboards - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -92171,10 +92126,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
 
     /**
     * MJ: Entity Documents - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -115325,10 +115277,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * MJ: Queries - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -124629,10 +124578,7 @@ export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntit
 
     /**
     * MJ: Rubric Evaluations - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override
@@ -138821,10 +138767,7 @@ export class MJUserApplicationEntity extends BaseEntity<MJUserApplicationEntityT
 
     /**
     * MJ: User Applications - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically:
-    * see BaseEntity.DeleteWithinEntityTransaction, which opens the transaction on this record's own
-    * provider (ProviderToUse) and commits only when the delete succeeded.
-    * A failed delete returns false with its real error in LatestResult.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
     * @public
     * @method
     * @override

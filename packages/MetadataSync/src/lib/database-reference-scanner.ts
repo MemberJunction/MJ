@@ -1,7 +1,6 @@
 import { Metadata, RunView, UserInfo, CompositeKey, EntityInfo } from '@memberjunction/core';
 import { FlattenedRecord } from './record-dependency-analyzer';
 import { ReverseFKInfo } from './entity-foreign-key-helper';
-import { SQLTextLiteral } from './sql-text-literal';
 
 /**
  * Maximum number of primary-key values placed in a single batched `IN (...)` filter when scanning
@@ -113,7 +112,7 @@ export class DatabaseReferenceScanner {
         }
 
         try {
-            const inList = SQLTextLiteral.List(pkValues);
+            const inList = pkValues.map(v => `'${v.replace(/'/g, "''")}'`).join(', ');
             const filter = `${refInfo.fieldName} IN (${inList})`;
 
             const result = await rv.RunView({

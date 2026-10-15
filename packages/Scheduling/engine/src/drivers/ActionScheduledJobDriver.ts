@@ -108,8 +108,7 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
 
     /**
      * Pauses the job because its action's class is not loaded here (a database-only install of the app), marking which
-     * class, so it stops failing on every run. A server that loads the class resumes it — at its next start, or at its
-     * next periodic resume check (MJServer `scheduledJobs.pausedJobResumeInterval`, default hourly).
+     * class, so it stops failing on every run. A server that loads the class resumes it at its next start.
      *
      * The pause is saved on a fresh copy of the job read through the context's provider, never on `context.Schedule`:
      * that shared entity was read before the engine acquired the job's lock, and a full save of it would write its stale
@@ -120,7 +119,7 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
         const message = `Action '${actionName}': class '${actionClass}' is not loaded on this server, so its app's server package is ` +
             `not installed here (a database-only install). The job was paused so it stops failing on every run; once the ` +
             `package is installed (mj app install, or MJAPI's dynamicPackages), a server that loads it sets the job back to ` +
-            `Active at its next start or its next periodic resume check (scheduledJobs.pausedJobResumeInterval, default hourly).`;
+            `Active at its next start.`;
         const job = await context.Provider.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', context.ContextUser);
         if (!(await job.Load(context.Schedule.ID))) {
             return { Success: false, ErrorMessage: `${message} Pausing the job failed: the job could not be read.` };
@@ -135,14 +134,13 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
 
     /**
      * Sets each job paused for a missing action class back to Active when that class is now registered, and removes the
-     * marker. ScheduledJobEngine calls it in StartPolling, before it loads the active jobs, and then every
-     * `PausedJobResumeIntervalMs`. The `LIKE` only narrows the read; the decision is the parsed `PausedForMissingClass`
+     * marker. ScheduledJobEngine calls it in StartPolling, before it loads the active jobs. The `LIKE` only narrows the read; the decision is the parsed `PausedForMissingClass`
      * field (no substring classification).
      *
      * Only unlocked rows are resumed. The server that paused a job still holds its lock until it has saved the run and
      * its statistics; resuming that row with a full save would write the lock columns and the pre-run statistics read
      * here back over the live row. A paused row is never dispatched, so once its lock is released it stays unlocked and
-     * the next check resumes it.
+     * the next start resumes it.
      * @returns the names of the resumed jobs.
      */
     public static async ResumeJobsPausedForMissingClass(contextUser: UserInfo, provider: IMetadataProvider): Promise<string[]> {

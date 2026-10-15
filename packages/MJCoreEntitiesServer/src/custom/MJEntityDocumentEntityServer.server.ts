@@ -144,10 +144,7 @@ export class MJEntityDocumentEntityServer extends MJEntityDocumentEntityExtended
         return false;
     }
 
-    /**
-     * Update, in place, the content the linked Template renders (its highest-priority content — the row `TemplateText`
-     * reads, and vector sync and duplicate detection render), then record it as the text's source.
-     */
+    /** Update the content the linked Template renders in place, and record it as the text's source. */
     protected async UpdateLinkedTemplateContents(md: IMetadataProvider, tg?: TransactionGroupBase): Promise<boolean> {
         try {
             if (!this.TemplateID) {

@@ -27,7 +27,7 @@ import { resolveDbPlatformFromEnv } from "@memberjunction/generic-database-provi
 @RegisterClass(BaseEntity, 'MJ: Queries')
 export class MJQueryEntityServer extends MJQueryEntityExtended {
     /** Optional caller-provided parameter sample values. When set, these override
-     *  AI-generated sampleValues during the extraction pipeline. Use this to pass
+     *  LLM-generated sampleValues during the extraction pipeline. Use this to pass
      *  tested/validated values from the calling system.
      *  Keys are parameter names, values are the tested sample values. */
     public ParameterHints?: Map<string, string>;

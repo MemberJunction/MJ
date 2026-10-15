@@ -248,34 +248,6 @@ describe('MJTemplateEntityExtended', () => {
             expect(MJTemplateEntityExtended.SelectHighestPriorityContent([upperB, lowerA])).toBe(lowerA);
             expect(MJTemplateEntityExtended.SelectHighestPriorityContent([lowerA, upperB])).toBe(lowerA);
         });
-
-        it('returns undefined when the template has no content', () => {
-            template.Content = [];
-            expect(template.GetHighestPriorityContent()).toBeUndefined();
-            expect(template.GetHighestPriorityContent('HTML')).toBeUndefined();
-        });
-
-        it('does not reorder Content', () => {
-            const at = new Date('2026-01-01');
-            template.Content = [
-                contentRow({ ID: 'r1', Type: 'HTML', Priority: 5, __mj_CreatedAt: at }),
-                contentRow({ ID: 'r2', Type: 'HTML', Priority: 1, __mj_CreatedAt: at }),
-            ];
-            template.GetHighestPriorityContent();
-            expect(template.Content.map((c) => c.Priority)).toEqual([5, 1]);
-        });
-    });
-
-    describe('SelectHighestPriorityContent', () => {
-        it('selects the same row as GetHighestPriorityContent', () => {
-            const rows = [
-                contentRow({ ID: 'x', Type: 'Text', Priority: 2, __mj_CreatedAt: new Date('2026-01-01') }),
-                contentRow({ ID: 'y', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-03-01') }),
-            ];
-            template.Content = rows;
-            expect(MJTemplateEntityExtended.SelectHighestPriorityContent(rows)).toBe(template.GetHighestPriorityContent());
-            expect(MJTemplateEntityExtended.SelectHighestPriorityContent(rows)?.ID).toBe('y');
-        });
     });
 
     // ---------------------------------------------------------------

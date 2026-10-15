@@ -15,7 +15,6 @@ import { HttpGet } from '@memberjunction/network-utils';
 import { EntityInfo, IEntityDataProvider, IMetadataProvider, IRunViewProvider, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetDialect, IsDateSQLType, IsUuidSQLType } from '@memberjunction/sql-dialect';
-import { SQLTextLiteral } from './sql-text-literal';
 import { EntityConfig, FolderConfig } from '../config';
 import { JsonPreprocessor } from './json-preprocessor';
 import { DescribeMissingEntitySubclass } from './entity-subclass-guard';
@@ -770,10 +769,9 @@ export class SyncEngine {
           && !IsUuidSQLType(field.Type)
           && !IsDateSQLType(field.Type);
         if (isStringType) {
-          // SQLTextLiteral carries the dialect's Unicode prefix: a name with a character outside the code page
-          // (e.g. '→') would otherwise never match its own row.
           const dialect = GetDialect(resolveDbPlatformFromEnv() ?? 'sqlserver');
-          filterParts.push(`${dialect.LowerCase(fieldName)} = ${dialect.LowerCase(SQLTextLiteral.For(fieldValue))}`);
+          const literal = `${dialect.StringLiteralPrefix(fieldValue)}${dialect.QuoteStringLiteral(fieldValue)}`;
+          filterParts.push(`${dialect.LowerCase(fieldName)} = ${dialect.LowerCase(literal)}`);
         } else {
           filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
         }
@@ -1306,13 +1304,9 @@ export class SyncEngine {
       
       // Check if field needs quotes
       const field = entityInfo.Fields.find(f => f.Name === pk.Name);
-      if (field?.NeedsQuotes && typeof value === 'string') {
-        // Same Unicode-prefix rule as the lookup filter: a text key outside the code page must keep its characters.
-        filters.push(`${pk.Name} = ${SQLTextLiteral.For(value)}`);
-      } else {
-        const quotes = field?.NeedsQuotes ? "'" : '';
-        filters.push(`${pk.Name} = ${quotes}${value}${quotes}`);
-      }
+      const quotes = field?.NeedsQuotes ? "'" : '';
+      const escapedValue = field?.NeedsQuotes && typeof value === 'string' ? value.replace(/'/g, "''") : value;
+      filters.push(`${pk.Name} = ${quotes}${escapedValue}${quotes}`);
     }
     
     const result = await rv.RunView({

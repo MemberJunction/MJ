@@ -46,8 +46,7 @@ function makeRecord(
     path: `test/${id}`,
     dependencies: new Set<string>(),
     id,
-    originalIndex: 0,
-    graphId: 'g1'
+    originalIndex: 0
   };
 }
 
@@ -82,16 +81,6 @@ describe('DeletionAuditor.checkRecordExistence', () => {
     expect(runViewCalls[0].Fields).toEqual(['ID']);
     expect(runViewCalls[0].IgnoreMaxRows).toBe(true);
     expect(runViewCalls[0].ResultType).toBe('simple');
-  });
-
-  it('writes a key outside ASCII as a Unicode literal on SQL Server, quotes escaped', async () => {
-    vi.stubEnv('DB_PLATFORM', 'sqlserver');
-    const auditor = makeAuditor();
-
-    await auditor.checkRecordExistence([makeRecord(SINGLE, 'r1', { ID: "Café → O'Brien" }), makeRecord(SINGLE, 'r2', { ID: 'AAA' })]);
-
-    expect(runViewCalls[0].ExtraFilter).toBe("ID IN (N'CAFÉ → O''BRIEN', 'AAA')");
-    vi.unstubAllEnvs();
   });
 
   it('classifies records into still-existing vs already-deleted from the returned keys', async () => {

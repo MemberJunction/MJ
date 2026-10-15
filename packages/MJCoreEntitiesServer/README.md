@@ -105,18 +105,8 @@ Extends the Query entity with automatic Template management similar to AIPromptE
 - **Automatic Template Management**: Creates and updates Template records when saving
 - **Dynamic SQL Support**: Supports parameterized queries with Nunjucks templates
 
-**Re-extraction keeps declared sample values.** When a query's SQL changes, extraction updates each
-existing parameter's Type, IsRequired, DefaultValue and Description from the SQL, but a parameter
-whose `DetectionMethod` is `'Manual'` and whose `SampleValue` is not empty keeps that SampleValue (a
-value declared by a user or by metadata is not overwritten by a heuristic or AI sample), unless the
-parameter's Type changed. Re-extraction no longer flips `DetectionMethod` to `'AI'`. Because the
-column defaults to `'Manual'`, a row created without an explicit DetectionMethod counts as Manual;
-set its `DetectionMethod` to `'AI'` to let the next extraction refresh its SampleValue again.
-
-**Identifier samples.** A string parameter whose name reads as a key — `ID`, a name ending in
-`ID`/`Id` after a lowercase letter or digit (`ActivityID`, `userId`), `_id`, or a GUID/UUID name —
-gets the empty GUID `00000000-0000-0000-0000-000000000000` as its heuristic sample, so a test run of
-the query is valid SQL and returns no rows (`QueryParameterEnricher.IsIdentifierParameterName`).
+A string parameter whose name reads as a key (`ID`, `ActivityID`, `userId`, `user_id`, a GUID/UUID name) gets the
+empty GUID as its heuristic sample, so a test run of the query is valid SQL (`IsIdentifierParameterName`).
 
 ### MJAIAgentNoteEntityServer (v5.30.x+)
 

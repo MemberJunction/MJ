@@ -747,7 +747,6 @@ scheduledJobs: {
   maxConcurrentJobs: 5,
   defaultLockTimeout: 600000,    // 10 minutes
   staleLockCleanupInterval: 300000, // 5 minutes
-  pausedJobResumeInterval: 3600000, // 1 hour — how often a server resumes Action jobs paused because their action class was not loaded elsewhere
 }
 ```
 

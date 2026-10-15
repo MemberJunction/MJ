@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { stubViews } = vi.hoisted(() => ({
-    /** Each stub base, by the instance the server class built on it: the test's typed view of the stub's members. */
-    stubViews: new WeakMap<object, MockedBaseStub>(),
-}));
-
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
     return {
@@ -57,10 +52,6 @@ vi.mock('@memberjunction/actions-base', () => {
             ['UserPrompt', { Name: 'UserPrompt', Dirty: false }],
         ]);
 
-        constructor() {
-            stubViews.set(this, this);
-        }
-
         public GetFieldByName(name: string): StubField | undefined {
             return this.fields.get(name);
         }
@@ -97,38 +88,6 @@ vi.mock('@memberjunction/doc-utils', () => ({
 
 import { MJActionEntityServer } from '../custom/MJActionEntityServer.server';
 
-/**
- * The mocked base class's test-only surface: it records field dirtiness through SetFieldDirty and holds IsSaved as a
- * plain field, and its post-save helpers (protected on the real base class) are stubbed so a save has no dependencies.
- * The server class's type declares none of these (IsSaved is a read-only getter on the real BaseEntity).
- */
-interface MockedBaseStub {
-    SetFieldDirty(name: string, dirty: boolean): void;
-    IsSaved: boolean;
-    PostSaveProcessLibraries(): Promise<void>;
-    PostSaveProcessParamsAndResults(): Promise<void>;
-}
-
-/** The mocked base under `entity`, through which a test sets what the stub records. */
-function stubOf(entity: MJActionEntityServer): MockedBaseStub {
-    const stub = stubViews.get(entity);
-    if (!stub) {
-        throw new Error('the entity was not built on the mocked base');
-    }
-    return stub;
-}
-
-/** Marks a field dirty (or clean) on the mocked base. */
-function setFieldDirty(entity: MJActionEntityServer, name: string, dirty: boolean): void {
-    stubOf(entity).SetFieldDirty(name, dirty);
-}
-
-/** Sets whether the mocked base counts as already saved (an update) or not (a create). */
-function setSaved(entity: MJActionEntityServer, saved: boolean): void {
-    stubOf(entity).IsSaved = saved;
-}
-
-
 describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated Actions', () => {
     let action: MJActionEntityServer;
     let generateCodeSpy: ReturnType<typeof vi.spyOn>;
@@ -138,7 +97,7 @@ describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated A
         action.Type = 'Generated';
         action.CodeLocked = false;
         action.ForceCodeGeneration = false;
-        setFieldDirty(action, 'UserPrompt', false);
+        (action as unknown as { SetFieldDirty: (n: string, d: boolean) => void }).SetFieldDirty('UserPrompt', false);
 
         // Spy on GenerateCode and provide stub return
         generateCodeSpy = vi.spyOn(action, 'GenerateCode').mockResolvedValue({
@@ -151,13 +110,12 @@ describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated A
         });
 
         // Mock post-save helpers to avoid dependencies
-        const postSave = stubOf(action);
-        vi.spyOn(postSave, 'PostSaveProcessLibraries').mockResolvedValue(undefined);
-        vi.spyOn(postSave, 'PostSaveProcessParamsAndResults').mockResolvedValue(undefined);
+        vi.spyOn(action, 'PostSaveProcessLibraries' as never).mockResolvedValue(undefined as never);
+        vi.spyOn(action, 'PostSaveProcessParamsAndResults' as never).mockResolvedValue(undefined as never);
     });
 
     it('skips GenerateCode when saving a new action that ALREADY HAS code (e.g. cloned action)', async () => {
-        setSaved(action, false);
+        action.IsSaved = false;
         action.Code = 'return { Success: true, Data: "cloned pre-existing code" };';
 
         const result = await action.Save();
@@ -168,7 +126,7 @@ describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated A
     });
 
     it('invokes GenerateCode when saving a new action with EMPTY / NULL code', async () => {
-        setSaved(action, false);
+        action.IsSaved = false;
         action.Code = null;
 
         const result = await action.Save();
@@ -179,9 +137,9 @@ describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated A
     });
 
     it('invokes GenerateCode when saving an existing action whose UserPrompt is dirty', async () => {
-        setSaved(action, true);
+        action.IsSaved = true;
         action.Code = 'old code';
-        setFieldDirty(action, 'UserPrompt', true);
+        (action as unknown as { SetFieldDirty: (n: string, d: boolean) => void }).SetFieldDirty('UserPrompt', true);
 
         const result = await action.Save();
 
@@ -191,7 +149,7 @@ describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated A
     });
 
     it('invokes GenerateCode when ForceCodeGeneration is true even if code is present', async () => {
-        setSaved(action, false);
+        action.IsSaved = false;
         action.Code = 'some existing code';
         action.ForceCodeGeneration = true;
 

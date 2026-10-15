@@ -8,7 +8,7 @@ import type { MJParameterInfo, MJParseResult, SQLSelectColumn, SQLTableReference
 
 /**
  * A parameter extracted from a query's SQL — the final merged result
- * combining deterministic parsing, dependency metadata, and AI enrichment.
+ * combining deterministic parsing, dependency metadata, and LLM enrichment.
  */
 export interface ExtractedParameter {
     name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
@@ -42,7 +42,7 @@ export interface ExtractedField {
 }
 
 /**
- * Result from AI enrichment prompt.
+ * Result from LLM enrichment prompt.
  */
 export interface ParameterExtractionResult {
     parameters: ExtractedParameter[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
@@ -51,7 +51,7 @@ export interface ParameterExtractionResult {
 
 /**
  * Metadata inherited from a dependency query's parameter for passthrough parameters.
- * Used as a fallback source for description and sampleValue when AI enrichment is unavailable.
+ * Used as a fallback source for description and sampleValue when LLM enrichment is unavailable.
  */
 export interface PassthroughParamContext {
     Description: string | null;
@@ -125,9 +125,9 @@ export interface QuerySyncContext {
      *  is used for parsing and which SQL types are used for field extraction. */
     platform: DatabasePlatform;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Caller-provided tested parameter sample values (paramName → sampleValue).
-     *  When present, these take highest priority over AI-generated or heuristic sampleValues. */
+     *  When present, these take highest priority over LLM-generated or heuristic sampleValues. */
     parameterHints?: Map<string, string>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
-    /** Skip the AI enrichment stage, so the deterministic extraction alone decides parameters
+    /** Skip the LLM enrichment stage, so the deterministic extraction alone decides parameters
      *  and fields (with heuristic descriptions). Set from the save's `SkipEntityAIActions`. */
     SkipAIEnrichment?: boolean;
 }

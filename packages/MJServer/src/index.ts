@@ -1671,7 +1671,7 @@ const setupComplete$ = new ReplaySubject(1);
     }
   }
 
-  // Initialize and start the integration sync worker if enabled.
+  // Initialize and start the integration sync worker if enabled (PR 1 item 8).
   // Off by default — deployments that don't opt in keep running syncs inline.
   let integrationSyncWorker: IntegrationSyncWorkerService | null = null;
   if (configInfo.integrationSyncWorker?.enabled) {
