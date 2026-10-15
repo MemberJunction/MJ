@@ -1360,7 +1360,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (61 classes)
+// @memberjunction/core-entities-server (62 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -2699,11 +2699,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
-    CalculateExpressionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
     CloneRecordAction,
@@ -2882,7 +2882,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1162;
+export const CLASS_REGISTRATIONS_COUNT = 1163;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
