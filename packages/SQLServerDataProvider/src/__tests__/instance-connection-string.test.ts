@@ -12,9 +12,7 @@
  * collided on the same shared-cache keys (2026-09-02 Skip prod incident).
  * The getter must read the public `config` property instead.
  */
-import { describe, it, expect, vi } from 'vitest';
-
-vi.mock('mssql', async () => (await import('./helpers/mock-mssql')).createMockMssqlModule());
+import { describe, it, expect } from 'vitest';
 
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 
