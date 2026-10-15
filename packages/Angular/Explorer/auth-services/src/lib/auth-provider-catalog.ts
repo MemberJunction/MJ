@@ -88,12 +88,14 @@ export class AuthProviderCatalog {
   }
 
   /**
-   * Builds the catalog URL off the MJAPI URL (MJ #5674): `mjapiUri` when given, else the
-   * GraphQL endpoint minus a trailing `/graphql`. The catalog is served by the same MJServer
-   * instance, mounted ahead of the auth middleware.
+   * Builds the catalog URL. With a configured MJAPI URL (`MJAPI_URI`, MJ #5674) the catalog is
+   * `<MJAPI URL>/auth/providers`. Without one it keeps the pre-#5674 behaviour: `/auth/providers` at the
+   * GraphQL endpoint's origin. The catalog is served by the same MJServer instance, mounted ahead of the
+   * auth middleware.
    */
   public static BuildCatalogUrl(graphqlUri: string, mjapiUri?: string): string {
-    return `${ResolveMJAPIURL(graphqlUri, mjapiUri)}/auth/providers`;
+    const mjapiUrl = ResolveMJAPIURL(mjapiUri);
+    return mjapiUrl ? `${mjapiUrl}/auth/providers` : new URL('/auth/providers', graphqlUri).toString();
   }
 
   /**

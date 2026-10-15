@@ -1241,7 +1241,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * Build the health check URL off the MJAPI URL and start the connectivity polling service.
    */
   private startConnectivityMonitoring(): void {
-    const healthUrl = `${ResolveMJAPIURL(this.environment.GRAPHQL_URI, this.environment.MJAPI_URI)}/healthcheck`;
+    // MJAPI_URI when configured (MJ #5674); otherwise the pre-#5674 origin-relative URL.
+    const mjapiUrl = ResolveMJAPIURL(this.environment.MJAPI_URI);
+    const healthUrl = mjapiUrl ? `${mjapiUrl}/healthcheck` : new URL('/healthcheck', this.environment.GRAPHQL_URI).toString();
     this.connectivityService.Start(healthUrl);
   }
 

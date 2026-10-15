@@ -234,6 +234,14 @@ export class OAuthCallbackComponent extends BaseAngularComponent implements OnIn
         }
     }
 
+    /** Pre-#5674 exchange URL for hosts that have not configured MJAPI_URI: derived from the GraphQL URL. */
+    private legacyExchangeUrl(graphqlUrl: string): string {
+        if (graphqlUrl.includes('/graphql')) {
+            return graphqlUrl.replace('/graphql', '/oauth/exchange');
+        }
+        return graphqlUrl.replace(/\/$/, '') + '/oauth/exchange';
+    }
+
     /**
      * Call the backend to exchange the authorization code for tokens
      */
@@ -242,8 +250,9 @@ export class OAuthCallbackComponent extends BaseAngularComponent implements OnIn
         const gqlProvider = this.ProviderToUse as GraphQLDataProvider;
         const configData = gqlProvider.ConfigData;
 
-        // The exchange endpoint hangs off the MJAPI URL, not the GraphQL URL (MJ #5674).
-        const apiUrl = `${configData.MJAPIURL}/oauth/exchange`;
+        // The exchange endpoint hangs off the configured MJAPI URL (MJAPI_URI, MJ #5674). Without one,
+        // keep the pre-#5674 derivation from the GraphQL URL.
+        const apiUrl = configData.MJAPIURL ? `${configData.MJAPIURL}/oauth/exchange` : this.legacyExchangeUrl(configData.URL);
 
         try {
             const response = await fetch(apiUrl, {

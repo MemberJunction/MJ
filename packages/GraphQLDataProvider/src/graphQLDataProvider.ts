@@ -178,11 +178,11 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
     get WSURL(): string { return this.Data.WSURL }
 
     /**
-     * URL of the MJAPI server for routes other than GraphQL, such as `/oauth/*` and `/media/*` (MJ #5674).
-     * Set it from the host's `MJAPI_URI`; unset, it falls back to {@link URL} minus a trailing `/graphql`.
-     * Never resolve those routes against the origin root.
+     * URL of the MJAPI server for routes other than GraphQL, such as `/oauth/*` and `/media/*` (MJ #5674),
+     * set from the host's `MJAPI_URI`. `undefined` when the host has not configured one; callers then keep
+     * their pre-#5674 behaviour.
      */
-    get MJAPIURL(): string { return ResolveMJAPIURL(this.URL, this.Data.MJAPIURL) }
+    get MJAPIURL(): string | undefined { return ResolveMJAPIURL(this.Data.MJAPIURL) }
     set MJAPIURL(url: string) { this.Data.MJAPIURL = url }
 
     /**
