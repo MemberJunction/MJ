@@ -98,7 +98,11 @@ export class MJNotificationService {
    */
   public static readonly Notifications$: Observable<MJUserNotificationEntity[]> =
     UserInfoEngine.Instance.UserNotifications$.pipe(
-      map(() => UserInfoEngine.Instance.UserNotifications),
+      // ...IfPermitted, not UserNotifications: a permission-constrained session (an external
+      // magic-link user) cannot read notifications, and the throwing getter errored this
+      // stream at shell boot — an uncaught PermissionConstrainedError that also terminated
+      // the shared replay for every later subscriber. Such users simply have no badge.
+      map(() => UserInfoEngine.Instance.UserNotificationsIfPermitted),
       shareReplay({ bufferSize: 1, refCount: false })
     );
 
@@ -244,10 +248,11 @@ export class MJNotificationService {
  
   /**
    * The current user's notifications, delegated to UserInfoEngine which owns the
-   * cache. Applies the per-user filter and newest-first sort on each access.
+   * cache. Applies the per-user filter and newest-first sort on each access. Empty
+   * (never a thrown PermissionConstrainedError) for a user who cannot read notifications.
    */
   public static get UserNotifications(): MJUserNotificationEntity[] {
-    return UserInfoEngine.Instance.UserNotifications;
+    return UserInfoEngine.Instance.UserNotificationsIfPermitted;
   }
 
   /**

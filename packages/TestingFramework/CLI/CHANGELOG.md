@@ -1,5 +1,89 @@
 # @memberjunction/testing-cli
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [432cb73]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [1da00cb]
+- Updated dependencies [bd0ee83]
+- Updated dependencies [fd2a410]
+- Updated dependencies [0dbd455]
+- Updated dependencies [dde482c]
+- Updated dependencies [49f26d9]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [32fedd8]
+- Updated dependencies [fcf8e1c]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [aaf74ca]
+- Updated dependencies [7316ac3]
+- Updated dependencies [4c682c1]
+- Updated dependencies [e533f99]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [35d3c95]
+- Updated dependencies [dbc3462]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [7177e09]
+- Updated dependencies [8704df6]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [45359c6]
+- Updated dependencies [aee2d53]
+- Updated dependencies [8ed4049]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d0df5a1]
+- Updated dependencies [d853bf8]
+- Updated dependencies [02bb563]
+- Updated dependencies [a66f4b0]
+- Updated dependencies [ed326fb]
+- Updated dependencies [90829e3]
+- Updated dependencies [31057d8]
+- Updated dependencies [aac148b]
+- Updated dependencies [f2f6f4b]
+- Updated dependencies [a28ce42]
+- Updated dependencies [bc0e36f]
+- Updated dependencies [e1942c7]
+- Updated dependencies [bdea87a]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [b653746]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [d2ccfef]
+  - @memberjunction/ai-agents@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/generic-database-provider@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/rubrics@6.2.0-edge.4
+  - @memberjunction/dynamic-packages@6.2.0-edge.4
+  - @memberjunction/testing-integration@6.2.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.4
+  - @memberjunction/testing-engine@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/testing-engine-base@6.2.0-edge.4
+  - @memberjunction/rubrics-base@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Minor Changes

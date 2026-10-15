@@ -809,9 +809,10 @@ describe('GenericDatabaseProvider', () => {
          */
         interface RLSAccess {
             CheckRecordRLS: (e: BaseEntity, u: UserInfo, t: EntityPermissionType) => Promise<boolean>;
+            CheckCreateRLS: (e: BaseEntity, u: UserInfo) => Promise<boolean>;
             CheckUpdateRLSPostImage: (e: BaseEntity, u: UserInfo) => Promise<boolean>;
             TryExtractSimpleFilterColumns: (clause: string) => string[] | null;
-            BuildRLSSyntheticRowProjections: (e: BaseEntity, ei: EntityInfo, includeNulls: boolean) => string;
+            BuildRLSSyntheticRowProjections: (e: BaseEntity, ei: EntityInfo) => string;
         }
         const RLS = (): RLSAccess => provider as unknown as RLSAccess;
 
@@ -1008,7 +1009,7 @@ describe('GenericDatabaseProvider', () => {
         });
 
         describe('BuildRLSSyntheticRowProjections', () => {
-            it('includeNulls=true emits a typed CAST(NULL AS <type>) for null fields', () => {
+            it('emits a typed CAST(NULL AS <type>) for null fields', () => {
                 // No dialect on this test provider (`getDialect()` returns null), so the code takes
                 // its documented fallback and emits `SQLFullType` verbatim — the exact string it
                 // emitted before dialect mapping existed.
@@ -1017,7 +1018,7 @@ describe('GenericDatabaseProvider', () => {
                     fields: [{ Name: 'Notes', NeedsQuotes: true, Type: 'nvarchar', Length: 200, SQLFullType: 'nvarchar(100)', Value: null }],
                 });
 
-                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo);
 
                 expect(projections).toBe('CAST(NULL AS nvarchar(100)) AS "Notes"');
             });
@@ -1039,7 +1040,7 @@ describe('GenericDatabaseProvider', () => {
                     (provider as unknown as { getDialect(): unknown }).getDialect = () => dialect;
 
                     expect(
-                        provider.BuildRLSSyntheticRowProjections(entity, entityInfo, true),
+                        provider.BuildRLSSyntheticRowProjections(entity, entityInfo),
                         `${dialect.constructor.name}: byte length must be halved to characters`,
                     ).toBe(expected);
                 }
@@ -1053,32 +1054,36 @@ describe('GenericDatabaseProvider', () => {
                 const provider = RLS();
                 (provider as unknown as { getDialect(): unknown }).getDialect = () => new SQLServerDialect();
 
-                expect(provider.BuildRLSSyntheticRowProjections(entity, entityInfo, true))
+                expect(provider.BuildRLSSyntheticRowProjections(entity, entityInfo))
                     .toBe('CAST(NULL AS NVARCHAR(MAX)) AS "Body"');
             });
 
-            it('includeNulls=true throws for a null field with no resolvable SQLFullType', () => {
+            it('throws for a null field with no resolvable SQLFullType', () => {
                 const { entity, entityInfo } = MakeRLSEntity({
                     rlsClause: '',
                     fields: [{ Name: 'Notes', NeedsQuotes: true, SQLFullType: '', Value: null }],
                 });
 
-                expect(() => RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true))
+                expect(() => RLS().BuildRLSSyntheticRowProjections(entity, entityInfo))
                     .toThrow(/no resolvable SQL type/i);
             });
 
-            it('includeNulls=false skips null fields instead of projecting them', () => {
-                const { entity, entityInfo } = MakeRLSEntity({
-                    rlsClause: '',
+            it('CheckCreateRLS projects a null field as a typed NULL, so a filter on it evaluates instead of failing to bind', async () => {
+                // A shared folder leaves OwnerUserID NULL. Skipping the column made any create filter
+                // that mentions it fail with `Invalid column name` instead of evaluating.
+                const { entity } = MakeRLSEntity({
+                    rlsClause: "OwnerUserID IS NULL OR OwnerUserID = 'u1'",
                     fields: [
-                        { Name: 'Notes', NeedsQuotes: true, SQLFullType: 'nvarchar(100)', Value: null },
-                        { Name: 'Name', NeedsQuotes: true, Value: 'Keep' },
+                        { Name: 'Name', NeedsQuotes: true, Value: 'Shared folder' },
+                        { Name: 'OwnerUserID', NeedsQuotes: true, Type: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', Value: null },
                     ],
                 });
+                provider.executeSQLResults = [[{ pass: 1 }]];
 
-                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, false);
+                const result = await RLS().CheckCreateRLS(entity, mockUser);
 
-                expect(projections).toBe('\'Keep\' AS "Name"');
+                expect(result).toBe(true);
+                expect(provider.executeSQLCalls[0].sql).toContain('CAST(NULL AS uniqueidentifier) AS "OwnerUserID"');
             });
 
             it('throws for a non-numeric string in a numeric (NeedsQuotes=false) field instead of interpolating it', () => {
@@ -1087,7 +1092,7 @@ describe('GenericDatabaseProvider', () => {
                     fields: [{ Name: 'Amount', NeedsQuotes: false, Value: 'abc' }],
                 });
 
-                expect(() => RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true))
+                expect(() => RLS().BuildRLSSyntheticRowProjections(entity, entityInfo))
                     .toThrow(/does not parse as a number/i);
             });
 
@@ -1101,7 +1106,7 @@ describe('GenericDatabaseProvider', () => {
                     ],
                 });
 
-                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo);
 
                 expect(projections).toContain('42 AS "Amount"');
                 expect(projections).toContain('1 AS "IsActive"');
@@ -1117,7 +1122,7 @@ describe('GenericDatabaseProvider', () => {
                     ],
                 });
 
-                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo);
 
                 expect(projections).toBe('\'abc\' AS "OrganizationID"');
             });

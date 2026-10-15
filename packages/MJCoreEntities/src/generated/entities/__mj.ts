@@ -2447,7 +2447,7 @@ export const MJAIAgentRunStepSchema = z.object({
         * * Field Name: PayloadAtStart
         * * Display Name: Payload At Start
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON serialization of the Payload state at the start of this step`),
+        * * Description: JSON serialization of the Payload state at the start of this step. NULL when PayloadAtStartSourceStepID is set; the starting payload is then the PayloadAtEnd of that step.`),
     PayloadAtEnd: z.string().nullable().describe(`
         * * Field Name: PayloadAtEnd
         * * Display Name: Payload At End
@@ -2519,6 +2519,12 @@ detailed information about what validation rules failed.`),
         * * Display Name: Native Tool Results Sent
         * * SQL Data Type: bit
         * * Description: For native tool-calling steps: 1 = the results of this step's tool calls were returned to the model as native tool-result turns, 0 = as the markdown action-results user message. NULL for envelope steps and for rows predating the feature.`),
+    PayloadAtStartSourceStepID: z.string().nullable().describe(`
+        * * Field Name: PayloadAtStartSourceStepID
+        * * Display Name: Payload At Start Source Step ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+        * * Description: When set, PayloadAtStart is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's starting payload.`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
         * * Display Name: Agent Run Context
@@ -2526,6 +2532,10 @@ detailed information about what validation rules failed.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Step Context
+        * * SQL Data Type: nvarchar(255)`),
+    PayloadAtStartSourceStep: z.string().nullable().describe(`
+        * * Field Name: PayloadAtStartSourceStep
+        * * Display Name: Payload At Start Source Step
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -2624,7 +2634,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Field Name: Result
         * * Display Name: Result
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Final result or output from the agent execution, stored as JSON or text`),
+        * * Description: Deprecated. No longer written by agent runs; use FinalPayload, which holds the same value. Kept for existing rows and external readers.`),
     AgentState: z.string().nullable().describe(`
         * * Field Name: AgentState
         * * Display Name: Agent State
@@ -7461,6 +7471,16 @@ export const MJAIPromptSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJAIPromptEntity_IAIPromptConfiguration
         * * Description: Per-prompt call-time configuration bag (JSON, IAIPromptConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the prompt Configuration cascade — AIPromptModel rows inherit from it per key and may override — and itself layered on top of the resolved AIModel/AIModelVendor ModelConfiguration. NULL = contributes nothing.`),
+    TemplateDataCapture: z.union([z.literal('Full'), z.literal('None'), z.literal('Referenced')]).nullable().describe(`
+        * * Field Name: TemplateDataCapture
+        * * Display Name: Template Data Capture
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Full
+    *   * None
+    *   * Referenced
+        * * Description: Which template inputs (data, templateData) prompt runs store in Messages: None (shape only), Referenced (only keys the template uses) or Full. NULL uses the server default.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template Text
@@ -35691,6 +35711,16 @@ export const MJThemeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    LoginScreen: z.string().nullable().describe(`
+        * * Field Name: LoginScreen
+        * * Display Name: Login Screen
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The published sign-in page design as JSON (the LoginDesign shape from @memberjunction/theme-engine): layout, background, colors and the blocks in each login-screen region. The default Active theme's value is served unauthenticated to draw the Explorer login screen. NULL means the stock login screen.`),
+    LoginScreenDraft: z.string().nullable().describe(`
+        * * Field Name: LoginScreenDraft
+        * * Display Name: Login Screen Draft
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The sign-in page design being edited in Login Studio, as JSON in the same shape as LoginScreen. Never served publicly; publishing copies it to LoginScreen. NULL means no draft.`),
 });
 
 export type MJThemeEntityType = z.infer<typeof MJThemeSchema>;
@@ -45349,7 +45379,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     * * Field Name: PayloadAtStart
     * * Display Name: Payload At Start
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON serialization of the Payload state at the start of this step
+    * * Description: JSON serialization of the Payload state at the start of this step. NULL when PayloadAtStartSourceStepID is set; the starting payload is then the PayloadAtEnd of that step.
     */
     get PayloadAtStart(): string | null {
         return this.Get('PayloadAtStart');
@@ -45525,6 +45555,20 @@ detailed information about what validation rules failed.
     }
 
     /**
+    * * Field Name: PayloadAtStartSourceStepID
+    * * Display Name: Payload At Start Source Step ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+    * * Description: When set, PayloadAtStart is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's starting payload.
+    */
+    get PayloadAtStartSourceStepID(): string | null {
+        return this.Get('PayloadAtStartSourceStepID');
+    }
+    set PayloadAtStartSourceStepID(value: string | null) {
+        this.Set('PayloadAtStartSourceStepID', value);
+    }
+
+    /**
     * * Field Name: AgentRun
     * * Display Name: Agent Run Context
     * * SQL Data Type: nvarchar(255)
@@ -45540,6 +45584,15 @@ detailed information about what validation rules failed.
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: PayloadAtStartSourceStep
+    * * Display Name: Payload At Start Source Step
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PayloadAtStartSourceStep(): string | null {
+        return this.Get('PayloadAtStartSourceStep');
     }
 
     /**
@@ -45910,7 +45963,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     * * Field Name: Result
     * * Display Name: Result
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Final result or output from the agent execution, stored as JSON or text
+    * * Description: Deprecated. No longer written by agent runs; use FinalPayload, which holds the same value. Kept for existing rows and external readers.
     */
     get Result(): string | null {
         return this.Get('Result');
@@ -61588,6 +61641,24 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     }
     set PromptConfigurationObject(value: MJAIPromptEntity_IAIPromptConfiguration | null) {
         this.SetJSONFieldObject<MJAIPromptEntity_IAIPromptConfiguration>('PromptConfiguration', value);
+    }
+
+    /**
+    * * Field Name: TemplateDataCapture
+    * * Display Name: Template Data Capture
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Full
+    *   * None
+    *   * Referenced
+    * * Description: Which template inputs (data, templateData) prompt runs store in Messages: None (shape only), Referenced (only keys the template uses) or Full. NULL uses the server default.
+    */
+    get TemplateDataCapture(): 'Full' | 'None' | 'Referenced' | null {
+        return this.Get('TemplateDataCapture');
+    }
+    set TemplateDataCapture(value: 'Full' | 'None' | 'Referenced' | null) {
+        this.Set('TemplateDataCapture', value);
     }
 
     /**
@@ -138068,6 +138139,32 @@ export class MJThemeEntity extends BaseEntity<MJThemeEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: LoginScreen
+    * * Display Name: Login Screen
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The published sign-in page design as JSON (the LoginDesign shape from @memberjunction/theme-engine): layout, background, colors and the blocks in each login-screen region. The default Active theme's value is served unauthenticated to draw the Explorer login screen. NULL means the stock login screen.
+    */
+    get LoginScreen(): string | null {
+        return this.Get('LoginScreen');
+    }
+    set LoginScreen(value: string | null) {
+        this.Set('LoginScreen', value);
+    }
+
+    /**
+    * * Field Name: LoginScreenDraft
+    * * Display Name: Login Screen Draft
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The sign-in page design being edited in Login Studio, as JSON in the same shape as LoginScreen. Never served publicly; publishing copies it to LoginScreen. NULL means no draft.
+    */
+    get LoginScreenDraft(): string | null {
+        return this.Get('LoginScreenDraft');
+    }
+    set LoginScreenDraft(value: string | null) {
+        this.Set('LoginScreenDraft', value);
     }
 }
 
