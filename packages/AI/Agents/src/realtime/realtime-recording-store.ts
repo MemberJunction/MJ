@@ -187,7 +187,8 @@ export async function deleteRealtimeRecordingSegments(sessionID: string, storage
     try {
         const driver = await FileStorageEngine.Instance.GetDriver(storageAccountID, contextUser);
         const folder = recordingFolder(sessionID);
-        const listed = await driver.ListObjects(folder);
+        // Delimiter-based drivers need the trailing slash to return contents rather than the folder prefix.
+        const listed = await driver.ListObjects(`${folder}/`);
         let deleted = 0;
         for (const obj of listed.objects ?? []) {
             const base = (obj.name.split('/').pop() ?? obj.name);

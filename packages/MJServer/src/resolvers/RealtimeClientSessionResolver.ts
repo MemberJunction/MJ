@@ -60,7 +60,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
-import { resolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
+import { resolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser, ResolveRecordingStoreUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /**
  * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter
@@ -709,11 +709,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return { Success: false, ErrorMessage: 'Recording consent was not granted.' };
         }
 
-        // SCOPED-ANONYMOUS ELEVATION (issue #3371): past the ownership + consent gates, the store is
-        // server-side plumbing over entities (MJ: AI Agents read, MJ: Files, the file-session link)
-        // the caller's narrow relay role deliberately does not hold. Attribution flows through the
-        // session link, so nothing here depends on the caller's identity.
-        const runUser = ResolveScopedAnonymousRunUser(contextUser);
+        // Ownership and consent stay on the caller. Only the recording store runs as SYSTEM:
+        // the stock UI role cannot create MJ: Files or the file-session link (#5195).
+        const runUser = ResolveRecordingStoreUser(contextUser);
         try {
             const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', runUser);
             if (!(await agent.Load(session.AgentID))) {
