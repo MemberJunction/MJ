@@ -337,6 +337,18 @@ export interface CacheChangedEvent {
      * For `'removed'` and `'category_cleared'` actions, this is `undefined`.
      */
     Data?: string;
+
+    /**
+     * Monotonic counter shared by every server, incremented once per shared-cache mutation.
+     *
+     * For recovery rather than ordering: a subscriber that was disconnected cannot see what pub/sub
+     * did not replay, so it records the highest epoch it has seen and compares that with the current
+     * value on reconnect to learn whether anything was invalidated meanwhile.
+     *
+     * Optional — transports without the counter omit it, and consumers that do not reconcile can
+     * ignore it.
+     */
+    Epoch?: number;
 }
 
 // ============================================================================
