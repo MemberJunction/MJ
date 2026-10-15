@@ -34,7 +34,7 @@ const { userCacheStub } = vi.hoisted(() => ({
     userCacheStub: { Users: [] as Array<{ ID: string; UserRoles: Array<{ RoleID: string }> }> },
 }));
 
-vi.mock('@memberjunction/generic-database-provider', () => ({
+vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
     UserCache: userCacheStub,
 }));
 
