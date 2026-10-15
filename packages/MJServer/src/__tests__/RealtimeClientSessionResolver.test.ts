@@ -2981,6 +2981,19 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect((writeSegmentMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(SYSTEM_USER);
     });
 
+    it('refuses a crash-recovery segment once the session has its consolidated recording (no orphan shard) (#5197)', async () => {
+        const session = makeSessionEntity({ UserID: 'anon-1', RecordingFileID: 'file-final' });
+        const agent = makeSessionEntity({ ID: 'co-agent-1' });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agents' ? agent : session)),
+        };
+
+        const ok = await makeAnonResolver().UploadRealtimeRecordingSegment('session-1', 7, AUDIO_B64, 'audio/wav', makeCtx());
+
+        expect(ok).toBe(false);
+        expect(writeSegmentMock).not.toHaveBeenCalled();
+    });
+
     it('a UI-only owner stores a closed session recording as SYSTEM after caller ownership is proven (#5195)', async () => {
         const session = makeSessionEntity({ UserID: 'user-1', Status: 'Closed' });
         const agent = makeSessionEntity({ ID: 'co-agent-1' });
