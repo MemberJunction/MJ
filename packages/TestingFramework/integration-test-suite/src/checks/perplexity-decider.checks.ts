@@ -455,8 +455,11 @@ async function assertSelectionWithBoundDecider(
     AssertEqual(considered?.available, true, `${label}: the run saw the Decider as available`);
 }
 
-/** Every decision driver but Perplexity's, made unavailable for PX5's failover leg. */
-const UNAVAILABLE_DRIVER_CLASSES: readonly string[] = ['OpenRouterDecision', 'LLMDecision', 'CloudflareDecision', 'SystemOneDecision'];
+/**
+ * Every decision driver but Perplexity's, made unavailable for PX5's failover leg: the shared list, so a
+ * driver added to it is covered here too.
+ */
+const UNAVAILABLE_DRIVER_CLASSES: readonly string[] = SCRIPTED_DECISION_DRIVER_CLASSES.filter(name => name !== DRIVER_CLASS);
 
 /**
  * PX5 failover: with every other decision driver unavailable, `Default Decision` fails over from model to
