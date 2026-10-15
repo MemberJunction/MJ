@@ -142,8 +142,9 @@ import {
     HuggingFaceRealtime,
 } from '@memberjunction/ai-huggingface';
 
-// @memberjunction/ai-inception (1 classes)
+// @memberjunction/ai-inception (2 classes)
 import {
+    InceptionDecision,
     InceptionLLM,
 } from '@memberjunction/ai-inception';
 
@@ -168,9 +169,10 @@ import {
     SiliconFlowLLM,
 } from '@memberjunction/ai-siliconflow';
 
-// @memberjunction/ai-systemone (2 classes)
+// @memberjunction/ai-systemone (3 classes)
 import {
     PerplexityDecision,
+    SubQDecision,
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
@@ -241,7 +243,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (452 classes)
+// @memberjunction/core-entities (453 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -659,6 +661,7 @@ import {
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
     MJThemeEntity,
+    MJThemeEntityExtended,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -1361,7 +1364,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (61 classes)
+// @memberjunction/core-entities-server (63 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1388,12 +1391,14 @@ import {
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJDashboardEntityServer,
+    MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
     MJEntityFormContributionEntityServer,
     MJEntityFormOverrideEntityServer,
+    MJFileEntityServer,
     MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
@@ -1722,6 +1727,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAIRealtime,
     DeepInfraLLM,
     HuggingFaceRealtime,
+    InceptionDecision,
     InceptionLLM,
     LlamaCppLLM,
     MiniMaxLLM,
@@ -1729,6 +1735,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenRouterLLM,
     SiliconFlowLLM,
     PerplexityDecision,
+    SubQDecision,
     SystemOneDecision,
     GeminiEnterpriseRealtime,
     VertexLLM,
@@ -1881,12 +1888,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
-    MJCollectionEntity,
-    MJCollectionPermissionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCollectionEntity,
+    MJCollectionPermissionEntity,
     MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
@@ -2085,12 +2092,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryPermissionEntity,
     MJQuerySQLEntity,
     MJQueueEntity,
-    MJQueueTaskEntity,
-    MJQueueTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueueTaskEntity,
+    MJQueueTypeEntity,
     MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
@@ -2177,6 +2184,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
     MJThemeEntity,
+    MJThemeEntityExtended,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -2288,13 +2296,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ExportSurveyMonkeyCSVAction,
     ExportTypeformCSVAction,
     GetGoogleFormAction,
-    GetGoogleFormsStatisticsAction,
-    GetJotFormAction,
-    GetJotFormStatisticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetGoogleFormsStatisticsAction,
+    GetJotFormAction,
+    GetJotFormStatisticsAction,
     GetJotFormSubmissionsAction,
     GetSingleGoogleFormsResponseAction,
     GetSingleJotFormSubmissionAction,
@@ -2492,13 +2500,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     OpenSearchSearchProvider,
     SearchScopePermissionResolver,
     StorageSearchProvider,
-    TagSearchProvider,
-    TypesenseSearchProvider,
-    VectorSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TagSearchProvider,
+    TypesenseSearchProvider,
+    VectorSearchProvider,
     VoyageReRanker,
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
@@ -2626,12 +2634,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJDashboardEntityServer,
+    MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
     MJEntityFormContributionEntityServer,
     MJEntityFormOverrideEntityServer,
+    MJFileEntityServer,
     MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
@@ -2694,15 +2704,15 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AddRecordsToListAction,
     AddViewResultsToListAction,
     AggregateDataAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     AssignUserRolesAction,
     BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
@@ -2882,7 +2892,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1163;
+export const CLASS_REGISTRATIONS_COUNT = 1168;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

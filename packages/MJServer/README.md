@@ -182,6 +182,11 @@ module.exports = {
     level: 'standard',  // 'minimal' | 'standard' | 'verbose' | 'debug'
   },
 
+  // Template data that prompt runs store — see "Prompt run template data" below
+  aiPromptRuns: {
+    templateDataCapture: 'None',  // 'None' | 'Referenced' | 'Full'
+  },
+
   // Realtime WebRTC SDP broker router (/realtime/sdp-exchange)
   // Enabled by default; can be disabled via MJ_REALTIME_ENABLED=false or realtime.enabled: false
   realtime: {
@@ -196,6 +201,18 @@ module.exports = {
   },
 };
 ```
+
+### Prompt run template data (`aiPromptRuns`)
+
+`aiPromptRuns.templateDataCapture` is the server default for the template inputs that a prompt run stores in `AIPromptRun.Messages`:
+
+| Value | What a run stores |
+|---|---|
+| `'None'` (default) | Top-level key names and byte sizes only, no values |
+| `'Referenced'` | Only the keys that the prompt's templates read |
+| `'Full'` | All keys |
+
+A value on the prompt (`AIPrompt.TemplateDataCapture`) or on the call (`AIPromptParams.TemplateDataCapture`) overrides it. MJServer checks the value when it starts: any other value stops MJAPI with `Configuration validation failed`. For the full rules, see [Template data capture](../AI/Prompts/README.md#template-data-capture) in the AI Prompts README.
 
 ### Debugging GraphQL requests
 

@@ -5,7 +5,7 @@ import { RecordChangeFieldSecurityProjector } from "./recordChangeFieldSecurity"
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager, CachedRunViewResult, CacheCategory } from "./localCacheManager";
-import type { CacheChangedEvent } from "./localCacheManager";
+import type { CacheChangedEvent, QueryDefinitionSignature } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
@@ -124,6 +124,17 @@ export interface QueryCacheAuthorization {
      * the user or the date is never served to another user or on another day.
      */
     contextTokens?: ContextToken[];
+    /**
+     * Resolved query ID. With `queryName`, the identity the RunQuery fingerprint is built from, so
+     * a request by ID, by name, or by both reaches the same slot.
+     */
+    queryId?: string;
+    /**
+     * The definition the provider would execute on a miss. Set by providers that execute queries
+     * themselves; a slot written under another definition is then a miss. Undefined where the
+     * provider cannot compute one (a client, whose slots the server validates instead).
+     */
+    definition?: QueryDefinitionSignature;
 }
 
 export const AllMetadataArrays = [
@@ -2444,7 +2455,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 qInfo.ID,
                 id => [this.Queries.find(q => UUIDsEqual(q.ID, id))?.SQL, ...this.QuerySQLs.filter(s => UUIDsEqual(s.QueryID, id)).map(s => s.SQL)],
                 id => this.QueryDependencies.filter(d => UUIDsEqual(d.QueryID, id)).map(d => d.DependsOnQueryID)
-            )
+            ),
+            queryId: qInfo.ID
         };
     }
 
@@ -2508,6 +2520,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             && !params.RequireApproved
             && LocalCacheManager.Instance.IsInitialized;
         let queryFingerprint: string | undefined;
+        let queryDefinition: QueryDefinitionSignature | undefined;
         if (queryCacheEngaged) {
             // Resolve + authorize ONCE, BEFORE fingerprinting (B45/B46 seam). The resolved
             // category feeds the fingerprint below, and the same result drives the permission
@@ -2527,7 +2540,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             };
             if (serverSegment !== null) {
                 queryFingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(
-                    params.QueryID, params.QueryName, fingerprintParams, this.InstanceConnectionString,
+                    // The RESOLVED identity when metadata resolves, so a request by ID, by name, or by
+                    // both shares one slot (and a query's slots can be found by its ID). The caller's
+                    // identity otherwise.
+                    queryAuth.resolvable ? queryAuth.queryId : params.QueryID,
+                    queryAuth.resolvable ? queryAuth.queryName : params.QueryName,
+                    fingerprintParams, this.InstanceConnectionString,
                     // B46: the full category path is a DISTINGUISHING element. Canonical resolved
                     // path when metadata resolves; the caller-stated path otherwise (runtime-created
                     // queries) — either way, same-named queries in different categories get
@@ -2535,7 +2553,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     queryAuth.resolvable ? queryAuth.categoryPath : params.CategoryPath
                 );
             }
-            const cached = queryFingerprint ? await LocalCacheManager.Instance.GetRunQueryResult(queryFingerprint) : null; // TTL-enforced
+            queryDefinition = queryAuth.definition;
+            // TTL-enforced, and a miss when the slot was written under another query definition.
+            const cached = queryFingerprint ? await LocalCacheManager.Instance.GetRunQueryResult(queryFingerprint, queryDefinition) : null;
             if (cached && queryFingerprint) {
                 const serveFromSlot = (): RunQueryResult => ({
                     QueryID: cached.queryId ?? params.QueryID ?? '',
@@ -2615,7 +2635,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 } else {
                 const response = await checker([{
                     params,
-                    cacheStatus: { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount }
+                    // '' for a slot written without a hash: the server answers `stale` and returns
+                    // its hash, so the rewrite below stamps the slot.
+                    cacheStatus: { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount, definitionHash: cached.definitionHash ?? '' }
                 }], contextUser);
                 const check = response.results?.[0];
                 if (response.success && check) {
@@ -2628,7 +2650,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         LocalCacheManager.Instance.SetRunQueryResult(
                             queryFingerprint, params.QueryName ?? '', freshRows,
                             check.maxUpdatedAt ?? '', check.rowCount, check.queryId, params.CacheLocalTTL,
-                            contextUser?.ID
+                            contextUser?.ID,
+                            check.definitionHash ? { QueryID: check.queryId, Hash: check.definitionHash } : undefined
                         ).catch(e => LogError(`RunQuery cache rewrite failed: ${e}`));
                         return {
                             QueryID: check.queryId ?? params.QueryID ?? '',
@@ -2673,7 +2696,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             LocalCacheManager.Instance.SetRunQueryResult(
                 queryFingerprint, result.QueryName, result.Results,
                 '', result.TotalRowCount, result.QueryID, params.CacheLocalTTL,
-                contextUser?.ID
+                contextUser?.ID, queryDefinition
             ).catch(e => LogError(`RunQuery cache write failed: ${e}`));
         }
 

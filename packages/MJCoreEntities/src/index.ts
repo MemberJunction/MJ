@@ -18,6 +18,7 @@ export * from './custom/ConversationForkAccess';
 export * from './custom/MJConversationBranchEntityExtended';
 export * from './custom/MJQueryEntityExtended';
 export * from './custom/approvals';
+export * from './custom/MJThemeEntityExtended';
 export * from './custom/AIAgentNoteStatus';
 
 export * from './custom/ResourcePermissions/ResourcePermissionEngine';

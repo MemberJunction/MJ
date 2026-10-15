@@ -5994,7 +5994,7 @@ export class MJAIAgentRunStep_ {
     @MaxLength(36)
     TargetLogID?: string;
         
-    @Field({nullable: true, description: "JSON serialization of the Payload state at the start of this step"}) 
+    @Field({nullable: true, description: "JSON serialization of the Payload state at the start of this step. NULL when PayloadAtStartSourceStepID is set; the starting payload is then the PayloadAtEnd of that step."}) 
     PayloadAtStart?: string;
         
     @Field({nullable: true, description: "JSON serialization of the Payload state at the end of this step"}) 
@@ -6030,6 +6030,10 @@ export class MJAIAgentRunStep_ {
     @Field(() => Boolean, {nullable: true, description: "For native tool-calling steps: 1 = the results of this step's tool calls were returned to the model as native tool-result turns, 0 = as the markdown action-results user message. NULL for envelope steps and for rows predating the feature."}) 
     NativeToolResultsSent?: boolean;
         
+    @Field({nullable: true, description: "When set, PayloadAtStart is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's starting payload."}) 
+    @MaxLength(36)
+    PayloadAtStartSourceStepID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     AgentRun?: string;
@@ -6037,6 +6041,10 @@ export class MJAIAgentRunStep_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    PayloadAtStartSourceStep?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -6139,6 +6147,9 @@ export class CreateMJAIAgentRunStepInput {
     @Field(() => Boolean, { nullable: true })
     NativeToolResultsSent: boolean | null;
 
+    @Field({ nullable: true })
+    PayloadAtStartSourceStepID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -6223,6 +6234,9 @@ export class UpdateMJAIAgentRunStepInput {
 
     @Field(() => Boolean, { nullable: true })
     NativeToolResultsSent?: boolean | null;
+
+    @Field({ nullable: true })
+    PayloadAtStartSourceStepID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -6358,7 +6372,7 @@ export class MJAIAgentRun_ {
     @MaxLength(36)
     UserID?: string;
         
-    @Field({nullable: true, description: "Final result or output from the agent execution, stored as JSON or text"}) 
+    @Field({nullable: true, description: "Deprecated. No longer written by agent runs; use FinalPayload, which holds the same value. Kept for existing rows and external readers."}) 
     Result?: string;
         
     @Field({nullable: true, description: "JSON serialization of the complete agent state, including conversation context, variables, and execution state. Enables pause/resume functionality."}) 
@@ -17025,6 +17039,10 @@ export class MJAIPrompt_ {
     @Field({nullable: true, description: "Per-prompt call-time configuration bag (JSON, IAIPromptConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the prompt Configuration cascade — AIPromptModel rows inherit from it per key and may override — and itself layered on top of the resolved AIModel/AIModelVendor ModelConfiguration. NULL = contributes nothing."}) 
     PromptConfiguration?: string;
         
+    @Field({nullable: true, description: "Which template inputs (data, templateData) prompt runs store in Messages: None (shape only), Referenced (only keys the template uses) or Full. NULL uses the server default."}) 
+    @MaxLength(20)
+    TemplateDataCapture?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Template?: string;
@@ -17214,6 +17232,9 @@ export class CreateMJAIPromptInput {
     @Field({ nullable: true })
     PromptConfiguration: string | null;
 
+    @Field({ nullable: true })
+    TemplateDataCapture: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -17382,6 +17403,9 @@ export class UpdateMJAIPromptInput {
 
     @Field({ nullable: true })
     PromptConfiguration?: string | null;
+
+    @Field({ nullable: true })
+    TemplateDataCapture?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -92934,6 +92958,12 @@ export class MJTheme_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "The published sign-in page design as JSON (the LoginDesign shape from @memberjunction/theme-engine): layout, background, colors and the blocks in each login-screen region. The default Active theme's value is served unauthenticated to draw the Explorer login screen. NULL means the stock login screen."}) 
+    LoginScreen?: string;
+        
+    @Field({nullable: true, description: "The sign-in page design being edited in Login Studio, as JSON in the same shape as LoginScreen. Never served publicly; publishing copies it to LoginScreen. NULL means no draft."}) 
+    LoginScreenDraft?: string;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         
@@ -92980,6 +93010,12 @@ export class CreateMJThemeInput {
     @Field({ nullable: true })
     CustomCSS: string | null;
 
+    @Field({ nullable: true })
+    LoginScreen: string | null;
+
+    @Field({ nullable: true })
+    LoginScreenDraft: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -93025,6 +93061,12 @@ export class UpdateMJThemeInput {
 
     @Field({ nullable: true })
     CustomCSS?: string | null;
+
+    @Field({ nullable: true })
+    LoginScreen?: string | null;
+
+    @Field({ nullable: true })
+    LoginScreenDraft?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -1,5 +1,5 @@
 /**
- * calendar-event-links.checks.ts — the 'calendar-event-links' bundle (IT123, #4789 A18): calendar
+ * calendar-event-links.checks.ts — the 'calendar-event-links' bundle (IT127, #4789 A18): calendar
  * events tied to records (`MJ: Calendar Event Links`) and calendar sync (`MJ: Calendar Sync States`),
  * through the real `CalendarEventLinks` against a test-only calendar provider. No external calls.
  *
@@ -73,7 +73,7 @@ import { BuildSystemKeyProvider, BuildUserKeyProviderWithRetry } from './fls-cli
 const BUNDLE = 'calendar-event-links';
 const TAG = '(mj-integration-test — safe to delete)';
 /** The ClassFactory key AND the provider row's name. CommunicationEngine caches provider instances by name, so no other check may use it. */
-const PROVIDER_NAME = 'IT123 Fake Calendar';
+const PROVIDER_NAME = 'IT127 Fake Calendar';
 const PROVIDERS_ENTITY = 'MJ: Communication Providers';
 const LINK_ENTITY = 'MJ: Calendar Event Links';
 const SYNC_STATE_ENTITY = 'MJ: Calendar Sync States';
@@ -95,7 +95,7 @@ const DAY_MS = 24 * HOUR_MS;
 /** How long CL1 waits for MJAPI to honour the new user's role and key scope (its caches refresh asynchronously). */
 const READ_PROPAGATION_MS = 90_000;
 const TOKEN_PREFIX = 'it122-token-';
-const NOT_MESSAGING = 'The IT123 fake calendar sends and reads no messages.';
+const NOT_MESSAGING = 'The IT127 fake calendar sends and reads no messages.';
 
 // ── the fake calendar ──────────────────────────────────────────────────────────────────────────
 
@@ -257,12 +257,12 @@ class FakeCalendarProvider extends BaseCommunicationProvider {
     }
 
     private missing(id: string): string | null {
-        return this.events.has(id) ? null : `No event ${id} in the IT123 fake calendar.`;
+        return this.events.has(id) ? null : `No event ${id} in the IT127 fake calendar.`;
     }
 
     private require(id: string): CalendarEvent {
         const event = this.events.get(id);
-        if (!event) throw new Error(`No event ${id} in the IT123 fake calendar.`);
+        if (!event) throw new Error(`No event ${id} in the IT127 fake calendar.`);
         return event;
     }
 }
@@ -316,7 +316,7 @@ function requireFixture(): CalendarFixture {
 function fakeCalendar(): FakeCalendarProvider {
     const provider = CommunicationEngine.Instance.GetProvider(PROVIDER_NAME);
     if (!(provider instanceof FakeCalendarProvider)) {
-        throw new Error(`CommunicationEngine.GetProvider('${PROVIDER_NAME}') returned ${provider.constructor.name}, not the IT123 fake.`);
+        throw new Error(`CommunicationEngine.GetProvider('${PROVIDER_NAME}') returned ${provider.constructor.name}, not the IT127 fake.`);
     }
     return provider;
 }
@@ -361,7 +361,7 @@ async function createProviderRow(ctx: IntegrationCheckContext): Promise<string> 
     const row = await ctx.Provider.GetEntityObject<MJCommunicationProviderEntity>(PROVIDERS_ENTITY, ctx.User);
     row.NewRecord();
     row.Name = PROVIDER_NAME;
-    row.Description = `Test-only in-memory calendar for IT123 ${TAG}`;
+    row.Description = `Test-only in-memory calendar for IT127 ${TAG}`;
     row.Status = 'Active';
     row.SupportsSending = false; // never a candidate for a send (the communication bundle picks the first sending provider)
     row.SupportsReceiving = false;
@@ -455,7 +455,7 @@ async function createUIReader(ctx: IntegrationCheckContext, wire: IMetadataProvi
     user.NewRecord();
     user.Name = email;
     user.Email = email;
-    user.FirstName = 'IT123';
+    user.FirstName = 'IT127';
     user.LastName = `UI Reader ${TAG}`;
     user.Type = 'User';
     user.IsActive = true;
@@ -472,7 +472,7 @@ async function createUIReader(ctx: IntegrationCheckContext, wire: IMetadataProvi
 
 /** A user API key for the reader, granted full_access so only entity permissions can stop it. Written through MJAPI. */
 async function mintReaderKey(ctx: IntegrationCheckContext, wire: IMetadataProvider, userID: string): Promise<string> {
-    const created = await GetAPIKeyEngine().CreateAPIKey({ UserId: userID, Label: `IT123 UI reader ${TAG}` }, ctx.User, wire);
+    const created = await GetAPIKeyEngine().CreateAPIKey({ UserId: userID, Label: `IT127 UI reader ${TAG}` }, ctx.User, wire);
     if (!created.Success || !created.RawKey || !created.APIKeyId) {
         throw new Error(`CL1: CreateAPIKey failed: ${created.Error ?? 'no raw key returned'}`);
     }
@@ -581,7 +581,7 @@ async function checkUIRoleOverGraphQL(ctx: IntegrationCheckContext): Promise<voi
 
 function eventInput(subject: string, start: Date): CalendarEventInput {
     return {
-        Subject: `IT123 ${subject} ${TAG}`,
+        Subject: `IT127 ${subject} ${TAG}`,
         Start: start,
         End: new Date(start.getTime() + HOUR_MS),
         TimeZone: 'UTC',
@@ -702,7 +702,7 @@ async function syncAfterRefusedToken(ctx: IntegrationCheckContext, links: Calend
 
 async function cancelLinkedEvent(ctx: IntegrationCheckContext, links: CalendarEventLinks, record: LinkedRecord, linkA: MJCalendarEventLinkEntity): Promise<void> {
     const result = await links.CancelLinkedEvent(
-        { ProviderName: PROVIDER_NAME, EntityName: record.EntityName, RecordKey: record.Key, Comment: `Cancelled by IT123 ${TAG}` },
+        { ProviderName: PROVIDER_NAME, EntityName: record.EntityName, RecordKey: record.Key, Comment: `Cancelled by IT127 ${TAG}` },
         ctx.User
     );
     Assert(result.Success, `CL2: CancelLinkedEvent failed: ${result.ErrorMessage}`);
