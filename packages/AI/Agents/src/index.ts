@@ -62,7 +62,7 @@ export * from './realtime/realtime-turn-moderator';
 // DelegateToTargetRequest, DelegatedResult, ToolExecutionResult, loggers) is surfaced via the
 // runner's `export *` above, so only the broker-specific symbols are named here to avoid a
 // duplicate-export collision.
-export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall, DelegatedRunArtifact } from './realtime/realtime-tool-broker';
+export { RealtimeToolBroker, INVOKE_TARGET_AGENT_TOOL_NAME, RealtimeToolBrokerDeps, ExecutedToolCall, DelegatedRunArtifact } from './realtime/realtime-tool-broker';
 export * from './realtime/realtime-client-session-service';
 export * from './realtime/realtime-coagent-config';
 export * from './realtime/realtime-vendor-resolution';
