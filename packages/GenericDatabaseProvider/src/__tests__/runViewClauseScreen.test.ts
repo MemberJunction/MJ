@@ -431,3 +431,47 @@ describe('RunViewCore — a stored clause may not call a function whose reads th
         expect(result.ErrorMessage).toMatch(/may not call table_to_xml/);
     });
 });
+
+describe('RunViewCore — a user search term is screened as the quoted text it becomes', () => {
+    // lts/5 screens every search term with ValidateUserProvidedSQLClause. That screen reads SQL the
+    // way the database does, so it reads the quote-doubled term: a lone apostrophe in the raw term
+    // would otherwise read as an unterminated string literal.
+    const PEOPLE_ID = '3f1f6b9e-0000-4000-8000-0000000000a4';
+    const PEOPLE = readableEntity(PEOPLE_ID, 'People', 'vwPeople', [
+        { Name: 'LastName', CodeName: 'LastName', Type: 'nvarchar', Length: 100, IncludeInUserSearchAPI: true },
+    ]);
+
+    class PostgreSQLPeopleTestProvider extends PostgreSQLClauseScreenTestProvider {
+        public override get Entities(): EntityInfo[] { return [PEOPLE]; }
+    }
+
+    it.each([
+        ['SQL Server', () => new EntitySetTestProvider([PEOPLE])],
+        ['PostgreSQL', () => new PostgreSQLPeopleTestProvider()],
+    ])('accepts a term with an apostrophe on %s', async (_name, makeProvider) => {
+        const { result, sql } = await run({ EntityName: 'People', UserSearchString: "O'Leary" }, makeProvider());
+
+        expect(result.Success).toBe(true);
+        expect(sql[0]).toContain("O''Leary");
+    });
+
+    it('accepts a term with an apostrophe in the cache check', async () => {
+        const provider = new EntitySetTestProvider([PEOPLE]);
+
+        const response = await provider.RunViewsWithCacheCheck(
+            [{ params: { EntityName: 'People', UserSearchString: "O'Leary" }, cacheStatus: { maxUpdatedAt: '', rowCount: 0 } }],
+            USER,
+        );
+
+        expect(response.results[0].status).toBe('current');
+        expect(provider.ExecutedSQL[0]).toContain("O''Leary");
+    });
+
+    it('still refuses a term with a forbidden keyword, and runs no SQL', async () => {
+        const { result, sql } = await run({ EntityName: 'People', UserSearchString: "x' ; DROP TABLE t --" }, new EntitySetTestProvider([PEOPLE]));
+
+        expect(sql).toHaveLength(0);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/User Search/);
+    });
+});

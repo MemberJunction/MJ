@@ -9,7 +9,7 @@ const { executedSQL } = vi.hoisted(() => ({ executedSQL: [] as string[] }));
 
 // GetData's server bootstrap, provider, auth and driver imports are replaced so the resolver runs
 // offline. The fake driver records every text it is asked to run.
-vi.mock('../../index.js', () => ({ GetDbType: () => 'sqlserver' }));
+vi.mock('../../index.js', () => ({ getDbType: () => 'sqlserver' }));
 vi.mock('@memberjunction/generic-database-provider', () => ({
   QueryCompositionEngine: class {
     HasCompositionTokens(): boolean {
@@ -18,7 +18,7 @@ vi.mock('@memberjunction/generic-database-provider', () => ({
   },
 }));
 vi.mock('../../util.js', () => ({ GetReadOnlyDataSource: () => ({}), GetReadOnlyProvider: () => null }));
-vi.mock('../../auth/index.js', () => ({ GetSystemUser: async () => ({}) }));
+vi.mock('../../auth/index.js', () => ({ getSystemUser: async () => ({}) }));
 vi.mock('mssql', () => ({
   default: {
     Request: class {
@@ -30,7 +30,7 @@ vi.mock('mssql', () => ({
   },
 }));
 
-import { GetDataResolver, GetDataInputType, GetDataOutputType, RegisterAccessToken } from '../GetDataResolver.js';
+import { GetDataResolver, GetDataInputType, GetDataOutputType, registerAccessToken } from '../GetDataResolver.js';
 import type { AppContext } from '../../types.js';
 
 const CONTEXT = { dataSources: [] } as unknown as AppContext;
@@ -40,7 +40,7 @@ let tokenSeq = 0;
 /** Calls GetData with a fresh valid token. */
 async function runGetData(queries: string[]): Promise<GetDataOutputType> {
   const token = `getdata-validation-${Date.now()}-${++tokenSeq}`;
-  RegisterAccessToken(token, 60_000);
+  registerAccessToken(token, 60_000);
   const input = Object.assign(new GetDataInputType(), { Token: token, Queries: queries });
   return new GetDataResolver().GetData(input, CONTEXT);
 }

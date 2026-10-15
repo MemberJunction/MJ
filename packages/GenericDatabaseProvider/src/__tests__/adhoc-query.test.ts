@@ -1,10 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
 
 vi.mock('sql-formatter', () => ({
     format: (sql: string) => sql,
 }));
 
+import { SQLExpressionValidator } from '@memberjunction/global';
 import { DatabasePlatform, DeleteSQLResult, ExecuteSQLOptions, QueryExecutionSpec, RunQueryParams, RunQueryResult, SaveSQLResult } from '@memberjunction/core';
 
 /** A provider that records the SQL it is asked to run and answers from a queue. */
@@ -190,6 +191,48 @@ describe('caller-supplied SQL may not call functions that read around the checks
         const result = await provider.RunSpec({ SQL: `SELECT * FROM OPENROWSET(BULK 'c:\\secret.txt', SINGLE_CLOB) AS f`, MaxRows: 10 });
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toMatch(/may not call openrowset/);
+        expect(provider.Executed).toEqual([]);
+    });
+});
+
+describe('ad-hoc SQL is screened with the provider\'s SQL dialect', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    for (const platform of ['sqlserver', 'postgresql'] as const) {
+        it(`passes the SQL and the ${platform} dialect to ValidateFullQuery before it runs`, async () => {
+            const provider = new AdhocTestProvider(platform);
+            const spy = vi.spyOn(SQLExpressionValidator.Instance, 'ValidateFullQuery');
+            const sql = 'SELECT ID, Name FROM t';
+
+            await provider.RunAdhoc({ SQL: sql });
+
+            expect(spy).toHaveBeenCalledWith(sql, platform);
+        });
+    }
+
+    it('accepts a SQL Server bracket alias that contains a quote, and runs it', async () => {
+        // PostgreSQL would read the quote inside [Today's Count] as the start of a literal, so this
+        // query passes only when the screen knows the dialect.
+        const provider = new AdhocTestProvider('sqlserver');
+        provider.Answers = [[{ "Today's Count": 3 }]];
+
+        const result = await provider.RunAdhoc({ SQL: "SELECT COUNT(*) AS [Today's Count] FROM t WHERE Status = 'Active'" });
+
+        expect(result.Success).toBe(true);
+        expect(provider.Executed).toHaveLength(1);
+        expect(provider.Executed[0]).toContain("[Today's Count]");
+    });
+
+    it('returns the validator\'s own error and runs nothing when the SQL is refused', async () => {
+        const provider = new AdhocTestProvider('sqlserver');
+        const badSQL = "INSERT INTO t (Name) VALUES ('x')";
+        const expected = SQLExpressionValidator.Instance.ValidateFullQuery(badSQL, 'sqlserver');
+        expect(expected.valid).toBe(false);
+
+        const result = await provider.RunAdhoc({ SQL: badSQL });
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe(expected.error);
         expect(provider.Executed).toEqual([]);
     });
 });
