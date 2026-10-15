@@ -903,16 +903,35 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     private _definitionHashUnsupportedUntil: number | null = null;
 
-    /** True when the server's schema rejected the `definitionHash` field (a server that predates it). */
+    /**
+     * The errors a server whose schema predates `definitionHash` returns for this request, with the
+     * code Apollo gives each: the selected output field fails query validation, and the input field
+     * fails variable coercion. Only these mean "older server"; any other error that happens to name
+     * the field is an ordinary failure, and must not relax the check to data-only validation.
+     */
+    private static readonly UNSUPPORTED_DEFINITION_HASH_ERRORS: ReadonlyArray<{ Code: string; Message: string }> = [
+        { Code: 'GRAPHQL_VALIDATION_FAILED', Message: 'Cannot query field "definitionHash" on type "RunQueryWithCacheCheckResultOutput"' },
+        { Code: 'BAD_USER_INPUT', Message: 'Field "definitionHash" is not defined by type "RunQueryCacheStatusInput"' },
+    ];
+
+    /**
+     * True when the server's schema rejected the `definitionHash` field (a server that predates it):
+     * one of the GraphQL errors is one of {@link UNSUPPORTED_DEFINITION_HASH_ERRORS}, with that
+     * error's code when the server sends one. Reads the structured GraphQL errors when the thrown
+     * error carries them, and its message otherwise.
+     */
     private static isUnsupportedDefinitionHashError(e: unknown): boolean {
-        const messages: string[] = e instanceof Error ? [e.message] : [];
-        const errors = (e as { response?: { errors?: Array<{ message?: string }> } } | null)?.response?.errors;
-        for (const error of errors ?? []) {
-            if (error.message) {
-                messages.push(error.message);
-            }
+        const errors = (e as { response?: { errors?: Array<{ message?: string; extensions?: { code?: string } }> } } | null)?.response?.errors;
+        if (errors && errors.length > 0) {
+            return errors.some(error => GraphQLDataProvider.isDefinitionHashSchemaRejection(error.message, error.extensions?.code));
         }
-        return messages.some(m => m.includes('definitionHash'));
+        return e instanceof Error && GraphQLDataProvider.isDefinitionHashSchemaRejection(e.message, undefined);
+    }
+
+    /** True when `message` is one of the schema rejections and `code`, if given, is its code. */
+    private static isDefinitionHashSchemaRejection(message: string | undefined, code: string | undefined): boolean {
+        return GraphQLDataProvider.UNSUPPORTED_DEFINITION_HASH_ERRORS.some(rejection =>
+            !!message && message.includes(rejection.Message) && (code === undefined || code === rejection.Code));
     }
 
     /** One RunQueriesWithCacheCheck round trip; throws on a transport or GraphQL error. */
