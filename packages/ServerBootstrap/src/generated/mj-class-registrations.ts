@@ -142,8 +142,9 @@ import {
     HuggingFaceRealtime,
 } from '@memberjunction/ai-huggingface';
 
-// @memberjunction/ai-inception (1 classes)
+// @memberjunction/ai-inception (2 classes)
 import {
+    InceptionDecision,
     InceptionLLM,
 } from '@memberjunction/ai-inception';
 
@@ -168,9 +169,10 @@ import {
     SiliconFlowLLM,
 } from '@memberjunction/ai-siliconflow';
 
-// @memberjunction/ai-systemone (2 classes)
+// @memberjunction/ai-systemone (3 classes)
 import {
     PerplexityDecision,
+    SubQDecision,
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
@@ -1726,6 +1728,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     AzureLLM,
     DeepInfraLLM,
     HuggingFaceRealtime,
+    InceptionDecision,
     InceptionLLM,
     LlamaCppLLM,
     MiniMaxLLM,
@@ -1733,6 +1736,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenRouterLLM,
     SiliconFlowLLM,
     PerplexityDecision,
+    SubQDecision,
     SystemOneDecision,
     GeminiEnterpriseRealtime,
     VertexLLM,
@@ -1885,12 +1889,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCollectionArtifactEntity,
     MJCollectionEntity,
     MJCollectionPermissionEntity,
-    MJCollectionPermissionEntityExtended,
-    MJCommunicationBaseMessageTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCollectionPermissionEntityExtended,
+    MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
     MJCommunicationProviderEntity,
     MJCommunicationProviderMessageTypeEntity,
@@ -2089,12 +2093,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQuerySQLEntity,
     MJQueueEntity,
     MJQueueTaskEntity,
-    MJQueueTypeEntity,
-    MJRSUPendingWorkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -2293,12 +2297,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ExportTypeformCSVAction,
     GetGoogleFormAction,
     GetGoogleFormsStatisticsAction,
-    GetJotFormAction,
-    GetJotFormStatisticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetJotFormAction,
+    GetJotFormStatisticsAction,
     GetJotFormSubmissionsAction,
     GetSingleGoogleFormsResponseAction,
     GetSingleJotFormSubmissionAction,
@@ -2497,12 +2501,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     OpenSearchSearchProvider,
     SearchScopePermissionResolver,
     StorageSearchProvider,
-    TagSearchProvider,
-    TypesenseSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TagSearchProvider,
+    TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
     AISkillExportMarkdownServerOperation,
@@ -2701,12 +2705,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AddDocumentContentAction,
     AddRecordsToListAction,
     AddViewResultsToListAction,
-    AggregateDataAction,
-    AssignUserRolesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    AggregateDataAction,
+    AssignUserRolesAction,
     BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
@@ -2890,7 +2894,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1167;
+export const CLASS_REGISTRATIONS_COUNT = 1169;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
