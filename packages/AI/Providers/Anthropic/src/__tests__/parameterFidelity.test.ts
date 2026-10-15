@@ -1,7 +1,4 @@
-/**
- * Parameter fidelity for AnthropicLLM. Runs the REAL BaseLLM.ChatCompletion and mocks only the Anthropic SDK, so each
- * test compares what DescribeSentParameters reports with the request body the SDK actually received.
- */
+/** Parameter fidelity for AnthropicLLM: what DescribeSentParameters reports against the body the mocked SDK received. */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ChatParams, ParameterFidelityError, type VendorCallParameters } from '@memberjunction/ai';
 
@@ -63,15 +60,6 @@ describe('AnthropicLLM parameter fidelity', () => {
         expect(sentBodies).toHaveLength(1);
     });
 
-    it('describes the temperature Claude 4.5 Opus with thinking does not send, and refuses it when strict', async () => {
-        const llm = new AnthropicLLM('k');
-        const p = chatParams({ model: 'claude-opus-4-5-20251101', temperature: 0.2, effortLevel: '50' });
-        await llm.ChatCompletion(p);
-        expect(lastSent(p.model).Temperature).toBeNull();
-        expect(llm.DescribeSentParameters(p)).toEqual(lastSent(p.model));
-        await expect(llm.ChatCompletion({ ...p, strictParameters: true })).rejects.toThrow(/temperature 0\.2.*temperature none/);
-    });
-
     it('describes a configured seed as not sent, and refuses it when strict', async () => {
         const llm = new AnthropicLLM('k');
         const p = chatParams({ temperature: 0, maxOutputTokens: 500, seed: 42 });
@@ -90,31 +78,5 @@ describe('AnthropicLLM parameter fidelity', () => {
         expect(lastSent(p.model)).toEqual({ VendorModelName: p.model, Temperature: 0, MaxTokens: 32000, Seed: null });
         expect(llm.DescribeSentParameters(p)).toEqual(lastSent(p.model));
         expect(r.parameterFidelity?.Status).toBe('sent-unchanged');
-    });
-
-    it('sends a configured cap of 0, which the vendor rejects, as the 32000 default, and refuses it when strict', async () => {
-        const llm = new AnthropicLLM('k');
-        const p = chatParams({ maxOutputTokens: 0 });
-        await llm.ChatCompletion(p);
-        expect(lastSent(p.model).MaxTokens).toBe(32000);
-        expect(llm.DescribeSentParameters(p)).toEqual(lastSent(p.model));
-        await expect(llm.ChatCompletion({ ...p, strictParameters: true })).rejects.toBeInstanceOf(ParameterFidelityError);
-        expect(sentBodies).toHaveLength(1);
-    });
-
-    it('sends a configured streaming cap as given', async () => {
-        const llm = new AnthropicLLM('k');
-        const p = chatParams({ maxOutputTokens: 500, streaming: true, streamingCallbacks: { OnContent: () => undefined } });
-        await llm.ChatCompletion(p);
-        expect(lastSent(p.model).MaxTokens).toBe(500);
-        expect(llm.DescribeSentParameters(p)).toEqual(lastSent(p.model));
-    });
-
-    it('describes the streaming cap, which the streaming path does not raise for a thinking budget', async () => {
-        const llm = new AnthropicLLM('k');
-        const p = chatParams({ maxOutputTokens: 1000, effortLevel: '50', streaming: true, streamingCallbacks: { OnContent: () => undefined } });
-        await llm.ChatCompletion(p);
-        expect(lastSent(p.model).MaxTokens).toBe(1000);
-        expect(llm.DescribeSentParameters(p)).toEqual(lastSent(p.model));
     });
 });

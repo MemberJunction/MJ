@@ -21,7 +21,6 @@
     "@azure/core-auth": "^1.10.1",
     "@azure/identity": "^4.13.0",
     "@memberjunction/ai": "6.2.0-edge.4",
-    "@memberjunction/ai-openai": "6.2.0-edge.4",
     "@memberjunction/global": "6.2.0-edge.4"
   },
   "devDependencies": {

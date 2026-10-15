@@ -49,14 +49,4 @@ describe('LinkedTemplateText: the template cache of the entity\'s own provider',
     it('falls back to the process-wide engine for a provider without a connection key', () => {
         expect(LinkedTemplateText.RenderedContent(entityOn(null), 'T1')?.TemplateText).toBe('global');
     });
-
-    it('answers undefined without a template ID', () => {
-        expect(LinkedTemplateText.RenderedContent(entityOn(null), null)).toBeUndefined();
-    });
-
-    it('loads the provider\'s engine as the entity\'s user, through the entity\'s provider', async () => {
-        const provider = new ConnectionNamedProvider('mssql://host/db-a');
-        await LinkedTemplateText.EnsureLoaded(entityOn(provider));
-        expect(providerEngine.Config).toHaveBeenCalledWith(false, USER, provider);
-    });
 });

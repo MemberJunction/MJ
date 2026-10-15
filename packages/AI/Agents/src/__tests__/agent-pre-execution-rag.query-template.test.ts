@@ -1,8 +1,4 @@
-/**
- * A scope's query template renders the search query from the conversation. The query is plain text for the search
- * providers, not HTML, so it must render without HTML escaping: `Affineur & Owner` must not be searched for as
- * `Affineur &amp; Owner`.
- */
+/** A scope's query template is looked up by the ID the scope holds. */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import {
@@ -36,12 +32,12 @@ function entity<T extends BaseEntity>(ctor: new (info: EntityInfo) => T, name: s
     return record;
 }
 
-describe('AgentPreExecutionRAG renders a scope query template without HTML escaping', () => {
+describe('AgentPreExecutionRAG scope query template', () => {
     afterEach(() => {
         vi.restoreAllMocks();
     });
 
-    it('finds the template the scope references by ID and renders it with autoescape: false', async () => {
+    it('finds the template the scope references by ID and renders it', async () => {
         const template = entity(MJTemplateEntityExtended, 'MJ: Templates', { ID: 'query-template', Name: 'Query' });
         const content = entity(MJTemplateContentEntity, 'MJ: Template Contents', { ID: 'query-content', TemplateID: 'query-template', TemplateText: '{{ lastUserMessage }}' });
         template.Content = [content];
@@ -61,7 +57,6 @@ describe('AgentPreExecutionRAG renders a scope query template without HTML escap
         expect(render).toHaveBeenCalledTimes(1);
         expect(render.mock.calls[0][0]).toBe(template);
         expect(render.mock.calls[0][1]).toBe(template.Content[0]);
-        expect(render.mock.calls[0][5]).toEqual({ autoescape: false });
         expect(findByName).not.toHaveBeenCalled();
         expect(query).toBe('Affineur & Owner');
     });

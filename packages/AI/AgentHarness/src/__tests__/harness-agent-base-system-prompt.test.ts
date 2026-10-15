@@ -1,8 +1,4 @@
-/**
- * The harness system prompt is plain text for a model, rendered through the same template engine AIPromptRunner uses.
- * It must ask for the same raw render, so a value such as `Affineur & Owner` does not reach the harness as
- * `Affineur &amp; Owner`.
- */
+/** The harness system prompt is plain text for a model, so it renders without HTML escaping. */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BaseEntity, EntityInfo } from '@memberjunction/core';
 import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';

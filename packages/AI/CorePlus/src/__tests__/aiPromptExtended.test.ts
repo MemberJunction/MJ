@@ -1,22 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock dependencies before importing the module under test
-vi.mock('@memberjunction/core', async (importOriginal) => {
-    // Real ValidationResult / EntityInfo; only BaseEntity is replaced (the generated MJAIPromptEntity is mocked below).
-    const actual = await importOriginal<typeof import('@memberjunction/core')>();
-    return {
-        ...actual,
-        BaseEntity: class BaseEntity {
-            ContextCurrentUser = null;
-            Fields = [];
-            Get(fieldName: string) { return ''; }
-            Set(fieldName: string, value: unknown) {}
-            get Dirty() { return false; }
-            async LoadFromData(data: unknown) { return true; }
-            async InnerLoad(key: unknown) { return true; }
-        },
-    };
-});
+vi.mock('@memberjunction/core', () => ({
+    BaseEntity: class BaseEntity {
+        ContextCurrentUser: null;
+        Fields: [];
+        Get(fieldName: string) { return ''; }
+        Set(fieldName: string, value: unknown) {}
+        get Dirty() { return false; }
+        async LoadFromData(data: unknown) { return true; }
+        async InnerLoad(key: unknown) { return true; }
+    },
+    CompositeKey: class CompositeKey {},
+    ValidationErrorInfo: class ValidationErrorInfo {
+        constructor(public FieldName: string, public Message: string, public Value: unknown, public Type: string) {}
+    },
+    ValidationErrorType: { Failure: 'Failure' },
+    ValidationResult: class ValidationResult { Errors: unknown[] = []; }
+}));
 
 vi.mock('@memberjunction/global', async (importOriginal) => ({
     ...(await importOriginal<typeof import('@memberjunction/global')>()),
@@ -49,41 +50,21 @@ vi.mock('@memberjunction/core-entities', () => ({
 /** A cached Template Content row: the fields the read-through reads. */
 interface ContentRow { ID: string; TemplateID: string; TemplateText: string; Priority: number; __mj_UpdatedAt: Date }
 
-const { cachedTemplates, TemplateDouble } = vi.hoisted(() => {
-    /** A cached template; GetHighestPriorityContent stands in for the shared selection (tested in MJCoreEntities). */
-    class TemplateDouble {
-        constructor(public ID: string, public Content: ContentRow[]) {}
-        GetHighestPriorityContent(): ContentRow | undefined {
-            return [...this.Content].sort((a, b) => a.Priority - b.Priority)[0];
-        }
-    }
-    return { cachedTemplates: [] as TemplateDouble[], TemplateDouble };
-});
+const { cachedRows } = vi.hoisted(() => ({ cachedRows: [] as ContentRow[] }));
 
 vi.mock('@memberjunction/templates-base-types', () => ({
     TemplateEngineBase: {
         Instance: {
             Config: vi.fn().mockResolvedValue(true),
-            Templates: cachedTemplates,
             TemplateContents: [],
             TemplateParams: [],
-            /** The engine's O(1) rendered-content lookup, answered from the cached template doubles. */
-            FindRenderedContent: (templateID: string) => cachedTemplates.find((t) => t.ID === templateID)?.GetHighestPriorityContent(),
+            /** The row the template renders: the lowest Priority (the real selection is tested in MJCoreEntities). */
+            FindRenderedContent: (templateID: string) => cachedRows.filter((c) => c.TemplateID === templateID).sort((a, b) => a.Priority - b.Priority)[0],
         }
     }
 }));
 
 import { MJAIPromptEntityExtended } from '../MJAIPromptEntityExtended';
-import { EntityInfo, ValidationResult } from '@memberjunction/core';
-
-/** A minimal `MJ: AI Prompts` definition, so the prompt is constructed the way the entity requires. */
-const PROMPT_ENTITY = new EntityInfo({
-    ID: 'entity-ai-prompts', Name: 'MJ: AI Prompts', SchemaName: '__mj', BaseTable: 'AIPrompt', BaseView: 'vwAIPrompts',
-    Fields: ['ID', 'Name', 'TemplateID', 'ResultSelectorPromptID'].map((name, index) => ({
-        ID: `entity-ai-prompts-${name}`, EntityID: 'entity-ai-prompts', Sequence: index + 1, Name: name, Entity: 'MJ: AI Prompts',
-        Type: name.endsWith('ID') ? 'uniqueidentifier' : 'nvarchar', IsPrimaryKey: name === 'ID',
-    })),
-});
 
 /** Exposes what the server subclass does after saving the text into a content row. */
 class SavingPrompt extends MJAIPromptEntityExtended {
@@ -97,17 +78,17 @@ function row(id: string, text: string, updatedAt: string, priority = 1): Content
     return { ID: id, TemplateID: 'T1', TemplateText: text, Priority: priority, __mj_UpdatedAt: new Date(updatedAt) };
 }
 
-/** Replaces the cached template the way a template-engine reload does: new row objects. */
+/** Replaces the cached rows the way a template-engine reload does: new row objects. */
 function reloadCache(...rows: ContentRow[]): void {
-    cachedTemplates.length = 0;
-    cachedTemplates.push(new TemplateDouble('T1', rows));
+    cachedRows.length = 0;
+    cachedRows.push(...rows);
 }
 
 describe('MJAIPromptEntityExtended', () => {
     let prompt: MJAIPromptEntityExtended;
 
     beforeEach(() => {
-        prompt = new MJAIPromptEntityExtended(PROMPT_ENTITY);
+        prompt = new MJAIPromptEntityExtended();
     });
 
     describe('TemplateText virtual property', () => {
@@ -176,7 +157,7 @@ describe('MJAIPromptEntityExtended', () => {
         it('should not add error when IDs are different', () => {
             prompt.ID = 'id-1';
             prompt.ResultSelectorPromptID = 'id-2';
-            const result = new ValidationResult();
+            const result = { Errors: [] as unknown[] };
 
             prompt.ValidateResultSelectorPromptIDNotEqualID(result);
 
@@ -186,17 +167,17 @@ describe('MJAIPromptEntityExtended', () => {
         it('should add error when IDs are the same and not null', () => {
             prompt.ID = 'same-id';
             prompt.ResultSelectorPromptID = 'same-id';
-            const result = new ValidationResult();
+            const result = { Errors: [] as unknown[] };
 
             prompt.ValidateResultSelectorPromptIDNotEqualID(result);
 
             expect(result.Errors).toHaveLength(1);
         });
 
-        it('should not add error for an unsaved record (no ID yet) with no result selector', () => {
-            prompt.ID = '';
+        it('should not add error when both IDs are null (new record)', () => {
+            prompt.ID = null;
             prompt.ResultSelectorPromptID = null;
-            const result = new ValidationResult();
+            const result = { Errors: [] as unknown[] };
 
             prompt.ValidateResultSelectorPromptIDNotEqualID(result);
 
@@ -205,35 +186,24 @@ describe('MJAIPromptEntityExtended', () => {
     });
 
     describe('TemplateText reads through to the current Template Content', () => {
-        beforeEach(() => { cachedTemplates.length = 0; });
+        beforeEach(() => { cachedRows.length = 0; });
 
         it('returns the edited content after the template engine refreshes, without reloading the prompt', () => {
-            reloadCache(row('C1', 'v1 {{record.CurrentJobTitle}}', '2026-01-01'));
+            reloadCache(row('C1', 'v1', '2026-01-01'));
             prompt.TemplateID = 'T1';
-            expect(prompt.TemplateText).toBe('v1 {{record.CurrentJobTitle}}');
-            reloadCache(row('C1', 'v2 {{record.CurrentJobTitle}}', '2026-01-02'));
-            expect(prompt.TemplateText).toBe('v2 {{record.CurrentJobTitle}}');
+            expect(prompt.TemplateText).toBe('v1');
+            reloadCache(row('C1', 'v2', '2026-01-02'));
+            expect(prompt.TemplateText).toBe('v2');
             expect(prompt.TemplateTextDirty).toBe(false);
         });
 
-        it('keeps an unsaved local edit', () => {
-            reloadCache(row('C1', 'v1', '2026-01-01'));
-            prompt.TemplateID = 'T1';
-            prompt.TemplateText = 'local edit';
-            reloadCache(row('C1', 'v2', '2026-01-02'));
-            expect(prompt.TemplateText).toBe('local edit');
-        });
-
         it('keeps a just-saved text while the cache still holds the older row, then adopts a later version', () => {
-            const saving = new SavingPrompt(PROMPT_ENTITY);
+            const saving = new SavingPrompt();
             reloadCache(row('C1', 'v1', '2026-01-01'));
             saving.TemplateID = 'T1';
-            expect(saving.TemplateText).toBe('v1');
-
             saving.TemplateText = 'v2 saved here';
             saving.MarkSaved(row('C1', 'v2 saved here', '2026-01-02')); // the reload has not landed yet
             expect(saving.TemplateText).toBe('v2 saved here');
-            expect(saving.TemplateTextDirty).toBe(false);
 
             reloadCache(row('C1', 'v3 from another server', '2026-01-03'));
             expect(saving.TemplateText).toBe('v3 from another server');

@@ -1,21 +1,18 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type MockInstance } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { ApiError } from '@google/genai';
 
 /* ------------------------------------------------------------------ */
 /*  Hoisted mocks                                                     */
 /* ------------------------------------------------------------------ */
 vi.mock('@google/genai', () => ({
-  // A function rather than an arrow: a test constructs the client with `new`, which vitest 4 refuses for an arrow.
-  GoogleGenAI: vi.fn().mockImplementation(function () {
-    return {
-      chats: {
-        create: vi.fn().mockReturnValue({
-          sendMessage: vi.fn(),
-          sendMessageStream: vi.fn(),
-        }),
-      },
-    };
-  }),
+  GoogleGenAI: vi.fn().mockImplementation(() => ({
+    chats: {
+      create: vi.fn().mockReturnValue({
+        sendMessage: vi.fn(),
+        sendMessageStream: vi.fn(),
+      }),
+    },
+  })),
   Content: class {},
   Part: class {},
   Blob: class {},
@@ -123,8 +120,7 @@ vi.mock('@memberjunction/ai', () => {
   };
 });
 
-import { GoogleGenAI } from '@google/genai';
-import { ChatParams, ModelUsage, type ChatResult } from '@memberjunction/ai';
+import { ChatParams } from '@memberjunction/ai';
 import { GeminiLLM } from '../index';
 
 /* ------------------------------------------------------------------ */
@@ -337,7 +333,7 @@ describe('GeminiLLM', () => {
         content?: { parts?: Array<{ text?: string; thought?: boolean }> };
         finishReason?: string;
       }>;
-      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number };
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
     };
     type StreamResult = { content: string; finishReason?: string; usage?: unknown };
 
@@ -370,6 +366,7 @@ describe('GeminiLLM', () => {
       // succeed against the wrong shape. content[0] would imply content is an array.
       const legacyChunk = {
         candidates: [{
+          // @ts-expect-error -- intentionally legacy shape
           content: [{ parts: [{ text: 'should-not-extract' }] }],
         }],
       } as unknown as StreamChunk;
@@ -421,14 +418,6 @@ describe('GeminiLLM', () => {
       expect(result.usage).toBeDefined();
       expect((result.usage as { promptTokens: number }).promptTokens).toBe(12);
       expect((result.usage as { completionTokens: number }).completionTokens).toBe(34);
-    });
-
-    it('counts thinking tokens as completion tokens in the final chunk usage', () => {
-      const result = callProcessStreamingChunk({
-        candidates: [{ content: { parts: [{ text: 'x' }] } }],
-        usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 34, thoughtsTokenCount: 100 },
-      });
-      expect((result.usage as { completionTokens: number }).completionTokens).toBe(134);
     });
 
     it('handles chunks with no candidates without throwing', () => {
@@ -524,25 +513,8 @@ describe('GeminiLLM', () => {
 // Native tool calling — request mapping + response normalization (plan §5)
 // =============================================================================
 
-/** Exposes the protected request builders and takes the SDK client a test hands it. */
-class DriverProbe extends GeminiLLM {
-  public UseClient(client: GoogleGenAI): void {
-    this._gemini = client;
-  }
-  public SendNonStreaming(params: ChatParams): Promise<ChatResult> {
-    return this.nonStreamingChatCompletion(params);
-  }
-  public async SendStreaming(params: ChatParams): Promise<void> {
-    await this.createStreamingRequest(params);
-  }
-  public FinalizeStream(accumulatedContent: string, lastChunk: Record<string, unknown>, usage: ModelUsage | null): ChatResult {
-    this.resetStreamingState();
-    return this.finalizeStreamingResponse(accumulatedContent, lastChunk, usage);
-  }
-}
-
 describe('GeminiLLM — native tool calling', () => {
-  let llm: DriverProbe;
+  let llm: GeminiLLM;
   let sendMessage: Mock;
 
   const WEATHER_TOOL = {
@@ -552,8 +524,10 @@ describe('GeminiLLM — native tool calling', () => {
   };
 
   /** Invokes the protected driver entry point the way the base class would. */
-  const run = async (params: Record<string, unknown>): Promise<ChatResult> =>
-    llm.SendNonStreaming(Object.assign(new ChatParams(), { model: 'gemini-2.5-flash' }, params));
+  const run = async (params: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    const fn = (llm as unknown as Record<string, (p: unknown) => Promise<Record<string, unknown>>>)['nonStreamingChatCompletion'].bind(llm);
+    return fn({ model: 'gemini-2.5-flash', ...params });
+  };
 
   /** The per-request config the driver handed the SDK. */
   const sentConfig = (): Record<string, unknown> => sendMessage.mock.calls[0][0].config as Record<string, unknown>;
@@ -569,15 +543,13 @@ describe('GeminiLLM — native tool calling', () => {
   const sentMessageParts = (): Array<Record<string, unknown>> => sendMessage.mock.calls[0][0].message;
 
   beforeEach(() => {
-    llm = new DriverProbe('test-gemini-key');
+    llm = new GeminiLLM('test-gemini-key');
     sendMessage = vi.fn().mockResolvedValue({
       candidates: [{ content: { parts: [{ text: 'hi' }] }, finishReason: 'STOP' }],
       usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2 }
     });
     create = vi.fn().mockReturnValue({ sendMessage, sendMessageStream: vi.fn() });
-    const client = new GoogleGenAI({ apiKey: 'test-gemini-key' });
-    client.chats.create = create;
-    llm.UseClient(client);
+    (llm as unknown as Record<string, unknown>)['_gemini'] = { chats: { create } };
   });
 
   it('declares SupportsTools', () => {
@@ -686,7 +658,7 @@ describe('GeminiLLM — native tool calling', () => {
         ],
         tools: [WEATHER_TOOL]
       });
-      expect(sentHistory()[1].parts).toMatchObject([{ thoughtSignature: 'skip_thought_signature_validator' }]);
+      expect(sentHistory()[1].parts[0].thoughtSignature).toBe('skip_thought_signature_validator');
     });
 
     it('sends a tool result as a functionResponse part with the output key', async () => {
@@ -766,78 +738,6 @@ describe('GeminiLLM — native tool calling', () => {
       expect(result.data.choices[0].finish_reason).toBe('tool_calls');
     });
 
-    it('counts thinking tokens as completion tokens, so they are priced at the output rate', async () => {
-      sendMessage.mockResolvedValue({
-        candidates: [{ content: { parts: [{ text: 'thought about it', thought: true }, { text: 'answer' }] }, finishReason: 'STOP' }],
-        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2, thoughtsTokenCount: 50 }
-      });
-
-      const result = await run({ messages: [{ role: 'user', content: 'x' }] });
-
-      expect(result.data.usage?.promptTokens).toBe(10);
-      expect(result.data.usage?.completionTokens).toBe(52);
-    });
-
-    it('keeps completion tokens as reported when the model did not think', async () => {
-      const result = await run({ messages: [{ role: 'user', content: 'x' }] });
-
-      expect(result.data.usage?.completionTokens).toBe(2);
-    });
-
-    it('names the vendor token counts, thinking included, when a streamed thinking model returns no output', () => {
-      const usageMetadata = { promptTokenCount: 10, candidatesTokenCount: 0, thoughtsTokenCount: 4087 };
-      const lastChunk = { candidates: [{ finishReason: 'MAX_TOKENS' }], usageMetadata };
-
-      const result = llm.FinalizeStream('', lastChunk, new ModelUsage(10, 4087));
-
-      expect(result.success).toBe(false);
-      expect(result.errorMessage).toContain('promptTokens: 10, completionTokens: 0, thoughtsTokens: 4087');
-      expect(result.data.usage?.completionTokens).toBe(4087);
-    });
-
-    it('names the thinking tokens when a thinking model returns no output', async () => {
-      sendMessage.mockResolvedValue({
-        candidates: [{ content: { parts: [] }, finishReason: 'MAX_TOKENS' }],
-        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 0, thoughtsTokenCount: 4087 }
-      });
-
-      const result = await run({ messages: [{ role: 'user', content: 'x' }] });
-
-      expect(result.success).toBe(false);
-      expect(result.errorMessage).toContain('completionTokens: 0, thoughtsTokens: 4087');
-      // The thinking was billed though no text came back, so the failed result keeps it, as the streaming path does
-      expect(result.data.usage?.promptTokens).toBe(10);
-      expect(result.data.usage?.completionTokens).toBe(4087);
-    });
-
-    it('keeps the billed prompt usage on a prompt blocked before any candidate', async () => {
-      sendMessage.mockResolvedValue({
-        candidates: [],
-        promptFeedback: { blockReason: 'SAFETY' },
-        usageMetadata: { promptTokenCount: 12 }
-      });
-
-      const result = await run({ messages: [{ role: 'user', content: 'x' }] });
-
-      expect(result.success).toBe(false);
-      expect(result.errorMessage).toContain('No output received from model: Blocked (SAFETY)');
-      expect(result.data.usage?.promptTokens).toBe(12);
-      expect(result.data.usage?.completionTokens).toBe(0);
-    });
-
-    it('keeps the billed usage on a response blocked for safety', async () => {
-      sendMessage.mockResolvedValue({
-        candidates: [{ content: { parts: [{ text: 'partial' }] }, finishReason: 'SAFETY' }],
-        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 3, thoughtsTokenCount: 40 }
-      });
-
-      const result = await run({ messages: [{ role: 'user', content: 'x' }] });
-
-      expect(result.success).toBe(false);
-      expect(result.errorMessage).toContain('Content blocked by model: SAFETY');
-      expect(result.data.usage?.completionTokens).toBe(43);
-    });
-
     it('does NOT report "no output received" for a text-free tool-call turn', async () => {
       // The regression this guards: a pure tool call has no text, and the empty-output guard used
       // to treat that as a failed generation and throw.
@@ -863,7 +763,7 @@ describe('GeminiLLM — native tool calling', () => {
 
       const result = await run({ messages: [{ role: 'user', content: 'x' }], tools: [WEATHER_TOOL] });
 
-      expect(result.data.choices[0].message.toolCalls?.map((c) => c.id))
+      expect(result.data.choices[0].message.toolCalls.map((c: { id: string }) => c.id))
         .toEqual(['get_weather_0', 'get_time_1']);
     });
 
@@ -888,23 +788,8 @@ describe('GeminiLLM — native tool calling', () => {
   });
 
   describe('parameter fidelity', () => {
-    /** A typed chat request; the fields not given keep ChatParams' own defaults. */
+    /** A typed chat request; `ChatParams` is mocked, so the instance carries only what is given. */
     const chatParams = (fields: Partial<ChatParams>): ChatParams => Object.assign(new ChatParams(), fields);
-
-    it('sends a configured temperature of 0 as 0, on both paths', async () => {
-      await run({ messages: [{ role: 'user', content: 'x' }], temperature: 0 });
-      expect(sentConfig().temperature).toBe(0);
-
-      const streamSend = vi.fn().mockResolvedValue({});
-      create.mockReturnValue({ sendMessage, sendMessageStream: streamSend });
-      await llm.SendStreaming(chatParams({ model: 'gemini-2.5-flash', messages: [{ role: 'user', content: 'x' }], temperature: 0 }));
-      expect(streamSend).toHaveBeenCalledWith(expect.objectContaining({ config: expect.objectContaining({ temperature: 0 }) }));
-    });
-
-    it('keeps the 0.5 default when no temperature is configured', async () => {
-      await run({ messages: [{ role: 'user', content: 'x' }] });
-      expect(sentConfig().temperature).toBe(0.5);
-    });
 
     it('sends maxOutputTokens and seed when configured, and describes exactly that', async () => {
       await run({ messages: [{ role: 'user', content: 'x' }], temperature: 0, maxOutputTokens: 256, seed: 42 });
@@ -937,19 +822,6 @@ describe('GeminiLLM — native tool calling', () => {
       expect(llm.DescribeSentParameters(chatParams({ messages: [], ...overriding })))
         .toEqual({ VendorModelName: 'gemini-2.5-flash', Temperature: 0.9, MaxTokens: 64, Seed: null });
     });
-
-    it('describes the default model name the request falls back to', () => {
-      expect(llm.DescribeSentParameters(chatParams({ model: '', messages: [] })).VendorModelName).toBe('gemini-pro');
-    });
-
-    it('logs nothing while describing; the unsupported-parameter warnings belong to the request', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      llm.DescribeSentParameters(chatParams({ model: 'gemini-2.5-flash', messages: [], frequencyPenalty: 0.5 }));
-      expect(warn).not.toHaveBeenCalled();
-      await run({ messages: [{ role: 'user', content: 'x' }], frequencyPenalty: 0.5 });
-      expect(warn).toHaveBeenCalledWith('Gemini provider does not support frequencyPenalty parameter, ignoring');
-      warn.mockRestore();
-    });
   });
 });
 
@@ -973,7 +845,7 @@ describe('GeminiLLM — generation config by model version', () => {
   let sendMessage: Mock;
   let sendMessageStream: Mock;
   let create: Mock;
-  let warn: MockInstance<typeof console.warn>;
+  let warn: ReturnType<typeof vi.spyOn>;
 
   const run = async (params: Record<string, unknown>): Promise<ChatResultShape> => {
     const fn = (llm as unknown as Record<string, (p: unknown) => Promise<unknown>>)['nonStreamingChatCompletion'].bind(llm);

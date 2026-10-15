@@ -1,8 +1,4 @@
-/**
- * A prompt template's output is plain text for a model, not HTML. Rendered with the template engine's default
- * HTML escaping, a value such as `Affineur & Owner` reaches the model as `Affineur &amp; Owner`. Both of the runner's
- * template renders must ask the engine for a raw render.
- */
+/** A prompt template's output is plain text for a model, so both of the runner's template renders ask for a raw render. */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BaseEntity, EntityInfo } from '@memberjunction/core';
 import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
@@ -34,10 +30,7 @@ function makeTemplate(): MJTemplateEntityExtended {
     return template;
 }
 
-/**
- * Builds a runner whose template engine renders nothing and records its calls. `renderPromptTemplate`,
- * `renderPromptWithChildTemplates` and `_templateEngine` are private, so the tests reach them by element access.
- */
+/** A runner whose template engine records its calls (private members reached by element access). */
 function makeRunner(template: MJTemplateEntityExtended) {
     vi.spyOn(SystemPlaceholderManager, 'resolveAllPlaceholders').mockResolvedValue({});
     const runner = new AIPromptRunner();

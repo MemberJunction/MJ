@@ -32,9 +32,9 @@ vi.mock('@memberjunction/ai', () => {
   }
   class MockChatResult {
     success: boolean;
-    statusText = '';
+    statusText: string;
     data: unknown;
-    errorMessage: string | null = null;
+    errorMessage: string | null;
     exception: unknown;
     errorInfo: unknown;
     startTime: Date;

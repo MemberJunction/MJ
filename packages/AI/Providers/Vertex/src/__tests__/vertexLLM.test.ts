@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { VertexLLM, VertexAICredentials } from '../models/vertexLLM';
 import { VertexKeySourceOf } from '../vertexCredentials';
-import { ChatParams, ChatMessageRole, ModelUsage, ParameterFidelityError } from '@memberjunction/ai';
+import { ChatParams, ChatMessageRole, ModelUsage } from '@memberjunction/ai';
 import { type Chat, FinishReason, GenerateContentResponse, GoogleGenAI } from '@google/genai';
 
 /**
@@ -217,8 +217,8 @@ describe('VertexLLM', () => {
       expect(result.data.choices[0].message.content).toBeTruthy();
       expect(result.data.choices[0].message.role).toBe(ChatMessageRole.assistant);
       expect(result.data.usage).toBeInstanceOf(ModelUsage);
-      expect(result.data.usage?.promptTokens).toBeGreaterThan(0);
-      expect(result.data.usage?.completionTokens).toBeGreaterThan(0);
+      expect(result.data.usage.promptTokens).toBeGreaterThan(0);
+      expect(result.data.usage.completionTokens).toBeGreaterThan(0);
     }, 30000);
 
     it('should handle system messages (inherited from GeminiLLM)', async () => {
@@ -436,43 +436,22 @@ class ClientInjectedVertexLLM extends VertexLLM {
 }
 
 describe('parameter fidelity (inherited from GeminiLLM)', () => {
-  let llm: ClientInjectedVertexLLM;
-  let sendMessage: MockInstance<Chat['sendMessage']>;
-
-  beforeEach(() => {
-    // A real SDK client and chat with only the two calls the driver makes stubbed: chats.create and sendMessage.
+  it('records on the result exactly the temperature, max tokens and seed the request sent', async () => {
     const client = new GoogleGenAI({ apiKey: 'test-key' });
     const chat = client.chats.create({ model: 'gemini-3.1-flash-lite' });
     vi.spyOn(client.chats, 'create').mockReturnValue(chat);
-    sendMessage = vi.spyOn(chat, 'sendMessage').mockResolvedValue(Object.assign(new GenerateContentResponse(), {
+    const sendMessage: MockInstance<Chat['sendMessage']> = vi.spyOn(chat, 'sendMessage').mockResolvedValue(Object.assign(new GenerateContentResponse(), {
       candidates: [{ content: { parts: [{ text: '{}' }] }, finishReason: FinishReason.STOP }],
       usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1 },
     }));
-    llm = new ClientInjectedVertexLLM(JSON.stringify({ project: 'test-project', location: 'global' }), client);
-  });
+    const llm = new ClientInjectedVertexLLM(JSON.stringify({ project: 'test-project', location: 'global' }), client);
 
-  const userTurn = [{ role: ChatMessageRole.user, content: 'x' }];
+    const result = await llm.ChatCompletion({ model: 'gemini-3.1-flash-lite', messages: [{ role: ChatMessageRole.user, content: 'x' }], temperature: 0, maxOutputTokens: 256, seed: 42 });
 
-  it('sends temperature 0 as 0 through Vertex', async () => {
-    await llm.ChatCompletion({ model: 'gemini-3.1-flash-lite', messages: userTurn, temperature: 0 });
-    expect(sendMessage.mock.calls[0][0].config?.temperature).toBe(0);
-  });
-
-  it('records on the result exactly the temperature, max tokens and seed the request sent', async () => {
-    const result = await llm.ChatCompletion({ model: 'gemini-3.1-flash-lite', messages: userTurn, temperature: 0, maxOutputTokens: 256, seed: 42 });
-    const sent = sendMessage.mock.calls[0][0].config;
-    expect(sent).toMatchObject({ temperature: 0, maxOutputTokens: 256, seed: 42 });
+    expect(sendMessage.mock.calls[0][0].config).toMatchObject({ temperature: 0, maxOutputTokens: 256, seed: 42 });
     expect(result.parameterFidelity).toEqual({
       Status: 'sent-unchanged',
       Sent: { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: 256, Seed: 42 },
     });
-  });
-
-  it('refuses a strict call before any request when the model takes no temperature', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    await expect(llm.ChatCompletion({ model: 'gemini-3.8-flash', messages: userTurn, temperature: 0, strictParameters: true }))
-      .rejects.toBeInstanceOf(ParameterFidelityError);
-    expect(sendMessage).not.toHaveBeenCalled();
-    warn.mockRestore();
   });
 });

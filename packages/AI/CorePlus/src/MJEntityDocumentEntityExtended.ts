@@ -6,8 +6,7 @@ import { LinkedTemplateText, type TemplateContentVersion } from "./LinkedTemplat
 /**
  * Extended client-side subclass for `MJ: Entity Documents` that exposes a
  * `TemplateText` virtual property mirroring the content the linked Template
- * renders (its highest-priority `TemplateContent`). Shares its mechanics with
- * `MJ: AI Prompts` (`MJAIPromptEntityExtended`) through {@link LinkedTemplateText}:
+ * renders (its highest-priority `TemplateContent`), as `MJAIPromptEntityExtended` does:
  *
  *   - `TemplateText` is NOT a database column on `EntityDocument` — it's read
  *     from the linked Template + TemplateContent via `TemplateEngineBase` on
@@ -24,7 +23,6 @@ import { LinkedTemplateText, type TemplateContentVersion } from "./LinkedTemplat
  */
 @RegisterClass(BaseEntity, "MJ: Entity Documents")
 export class MJEntityDocumentEntityExtended extends MJEntityDocumentEntity {
-    /** The template text this document mirrors from its template's rendered content (shared with AI prompts). */
     private readonly linkedTemplateText = new LinkedTemplateText();
 
     /** Pre-mutation snapshot of TemplateText, used by `TemplateTextDirty` and reset post-Save. */
@@ -37,9 +35,7 @@ export class MJEntityDocumentEntityExtended extends MJEntityDocumentEntity {
 
     /**
      * Virtual property holding the active template body for this EntityDocument: the content the linked Template
-     * renders (its highest-priority content, the row vector sync and duplicate detection render). Reads through to the
-     * template engine's cache, so a saved Template Content is picked up without reloading the document; pushed back
-     * into that same row on `Save` (server-side subclass). See {@link LinkedTemplateText}.
+     * renders, read through the template engine's cache; pushed back into that same row on `Save` (server-side subclass).
      */
     public get TemplateText(): string {
         this.RefreshTemplateTextFromCache();
@@ -88,28 +84,19 @@ export class MJEntityDocumentEntityExtended extends MJEntityDocumentEntity {
         this.linkedTemplateText.RefreshFrom(this.CurrentTemplateContent());
     }
 
-    /**
-     * The content the linked template renders, from the template engine's cache for this document's provider: the
-     * same row vector sync and duplicate detection render (`GetHighestPriorityContent`). Undefined when the cache does
-     * not know the template (or the document has no template yet).
-     */
+    /** The content the linked template renders (`GetHighestPriorityContent`), from its provider's template cache. */
     protected CurrentTemplateContent(): MJTemplateContentEntity | undefined {
         return LinkedTemplateText.RenderedContent(this, this.TemplateID);
     }
 
-    /**
-     * Records the content row the template text now matches — the server subclass calls it after saving the text into
-     * `content`, so the document does not take the engine's older cached copy of that row for an edit.
-     */
+    /** Records the content row the template text now matches; the server subclass calls it after saving the text. */
     protected RecordTemplateTextSource(content: TemplateContentVersion): void {
         this.linkedTemplateText.RecordSource(content);
     }
 
     /**
-     * Resolves the linked template body from the template engine's cache (no extra RunView): the content the template
-     * renders. Without a `TemplateID` (before the first save) or any content, the text is empty, so a later edit and
-     * Save() go through the create-Template branch in the server subclass.
-     * @returns true when the linked template has content
+     * Resolves the linked template body from the template engine's cache. Without a `TemplateID` (before the first
+     * save) the text is empty, so a later edit and Save() go through the create-Template branch in the server subclass.
      */
     protected async LoadTemplateText(): Promise<boolean> {
         return this.linkedTemplateText.Load(this.CurrentTemplateContent());

@@ -22,12 +22,8 @@ export class CerebrasLLM extends BaseLLM {
         this._client = new Cerebras({ apiKey });
     }
 
-    /**
-     * Both request paths send temperature and `max_tokens` as configured and never a seed (the request builders
-     * have no seed field), so a configured seed is described as not sent and a strict call refuses it.
-     */
+    /** Both request paths send temperature and `max_tokens` as configured and never a seed. */
     public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
-        // `??`: 0 is a sent value; only an unsent one becomes null.
         return { VendorModelName: params.model, Temperature: params.temperature ?? null, MaxTokens: params.maxOutputTokens ?? null, Seed: null };
     }
 

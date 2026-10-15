@@ -1,20 +1,15 @@
 /**
- * Typed test doubles for driving the real `AIPromptRunner.ExecutePrompt` without a database: real entity objects
- * (whose metadata holds only the fields a test names), a prompt run that is never written, and a runner that hands
- * back a given run record instead of creating one.
- *
- * Build the entities while the test file is being collected: an entity's fields are created through
- * `ClassFactory.CreateInstance`, which the AIPromptRunner tests replace in `beforeEach` to return their test driver.
+ * Test doubles for driving the real `AIPromptRunner.ExecutePrompt` without a database. Build the entities while the
+ * test file is collected: the AIPromptRunner tests replace `ClassFactory.CreateInstance` in `beforeEach`.
  */
 import { AIPromptParams, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { AIPromptRunner } from '../../AIPromptRunner';
 
-/** A field value a test double's metadata is inferred from. */
-export type RealEntityValue = string | number | boolean | null;
+type RealEntityValue = string | number | boolean | null;
 
-/** A real entity object of the given class, whose metadata holds only the named (updatable) fields, hydrated with `values`. */
-export function BuildRealEntity<T extends BaseEntity>(ctor: new (info: EntityInfo) => T, name: string, values: Record<string, RealEntityValue>): T {
+/** A real entity object whose metadata holds only the named fields, hydrated with `values`. */
+function BuildRealEntity<T extends BaseEntity>(ctor: new (info: EntityInfo) => T, name: string, values: Record<string, RealEntityValue>): T {
   const entityId = `entity-${name}`;
   const info = new EntityInfo({
     ID: entityId, Name: name,
@@ -28,19 +23,16 @@ export function BuildRealEntity<T extends BaseEntity>(ctor: new (info: EntityInf
   return record;
 }
 
-/** A prompt run that is never written: the runner's queued INSERT/UPDATE land here. */
-export class UnsavedPromptRun extends MJAIPromptRunEntityExtended {
+class UnsavedPromptRun extends MJAIPromptRunEntityExtended {
   public override async Save(): Promise<boolean> {
     return true;
   }
 }
 
-/** A `Running` prompt run carrying the fields a run's finalize writes, so a test can read them back. */
-export function BuildPromptRunRecord(id: string): UnsavedPromptRun {
+/** A `Running` prompt run that is never written, carrying the fields a run's finalize sets. */
+export function BuildPromptRunRecord(id: string): MJAIPromptRunEntityExtended {
   return BuildRealEntity(UnsavedPromptRun, 'MJ: AI Prompt Runs', {
-    ID: id, Status: 'Running', Success: false, Cancelled: false, CancellationReason: null,
-    ErrorMessage: null, ErrorDetails: null, Result: null,
-    TokensPrompt: 0, TokensCompletion: 0, TokensUsed: 0, Cost: 0, TotalCost: 0,
+    ID: id, Status: 'Running', Success: false, ErrorMessage: null, ErrorDetails: null, Result: null,
   });
 }
 
@@ -64,14 +56,8 @@ export function BuildPromptParams(prompt: MJAIPromptEntityExtended): AIPromptPar
   return params;
 }
 
-/**
- * The runner with its run record kept in memory: creating a run hands back the given record (after `OnRunCreated`).
- * Retry delays are counted instead of waited, so a test that retries does not sleep.
- */
+/** The runner with its run record kept in memory and its retry delays counted instead of waited. */
 export class InMemoryRunRecordRunner extends AIPromptRunner {
-  /** Called when the runner creates its run, before the record is returned. */
-  public OnRunCreated: (() => void) | undefined;
-  /** How many retry delays the runner would have waited. */
   public RetryDelays = 0;
 
   constructor(private readonly runRecord: MJAIPromptRunEntityExtended) {
@@ -79,7 +65,6 @@ export class InMemoryRunRecordRunner extends AIPromptRunner {
   }
 
   protected override async CreateRunRecord(): Promise<MJAIPromptRunEntityExtended> {
-    this.OnRunCreated?.();
     return this.runRecord;
   }
   protected override async ApplyRetryDelay(): Promise<void> {

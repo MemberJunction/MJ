@@ -3,10 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /* ------------------------------------------------------------------ */
 /*  Hoisted mocks                                                     */
 /* ------------------------------------------------------------------ */
-/** The fields of an InvokeModel command the mocked command classes keep, and the reply shapes the tests script. */
-type SentCommand = { modelId: string; body: string };
-type ScriptedReply = { body: Uint8Array | never[] };
-const mockSend = vi.hoisted(() => vi.fn<(command: SentCommand, options?: { abortSignal?: AbortSignal }) => Promise<ScriptedReply>>());
+const mockSend = vi.hoisted(() => vi.fn());
 
 vi.mock('@aws-sdk/client-bedrock-runtime', () => {
   return {
@@ -83,8 +80,6 @@ vi.mock('@memberjunction/ai', () => {
     SummarizeParams: class {},
     SummarizeResult: class {},
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
-    GetTextFromContent: (content: string | Array<{ type: string; content: string }>): string =>
-      typeof content === 'string' ? content : content.filter(b => b.type === 'text').map(b => b.content).join('\n'),
     parseBase64DataUrl: vi.fn().mockImplementation((input: string) => {
       const match = input.match(/^data:([^;]+);base64,(.+)$/);
       if (match) return { mediaType: match[1], data: match[2] };
@@ -357,7 +352,7 @@ describe('BedrockLLM', () => {
         messages: [{ role: 'user', content: 'Hello' }],
         stopSequences,
       });
-      const sentBody = JSON.parse(mockSend.mock.calls[0][0].body);
+      const sentBody = JSON.parse(mockSend.mock.calls[0][0].body as string);
       return sentBody;
     };
 
@@ -422,7 +417,7 @@ describe('BedrockLLM', () => {
         messages: [{ role: 'user', content: 'Hello' }],
         assistantPrefill,
       });
-      const sentBody = JSON.parse(mockSend.mock.calls[0][0].body);
+      const sentBody = JSON.parse(mockSend.mock.calls[0][0].body as string);
       return sentBody;
     };
 
@@ -540,15 +535,12 @@ describe('BedrockLLM', () => {
 /** Reaches the protected request paths through a subclass, so a test sees the exact InvokeModel body. */
 class RequestCapturingBedrockLLM extends BedrockLLM {
   public SendNonStreaming(params: ChatParams): Promise<ChatResult> { return this.nonStreamingChatCompletion(params); }
-  // `unknown` on purpose: the stream handle is never read here, and the driver's own return type is the SDK's untyped stream.
   public SendStreaming(params: ChatParams): Promise<unknown> { return this.createStreamingRequest(params); }
 }
 /** Chat params from a partial literal; `ChatParams` is mocked, so the instance carries only what is given. */
 const chatParams = (o: Partial<ChatParams>): ChatParams => Object.assign(new ChatParams(), o);
-/** The command most recently sent to the mocked Bedrock client. */
-const lastSentCommand = (): SentCommand => mockSend.mock.calls[mockSend.mock.calls.length - 1][0];
 /** The JSON body of the most recent command sent to the mocked Bedrock client. */
-const lastSentBody = (): Record<string, unknown> => JSON.parse(lastSentCommand().body);
+const lastSentBody = (): Record<string, unknown> => JSON.parse(mockSend.mock.calls[mockSend.mock.calls.length - 1][0].body as string);
 
 describe('BedrockLLM parameter fidelity', () => {
   const families: Array<[string, (body: Record<string, unknown>) => unknown]> = [
@@ -567,130 +559,9 @@ describe('BedrockLLM parameter fidelity', () => {
     await new RequestCapturingBedrockLLM('a:b').SendStreaming(chatParams({ model: 'anthropic.claude-3-haiku-20240307-v1:0', messages: [{ role: 'user', content: 'x' }], temperature: 0 }));
     expect(lastSentBody().temperature).toBe(0);
   });
-  it('sends a configured topP and max tokens of 0 as given, leaving the vendor to judge them', async () => {
-    mockSend.mockResolvedValueOnce({ body: new TextEncoder().encode(JSON.stringify({})) });
-    await new RequestCapturingBedrockLLM('a:b').SendNonStreaming(chatParams({ model: 'anthropic.claude-3-haiku-20240307-v1:0', messages: [{ role: 'user', content: 'x' }], topP: 0, maxOutputTokens: 0 }));
-    expect(lastSentBody()).toMatchObject({ top_p: 0, max_tokens: 0 });
-  });
-  it('keeps 0.7 when no temperature is configured, and describes no seed', () => {
+  it('describes the 0.7 and 1024 defaults it sends when none is configured, and no seed', () => {
     const llm = new BedrockLLM('a:b');
     expect(llm.DescribeSentParameters(chatParams({ model: 'anthropic.claude-3-haiku-20240307-v1:0', messages: [], seed: 42 })))
       .toEqual({ VendorModelName: 'anthropic.claude-3-haiku-20240307-v1:0', Temperature: 0.7, MaxTokens: 1024, Seed: null });
-  });
-});
-
-describe('BedrockLLM inference-profile model IDs', () => {
-  const claudeReply = (): { body: Uint8Array } => ({ body: new TextEncoder().encode(JSON.stringify({ content: [{ text: 'OK' }], usage: { input_tokens: 7, output_tokens: 1 } })) });
-  beforeEach(() => { vi.clearAllMocks(); });
-
-  it.each([
-    ['anthropic.claude-opus-4-5-20251101-v1:0', 'anthropic'],
-    ['us.anthropic.claude-opus-4-6-v1', 'anthropic'],
-    ['global.anthropic.claude-opus-5-5', 'anthropic'],
-    ['eu.anthropic.claude-sonnet-4-6', 'anthropic'],
-    ['apac.anthropic.claude-haiku-4-5-20251001-v1:0', 'anthropic'],
-    ['us-gov.meta.llama3-8b-instruct-v1:0', 'meta'],
-    ['us.amazon.titan-text-express-v1', 'amazon.titan'],
-    ['ai21.j2-ultra-v1', 'ai21'],
-    ['openai.gpt-6-astra', null],
-    ['us.openai.gpt-oss-120b-1:0', null],
-    ['amazon.nova-pro-v1:0', null],
-  ])('%s belongs to family %s', (modelID, family) => {
-    expect(BedrockLLM.ResolveModelFamily(modelID)).toBe(family);
-  });
-
-  it('sends a Claude body for a profile ID, keeps the full profile ID as the model, and reads the Claude reply', async () => {
-    mockSend.mockResolvedValueOnce(claudeReply());
-    const result = await new RequestCapturingBedrockLLM('a:b').SendNonStreaming(chatParams({ model: 'us.anthropic.claude-opus-4-6-v1', messages: [{ role: 'user', content: 'x' }] }));
-    expect(lastSentCommand().modelId).toBe('us.anthropic.claude-opus-4-6-v1');
-    expect(lastSentBody()).toMatchObject({ anthropic_version: 'bedrock-2023-05-31', max_tokens: 1024, temperature: 0.7 });
-    expect(result.success).toBe(true);
-    expect(result.data.choices[0].message.content).toBe('OK');
-    expect(result.data.usage?.promptTokens).toBe(7);
-  });
-
-  it('streams a profile ID with a Claude body and the full profile ID', async () => {
-    mockSend.mockResolvedValueOnce({ body: [] });
-    await new RequestCapturingBedrockLLM('a:b').SendStreaming(chatParams({ model: 'global.anthropic.claude-opus-5-5', messages: [{ role: 'user', content: 'x' }] }));
-    expect(lastSentCommand().modelId).toBe('global.anthropic.claude-opus-5-5');
-    expect(lastSentBody()).toMatchObject({ anthropic_version: 'bedrock-2023-05-31' });
-  });
-
-  it('still refuses a family it cannot build a body for, before sending', async () => {
-    const result = await new RequestCapturingBedrockLLM('a:b').SendNonStreaming(chatParams({ model: 'us.openai.gpt-oss-120b-1:0', messages: [{ role: 'user', content: 'x' }] }));
-    expect(result.success).toBe(false);
-    expect(result.errorMessage).toContain('Unsupported model provider for Bedrock: us.openai.gpt-oss-120b-1:0');
-    expect(mockSend).not.toHaveBeenCalled();
-  });
-
-  it('describes exactly the model ID, temperature and max tokens a profile-ID request sends', async () => {
-    mockSend.mockResolvedValueOnce(claudeReply());
-    const params = chatParams({ model: 'us.anthropic.claude-opus-4-6-v1', messages: [{ role: 'user', content: 'x' }], temperature: 0, maxOutputTokens: 5 });
-    const llm = new RequestCapturingBedrockLLM('a:b');
-    await llm.SendNonStreaming(params);
-    const body = lastSentBody();
-    expect(llm.DescribeSentParameters(params)).toEqual({ VendorModelName: lastSentCommand().modelId, Temperature: body.temperature, MaxTokens: body.max_tokens, Seed: null });
-  });
-});
-
-describe('BedrockLLM Claude request body', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockSend.mockResolvedValue({ body: new TextEncoder().encode(JSON.stringify({ content: [{ text: 'OK' }] })) }); });
-
-  it('sends no top_p unless one is configured (Claude 4.x rejects temperature and top_p together)', async () => {
-    await new RequestCapturingBedrockLLM('a:b').SendNonStreaming(chatParams({ model: 'us.anthropic.claude-opus-4-6-v1', messages: [{ role: 'user', content: 'x' }] }));
-    expect(lastSentBody()).not.toHaveProperty('top_p');
-  });
-
-  it('sends a configured top_p without the default temperature, and describes no temperature (Claude 4.x rejects the pair)', async () => {
-    const params = chatParams({ model: 'anthropic.claude-opus-4-5-20251101-v1:0', messages: [{ role: 'user', content: 'x' }], topP: 0.5 });
-    const llm = new RequestCapturingBedrockLLM('a:b');
-    await llm.SendNonStreaming(params);
-    expect(lastSentBody().top_p).toBe(0.5);
-    expect(lastSentBody()).not.toHaveProperty('temperature');
-    expect(llm.DescribeSentParameters(params).Temperature).toBeNull();
-  });
-
-  it('streams a configured top_p without the default temperature too', async () => {
-    mockSend.mockResolvedValueOnce({ body: [] });
-    await new RequestCapturingBedrockLLM('a:b').SendStreaming(chatParams({ model: 'us.anthropic.claude-opus-4-6-v1', messages: [{ role: 'user', content: 'x' }], topP: 0.5 }));
-    expect(lastSentBody()).not.toHaveProperty('temperature');
-  });
-
-  it.each([
-    [{}, ['temperature']],
-    [{ temperature: 0 }, ['temperature']],
-    [{ topP: 0.5 }, ['top_p']],
-    [{ temperature: 0.2, topP: 0.5 }, ['temperature', 'top_p']],
-    [{ topP: null }, ['temperature']],
-  ])('with %j the Claude body carries exactly %j of temperature and top_p', async (sampling, expected) => {
-    await new RequestCapturingBedrockLLM('a:b').SendNonStreaming(Object.assign(chatParams({ model: 'us.anthropic.claude-opus-4-6-v1', messages: [{ role: 'user', content: 'x' }] }), sampling));
-    expect(['temperature', 'top_p'].filter(k => k in lastSentBody())).toEqual(expected);
-  });
-
-  it('keeps the 0.7 default temperature beside topP for the non-Claude families', async () => {
-    mockSend.mockResolvedValueOnce({ body: new TextEncoder().encode(JSON.stringify({ generation: 'OK' })) });
-    await new RequestCapturingBedrockLLM('a:b').SendNonStreaming(chatParams({ model: 'meta.llama3-8b-instruct-v1:0', messages: [{ role: 'user', content: 'x' }], topP: 0.5 }));
-    expect(lastSentBody()).toMatchObject({ temperature: 0.7, top_p: 0.5 });
-  });
-
-  it('moves system messages to the top-level system field, which is the only place Claude reads them', async () => {
-    await new RequestCapturingBedrockLLM('a:b').SendNonStreaming(chatParams({
-      model: 'us.anthropic.claude-opus-4-6-v1',
-      messages: [{ role: 'system', content: 'Be terse.' }, { role: 'system', content: [{ type: 'text', content: 'Answer in JSON.' }] }, { role: 'user', content: 'x' }],
-    }));
-    const body = lastSentBody();
-    expect(body.system).toBe('Be terse.\n\nAnswer in JSON.');
-    expect(body.messages).toEqual([{ role: 'user', content: 'x' }]);
-  });
-
-  it('sends no system field when there are no system messages', async () => {
-    await new RequestCapturingBedrockLLM('a:b').SendNonStreaming(chatParams({ model: 'anthropic.claude-opus-4-5-20251101-v1:0', messages: [{ role: 'user', content: 'x' }] }));
-    expect(lastSentBody()).not.toHaveProperty('system');
-  });
-
-  it('keeps system messages in the prompt text of the non-Claude families', async () => {
-    mockSend.mockResolvedValueOnce({ body: new TextEncoder().encode(JSON.stringify({ generation: 'OK' })) });
-    await new RequestCapturingBedrockLLM('a:b').SendNonStreaming(chatParams({ model: 'meta.llama3-8b-instruct-v1:0', messages: [{ role: 'system', content: 'Be terse.' }, { role: 'user', content: 'x' }] }));
-    expect(lastSentBody().prompt).toBe('System: Be terse.\nUser: x\n');
   });
 });

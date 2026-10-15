@@ -3,7 +3,7 @@ import { BaseModel, ModelUsage } from "./baseModel";
 import { ChatMessage, ChatMessageRole, ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage, ValidateToolConversation } from "./chat.types";
 import { ClassifyParams, ClassifyResult } from "./classify.types";
 import { ErrorAnalyzer } from "./errorAnalyzer";
-import { ParameterFidelityError, VendorParameterFidelity, type ParameterFidelity, type VendorCallParameters } from "./parameterFidelity";
+import { ParameterFidelityError, VendorParameterFidelity, type VendorCallParameters } from "./parameterFidelity";
 import { BuildCancellationErrorInfo, DescribeCancellation, IsAbortError } from "./cancellation";
 
 /**
@@ -90,27 +90,21 @@ export abstract class BaseLLM extends BaseModel {
 
     /**
      * The temperature, max output tokens and seed this driver would send for these params. The default is the
-     * configured values; a driver that substitutes a default or drops a parameter overrides this and builds its request
-     * from the same values, so the description cannot drift from what is sent.
+     * configured values; a driver that substitutes a default or drops a parameter overrides this.
      */
     public DescribeSentParameters(params: ChatParams): VendorCallParameters {
         return VendorParameterFidelity.ConfiguredParameters(params);
     }
 
-    /**
-     * Whether {@link ChatCompletion} takes the streaming path for these params: streaming was asked for with
-     * callbacks, the driver supports it, and no tools are declared. A driver whose two paths send different
-     * parameters reads this in {@link DescribeSentParameters}, so the description follows the path really taken.
-     */
+    /** Whether {@link ChatCompletion} takes the streaming path for these params. */
     protected WillStream(params: ChatParams): boolean {
         return params.streaming === true && params.streamingCallbacks != null && this.SupportsStreaming && !this.isStreamingSuppressedForTools(params);
     }
 
     /**
      * Native tool calling is non-streaming only: streaming tool-call delta assembly differs substantially per
-     * provider and is deferred. When a caller asks for both, tools win and the call quietly takes the
-     * non-streaming path — the same shape as the "streaming unsupported -> non-streaming" fallback — and the
-     * result records it so the downgrade is visible rather than mysterious.
+     * provider and is deferred. When a caller asks for both, tools win and we quietly take the non-streaming
+     * path, recording it on the result so the downgrade is visible rather than mysterious.
      */
     private isStreamingSuppressedForTools(params: ChatParams): boolean {
         const toolsRequested = this.SupportsTools && params.tools != null && params.tools.length > 0;
@@ -118,18 +112,9 @@ export abstract class BaseLLM extends BaseModel {
     }
 
     /**
-     * Stamps the call's parameter fidelity on a result and returns it, so every exit of {@link ChatCompletion} —
-     * streamed, cancelled or completed — records what was configured against what the driver would send.
-     */
-    private withFidelity(result: ChatResult, fidelity: ParameterFidelity): ChatResult {
-        result.parameterFidelity = fidelity;
-        return result;
-    }
-
-    /**
      * Process a chat completion request. If streaming is enabled and supported,
      * this will route to the streaming implementation. A `strictParameters` call the driver would not send as
-     * configured throws {@link ParameterFidelityError} before any request; every result records its fidelity.
+     * configured throws {@link ParameterFidelityError} before any request.
      */
     public async ChatCompletion(params: ChatParams): Promise<ChatResult> {
         if (params.enableCaching === undefined) {
@@ -143,8 +128,7 @@ export abstract class BaseLLM extends BaseModel {
             ValidateToolConversation(params.messages);
         }
 
-        // Refuse before any request when a strict caller's temperature, max tokens or seed would not reach the
-        // vendor as configured — a driver silently substituting its default (a `||` that turned a configured 0 into its own default) would otherwise go unnoticed.
+        // Refuse before any request when a strict caller's temperature, max tokens or seed would not reach the vendor as configured
         const fidelity = VendorParameterFidelity.CompareParameters(VendorParameterFidelity.ConfiguredParameters(params), this.DescribeSentParameters(params));
         if (params.strictParameters === true && fidelity.Status === 'refused') {
             throw new ParameterFidelityError(fidelity, this.constructor.name);
@@ -155,12 +139,13 @@ export abstract class BaseLLM extends BaseModel {
         // A request cancelled before it starts opens no socket, on every driver alike.
         const signal = params.cancellationToken;
         if (signal?.aborted) {
-            return this.withFidelity(this.BuildCancelledChatResult(new Date(), { signal }), fidelity);
+            return this.BuildCancelledChatResult(new Date(), { signal });
         }
 
         if (this.WillStream(params)) {
             const streamed = await this.handleStreamingChatCompletion(params);
-            return this.withFidelity(streamed, fidelity);
+            streamed.parameterFidelity = fidelity;
+            return streamed;
         }
 
         // Continue with normal non-streaming implementation
@@ -170,14 +155,14 @@ export abstract class BaseLLM extends BaseModel {
             result = await this.nonStreamingChatCompletion(params);
         } catch (error) {
             if (this.IsCancellationError(error, signal)) {
-                return this.withFidelity(this.BuildCancelledChatResult(startTime, { error, signal }), fidelity);
+                return this.BuildCancelledChatResult(startTime, { error, signal });
             }
             throw error;
         }
         // A driver that caught the abort itself still reports it as a cancellation, whatever shape of
         // failure it built.
         if (!result.success && signal?.aborted) {
-            return this.withFidelity(this.BuildCancelledChatResult(result.startTime ?? startTime, { error: result.exception, signal, message: result.errorMessage }), fidelity);
+            return this.BuildCancelledChatResult(result.startTime ?? startTime, { error: result.exception, signal, message: result.errorMessage });
         }
         result.parameterFidelity = fidelity;
         if (streamingSuppressedForTools) {

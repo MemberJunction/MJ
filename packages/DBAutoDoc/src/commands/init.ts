@@ -116,7 +116,7 @@ export default class Init extends Command {
           if (answers.provider === 'cerebras') return 'llama-3.1-8b';
           if (answers.provider === 'openrouter') return 'anthropic/claude-3-opus';
           if (answers.provider === 'xai') return 'grok-2';
-          if (answers.provider === 'bedrock') return 'us.anthropic.claude-sonnet-4-6';
+          if (answers.provider === 'bedrock') return 'anthropic.claude-3-sonnet-20240229-v1:0';
           return '';
         }
       },

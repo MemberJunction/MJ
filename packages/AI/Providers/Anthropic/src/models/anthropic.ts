@@ -27,10 +27,7 @@ export const ANTHROPIC_CACHE_BREAKPOINT = '<<<MJ_CACHE_BREAKPOINT>>>';
 /** Anthropic allows at most 4 cache_control breakpoints per request. */
 const MAX_CACHE_BREAKPOINTS = 4;
 
-/**
- * The output cap, thinking budget and temperature one request path sends. `undefined` = not sent. Both the request
- * builders and `DescribeSentParameters` read it, so the description cannot drift from the request.
- */
+/** The output cap, thinking budget and temperature one request path sends (`undefined` = not sent). */
 type AnthropicSentSampling = { MaxTokens: number; ThinkingBudget: number | undefined; Temperature: number | undefined };
 
 /** A minimal Anthropic text content block, optionally carrying an ephemeral cache breakpoint. */
@@ -38,25 +35,6 @@ type AnthropicTextBlock = { type: 'text'; text: string; cache_control?: { type: 
 
 @RegisterClass(BaseLLM, 'AnthropicLLM')
 export class AnthropicLLM extends BaseLLM {
-    /**
-     * Whether the JSON response-format notice has been logged. A JSON prompt sets the format on every call, so the
-     * notice is logged once per process instead of once per request.
-     */
-    private static _warnedJSONResponseFormat = false;
-
-    /**
-     * Logs, once per process, that `responseFormat='JSON'` sends nothing to Anthropic. The Messages API has no
-     * schema-less JSON mode, so JSON comes from the prompt's own instructions, an assistant prefill and MJ's output
-     * parsing; the notice tells a direct caller how to ask for more.
-     */
-    private static warnJSONResponseFormatOnce(): void {
-        if (AnthropicLLM._warnedJSONResponseFormat) {
-            return;
-        }
-        AnthropicLLM._warnedJSONResponseFormat = true;
-        console.warn(`Anthropic provider: responseFormat='JSON' has no native equivalent, so nothing is sent for it (logged once per process). Use ResponseFormat='ModelSpecific' with a tool definition for structured output, or set assistantPrefill to '{' to coax JSON.`);
-    }
-
     private _anthropic: Anthropic;
     
     // State tracking for streaming thinking extraction
@@ -646,10 +624,9 @@ export class AnthropicLLM extends BaseLLM {
 
     /**
      * What a non-streaming request sends. When BUDGET-form thinking is enabled, max_tokens must be greater than
-     * budget_tokens, so a smaller cap is raised. Adaptive-thinking models (Claude 4.6+, all of Claude 5) have no
-     * budget: they take `thinking.type = 'adaptive'` + `output_config.effort` and reject the budget form with
-     * HTTP 400 (observed on claude-sonnet-5) — see `UsesAdaptiveThinking`. Claude 4.5 Opus with thinking only
-     * accepts temperature 1 (2025-11-25), so a configured temperature is not sent there.
+     * budget_tokens. Adaptive-thinking models (Claude 4.6+, all of Claude 5) have no budget: they take
+     * `thinking.type = 'adaptive'` + `output_config.effort` and reject the budget form with
+     * HTTP 400 (observed on claude-sonnet-5) — see `UsesAdaptiveThinking`.
      */
     private resolveNonStreamingSampling(params: ChatParams): AnthropicSentSampling {
         let maxTokens = this.resolveMaxTokens(params);
@@ -662,40 +639,28 @@ export class AnthropicLLM extends BaseLLM {
                 maxTokens = thinkingBudget + 1000; // buffer so max_tokens > budget_tokens
             }
         }
+        //2025-11-25: With thinking enabled on Claude 4.5 Opus, temperature must be 1, so it is not sent.
         const temperatureRejected = params.model.toLowerCase().startsWith('claude-opus-4-5') && thinkingBudget !== undefined;
-        // `??`: a configured temperature of 0 is sent as 0.
         return { MaxTokens: maxTokens, ThinkingBudget: thinkingBudget, Temperature: temperatureRejected ? undefined : params.temperature ?? undefined };
     }
 
-    /**
-     * The `max_tokens` both paths start from. The Messages API requires the field and rejects a value below 1, so
-     * an unset, zero or negative cap is sent as the 32000 default (and a strict call that configured 0 refuses).
-     */
+    /** The `max_tokens` both paths start from: the API requires it, so an unset or non-positive cap sends 32000. */
     private resolveMaxTokens(params: ChatParams): number {
         return params.maxOutputTokens != null && params.maxOutputTokens > 0 ? params.maxOutputTokens : 32000;
     }
 
-    /**
-     * What a streaming request sends: the shared cap ({@link resolveMaxTokens}), the configured temperature as
-     * given, and a budget-form thinking budget only when the caller supplied at least 1024 tokens (the adaptive
-     * form has no budget at all).
-     */
+    /** What a streaming request sends: a budget-form thinking budget only when the caller supplied at least 1024 tokens. */
     private resolveStreamingSampling(params: ChatParams): AnthropicSentSampling {
         return {
             MaxTokens: this.resolveMaxTokens(params),
             ThinkingBudget: typeof params.reasoningBudgetTokens === 'number' && params.reasoningBudgetTokens >= 1024 ? params.reasoningBudgetTokens : undefined,
-            // `??`: a configured temperature of 0 is sent as 0.
             Temperature: params.temperature ?? undefined
         };
     }
 
-    /**
-     * Anthropic's two request paths send different values (see the resolvers), so the description follows the
-     * path {@link WillStream} says ChatCompletion takes. The Messages API has no seed, so a seed is never sent.
-     */
+    /** The two request paths send different values, so this follows the path taken. The Messages API has no seed. */
     public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
         const sampling = this.WillStream(params) ? this.resolveStreamingSampling(params) : this.resolveNonStreamingSampling(params);
-        // `??`: a temperature of 0 is sent; only an unsent one becomes null.
         return { VendorModelName: params.model, Temperature: sampling.Temperature ?? null, MaxTokens: sampling.MaxTokens, Seed: null };
     }
 
@@ -710,15 +675,14 @@ export class AnthropicLLM extends BaseLLM {
             const systemMsgs = params.messages.filter(m => m.role === "system");
             const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
             
-            // max_tokens, thinking budget and temperature — the same values DescribeSentParameters reports.
+            // max_tokens, thinking budget and temperature
             const sampling = this.resolveNonStreamingSampling(params);
 
             // Append assistant prefill message if specified
             const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, params.assistantPrefill);
 
             // Create the request parameters
-            // Sent through `messages.stream()` (Anthropic prefers streaming for any decent sized response), which adds
-            // `stream: true` itself, so the body is the non-streaming shape.
+            // Sent through `messages.stream()` (Anthropic prefers it for any decent sized response), which adds `stream: true`
             const createParams: MessageCreateParamsNonStreaming = {
                 model: params.model,
                 max_tokens: sampling.MaxTokens,
@@ -785,7 +749,7 @@ export class AnthropicLLM extends BaseLLM {
 
             switch (params.responseFormat) {
                 case 'JSON':
-                    AnthropicLLM.warnJSONResponseFormatOnce();
+                    console.warn(`Anthropic provider: responseFormat='JSON' has no native equivalent. Use ResponseFormat='ModelSpecific' with a tool definition for structured output, or set assistantPrefill to '{' to coax JSON.`);
                     break;
                 case 'ModelSpecific':
                     if (params.modelSpecificResponseFormat) {
@@ -800,7 +764,7 @@ export class AnthropicLLM extends BaseLLM {
             // APIUserAbortError.
             const stream = this.AnthropicClient.messages
                 .stream(createParams, { signal: params.cancellationToken })
-                .on('text', (_chunk: string) => {
+                .on('text', (chunk: any) => {
                     // too noisy to log this -- console.log('stream chunk', chunk);
                 });
             result = await stream.finalMessage();
@@ -1023,7 +987,7 @@ export class AnthropicLLM extends BaseLLM {
 
         switch (params.responseFormat) {
             case 'JSON':
-                AnthropicLLM.warnJSONResponseFormatOnce();
+                console.warn(`Anthropic provider: responseFormat='JSON' has no native equivalent. Use ResponseFormat='ModelSpecific' with a tool definition for structured output, or set assistantPrefill to '{' to coax JSON.`);
                 break;
             case 'ModelSpecific':
                 if (params.modelSpecificResponseFormat) {

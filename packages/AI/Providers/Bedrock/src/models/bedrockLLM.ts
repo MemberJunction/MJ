@@ -13,7 +13,6 @@ import {
   ChatMessageContentBlock,
   ErrorAnalyzer,
   parseBase64DataUrl,
-  GetTextFromContent,
   type VendorCallParameters
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
@@ -23,56 +22,8 @@ import {
   InvokeModelWithResponseStreamCommand 
 } from '@aws-sdk/client-bedrock-runtime';
 
-/** A base64 image or document block, in the Claude content-block shape Bedrock mirrors. */
-type BedrockMediaBlock = { type: 'image' | 'document'; source: { type: 'base64'; media_type: string; data: string } };
-
-/** One content block of a Bedrock Claude message. */
-type BedrockContentBlock = { type: 'text'; text: string } | BedrockMediaBlock;
-
-/**
- * One message as the Bedrock model families read it: plain text, or content blocks for Claude. A message whose
- * blocks are all of unsupported kinds (audio, video) keeps its original MJ blocks, as it always has.
- */
-type BedrockMessage = { role: string; content: string | BedrockContentBlock[] | ChatMessageContentBlock[] };
-
-/** The Bedrock model families this driver builds InvokeModel request bodies for. */
-export type BedrockModelFamily = 'anthropic' | 'ai21' | 'amazon.titan' | 'meta';
-
 @RegisterClass(BaseLLM, "BedrockLLM")
 export class BedrockLLM extends BaseLLM {
-  /** The foundation-model ID prefix of each supported family. */
-  private static readonly FAMILY_PREFIXES: ReadonlyArray<readonly [string, BedrockModelFamily]> = [
-    ['anthropic.', 'anthropic'],
-    ['ai21.', 'ai21'],
-    ['amazon.titan-', 'amazon.titan'],
-    ['meta.', 'meta'],
-  ];
-
-  /**
-   * The model family whose request body a Bedrock model ID needs, or `null` when this driver supports none.
-   *
-   * Accepts a foundation-model ID (`anthropic.claude-opus-4-5-20251101-v1:0`) and a system-defined
-   * cross-region inference-profile ID, which is a foundation-model ID behind one geography segment
-   * (`us.`, `eu.`, `apac.`, `global.`, `us-gov.` ...). Claude 4.x and later on Bedrock are served ONLY through
-   * such profiles, so the family must be read past that segment. The geography list is not hard-coded:
-   * AWS adds geographies, and a segment in front of a known family prefix is unambiguous. The full ID,
-   * profile segment included, is what the request sends.
-   */
-  public static ResolveModelFamily(modelID: string): BedrockModelFamily | null {
-    const direct = BedrockLLM.familyOfFoundationModelID(modelID);
-    if (direct) {
-      return direct;
-    }
-    const profileSegmentEnd = modelID.indexOf('.');
-    return profileSegmentEnd > 0 ? BedrockLLM.familyOfFoundationModelID(modelID.slice(profileSegmentEnd + 1)) : null;
-  }
-
-  /** The family whose foundation-model ID prefix starts `modelID`, or `null`. */
-  private static familyOfFoundationModelID(modelID: string): BedrockModelFamily | null {
-    const match = BedrockLLM.FAMILY_PREFIXES.find(([prefix]) => modelID.startsWith(prefix));
-    return match ? match[1] : null;
-  }
-
   private _client: BedrockRuntimeClient;
   private _region: string;
 
@@ -102,7 +53,7 @@ export class BedrockLLM extends BaseLLM {
   }
 
   /**
-   * Bedrock supports assistant prefill for Claude models (`anthropic.*` and their inference profiles).
+   * Bedrock supports assistant prefill for Claude (anthropic.*) models.
    * The provider implementation handles per-model-prefix gating internally.
    */
   public override get SupportsPrefill(): boolean {
@@ -124,10 +75,68 @@ export class BedrockLLM extends BaseLLM {
     const startTime = new Date();
 
     try {
-      // The model ID is sent exactly as configured: a foundation-model ID or an inference-profile ID.
+      // Map provider-agnostic params to Bedrock-specific format
+      const bedrockParams = this.mapToBedrockParams(params);
+      
+      // The modelId should be specified in the model parameter, e.g., "anthropic.claude-v2"
       const modelId = params.model;
-      const family = BedrockLLM.ResolveModelFamily(modelId);
-      const requestBody = this.buildRequestBody(params);
+      
+      // Create the request body - depends on the specific model provider in Bedrock
+      let requestBody: any;
+      
+      if (modelId.startsWith('anthropic.')) {
+        // Anthropic Claude models
+        const claudeMessages = [...bedrockParams.messages];
+        // Append assistant prefill if specified — Claude on Bedrock supports this natively
+        if (params.assistantPrefill) {
+          claudeMessages.push({ role: 'assistant', content: params.assistantPrefill });
+        }
+        requestBody = {
+          anthropic_version: "bedrock-2023-05-31",
+          max_tokens: params.maxOutputTokens || 1024,
+          messages: claudeMessages,
+          temperature: params.temperature ?? 0.7,
+          top_p: 0.9
+        };
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+          requestBody.stop_sequences = params.stopSequences;
+        }
+      } else if (modelId.startsWith('ai21.')) {
+        // AI21 models
+        requestBody = {
+          prompt: this.convertMessagesToPrompt(bedrockParams.messages),
+          maxTokens: params.maxOutputTokens || 1024,
+          temperature: params.temperature ?? 0.7,
+          topP: 0.9
+        };
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+          requestBody.stopSequences = params.stopSequences;
+        }
+      } else if (modelId.startsWith('amazon.titan-')) {
+        // Amazon Titan models
+        requestBody = {
+          inputText: this.convertMessagesToPrompt(bedrockParams.messages),
+          textGenerationConfig: {
+            maxTokenCount: params.maxOutputTokens || 1024,
+            temperature: params.temperature ?? 0.7,
+            topP: 0.9
+          }
+        };
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+          requestBody.textGenerationConfig.stopSequences = params.stopSequences;
+        }
+      } else if (modelId.startsWith('meta.')) {
+        // Meta Llama models
+        requestBody = {
+          prompt: this.convertMessagesToPrompt(bedrockParams.messages),
+          max_gen_len: params.maxOutputTokens || 1024,
+          temperature: params.temperature ?? 0.7,
+          top_p: 0.9
+        };
+        // Note: Meta Llama models on Bedrock don't support stop sequences in the request body
+      } else {
+        throw new Error(`Unsupported model provider for Bedrock: ${modelId}`);
+      }
 
       // Invoke the model
       const command = new InvokeModelCommand({
@@ -146,7 +155,7 @@ export class BedrockLLM extends BaseLLM {
       let content = '';
       let tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
 
-      if (family === 'anthropic') {
+      if (modelId.startsWith('anthropic.')) {
         content = responseBody.content?.[0]?.text || '';
         // Anthropic-style usage: input_tokens EXCLUDES cached tokens, so it is already the net-new
         // (uncached) prompt count — assign through. Cache reads/writes are reported separately and
@@ -158,7 +167,7 @@ export class BedrockLLM extends BaseLLM {
           cacheReadTokens: responseBody.usage?.cache_read_input_tokens || 0,
           cacheWriteTokens: responseBody.usage?.cache_creation_input_tokens || 0
         };
-      } else if (family === 'ai21') {
+      } else if (modelId.startsWith('ai21.')) {
         content = responseBody.completions?.[0]?.data?.text || '';
         // AI21 via Bedrock has no prompt-cache reporting — promptTokens is already net-new.
         tokenUsage = {
@@ -168,7 +177,7 @@ export class BedrockLLM extends BaseLLM {
           cacheReadTokens: 0,
           cacheWriteTokens: 0
         };
-      } else if (family === 'amazon.titan') {
+      } else if (modelId.startsWith('amazon.titan-')) {
         content = responseBody.results?.[0]?.outputText || '';
         // Titan via Bedrock has no prompt-cache reporting — promptTokens is already net-new.
         tokenUsage = {
@@ -178,7 +187,7 @@ export class BedrockLLM extends BaseLLM {
           cacheReadTokens: 0,
           cacheWriteTokens: 0
         };
-      } else if (family === 'meta') {
+      } else if (modelId.startsWith('meta.')) {
         content = responseBody.generation || '';
         // Llama models via Bedrock may not provide token counts, and report no cache info.
         tokenUsage = {
@@ -248,9 +257,68 @@ export class BedrockLLM extends BaseLLM {
    * Create a streaming request for Bedrock
    */
   protected async createStreamingRequest(params: ChatParams): Promise<any> {
-    // The model ID is sent exactly as configured: a foundation-model ID or an inference-profile ID.
+    // Map provider-agnostic params to Bedrock-specific format
+    const bedrockParams = this.mapToBedrockParams(params);
+    
+    // The modelId should be specified in the model parameter, e.g., "anthropic.claude-v2"
     const modelId = params.model;
-    const requestBody = this.buildRequestBody(params);
+    
+    // Create the request body - depends on the specific model provider in Bedrock
+    let requestBody: any;
+    
+    if (modelId.startsWith('anthropic.')) {
+      // Anthropic Claude models
+      const claudeMessages = [...bedrockParams.messages];
+      // Append assistant prefill if specified — Claude on Bedrock supports this natively
+      if (params.assistantPrefill) {
+        claudeMessages.push({ role: 'assistant', content: params.assistantPrefill });
+      }
+      requestBody = {
+        anthropic_version: "bedrock-2023-05-31",
+        max_tokens: params.maxOutputTokens || 1024,
+        messages: claudeMessages,
+        temperature: params.temperature ?? 0.7,
+        top_p: 0.9
+      };
+      if (params.stopSequences != null && params.stopSequences.length > 0) {
+        requestBody.stop_sequences = params.stopSequences;
+      }
+    } else if (modelId.startsWith('ai21.')) {
+      // AI21 models
+      requestBody = {
+        prompt: this.convertMessagesToPrompt(bedrockParams.messages),
+        maxTokens: params.maxOutputTokens || 1024,
+        temperature: params.temperature ?? 0.7,
+        topP: 0.9
+      };
+      if (params.stopSequences != null && params.stopSequences.length > 0) {
+        requestBody.stopSequences = params.stopSequences;
+      }
+    } else if (modelId.startsWith('amazon.titan-')) {
+      // Amazon Titan models
+      requestBody = {
+        inputText: this.convertMessagesToPrompt(bedrockParams.messages),
+        textGenerationConfig: {
+          maxTokenCount: params.maxOutputTokens || 1024,
+          temperature: params.temperature ?? 0.7,
+          topP: 0.9
+        }
+      };
+      if (params.stopSequences != null && params.stopSequences.length > 0) {
+        requestBody.textGenerationConfig.stopSequences = params.stopSequences;
+      }
+    } else if (modelId.startsWith('meta.')) {
+      // Meta Llama models
+      requestBody = {
+        prompt: this.convertMessagesToPrompt(bedrockParams.messages),
+        max_gen_len: params.maxOutputTokens || 1024,
+        temperature: params.temperature ?? 0.7,
+        top_p: 0.9
+      };
+      // Note: Meta Llama models on Bedrock don't support stop sequences in the request body
+    } else {
+      throw new Error(`Unsupported model provider for Bedrock: ${modelId}`);
+    }
 
     // Invoke the model with streaming
     const command = new InvokeModelWithResponseStreamCommand({
@@ -373,86 +441,20 @@ export class BedrockLLM extends BaseLLM {
     throw new Error("Method not implemented.");
   }
 
-  /**
-   * The temperature sent: the configured one (0 included — `??` on purpose: `||` would turn a configured 0 into 0.7),
-   * otherwise the 0.7 default. Claude is the exception: it gets no default temperature when a topP is configured,
-   * because Claude 4.x rejects a request carrying both `temperature` and `top_p` (Bedrock ValidationException, seen
-   * live on Claude Opus 4.6). `undefined` = not sent. The request body and {@link DescribeSentParameters} both read this.
-   */
-  private resolveTemperature(params: ChatParams): number | undefined {
-    if (params.temperature !== undefined && params.temperature !== null) {
-      return params.temperature;
-    }
-    const claudeWithTopP = BedrockLLM.ResolveModelFamily(params.model) === 'anthropic' && BedrockLLM.hasConfiguredTopP(params);
-    return claudeWithTopP ? undefined : 0.7;
-  }
-
-  /** Whether a topP is configured. A `null` override (prompt-runner overrides pass through as given) counts as unset. */
-  private static hasConfiguredTopP(params: ChatParams): boolean {
-    return params.topP !== undefined && params.topP !== null;
-  }
-
-  /** The max tokens sent: configured or 1024. `??` keeps a configured value exactly as given. */
-  private resolveMaxTokens(params: ChatParams): number {
-    return params.maxOutputTokens ?? 1024;
-  }
-
-  /**
-   * Bedrock sends temperature and max tokens as resolved here, and never a seed: the InvokeModel bodies of the
-   * supported families have no seed field. The request body reads the same resolvers, so this cannot drift from it.
-   */
+  /** Every family's request body sends the temperature or 0.7, the max tokens or 1024, and no seed. */
   public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
-    // `??`: a temperature of 0 is sent; only an unsent one becomes null.
-    return { VendorModelName: params.model, Temperature: this.resolveTemperature(params) ?? null, MaxTokens: this.resolveMaxTokens(params), Seed: null };
+    return { VendorModelName: params.model, Temperature: params.temperature ?? 0.7, MaxTokens: params.maxOutputTokens || 1024, Seed: null };
   }
 
   /**
-   * The InvokeModel request body for the model's family; shared by the streaming and non-streaming paths.
-   * Throws for a model ID whose family this driver has no body for, before anything is sent.
+   * Map MemberJunction ChatParams to Bedrock-specific params
    */
-  private buildRequestBody(params: ChatParams): Record<string, unknown> {
-    const family = BedrockLLM.ResolveModelFamily(params.model);
-    const temperature = this.resolveTemperature(params);
-    const maxTokens = this.resolveMaxTokens(params);
-    const topP = params.topP ?? 0.9; // `??`: a configured 0 is sent as 0
-    const stops = params.stopSequences && params.stopSequences.length > 0 ? params.stopSequences : undefined;
-    if (family === 'anthropic') {
-      return this.buildClaudeRequestBody(params, temperature, maxTokens, stops);
-    }
-    const prompt = this.convertMessagesToPrompt(this.convertToBedrockMessages(params.messages));
-    if (family === 'ai21') {
-      return { prompt, maxTokens, temperature, topP, ...(stops ? { stopSequences: stops } : {}) };
-    }
-    if (family === 'amazon.titan') {
-      return { inputText: prompt, textGenerationConfig: { maxTokenCount: maxTokens, temperature, topP, ...(stops ? { stopSequences: stops } : {}) } };
-    }
-    if (family === 'meta') {
-      // Meta Llama models on Bedrock don't support stop sequences in the request body.
-      return { prompt, max_gen_len: maxTokens, temperature, top_p: topP };
-    }
-    // TODO: Bedrock model rows for the openai.*, xai.* and mistral.* families are Active in metadata, but this driver
-    // has no request body for them, so they always fail here. Track adding their bodies (or deactivating the rows) as an issue.
-    throw new Error(`Unsupported model provider for Bedrock: ${params.model}`);
-  }
-
-  /**
-   * The Claude Messages body. System messages go to the top-level `system` field: Claude's `messages` take only the
-   * user and assistant roles. `top_p` is sent only when configured, and then the temperature only when configured too
-   * ({@link resolveTemperature}): Claude 4.x rejects the pair, so the driver never adds half of it on its own. Claude
-   * supports an assistant prefill natively.
-   */
-  private buildClaudeRequestBody(params: ChatParams, temperature: number | undefined, maxTokens: number, stops: string[] | undefined): Record<string, unknown> {
-    const system = params.messages.filter(m => m.role === ChatMessageRole.system).map(m => GetTextFromContent(m.content)).join('\n\n');
-    const messages = this.convertToBedrockMessages(params.messages.filter(m => m.role !== ChatMessageRole.system));
-    const claudeMessages: BedrockMessage[] = params.assistantPrefill ? [...messages, { role: 'assistant', content: params.assistantPrefill }] : messages;
+  private mapToBedrockParams(params: ChatParams): any {
     return {
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: maxTokens,
-      ...(system ? { system } : {}),
-      messages: claudeMessages,
-      ...(temperature !== undefined ? { temperature } : {}),
-      ...(BedrockLLM.hasConfiguredTopP(params) ? { top_p: params.topP } : {}),
-      ...(stops ? { stop_sequences: stops } : {})
+      modelId: params.model,
+      messages: this.convertToBedrockMessages(params.messages),
+      temperature: params.temperature,
+      maxTokens: params.maxOutputTokens
     };
   }
 
@@ -460,8 +462,8 @@ export class BedrockLLM extends BaseLLM {
    * Convert MemberJunction chat messages to Bedrock-compatible messages
    * Supports multimodal content for Claude models (images via base64)
    */
-  private convertToBedrockMessages(messages: ChatMessage[]): BedrockMessage[] {
-    return messages.map((msg): BedrockMessage => {
+  private convertToBedrockMessages(messages: ChatMessage[]): any[] {
+    return messages.map(msg => {
       const role = this.mapRole(msg.role);
 
       // If content is a simple string, return as-is for text-only models
@@ -475,7 +477,7 @@ export class BedrockLLM extends BaseLLM {
 
       // Content is an array of ChatMessageContentBlock - convert to Bedrock format
       const contentBlocks = msg.content as ChatMessageContentBlock[];
-      const bedrockContent: BedrockContentBlock[] = [];
+      const bedrockContent: any[] = [];
 
       for (const block of contentBlocks) {
         if (block.type === 'text') {
@@ -510,7 +512,7 @@ export class BedrockLLM extends BaseLLM {
    * Format an image content block for Bedrock Claude API
    * Claude expects: { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "..." } }
    */
-  private formatImageForBedrock(block: ChatMessageContentBlock): BedrockMediaBlock | null {
+  private formatImageForBedrock(block: ChatMessageContentBlock): any | null {
     const content = block.content;
 
     // Check if it's a data URL (data:image/png;base64,...)
@@ -563,7 +565,7 @@ export class BedrockLLM extends BaseLLM {
    *
    * Same format as direct Anthropic API — Bedrock mirrors the Claude content block types.
    */
-  private formatDocumentForBedrock(block: ChatMessageContentBlock): BedrockMediaBlock | null {
+  private formatDocumentForBedrock(block: ChatMessageContentBlock): any | null {
     const content = block.content;
 
     // Determine the MIME type
@@ -637,7 +639,7 @@ export class BedrockLLM extends BaseLLM {
   /**
    * Convert messages to a single prompt string for models that don't support chat format
    */
-  private convertMessagesToPrompt(messages: BedrockMessage[]): string {
+  private convertMessagesToPrompt(messages: any[]): string {
     // Basic implementation - can be enhanced for different models
     return messages.map(msg => {
       if (msg.role === 'system') {

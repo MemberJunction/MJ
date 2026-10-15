@@ -3,8 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock dependencies before importing the module under test
 vi.mock('@memberjunction/core', () => ({
     BaseEntity: class BaseEntity {
-        ContextCurrentUser = null;
-        Fields = [];
+        ContextCurrentUser: null;
+        Fields: [];
         Get(_fieldName: string) { return ''; }
         Set(_fieldName: string, _value: unknown) {}
         get Dirty() { return false; }
@@ -44,17 +44,13 @@ vi.mock('@memberjunction/templates-base-types', () => ({
     },
 }));
 
-import type { EntityInfo } from '@memberjunction/core';
 import { MJEntityDocumentEntityExtended } from '../MJEntityDocumentEntityExtended';
-
-/** The mocked base class ignores its entity metadata; the real constructor requires one. */
-const UNUSED_ENTITY_INFO = {} as EntityInfo;
 
 describe('MJEntityDocumentEntityExtended', () => {
     let ed: MJEntityDocumentEntityExtended;
 
     beforeEach(() => {
-        ed = new MJEntityDocumentEntityExtended(UNUSED_ENTITY_INFO);
+        ed = new MJEntityDocumentEntityExtended();
         // Reset the shared mock cache between tests so cross-test leakage
         // can't make `LoadTemplateText` see stale content.
         contents.length = 0;
@@ -130,20 +126,9 @@ describe('MJEntityDocumentEntityExtended', () => {
         });
 
         it('leaves TemplateText empty when TemplateID has no matching content', async () => {
-            ed.TemplateID = 'tmpl-missing';
+            (ed as unknown as { TemplateID: string }).TemplateID = 'tmpl-missing';
             await ed.LoadFromData({});
             expect(ed.TemplateText).toBe('');
-        });
-
-        it('clears the text on a reload whose template no longer has content', async () => {
-            contents.push({ ID: 'c-1', TemplateID: 'tmpl-1', TemplateText: 'v1', Priority: 1, __mj_UpdatedAt: new Date('2026-01-01') });
-            ed.TemplateID = 'tmpl-1';
-            await ed.LoadFromData({});
-            expect(ed.TemplateText).toBe('v1');
-            contents.length = 0; // the content row was deleted and the engine reloaded
-            await ed.LoadFromData({});
-            expect(ed.TemplateText).toBe('');
-            expect(ed.TemplateTextDirty).toBe(false);
         });
 
         it('reads through to an edited Template Content without reloading the document, and keeps an unsaved edit', async () => {

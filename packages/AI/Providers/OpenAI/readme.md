@@ -121,9 +121,9 @@ console.log(`Dimensions: ${result.vector.length}`);
 
 | Parameter | Supported | Notes |
 |-----------|-----------|-------|
-| temperature | Yes | 0.0 - 2.0. Reasoning models (o-series, GPT-5 and later; see `OpenAILLM.IsReasoningModel`) accept only their default, 1: any other configured value is not sent, and the call's parameter fidelity says so |
+| temperature | Yes | 0.0 - 2.0 |
 | maxOutputTokens | Yes | Maximum tokens to generate |
-| topP | Yes | Nucleus sampling. Reasoning models accept only 1: any other configured value is not sent |
+| topP | Yes | Nucleus sampling |
 | frequencyPenalty | Yes | -2.0 to 2.0 |
 | presencePenalty | Yes | -2.0 to 2.0 |
 | seed | Yes | Deterministic outputs |

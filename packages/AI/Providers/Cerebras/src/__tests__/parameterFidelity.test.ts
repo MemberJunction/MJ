@@ -1,7 +1,4 @@
-/**
- * Parameter fidelity for CerebrasLLM. Runs the REAL BaseLLM.ChatCompletion and mocks only the Cerebras SDK, so each test
- * compares what DescribeSentParameters reports with the request body the SDK actually received.
- */
+/** Parameter fidelity for CerebrasLLM: what DescribeSentParameters reports against the body the mocked SDK received. */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ChatParams, ParameterFidelityError, type VendorCallParameters } from '@memberjunction/ai';
 

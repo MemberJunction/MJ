@@ -5,10 +5,9 @@ import { LinkedTemplateText, type TemplateContentVersion } from "./LinkedTemplat
 
 @RegisterClass(BaseEntity, "MJ: AI Prompts")
 export class MJAIPromptEntityExtended extends MJAIPromptEntity {
-    /** The template text this prompt mirrors from its template's rendered content (shared with entity documents). */
     private readonly linkedTemplateText = new LinkedTemplateText();
 
-    /** The text as last loaded or saved; servers set it after saving the text so the prompt is no longer dirty. */
+    /** The text as last loaded or saved. */
     protected get _originalTemplateText(): string {
         return this.linkedTemplateText.OriginalText;
     }
@@ -19,7 +18,7 @@ export class MJAIPromptEntityExtended extends MJAIPromptEntity {
     /**
      * Virtual property to hold the template text.
      * This property is used to create or update the Template and Template Contents entity records automatically
-     * whenever the AIPrompt is saved. Reads through to the template engine's cache (see {@link LinkedTemplateText}).
+     * whenever the AIPrompt is saved. Reads through to the template engine's cache.
      */
     public get TemplateText(): string {
         this.RefreshTemplateTextFromCache();
@@ -32,27 +31,17 @@ export class MJAIPromptEntityExtended extends MJAIPromptEntity {
         return this.linkedTemplateText.Dirty;
     }
 
-    /**
-     * Brings the template text up to date with the template engine's cache: adopts the cached rendered
-     * content when it is newer than the text's source, never over an unsaved local edit (see {@link LinkedTemplateText}).
-     */
+    /** Adopts the cached rendered content when it is newer than the text's source, never over an unsaved edit. */
     protected RefreshTemplateTextFromCache(): void {
         this.linkedTemplateText.RefreshFrom(this.CurrentTemplateContent());
     }
 
-    /**
-     * The template content this prompt renders, from the template engine's cache for this prompt's provider: the same
-     * row the AI prompt runner renders (`GetHighestPriorityContent`), so a feature pipeline's prompt version hash changes
-     * exactly when the rendered text does. Undefined when the cache does not know the template.
-     */
+    /** The template content this prompt renders (`GetHighestPriorityContent`), from its provider's template cache. */
     protected CurrentTemplateContent(): MJTemplateContentEntity | undefined {
         return LinkedTemplateText.RenderedContent(this, this.TemplateID);
     }
 
-    /**
-     * Records the content row the template text now matches — call after saving the text into `content`, so the
-     * prompt does not take the engine's older cached copy of that row for an edit.
-     */
+    /** Records the content row the template text now matches; the server subclass calls it after saving the text. */
     protected RecordTemplateTextSource(content: TemplateContentVersion): void {
         this.linkedTemplateText.RecordSource(content);
     }
@@ -118,11 +107,6 @@ export class MJAIPromptEntityExtended extends MJAIPromptEntity {
         return result;
     }
 
-    /**
-     * Loads the template text from the template engine's cache when the record loads. A different content row, or a
-     * later version of the row the text came from, replaces the text (and any unsaved edit of it, as a load replaces
-     * the record's other fields); a row no newer than the text this prompt saved does not.
-     */
     protected async LoadTemplateText() {
         return this.linkedTemplateText.Load(this.CurrentTemplateContent());
     }

@@ -14,11 +14,9 @@ import {
   GetUserMessageFromChatParams,
   ModelUsage,
   BaseResult,
-  ErrorAnalyzer,
-  type VendorCallParameters
+  ErrorAnalyzer
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
-import { OpenAILLM } from '@memberjunction/ai-openai';
 import { AzureChatCompletionChoice, AzureChatCompletionChunk, AzureChatCompletionChunkChoice, AzureChatCompletionResponse } from '../generic/azure.types';
 import { AzureAIConfig } from '../config';
 import ModelClient from "@azure-rest/ai-inference";
@@ -26,17 +24,6 @@ import { AzureKeyCredential } from "@azure/core-auth";
 import { DefaultAzureCredential } from "@azure/identity";
 
 // Using the imported SummarizeResult from @memberjunction/ai
-
-/**
- * The temperature, `top_p` and output cap one Azure request sends, and the body field the cap goes in. `undefined` =
- * not sent. Both request builders and `DescribeSentParameters` read it, so the description cannot drift from the request.
- */
-export interface AzureSentSampling {
-    Temperature: number | undefined;
-    TopP: number | undefined;
-    MaxTokens: number | undefined;
-    MaxTokensField: 'max_tokens' | 'max_completion_tokens';
-}
 
 /**
  * Implementation of the Azure AI Large Language Model
@@ -120,54 +107,6 @@ export class AzureLLM extends BaseLLM {
     }
 
     /**
-     * The temperature, `top_p` and output cap both request paths send, and the field the cap goes in.
-     *
-     * Azure serves OpenAI's models, and OpenAI's reasoning models ({@link OpenAILLM.IsReasoningModel}) accept only
-     * their default temperature and `top_p` (1) and reject `max_tokens` in favor of `max_completion_tokens`. They are
-     * sent a configured 1 and otherwise no temperature or `top_p` ({@link OpenAILLM.ReasoningModelSamplingValue}), and
-     * the cap as `max_completion_tokens`. Every other model is sent the configured temperature (0 included), the
-     * configured `top_p` or 0.95, and `max_tokens`.
-     */
-    protected ResolveSampling(params: ChatParams): AzureSentSampling {
-        if (OpenAILLM.IsReasoningModel(params.model)) {
-            return {
-                Temperature: OpenAILLM.ReasoningModelSamplingValue(params.temperature),
-                TopP: OpenAILLM.ReasoningModelSamplingValue(params.topP),
-                MaxTokens: params.maxOutputTokens,
-                MaxTokensField: 'max_completion_tokens'
-            };
-        }
-        // `??`: a configured top_p of 0 is sent as 0.
-        return { Temperature: params.temperature, TopP: params.topP ?? 0.95, MaxTokens: params.maxOutputTokens, MaxTokensField: 'max_tokens' };
-    }
-
-    /** The request-body fields for {@link ResolveSampling}'s values; an unsent value is left out. */
-    private buildSamplingFields(params: ChatParams): Record<string, number> {
-        const sampling = this.ResolveSampling(params);
-        const fields: Record<string, number> = {};
-        if (sampling.Temperature !== undefined && sampling.Temperature !== null) {
-            fields.temperature = sampling.Temperature;
-        }
-        if (sampling.TopP !== undefined && sampling.TopP !== null) {
-            fields.top_p = sampling.TopP;
-        }
-        if (sampling.MaxTokens !== undefined && sampling.MaxTokens !== null) {
-            fields[sampling.MaxTokensField] = sampling.MaxTokens;
-        }
-        return fields;
-    }
-
-    /**
-     * Azure sends {@link ResolveSampling}'s temperature and output cap, and the configured seed, on both paths. The
-     * request bodies read the same resolver, so the description cannot drift from them.
-     */
-    public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
-        const sampling = this.ResolveSampling(params);
-        // `??`: 0 is a sent value; only an unsent one becomes null.
-        return { VendorModelName: params.model, Temperature: sampling.Temperature ?? null, MaxTokens: sampling.MaxTokens ?? null, Seed: params.seed ?? null };
-    }
-
-    /**
      * Implementation of non-streaming chat completion for Azure AI
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
@@ -201,9 +140,18 @@ export class AzureLLM extends BaseLLM {
             const requestBody: any = {
                 messages: params.messages,
                 model: params.model,
-                ...this.buildSamplingFields(params),
+                max_tokens: params.maxOutputTokens,
+                temperature: params.temperature,
                 response_format: responseFormat
             };
+            
+            // Add sampling and generation parameters (Azure uses OpenAI's API)
+            if (params.topP != null) {
+                requestBody.top_p = params.topP;
+            } else {
+                // Use default top_p of 0.95 if not provided
+                requestBody.top_p = 0.95;
+            }
             
             if (params.frequencyPenalty != null) {
                 requestBody.frequency_penalty = params.frequencyPenalty;
@@ -334,10 +282,19 @@ export class AzureLLM extends BaseLLM {
         const requestBody: any = {
             messages: params.messages,
             model: params.model,
-            ...this.buildSamplingFields(params),
+            max_tokens: params.maxOutputTokens,
+            temperature: params.temperature,
             response_format: responseFormat,
             stream: true
         };
+        
+        // Add sampling and generation parameters (Azure uses OpenAI's API)
+        if (params.topP != null) {
+            requestBody.top_p = params.topP;
+        } else {
+            // Use default top_p of 0.95 if not provided
+            requestBody.top_p = 0.95;
+        }
         
         if (params.frequencyPenalty != null) {
             requestBody.frequency_penalty = params.frequencyPenalty;

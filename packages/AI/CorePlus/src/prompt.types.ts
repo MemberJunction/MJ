@@ -503,9 +503,8 @@ export class AIPromptParams extends AIModelRunParams {
   additionalParameters?: Record<string, any>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
-   * Run the model call strictly: the driver refuses with a `ParameterFidelityError` (from `@memberjunction/ai`) rather
-   * than send a temperature, max output tokens or seed different from the configured ones. The refusal is made before
-   * any request; the failed result keeps the error on `chatResult.exception`.
+   * When true, the driver refuses with `ParameterFidelityError` rather than send a temperature, max output tokens or
+   * seed different from the configured ones.
    */
   strictParameters?: boolean;  // case-violation-ok-legacy-back-compat: new member of shipped camelCase AIPromptParams keeps its casing
 

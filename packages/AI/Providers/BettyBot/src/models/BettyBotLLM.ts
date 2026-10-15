@@ -18,10 +18,7 @@ export class BettyBotLLM extends BaseLLM {
         this.TokenExpiration = new Date();
     }
 
-    /**
-     * The Betty Bot request carries no temperature, output cap or seed, so the description says none of them is sent; a strict call that configures one is refused rather
-     * than recorded as sent.
-     */
+    /** The request carries no temperature, output cap or seed. */
     public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
         return { VendorModelName: params.model, Temperature: null, MaxTokens: null, Seed: null };
     }

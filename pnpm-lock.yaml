@@ -1573,9 +1573,6 @@ importers:
       '@memberjunction/ai':
         specifier: 6.2.0-edge.4
         version: link:../../Core
-      '@memberjunction/ai-openai':
-        specifier: 6.2.0-edge.4
-        version: link:../OpenAI
       '@memberjunction/global':
         specifier: 6.2.0-edge.4
         version: link:../../../MJGlobal

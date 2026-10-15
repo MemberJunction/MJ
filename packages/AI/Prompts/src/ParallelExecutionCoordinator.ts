@@ -426,13 +426,13 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
   ): Promise<ExecutionTaskResult[]> {
     const maxConcurrent = Math.min(config.maxConcurrentExecutions, group.Tasks.length);
     const results: ExecutionTaskResult[] = [];
-    const executing = new Set<Promise<ExecutionTaskResult>>();
+    const executing: Promise<ExecutionTaskResult>[] = [];
 
     let taskIndex = 0;
     let executionOrder = 0;
 
     // Process tasks with concurrency limit
-    while (taskIndex < group.Tasks.length || executing.size > 0) {
+    while (taskIndex < group.Tasks.length || executing.length > 0) {
       // Check for cancellation
       if (cancellationToken?.aborted) {
         LogStatus(`Task execution cancelled in group ${group.GroupNumber}`);
@@ -453,26 +453,26 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       }
 
       // Start new tasks up to concurrency limit
-      while (executing.size < maxConcurrent && taskIndex < group.Tasks.length) {
+      while (executing.length < maxConcurrent && taskIndex < group.Tasks.length) {
         const task = group.Tasks[taskIndex++];
         progressTracker?.addActiveTask(task.taskId);
         const execution = this.executeTask(params, task, config, parentPromptRunId, executionOrder++);
-        executing.add(execution);
+        executing.push(execution);
       }
 
-      // Wait for at least one task to complete, and know WHICH one: the race reports the settled promise
-      // itself so it can be removed. (Matching the result against `Promise.resolve(result)` never matched —
-      // that is a new promise — so a finished task stayed in the set and was re-counted on every pass,
-      // growing `results` until the array overflowed.)
-      if (executing.size > 0) {
-        const { result, settled } = await Promise.race(
-          [...executing].map(async (execution) => ({ result: await execution, settled: execution })),
-        );
-        executing.delete(settled);
+      // Wait for at least one task to complete
+      if (executing.length > 0) {
+        const result = await Promise.race(executing);
         results.push(result);
 
         // Notify progress tracker of task completion
         progressTracker?.taskCompleted(result);
+
+        // Remove completed task from executing array
+        const completedIndex = executing.findIndex((p) => p === Promise.resolve(result));
+        if (completedIndex !== -1) {
+          executing.splice(completedIndex, 1);
+        }
       }
     }
 
@@ -642,9 +642,8 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         streamCbs.OnError(error);
       }
 
-      // A cancellation is the caller's token having fired — the same test the runner applies to its own run —
-      // not an error whose text happens to mention "cancelled" (an abort surfaces as "This operation was aborted").
-      const isCancelled = task.cancellationToken?.aborted === true;
+      // Check if this was a cancellation error
+      const isCancelled = error.message.includes('cancelled');
 
       // Update child prompt run with error if it exists
       if (childPromptRun) {

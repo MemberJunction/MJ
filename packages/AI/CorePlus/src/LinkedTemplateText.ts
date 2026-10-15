@@ -16,18 +16,9 @@ interface TemplateTextSource {
 }
 
 /**
- * The template text an entity mirrors from the content its linked Template renders: `MJ: AI Prompts` and
- * `MJ: Entity Documents` both expose a virtual `TemplateText` this way, and both hold one of these (has-a), so the two
- * cannot drift apart again.
- *
- * The text is the row the template renders — the one `MJTemplateEntityExtended.SelectHighestPriorityContent` selects,
- * as `TemplateEngineBase.FindRenderedContent` caches it — so a feature pipeline's prompt version hash, and an entity
- * document's vector-sync and duplicate-detection text, change exactly when the rendered text does. The text reads
- * through to the template engine's cache: a saved Template Content reloads the engine, and a long-lived entity (such as
- * AIEngine's cached prompts in a running server) takes the new text on its next read instead of keeping the old text
- * until restart. A cached row is adopted only when it is a different row from the one the text came from, or a later
- * version of it, and never over an unsaved local edit: an entity that has just saved its text is ahead of the cache
- * until the reload lands, and adopting the older cached row then would revert the save.
+ * The template text an entity (`MJ: AI Prompts`, `MJ: Entity Documents`) mirrors from the content its linked Template
+ * renders. Reads through to the template engine's cache, so a saved Template Content is picked up without a restart;
+ * a cached row is adopted only when it is newer than the text's source, and never over an unsaved local edit.
  */
 export class LinkedTemplateText {
     private text = '';
@@ -64,9 +55,7 @@ export class LinkedTemplateText {
     }
 
     /**
-     * Loads the text when its record loads. A different content row, or a later version of the row the text came from,
-     * replaces the text (and any unsaved edit of it, as a load replaces the record's other fields); a row no newer than
-     * the text last saved does not. With no content, the text is cleared.
+     * Loads the text when its record loads: a newer content row replaces it (and any unsaved edit); no content clears it.
      * @returns true when the template has content
      */
     public Load(content: MJTemplateContentEntity | undefined): boolean {
@@ -82,10 +71,7 @@ export class LinkedTemplateText {
         return false;
     }
 
-    /**
-     * Records the content row the text now matches — call after saving the text into `content`, so the entity does not
-     * take the engine's older cached copy of that row for an edit.
-     */
+    /** Records the content row the text now matches; call after saving the text into `content`. */
     public RecordSource(content: TemplateContentVersion): void {
         this.source = { ContentID: content.ID, UpdatedAt: LinkedTemplateText.updatedAt(content) };
     }
@@ -105,12 +91,7 @@ export class LinkedTemplateText {
         this.RecordSource(content);
     }
 
-    /**
-     * The template engine for the entity's provider: the provider's own engine instance when the provider names its
-     * connection (so a multi-provider server reads the right connection's cache), else the process-wide instance — a
-     * provider without a connection key cannot key an engine instance, and asking for one would build an empty
-     * engine on every read.
-     */
+    /** The template engine for the entity's provider: its own instance when it names a connection, else the global one. */
     public static EngineFor(entity: BaseEntity): TemplateEngineBase {
         const provider = LinkedTemplateText.ProviderOf(entity);
         if (provider?.InstanceConnectionString) {
@@ -130,13 +111,10 @@ export class LinkedTemplateText {
     }
 
     /**
-     * The text the entity's linked template renders, read through the entity's own provider instead of the template
-     * engine's cache. The provider's reads join its open transaction, so a Template Content row written earlier in the
-     * same transaction is seen; the engine reloads only after commit and does not hold it yet. A metadata push that
-     * edits a prompt's template and then saves a row checked against that template needs exactly this. The row is the
-     * one the engine would select ({@link MJTemplateEntityExtended.SelectHighestPriorityContent}).
-     * @returns the rendered row's text ('' when the row has none); undefined when the template has no content row
-     * @throws Error naming the template when its content rows cannot be read
+     * The text the entity's linked template renders, read through the entity's own provider, so a Template Content row
+     * written earlier in the same open transaction is seen (the engine cache reloads only after commit).
+     * @returns the rendered row's text; undefined when the template has no content row
+     * @throws Error when the template's content rows cannot be read
      */
     public static async ReadRenderedText(entity: BaseEntity, templateID: string): Promise<string | undefined> {
         const result = await entity.RunViewProviderToUse.RunView<RenderedContentRow>({
@@ -151,13 +129,7 @@ export class LinkedTemplateText {
         return rendered ? rendered.TemplateText || '' : undefined;
     }
 
-    /**
-     * The entity's provider as a metadata provider. `BaseEntity.ProviderToUse` is typed as the entity-data side of the
-     * same provider object; this is the one place the two views are bridged (with the one cast that takes), so callers
-     * that need the metadata view of an entity's provider use this instead of casting again. Public for entity checks
-     * that read templates through the entity's provider (and need its tier, e.g. `ProviderType`); it belongs with the
-     * entity/provider types if a caller unrelated to templates comes to need it.
-     */
+    /** The entity's provider as a metadata provider (`BaseEntity.ProviderToUse` is typed as its entity-data side). */
     public static ProviderOf(entity: BaseEntity): IMetadataProvider | undefined {
         return entity.ProviderToUse as unknown as IMetadataProvider | undefined;
     }

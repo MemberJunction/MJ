@@ -226,7 +226,7 @@ export class AgentPreExecutionRAG {
                     SearchContext: hasContext ? searchContext : undefined,
                     FusionWeightsOverride: fusionWeights,
                     Mode: 'full',
-                    // Thread AIAgentID so SearchExecutionLog rows
+                    // P3.2 — thread AIAgentID so SearchExecutionLog rows
                     // attribute pre-execution RAG searches to the calling
                     // agent. Without this, the analytics dashboard's "top
                     // searches by agent" view is blind to the RAG path.
@@ -623,7 +623,7 @@ export class AgentPreExecutionRAG {
             const tmpl = await this.loadTemplate(row.QueryTemplateID, params.contextUser);
             if (!tmpl) return params.lastUserMessage;
 
-            const content = tmpl.content;
+            const content = tmpl.template.GetHighestPriorityContent?.() ?? tmpl.content;
             if (!content) return params.lastUserMessage;
 
             const data = {
@@ -637,8 +637,7 @@ export class AgentPreExecutionRAG {
                 scopeDescription: scope.Description ?? ''
             };
 
-            // The query is plain text for the search providers, not HTML, so it renders without HTML escaping.
-            const rendered = await TemplateEngineServer.Instance.RenderTemplate(tmpl.template, content, data, undefined, undefined, { autoescape: false });
+            const rendered = await TemplateEngineServer.Instance.RenderTemplate(tmpl.template, content, data);
             if (rendered?.Success && rendered.Output) {
                 return rendered.Output.trim();
             }
@@ -652,8 +651,7 @@ export class AgentPreExecutionRAG {
     }
 
     /**
-     * Loads a scope's query template and the content row it renders, by the template's ID, from the template engine's
-     * cache (which holds every template with its content rows). Returns null when the cache does not know the ID.
+     * Load a Template entity + its highest-priority content row, by ID, from the template engine's cache.
      */
     private async loadTemplate(
         templateID: string,

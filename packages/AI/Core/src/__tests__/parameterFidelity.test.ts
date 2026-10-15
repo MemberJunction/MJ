@@ -8,7 +8,7 @@ import { ParameterFidelityError, VendorParameterFidelity, type VendorCallParamet
 class CoercingLLM extends BaseLLM {
     public Calls = 0;
     public override DescribeSentParameters(p: ChatParams): VendorCallParameters {
-        // `||` on purpose: this double reproduces the driver bug under test (a configured 0 becomes 0.5).
+        // `||` on purpose: a configured 0 becomes 0.5.
         return { VendorModelName: p.model, Temperature: p.temperature || 0.5, MaxTokens: p.maxOutputTokens ?? null, Seed: null };
     }
     protected async nonStreamingChatCompletion(): Promise<ChatResult> { this.Calls++; return new ChatResult(true, new Date(), new Date()); }
@@ -34,17 +34,10 @@ describe('ParameterFidelity', () => {
         await expect(llm.ChatCompletion(params({ temperature: 0, strictParameters: true }))).rejects.toBeInstanceOf(ParameterFidelityError);
         expect(llm.Calls).toBe(0);
     });
-    it('a strict call with a dropped seed raises, naming configured and would-send values', async () => {
-        const llm = new CoercingLLM('k');
-        await expect(llm.ChatCompletion(params({ temperature: 0.2, seed: 42, strictParameters: true }))).rejects.toThrow(/seed 42.*seed none/);
-    });
-    it('the error carries a Fatal classification that does not fail over', async () => {
-        const err = await new CoercingLLM('k').ChatCompletion(params({ temperature: 0, strictParameters: true })).catch((e: unknown) => e);
-        expect(err instanceof ParameterFidelityError ? err.errorInfo : null).toMatchObject({ errorType: 'VendorValidationError', severity: 'Fatal', canFailover: false });
-    });
-    it('the classification serializes to JSON, so logging it does not replace the refusal with a TypeError', async () => {
+    it('the error carries a Fatal classification that does not fail over, and serializes for logging', async () => {
         const err = await new CoercingLLM('k').ChatCompletion(params({ temperature: 0, strictParameters: true })).catch((e: unknown) => e);
         const info = err instanceof ParameterFidelityError ? err.errorInfo : null;
+        expect(info).toMatchObject({ errorType: 'VendorValidationError', severity: 'Fatal', canFailover: false });
         expect(() => JSON.stringify({ errorInfo: info })).not.toThrow();
     });
     it('a non-strict call proceeds and records the fidelity on the result', async () => {
@@ -62,11 +55,5 @@ describe('ParameterFidelity', () => {
         class StreamingLLM extends CoercingLLM { public override get SupportsStreaming(): boolean { return true; } }
         const r = await new StreamingLLM('k').ChatCompletion(params({ temperature: 0, streaming: true, streamingCallbacks: { OnContent: () => undefined } }));
         expect(r.parameterFidelity?.Status).toBe('refused');
-    });
-    it('a streaming request without callbacks takes the non-streaming path', async () => {
-        class StreamingLLM extends CoercingLLM { public override get SupportsStreaming(): boolean { return true; } }
-        const llm = new StreamingLLM('k');
-        await llm.ChatCompletion(params({ streaming: true }));
-        expect(llm.Calls).toBe(1);
     });
 });

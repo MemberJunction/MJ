@@ -18,7 +18,7 @@ import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
 import { ParseManifestEntryMime, TrimSpacesAndTabs } from './linearTextScan';
-import { ResultSelectionConfig, type IParallelExecutionCoordinator, type ExecutionTask, type ExecutionTaskResult, type ParallelExecutionResult } from './ParallelExecution';
+import { ResultSelectionConfig, type IParallelExecutionCoordinator } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SystemPlaceholderManager } from '@memberjunction/ai-core-plus';
@@ -163,16 +163,6 @@ interface ResolvedScalarInferenceParams {
   topLogProbs?: number;
 }
 
-/**
- * Token usage and cost summed over a prompt's attempts. `promptTokens` is the uncached ("net-new") input, as in
- * `ModelUsage`; cache reads and writes are not summed (the re-sent prefix would be over-counted).
- */
-export interface PromptAttemptUsage {
-  promptTokens: number;
-  completionTokens: number;
-  totalCost: number;
-}
-
 export class AIPromptRunner extends BaseModelRunner {
   /**
    * The model type this runner requires. Returns 'LLM' for AIPromptRunner.
@@ -187,11 +177,6 @@ export class AIPromptRunner extends BaseModelRunner {
   }
 
   private _templateEngine: TemplateEngineServer;
-  /**
-   * The run each failed execution finalized, keyed by the error it threw, so `ExecutePrompt`'s catch can return the
-   * failed run on its error result. Weak keys: an entry lives only as long as its error does.
-   */
-  private readonly _failedRuns = new WeakMap<Error, MJAIPromptRunEntityExtended>();
   private _executionPlanner: ExecutionPlanner;
   private _parallelCoordinator?: IParallelExecutionCoordinator;
   private _jsonValidator: JSONValidator;
@@ -297,6 +282,7 @@ export class AIPromptRunner extends BaseModelRunner {
    */
   public async ExecutePrompt<T = unknown>(params: AIPromptParams): Promise<AIPromptRunResult<T>> {
     const startTime = new Date();
+    const promptRun: MJAIPromptRunEntityExtended | null = null;
 
     // AIEngineBase is registered as deferred — its initial load runs in the background
     // after server boot. Make sure the cached metadata (Models, Vendors, ModelVendors,
@@ -419,44 +405,36 @@ export class AIPromptRunner extends BaseModelRunner {
         }
       }
 
-      // Everything from here on runs after the hierarchical case has created its run, so a throw — a cancellation,
-      // a failed engine load, a Fatal model error — finalizes that run with the error instead of leaving it at
-      // 'Running'. The non-hierarchical paths create (and finalize) their own run inside the execute methods.
-      // The usage accumulator is created here so that, whichever wrapper finalizes the run, it records the
-      // attempts that completed before the throw.
-      const usageSoFar: PromptAttemptUsage = { promptTokens: 0, completionTokens: 0, totalCost: 0 };
-      const dispatch = async (): Promise<AIPromptRunResult<T>> => {
-        // Check for cancellation after template rendering
-        if (params.cancellationToken?.aborted) {
-          throw new Error('Prompt execution was cancelled during template rendering');
+      // Check for cancellation after template rendering
+      if (params.cancellationToken?.aborted) {
+        throw new Error('Prompt execution was cancelled during template rendering');
+      }
+
+      // If no model was selected yet (non-hierarchical case), select one now — capture the FULL result
+      if (!selection?.model) {
+        let modelSelectionPrompt = prompt;
+        if (params.modelSelectionPrompt) {
+          modelSelectionPrompt = params.modelSelectionPrompt;
+          this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of main prompt`, true, params);
         }
 
-        // If no model was selected yet (non-hierarchical case), select one now — capture the FULL result
-        if (!selection?.model) {
-          let modelSelectionPrompt = prompt;
-          if (params.modelSelectionPrompt) {
-            modelSelectionPrompt = params.modelSelectionPrompt;
-            this.logStatus(`🎯 Using prompt "${modelSelectionPrompt.Name}" for model selection instead of main prompt`, true, params);
-          }
-
-          selection = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
-          if (!selection.model) {
-            throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo, params.CredentialScope));
-          }
+        selection = await this.selectModel(modelSelectionPrompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
+        if (!selection.model) {
+          throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo, params.CredentialScope));
         }
+      }
 
-        // Check if we need parallel execution based on ParallelizationMode
-        const shouldUseParallelExecution = prompt.ParallelizationMode && prompt.ParallelizationMode !== 'None';
+      // Check if we need parallel execution based on ParallelizationMode
+      const shouldUseParallelExecution = prompt.ParallelizationMode && prompt.ParallelizationMode !== 'None';
 
-
-        // Use the parallel or the single execution path — pass the full selection through
-        return shouldUseParallelExecution
-          ? this.executePromptInParallel<T>(prompt, renderedPromptText, params, startTime, parentPromptRun, selection)
-          : this.executeSinglePrompt<T>(prompt, renderedPromptText, params, startTime, usageSoFar, parentPromptRun, selection);
-      };
-      const result = parentPromptRun
-        ? await this.RecordRunFailureOnThrow(parentPromptRun, params, startTime, dispatch, usageSoFar)
-        : await dispatch();
+      let result: AIPromptRunResult<T>;
+      if (shouldUseParallelExecution) {
+        // Use parallel execution path — pass full selection through
+        result = await this.executePromptInParallel<T>(prompt, renderedPromptText, params, startTime, parentPromptRun, selection);
+      } else {
+        // Use traditional single execution path — pass full selection through
+        result = await this.executeSinglePrompt<T>(prompt, renderedPromptText, params, startTime, parentPromptRun, selection);
+      }
 
       // Note: With template composition, we only execute once so no rollup calculations needed
       // The final composed prompt is executed as a single operation
@@ -480,9 +458,35 @@ export class AIPromptRunner extends BaseModelRunner {
       const endTime = new Date();
       const executionTimeMS = endTime.getTime() - startTime.getTime();
 
-      // A run created before the throw was already finalized with this error — see RecordRunFailureOnThrow — and
-      // is returned here so callers (agent steps) can link to it.
-      const failedRun = error instanceof Error ? this._failedRuns.get(error) : undefined;
+      // Update prompt run with error if it was created
+      if (promptRun) {
+        promptRun.CompletedAt = endTime;
+        promptRun.ExecutionTimeMS = executionTimeMS;
+        promptRun.Success = false;
+        promptRun.Result = `ERROR: ${error.message}`;
+        
+        // Set Status and Cancelled based on error type
+        if (error.message.includes('cancelled')) {
+          promptRun.Status = 'Cancelled';
+          promptRun.Cancelled = true;
+          promptRun.CancellationReason = 'user_requested';
+        } else {
+          promptRun.Status = 'Failed';
+          promptRun.ErrorDetails = error.message;
+        }
+        
+        const saveResult = await promptRun.Save();
+        if (!saveResult) {
+          this.logError(`Failed to save error to AIPromptRun: ${promptRun.LatestResult?.CompleteMessage || 'Unknown error'}`, {
+            category: 'PromptRunSave',
+            metadata: {
+              promptRunId: promptRun.ID,
+              errorMessage: promptRun.LatestResult?.CompleteMessage
+            },
+            maxErrorLength: params.maxErrorLength
+          });
+        }
+      }
 
       // Classify the error so downstream consumers (e.g., isFatalPromptError) can
       // detect fatal conditions like missing credentials without relying on string matching
@@ -491,7 +495,7 @@ export class AIPromptRunner extends BaseModelRunner {
       const errorResult: AIPromptRunResult<T> = {
         success: false,
         errorMessage: error.message,
-        promptRun: failedRun,
+        promptRun,
         executionTimeMS,
         // Preserve the original exception on the ChatResult so typed failures (e.g.
         // AIPromptTimeoutError from an exceeded AIPrompt.TimeoutMS) survive to the caller
@@ -518,7 +522,6 @@ export class AIPromptRunner extends BaseModelRunner {
     renderedPromptText: string,
     params: AIPromptParams,
     startTime: Date,
-    usageSoFar: PromptAttemptUsage,
     existingPromptRun?: MJAIPromptRunEntityExtended,
     existingSelection?: ModelSelectionResult
   ): Promise<AIPromptRunResult<T>> {
@@ -571,34 +574,26 @@ export class AIPromptRunner extends BaseModelRunner {
     // Use existing prompt run if provided (hierarchical case) or create new one
     const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId, modelSelectionInfo, params.RunType);
 
-    // Execute with retry logic for validation failures. A throw from here on (a cancellation, a Fatal error with
-    // no failover) still finalizes the run, with the error and the usage of the attempts that completed (summed
-    // into the caller's usageSoFar). A run passed in (the hierarchical case) is finalized by the caller that
-    // created it — with the same usageSoFar — so it is not wrapped here.
-    const execute = async () => {
-      // Check for cancellation before model execution
-      if (params.cancellationToken?.aborted) {
-        throw new Error('Prompt execution was cancelled before model execution');
-      }
-      return this.executeWithValidationRetries(
-        selectedModel,
-        renderedPromptText,
-        prompt,
-        params,
-        promptRun,
-        allCandidates,
-        vendorDriverClass,
-        vendorApiName,
-        vendorSupportsEffortLevel,
-        modelEffortLevel, // Pass model-specific effort level
-        credentialAvailability, // Reuse credential probes from selection
-        promptModelConfiguration,
-        usageSoFar
-      );
-    };
-    const { modelResult, parsedResult, validationAttempts, cumulativeTokens } = existingPromptRun
-      ? await execute()
-      : await this.RecordRunFailureOnThrow(promptRun, params, startTime, execute, usageSoFar);
+    // Check for cancellation before model execution
+    if (params.cancellationToken?.aborted) {
+      throw new Error('Prompt execution was cancelled before model execution');
+    }
+
+    // Execute with retry logic for validation failures
+    const { modelResult, parsedResult, validationAttempts, cumulativeTokens } = await this.executeWithValidationRetries(
+      selectedModel,
+      renderedPromptText,
+      prompt,
+      params,
+      promptRun,
+      allCandidates,
+      vendorDriverClass,
+      vendorApiName,
+      vendorSupportsEffortLevel,
+      modelEffortLevel, // Pass model-specific effort level
+      credentialAvailability, // Reuse credential probes from selection
+      promptModelConfiguration
+    );
 
     // Calculate execution metrics
     const endTime = new Date();
@@ -685,24 +680,19 @@ export class AIPromptRunner extends BaseModelRunner {
     // Load AI Engine to get models and prompt models
     await AIEngine.Instance.Config(false, params.contextUser);
 
-    let executionTasks: ExecutionTask[];
+    let executionTasks: any[];
 
     // If a model is already selected (from hierarchical template composition),
     // create a single task with that model instead of using the planner
     if (existingSelection?.model) {
-      // Create a single execution task with the pre-selected model. Typed as an ExecutionTask so it carries the
-      // fields the coordinator reads (the prompt, the rendered prompt, the conversation) under their real names.
+      // Create a single execution task with the pre-selected model
       executionTasks = [{
         taskId: 'pre-selected',
-        prompt,
         model: existingSelection.model,
-        executionGroup: 0,
-        priority: 1,
-        renderedPrompt: renderedPromptText,
-        vendorId: existingSelection.selectionInfo?.vendorSelected?.ID,
         vendorDriverClass: existingSelection.vendorDriverClass,
         vendorApiName: existingSelection.vendorApiName,
-        conversationMessages: params.conversationMessages || [],
+        messages: params.conversationMessages || [],
+        promptText: renderedPromptText,
         templateMessageRole: params.templateMessageRole || 'system',
         contextUser: params.contextUser
       }];
@@ -779,12 +769,46 @@ export class AIPromptRunner extends BaseModelRunner {
     consolidatedPromptRun.RunType = 'ParallelParent';
     consolidatedPromptRun.WasSelectedResult = false;
 
-    // A throw while the arms run or a result is chosen still finalizes the consolidated run, with the error. A run
-    // passed in (the hierarchical case) is finalized by the caller that created it, so it is not wrapped here.
-    const executeArms = () => this.ExecuteParallelTasksAndSelect(prompt, params, executionTasks, consolidatedPromptRun);
-    const { parallelResult, successfulResults, selectedResult } = existingPromptRun
-      ? await executeArms()
-      : await this.RecordRunFailureOnThrow(consolidatedPromptRun, params, startTime, executeArms);
+    // Execute tasks in parallel - pass consolidatedPromptRun.ID as parentPromptRunId
+    const parallelResult = await this.ParallelCoordinator.executeTasksInParallel(
+      params,
+      executionTasks,
+      undefined,
+      consolidatedPromptRun.ID,
+      params.cancellationToken,
+    );
+
+    if (!parallelResult.success) {
+      throw new Error(`Parallel execution failed: ${parallelResult.errors.join(', ')}`);
+    }
+
+    // Select best result if multiple successful results
+    const successfulResults = parallelResult.taskResults.filter((r) => r.success);
+    if (successfulResults.length === 0) {
+      throw new Error(`No successful results from parallel execution`);
+    }
+
+    let selectedResult = successfulResults[0]; // Default to first
+
+    // Use result selector if configured - pass consolidatedPromptRun.ID and contextUser
+    if (successfulResults.length > 1 && prompt.ResultSelectorPromptID) {
+      const selectionConfig: ResultSelectionConfig = {
+        method: 'PromptSelector',
+        selectorPromptId: prompt.ResultSelectorPromptID,
+      };
+
+      const aiSelectedResult = await this.ParallelCoordinator.selectBestResult(
+        successfulResults,
+        selectionConfig,
+        consolidatedPromptRun.ID,
+        params.cancellationToken,
+        params.contextUser,
+        PickPromptExecutionScope(params),
+      );
+      if (aiSelectedResult) {
+        selectedResult = aiSelectedResult;
+      }
+    }
 
     // Update parent with selected arm's model and vendor
     consolidatedPromptRun.ModelID = selectedResult.task.model.ID;
@@ -1746,10 +1770,7 @@ export class AIPromptRunner extends BaseModelRunner {
       // almost always what the author meant. If real param validation is
       // needed (e.g., catching typos at template-author time), it should
       // live in the authoring tools, not in the runtime render path.
-      //
-      // autoescape is off: the output is plain text for a model, not HTML, so a
-      // value such as `Affineur & Owner` must reach the model as written rather
-      // than as `Affineur &amp; Owner`.
+      // autoescape is off: the output is plain text for a model, not HTML.
       return await this._templateEngine.RenderTemplate(template, templateContent, mergedData, true, false, { autoescape: false });
     } catch (error) {
       this.logError(error, {
@@ -2879,8 +2900,7 @@ export class AIPromptRunner extends BaseModelRunner {
   }
 
   /**
-   * Executes the model with retry logic for validation failures. Each attempt's usage is added to `usageSoFar`
-   * as it completes, so the caller still has it when a later attempt throws.
+   * Executes the model with retry logic for validation failures
    */
   private async executeWithValidationRetries(
     selectedModel: MJAIModelEntityExtended,
@@ -2889,25 +2909,30 @@ export class AIPromptRunner extends BaseModelRunner {
     params: AIPromptParams,
     promptRun: MJAIPromptRunEntityExtended,
     allCandidates: ModelVendorCandidate[],
-    vendorDriverClass: string | undefined,
-    vendorApiName: string | undefined,
-    vendorSupportsEffortLevel: boolean | undefined,
-    modelEffortLevel: number | undefined,
-    credentialAvailability: Map<string, boolean> | undefined,
-    promptModelConfiguration: AIPromptConfiguration | null | undefined,
-    usageSoFar: PromptAttemptUsage
+    vendorDriverClass?: string,
+    vendorApiName?: string,
+    vendorSupportsEffortLevel?: boolean,
+    modelEffortLevel?: number,
+    credentialAvailability?: Map<string, boolean>,
+    promptModelConfiguration?: AIPromptConfiguration | null
   ): Promise<{
     modelResult: ChatResult;
     parsedResult: { result: unknown; validationResult?: ValidationResult };
     validationAttempts: ValidationAttempt[];
-    cumulativeTokens: PromptAttemptUsage;
+    cumulativeTokens: {
+      promptTokens: number;
+      completionTokens: number;
+      totalCost: number;
+    };
   }> {
     const validationAttempts: ValidationAttempt[] = [];
     const maxRetries = Math.max(0, prompt.MaxRetries || 0);
     let lastError: Error | null = null;
     
-    // Cumulative token usage across all attempts is kept in the caller's usageSoFar, so a run whose later attempt
-    // throws can still record what the earlier attempts used.
+    // Track cumulative token usage across all attempts
+    let cumulativePromptTokens = 0;
+    let cumulativeCompletionTokens = 0;
+    let cumulativeCost = 0;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -2941,14 +2966,6 @@ export class AIPromptRunner extends BaseModelRunner {
           promptModelConfiguration
         );
 
-        // Accumulate token usage from this attempt — before the Fatal check, because a failed result can carry
-        // usage the vendor billed (an unusable response), and it counts toward the run's totals like any attempt.
-        if (modelResult.data?.usage) {
-          usageSoFar.promptTokens += modelResult.data.usage.promptTokens || 0;
-          usageSoFar.completionTokens += modelResult.data.usage.completionTokens || 0;
-          usageSoFar.totalCost += modelResult.data.usage.cost || 0;
-        }
-
         // Check for fatal errors - don't attempt validation/retry on these
         // Fatal errors (like ContextLengthExceeded when all models exhausted) cannot be resolved by retrying
         if (!modelResult.success && modelResult.errorInfo?.severity === 'Fatal') {
@@ -2970,8 +2987,19 @@ export class AIPromptRunner extends BaseModelRunner {
               validationResult: undefined
             },
             validationAttempts,
-            cumulativeTokens: { ...usageSoFar },
+            cumulativeTokens: {
+              promptTokens: cumulativePromptTokens,
+              completionTokens: cumulativeCompletionTokens,
+              totalCost: cumulativeCost,
+            },
           };
+        }
+
+        // Accumulate token usage from this attempt
+        if (modelResult.data?.usage) {
+          cumulativePromptTokens += modelResult.data.usage.promptTokens || 0;
+          cumulativeCompletionTokens += modelResult.data.usage.completionTokens || 0;
+          cumulativeCost += modelResult.data.usage.cost || 0;
         }
 
         // Parse and validate the result
@@ -3002,7 +3030,11 @@ export class AIPromptRunner extends BaseModelRunner {
             modelResult,
             parsedResult: { result, validationResult },
             validationAttempts,
-            cumulativeTokens: { ...usageSoFar },
+            cumulativeTokens: {
+              promptTokens: cumulativePromptTokens,
+              completionTokens: cumulativeCompletionTokens,
+              totalCost: cumulativeCost,
+            },
           };
         }
 
@@ -3023,7 +3055,11 @@ export class AIPromptRunner extends BaseModelRunner {
             modelResult,
             parsedResult: { result, validationResult },
             validationAttempts,
-            cumulativeTokens: { ...usageSoFar },
+            cumulativeTokens: {
+              promptTokens: cumulativePromptTokens,
+              completionTokens: cumulativeCompletionTokens,
+              totalCost: cumulativeCost,
+            },
           };
         }
       } catch (error) {
@@ -3032,8 +3068,7 @@ export class AIPromptRunner extends BaseModelRunner {
           throw error;
         }
         lastError = error;
-        // A thrown Fatal error (a strict-parameter refusal, missing credentials, a malformed request) cannot be
-        // resolved by another attempt: stop at once, as the returned-result path above does for a Fatal result.
+        // A thrown Fatal error (a strict-parameter refusal, missing credentials) cannot be resolved by another attempt
         const fatal = ErrorAnalyzer.AnalyzeError(error).severity === 'Fatal';
         this.logError(error, {
           category: 'ExecutionRetry',
@@ -4072,133 +4107,6 @@ export class AIPromptRunner extends BaseModelRunner {
   }
 
   /**
-   * Runs a parallel prompt's arms under the consolidated run and picks the result to use: the first
-   * successful arm, or the result selector prompt's choice when the prompt names one and more than
-   * one arm succeeded.
-   *
-   * @throws when the parallel execution fails or no arm succeeds.
-   */
-  protected async ExecuteParallelTasksAndSelect(
-    prompt: MJAIPromptEntityExtended,
-    params: AIPromptParams,
-    executionTasks: ExecutionTask[],
-    consolidatedPromptRun: MJAIPromptRunEntityExtended,
-  ): Promise<{ parallelResult: ParallelExecutionResult; successfulResults: ExecutionTaskResult[]; selectedResult: ExecutionTaskResult }> {
-    // Execute tasks in parallel - pass consolidatedPromptRun.ID as parentPromptRunId
-    const parallelResult = await this.ParallelCoordinator.executeTasksInParallel(
-      params,
-      executionTasks,
-      undefined,
-      consolidatedPromptRun.ID,
-      params.cancellationToken,
-    );
-
-    if (!parallelResult.success) {
-      throw new Error(`Parallel execution failed: ${parallelResult.errors.join(', ')}`);
-    }
-
-    // Select best result if multiple successful results
-    const successfulResults = parallelResult.taskResults.filter((r) => r.success);
-    if (successfulResults.length === 0) {
-      throw new Error(`No successful results from parallel execution`);
-    }
-
-    let selectedResult = successfulResults[0]; // Default to first
-
-    // Use result selector if configured - pass consolidatedPromptRun.ID and contextUser
-    if (successfulResults.length > 1 && prompt.ResultSelectorPromptID) {
-      const selectionConfig: ResultSelectionConfig = {
-        method: 'PromptSelector',
-        selectorPromptId: prompt.ResultSelectorPromptID,
-      };
-
-      const aiSelectedResult = await this.ParallelCoordinator.selectBestResult(
-        successfulResults,
-        selectionConfig,
-        consolidatedPromptRun.ID,
-        params.cancellationToken,
-        params.contextUser,
-        PickPromptExecutionScope(params),
-      );
-      if (aiSelectedResult) {
-        selectedResult = aiSelectedResult;
-      }
-    }
-
-    return { parallelResult, successfulResults, selectedResult };
-  }
-
-  /**
-   * Runs `work` for a prompt run that already exists. If `work` throws, the run is finalized as
-   * failed (or cancelled, when the caller's cancellation token has fired) with the error as its
-   * `ErrorMessage`, and the error is rethrown. Without this a throw after the run's INSERT leaves the
-   * row at `'Running'` with no error, because only the success path finalizes it.
-   *
-   * @param promptRun The run `work` executes under.
-   * @param params The prompt's execution parameters; their cancellation token classifies the failure.
-   * @param startTime When the prompt's execution started, for the run's `ExecutionTimeMS`.
-   * @param work The execution step that can throw.
-   * @param usageSoFar The usage of the attempts `work` completed before it threw, recorded on the failed run;
-   *   omitted for a run whose cost is not its own (a parallel parent's is its arms').
-   */
-  protected async RecordRunFailureOnThrow<R>(
-    promptRun: MJAIPromptRunEntityExtended,
-    params: AIPromptParams,
-    startTime: Date,
-    work: () => Promise<R>,
-    usageSoFar?: PromptAttemptUsage,
-  ): Promise<R> {
-    try {
-      return await work();
-    } catch (error) {
-      this.FinalizeFailedRun(promptRun, params, startTime, error instanceof Error ? error.message : String(error), usageSoFar);
-      if (error instanceof Error) {
-        this._failedRuns.set(error, promptRun);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Finalizes a run whose execution threw: `'Cancelled'` (with `Cancelled` and its reason) when the
-   * caller's cancellation token has fired, otherwise `'Failed'`; the error goes to `ErrorMessage` and
-   * `ErrorDetails`.
-   *
-   * @param promptRun The run to finalize.
-   * @param params The prompt's execution parameters, for the cancellation token.
-   * @param startTime When the prompt's execution started.
-   * @param errorMessage The error that stopped the execution.
-   * @param usageSoFar The usage of the attempts that completed before the throw. Recorded when it has any tokens,
-   *   so the failed run's tokens and cost include what those attempts were billed.
-   */
-  protected FinalizeFailedRun(
-    promptRun: MJAIPromptRunEntityExtended,
-    params: AIPromptParams,
-    startTime: Date,
-    errorMessage: string,
-    usageSoFar?: PromptAttemptUsage,
-  ): void {
-    const endTime = new Date();
-    const cancelled = params.cancellationToken?.aborted === true;
-    void this.FinalizeRunRecord(promptRun, false, endTime, endTime.getTime() - startTime.getTime(), (run) => {
-      run.ErrorMessage = errorMessage;
-      run.ErrorDetails = errorMessage;
-      if (usageSoFar && usageSoFar.promptTokens + usageSoFar.completionTokens > 0) {
-        // TokensUsed must equal TokensPrompt + TokensCompletion (AIPromptRun invariant)
-        run.TokensPrompt = usageSoFar.promptTokens;
-        run.TokensCompletion = usageSoFar.completionTokens;
-        run.TokensUsed = usageSoFar.promptTokens + usageSoFar.completionTokens;
-        run.Cost = usageSoFar.totalCost;
-      }
-      if (cancelled) {
-        run.Status = 'Cancelled';
-        run.Cancelled = true;
-        run.CancellationReason = 'user_requested';
-      }
-    });
-  }
-
-  /**
    * Updates the AIPromptRun entity with execution results
    */
   private async updatePromptRun(
@@ -4209,7 +4117,11 @@ export class AIPromptRunner extends BaseModelRunner {
     endTime: Date,
     executionTimeMS: number,
     validationAttempts?: ValidationAttempt[],
-    cumulativeTokens?: PromptAttemptUsage,
+    cumulativeTokens?: {
+      promptTokens: number;
+      completionTokens: number;
+      totalCost: number;
+    },
   ): Promise<void> {
     // A chat run succeeds only if the model call succeeded AND its output did not fail validation.
     const success = modelResult.success && (parsedResult.validationResult?.Success !== false);
@@ -4237,7 +4149,11 @@ export class AIPromptRunner extends BaseModelRunner {
     endTime: Date,
     executionTimeMS: number,
     validationAttempts?: ValidationAttempt[],
-    cumulativeTokens?: PromptAttemptUsage,
+    cumulativeTokens?: {
+      promptTokens: number;
+      completionTokens: number;
+      totalCost: number;
+    },
   ): void {
     // Determine what to save as the result
     let resultToSave: string;
@@ -4425,17 +4341,8 @@ export class AIPromptRunner extends BaseModelRunner {
   }
 
   /**
-   * Sets a chat run's `ErrorMessage`. A failed model call records the call's own error — a
-   * strict-parameter refusal, a rate limit, a network failure — because nothing about the output
-   * explains it. Only a call that succeeded but whose text output parsed to nothing gets the parse
-   * message: its validation errors when there are any, otherwise the raw-output fallback note. A
-   * native tool-call turn is a complete answer with no text (parsing returns `null` for it by
-   * design), so it gets no message.
-   *
-   * @param promptRun The run being finalized.
-   * @param modelResult The final model call's result.
-   * @param parsedResult The parsed output and its validation.
-   * @param parsedToNothing Whether the output parsed to nothing, so the raw output was saved instead.
+   * Sets a chat run's `ErrorMessage`: a failed model call records the call's own error; a call whose text output
+   * parsed to nothing gets the parse message. A native tool-call turn has no text by design, so it gets none.
    */
   protected ApplyChatRunErrorMessage(
     promptRun: MJAIPromptRunEntityExtended,
@@ -4459,12 +4366,7 @@ export class AIPromptRunner extends BaseModelRunner {
     }
   }
 
-  /**
-   * The error a failed model call reports: its `errorMessage`, else its exception's message. A
-   * driver that fails with neither still gets a message, so the failed run never records an empty one.
-   *
-   * @param modelResult A model call result whose `success` is false.
-   */
+  /** A failed model call's error: its `errorMessage`, else its exception's message, never empty. */
   protected static FailedCallErrorMessage(modelResult: ChatResult): string {
     const exception: Error | undefined = modelResult.exception instanceof Error ? modelResult.exception : undefined;
     return modelResult.errorMessage || exception?.message || 'The model call failed without reporting an error';

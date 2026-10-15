@@ -187,7 +187,7 @@ Every prompt execution creates an `AIPromptRun` record with:
 
 **Persistence is fire-and-forget.** The initial `Running` INSERT and the final `Completed`/`Failed` UPDATE are queued, not awaited, so the model call is never blocked on a DB round-trip. Saves for the same run are chained (the INSERT always completes before the UPDATE, so a slow INSERT can't clobber the finalized row), and the record's ID is available immediately because `NewRecord()` client-generates the UUID. Save failures are logged but never fail the prompt (the record is observability, not part of the success contract). Callers that need the rows durably written before continuing can `await runner.WaitForPendingPromptRunSaves()`.
 
-**A failed run records its own error.** When the model call fails — a strict-parameter refusal, a rate limit, a network error — the run's `ErrorMessage` and `ErrorDetails` are the call's error, not a parse note; the "Failed to parse result into expected format; raw output saved instead" message is only for a call that succeeded but whose text output parsed to nothing (a native tool-call turn, which has no text by design, gets no message). Every throw after a run's `Running` INSERT — a cancellation, a Fatal error with no failover strategy, a parallel prompt whose arms all fail, a hierarchical prompt's engine load or cancellation — finalizes that run as `Failed` (or `Cancelled` when the caller's cancellation token fired) with the error, rather than leaving it at `Running`; a single (non-parallel) prompt's run — hierarchical or not — also records the tokens and cost of every attempt that completed, including a failed attempt whose response the vendor billed, while a parallel parent's cost stays the sum of its arms'. The error result's `promptRun` is that run.
+**A failed run records its own error.** When the model call fails, the run's `ErrorMessage` and `ErrorDetails` are the call's error; the "Failed to parse result…" note is only for a call that succeeded but whose text output parsed to nothing.
 
 ### Template data capture
 
@@ -263,7 +263,7 @@ When a model fails due to rate limiting, authentication errors, or other transie
 
 ### Strict Parameters
 
-Set `AIPromptParams.strictParameters = true` when the call must reach the model with exactly the configured temperature, max output tokens and seed (Feature Pipelines set it). A driver that would change or drop one of them refuses with `ParameterFidelityError` before any request; the refusal is Fatal, so neither failover nor the retry loop tries again (any thrown Fatal error ends the retries at once, as a Fatal result does), and the failed result keeps the error on `chatResult.exception`. Every successful result reports what was sent on `chatResult.parameterFidelity`.
+Set `AIPromptParams.strictParameters = true` when the call must reach the model with exactly the configured temperature, max output tokens and seed (Feature Pipelines set it). A driver that would change or drop one refuses with `ParameterFidelityError` before any request; the refusal is Fatal, so neither failover nor the retry loop tries again, and the failed result keeps the error on `chatResult.exception`.
 
 ### Media Runners
 

@@ -22,10 +22,7 @@ export type ParameterFidelity =
 
 /** Reading configured parameters and comparing them with what a driver would send. */
 export class VendorParameterFidelity {
-    /**
-     * The parameters a caller configured on a chat request. `??` on purpose: 0 is a configured value (the bug
-     * this guards against was a driver's `||` turning a configured 0 into its default).
-     */
+    /** The parameters a caller configured on a chat request (0 is a configured value). */
     public static ConfiguredParameters(params: ChatParams): VendorCallParameters {
         return { VendorModelName: params.model, Temperature: params.temperature ?? null, MaxTokens: params.maxOutputTokens ?? null, Seed: params.seed ?? null };
     }
@@ -44,17 +41,9 @@ export class VendorParameterFidelity {
     }
 }
 
-/**
- * Thrown by a strict call the driver would not send as configured. Classified Fatal, so `AIPromptRunner`'s failover
- * stops at the first refusal (a Fatal error ends the candidate loop) and the prompt fails with this message.
- */
+/** Thrown by a strict call the driver would not send as configured. Classified Fatal, so failover and retries stop. */
 export class ParameterFidelityError extends Error {
-    /**
-     * The classification ErrorAnalyzer reads from a thrown error (`carriedErrorInfo`, shipped on `next`), so the runner
-     * classifies the refusal by this object rather than by its message. Keeps the shipped `errorInfo` name that contract reads (a shipped shape keeps its casing). It leaves
-     * `error` unset: this object is the error, and a reference back to it makes the classification circular, so the
-     * runner's error log (`JSON.stringify` of its metadata) would throw a TypeError in place of the refusal.
-     */
+    /** The classification `ErrorAnalyzer` reads from a thrown error; `error` stays unset so it serializes. */
     public readonly errorInfo: AIErrorInfo;  // case-violation-ok-legacy-back-compat: ErrorAnalyzer.carriedErrorInfo reads this exact shipped name (BaseResult.errorInfo)
     constructor(public readonly Fidelity: Extract<ParameterFidelity, { Status: 'refused' }>, driverName: string) {
         super(`${driverName} would not send the configured parameters for model '${Fidelity.Configured.VendorModelName}': ` +
