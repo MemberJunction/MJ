@@ -21,8 +21,6 @@ import {
   TestRunWithFeedbackSummary,
   EvaluationSummaryMetrics
 } from '../services/testing-instrumentation.service';
-import { TestingListBoundInfo } from '../services/testing-list-bound';
-import { TestingPassRate } from '../services/testing-pass-rate';
 
 type StatusFilter = 'all' | 'running' | 'passed' | 'failed' | 'error';
 type TimeRange = 'today' | 'week' | 'month' | '90days';
@@ -35,8 +33,6 @@ interface RunsFilterState {
 
 interface FilteredStats {
   totalRuns: number;
-  /** Skipped runs among totalRuns; passRate covers the executed rest. */
-  SkippedRuns: number;
   passRate: number;
   avgDuration: number;
   totalCost: number;
@@ -90,9 +86,6 @@ interface FilteredStats {
             }
           </div>
           <span class="result-count">{{ (FilteredRuns$ | async)?.length ?? 0 }} results</span>
-          @if (ListNotice$ | async; as notice) {
-            <span class="list-bound-notice"><i class="fa-solid fa-circle-info"></i> {{ notice }}</span>
-          }
         </div>
         <div class="filter-right">
           <select
@@ -129,7 +122,7 @@ interface FilteredStats {
             <div class="stat-icon total"><i class="fa-solid fa-hashtag"></i></div>
             <div class="stat-body">
               <div class="stat-value">{{ stats.totalRuns }}</div>
-              <div class="stat-label">Total Runs · {{ ExecutedLabel(stats.totalRuns, stats.SkippedRuns) }}</div>
+              <div class="stat-label">Total Runs</div>
             </div>
           </div>
           <div class="stat-card">
@@ -537,18 +530,6 @@ interface FilteredStats {
       border-color: var(--mj-status-warning);
     }
 
-    .list-bound-notice {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      margin: 0;
-      font-size: 12.5px;
-      color: var(--mj-text-secondary);
-      background: var(--mj-bg-surface-sunken);
-      border: 1px solid var(--mj-border-default);
-      border-radius: 6px;
-    }
     .result-count {
       font-size: 12px;
       color: var(--mj-text-disabled);
@@ -1213,8 +1194,6 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
 
   // Observables
   FilteredRuns$!: Observable<TestRunWithFeedbackSummary[]>;
-  /** "Showing the newest … of …" when the run list load was capped; null when the list is complete. */
-  ListNotice$!: Observable<string | null>;
   FilteredStats$!: Observable<FilteredStats>;
 
   // Constants
@@ -1481,9 +1460,6 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
   // ------- Private Methods -------
 
   private setupObservables(): void {
-    this.ListNotice$ = this.InstrumentationService.ListBounds$.pipe(
-      map(bounds => TestingListBoundInfo.Notice(bounds.RunsWithFeedback, 'runs in this period'))
-    );
     const data$ = this.InstrumentationService.testRunsWithFeedback$.pipe(
       takeUntil(this.destroy$)
     );
@@ -1545,20 +1521,14 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** "N executed · M skipped" for the run count shown beside the pass rate. */
-  ExecutedLabel(runs: number, skipped: number): string {
-    return TestingPassRate.ExecutedLabel(runs, skipped);
-  }
-
   private computeStats(runs: TestRunWithFeedbackSummary[]): FilteredStats {
     const total = runs.length;
     if (total === 0) {
-      return { totalRuns: 0, SkippedRuns: 0, passRate: 0, avgDuration: 0, totalCost: 0 };
+      return { totalRuns: 0, passRate: 0, avgDuration: 0, totalCost: 0 };
     }
 
-    // Skipped runs were not executed: neither passes nor failures (QF2-Y2).
-    const counts = TestingPassRate.CountStatuses(runs.map(r => r.status));
-    const passRate = TestingPassRate.OfExecuted(counts.Passed, counts.Total, counts.Skipped);
+    const passed = runs.filter(r => r.status === 'Passed').length;
+    const passRate = (passed / total) * 100;
 
     const completedRuns = runs.filter(r => r.duration > 0 && r.status !== 'Running');
     const avgDuration = completedRuns.length > 0
@@ -1567,7 +1537,7 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
 
     const totalCost = runs.reduce((sum, r) => sum + r.cost, 0);
 
-    return { totalRuns: total, SkippedRuns: counts.Skipped, passRate, avgDuration, totalCost };
+    return { totalRuns: total, passRate, avgDuration, totalCost };
   }
 
   private updateServiceDateRange(): void {

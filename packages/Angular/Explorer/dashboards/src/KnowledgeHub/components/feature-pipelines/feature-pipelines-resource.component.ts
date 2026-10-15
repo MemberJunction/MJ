@@ -55,20 +55,10 @@ import { ValidateStringParam, AgentToolResult } from '../../../shared/agent-tool
 /** Stable operation key of the Run Feature Pipeline Remote Operation. */
 const RUN_FEATURE_PIPELINE_OP = 'PredictiveStudio.RunFeaturePipeline';
 
-/** The toast a finished Run shows: a completed run's counts, or why the run did not complete. */
+/** The toast a finished Run shows. */
 export interface FeaturePipelineRunNotice {
-  /** The toast text. */
   Message: string;
-  /** `success` for a clean completed run, `warning` for one with record errors or that stopped, `error` for a failed one. */
   Style: 'success' | 'warning' | 'error';
-  /** True only when the run completed (status `Completed`); a failed, refused, cancelled or paused run did not. */
-  Completed: boolean;
-}
-
-/** What the `RunFeaturePipeline` agent tool answers: a run that completed, with its toast text, or why it did not. */
-export interface FeaturePipelineRunToolResult extends AgentToolResult {
-  /** A run that completed: the pipeline and the toast text with its counts. */
-  Data?: { Pipeline: string; Message: string };
 }
 
 @RegisterClass(BaseResourceComponent, 'FeaturePipelinesResource')
@@ -189,8 +179,7 @@ export class FeaturePipelinesResourceComponent
    * `PredictiveStudio.RunFeaturePipeline` Remote Operation through the active
    * provider. The op delegates to the Record Set Processing substrate — the same
    * batching/resume/audit path the rest of the platform uses.
-   * @returns the notice the run showed (a refused or failed run's is an error), or null when a run of the pipeline was
-   *   already in flight and nothing ran
+   * @returns the notice the run showed, or null when a run of the pipeline was already in flight
    */
   public async OnRunPipeline(pipeline: FeaturePipelineSummary): Promise<FeaturePipelineRunNotice | null> {
     if (this.RunningIDs.has(pipeline.ID)) return null;
@@ -213,7 +202,6 @@ export class FeaturePipelinesResourceComponent
     } catch (error) {
       const notice: FeaturePipelineRunNotice = {
         Style: 'error',
-        Completed: false,
         Message: `Failed to run "${pipeline.Name}": ${error instanceof Error ? error.message : String(error)}`,
       };
       MJNotificationService.Instance.CreateSimpleNotification(notice.Message, notice.Style, 5000);
@@ -334,12 +322,8 @@ export class FeaturePipelinesResourceComponent
   }
 
   /**
-   * The toast for a Run's result. The operation succeeding only means the run was carried out: the run's own status
-   * says whether it completed. A refused run (a Feature Pipeline version not activated) or a failed one ends `Failed`
-   * with the run's error message, and is an error; a cancelled or paused run did not finish, a warning. Only a
-   * completed run reports its counts.
-   * @param pipelineName - the pipeline's display name
-   * @param result - the `PredictiveStudio.RunFeaturePipeline` result
+   * The toast for a Run's result. The operation succeeding only means the run was carried out; a refused or failed
+   * run ends `Failed` with its error message, and a cancelled or paused run did not finish.
    */
   public static RunResultNotice(
     pipelineName: string,
@@ -347,46 +331,27 @@ export class FeaturePipelinesResourceComponent
   ): FeaturePipelineRunNotice {
     const out = result.Output;
     if (!result.Success || !out) {
-      return { Style: 'error', Completed: false, Message: `"${pipelineName}" did not complete: ${result.ErrorMessage || 'unknown error'}` };
+      return { Style: 'error', Message: `"${pipelineName}" did not complete: ${result.ErrorMessage ?? 'unknown error'}` };
     }
     const reason = out.errorMessage || `the run ended with status ${out.status}`;
     if (out.status === 'Failed') {
-      return { Style: 'error', Completed: false, Message: `"${pipelineName}" failed: ${reason}` };
+      return { Style: 'error', Message: `"${pipelineName}" failed: ${reason}` };
     }
     if (out.status !== 'Completed') {
-      return { Style: 'warning', Completed: false, Message: `"${pipelineName}" did not finish: ${reason}` };
+      return { Style: 'warning', Message: `"${pipelineName}" did not finish: ${reason}` };
     }
     return {
       Style: out.error > 0 ? 'warning' : 'success',
-      Completed: true,
       Message: `"${pipelineName}" finished: ${out.processed} processed, ${out.written} succeeded, ${out.skipped} skipped unchanged, ${out.error} error(s).`,
     };
   }
 
-  /**
-   * What the `RunFeaturePipeline` agent tool answers for a Run: only a completed run is a success. A refused, failed,
-   * cancelled or paused run is a failure carrying the run's own message (e.g. which version to activate); a run already
-   * in flight is a failure too (nothing ran).
-   * @param pipelineName - the pipeline's display name
-   * @param notice - the notice the Run showed, or null when nothing ran
-   */
-  public static RunToolResult(pipelineName: string, notice: FeaturePipelineRunNotice | null): FeaturePipelineRunToolResult {
-    if (!notice) {
-      return { Success: false, ErrorMessage: `"${pipelineName}" is already running.` };
-    }
-    return !notice.Completed
-      ? { Success: false, ErrorMessage: notice.Message }
-      : { Success: true, Data: { Pipeline: pipelineName, Message: notice.Message } };
-  }
-
-  /** Shows the toast for a Run's result and returns it. */
   private notifyRunResult(
     pipeline: FeaturePipelineSummary,
     result: RemoteOpResult<PredictiveStudioRunFeaturePipelineOutput>,
   ): FeaturePipelineRunNotice {
     const notice = FeaturePipelinesResourceComponent.RunResultNotice(pipeline.Name, result);
-    // an error stays longer: its message (a refusal names the golden-set test to run) is the next step to take
-    MJNotificationService.Instance.CreateSimpleNotification(notice.Message, notice.Style, notice.Style === 'error' ? 8000 : 5000);
+    MJNotificationService.Instance.CreateSimpleNotification(notice.Message, notice.Style, 5000);
     return notice;
   }
 
@@ -451,7 +416,11 @@ export class FeaturePipelinesResourceComponent
           if (!r.pipeline.OnDemandEnabled) {
             return { Success: false, ErrorMessage: `"${r.pipeline.Name}" is not enabled for on-demand runs.` };
           }
-          return FeaturePipelinesResourceComponent.RunToolResult(r.pipeline.Name, await this.OnRunPipeline(r.pipeline));
+          const notice = await this.OnRunPipeline(r.pipeline);
+          if (notice?.Style === 'error') {
+            return { Success: false, ErrorMessage: notice.Message };
+          }
+          return { Success: true, Data: { Pipeline: r.pipeline.Name } };
         },
       },
       {

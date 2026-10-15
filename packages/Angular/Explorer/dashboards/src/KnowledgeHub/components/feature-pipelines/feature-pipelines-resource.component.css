@@ -138,11 +138,6 @@
   overflow: hidden;
 }
 
-/* A run that stopped without failing (cancelled, paused): a warning, as its toast is */
-.fp-card__error--warning {
-  color: var(--mj-status-warning-text);
-}
-
 .fp-card__meta {
   display: flex;
   flex-direction: column;

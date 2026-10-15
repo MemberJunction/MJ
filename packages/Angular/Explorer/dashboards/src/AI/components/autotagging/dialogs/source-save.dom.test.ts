@@ -1,20 +1,49 @@
 /**
  * Both Explorer screens that edit a content source write the form's source-type fields into
- * `Configuration.SourceSpecificConfiguration`. Keys the form does not show (such as the render version a content
- * provider records there) must survive the save. Each screen's real SaveSource runs against a real content source
- * entity whose save is captured.
+ * `Configuration.SourceSpecificConfiguration`. Keys the form does not show must survive the save. Each screen's real
+ * SaveSource runs against a real content source entity whose save is captured.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { NO_ERRORS_SCHEMA, type Type } from '@angular/core';
+import { Component, EventEmitter, Input, Output, type Type } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { TestBed } from '@angular/core/testing';
-import { EntityInfo, type IMetadataProvider, type RunViewResult } from '@memberjunction/core';
+import { EntityInfo, type CompositeKey, type IMetadataProvider, type RunViewResult } from '@memberjunction/core';
 import { MJContentSourceEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
+import { StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
+import type { TreeBranchConfig, TreeLeafConfig, TreeSelectableTypes, TreeSelectionMode } from '@memberjunction/ng-trees';
+import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
+import {
+    MJButtonDirective, MJComboboxComponent, MJLeftNavComponent, MJLeftNavContentComponent,
+    MJPageBodyComponent, MJPageBodyInteriorComponent, MJPageHeaderComponent, MJPageHeaderInteriorComponent, MJPageLayoutComponent,
+    MJSwitchComponent, MJTabNavComponent,
+} from '@memberjunction/ng-ui-components';
 import { ClassifySourceTypeFormDialogComponent } from './source-type-form.dialog.component';
 import { TagsResourceComponent } from '../../tags/tags-resource.component';
 
-const STORED = { SourceSpecificConfiguration: { EntityDocumentRenderVersion: 1, URL: 'https://old.example.com' } };
+/** Inert `<mj-tree-dropdown>`: the real one loads its branches and leaves through the provider on init. */
+@Component({ standalone: true, selector: 'mj-tree-dropdown', template: '' })
+class TreeDropdownStub {
+    @Input() BranchConfig: TreeBranchConfig | null = null;
+    @Input() LeafConfig: TreeLeafConfig | null = null;
+    @Input() SelectionMode: TreeSelectionMode = 'single';
+    @Input() SelectableTypes: TreeSelectableTypes = 'both';
+    @Input() Placeholder = '';
+    @Input() Clearable = true;
+    @Input() Value: CompositeKey | CompositeKey[] | null = null;
+    @Output() ValueChange = new EventEmitter<CompositeKey | CompositeKey[] | null>();
+}
+
+/** The children both screens' templates use: the real light UI components, and stubs for the data-loading ones. */
+const CHILDREN = [
+    FormsModule, MJButtonDirective, MJSwitchComponent, MJComboboxComponent, MJLeftNavComponent, MJLeftNavContentComponent,
+    MJPageLayoutComponent, MJPageHeaderComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent,
+    MJTabNavComponent, MJWordCloudComponent,
+    TreeDropdownStub, StubLoadingComponent, StubEmptyStateComponent,
+];
+
+const STORED = { SourceSpecificConfiguration: { Language: 'en', URL: 'https://old.example.com' } };
 
 /** The stored source: an RSS-style source whose configuration holds a key the form does not show. */
 function storedSource(): MJContentSourceEntity {
@@ -47,7 +76,7 @@ interface SourceForm {
  * SourceSpecificConfiguration that was saved.
  */
 async function saveThrough<T extends SourceForm>(component: Type<T>): Promise<Record<string, unknown> | undefined> {
-    TestBed.configureTestingModule({ declarations: [component], schemas: [NO_ERRORS_SCHEMA] });
+    TestBed.configureTestingModule({ imports: CHILDREN, declarations: [component] });
     vi.spyOn(TestBed.inject(MJNotificationService), 'CreateSimpleNotification').mockImplementation(() => undefined);
     const form = TestBed.createComponent(component).componentInstance;
     const source = storedSource();
@@ -83,10 +112,10 @@ describe('saving a content source from Explorer', () => {
     });
 
     it('the source-type form keeps the stored keys the form does not show', async () => {
-        expect(await saveThrough(ClassifySourceTypeFormDialogComponent)).toEqual({ EntityDocumentRenderVersion: 1, URL: 'https://new.example.com' });
+        expect(await saveThrough(ClassifySourceTypeFormDialogComponent)).toEqual({ Language: 'en', URL: 'https://new.example.com' });
     });
 
     it('the tags screen keeps the stored keys the form does not show', async () => {
-        expect(await saveThrough(TagsResourceComponent)).toEqual({ EntityDocumentRenderVersion: 1, URL: 'https://new.example.com' });
+        expect(await saveThrough(TagsResourceComponent)).toEqual({ Language: 'en', URL: 'https://new.example.com' });
     });
 });

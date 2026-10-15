@@ -7,11 +7,7 @@ import { renderComponentFixture, queryAll, query, createFakeProvider } from '@me
 import { RecordProcessRunnerUXComponent } from './record-process-runner-ux.component';
 import type { EntityActionUXContext } from '../runtime-ux-context';
 
-/**
- * DOM coverage for the record-process runner dialog's dry-run preview. A FieldRules run stores
- * `{ Changes }` on each run detail; a write-back run (Infer / Action / Agent) stores `{ output, writeBack }`
- * whose `writeBack` carries the previews. Both must show their rows, and the Apply button must offer the count.
- */
+/** The runner dialog's dry-run preview: a FieldRules run's `{ Changes }` and a write-back run's `{ output, writeBack }`. */
 
 const MEMBERS = new EntityInfo({
   ID: 'ent-members',
@@ -41,7 +37,7 @@ const writeBackPayload = (writeBack: Partial<WriteBackResult>): WriteBackRunPayl
 });
 
 /** Renders the dialog over a fake provider answering the run details, and runs the preview. */
-async function renderPreview(details: DetailRow[], views: RunViewParams[] = [], output: Partial<RecordProcessRunNowOutput> = {}) {
+async function renderPreview(details: DetailRow[], output: Partial<RecordProcessRunNowOutput> = {}) {
     const operation = vi.spyOn(RecordProcessRunNowOperation.prototype, 'Execute').mockImplementation(
         async (_input: RecordProcessRunNowInput): Promise<RemoteOpResult<RecordProcessRunNowOutput>> => ({
             Success: true,
@@ -49,10 +45,7 @@ async function renderPreview(details: DetailRow[], views: RunViewParams[] = [], 
         }),
     );
     const provider = createFakeProvider({
-        runViewResults: (params: RunViewParams) => {
-            views.push(params);
-            return params.EntityName === 'MJ: Process Run Details' ? details : [];
-        },
+        runViewResults: (params: RunViewParams) => (params.EntityName === 'MJ: Process Run Details' ? details : []),
     });
     const context: EntityActionUXContext = {
         EntityInfo: MEMBERS, ScopeKind: 'records', SelectedRecordIDs: details.map((d) => d.RecordID),
@@ -85,33 +78,12 @@ describe('RecordProcessRunnerUXComponent dry-run preview (DOM)', () => {
         expect(query(f, '.rp-empty')).toBeNull();
     });
 
-    it('reads nothing but the run details', async () => {
-        const views: RunViewParams[] = [];
-        await renderPreview([detail('id-1', writeBackPayload({ previewFields: { Tier: 'b' } }))], views);
-
-        expect(views.map((v) => v.EntityName)).toEqual(['MJ: Process Run Details']);
-    });
-
     it('shows Nothing to change, with no Apply, when the preview proposes nothing', async () => {
         const { f } = await renderPreview([detail('id-1', writeBackPayload({}))]);
 
         expect(f.componentInstance.ChangedRecordCount).toBe(0);
         expect(query(f, '.rp-empty')).not.toBeNull();
         expect(applyButton(f)).toBeUndefined();
-    });
-
-    it('shows each child row and tag the write stores, leaving out the link to the parent', async () => {
-        const { f } = await renderPreview([detail('id-1', writeBackPayload({
-            previewChildren: [{ MemberID: 'id-1', Skill: 'Python', Level: 3 }, { MemberID: 'id-1', Skill: 'SQL' }],
-            previewTags: [{ tagText: 'vip', resolvedTagName: 'VIP', matched: true, created: false, rootTagID: 'root' }],
-        }))]);
-
-        const [row] = rowsText(f);
-        expect(row).toContain('Skill: Python; Level: 3');
-        expect(row).toContain('Skill: SQL');
-        expect(row).toContain('VIP');
-        expect(row).not.toContain('MemberID');
-        expect(queryAll(f, '.rp-change')).toHaveLength(3);
     });
 
     it('shows what the real write would fail on as the record\'s errors, counts none of its changes and offers no Apply', async () => {
@@ -155,32 +127,13 @@ describe('RecordProcessRunnerUXComponent dry-run preview (DOM)', () => {
 
     it('says a real run would be refused, and offers no Apply, when the previewed version is not activated', async () => {
         const refusal = 'Feature Pipeline version v6 is not activated: run its golden-set test (MJ: Tests ID T-1) to evaluate it against the threshold 0.9.';
-        const { f } = await renderPreview([detail('id-1', writeBackPayload({ previewFields: { Tier: 'Gold' } }))], [], { wouldRefuse: refusal });
+        const { f, operation } = await renderPreview([detail('id-1', writeBackPayload({ previewFields: { Tier: 'Gold' } }))], { wouldRefuse: refusal });
 
         const notice = query(f, '.rp-refusal');
         expect(notice?.textContent).toContain('Applying these changes would be refused');
         expect(notice?.textContent).toContain(refusal);
         expect(applyButton(f)).toBeUndefined();
-    });
-
-    it('does not run for real when Apply is called on a preview a real run would refuse', async () => {
-        const { f, operation } = await renderPreview([detail('id-1', writeBackPayload({ previewFields: { Tier: 'Gold' } }))],
-            [], { wouldRefuse: 'Feature Pipeline version v6 is not activated' });
-
         await f.componentInstance.Apply();
-
         expect(operation).toHaveBeenCalledTimes(1);
-        expect(f.componentInstance.State).toBe('preview');
-    });
-
-    it('applies with a real run when Apply is chosen', async () => {
-        const { f, operation } = await renderPreview([detail('id-1', writeBackPayload({ previewFields: { Tier: 'Gold' } }))]);
-
-        await f.componentInstance.Apply();
-
-        expect(operation).toHaveBeenCalledTimes(2);
-        expect(operation.mock.calls[0][0].dryRun).toBe(true);
-        expect(operation.mock.calls[1][0].dryRun).toBe(false);
-        expect(f.componentInstance.State).toBe('done');
     });
 });

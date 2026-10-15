@@ -35,13 +35,15 @@ import { RecordOriginCrumbComponent } from '../record-open/record-origin-crumb.c
 import { RecordSwitcherService } from '../record-open/record-switcher.service';
 import { RecordSwitcherEntry } from '../record-open/record-switcher-sheet.component';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { BaseEntity, CompositeKey, DatasetResultType, LogError, Metadata } from '@memberjunction/core';
+import { BaseEntity, DatasetResultType, LogError, Metadata } from '@memberjunction/core';
 import { ComponentCacheManager, CachedComponentInfo } from './component-cache-manager';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /** Fallback tab accent when an app has no color (matches pre-existing usage) */
 const DEFAULT_APP_COLOR = '#757575';
+/** A single-field key in URL-segment form ('Field|value'); group 1 is the value. */
+const SINGLE_FIELD_URL_SEGMENT = /^[^|]+\|([^|]+)$/;
 /**
  * Container for Golden Layout tabs with app-colored styling.
  *
@@ -596,8 +598,6 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // would register as a permanent difference and reload the pane on every
     // configuration emission.
     const nextRecordId = (config['recordId'] as string) || tab.resourceRecordId || '';
-    // Record identity, not string identity: a save rewrites the component's id to the server's
-    // URL-segment form while a deep-linked tab keeps the bare id from the URL.
     const changed =
       !TabContainerComponent.IsSameRecordId(existing.ResourceRecordID, nextRecordId) ||
       (existingConfig['Entity'] as string | undefined) !== (config['Entity'] as string | undefined) ||
@@ -1693,16 +1693,12 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    *
    * Does two things on every save:
    *
-   * 1. **Re-key the tab to the saved PK.** When a tab opened as "Create New Record" (empty
+   * 1. **Re-key new-record tabs.** When a tab opened as "Create New Record" (empty
    *    `resourceRecordId`) transitions to a saved record, we update both the workspace
    *    tab's id and the component-cache key to the new PK. Without this, the next
    *    `OpenNewEntityRecord(<sameEntity>)` would match this tab (both have empty
    *    `resourceRecordId`) and focus the stale form instead of opening a fresh one.
-   *    An existing record is re-keyed the same way when the tab holds a different spelling of
-   *    its id than the saved `ToURLSegment()` (a deep link keeps the bare lower-case id), so the
-   *    tab and the component agree after every save. A tab that already holds it is left alone.
-   *    When another cache entry already holds the saved id, the tab keeps its own key and
-   *    component: nothing is moved, overwritten or detached under the wrong tab.
+   *    For existing records being re-saved, this step is a no-op.
    *
    * 2. **Refresh the tab title.** Whether new or existing, the entity's display name
    *    (typically its `Name` field) may have changed. We call the resource component's
@@ -1721,27 +1717,18 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       return;
     }
 
-    // Same precedence the load path keys the component cache with (getResourceDataFromTab), so the
-    // re-key below finds the entry.
-    const oldRecordId = (tab.configuration?.['recordId'] as string | undefined) || tab.resourceRecordId || '';
+    const oldRecordId = tab.resourceRecordId || '';
     // ToURLSegment, NOT ToString — must match the format NavigationService.OpenEntityRecord
     // uses and that EntityRecordResource.GetPrimaryKey expects via LoadFromURLSegment.
     const newRecordId = entity?.PrimaryKey?.ToURLSegment?.() ?? '';
     const isNewRecordTransition = oldRecordId === '' && !!newRecordId;
-    // A tab that opened a record under one spelling can find the other spelling already cached for a
-    // second tab (a workspace restored with two tabs on one record). Moving this tab's entry there
-    // would overwrite or alias that tab's component, so this tab keeps its own key and component.
-    // The reload check compares record identity, so the differing spelling does not reload it.
-    const newKeyOccupied = !!newRecordId && this.cacheManager.HasEntry(driverClass, newRecordId, appId, undefined);
-    const needsRekey = !!newRecordId && oldRecordId !== newRecordId && !newKeyOccupied;
     // The cache entry for an empty-recordId tab was keyed with the entity name as
     // discriminator (to avoid new-record collisions across entities). Re-key has to
     // pass that same old discriminator to find the entry. After save the record has
-    // a real PK, so the new key needs no discriminator. An existing record's entry never
-    // carried one.
-    const oldDiscriminator = isNewRecordTransition ? (tab.configuration?.['Entity'] as string | undefined) : undefined;
+    // a real PK, so the new key needs no discriminator.
+    const oldDiscriminator = tab.configuration?.['Entity'] as string | undefined;
 
-    if (needsRekey) {
+    if (isNewRecordTransition) {
       // Re-key the cache entry first, so when the workspace config emission triggers
       // signature/needsReload checks below, the cache lookup at the new id succeeds.
       this.cacheManager.rekeyComponent(driverClass, oldRecordId, newRecordId, appId, oldDiscriminator, undefined);
@@ -2378,35 +2365,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Whether two resource record ids name the same record. A component's ResourceRecordSaved
-   * stores the key in the URL-segment form with the server's casing ('ID|<UUID>'), while its tab
-   * may keep the bare lower-case value from a deep link ('<uuid>'). Delegates to
-   * {@link CompositeKey.URLSegmentsNameSameRecord}: the field name is dropped only for a bare value, string values
-   * compare case-insensitively (as CompositeKey.EqualsKey does), and composite segments compare field by field.
+   * stores a single-field key in the URL-segment form with the server's casing ('ID|<UUID>'), while
+   * its tab may keep the bare lower-case value from a deep link ('<uuid>'). The field name is dropped
+   * only when the other id is a bare value, so two ids that both contain '|' are compared as they are.
+   * Case is ignored.
    */
   public static IsSameRecordId(a: string | null | undefined, b: string | null | undefined): boolean {
-    return CompositeKey.URLSegmentsNameSameRecord(a || '', b || '');
-  }
-
-  /**
-   * Whether a loaded component's id and its tab's id name the same resource. Record identity (case
-   * folding, bare value against URL segment) applies to Records only; every other resource type
-   * keeps an exact comparison, tolerating only the single-field URL-segment prefix a component's
-   * ResourceRecordSaved writes ('ID|dash-1' for a tab that keeps 'dash-1').
-   */
-  public static IsSameResourceId(resourceType: string | undefined, a: string | null | undefined, b: string | null | undefined): boolean {
-    if (resourceType === 'Records') {
-      return TabContainerComponent.IsSameRecordId(a, b);
-    }
-    const left = (a || '').trim();
-    const right = (b || '').trim();
-    const delimiter = CompositeKey.DefaultValueDelimiter;
-    if (left.includes(delimiter) === right.includes(delimiter)) {
-      return left === right;
-    }
-    const segment = new CompositeKey();
-    segment.SimpleLoadFromURLSegment(left.includes(delimiter) ? left : right);
-    const bare = left.includes(delimiter) ? right : left;
-    return segment.KeyValuePairs.length === 1 && String(segment.KeyValuePairs[0].Value) === bare;
+    const left = (a ?? '').trim().toLowerCase();
+    const right = (b ?? '').trim().toLowerCase();
+    const bareValue = (id: string): string => SINGLE_FIELD_URL_SEGMENT.exec(id)?.[1] ?? id;
+    return left === right || bareValue(left) === right || left === bareValue(right);
   }
 
   private async getResourceTypeId(resourceType: string): Promise<string> {
@@ -2646,7 +2614,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           // emits a new configuration.
           const needsReload = !TabContainerComponent.IsSameResourceType(existingResourceData?.ResourceType, tab.configuration['resourceType'] as string | undefined) ||
                              existingResourceData?.Configuration?.applicationId !== tab.applicationId ||
-                             !TabContainerComponent.IsSameResourceId(tab.configuration['resourceType'] as string | undefined, existingRecordId, newRecordId) ||
+                             !TabContainerComponent.IsSameRecordId(existingRecordId, newRecordId) ||
                              existingEntity !== newEntity ||
                              (tab.configuration['resourceType'] === 'Custom' && existingDriverClass !== newDriverClass);
 

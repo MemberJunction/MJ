@@ -178,11 +178,10 @@ export class RecordProcessEditorComponent extends BaseAngularComponent implement
     public ErrorMessage = '';
     public PreviewDriver: { DriverClass: string; Context: EntityActionUXContext } | null = null;
 
-    // The entity picker marks the stored entity with [selected] on each <option>, not [value] on the <select>:
-    // @for creates the options after a <select> [value] binding has run, so that binding matches nothing and the
-    // browser shows the first entity — the editor then displays (and a change event would save) the wrong one.
-
-    /** Whether `entity` is the record's stored target entity (UUIDs compared with {@link UUIDsEqual}). */
+    /**
+     * Whether `entity` is the record's stored target entity. The picker marks it with [selected] on its option:
+     * a [value] on the <select> runs before @for creates the options, so the first entity would show.
+     */
     public IsSavedEntity(entity: EntityInfo): boolean {
         return !!this.Record?.EntityID && UUIDsEqual(entity.ID, this.Record.EntityID);
     }
@@ -306,7 +305,7 @@ export class RecordProcessEditorComponent extends BaseAngularComponent implement
         if (ok) {
             this.Saved.emit(this.Record);
         } else {
-            this.ErrorMessage = this.Record.LatestResult?.CompleteMessage || 'Save failed';
+            this.ErrorMessage = this.Record.LatestResult?.CompleteMessage ?? 'Save failed';
         }
         this.cdr.detectChanges();
         return ok;

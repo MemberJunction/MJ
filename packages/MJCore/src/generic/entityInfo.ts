@@ -3789,37 +3789,6 @@ export class EntityInfo extends BaseInfo {
       return this._nameFieldCache;
     }
 
-    /**
-     * The fields a record's display name is built from, in order: every `IsNameField` field by
-     * `Sequence` (so FirstName + LastName gives "Elizabeth Rodriguez"), else the entity's single
-     * {@link NameField}. Empty when the entity has neither.
-     */
-    public get RecordNameFields(): EntityFieldInfo[] {
-      const nameFields = this.Fields
-        .filter((f) => f.IsNameField)
-        .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
-      if (nameFields.length === 0 && this.NameField) {
-        nameFields.push(this.NameField);
-      }
-      return nameFields;
-    }
-
-    /**
-     * Whether a user may see this entity's record names: every field in {@link RecordNameFields}
-     * must be readable to them. On an entity with field-level security on, a missing user may not,
-     * because there is nobody to check against.
-     */
-    public CanUserReadRecordName(user: UserInfo | null | undefined): boolean {
-      if (!this.EnableFieldLevelSecurity) {
-        return true;
-      }
-      if (!user) {
-        return false;
-      }
-      const denied = this.GetDeniedReadFields(user);
-      return this.RecordNameFields.every((f) => !denied.has(f.Name.trim().toLowerCase()));
-    }
-
     /**************************************************************************
      * IS-A Type Relationship Computed Properties
      *

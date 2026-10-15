@@ -14,8 +14,8 @@ import { WorkspaceStateManager, CreateDefaultWorkspaceConfiguration } from '@mem
 import type { NavItem } from '@memberjunction/ng-base-application';
 import { NavigationService } from '../navigation.service';
 
-vi.mock('@angular/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@angular/core')>();
+vi.mock(import('@angular/core'), async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
     Directive:
@@ -32,10 +32,10 @@ vi.mock('@angular/core', async (importOriginal) => {
 vi.mock('@angular/router', () => ({}));
 vi.mock('golden-layout', () => ({ VirtualLayout: class {} }));
 vi.mock('@memberjunction/ng-base-types', () => ({ BaseAngularComponent: class {} }));
-vi.mock('@memberjunction/core', async () => ({
+vi.mock('@memberjunction/core', () => ({
   BaseEntity: class {},
   Metadata: class {},
-  CompositeKey: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core')).CompositeKey,
+  CompositeKey: class {},
   StartupManager: { Instance: {} },
   LogError: vi.fn(),
   LogStatus: vi.fn(),
@@ -45,8 +45,7 @@ vi.mock('@memberjunction/core-entities', () => ({
   UserInfoEngine: { Instance: {} },
   DashboardEngine: { Instance: {} },
 }));
-vi.mock('@memberjunction/global', async () => ({
-  ...(await vi.importActual<typeof import('@memberjunction/global')>('@memberjunction/global')),
+vi.mock('@memberjunction/global', () => ({
   UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase(),
   GetGlobalObjectStore: () => ({}),
   MJGlobal: { Instance: {} },

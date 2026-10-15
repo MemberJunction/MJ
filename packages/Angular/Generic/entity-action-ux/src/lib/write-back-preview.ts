@@ -1,8 +1,6 @@
 /**
- * @fileoverview Pure model of a write-back run's dry-run preview. A write-back work type (Infer, Action, Agent)
- * persists `{ output, writeBack }` on each `MJ: Process Run Details.ResultPayload`. On a dry run `writeBack` holds only
- * what the real write would change (fields, child values, tags); this turns them into the rows the runner dialog shows.
- * Angular-free so it is unit-testable without a component.
+ * @fileoverview The runner dialog's rows for a write-back run's dry-run preview (`writeBack` on each
+ * `MJ: Process Run Details.ResultPayload`: only what the real write would change).
  * @module @memberjunction/ng-entity-action-ux
  */
 import { UUIDsEqual } from '@memberjunction/global';
@@ -12,9 +10,8 @@ import { DisplayValue } from './scope';
 /** One change the preview shows: a field's old and new value, or a value, row or tag the write stores. */
 export interface PreviewChange {
     Field: string;
-    /** The field's current value (`unknown`: whatever the entity field holds); absent for a value, row or tag. */
+    /** `unknown`: whatever the entity field holds. */
     OldValue: unknown;
-    /** The value the write stores (`unknown`: whatever the entity field holds), or a row's or tag's shown description. */
     NewValue: unknown;
     Applied: boolean;
     Changed: boolean;

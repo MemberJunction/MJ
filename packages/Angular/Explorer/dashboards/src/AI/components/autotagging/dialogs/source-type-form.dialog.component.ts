@@ -30,7 +30,6 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { TagEngineBase } from '@memberjunction/tag-engine-base';
 import { SourceCard, ContentTypeCard, DropdownOption, FormMode } from '../shared/classify.types';
-import { ContentSourceConfiguration } from '../shared/content-source-configuration';
 
 /** The taxonomy-mode literal union, derived from the typed config so it can never drift. */
 type TaxonomyModeJson = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['TagTaxonomyMode']>;
@@ -980,7 +979,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
             const { SourceSpecificConfiguration: _ssc, MaxItemsPerRun: _mipr, Website: _web, ...classifierKnobs } = this.workingConfig;
             Object.assign(currentConfig, classifierKnobs);
 
-            currentConfig.SourceSpecificConfiguration = ContentSourceConfiguration.MergeSourceSpecific(currentConfig.SourceSpecificConfiguration, this.FormSourceSpecificConfig);
+            currentConfig.SourceSpecificConfiguration = { ...currentConfig.SourceSpecificConfiguration, ...this.FormSourceSpecificConfig };
 
             // Persist the quick-edit knobs that don't have their own DB columns
             // (the rest live on the typed Configuration JSON sub-objects). The

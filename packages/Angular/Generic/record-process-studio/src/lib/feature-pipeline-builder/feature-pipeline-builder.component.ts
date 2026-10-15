@@ -21,7 +21,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, EntityFieldInfo, LogError, RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJRecordProcessEntity,
     MJAIPromptEntity,
@@ -420,35 +420,6 @@ export function ParseConfidenceFloor(raw: string): number {
                                         </div>
                                     </div>
                                 }
-                                @if (output.Constraint?.Type === 'money') {
-                                    <!-- Min and Max use ?? : 0 is a legitimate amount and must show as 0, not as empty -->
-                                    <div class="rpe-grid2 rpe-mt">
-                                        <div class="field">
-                                            <label>Min Amount</label>
-                                            <input class="mj-input" type="number" [value]="MoneyOf(output.Constraint)?.Min ?? ''" (input)="UpdateMoneyMin(outputIndex, $event)">
-                                        </div>
-                                        <div class="field">
-                                            <label>Max Amount</label>
-                                            <input class="mj-input" type="number" [value]="MoneyOf(output.Constraint)?.Max ?? ''" (input)="UpdateMoneyMax(outputIndex, $event)">
-                                        </div>
-                                    </div>
-                                    <div class="field rpe-mt">
-                                        <label>Currency Code</label>
-                                        <input class="mj-input" [value]="MoneyOf(output.Constraint)?.CurrencyCode || ''" (input)="UpdateMoneyCurrencyCode(outputIndex, $event)" placeholder="e.g. USD">
-                                    </div>
-                                }
-                                @if (output.Constraint?.Type === 'date') {
-                                    <div class="rpe-grid2 rpe-mt">
-                                        <div class="field">
-                                            <label>Earliest Date</label>
-                                            <input class="mj-input" type="date" [value]="DateOf(output.Constraint)?.Min || ''" (input)="UpdateDateMin(outputIndex, $event)">
-                                        </div>
-                                        <div class="field">
-                                            <label>Latest Date</label>
-                                            <input class="mj-input" type="date" [value]="DateOf(output.Constraint)?.Max || ''" (input)="UpdateDateMax(outputIndex, $event)">
-                                        </div>
-                                    </div>
-                                }
                                 @if (output.Constraint?.Type === 'boolean' && IsDecisionPipeline) {
                                     <div class="field rpe-mt">
                                         <label>Decision Threshold (0.0 to 1.0) <span class="muted">— calibrated probability threshold for true</span></label>
@@ -736,10 +707,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return all.filter((m) => supported.includes(m.Value));
     }
 
-    /**
-     * The constraint types the picker offers: every type the pipeline type's driver declares, each with its label, plus
-     * `none` for a pipeline type that allows an unconstrained output.
-     */
+    /** Every constraint type the pipeline type's driver declares, plus `none` when an unconstrained output is allowed. */
     public get AvailableConstraintTypes(): Array<{ Value: string; Label: string }> {
         const options: Array<{ Value: string; Label: string }> = [];
         if (!this.IsDecisionPipeline) {
@@ -923,13 +891,8 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     /** The constraint block the model is sent, as the runner renders it (see {@link RenderConstraintPreview}). */
     public RenderedConstraintPreview = '';
 
-    /**
-     * Each lookup's allowed rows for the preview, read once per lookup (entity, match column, display columns, filter)
-     * through the provider they were read from ({@link previewLookupRowsProvider}). A failed read is not kept.
-     */
+    /** Each lookup's allowed rows for the preview, read once per lookup; a failed read is not kept. */
     private previewLookupRows = new Map<string, Promise<LookupValueRow[]>>();
-    /** The provider the memoised preview rows came from; another provider's rows are not reused. */
-    private previewLookupRowsProvider: IMetadataProvider | null = null;
 
     /** Counts preview renders, so a lookup load that finishes after a later edit does not overwrite that edit's preview. */
     private previewRenderVersion = 0;
@@ -1414,10 +1377,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return this.UpdateChildTargetEntity(index, event);
     }
 
-    /**
-     * Switches the output's constraint type. Choosing the type the output already has changes nothing, so a saved
-     * constraint keeps its settings; choosing another type replaces the constraint with that type's starting one.
-     */
+    /** Switches the output's constraint type; re-choosing its current type keeps the saved constraint's settings. */
     public UpdateConstraintType(index: number, event: Event): void {
         const type = (event.target as HTMLSelectElement).value;
         const output = this.spec.Outputs[index];
@@ -1548,22 +1508,11 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return constraint?.Type === 'lookup' ? constraint : undefined;
     }
 
-    /** The constraint as a money constraint, or undefined when it is another type. */
-    public MoneyOf(constraint?: ValueConstraint): Extract<ValueConstraint, { Type: 'money' }> | undefined {
-        return constraint?.Type === 'money' ? constraint : undefined;
-    }
-
-    /** The constraint as a date constraint, or undefined when it is another type. */
-    public DateOf(constraint?: ValueConstraint): Extract<ValueConstraint, { Type: 'date' }> | undefined {
-        return constraint?.Type === 'date' ? constraint : undefined;
-    }
-
     /** A lookup's display fields as the comma separated text the editor shows. */
     public GetLookupDisplayFieldsCsv(constraint?: ValueConstraint): string {
         return this.LookupOf(constraint)?.DisplayFields?.join(', ') || '';
     }
 
-    /** Sets (or, for an empty entry, clears) the lookup's entity. */
     public UpdateLookupEntity(index: number, event: Event): void {
         const lookup = this.LookupOf(this.spec.Outputs[index].Constraint);
         if (lookup) {
@@ -1572,7 +1521,6 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
-    /** Sets (or, for an empty entry, clears) the lookup's match field. */
     public UpdateLookupMatchField(index: number, event: Event): void {
         const lookup = this.LookupOf(this.spec.Outputs[index].Constraint);
         if (lookup) {
@@ -1581,7 +1529,6 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
-    /** Sets (or, for an empty entry, clears) the lookup's display fields from comma separated text. */
     public UpdateLookupDisplayFields(index: number, event: Event): void {
         const lookup = this.LookupOf(this.spec.Outputs[index].Constraint);
         if (lookup) {
@@ -1591,7 +1538,6 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
-    /** Sets (or, for an empty entry, clears) the lookup's filter. */
     public UpdateLookupFilter(index: number, event: Event): void {
         const lookup = this.LookupOf(this.spec.Outputs[index].Constraint);
         if (lookup) {
@@ -1600,61 +1546,10 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
-    /** Sets (or, for an empty entry, clears) the money constraint's minimum amount. */
-    public UpdateMoneyMin(index: number, event: Event): void {
-        const money = this.MoneyOf(this.spec.Outputs[index].Constraint);
-        if (money) {
-            money.Min = FeaturePipelineBuilderComponent.numberOrUndefined(event);
-        }
-        this.emitChanges();
-    }
-
-    /** Sets (or, for an empty entry, clears) the money constraint's maximum amount. */
-    public UpdateMoneyMax(index: number, event: Event): void {
-        const money = this.MoneyOf(this.spec.Outputs[index].Constraint);
-        if (money) {
-            money.Max = FeaturePipelineBuilderComponent.numberOrUndefined(event);
-        }
-        this.emitChanges();
-    }
-
-    /** Sets (or, for an empty entry, clears) the money constraint's currency code. */
-    public UpdateMoneyCurrencyCode(index: number, event: Event): void {
-        const money = this.MoneyOf(this.spec.Outputs[index].Constraint);
-        if (money) {
-            money.CurrencyCode = FeaturePipelineBuilderComponent.textOrUndefined(event);
-        }
-        this.emitChanges();
-    }
-
-    /** Sets (or, for an empty entry, clears) the date constraint's earliest date. */
-    public UpdateDateMin(index: number, event: Event): void {
-        const date = this.DateOf(this.spec.Outputs[index].Constraint);
-        if (date) {
-            date.Min = FeaturePipelineBuilderComponent.textOrUndefined(event);
-        }
-        this.emitChanges();
-    }
-
-    /** Sets (or, for an empty entry, clears) the date constraint's latest date. */
-    public UpdateDateMax(index: number, event: Event): void {
-        const date = this.DateOf(this.spec.Outputs[index].Constraint);
-        if (date) {
-            date.Max = FeaturePipelineBuilderComponent.textOrUndefined(event);
-        }
-        this.emitChanges();
-    }
-
     /** The event target's trimmed text, or undefined when it is empty (so an emptied editor field leaves the spec). */
     private static textOrUndefined(event: Event): string | undefined {
         const text = (event.target as HTMLInputElement | HTMLSelectElement).value.trim();
         return text.length > 0 ? text : undefined;
-    }
-
-    /** The event target's number, or undefined when it is empty or not a number. */
-    private static numberOrUndefined(event: Event): number | undefined {
-        const value = parseFloat((event.target as HTMLInputElement).value);
-        return isNaN(value) ? undefined : value;
     }
 
     public UpdateWatermarkStrategy(event: Event): void {
@@ -1989,10 +1884,8 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     }
 
     /**
-     * Renders the constraint block preview the way the runner renders the block it sends ({@link OutputConstraintResolver}):
-     * at once from the constraints resolved against the entity's fields (an enum's field value list), then again once
-     * the lookup outputs' allowed rows have loaded. Each lookup's rows are read once through `ProviderToUse` and reused
-     * across edits, so typing does not re-query.
+     * Renders the constraint block preview as the runner renders the block it sends ({@link OutputConstraintResolver}):
+     * at once from the entity's fields, then again once the lookup outputs' allowed rows have loaded.
      */
     protected RenderConstraintPreview(): void {
         const outputs = this.spec.Outputs;
@@ -2020,43 +1913,28 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.cdr.markForCheck();
     }
 
-    /**
-     * A lookup's allowed rows for the preview, read once per lookup. A lookup whose entity is not a known entity (one
-     * still being typed) has none, so nothing is queried for it.
-     */
+    /** A lookup's allowed rows for the preview; none for an entity that is not known (one still being typed). */
     protected PreviewLookupRows(lookup: ResolvedConstraint): Promise<LookupValueRow[]> {
         const entityName = lookup.RelatedEntityName;
         if (!entityName || !this.ProviderToUse.EntityByName(entityName)) {
             return Promise.resolve([]);
         }
-        const provider = this.ProviderToUse;
-        if (this.previewLookupRowsProvider !== provider) {
-            // rows read through another provider may differ; start over for this one
-            this.previewLookupRows.clear();
-            this.previewLookupRowsProvider = provider;
-        }
         const key = JSON.stringify([entityName.toLowerCase(), lookup.LookupMatchField || 'Name', lookup.DisplayFields || [], lookup.Filter || '']);
         let rows = this.previewLookupRows.get(key);
         if (!rows) {
-            rows = this.LoadPreviewLookupRows(lookup, provider, key);
+            rows = this.LoadPreviewLookupRows(lookup, key);
             this.previewLookupRows.set(key, rows);
         }
         return rows;
     }
 
-    /**
-     * Reads a lookup's allowed rows for the preview. On failure the preview keeps the lookup's "Must match an existing"
-     * line (the run reports the failure itself), the failure is logged, and the memo entry is dropped so the next edit
-     * reads again (the lookup entity may have been created, or the error may have cleared).
-     */
-    protected async LoadPreviewLookupRows(lookup: ResolvedConstraint, provider: IMetadataProvider, key: string): Promise<LookupValueRow[]> {
+    /** Reads a lookup's allowed rows for the preview. A failed read is logged and dropped, so the next edit reads again. */
+    protected async LoadPreviewLookupRows(lookup: ResolvedConstraint, key: string): Promise<LookupValueRow[]> {
         try {
-            return await LookupConstraintValues.Load(lookup, provider, provider.CurrentUser);
+            return await LookupConstraintValues.Load(lookup, this.ProviderToUse, this.ProviderToUse.CurrentUser);
         } catch (e) {
             LogError(`FeaturePipelineBuilder: the preview could not load the allowed values of '${lookup.RelatedEntityName}': ${e instanceof Error ? e.message : String(e)}`);
-            if (this.previewLookupRowsProvider === provider) {
-                this.previewLookupRows.delete(key);
-            }
+            this.previewLookupRows.delete(key);
             return [];
         }
     }

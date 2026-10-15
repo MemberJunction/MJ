@@ -13,8 +13,8 @@ import type { NavItem, WorkspaceTab } from '@memberjunction/ng-base-application'
 import { ResourceData } from '@memberjunction/core-entities';
 import { NavigationService } from '../navigation.service';
 
-vi.mock('@angular/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@angular/core')>();
+vi.mock(import('@angular/core'), async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
     Directive:
@@ -31,10 +31,10 @@ vi.mock('@angular/core', async (importOriginal) => {
 vi.mock('@angular/router', () => ({}));
 vi.mock('golden-layout', () => ({ VirtualLayout: class {} }));
 vi.mock('@memberjunction/ng-base-types', () => ({ BaseAngularComponent: class {} }));
-vi.mock('@memberjunction/core', async () => ({
+vi.mock('@memberjunction/core', () => ({
   BaseEntity: class {},
   Metadata: class {},
-  CompositeKey: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core')).CompositeKey,
+  CompositeKey: class {},
   StartupManager: { Instance: {} },
   LogError: vi.fn(),
   LogStatus: vi.fn(),
@@ -51,8 +51,8 @@ vi.mock('@memberjunction/core-entities', () => ({
   UserInfoEngine: { Instance: {} },
   DashboardEngine: { Instance: {} },
 }));
-vi.mock('@memberjunction/global', async () => ({
-  ...(await vi.importActual<typeof import('@memberjunction/global')>('@memberjunction/global')),
+vi.mock('@memberjunction/global', () => ({
+  UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase(),
   GetGlobalObjectStore: () => ({}),
   MJGlobal: { Instance: {} },
   MJEventType: {},
@@ -224,65 +224,10 @@ describe('IsTabShowingResource', () => {
     expect(service.IsTabShowingResource(tabId, library)).toBe(true);
   });
 
-  it('is true for a record the component re-keyed to its saved URL segment', () => {
-    // ResourceRecordSaved rewrites the component's id to 'ID|<UUID>' in the server's casing while the
-    // tab keeps the id it was opened with.
-    const { service, manager } = createService();
-    const tabId = service.OpenDashboard(DASHBOARD_ID.toLowerCase(), 'Revenue', { applicationId: DASHBOARDS.ID });
-    const owner = ownerOf(tabById(manager, tabId), 'DashboardResource');
-    owner.ResourceRecordID = `ID|${DASHBOARD_ID.toUpperCase()}`;
-
-    expect(service.IsTabShowingResource(tabId, owner)).toBe(true);
-  });
-
   it('is false for a tab that no longer exists', () => {
     const { service, manager } = createService();
     const tabId = openHome(service);
 
     expect(service.IsTabShowingResource('no-such-tab', ownerOf(tabById(manager, tabId)))).toBe(false);
-  });
-});
-
-describe('findOpenRecordTab — record dedup by identity', () => {
-  const SAVED_FORM = `ID|${DASHBOARD_ID.toUpperCase()}`;
-
-  function serviceWithRecordsTab(resourceRecordId: string): NavigationService {
-    const { service, manager } = createService();
-    const config = manager.GetConfiguration();
-    if (!config) throw new Error('No workspace configuration');
-    const tab: WorkspaceTab = { id: 'rec-tab', applicationId: HOME.ID, title: 'Widget', resourceTypeId: '', resourceRecordId, isPinned: false, sequence: 0,
-      lastAccessedAt: '', configuration: { resourceType: 'Records', Entity: 'Widgets' } };
-    manager.UpdateConfiguration({ ...config, tabs: [tab] });
-    return service;
-  }
-  const find = (service: NavigationService, recordId: string): { id: string } | null =>
-    service['findOpenRecordTab']('Widgets', recordId);
-
-  it('finds the open tab when the id arrives in another spelling of the same record', () => {
-    const service = serviceWithRecordsTab(SAVED_FORM);
-    expect(find(service, DASHBOARD_ID.toLowerCase())).toEqual({ id: 'rec-tab' });
-  });
-
-  it('does not find it for a different record', () => {
-    const service = serviceWithRecordsTab(SAVED_FORM);
-    expect(find(service, OTHER_DASHBOARD_ID)).toBeNull();
-  });
-});
-
-describe('isSameResource — record identity applies to records only', () => {
-  const tabFor = (resourceType: string, resourceRecordId: string): WorkspaceTab =>
-    ({ id: 't', applicationId: HOME.ID, title: 'T', resourceTypeId: '', resourceRecordId, isPinned: false, sequence: 0, lastAccessedAt: '', configuration: { resourceType } });
-  const isSame = (tab: WorkspaceTab, resourceType: string, recordId: string): boolean => {
-    const { service } = createService();
-    return service['isSameResource'](tab, { ApplicationId: HOME.ID, Title: 'T', ResourceRecordId: recordId, Configuration: { resourceType } });
-  };
-
-  it('matches a record across spellings and case', () => {
-    expect(isSame(tabFor('Records', `ID|${DASHBOARD_ID.toUpperCase()}`), 'Records', DASHBOARD_ID.toLowerCase())).toBe(true);
-  });
-
-  it('keeps ids that differ only by case apart for another resource type', () => {
-    expect(isSame(tabFor('Dashboards', 'Board-ABC'), 'Dashboards', 'board-abc')).toBe(false);
-    expect(isSame(tabFor('Dashboards', 'Board-ABC'), 'Dashboards', 'Board-ABC')).toBe(true);
   });
 });

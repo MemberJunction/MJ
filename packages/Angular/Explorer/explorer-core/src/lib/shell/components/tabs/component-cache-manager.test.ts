@@ -76,23 +76,3 @@ describe('ComponentCacheManager — other resources are unchanged', () => {
     expect(m.GetCachedComponent(DRIVER, '', APP, 'MJ: Companies')).not.toBeNull();
   });
 });
-
-describe('ComponentCacheManager — RekeyComponent', () => {
-  it('moves an entry to the new record id', () => {
-    const m = manager();
-    cacheAndDetach(m, 'bare-id');
-    expect(m.RekeyComponent(DRIVER, 'bare-id', 'ID|bare-id', APP)).toBe(true);
-    expect(m.GetCachedComponent(DRIVER, 'ID|bare-id', APP)).not.toBeNull();
-    expect(m.GetCachedComponent(DRIVER, 'bare-id', APP)).toBeNull();
-  });
-
-  it('leaves both entries alone when the new key is already occupied', () => {
-    const m = manager();
-    cacheAndDetach(m, 'bare-id');
-    cacheAndDetach(m, 'ID|bare-id');
-    const occupant = m.GetCachedComponent(DRIVER, 'ID|bare-id', APP);
-    expect(m.RekeyComponent(DRIVER, 'bare-id', 'ID|bare-id', APP)).toBe(false);
-    expect(m.GetCachedComponent(DRIVER, 'ID|bare-id', APP)).toBe(occupant);
-    expect(m.GetCachedComponent(DRIVER, 'bare-id', APP)).not.toBeNull();
-  });
-});

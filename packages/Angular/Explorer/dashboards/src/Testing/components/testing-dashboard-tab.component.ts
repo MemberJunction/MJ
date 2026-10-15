@@ -12,7 +12,6 @@ import {
   TestRunSummary,
   SuiteHierarchyNode
 } from '../services/testing-instrumentation.service';
-import { TestingPassRate } from '../services/testing-pass-rate';
 import { KPICardData } from '../../AI/components/widgets/kpi-card.component';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 import { TestingExecutionService, ActiveRun, TestingDialogService } from '@memberjunction/ng-testing';
@@ -143,12 +142,10 @@ interface TestAlert {
                   <div class="suite-health-row">
                     <div class="suite-health-info">
                       <span class="suite-health-name">{{ suite.name }}</span>
-                      <span class="suite-health-count" [attr.title]="suite.RunCount > 0 ? ExecutedLabel(suite.RunCount, suite.SkippedCount) : null">{{ suite.testCount }} tests</span>
+                      <span class="suite-health-count">{{ suite.testCount }} tests</span>
                     </div>
                     @if (suite.RunCount === 0) {
-                      <span class="suite-health-none" title="No runs of this suite's tests in the period">No runs</span>
-                    } @else if (suite.RunCount === suite.SkippedCount) {
-                      <span class="suite-health-none" title="Every run of this suite's tests in the period was skipped">All skipped</span>
+                      <span class="suite-health-none">No runs</span>
                     } @else {
                     <div class="suite-health-bar-wrapper">
                       <div class="suite-health-bar">
@@ -811,8 +808,6 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
       {
         title: 'Pass Rate',
         value: `${kpis.PassRateThisMonth.toFixed(1)}%`,
-        // The rate covers executed runs only; skipped runs are shown beside it so the counts add up (QF2-Y2).
-        subtitle: TestingPassRate.ExecutedLabel(kpis.TotalTestRuns, kpis.SkippedTests),
         icon: 'fa-check-circle',
         color: kpis.PassRateThisMonth >= 90 ? 'success' : kpis.PassRateThisMonth >= 75 ? 'warning' : 'danger',
         trend: kpis.PassRateTrend !== 0 ? {
@@ -901,10 +896,7 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Flag tests with scores below 0.5. Only scored outcomes count: a Running run has no score yet and a Skipped
-   * run never ran (its score is 0 because nothing was evaluated), so neither is a low score.
-   */
+  /** Flag tests with scores below 0.5 */
   private detectLowScores(runs: TestRunSummary[], alerts: TestAlert[]): void {
     const alertIds = new Set(alerts.map(a => a.id));
 
@@ -922,24 +914,11 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** "N executed · M skipped" for a run count shown beside a pass rate. */
-  ExecutedLabel(runs: number, skipped: number): string {
-    return TestingPassRate.ExecutedLabel(runs, skipped);
-  }
-
-  /**
-   * Flatten suite hierarchy and sort by worst health first; suites with no executed runs in the period (no runs,
-   * or all skipped — no health to rank) go last.
-   */
+  /** Flatten suite hierarchy and sort by worst health first; suites with no runs in the period go last */
   private flattenAndSort(nodes: SuiteHierarchyNode[]): SuiteHierarchyNode[] {
     const flat: SuiteHierarchyNode[] = [];
     this.collectNodes(nodes, flat);
-    return flat.sort((a, b) => {
-      const aHasRuns = TestingPassRate.Executed(a.RunCount, a.SkippedCount) > 0;
-      const bHasRuns = TestingPassRate.Executed(b.RunCount, b.SkippedCount) > 0;
-      if (aHasRuns !== bHasRuns) return aHasRuns ? -1 : 1;
-      return a.passRate - b.passRate;
-    });
+    return flat.sort((a, b) => (a.RunCount === 0 ? 1 : 0) - (b.RunCount === 0 ? 1 : 0) || a.passRate - b.passRate);
   }
 
   private collectNodes(nodes: SuiteHierarchyNode[], out: SuiteHierarchyNode[]): void {

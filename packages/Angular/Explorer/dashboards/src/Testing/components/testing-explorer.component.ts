@@ -16,7 +16,6 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { TestingDialogService } from '@memberjunction/ng-testing';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 import { TestingInstrumentationService } from '../services/testing-instrumentation.service';
-import { TestingPassRate } from '../services/testing-pass-rate';
 import { CountByUUID, IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
@@ -30,8 +29,6 @@ interface SuiteCardData {
   Description: string;
   Status: string;
   TestCount: number;
-  /** Executed (non-skipped) runs behind PassRate; 0 means there is no rate to show. */
-  ExecutedRuns: number;
   PassRate: number;
   AvgScore: number;
   AvgDuration: number; // ms
@@ -58,8 +55,6 @@ interface TestCardData {
   LastRunStatus: string;
   LastScore: number;
   TotalRuns: number;
-  /** Skipped runs among TotalRuns; PassRate covers the executed rest. */
-  SkippedRuns: number;
   PassRate: number;
   EstDuration: number; // seconds
   EstCost: number;
@@ -222,7 +217,7 @@ interface TestRunStatRow {
                         <div class="card-stats">
                           <div class="stat">
                             <span class="stat-label">Pass Rate</span>
-                            <span class="stat-value" [class]="GetScoreClass(suite.PassRate / 100)">{{ suite.ExecutedRuns > 0 ? FormatPercent(suite.PassRate) : 'N/A' }}</span>
+                            <span class="stat-value" [class]="GetScoreClass(suite.PassRate / 100)">{{ FormatPercent(suite.PassRate) }}</span>
                           </div>
                           <div class="stat">
                             <span class="stat-label">Tests</span>
@@ -342,11 +337,11 @@ interface TestRunStatRow {
                           </div>
                           <div class="stat">
                             <span class="stat-label">Total Runs</span>
-                            <span class="stat-value" [attr.title]="ExecutedLabel(test.TotalRuns, test.SkippedRuns)">{{ test.TotalRuns }}@if (test.SkippedRuns > 0) { <span class="stat-skipped">({{ test.SkippedRuns }} skipped)</span>}</span>
+                            <span class="stat-value">{{ test.TotalRuns }}</span>
                           </div>
                           <div class="stat">
                             <span class="stat-label">Pass Rate</span>
-                            <span class="stat-value" [class]="GetScoreClass(test.PassRate / 100)">{{ test.TotalRuns > test.SkippedRuns ? FormatPercent(test.PassRate) : 'N/A' }}</span>
+                            <span class="stat-value" [class]="GetScoreClass(test.PassRate / 100)">{{ test.TotalRuns > 0 ? FormatPercent(test.PassRate) : 'N/A' }}</span>
                           </div>
                         </div>
 
@@ -841,12 +836,6 @@ interface TestRunStatRow {
       text-transform: uppercase;
       letter-spacing: 0.3px;
       margin-bottom: 2px;
-    }
-
-    .stat-skipped {
-      font-size: 11px;
-      font-weight: 400;
-      color: var(--mj-text-muted);
     }
 
     .stat-value {
@@ -1947,19 +1936,13 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
     this.suiteCards = this.AllSuites.map(suite => this.buildSingleSuiteCard(suite));
   }
 
-  /** "N executed · M skipped" for the run count shown beside a pass rate. */
-  ExecutedLabel(runs: number, skipped: number): string {
-    return TestingPassRate.ExecutedLabel(runs, skipped);
-  }
-
   private buildSingleSuiteCard(suite: MJTestSuiteEntity): SuiteCardData {
     const suiteTestLinks = this.allSuiteTests.filter(st => UUIDsEqual(st.SuiteID, suite.ID));
     const testIds = new Set(suiteTestLinks.map(st => st.TestID));
     const runsForSuite = this.testRunStats.filter(r => testIds.has(r.TestID));
 
-    // Skipped runs were not executed: neither passes nor failures (QF2-Y2).
-    const counts = TestingPassRate.CountStatuses(runsForSuite.map(r => r.Status));
-    const passRate = TestingPassRate.OfExecuted(counts.Passed, counts.Total, counts.Skipped);
+    const passedRuns = runsForSuite.filter(r => r.Status === 'Passed');
+    const passRate = runsForSuite.length > 0 ? (passedRuns.length / runsForSuite.length) * 100 : 0;
     const avgScore = runsForSuite.length > 0
       ? runsForSuite.reduce((s, r) => s + (r.Score || 0), 0) / runsForSuite.length
       : 0;
@@ -1973,7 +1956,6 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
       Description: suite.Description || '',
       Status: suite.Status,
       TestCount: testIds.size,
-      ExecutedRuns: TestingPassRate.Executed(counts.Total, counts.Skipped),
       PassRate: passRate,
       AvgScore: avgScore,
       AvgDuration: avgDuration,
@@ -2007,8 +1989,8 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
   private buildSingleTestCard(test: MJTestEntity): TestCardData {
     const runsForTest = this.testRunStats.filter(r => UUIDsEqual(r.TestID, test.ID));
     const lastRun = runsForTest.length > 0 ? runsForTest[0] : null; // already sorted DESC
-    const counts = TestingPassRate.CountStatuses(runsForTest.map(r => r.Status));
-    const passRate = TestingPassRate.OfExecuted(counts.Passed, counts.Total, counts.Skipped);
+    const passedRuns = runsForTest.filter(r => r.Status === 'Passed');
+    const passRate = runsForTest.length > 0 ? (passedRuns.length / runsForTest.length) * 100 : 0;
 
     const typeName = this.AllTestTypes.find(t => UUIDsEqual(t.ID, test.TypeID))?.Name || '';
     const suiteName = this.findSuiteNameForTest(test.ID);
@@ -2023,7 +2005,6 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
       LastRunStatus: lastRun?.Status || '',
       LastScore: lastRun?.Score || 0,
       TotalRuns: runsForTest.length,
-      SkippedRuns: counts.Skipped,
       PassRate: passRate,
       EstDuration: test.EstimatedDurationSeconds || 0,
       EstCost: test.EstimatedCostUSD || 0,

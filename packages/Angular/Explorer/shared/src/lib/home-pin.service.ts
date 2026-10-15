@@ -4,7 +4,6 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { toJpeg } from 'html-to-image';
 import { HomeAppPinnedItem, HomeAppPinInput, HomeAppPinUpdate } from './home-pin.types';
-import { CompositeKey } from '@memberjunction/core';
 
 /** UserSettings key for persisting pins */
 const PINS_SETTING_KEY = 'HomeApp.PinnedItems';
@@ -259,7 +258,7 @@ export class HomeAppPinService {
         return pin.Configuration['queryId'] === config['queryId'];
       case 'Records':
         return pin.Configuration['Entity'] === config['Entity']
-            && CompositeKey.URLSegmentsNameSameRecord(String(pin.Configuration['recordId'] ?? ''), String(config['recordId'] ?? ''));
+            && pin.Configuration['recordId'] === config['recordId'];
       case 'Custom': {
         // Match by app name + nav item name + route — never use appId or driverClass
         // Include route to differentiate same nav item with different URL paths

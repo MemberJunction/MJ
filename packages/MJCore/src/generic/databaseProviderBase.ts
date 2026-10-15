@@ -1537,14 +1537,35 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         return keyFields;
     }
 
-    /** The fields a record's display name is built from: {@link EntityInfo.RecordNameFields}. */
+    /**
+     * The fields a record's display name is built from, in order: every `IsNameField` field by
+     * `Sequence` (so FirstName + LastName gives "Elizabeth Rodriguez"), else the entity's single
+     * `NameField`. Empty when the entity has neither.
+     */
     protected RecordNameFieldsOf(entity: EntityInfo): EntityFieldInfo[] {
-        return entity.RecordNameFields;
+        const nameFields = entity.Fields
+            .filter(f => f.IsNameField)
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+        if (nameFields.length === 0 && entity.NameField) {
+            nameFields.push(entity.NameField);
+        }
+        return nameFields;
     }
 
-    /** Whether a user may see this entity's record names: {@link EntityInfo.CanUserReadRecordName}. */
+    /**
+     * Whether a user may see this entity's record names: every field the name is built from must
+     * be readable to them. On an entity with field-level security on, a missing user may not,
+     * because there is nobody to check against.
+     */
     protected CanUserReadRecordName(entity: EntityInfo, contextUser?: UserInfo): boolean {
-        return entity.CanUserReadRecordName(contextUser);
+        if (!entity.EnableFieldLevelSecurity) {
+            return true;
+        }
+        if (!contextUser) {
+            return false;
+        }
+        const denied = entity.GetDeniedReadFields(contextUser);
+        return this.RecordNameFieldsOf(entity).every(f => !denied.has(f.Name.trim().toLowerCase()));
     }
 
     /**

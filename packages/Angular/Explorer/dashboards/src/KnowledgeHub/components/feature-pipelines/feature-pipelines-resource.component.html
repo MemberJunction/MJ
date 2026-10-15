@@ -93,18 +93,9 @@
                 </span>
               </div>
               @if (pipeline.LastRunErrorMessage) {
-                <p class="fp-card__error" [class.fp-card__error--warning]="pipeline.LastRunStatus !== 'Failed'" [title]="pipeline.LastRunErrorMessage">
+                <p class="fp-card__error" [title]="pipeline.LastRunErrorMessage">
                   <i class="fa-solid fa-circle-exclamation"></i> {{ pipeline.LastRunErrorMessage }}
                 </p>
-              }
-              @if (pipeline.LatestDryRun; as dryRun) {
-                <div class="fp-meta-row">
-                  <span class="fp-meta-row__k"><i class="fa-solid fa-flask"></i> Dry run</span>
-                  <span class="fp-meta-row__v">
-                    {{ TimeAgo(dryRun.RunAt) }}
-                    <span class="fp-meta-row__sub">· {{ dryRun.Previewed }}/{{ dryRun.Attempted }} previewed (dry run, nothing written)@if (dryRun.Errors > 0) { · {{ dryRun.Errors }} error(s) }</span>
-                  </span>
-                </div>
               }
             </div>
 

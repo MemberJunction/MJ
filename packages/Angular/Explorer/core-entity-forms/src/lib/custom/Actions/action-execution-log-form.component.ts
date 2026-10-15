@@ -4,7 +4,6 @@ import { RegisterClass, ParseJSONRecursive, ParseJSONOptions } from '@memberjunc
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey } from '@memberjunction/core';
-import { ActionExecutionLogParams } from './action-execution-log-params';
 import { MJActionExecutionLogFormComponent } from '../../generated/Entities/MJActionExecutionLog/mjactionexecutionlog.form.component';
 
 type ParamType = 'Input' | 'Output' | 'Both';
@@ -243,9 +242,8 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
             debug: false
         };
 
-        // Format the params with recursive JSON parsing — the merged inputs + outputs once the run has ended
-        // (ResultParams), the as-called inputs before that (see ActionExecutionLogParams.DisplayJSON).
-        const paramsJSON = ActionExecutionLogParams.DisplayJSON(this.record);
+        // Format Params with recursive JSON parsing: an ended run's ResultParams holds its inputs and outputs
+        const paramsJSON = this.record.ResultParams || this.record.Params;
         if (paramsJSON) {
             try {
                 const parsed = JSON.parse(paramsJSON);

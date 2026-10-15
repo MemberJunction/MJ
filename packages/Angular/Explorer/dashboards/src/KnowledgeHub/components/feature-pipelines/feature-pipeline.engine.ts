@@ -24,39 +24,6 @@ export const FEATURE_PIPELINE_CATEGORY_NAME = 'Feature Pipeline';
 /** Normalized last-run status for a Feature Pipeline, derived from the most recent Process Run. */
 export type FeaturePipelineRunStatus = 'Never' | 'Running' | 'Completed' | 'Failed' | 'Cancelled';
 
-/** A pipeline's newest dry run, shown beside its last real run. A dry run writes nothing, so it is never the pipeline's last run. */
-export interface FeaturePipelineDryRunSummary {
-  /** The dry run's `MJ: Process Runs` ID. */
-  ProcessRunID: string;
-  /** When the dry run started (falling back to its end time), or null. */
-  RunAt: Date | null;
-  /** Records the dry run computed (the result's `Previewed`; the run row's success count for a run without a result). */
-  Previewed: number;
-  /** Records the dry run handed to the processor (the result's `Attempted`; the run row's processed count for a run without a result). */
-  Attempted: number;
-  /** Records that errored in the dry run. */
-  Errors: number;
-}
-
-/**
- * What a pipeline's most recent real run did with the records it processed, from its result (`ResultSummary`) and its
- * run row. The four counts add up: every processed record was written, left unchanged, or failed.
- */
-export interface FeaturePipelineRunOutcome {
-  /** Records whose Feature Values or write-back the run changed (the result's `Upserted`). */
-  Written: number;
-  /**
-   * Records already up to date: computed with nothing to change (`Unchanged`) or skipped, on their watermark or by the
-   * processor (`Skipped`). A record skipped on its watermark was never handed to the processor, so it is not in the
-   * result's `Attempted`; it still holds what the pipeline wrote.
-   */
-  Unchanged: number;
-  /** Records that failed, of any kind (the run row's `ErrorCount`). */
-  Failed: number;
-  /** Records the run processed (the run row's `ProcessedItems`): attempted plus skipped on their watermark. */
-  Total: number;
-}
-
 /**
  * UI-facing summary of one Feature Pipeline: what it is, the entity it writes to,
  * the attribute it produces, and last-run / freshness. Built purely from the
@@ -87,28 +54,22 @@ export interface FeaturePipelineSummary {
   OnDemandEnabled: boolean;
   /** Whether the pipeline runs on a cron schedule. */
   ScheduleEnabled: boolean;
-  /** Timestamp of the most recent real (not dry) run (start time, falling back to end time), or null. */
+  /** Timestamp of the most recent run (start time, falling back to end time), or null. */
   LastRunAt: Date | null;
-  /** Normalized status of the most recent real run. */
+  /** Normalized status of the most recent run. */
   LastRunStatus: FeaturePipelineRunStatus;
-  /** Id of the most recent real `MJ: Process Runs` row, or null. */
+  /** Id of the most recent `MJ: Process Runs` row, or null. */
   LastRunProcessRunID: string | null;
-  /** Records processed in the most recent real run, from its run row, or null. */
+  /** Records processed in the most recent run, or null. */
   LastRunProcessed: number | null;
-  /** Records that succeeded in the most recent real run, from its run row, or null. A run row counts a record as succeeded whether or not its values changed. */
+  /** Records whose features were written in the most recent run, or null. */
   LastRunSuccess: number | null;
-  /** Records that errored in the most recent real run, or null. */
+  /** Records that errored in the most recent run, or null. */
   LastRunErrors: number | null;
-  /** The most recent real run's Feature Pipeline result, parsed from its `ResultSummary`; null for a run without one. */
-  LastRunResult: FeaturePipelineRunResult | null;
-  /** What the most recent real run did with its records ({@link FeaturePipelineRunOutcome}), or null for a run without a result. */
-  LastRunOutcome: FeaturePipelineRunOutcome | null;
-  /** {@link LastRunOutcome} as the card's last-run line ({@link FeaturePipelineEngine.DescribeRunOutcome}), or null without a result. */
+  /** What the most recent run did with its records ({@link FeaturePipelineEngine.DescribeRunOutcome}), or null for a run without a result. */
   LastRunOutcomeText: string | null;
-  /** The most recent real run's error message when it did not complete (a refused or failed run), else null. */
+  /** The most recent run's error message when it did not complete (a refused or failed run), else null. */
   LastRunErrorMessage: string | null;
-  /** The newest dry run when it is newer than the most recent real run (or the pipeline has no real run); else null. */
-  LatestDryRun: FeaturePipelineDryRunSummary | null;
   /**
    * The pipeline type ('LLM' or 'Decision' or custom). Defaults to 'LLM' when unset. The two built-in
    * names are given in their canonical case whatever case the spec uses, as the processor matches them.
@@ -220,9 +181,8 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
     p: MJRecordProcessEntity,
     runs: ReadonlyArray<MJProcessRunEntity>,
   ): FeaturePipelineSummary {
-    const latest = FeaturePipelineEngine.newestRun(runs, p.ID, false);
-    const result = FeaturePipelineEngine.parseRunResult(latest);
-    const outcome = latest && result ? FeaturePipelineEngine.RunOutcomeOf(latest, result) : null;
+    const latest = FeaturePipelineEngine.newestRun(runs, p.ID);
+    const result = FeaturePipelineRunResults.Parse(latest?.ResultSummary);
     return {
       ID: p.ID,
       Name: p.Name,
@@ -240,100 +200,48 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
       LastRunProcessed: latest?.ProcessedItems ?? null,
       LastRunSuccess: latest?.SuccessCount ?? null,
       LastRunErrors: latest?.ErrorCount ?? null,
-      LastRunResult: result,
-      LastRunOutcome: outcome,
-      LastRunOutcomeText: outcome && latest ? FeaturePipelineEngine.DescribeRunOutcome(outcome, latest.Status) : null,
+      LastRunOutcomeText: latest && result ? FeaturePipelineEngine.DescribeRunOutcome(result, latest) : null,
       LastRunErrorMessage: latest && latest.Status !== 'Completed' ? latest.ErrorMessage || null : null,
-      LatestDryRun: FeaturePipelineEngine.buildDryRunNote(FeaturePipelineEngine.newestRun(runs, p.ID, true), latest),
       PipelineType: FeaturePipelineEngine.derivePipelineType(p.Configuration),
     };
   }
 
   /**
-   * What a real run did with its records: its result's write counts, its run row's failures and total. Every processed
-   * record is counted once: the run row's `ProcessedItems` is the result's `Upserted + Unchanged + Skipped` plus the
-   * failures.
-   * @param run - the run row
-   * @param result - the run's Feature Pipeline result
+   * The card's last-run line from a run's result. Records skipped on their watermark count as unchanged: they still
+   * hold what the pipeline wrote. A completed run with nothing to write is "up to date".
    */
-  public static RunOutcomeOf(run: MJProcessRunEntity, result: FeaturePipelineRunResult): FeaturePipelineRunOutcome {
-    return {
-      Written: result.Upserted,
-      Unchanged: result.Unchanged + result.Skipped,
-      Failed: run.ErrorCount || 0,
-      Total: run.ProcessedItems || 0,
-    };
-  }
-
-  /**
-   * The card's last-run line for a run outcome. A completed run with no failure and nothing to write says every record
-   * is up to date ("5 of 5 up to date (5 unchanged)"); any other run lists what it did ("1 written, 1 unchanged of 2",
-   * "2 written, 1 failed of 3"), so a run that did not complete is never called up to date. A run that processed no
-   * record says so.
-   * @param outcome - the run's outcome
-   * @param status - the run row's status
-   */
-  public static DescribeRunOutcome(outcome: FeaturePipelineRunOutcome, status: MJProcessRunEntity['Status']): string {
-    if (outcome.Total === 0) {
+  public static DescribeRunOutcome(result: FeaturePipelineRunResult, run: MJProcessRunEntity): string {
+    const total = run.ProcessedItems || 0;
+    const failed = run.ErrorCount || 0;
+    const unchanged = result.Unchanged + result.Skipped;
+    if (total === 0) {
       return 'no records processed';
     }
-    if (status === 'Completed' && outcome.Written === 0 && outcome.Failed === 0) {
-      return `${outcome.Unchanged} of ${outcome.Total} up to date (${outcome.Unchanged} unchanged)`;
+    if (run.Status === 'Completed' && result.Upserted === 0 && failed === 0) {
+      return `${unchanged} of ${total} up to date (${unchanged} unchanged)`;
     }
-    const parts: Array<[number, string]> = [[outcome.Written, 'written'], [outcome.Unchanged, 'unchanged'], [outcome.Failed, 'failed']];
+    const parts: Array<[number, string]> = [[result.Upserted, 'written'], [unchanged, 'unchanged'], [failed, 'failed']];
     const shown = parts.filter(([count]) => count > 0).map(([count, label]) => `${count} ${label}`);
-    return `${shown.length > 0 ? shown.join(', ') : '0 written'} of ${outcome.Total}`;
+    return `${shown.length > 0 ? shown.join(', ') : '0 written'} of ${total}`;
   }
 
-  /** When a run happened: its start time, else its end time, else its creation time (as epoch milliseconds; -Infinity when it has none). */
-  private static runTime(run: MJProcessRunEntity): number {
-    const candidate = run.StartTime || run.EndTime || run.__mj_CreatedAt;
-    return candidate ? new Date(candidate).getTime() : -Infinity;
-  }
-
-  /**
-   * Newest run for a pipeline id, scanning by StartTime/EndTime/createdAt regardless of input order. `dryRun` picks the
-   * dry runs or the real ones; a run row that does not say it was a dry run is a real one.
-   */
+  /** Newest real (not dry) run for a pipeline id, scanning by StartTime/EndTime/createdAt regardless of input order. */
   private static newestRun(
     runs: ReadonlyArray<MJProcessRunEntity>,
     recordProcessID: string,
-    dryRun: boolean,
   ): MJProcessRunEntity | undefined {
     let best: MJProcessRunEntity | undefined;
     let bestTime = -Infinity;
     for (const r of runs) {
-      if (r.RecordProcessID == null || !UUIDsEqual(r.RecordProcessID, recordProcessID)) continue;
-      if ((r.DryRun === true) !== dryRun) continue;
-      const t = FeaturePipelineEngine.runTime(r);
+      if (r.RecordProcessID == null || !UUIDsEqual(r.RecordProcessID, recordProcessID) || r.DryRun) continue;
+      const candidate = r.StartTime ?? r.EndTime ?? r.__mj_CreatedAt;
+      const t = candidate ? new Date(candidate).getTime() : -Infinity;
       if (t > bestTime) {
         bestTime = t;
         best = r;
       }
     }
     return best;
-  }
-
-  /** The run's `ResultSummary` as a Feature Pipeline result, or null for a run without one. */
-  private static parseRunResult(run: MJProcessRunEntity | undefined): FeaturePipelineRunResult | null {
-    return FeaturePipelineRunResults.Parse(run?.ResultSummary);
-  }
-
-  /** The dry-run note for a pipeline: its newest dry run when that is newer than the last real run, else null. */
-  private static buildDryRunNote(
-    dry: MJProcessRunEntity | undefined,
-    lastReal: MJProcessRunEntity | undefined,
-  ): FeaturePipelineDryRunSummary | null {
-    if (!dry) return null;
-    if (lastReal && FeaturePipelineEngine.runTime(dry) <= FeaturePipelineEngine.runTime(lastReal)) return null;
-    const result = FeaturePipelineEngine.parseRunResult(dry);
-    return {
-      ProcessRunID: dry.ID,
-      RunAt: dry.StartTime || dry.EndTime || null,
-      Previewed: result ? result.Previewed : dry.SuccessCount || 0,
-      Attempted: result ? result.Attempted : dry.ProcessedItems || 0,
-      Errors: dry.ErrorCount || 0,
-    };
   }
 
   /** Normalize a Process Run status into the small union the UI renders. `undefined` → `'Never'`. */

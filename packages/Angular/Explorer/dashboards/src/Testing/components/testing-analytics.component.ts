@@ -8,8 +8,6 @@ import {
   TestRunSummary,
   VersionMetrics
 } from '../services/testing-instrumentation.service';
-import { TestingListBoundInfo } from '../services/testing-list-bound';
-import { TestingPassRate } from '../services/testing-pass-rate';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { CriterionFailureRates, CriterionIdentity, RubricScoreTrend } from '@memberjunction/ng-testing';
@@ -36,8 +34,6 @@ interface VersionRow {
   agentVersion: string;
   date: Date;
   totalTests: number;
-  /** Skipped tests among totalTests; passRate covers the executed rest. */
-  SkippedTests: number;
   passRate: number;
   totalCost: number;
   passRateDelta: number | null;
@@ -122,7 +118,7 @@ interface VersionRow {
                     <div class="bar-track">
                       <div class="bar-fill pass-rate-bar" [style.width.%]="PassRate(t)"></div>
                     </div>
-                    <span class="bar-value" [class]="PassRateClass(t)" [attr.title]="ExecutedLabel(t.totalRuns, t.skipped)">{{ PassRate(t) | number:'1.0-0' }}%</span>
+                    <span class="bar-value" [class]="PassRateClass(t)">{{ PassRate(t) | number:'1.0-0' }}%</span>
                   </div>
                 }
               </div>
@@ -220,9 +216,6 @@ interface VersionRow {
         <i class="fa-solid fa-magnifying-glass-chart"></i>
         Insights
       </div>
-      @if (AnalyticsLoadError$ | async; as loadError) {
-        <div class="list-bound-notice analytics-load-error"><i class="fa-solid fa-triangle-exclamation"></i> Insights could not load: {{ loadError }}</div>
-      }
       <div class="insights-grid">
 
         <!-- Top Failing Tests -->
@@ -292,9 +285,6 @@ interface VersionRow {
         Score Distribution
       </div>
       <div class="card distribution-card">
-        @if (ScoreDistributionNotice$ | async; as notice) {
-          <div class="list-bound-notice"><i class="fa-solid fa-circle-info"></i> {{ notice }} The distribution covers those runs.</div>
-        }
         @if (ScoreDistribution$ | async; as buckets) {
           @if (buckets.length === 0) {
             <mj-empty-state Size="compact" Icon="fa-solid fa-chart-simple" Title="No score data available" />
@@ -348,7 +338,7 @@ interface VersionRow {
                       <span class="version-agent">{{ row.agentVersion }}</span>
                     </td>
                     <td>{{ row.date | date:'mediumDate' }}</td>
-                    <td class="num" [attr.title]="ExecutedLabel(row.totalTests, row.SkippedTests)">{{ row.totalTests }}@if (row.SkippedTests > 0) { <span class="version-skipped">({{ row.SkippedTests }} skipped)</span>}</td>
+                    <td class="num">{{ row.totalTests }}</td>
                     <td class="num">
                       <span>{{ row.passRate | number:'1.1-1' }}%</span>
                       @if (row.passRateDelta !== null) {
@@ -680,18 +670,6 @@ interface VersionRow {
     /* ------------------------------------------------------------------ */
     /*  Score Distribution                                                 */
     /* ------------------------------------------------------------------ */
-    .list-bound-notice {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      margin-bottom: 10px;
-      font-size: 12.5px;
-      color: var(--mj-text-secondary);
-      background: var(--mj-bg-surface-sunken);
-      border: 1px solid var(--mj-border-default);
-      border-radius: 6px;
-    }
     .distribution-card {
       margin-bottom: 28px;
     }
@@ -773,12 +751,6 @@ interface VersionRow {
       font-size: 12px;
       color: var(--mj-brand-primary);
     }
-    .version-skipped {
-      font-size: 11px;
-      color: var(--mj-text-muted);
-      margin-left: 4px;
-    }
-
     .version-agent {
       display: block;
       font-size: 11px;
@@ -879,13 +851,9 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
   DisplayTrends$!: Observable<TestTrendData[]>;
   PassRateTrendDirection$!: Observable<'up' | 'down' | 'stable'>;
   TopFailingTests$!: Observable<TestAnalytics['topFailingTests']>;
-  /** The analytics load error, when the per-test totals query failed (the insight cards are then empty). */
-  AnalyticsLoadError$!: Observable<string | null>;
   SlowestTests$!: Observable<TestAnalytics['slowestTests']>;
   MostExpensiveTests$!: Observable<TestAnalytics['mostExpensiveTests']>;
   ScoreDistribution$!: Observable<ScoreDistributionBucket[]>;
-  /** "Showing the newest … of …" when the runs behind the score distribution were capped. */
-  ScoreDistributionNotice$!: Observable<string | null>;
 
   // ------- Private -------
   private destroy$ = new Subject<void>();
@@ -991,14 +959,8 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
 
   // -- Trend helpers (called from template) --
 
-  /** The bucket's pass rate over executed runs (skipped runs are neither passes nor failures, QF2-Y2). */
   PassRate(t: TestTrendData): number {
-    return TestingPassRate.OfExecuted(t.passed, t.totalRuns, t.skipped);
-  }
-
-  /** "N executed · M skipped" for a run count shown beside a pass rate. */
-  ExecutedLabel(runs: number, skipped: number): string {
-    return TestingPassRate.ExecutedLabel(runs, skipped);
+    return t.totalRuns === 0 ? 0 : (t.passed / t.totalRuns) * 100;
   }
 
   PassRateClass(t: TestTrendData): string {
@@ -1090,8 +1052,6 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
 
     const analytics$ = this.instrumentationService.analytics$;
 
-    this.AnalyticsLoadError$ = analytics$.pipe(map(a => a.LoadError || null));
-
     this.TopFailingTests$ = analytics$.pipe(
       map(a => a.topFailingTests.slice(0, 5)),
       shareReplay(1)
@@ -1116,9 +1076,6 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
       this.emitState();
     });
 
-    this.ScoreDistributionNotice$ = this.instrumentationService.ListBounds$.pipe(
-      map(bounds => TestingListBoundInfo.Notice(bounds.Runs, 'runs'))
-    );
     this.ScoreDistribution$ = this.instrumentationService.testRuns$.pipe(
       map(runs => this.buildScoreDistribution(runs)),
       shareReplay(1)
@@ -1140,10 +1097,9 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
   }
 
   private averagePassRate(trends: TestTrendData[]): number {
-    // Only buckets with executed runs have a pass rate to average.
-    const withRuns = trends.filter(t => TestingPassRate.Executed(t.totalRuns, t.skipped) > 0);
+    const withRuns = trends.filter(t => t.totalRuns > 0);
     if (withRuns.length === 0) return 0;
-    return withRuns.reduce((s, t) => s + this.PassRate(t), 0) / withRuns.length;
+    return withRuns.reduce((s, t) => s + (t.passed / t.totalRuns) * 100, 0) / withRuns.length;
   }
 
   private buildScoreDistribution(runs: TestRunSummary[]): ScoreDistributionBucket[] {
@@ -1207,7 +1163,6 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
         agentVersion: m.agentVersion,
         date: m.runDate,
         totalTests: m.totalTests,
-        SkippedTests: m.SkippedTests,
         passRate: m.passRate,
         totalCost: m.totalCost,
         passRateDelta,

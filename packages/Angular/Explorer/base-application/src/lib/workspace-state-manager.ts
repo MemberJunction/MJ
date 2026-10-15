@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-import { CompositeKey, Metadata, IMetadataProvider, LogStatus, PermissionConstrainedError } from '@memberjunction/core';
+import { Metadata, IMetadataProvider, LogStatus, PermissionConstrainedError } from '@memberjunction/core';
 import { UserInfoEngine, MJWorkspaceEntity } from '@memberjunction/core-entities';
 import {
   WorkspaceConfiguration,
@@ -523,10 +523,8 @@ export class WorkspaceStateManager {
           const requestEntity = (request.Configuration.Entity as string)?.trim().toLowerCase() || '';
           const tabEntity = (tab.configuration?.Entity as string)?.trim().toLowerCase() || '';
 
-          // Record identity, not string identity: the same record can be spelled bare or as a URL segment,
-          // in either case. Other resource types keep the exact comparison.
           return tab.configuration.resourceType === request.Configuration.resourceType &&
-                 CompositeKey.URLSegmentsNameSameRecord(tabRecordId, requestRecordId) &&
+                 tabRecordId === requestRecordId &&
                  requestEntity === tabEntity;
         }
 
@@ -632,10 +630,8 @@ export class WorkspaceStateManager {
           const requestEntity = (request.Configuration.Entity as string)?.trim().toLowerCase() || '';
           const tabEntity = (tab.configuration?.Entity as string)?.trim().toLowerCase() || '';
 
-          // Record identity, not string identity: the same record can be spelled bare or as a URL segment,
-          // in either case. Other resource types keep the exact comparison.
           return tab.configuration.resourceType === request.Configuration.resourceType &&
-                 CompositeKey.URLSegmentsNameSameRecord(tabRecordId, requestRecordId) &&
+                 tabRecordId === requestRecordId &&
                  requestEntity === tabEntity;
         }
 

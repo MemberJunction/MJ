@@ -19,8 +19,7 @@ vi.mock('@angular/core', () => ({
   EventEmitter: class { emit() {} },
 }));
 
-vi.mock('@memberjunction/core', async () => ({
-  CompositeKey: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core')).CompositeKey,
+vi.mock('@memberjunction/core', () => ({
   Metadata: class {
     CurrentUser = { ID: 'user-123', Name: 'Test User' };
     Applications = [];
@@ -60,8 +59,7 @@ vi.mock('@memberjunction/core-entities', () => ({
   },
 }));
 
-vi.mock('@memberjunction/global', async () => ({
-  ...(await vi.importActual<typeof import('@memberjunction/global')>('@memberjunction/global')),
+vi.mock('@memberjunction/global', () => ({
   MJGlobal: {
     Instance: {
       GetEventListener: vi.fn(() => ({ subscribe: vi.fn() })),
@@ -160,59 +158,6 @@ describe('WorkspaceStateManager', () => {
 
       expect(tabId1).toBe(tabId2);
       expect(manager.GetConfiguration()!.tabs.length).toBe(1);
-    });
-
-    it('returns the existing tab when the record id arrives in another spelling of the same record', async () => {
-      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
-      const record = 'd8a9b7ab-7450-48e5-a0ea-acd1d86acf70';
-      const request = (id: string): TabRequest => ({ ApplicationId: 'app-1', Title: 'Test', ResourceRecordId: id, Configuration: { resourceType: 'Records', Entity: 'MJ: Users' } });
-
-      const first = manager.OpenTab(request(`ID|${record.toUpperCase()}`), '#ff0000');
-      // Pinned, so a miss would open a second tab instead of replacing this one in place.
-      manager.PinTab(first);
-      const second = manager.OpenTab(request(record), '#ff0000');
-
-      expect(second).toBe(first);
-      expect(manager.GetConfiguration()!.tabs.length).toBe(1);
-    });
-
-    it('keeps the exact id comparison for a resource type that is not a record', async () => {
-      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
-      const request = (id: string): TabRequest => ({ ApplicationId: 'app-1', Title: 'Board', ResourceRecordId: id, Configuration: { resourceType: 'Dashboards' } });
-
-      const first = manager.OpenTab(request('Board-ABC'), '#ff0000');
-      manager.PinTab(first);
-      const second = manager.OpenTab(request('board-abc'), '#ff0000');
-
-      expect(second).not.toBe(first);
-      expect(manager.GetConfiguration()!.tabs.length).toBe(2);
-    });
-
-    it('applies the same rules on the forced (Shift-click) path', async () => {
-      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
-      const record = (id: string): TabRequest => ({ ApplicationId: 'app-1', Title: 'R', ResourceRecordId: id, Configuration: { resourceType: 'Records', Entity: 'MJ: Users' } });
-      const board = (id: string): TabRequest => ({ ApplicationId: 'app-1', Title: 'B', ResourceRecordId: id, Configuration: { resourceType: 'Dashboards' } });
-
-      const rec = manager.OpenTabForced(record('ID|D8A9B7AB-7450-48E5-A0EA-ACD1D86ACF70'), '#ff0000');
-      expect(manager.OpenTabForced(record('d8a9b7ab-7450-48e5-a0ea-acd1d86acf70'), '#ff0000')).toBe(rec);
-      const first = manager.OpenTabForced(board('Board-ABC'), '#ff0000');
-      expect(manager.OpenTabForced(board('board-abc'), '#ff0000')).not.toBe(first);
-    });
-
-    it('opens a separate tab for a different record', async () => {
-      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
-      const request = (id: string): TabRequest => ({ ApplicationId: 'app-1', Title: 'Test', ResourceRecordId: id, Configuration: { resourceType: 'Records', Entity: 'MJ: Users' } });
-
-      const first = manager.OpenTab(request('ID|D8A9B7AB-7450-48E5-A0EA-ACD1D86ACF70'), '#ff0000');
-      manager.PinTab(first);
-      const second = manager.OpenTab(request('11111111-2222-3333-4444-555555555555'), '#ff0000');
-
-      expect(second).not.toBe(first);
-      expect(manager.GetConfiguration()!.tabs.length).toBe(2);
     });
 
     it('should replace temporary (unpinned) tab', async () => {

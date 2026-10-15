@@ -665,14 +665,9 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
 
     it('reports a failed load as a failure to check the target, a warning, not as "target not found"', async () => {
       const validity: boolean[] = [];
-      // Every load fails on purpose: capture the logged failures rather than print them, and check the target's was logged
-      const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const f = renderWith(decisionWithTarget(), providerWithRunView(async () => runViewResult([], 'Timeout expired')), validity);
 
       await f.componentInstance.LoadEscalationTargets();
-      await f.whenStable();
-      expect(logged.mock.calls.some((c) => String(c[0]).includes('Failed to load Escalation Targets'))).toBe(true);
-      logged.mockRestore();
 
       expect(f.componentInstance.EscalationTargetsLoaded).toBe(false);
       expect(f.componentInstance.EscalationTargetsLoadError).toBe('Timeout expired');
@@ -685,8 +680,6 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     });
 
     it('treats a load that throws the same way', async () => {
-      // Every load throws on purpose: capture the logged errors rather than print them, and check the target's was logged
-      const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const f = renderWith(
         decisionWithTarget(),
         providerWithRunView(async () => {
@@ -695,9 +688,6 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       );
 
       await f.componentInstance.LoadEscalationTargets();
-      await f.whenStable();
-      expect(logged.mock.calls.some((c) => String(c[0]).includes('Error loading Escalation Targets'))).toBe(true);
-      logged.mockRestore();
 
       expect(f.componentInstance.EscalationTargetsLoadError).toBe('network down');
       expect(targetIssues(f).map((e) => e.Severity)).toEqual(['warning']);
@@ -1247,50 +1237,9 @@ describe('the constraint block preview', () => {
     expect(builder.RenderedConstraintPreview).toContain('Free-form text');
   });
 
-  it('reads a lookup again on the next edit after its load failed, instead of keeping the empty result', async () => {
-    const views: RunViewParams[] = [];
-    const load = vi.spyOn(LookupConstraintValues, 'Load').mockRejectedValueOnce(new Error('lookup entity not reachable'));
-    const rec = makeRecord({ PipelineType: 'LLM', Outputs: OUTPUTS });
-    const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider(views), EntityID: rec.EntityID } });
-    const builder = f.componentInstance;
-    await vi.waitFor(() => expect(load).toHaveBeenCalled());
-    await f.whenStable();
-    // the first read failed; the next edit reads again, so the preview gains the rows
-    builder.OnFieldsCsvChange(eventWithValue('Name', 'input'));
-    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toContain('"Director"'));
-    expect(load.mock.calls.length).toBeGreaterThanOrEqual(2);
-    expect(views.filter((v) => v.EntityName === 'Seniority Levels')).toHaveLength(1);
-    load.mockRestore();
-  });
-
-  it('reads a lookup again through a new provider instead of reusing the old provider\'s rows', async () => {
-    const firstViews: RunViewParams[] = [];
-    const secondViews: RunViewParams[] = [];
-    const rec = makeRecord({ PipelineType: 'LLM', Outputs: OUTPUTS });
-    const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider(firstViews), EntityID: rec.EntityID } });
-    const builder = f.componentInstance;
-    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toContain('"Director"'));
-
-    f.componentRef.setInput('Provider', previewProvider(secondViews));
-    builder.OnFieldsCsvChange(eventWithValue('Name', 'input'));
-    await vi.waitFor(() => expect(secondViews.filter((v) => v.EntityName === 'Seniority Levels')).toHaveLength(1));
-    expect(firstViews.filter((v) => v.EntityName === 'Seniority Levels')).toHaveLength(1);
-  });
-
-  it('queries nothing for a lookup whose entity is not a known entity (a name still being typed)', async () => {
-    const views: RunViewParams[] = [];
-    const typing: DataFeatureOutput = { ...OUTPUTS[1], Constraint: { Type: 'lookup', Entity: 'Seniority Lev', MatchField: 'Name', OnViolation: 'fail' } };
-    const rec = makeRecord({ PipelineType: 'LLM', Outputs: [typing] });
-    const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider(views), EntityID: rec.EntityID } });
-    await f.whenStable();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(views.filter((v) => v.EntityName === 'Seniority Lev')).toEqual([]);
-    expect(f.componentInstance.RenderedConstraintPreview).toContain('Must match an existing Seniority Lev by Name');
-  });
 });
 
-
-describe('the constraint type picker and the lookup, money and date editors', () => {
+describe('the constraint type picker and the lookup editor', () => {
   const lookupOutput = (constraint: ValueConstraint): DataFeatureOutput => ({
     Name: 'Level', Ref: '$.Level', Target: { Mode: 'field', EntityFieldName: 'Rating' }, Constraint: constraint,
   });
@@ -1345,84 +1294,11 @@ describe('the constraint type picker and the lookup, money and date editors', ()
     expect(savedConstraint(f)).toEqual({ ...SAVED_LOOKUP, Filter: "Rating='Cold'" });
   });
 
-  it('edits the lookup entity, match field and display fields without disturbing the rest', () => {
-    const f = renderOutput(SAVED_LOOKUP);
-
-    f.componentInstance.UpdateLookupMatchField(0, eventWithValue('Rating', 'input'));
-    f.componentInstance.UpdateLookupDisplayFields(0, eventWithValue(' Summary , ,Rating ', 'input'));
-    f.componentInstance.UpdateLookupEntity(0, eventWithValue('Accounts'));
-
-    expect(savedConstraint(f)).toEqual({ ...SAVED_LOOKUP, MatchField: 'Rating', DisplayFields: ['Summary', 'Rating'] });
-  });
-
-  it('drops an emptied lookup field instead of saving an empty string', () => {
-    const f = renderOutput(SAVED_LOOKUP);
-
-    f.componentInstance.UpdateLookupFilter(0, eventWithValue('  ', 'input'));
-    f.componentInstance.UpdateLookupDisplayFields(0, eventWithValue('', 'input'));
-
-    const { Filter: _filter, DisplayFields: _display, ...rest } = SAVED_LOOKUP;
-    expect(savedConstraint(f)).toEqual(rest);
-  });
-
   it('keeps the lookup when Lookup is selected again', () => {
     const f = renderOutput(SAVED_LOOKUP);
 
     f.componentInstance.UpdateConstraintType(0, eventWithValue('lookup'));
 
     expect(savedConstraint(f)).toEqual(SAVED_LOOKUP);
-  });
-
-  it('replaces the lookup when the user picks another type, and starts a fresh lookup from another type', () => {
-    const f = renderOutput(SAVED_LOOKUP);
-
-    f.componentInstance.UpdateConstraintType(0, eventWithValue('freetext'));
-    expect(savedConstraint(f)).toEqual({ Type: 'freetext', MaxLength: 500, OnViolation: 'fail' });
-
-    f.componentInstance.UpdateConstraintType(0, eventWithValue('lookup'));
-    expect(savedConstraint(f)).toEqual({ Type: 'lookup', OnViolation: 'fail' });
-  });
-
-  it('keeps a saved enum when Enum is selected again', () => {
-    const f = render(makeRecord());
-    const before = savedConstraint(f) ?? f.componentInstance.spec.Outputs[0].Constraint;
-
-    f.componentInstance.UpdateConstraintType(0, eventWithValue('enum'));
-
-    expect(f.componentInstance.spec.Outputs[0].Constraint).toEqual(before);
-    expect(f.componentInstance.spec.Outputs[0].Constraint).toEqual({ Type: 'enum', Values: ['Hot', 'Warm', 'Cold'], OnViolation: 'fail' });
-  });
-
-  it('shows a saved money output as Money with its limits and currency', () => {
-    const f = renderOutput({ Type: 'money', Min: 5, Max: 900, CurrencyCode: 'USD', OnViolation: 'fail' });
-
-    expect(shownText(constraintSelect(f))).toBe('Money');
-    expect(inputLabelled(f, 'Min Amount').value).toBe('5');
-    expect(inputLabelled(f, 'Max Amount').value).toBe('900');
-    expect(inputLabelled(f, 'Currency Code').value).toBe('USD');
-
-    f.componentInstance.UpdateMoneyMax(0, eventWithValue('1000', 'input'));
-    f.componentInstance.UpdateMoneyCurrencyCode(0, eventWithValue('EUR', 'input'));
-    expect(savedConstraint(f)).toEqual({ Type: 'money', Min: 5, Max: 1000, CurrencyCode: 'EUR', OnViolation: 'fail' });
-  });
-
-  it('shows a saved date output as Date with its limits', () => {
-    const f = renderOutput({ Type: 'date', Min: '2020-01-01', Max: '2030-12-31', OnViolation: 'null' });
-
-    expect(shownText(constraintSelect(f))).toBe('Date');
-    expect(inputLabelled(f, 'Earliest Date').value).toBe('2020-01-01');
-    expect(inputLabelled(f, 'Latest Date').value).toBe('2030-12-31');
-
-    f.componentInstance.UpdateDateMin(0, eventWithValue('2021-06-01', 'input'));
-    expect(savedConstraint(f)).toEqual({ Type: 'date', Min: '2021-06-01', Max: '2030-12-31', OnViolation: 'null' });
-  });
-
-  it('starts a money and a date constraint with only the required policy when picked', () => {
-    const f = render(makeRecord());
-
-    f.componentInstance.UpdateConstraintType(0, eventWithValue('money'));
-    expect(savedConstraint(f)).toEqual({ Type: 'money', OnViolation: 'fail' });
-    f.componentInstance.UpdateConstraintType(0, eventWithValue('date'));
-    expect(savedConstraint(f)).toEqual({ Type: 'date', OnViolation: 'fail' });
   });
 });

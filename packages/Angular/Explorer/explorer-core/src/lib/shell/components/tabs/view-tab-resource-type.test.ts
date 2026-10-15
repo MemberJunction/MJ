@@ -35,11 +35,8 @@ vi.mock('@memberjunction/ng-base-application', () => ({
   ApplicationManager: class {},
   FlattenLayoutToSingleStack: vi.fn(),
 }));
-vi.mock('@memberjunction/global', async () => ({
-  ...(await vi.importActual<typeof import('@memberjunction/global')>('@memberjunction/global')),
-  MJGlobal: { Instance: { ClassFactory: {} } },
-}));
-vi.mock('@memberjunction/ng-shared', async () => ({
+vi.mock('@memberjunction/global', () => ({ MJGlobal: { Instance: { ClassFactory: {} } } }));
+vi.mock('@memberjunction/ng-shared', () => ({
   BaseResourceComponent: class {},
   HomeAppPinService: class {},
   NavigationService: class {},
@@ -58,11 +55,10 @@ vi.mock('@memberjunction/core-entities', () => ({
   MJResourceTypeEntity: class {},
   ResourcePermissionEngine: { Instance: {} },
 }));
-vi.mock('@memberjunction/core', async () => ({
+vi.mock('@memberjunction/core', () => ({
   BaseEntity: class {},
   Metadata: class {},
   LogError: vi.fn(),
-  CompositeKey: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core')).CompositeKey,
 }));
 vi.mock('@memberjunction/ng-notifications', () => ({ MJNotificationService: class {} }));
 vi.mock('@memberjunction/ng-base-types', () => ({ BaseAngularComponent: class {} }));
