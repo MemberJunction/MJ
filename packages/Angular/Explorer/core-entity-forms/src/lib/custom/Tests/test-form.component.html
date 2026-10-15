@@ -290,6 +290,21 @@
             </div>
 
             <div class="edit-field">
+              <label for="test-rubric">Rubric</label>
+              <select
+                id="test-rubric"
+                class="config-input"
+                [ngModel]="record.RubricID"
+                (ngModelChange)="record.RubricID = $event || null"
+              >
+                <option [ngValue]="null">— None —</option>
+                @for (rubric of RubricOptions; track rubric.id) {
+                  <option [ngValue]="rubric.id">{{ rubric.name }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="edit-field">
               <label for="test-type">Test Type</label>
               <select
                 id="test-type"

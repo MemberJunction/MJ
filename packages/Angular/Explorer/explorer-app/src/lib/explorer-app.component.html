@@ -15,6 +15,7 @@
 @if ((authBase.isAuthenticated() | async) && !isOAuthCallback) {
   @if (!preShellBlocked) {
     <div class="app-main">
+      <mj-template-user-banner></mj-template-user-banner>
       <mj-server-connectivity-banner></mj-server-connectivity-banner>
       <mj-system-validation-banner></mj-system-validation-banner>
       @if (!HasError) {
@@ -49,8 +50,9 @@
   <!-- Show environment validation errors on login page -->
   <mj-system-validation-banner></mj-system-validation-banner>
   <div class="login-wrapper"
-       [class.login-wrapper--split-reverse]="LoginLayout === 'split-reverse'"
-       [class.login-wrapper--centered]="LoginLayout === 'centered'">
+       [class.login-wrapper--split-reverse]="EffectiveLoginLayout === 'split-reverse'"
+       [class.login-wrapper--centered]="EffectiveLoginLayout === 'centered'"
+       [style]="LoginDesignStyle">
     <button class="theme-toggle" (click)="ToggleTheme()" [attr.aria-label]="IsDarkMode ? 'Switch to light mode' : 'Switch to dark mode'">
       <i class="fa-solid" [class.fa-sun]="IsDarkMode" [class.fa-moon]="!IsDarkMode"></i>
     </button>
@@ -58,10 +60,14 @@
          no animated waves, so the surface carries any brand rather than MJ's. Where it sits —
          leading, trailing, or stacked above a centered card — is LoginLayout's call; what it
          contains is the bannerContent slot's, falling back to the stock brand block. -->
-    <div class="main-banner" [class.main-banner--center]="LoginBannerAlignment === 'center'">
+    <div class="main-banner" [class.main-banner--center]="EffectiveLoginAlignment === 'center'">
       <div class="banner-brand">
         @if (LoginSlotTemplate('bannerContent'); as bannerContent) {
           <ng-container [ngTemplateOutlet]="bannerContent"></ng-container>
+        } @else if (LoginDesignBlocks('Banner'); as blocks) {
+          <!-- The story panel published in Login Studio: replaces the stock brand block, as the slot does. -->
+          <mj-login-region Region="Banner" [Blocks]="blocks" [Logos]="LoginLogos"
+                           [BrandName]="LoginBrandName" [Center]="EffectiveLoginAlignment === 'center'"></mj-login-region>
         } @else {
           <!-- An EMPTY label means decorative, not unnamed: role="img" with no accessible name is a
                worse outcome than no role at all, and "the logo is decoration, the title names the
@@ -93,6 +99,10 @@
       <div class="login-panel-stack">
         @if (LoginSlotTemplate('panelHeader'); as panelHeader) {
           <div class="login-region"><ng-container [ngTemplateOutlet]="panelHeader"></ng-container></div>
+        } @else if (LoginDesignBlocks('PanelTop'); as blocks) {
+          <div class="login-region">
+            <mj-login-region Region="PanelTop" [Blocks]="blocks" [Logos]="LoginLogos" [BrandName]="LoginBrandName"></mj-login-region>
+          </div>
         }
         <!-- One component covers all three states: 2+ providers renders a list, exactly one
              renders a single primary CTA naming it, and an empty catalog renders the generic
@@ -101,7 +111,7 @@
              surrounding chrome is Explorer's; the rows are the same in every MJ app that embeds it. -->
         <mj-login-picker
           [Providers]="AuthProviderChoices"
-          [Heading]="LoginHeading"
+          [Heading]="EffectiveLoginHeading"
           [Subheading]="ProviderPickerLede"
           [ShowPoweredBy]="LoginShowPoweredBy"
           [Busy]="SigningIn"
@@ -111,6 +121,10 @@
         </mj-login-picker>
         @if (LoginSlotTemplate('panelFooter'); as panelFooter) {
           <div class="login-region"><ng-container [ngTemplateOutlet]="panelFooter"></ng-container></div>
+        } @else if (LoginDesignBlocks('PanelBottom'); as blocks) {
+          <div class="login-region">
+            <mj-login-region Region="PanelBottom" [Blocks]="blocks" [Logos]="LoginLogos" [BrandName]="LoginBrandName"></mj-login-region>
+          </div>
         } @else if (LoginPanelCards.length) {
           <ng-container [ngTemplateOutlet]="loginCards" [ngTemplateOutletContext]="{ $implicit: LoginPanelCards, onBanner: false }"></ng-container>
         }

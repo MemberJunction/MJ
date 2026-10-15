@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT122 - Agent Prompt Cancellation",
+    "Description": "A caller that cancels an agent run while its prompt's model call is in flight ends the run there, end to end against this database's metadata and with no live model: every chat call is answered by TestLLM, registered on the ClassFactory over the chat driver classes for this bundle only and restored after it, and the runs pass placeholder keys under the RuntimeOnly credential scope so no platform key can bring a real vendor into the candidate list. A call scripted hangUntilAborted waits on the request's own abort signal and aborts the run's token a moment after it starts. APC1 cancelling the seeded IT: Echo Agent mid-call makes exactly one model call (the prompt's failover never moves to another candidate) and records the agent run Cancelled, its Prompt step failed with 'Cancelled during prompt execution', and the prompt run Cancelled by the user with no failover attempts. APC2 a first candidate that fails with a network error fails over, and a cancellation during the second candidate stops there: two model calls, the same cancelled rows, and the network failure kept as the prompt run's one failover attempt. Server transport by necessity: the stand-in is a ClassFactory registration in this process, which an agent run inside MJAPI would never see. Every run, step and prompt run the bundle creates is deleted in teardown.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A cancellation mid-call stops the prompt at that call with no failover walk, and the agent run, its Prompt step and the prompt run are all recorded as cancelled, not failed."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-prompt-cancellation"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "E20594CE-3B4D-4258-BCCB-345311CCFE2D"
+  }
+}

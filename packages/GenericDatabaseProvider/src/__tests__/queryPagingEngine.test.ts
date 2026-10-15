@@ -312,22 +312,18 @@ ORDER BY v.FirstName`;
         expect(result.CountSQL).not.toMatch(/ORDER BY/i);
     });
 
-    it('strips an outer TOP from the count body so the count reflects the full set (SQL Server)', () => {
+    it('keeps the query’s own TOP in the count, so the total is the size of the capped result (SQL Server)', () => {
         const sql = 'SELECT TOP 500 ID, Name FROM Users WHERE Active = 1 ORDER BY Name';
         const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, 'sqlserver');
-        // The user's TOP must not survive into the count — COUNT(*) should see the
-        // full result set, consistent with the paged data query (which also drops TOP).
-        expect(result.CountSQL).not.toMatch(/\bTOP\b/i);
+        // The data query pages within the TOP 500, so the count must count those 500 at most.
+        expect(result.CountSQL).toMatch(/\bTOP 500\b/);
         expect(result.CountSQL).toContain('TotalRowCount');
     });
 
-    it('strips an outer LIMIT from the count body so the count reflects the full set (PostgreSQL)', () => {
-        // Regression for the dialect inconsistency M1 flagged: the old AST count
-        // path stripped TOP (SQL Server) but left a PostgreSQL LIMIT in place,
-        // producing a count of the limited subset. ClearOuterCap strips both forms.
+    it('keeps the query’s own LIMIT in the count, so the total is the size of the capped result (PostgreSQL)', () => {
         const sql = 'SELECT id, name FROM users WHERE active = true ORDER BY name LIMIT 500';
         const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, 'postgresql');
-        expect(result.CountSQL).not.toMatch(/LIMIT\s+500/i);
+        expect(result.CountSQL).toMatch(/LIMIT\s+500/i);
         expect(result.CountSQL).toContain('TotalRowCount');
     });
 });
@@ -832,70 +828,15 @@ ORDER BY ts.Revenue DESC`;
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// StripOuterLimitOffset — PostgreSQL's counterpart to the SQL Server TOP strip
+// PostgreSQL queries that carry their own LIMIT
 //
-// buildDataSQL appends `LIMIT n OFFSET m` unconditionally, so a query that already ends in its
-// own `LIMIT` was handed a SECOND one: `… LIMIT 20 LIMIT 100 OFFSET 0`, a parse error. Agent and
-// Skip queries routinely carry their own LIMIT, so they could not be paged at all.
-//
-// The strip is END-ANCHORED, and that anchoring is the entire safety argument: a LIMIT inside a
-// CTE body or a subquery is part of that subquery's meaning and must survive untouched.
+// A query that already ends in its own `LIMIT` must get ONE paging clause, not a second one
+// appended after it (`… LIMIT 20 LIMIT 100 OFFSET 0` is a PostgreSQL parse error). The query's
+// cap is read from tokens (AnalyzePagingShape) and replaced by the page's clause, so only a
+// statement-level LIMIT is touched: a LIMIT inside a CTE body or a subquery is part of that
+// subquery's meaning and must survive untouched. The paging arithmetic itself (own OFFSET
+// composed with StartRow, a page past the cap) is covered in queryPagingEngine.ownCap.test.ts.
 // ═══════════════════════════════════════════════════════════════════════════
-
-describe('QueryPagingEngine.StripOuterLimitOffset', () => {
-    it('strips a statement-closing LIMIT and reports the number removed', () => {
-        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset('SELECT * FROM Users LIMIT 20');
-        expect(sql).toBe('SELECT * FROM Users');
-        expect(limitRemoved).toBe(20);
-    });
-
-    it('strips LIMIT with its trailing OFFSET', () => {
-        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset('SELECT * FROM Users LIMIT 20 OFFSET 5');
-        expect(sql).toBe('SELECT * FROM Users');
-        expect(limitRemoved).toBe(20);
-    });
-
-    it('strips LIMIT ALL but reports no numeric ceiling', () => {
-        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset('SELECT * FROM Users LIMIT ALL');
-        expect(sql).toBe('SELECT * FROM Users');
-        expect(limitRemoved).toBeNull();
-    });
-
-    it('is case-insensitive and tolerates trailing whitespace/newlines', () => {
-        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset('SELECT * FROM Users\n  limit 7  \n');
-        expect(sql).toBe('SELECT * FROM Users');
-        expect(limitRemoved).toBe(7);
-    });
-
-    it('leaves SQL with no LIMIT untouched', () => {
-        const original = 'SELECT * FROM Users ORDER BY Name';
-        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset(original);
-        expect(sql).toBe(original);
-        expect(limitRemoved).toBeNull();
-    });
-
-    it('leaves a SUBQUERY LIMIT untouched — it is not at end of statement', () => {
-        const original = 'SELECT * FROM (SELECT * FROM Users ORDER BY ID LIMIT 5) sub ORDER BY Name';
-        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset(original);
-        expect(sql).toBe(original);
-        expect(limitRemoved).toBeNull();
-    });
-
-    it('leaves a CTE-body LIMIT untouched', () => {
-        const original = 'WITH top5 AS (SELECT * FROM Users ORDER BY ID LIMIT 5)\nSELECT * FROM top5';
-        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset(original);
-        expect(sql).toBe(original);
-        expect(limitRemoved).toBeNull();
-    });
-
-    it('strips ONLY the outer LIMIT when a subquery also has one', () => {
-        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset(
-            'SELECT * FROM (SELECT * FROM Users ORDER BY ID LIMIT 5) sub ORDER BY Name LIMIT 100',
-        );
-        expect(sql).toBe('SELECT * FROM (SELECT * FROM Users ORDER BY ID LIMIT 5) sub ORDER BY Name');
-        expect(limitRemoved).toBe(100);
-    });
-});
 
 describe('WrapWithPaging — PostgreSQL queries that carry their own LIMIT', () => {
     const countLimits = (sql: string): number => (sql.match(/\bLIMIT\b/gi) ?? []).length;
@@ -940,13 +881,5 @@ describe('WrapWithPaging — PostgreSQL queries that carry their own LIMIT', () 
         const result = QueryPagingEngine.WrapWithPaging('SELECT ID FROM Users ORDER BY Name', 10, 25, 'postgresql');
         expect(countLimits(result.DataSQL)).toBe(1);
         expect(result.DataSQL).toContain('LIMIT 25 OFFSET 10');
-    });
-
-    it('does NOT strip a trailing LIMIT on SQL Server (not that dialect\'s cap syntax)', () => {
-        // A literal trailing `LIMIT` is not valid T-SQL in the first place; the point is that the
-        // PostgreSQL branch is dialect-gated and cannot reach SQL Server SQL.
-        const result = QueryPagingEngine.WrapWithPaging('SELECT ID FROM Users ORDER BY Name LIMIT 20', 0, 25, 'sqlserver');
-        expect(result.DataSQL).toContain('LIMIT 20');
-        expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 25 ROWS ONLY');
     });
 });
