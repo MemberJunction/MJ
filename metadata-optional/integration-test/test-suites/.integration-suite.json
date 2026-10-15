@@ -1751,6 +1751,9 @@
             "TestID": "@lookup:MJ: Tests.Name=IT114 - AI Vendor Effort Levels",
             "Sequence": 16,
             "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B3816AC6-B2DA-43DD-A091-34A51B833CF0"
           }
         }
       ]
