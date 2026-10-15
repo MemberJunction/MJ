@@ -106,6 +106,23 @@ describe('OpenSearchSearchProvider', () => {
             expect(results[1].Score).toBeCloseTo(0.5);
         });
 
+        it('a scoped search with no OpenSearch row queries nothing — never the default index', async () => {
+            mockFetch.mockResolvedValueOnce(probeOk());
+            const p = new OpenSearchSearchProvider();
+            await p.Initialize(basicConfig(), fakeUser);
+            await p.CheckAvailability(fakeUser);
+            mockFetch.mockClear();
+
+            const none = await p.Search('hello', 10, undefined, fakeUser, { ExternalIndexes: [] });
+            const otherType = await p.Search('hello', 10, undefined, fakeUser, {
+                ExternalIndexes: [{ IndexType: 'Elasticsearch', ExternalIndexName: 'es-docs' }],
+            });
+
+            expect(none).toEqual([]);
+            expect(otherType).toEqual([]);
+            expect(mockFetch).not.toHaveBeenCalled();
+        });
+
         it('uses scope ExternalIndexes when present (comma-separated url path)', async () => {
             mockFetch.mockResolvedValueOnce(probeOk()).mockResolvedValueOnce(searchResponse([
                 { _id: '1', _score: 5.0, _index: 'tickets', _source: { content: 'a' } },

@@ -104,6 +104,9 @@ interface SearchEngineTestState {
 }
 
 class TestSearchEngine extends SearchEngine {
+    /** Record ids the stubbed permission pass drops, standing in for rows the caller may not read. */
+    public Unreadable = new Set<string>();
+
     public InjectProviders(entries: ProviderEntry[]): void {
         // Bypass Config() — set internal state directly so tests don't need
         // the full SearchEngineBase metadata pipeline. The double-cast goes
@@ -114,7 +117,7 @@ class TestSearchEngine extends SearchEngine {
     }
 
     public override async filterByPermissions(results: SearchResultItem[]): Promise<SearchResultItem[]> {
-        return results;
+        return results.filter(r => !this.Unreadable.has(r.RecordID));
     }
     // Stub IMetadataProvider — the merged multi-provider refactor reads
     // `this.Base.ProviderToUse` which isn't initialized when tests bypass Config().
@@ -207,6 +210,32 @@ describe('SearchEngine.streamSearch (P2C.1 v2 — concurrent emission)', () => {
         // The fast provider takes 5ms; even with timer slop, the first
         // event should fire well before the slow provider's 100ms.
         expect(firstProviderAt).toBeLessThan(slowMs);
+    });
+
+    it('provider events carry a count and no record content; final carries only what the permission pass kept', async () => {
+        class TwoHitProvider extends BaseSearchProvider {
+            public override readonly SourceType: SearchResultItem['SourceType'] = 'vector';
+            public override async Search(): Promise<SearchResultItem[]> {
+                return [makeItem('readable', 'vector'), makeItem('row-filtered', 'vector')];
+            }
+        }
+        engine.InjectProviders([makeEntry('Vec', new TwoHitProvider()), makeEntry('Ft', new FakeProvider('ft-hit', 'fulltext', 1))]);
+        engine.Unreadable = new Set(['row-filtered']);
+
+        const events: SearchStreamEvent[] = [];
+        for await (const ev of engine.streamSearch({ Query: 'test' }, user)) events.push(ev);
+
+        const progress = events.filter((ev): ev is Extract<SearchStreamEvent, { phase: 'provider' }> => ev.phase === 'provider');
+        expect(progress.map(ev => [ev.providerName, ev.resultCount]).sort()).toEqual([['FullText', 1], ['Vector', 2]]);
+        for (const ev of progress) {
+            expect(ev.results).toEqual([]);
+            // Nothing of a hit — no id, title or snippet — is anywhere on a progress event.
+            expect(JSON.stringify(ev)).not.toMatch(/row-filtered|readable|ft-hit/);
+        }
+        const final = events.find((ev): ev is Extract<SearchStreamEvent, { phase: 'final' }> => ev.phase === 'final');
+        expect(final?.results.map(r => r.RecordID).sort()).toEqual(['ft-hit', 'readable']);
+        const fused = events.find((ev): ev is Extract<SearchStreamEvent, { phase: 'fused' }> => ev.phase === 'fused');
+        expect(fused?.results.map(r => r.RecordID)).not.toContain('row-filtered');
     });
 
     it('emits a single error event when the search throws and skips fused/final', async () => {
