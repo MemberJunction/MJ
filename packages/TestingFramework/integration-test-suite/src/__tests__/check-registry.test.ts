@@ -72,6 +72,7 @@ import { FlsLifecycleChecks } from '../checks/fls-lifecycle.checks';
 import { FlsClientChecks } from '../checks/fls-client.checks';
 import { MetadataSyncPushChecks } from '../checks/metadata-sync-push.checks';
 import { TaskGraphExecutionChecks } from '../checks/task-graph-execution.checks';
+import { PerformanceBenchmarkChecks } from '../checks/performance-benchmark.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -195,6 +196,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
+        ['performance-benchmark', PerformanceBenchmarkChecks, 12], // PB1-PB12 MJ primitives microbenchmarks + Sage/Query Builder/Research Agent deterministic and live runs (IT123)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -308,6 +310,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'metadata-sync-push': 10,
         'nested-transactions': 11,
         'open-app-teardown': 2,
+        'performance-benchmark': 12,
         'permission-engine': 15,
         'perplexity-decider': 5,
         'predictive-studio': 5,
@@ -381,7 +384,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(116);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(117);
     });
 });
 
@@ -696,6 +699,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'agent-skills-live.SL5',
         'agent-wire-callback.WC1',
         'agent-wire-callback.WC2',
+        'performance-benchmark.PB10',
+        'performance-benchmark.PB11',
+        'performance-benchmark.PB12',
         'shipped-agents-live.SA1',
         'shipped-agents-live.SA2',
         'shipped-agents-live.SA3',
