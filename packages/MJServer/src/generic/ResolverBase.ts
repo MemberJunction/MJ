@@ -31,6 +31,8 @@ import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
+import { SQLParser } from '@memberjunction/sql-parser';
+import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC } from './CacheInvalidationResolver.js';
@@ -734,6 +736,272 @@ export class ResolverBase {
   }
 
   /**
+   * SECURITY — GraphQL-boundary screen for one client-supplied SQL clause fragment.
+   *
+   * `ValidateUserProvidedSQLClause` still blocks stacked statements, DML, comments, UNION
+   * and WAITFOR, and still permits SELECT (server-internal engines pass richer filters).
+   * A keyword ban on SELECT/EXISTS at this boundary (#4253) broke first-party clients that
+   * use `IN (SELECT … FROM <entity base view>)` — that is a legitimate ExtraFilter.
+   *
+   * This screen uses `@memberjunction/sql-parser` (same wrap as EDS `assertReadOnlyClause`):
+   * wrap the fragment as a single SELECT, fail closed if it does not parse as a read, then
+   * allow a FROM only when it is an entity **BaseView**. Base tables (`Meeting`, `__mj.User`)
+   * and catalogs are rejected. Server-internal RunView callers never hit this.
+   *
+   * RLS is applied by RunView as an outer WHERE around the entity being queried, not compiled
+   * into the view. Subqueries against another entity's BaseView therefore do not inherit that
+   * entity's RLS; they are still restricted to the view (not the table).
+   */
+  protected assertClientClauseUsesEntityBaseViews(
+    clause: string | undefined | null,
+    label: string,
+    provider?: IMetadataProvider,
+    user?: UserInfo,
+  ): void {
+    if (!clause?.trim()) return;
+
+    const dialect = this.dialectForProvider(provider);
+    if (SQLParser.HasStackedStatements(clause, dialect)) {
+      throw new Error(`Invalid ${label}: multiple statements are not permitted in client-supplied filters`);
+    }
+
+    const wrapped =
+      label === 'OrderBy'
+        ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${clause}`
+        : `SELECT 1 FROM __mj_clause_screen WHERE (${clause})`;
+    const parser = new SQLParser(wrapped, dialect);
+    if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
+      throw new Error(
+        `Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`,
+      );
+    }
+    if (this.astContainsWriteNode(parser.AST)) {
+      throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
+    }
+
+    const allowed = this.entityBaseViewAllowList(provider);
+    const tables = SQLParser.ExtractTableRefs(wrapped, dialect);
+    for (const t of tables) {
+      const table = this.stripSqlIdent(t.TableName);
+      const schema = this.stripSqlIdent(t.SchemaName);
+      if (table.toLowerCase() === '__mj_clause_screen') continue;
+      this.assertTableRefReadable(allowed, schema, table, label, user);
+    }
+  }
+
+  /**
+   * SECURITY — screen for a FULL client-supplied SQL statement (ad-hoc query path). In addition
+   * to the SELECT-only validation the caller performs, every table reference must resolve to an
+   * entity BaseView the acting user can read UNSCOPED. CTE names defined by the statement itself
+   * are excluded from the check. Fails closed: no user, or an unresolvable reference, refuses.
+   *
+   * Entity CanRead is not unscoped base-view read authority: RunView narrows a granted read with
+   * row-level security, and raw SQL does not apply it. Rather than try to rewrite arbitrary SQL
+   * (joins, CTEs) to compose that policy, this refuses any entity that carries a row filter for
+   * the caller — those reads belong on RunView. For
+   * the remaining entities CanRead genuinely means "every row and field of the view".
+   */
+  protected assertFullQueryUsesReadableEntityViews(
+    sqlText: string,
+    provider: IMetadataProvider | undefined,
+    user: UserInfo | undefined,
+    label = 'SQL',
+  ): void {
+    if (!user) {
+      throw new Error(`Invalid ${label}: no acting user resolved for ad-hoc SQL — refusing`);
+    }
+    const dialect = this.dialectForProvider(provider);
+    const parser = new SQLParser(sqlText, dialect);
+    if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
+      throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
+    }
+    if (this.astContainsWriteNode(parser.AST)) {
+      throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
+    }
+    const cteNames = new Set<string>();
+    this.collectCTENames(parser.AST, cteNames);
+    const allowed = this.entityBaseViewAllowList(provider);
+    const tables = SQLParser.ExtractTableRefs(sqlText, dialect);
+    for (const t of tables) {
+      const table = this.stripSqlIdent(t.TableName);
+      const schema = this.stripSqlIdent(t.SchemaName);
+      if (this.isUnqualifiedSchema(schema) && cteNames.has(table.toLowerCase())) continue;
+      const entity = this.assertTableRefReadable(allowed, schema, table, label, user);
+      this.assertUnscopedRead(entity, user, label);
+    }
+  }
+
+  /** Refuses an entity whose read is narrowed for this user by row-level security or field-level denials. */
+  private assertUnscopedRead(entity: EntityInfo, user: UserInfo, label: string): void {
+    // lts/5: row-level security is the only read narrowing on this line (no field-level security,
+    // no session scopes), so GetUserRowLevelSecurityWhereClause is the full effective read filter.
+    if (entity.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '').length > 0) {
+      throw new Error(
+        `Invalid ${label}: entity '${entity.Name}' is row-level-security filtered for you — ad-hoc SQL cannot apply that filter; use RunView`,
+      );
+    }
+  }
+
+  /** Walks a parsed AST collecting the names of CTEs the statement itself defines. */
+  private collectCTENames(node: unknown, names: Set<string>): void {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const n of node) this.collectCTENames(n, names);
+      return;
+    }
+    const obj = node as Record<string, unknown>;
+    const withClause = obj.with;
+    if (Array.isArray(withClause)) {
+      for (const cte of withClause) {
+        const name = (cte as Record<string, unknown>)?.name;
+        if (typeof name === 'string') names.add(name.toLowerCase());
+        else if (name && typeof name === 'object' && typeof (name as Record<string, unknown>).value === 'string') {
+          names.add(((name as Record<string, unknown>).value as string).toLowerCase());
+        }
+      }
+    }
+    for (const v of Object.values(obj)) this.collectCTENames(v, names);
+  }
+
+  /**
+   * Applies {@link assertClientClauseUsesEntityBaseViews} to every client-supplied clause
+   * a view request can carry that is actually a SQL fragment. GraphQL entry points
+   * (RunViewByName, RunViewByID, RunDynamicView, RunViews) funnel through
+   * RunViewGenericInternal / RunViewsGenericInternal.
+   *
+   * 🚨 `UserSearchString` is deliberately NOT screened here (#4392). It is not a clause — it is
+   * the free text a person typed into a search box, and it never reaches SQL as a fragment.
+   * `GenericDatabaseProvider.createViewUserSearchSQL` builds the predicate itself from
+   * `IncludeInUserSearchAPI` metadata and lands the text only as a literal, doubling single
+   * quotes and escaping LIKE metacharacters with an explicit `ESCAPE`. Running it through a
+   * screen that parses its argument as SQL and fails closed rejected every term that is not
+   * coincidentally valid SQL: `Marcus Chen` parses as nothing, `O'Leary` as an unterminated
+   * literal — so essentially every real name search returned 0 rows.
+   *
+   * The provider-level denylist does NOT back this up — it was removed from `UserSearchString`
+   * in the same change, for the same reason (it refused `Union Pacific`). What protects the value
+   * is that it is never SQL: it reaches the database only as a quoted, quote-doubled literal.
+   * The single place that is not true is a field carrying `UserSearchParamFormatAPI`, whose
+   * admin-authored format may splice the term in unquoted; `createViewUserSearchSQL` re-applies
+   * `ValidateUserProvidedSQLClause` for exactly those entities.
+   */
+  protected screenClientViewClauses(
+    clauses: {
+      extraFilter?: string | null;
+      orderBy?: string | null;
+      userSearchString?: string | null;
+      overrideExcludeFilter?: string | null;
+    },
+    provider?: IMetadataProvider,
+    user?: UserInfo,
+  ): void {
+    this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider, user);
+    this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider, user);
+    this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider, user);
+  }
+
+  /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */
+  private astContainsWriteNode(node: unknown): boolean {
+    if (!node || typeof node !== 'object') return false;
+    if (Array.isArray(node)) return node.some((n) => this.astContainsWriteNode(n));
+    const obj = node as Record<string, unknown>;
+    const type = obj.type;
+    if (typeof type === 'string' && ResolverBase.WRITE_NODE_TYPES.has(type.toLowerCase())) {
+      return true;
+    }
+    return Object.values(obj).some((v) => this.astContainsWriteNode(v));
+  }
+
+  private static readonly WRITE_NODE_TYPES = new Set<string>([
+    'insert', 'update', 'delete', 'merge', 'replace', 'drop', 'create', 'alter', 'truncate',
+    'rename', 'call', 'exec', 'execute', 'grant', 'revoke', 'use', 'load', 'copy', 'do',
+  ]);
+
+  private dialectForProvider(provider?: IMetadataProvider): SQLParserDialect {
+    const name = provider?.constructor?.name ?? '';
+    if (/postgres/i.test(name)) return new PostgreSQLDialect();
+    return new SQLServerDialect();
+  }
+
+  /** True for a reference with no schema — which `SQLParser.ExtractTableRefs` reports as `dbo`. */
+  private isUnqualifiedSchema(schema: string): boolean {
+    return !schema || schema.toLowerCase() === 'dbo';
+  }
+
+  private stripSqlIdent(name: string | null | undefined): string {
+    if (!name) return '';
+    return name.replace(/^\[|\]$/g, '').replace(/^"|"$/g, '').replace(/^`|`$/g, '');
+  }
+
+  /**
+   * `bare` maps an unqualified view name to its entity, or to `null` when the name exists in
+   * more than one schema — the database, not this screen, would decide which one runs.
+   */
+  private entityBaseViewAllowList(provider?: IMetadataProvider): {
+    qualified: Map<string, EntityInfo>;
+    bare: Map<string, EntityInfo | null>;
+  } {
+    const qualified = new Map<string, EntityInfo>();
+    const bare = new Map<string, EntityInfo | null>();
+    const entities = provider?.Entities ?? [];
+    for (const e of entities) {
+      const view = this.stripSqlIdent(e.BaseView);
+      if (!view) continue;
+      const schema = this.stripSqlIdent(e.SchemaName);
+      const bareKey = view.toLowerCase();
+      bare.set(bareKey, bare.has(bareKey) ? null : e);
+      if (schema) qualified.set(`${schema}.${view}`.toLowerCase(), e);
+    }
+    return { qualified, bare };
+  }
+
+  /**
+   * SECURITY — resolves a table reference against the entity BaseView allow-list and, when an
+   * acting user is supplied, additionally requires that user to hold CanRead on the referenced
+   * entity. Base views do not embed RLS and entity permissions are otherwise checked only on
+   * the TOP entity of a request, so without this check a subquery (or ad-hoc query) could read
+   * entities the caller has no read grant on.
+   *
+   * A schema-qualified reference must match that exact schema — `secret.vwFoo` never resolves
+   * through another schema's `vwFoo`. An unqualified reference resolves only when the view name
+   * is unique across schemas; an ambiguous one must be qualified, because the database's
+   * default-schema resolution, not this screen, would pick which view actually runs.
+   *
+   * `SQLParser.ExtractTableRefs` reports an unqualified reference as schema `dbo`, so `dbo` is
+   * indistinguishable from "no schema" here and both take the unqualified path (an exact
+   * `dbo.<view>` entity wins first).
+   */
+  private assertTableRefReadable(
+    allowed: { qualified: Map<string, EntityInfo>; bare: Map<string, EntityInfo | null> },
+    schema: string,
+    table: string,
+    label: string,
+    user?: UserInfo,
+  ): EntityInfo {
+    const qualified = allowed.qualified.get(`${schema}.${table}`.toLowerCase());
+    const entity = this.isUnqualifiedSchema(schema) ? qualified ?? allowed.bare.get(table.toLowerCase()) : qualified;
+    if (entity === null) {
+      throw new Error(
+        `Invalid ${label}: '${table}' is a base view in more than one schema — qualify it with its schema`,
+      );
+    }
+    if (!entity) {
+      throw new Error(
+        `Invalid ${label}: subquery must use an entity base view, not '${schema ? schema + '.' : ''}${table}'`,
+      );
+    }
+    if (user) {
+      const perms = entity.GetUserPermisions(user);
+      if (!perms.CanRead) {
+        throw new Error(
+          `Invalid ${label}: you do not have read permission on entity '${entity.Name}' referenced by '${schema ? schema + '.' : ''}${table}'`,
+        );
+      }
+    }
+    return entity;
+  }
+
+  /**
    * Optimized RunViewGenericInternal implementation with:
    * - Field filtering at source (Fix #7)
    * - Improved error handling (Fix #9)
@@ -763,10 +1031,6 @@ export class ResolverBase {
     try {
       if (!viewInfo || !userPayload) return null;
 
-      // Check API key scope authorization for view operations
-      await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
-
-      const md = provider
       // Prefer the authenticated session's payload user — it is the authoritative per-request
       // identity and (for magic-link sessions) carries the per-session resource scope / synthesized
       // roles that drive RLS. The cached lookup is a fallback for paths where the payload user
@@ -774,6 +1038,20 @@ export class ResolverBase {
       const user = this.GetUserFromPayload(userPayload)
         ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
       if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
+
+      // SECURITY: GraphQL ExtraFilter may contain IN (SELECT … FROM <base view>).
+      // Screen at this boundary: parse, reject writes, allow only entity BaseViews the
+      // acting user can read (subqueries do not inherit the top entity's permission check).
+      this.screenClientViewClauses(
+        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
+        provider as unknown as IMetadataProvider,
+        user,
+      );
+
+      // Check API key scope authorization for view operations
+      await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
+
+      const md = provider
 
       const entityInfo = md.Entities.find((e) => e.Name === viewInfo.Entity);
       if (!entityInfo) throw new Error(`Entity ${viewInfo.Entity} not found in metadata`);
@@ -920,6 +1198,18 @@ export class ResolverBase {
 
       // Transform parameters
       for (const param of params) {
+        // SECURITY: same GraphQL-boundary BaseView screen as RunViewGenericInternal.
+        this.screenClientViewClauses(
+          {
+            extraFilter: param.extraFilter,
+            orderBy: param.orderBy,
+            userSearchString: param.userSearchString,
+            overrideExcludeFilter: param.overrideExcludeFilter,
+          },
+          md,
+          contextUser ?? undefined,
+        );
+
         if (param.viewInfo) {
           // Validate entity only once per entity type
           const entityName = param.viewInfo.Entity;
