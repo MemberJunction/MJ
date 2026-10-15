@@ -952,6 +952,8 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
         const sampleRate = this.resolveSampleRate(config);
         this.playback = this.createPlayback(sampleRate);
+        // Publish client-owned PCM output so recordings include the agent voice.
+        this.publishRemoteMediaStream(this.playback.GetOutputStream?.() ?? null);
         this.micCapture = await this.createMicCapture(micStream, sampleRate, (base64Pcm16) => this.sendMicChunk(base64Pcm16));
         // Audio-activity capability (base obligation #9): agent side taps the playout engine's
         // master gain; user side meters the mic stream. Null-safe — test fakes / no-WebAudio
@@ -981,6 +983,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         this.micCapture = null;
         this.playback?.Close();
         this.playback = null;
+        this.clearRemoteMediaStream();
         if (this.socket) {
             try {
                 this.socket.close();
