@@ -7,7 +7,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
     UserInfo: class {},
-    EntityInfo: class {},
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -62,26 +61,15 @@ vi.mock('@memberjunction/core-entities', () => ({
 import { AIPromptExtension, AIPromptConfig } from '../extensions/AIPrompt.extension';
 import { AIEngine } from '@memberjunction/aiengine';
 import { MJGlobal } from '@memberjunction/global';
-import { LogError, UserInfo, EntityInfo } from '@memberjunction/core';
-import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
-import type { NunjucksCallback } from '../extensions/TemplateExtensionBase';
-
-/** A model row for the mocked AI engine: an entity instance (the entity class is mocked) carrying the given fields. */
-const aiModel = (fields: Record<string, string | number>): MJAIModelEntityExtended => Object.assign(new MJAIModelEntityExtended(new EntityInfo()), fields);
-
-/** Exposes the extension's protected members to the tests. */
-class ExposedAIPromptExtension extends AIPromptExtension {
-    public get VendorName(): string { return this.DefaultAIVendorName; }
-    public FindModel(vendorName: string, contextUser: UserInfo): Promise<MJAIModelEntityExtended> { return this.GetAIModel(vendorName, contextUser); }
-}
+import { LogError } from '@memberjunction/core';
 
 describe('AIPromptExtension', () => {
-    let extension: ExposedAIPromptExtension;
-    const contextUser = Object.assign(new UserInfo(), { ID: 'user-1', Name: 'Test' });
+    let extension: AIPromptExtension;
+    const contextUser = { ID: 'user-1', Name: 'Test' };
 
     beforeEach(() => {
         vi.clearAllMocks();
-        extension = new ExposedAIPromptExtension(contextUser);
+        extension = new AIPromptExtension(contextUser as unknown as Record<string, Function>);
     });
 
     describe('constructor', () => {
@@ -163,17 +151,17 @@ describe('AIPromptExtension', () => {
                 }),
             };
 
-            vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockReturnValue(mockLLM);
+            (MJGlobal.Instance.ClassFactory.CreateInstance as ReturnType<typeof vi.fn>).mockReturnValue(mockLLM);
 
             // Set up a model in AIEngine
-            const testModel = aiModel({
+            const testModel = {
                 Name: 'gpt-4',
                 APIName: 'gpt-4',
                 DriverClass: 'OpenAILLM',
                 APINameOrName: 'gpt-4',
-            });
-            AIEngine.Instance.Models.length = 0;
-            AIEngine.Instance.Models.push(testModel);
+            };
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).length = 0;
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).push(testModel);
 
             const context = {};
             const params = { AIModel: 'gpt-4', AllowFormatting: false };
@@ -190,7 +178,7 @@ describe('AIPromptExtension', () => {
         });
 
         it('should call callback with error when specified model is not found', async () => {
-            AIEngine.Instance.Models.length = 0;
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).length = 0;
 
             const context = {};
             const params = { AIModel: 'nonexistent-model' };
@@ -205,15 +193,28 @@ describe('AIPromptExtension', () => {
             expect(LogError).toHaveBeenCalled();
         });
 
+        it('should call callback with error when the model returns a failed result', async () => {
+            const mockLLM = { ChatCompletion: vi.fn().mockResolvedValue({ success: false, errorMessage: 'quota exceeded' }) };
+            (MJGlobal.Instance.ClassFactory.CreateInstance as ReturnType<typeof vi.fn>).mockReturnValue(mockLLM);
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).length = 0;
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).push({ Name: 'gpt-4', APIName: 'gpt-4', DriverClass: 'OpenAILLM', APINameOrName: 'gpt-4' });
+            const callback = vi.fn();
+
+            extension.run({}, { AIModel: 'gpt-4' }, () => 'Some prompt', callback);
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            expect(callback).toHaveBeenCalledWith(null, expect.objectContaining({ message: "AI prompt failed on model 'gpt-4': quota exceeded" }));
+        });
+
         it('should use highest power model when AIModel not specified', async () => {
-            const fallbackModel = aiModel({
+            const fallbackModel = {
                 Name: 'Groq-LLaMA',
                 APIName: 'llama-3.1',
                 DriverClass: 'GroqLLM',
                 APINameOrName: 'llama-3.1',
-            });
+            };
 
-            vi.mocked(AIEngine.Instance.GetHighestPowerModel).mockResolvedValue(fallbackModel);
+            (AIEngine.Instance.GetHighestPowerModel as ReturnType<typeof vi.fn>).mockResolvedValue(fallbackModel);
 
             const mockLLM = {
                 ChatCompletion: vi.fn().mockResolvedValue({
@@ -223,7 +224,7 @@ describe('AIPromptExtension', () => {
                     },
                 }),
             };
-            vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockReturnValue(mockLLM);
+            (MJGlobal.Instance.ClassFactory.CreateInstance as ReturnType<typeof vi.fn>).mockReturnValue(mockLLM);
 
             const context = {};
             const params = {}; // No AIModel specified
@@ -249,16 +250,16 @@ describe('AIPromptExtension', () => {
                     },
                 }),
             };
-            vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockReturnValue(mockLLM);
+            (MJGlobal.Instance.ClassFactory.CreateInstance as ReturnType<typeof vi.fn>).mockReturnValue(mockLLM);
 
-            const testModel = aiModel({
+            const testModel = {
                 Name: 'test-model',
                 APIName: 'test-model',
                 DriverClass: 'TestLLM',
                 APINameOrName: 'test-model',
-            });
-            AIEngine.Instance.Models.length = 0;
-            AIEngine.Instance.Models.push(testModel);
+            };
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).length = 0;
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).push(testModel);
 
             const context = {};
             const params = { AIModel: 'test-model', AllowFormatting: 'true' };
@@ -284,16 +285,16 @@ describe('AIPromptExtension', () => {
                     },
                 }),
             };
-            vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockReturnValue(mockLLM);
+            (MJGlobal.Instance.ClassFactory.CreateInstance as ReturnType<typeof vi.fn>).mockReturnValue(mockLLM);
 
-            const testModel = aiModel({
+            const testModel = {
                 Name: 'test-model',
                 APIName: 'test',
                 DriverClass: 'TestLLM',
                 APINameOrName: 'test',
-            });
-            AIEngine.Instance.Models.length = 0;
-            AIEngine.Instance.Models.push(testModel);
+            };
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).length = 0;
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).push(testModel);
 
             const context = {};
             const params = { aimodel: 'test-model', allowformatting: 'false' };
@@ -318,16 +319,16 @@ describe('AIPromptExtension', () => {
                     },
                 }),
             };
-            vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockReturnValue(mockLLM);
+            (MJGlobal.Instance.ClassFactory.CreateInstance as ReturnType<typeof vi.fn>).mockReturnValue(mockLLM);
 
-            const testModel = aiModel({
+            const testModel = {
                 Name: 'test-model',
                 APIName: 'test',
                 DriverClass: 'TestLLM',
                 APINameOrName: 'test',
-            });
-            AIEngine.Instance.Models.length = 0;
-            AIEngine.Instance.Models.push(testModel);
+            };
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).length = 0;
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).push(testModel);
 
             const context = {};
             const params = { AIModel: 'test-model' };
@@ -348,16 +349,16 @@ describe('AIPromptExtension', () => {
                     data: { choices: [{ message: { content: 'ok' } }] },
                 }),
             };
-            vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockReturnValue(mockLLM);
+            (MJGlobal.Instance.ClassFactory.CreateInstance as ReturnType<typeof vi.fn>).mockReturnValue(mockLLM);
 
-            const testModel = aiModel({
+            const testModel = {
                 Name: 'mymodel',
                 APIName: 'mymodel',
                 DriverClass: 'TestLLM',
                 APINameOrName: 'mymodel',
-            });
-            AIEngine.Instance.Models.length = 0;
-            AIEngine.Instance.Models.push(testModel);
+            };
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).length = 0;
+            (AIEngine.Instance.Models as Array<Record<string, unknown>>).push(testModel);
 
             const context = {};
             // Using mixed case with spaces in key names
@@ -375,7 +376,7 @@ describe('AIPromptExtension', () => {
 
     describe('DefaultAIVendorName', () => {
         it('should return OpenAI', () => {
-            const name = extension.VendorName;
+            const name = (extension as Record<string, unknown>)['DefaultAIVendorName'];
             expect(name).toBe('OpenAI');
         });
     });
@@ -388,10 +389,9 @@ describe('AIPromptExtension', () => {
                 { AIModelType: 'embedding', Vendor: 'OpenAI', PowerRank: 200, Name: 'model-C' },
             ];
 
-            AIEngine.Instance.Models.length = 0;
-            AIEngine.Instance.Models.push(...models.map(aiModel));
+            (AIEngine.Instance as Record<string, unknown>).Models = models;
 
-            const result = await extension.FindModel('OpenAI', contextUser);
+            const result = await (extension as unknown as Record<string, Function>)['GetAIModel']('OpenAI', contextUser);
 
             expect(result).toBeDefined();
             expect(result.Name).toBe('model-B'); // Highest PowerRank among LLMs
@@ -414,52 +414,5 @@ describe('AIPromptConfig', () => {
         const config: AIPromptConfig = {};
         expect(config.AIModel).toBeUndefined();
         expect(config.AllowFormatting).toBeUndefined();
-    });
-});
-
-describe('AIPromptExtension failures always answer the render callback', () => {
-    /** What the render callback received, or 'hung' when it was not called within the wait. */
-    type CallbackOutcome = { Error: Error | null; Result: string | Error } | 'hung';
-
-    /** Runs the extension and waits up to one second for its callback: a render waits on it forever otherwise. */
-    const runAndAwaitCallback = (extension: AIPromptExtension): Promise<CallbackOutcome> =>
-        new Promise((resolve) => {
-            const timer = setTimeout(() => resolve('hung'), 1000);
-            const callBack: NunjucksCallback = (err, result) => { clearTimeout(timer); resolve({ Error: err, Result: result }); };
-            extension.run({}, {}, () => 'Write a greeting', callBack);
-        });
-    const model = (): MJAIModelEntityExtended => aiModel({ Name: 'Test Model', DriverClass: 'TestLLM', APINameOrName: 'test-model' });
-
-    beforeEach(() => {
-        vi.clearAllMocks();
-        vi.mocked(AIEngine.Instance.Config).mockResolvedValue(undefined);
-        vi.mocked(AIEngine.Instance.GetHighestPowerModel).mockResolvedValue(model());
-    });
-
-    it('a failed ChatResult reaches the callback as an error naming the model and the vendor message, and is logged', async () => {
-        vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockReturnValue({ ChatCompletion: async () => ({ success: false, errorMessage: 'vendor refused the call' }) });
-        const outcome = await runAndAwaitCallback(new AIPromptExtension(Object.assign(new UserInfo(), { ID: 'u', Name: 'User' })));
-        expect(outcome).not.toBe('hung');
-        if (outcome !== 'hung') {
-            expect(outcome.Result).toBeInstanceOf(Error);
-            expect(String(outcome.Result)).toContain("'Test Model'");
-            expect(String(outcome.Result)).toContain('vendor refused the call');
-        }
-        expect(LogError).toHaveBeenCalledTimes(1);
-    });
-
-    it('a failed AI engine load reaches the callback too', async () => {
-        vi.mocked(AIEngine.Instance.Config).mockRejectedValue(new Error('engine load failed'));
-        const outcome = await runAndAwaitCallback(new AIPromptExtension(Object.assign(new UserInfo(), { ID: 'u', Name: 'User' })));
-        expect(outcome).not.toBe('hung');
-        if (outcome !== 'hung') {
-            expect(String(outcome.Result)).toContain('engine load failed');
-        }
-    });
-
-    it('a successful result still reaches the callback once, with the response', async () => {
-        vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockReturnValue({ ChatCompletion: async () => ({ success: true, data: { choices: [{ message: { content: 'Hello &amp; welcome' } }] } }) });
-        const outcome = await runAndAwaitCallback(new AIPromptExtension(Object.assign(new UserInfo(), { ID: 'u', Name: 'User' })));
-        expect(outcome).toEqual({ Error: null, Result: 'Hello & welcome' });
     });
 });

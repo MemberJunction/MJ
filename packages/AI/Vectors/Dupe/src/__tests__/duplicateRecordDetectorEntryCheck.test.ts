@@ -144,10 +144,6 @@ vi.mock('@memberjunction/ai-vector-sync', () => ({
     // Rendering's related-data step is covered by duplicateRecordDetectorTemplateText.test.ts;
     // here each record renders its own values, as for a template with no Entity params.
     EntityDocumentTemplateDataBuilder: class {
-        // The shared render sync and detection both use; it renders through the template engine double.
-        static RenderDocumentText(template: object, content: object, data: Record<string, unknown>) {
-            return mocks.RenderTemplate(template, content, data);
-        }
         LoadRelatedData = vi.fn().mockResolvedValue([]);
         MissingRelatedParams = vi.fn().mockReturnValue([]);
         BuildTemplateData = vi.fn((_entity: unknown, record: Record<string, unknown>) => ({ ...record }));
@@ -163,11 +159,7 @@ vi.mock('@memberjunction/templates', () => ({
         Instance: {
             Config: vi.fn().mockResolvedValue(undefined),
             SetupNunjucks: vi.fn(),
-            Templates: [{
-                ID: 'template-1',
-                Content: [{ ID: 'template-content-1' }],
-                GetHighestPriorityContent() { return this.Content[0]; },
-            }],
+            Templates: [{ ID: 'template-1', Content: [{ ID: 'template-content-1' }] }],
             RenderTemplate: mocks.RenderTemplate,
         },
     },
@@ -247,7 +239,7 @@ const ENTITY_INFO = new EntityInfo({
 /** A concrete entity class for the unsaved record, as `GetEntityObject` would return. */
 class AccountRecord extends BaseEntity {}
 
-const USER = new UserInfo(undefined, { ID: 'user-1', Email: 'person@example.com' });
+const USER = new UserInfo(null, { ID: 'user-1', Email: 'person@example.com' });
 
 const ROWS: Record<string, AccountRow> = {
     'cand-a': { ID: 'cand-a', Name: 'Acme Corp', City: 'Boston' },

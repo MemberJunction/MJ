@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { IMetadataProvider } from '@memberjunction/core';
-import type { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 
 /**
  * `VectorizeEntity` must address the vector index on the provider by the name the
@@ -56,11 +55,7 @@ vi.mock('@memberjunction/templates', () => ({
         Instance: {
             Config: vi.fn(),
             SetupNunjucks: vi.fn(),
-            Templates: [{
-                ID: IDS.template,
-                Content: [{ TemplateText: '{{ Name }}' }],
-                GetHighestPriorityContent() { return this.Content[0]; },
-            }],
+            Templates: [{ ID: IDS.template, Content: [{ TemplateText: '{{ Name }}' }] }],
         },
     },
 }));
@@ -99,29 +94,5 @@ describe('EntityVectorSyncer.VectorizeEntity index name', () => {
         expect(aiEngine.GetProviderIndexName).toHaveBeenCalledWith(VECTOR_INDEX);
         expect(createVectorUpserter).toHaveBeenCalledTimes(1);
         expect((createVectorUpserter.mock.calls[0] as unknown[])[3]).toBe('morecheese-content');
-    });
-});
-
-/** Exposes the protected rendered-content guard. */
-class RenderedContentProbe extends EntityVectorSyncer {
-    public static Of(template: MJTemplateEntityExtended): MJTemplateContentEntity {
-        return EntityVectorSyncer.RenderedContentOf(template);
-    }
-}
-
-/** A template double: the two members the guard reads. */
-function templateWith(content: MJTemplateContentEntity | undefined): MJTemplateEntityExtended {
-    const double: Pick<MJTemplateEntityExtended, 'ID' | 'GetHighestPriorityContent'> = { ID: 'tpl-x', GetHighestPriorityContent: () => content };
-    return double as MJTemplateEntityExtended;
-}
-
-describe('EntityVectorSyncer.RenderedContentOf', () => {
-    it('refuses a template with no content: nothing can be vectorized from it', () => {
-        expect(() => RenderedContentProbe.Of(templateWith(undefined))).toThrow('Template tpl-x does not have an associated Template Content record');
-    });
-
-    it('returns the content the template renders', () => {
-        const content = { TemplateText: '{{ Name }}' } as MJTemplateContentEntity; // only the text is read downstream
-        expect(RenderedContentProbe.Of(templateWith(content))).toBe(content);
     });
 });

@@ -103,7 +103,7 @@ export class AutotagRSSFeed extends AutotagBase {
         LogStatus(`[RSS] Parsed ${allRSSItems.length} items from "${contentSource.Name}"`);
 
         // Load existing content items for upsert by URL
-        const existingItems = await this.LoadExistingContentItems(contentSourceParams.contentSourceID);
+        const existingItems = await this.loadExistingContentItems(contentSourceParams.contentSourceID);
         LogStatus(`[RSS] ${existingItems.size} existing items for "${contentSource.Name}"`);
 
         const items: MJContentItemEntity[] = [];
@@ -300,22 +300,24 @@ export class AutotagRSSFeed extends AutotagBase {
     /**
      * Load existing ContentItems for this source, keyed by lowercase URL for upsert.
      */
-    protected async LoadExistingContentItems(contentSourceID: string): Promise<Map<string, MJContentItemEntity>> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    private async loadExistingContentItems(contentSourceID: string): Promise<Map<string, MJContentItemEntity>> {
+        const rv = new RunView();
         const result = await rv.RunView<MJContentItemEntity>({
             EntityName: 'MJ: Content Items',
             ExtraFilter: `ContentSourceID='${contentSourceID}'`,
             ResultType: 'entity_object'
         }, this.contextUser);
-
         if (!result.Success) {
-            // An empty map would make every item look new and create a second content item for each
+            // an empty map would make every item look new and create a second content item for each
             throw new Error(`could not read the existing content items of source ${contentSourceID}: ${result.ErrorMessage}`);
         }
+
         const map = new Map<string, MJContentItemEntity>();
-        for (const ci of result.Results) {
-            if (ci.URL) {
-                map.set(ci.URL.toLowerCase(), ci);
+        if (result.Success) {
+            for (const ci of result.Results) {
+                if (ci.URL) {
+                    map.set(ci.URL.toLowerCase(), ci);
+                }
             }
         }
         return map;

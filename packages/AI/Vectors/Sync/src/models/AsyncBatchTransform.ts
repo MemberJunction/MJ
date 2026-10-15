@@ -20,7 +20,7 @@ export type AsyncBatchTransformOptions<TRecord, TContext, TResult> = {
  * A Transform stream that batches records and processes them asynchronously
  * in the main thread using a concurrency-limited queue.
  *
- * It runs in the main thread rather than in worker threads because of the ClassFactory
+ * This replaces the worker_threads-based BatchWorker to solve the ClassFactory
  * registration issue: worker threads run in separate V8 isolates and don't
  * share the main thread's class registrations, causing CreateInstance() to
  * return null. Since the bottleneck is I/O (embedding API calls, vector DB

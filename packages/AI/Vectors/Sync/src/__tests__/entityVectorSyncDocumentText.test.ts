@@ -79,7 +79,7 @@ vi.mock('@memberjunction/templates', () => ({
       Config: vi.fn(),
       Templates: [],
       SetupNunjucks: vi.fn(),
-      RenderTemplate: (template: unknown, content: unknown, data: Record<string, unknown>) => renderTemplateMock(template, content, data),
+      RenderTemplate: (...args: [unknown, unknown, Record<string, unknown>, boolean, boolean]) => renderTemplateMock(...args),
     },
   },
 }));

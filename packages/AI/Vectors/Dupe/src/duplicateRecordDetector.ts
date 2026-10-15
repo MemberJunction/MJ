@@ -48,7 +48,7 @@ import { CombineExtraFilters, EntityDocumentTemplateDataBuilder, EntityVectorSyn
 import { AIEngine } from "@memberjunction/aiengine";
 import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
-import type { MJTemplateEntityExtended } from "@memberjunction/core-entities";
+import type { MJTemplateEntityExtended, MJTemplateContentEntity } from "@memberjunction/core-entities";
 import {
     DuplicateReasoningProvider,
     DECISION_REASONING_PROVIDER_KEY,
@@ -352,12 +352,12 @@ export class DuplicateRecordDetector extends VectorBase {
             }
 
             const batchIDs = recordIDs.slice(offset, offset + batchSize);
-            const batchResults = await this.ProcessBatch(
+            const batchResults = await this.processBatch(
                 batchIDs, entityInfo, entityDocument, templateParser, duplicateRun.ID,
                 topK, concurrency, options, startTime, recordIDs.length, offset, totalMatchesFound, contextUser
             );
             // Retain a bounded sample for the response, and collect the auto-merge queue.
-            // Everything in batchResults.Results is already persisted (ProcessBatch writes the
+            // Everything in batchResults.Results is already persisted (processBatch writes the
             // Detail and Detail Match rows), so dropping the overflow loses no data — only the
             // in-memory copy that used to grow for the whole run.
             totalRecordsWithDuplicates += batchResults.Results.length;
@@ -487,15 +487,14 @@ export class DuplicateRecordDetector extends VectorBase {
      * @param entityName the entity the new record belongs to
      * @param values the entered values by field name; fields the entity does not have are ignored
      * @param contextUser the person entering the record. Required: the candidates are narrowed to the
-     *   records this user can read, and without a user (null, e.g. an unauthenticated caller) the check fails rather
-     *   than skip that step.
+     *   records this user can read, and without a user the check fails rather than skip that step.
      * @param options overrides for TopK and the potential-match threshold, the budget and cancellation
      * @returns the flagged candidates, most probable first, or why there are none
      */
     public async CheckRecordValues(
         entityName: string,
         values: Record<string, unknown>,
-        contextUser: UserInfo | null,
+        contextUser: UserInfo,
         options?: DuplicateEntryCheckOptions
     ): Promise<DuplicateEntryCheckResult> {
         const startTime = Date.now();
@@ -861,7 +860,7 @@ export class DuplicateRecordDetector extends VectorBase {
      * @param contextUser - The user context for entity operations
      * @returns Combined results and match count for this batch
      */
-    protected async ProcessBatch(
+    private async processBatch(
         batchIDs: string[],
         entityInfo: EntityInfo,
         entityDocument: MJEntityDocumentEntity,
@@ -1329,8 +1328,7 @@ export class DuplicateRecordDetector extends VectorBase {
      * different document than the stored one and genuine duplicates fall below the threshold. So
      * the template is rendered exactly as sync renders it: from the row RunView returns for the
      * record ({@link LoadTemplateRows}), with every `Entity` param's related rows (a person's
-     * Phones, Emails...), built by the same {@link EntityDocumentTemplateDataBuilder} sync uses and
-     * rendered by the same {@link EntityDocumentTemplateDataBuilder.RenderDocumentText}.
+     * Phones, Emails...), through the same {@link EntityDocumentTemplateDataBuilder} sync uses.
      *
      * @throws when a related param's rows can't be loaded: a query rendered without them can't
      * match the stored text, and would quietly miss the duplicates the run exists to find
@@ -1343,10 +1341,7 @@ export class DuplicateRecordDetector extends VectorBase {
     ): Promise<string[]> {
         await TemplateEngineServer.Instance.Config(false, contextUser);
         const template = this.loadTemplate(entityDocument);
-        const templateContent = template.GetHighestPriorityContent(); // the content the template renders
-        if (!templateContent) {
-            throw new Error(`Template ${template.ID} has no content records`);
-        }
+        const templateContent = template.Content[0] as MJTemplateContentEntity;
         TemplateEngineServer.Instance.SetupNunjucks();
         if (records.length === 0) {
             return [];
@@ -1367,8 +1362,12 @@ export class DuplicateRecordDetector extends VectorBase {
         const templateTexts: string[] = [];
         for (const [index, record] of records.entries()) {
             const data = dataBuilder.BuildTemplateData(entityInfo, rows[index], template, relatedData);
-            // The render sync stores with, so the query text is the stored text.
-            const result = await EntityDocumentTemplateDataBuilder.RenderDocumentText(template, templateContent, data);
+
+            // Skip validation and suppress its warnings, as sync does: records commonly have null
+            // fields, and the templates handle them with {% if %} conditionals.
+            const result = await TemplateEngineServer.Instance.RenderTemplate(
+                template, templateContent, data, true, true
+            );
 
             if (result.Success) {
                 templateTexts.push(result.Output);
@@ -1419,6 +1418,9 @@ export class DuplicateRecordDetector extends VectorBase {
 
         if (!template) {
             throw new Error(`Template not found for ID ${entityDocument.TemplateID}`);
+        }
+        if (template.Content.length === 0) {
+            throw new Error(`Template ${template.ID} has no content records`);
         }
         return template;
     }

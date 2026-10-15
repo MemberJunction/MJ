@@ -1,6 +1,6 @@
 # @memberjunction/ai-vector-sync
 
-Synchronizes MemberJunction entity records with vector databases by transforming records into embeddings through a template-based pipeline. Handles batch processing, concurrency-limited pipeline stages, Entity Document management, and Entity Record Document tracking.
+Synchronizes MemberJunction entity records with vector databases by transforming records into embeddings through a template-based pipeline. Handles batch processing, worker-based parallelism, Entity Document management, and Entity Record Document tracking.
 
 ## Architecture
 
@@ -10,7 +10,7 @@ graph TD
         EVS["EntityVectorSyncer"]
         EDC["EntityDocumentCache"]
         EDTP["EntityDocumentTemplateParser"]
-        ABT["AsyncBatchTransform"]
+        BW["BatchWorker"]
     end
 
     subgraph Pipeline["Vectorization Pipeline"]
@@ -64,7 +64,7 @@ Key capabilities:
 
 - **Batch processing** with configurable sizes for fetching, embedding, and upserting
 - **Template-based text generation** using Entity Document templates that reference entity fields
-- **Concurrency-limited stream stages** (`AsyncBatchTransform`) for embedding and upsert operations
+- **Worker architecture** for concurrent embedding and upsert operations
 - **Entity Document caching** via a singleton cache to avoid repeated database lookups
 - **Default Entity Document creation** for entities that lack one
 - **Resume support** via `StartingOffset` for interrupted processes
@@ -77,8 +77,8 @@ sequenceDiagram
     participant Caller
     participant EVS as EntityVectorSyncer
     participant Cache as EntityDocumentCache
-    participant Engine as TemplateEngineServer
-    participant Stage as Pipeline stages (AsyncBatchTransform)
+    participant Parser as TemplateParser
+    participant Worker as BatchWorker
     participant Model as Embedding Model
     participant VDB as Vector Database
     participant DB as MJ Database
@@ -93,19 +93,19 @@ sequenceDiagram
     EVS->>DB: Fetch entity records (batch)
 
     loop For each batch
-        EVS->>Engine: RenderDocumentText for each record (raw, no HTML escaping)
-        Engine-->>EVS: Text strings
+        EVS->>Parser: Parse template for each record
+        Parser-->>EVS: Text strings
 
-        EVS->>Stage: Embed batch
-        Stage->>Model: RunEmbedding(texts)
-        Model-->>Stage: Embedding vectors
+        EVS->>Worker: VectorizeTemplates batch
+        Worker->>Model: createBatchEmbedding(texts)
+        Model-->>Worker: Embedding vectors
 
-        EVS->>Stage: Upsert batch
-        Stage->>VDB: CreateRecords(vectors)
-        VDB-->>Stage: Success/failure
+        EVS->>Worker: UpsertVectors batch
+        Worker->>VDB: createRecords(vectors)
+        VDB-->>Worker: Success/failure
 
-        EVS->>Stage: Create EntityRecordDocuments
-        Stage->>DB: Save tracking records
+        EVS->>Worker: Create EntityRecordDocuments
+        Worker->>DB: Save tracking records
     end
 
     EVS-->>Caller: VectorizeEntityResponse
@@ -163,9 +163,9 @@ Converts entity records into text strings by evaluating Entity Document template
 // Result: "Jane Doe works at Acme as Engineer"
 ```
 
-### AsyncBatchTransform
+### BatchWorker
 
-The pipeline stages: a stream Transform that batches records and runs each batch's work (render + embed, vector upsert, Entity Record Document writes) in the main thread under a concurrency limit. Configurable batch sizes allow tuning for memory and API rate limits.
+Handles the parallel execution of embedding generation, vector database upserts, and Entity Record Document creation. Configurable batch sizes allow tuning for memory and API rate limits.
 
 ## Usage
 
@@ -299,11 +299,6 @@ type EntitySyncConfig = {
 
 Templates define how entity records are transformed into text for embedding generation.
 
-Every record renders through `EntityDocumentTemplateDataBuilder.RenderDocumentText`, the same render duplicate
-detection queries with, so the query text always matches the stored text. The text renders raw, without HTML escaping:
-the model embeds `R&D <Lead>`, not `R&amp;D &lt;Lead&gt;`. Each `VectorizeEntity` run re-renders and re-embeds every
-record of the entity document, so text stored by an earlier escaping render is replaced on the next run.
-
 ```mermaid
 graph LR
     ED["Entity Document"] --> TMPL["Template<br/>${Field} syntax"]
@@ -362,7 +357,7 @@ CURRENT_USER_EMAIL=user@example.com
 
 - **Batch sizes**: Adjust `listBatchCount`, `VectorizeBatchCount`, and `UpsertBatchCount` based on available memory and API rate limits
 - **Long-running**: Full vectorization of large entities can take hours; use `StartingOffset` to resume
-- **Stage concurrency**: each `AsyncBatchTransform` stage runs a bounded number of batches at once
+- **Worker concurrency**: The BatchWorker processes embedding and upsert operations concurrently within each batch
 - **Caching**: `EntityDocumentCache` reduces database lookups for document metadata
 
 ## Development

@@ -1,8 +1,6 @@
 import { LogError } from '@memberjunction/core';
 import type { EntityInfo, RunView, UserInfo } from '@memberjunction/core';
-import type { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
-import { TemplateEngineServer } from '@memberjunction/templates';
-import type { TemplateRenderResult } from '@memberjunction/templates-base-types';
+import type { MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import type { TemplateParamData } from '../generic/vectorSync.types';
 
 /**
@@ -16,28 +14,6 @@ import type { TemplateParamData } from '../generic/vectorSync.types';
  * one stored, and duplicates that shared contact data fell below the match threshold.
  */
 export class EntityDocumentTemplateDataBuilder {
-  /**
-   * Renders one record's entity document text from the data {@link BuildTemplateData} built: the
-   * text vector sync embeds and stores, and the text duplicate detection embeds and queries with.
-   * Both render through this one method, so the two texts cannot drift apart.
-   *
-   * The text renders raw, without HTML escaping: an embedding model must read `R&D <Lead>`, not
-   * `R&amp;D &lt;Lead&gt;`. The raw render also offers the registered template extensions
-   * (`{% template %}` embeds, AI prompt tags), which the escaping environment vector sync used to
-   * rebuild left out. Text stored by the escaping render is replaced when vector sync next runs,
-   * since every run re-renders and re-embeds every record.
-   *
-   * Validation is skipped and its warnings suppressed: records commonly have null fields, and the
-   * templates handle them with `{% if %}` conditionals.
-   *
-   * @param template the entity document's template
-   * @param templateContent the content row the template renders
-   * @param data the record's template data
-   */
-  public static async RenderDocumentText(template: MJTemplateEntityExtended, templateContent: MJTemplateContentEntity, data: Record<string, unknown>): Promise<TemplateRenderResult> {
-    return TemplateEngineServer.Instance.RenderTemplate(template, templateContent, data, true, true, { autoescape: false });
-  }
-
   /**
    * @param runView the RunView to load related rows with, bound to the caller's provider
    * @param contextUser the user the related rows are loaded as

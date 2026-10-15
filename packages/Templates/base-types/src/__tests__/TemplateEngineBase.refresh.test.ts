@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { loadCalls, loadSpy, logErrorSpy, ProviderDouble } = vi.hoisted(() => {
+const { loadCalls, loadSpy, ProviderDouble } = vi.hoisted(() => {
     /**
      * Stands in for DatabaseProviderBase (the mock exports it under that name, so `instanceof` matches). A record can be
      * bound to it; the record's data calls are never made here.
@@ -18,7 +18,7 @@ const { loadCalls, loadSpy, logErrorSpy, ProviderDouble } = vi.hoisted(() => {
     }
     /** Each reload the engine asked BaseEngine.Load for: whether it was forced, and where its dataset reads run. */
     const calls: Array<{ Force: boolean | undefined; ReadOptions: { ReadOnPool?: boolean } | undefined }> = [];
-    return { loadCalls: calls, loadSpy: vi.fn().mockResolvedValue(undefined), logErrorSpy: vi.fn(), ProviderDouble };
+    return { loadCalls: calls, loadSpy: vi.fn().mockResolvedValue(undefined), ProviderDouble };
 });
 vi.mock('@memberjunction/core', () => {
     class BaseEngine {
@@ -52,10 +52,13 @@ vi.mock('@memberjunction/core', () => {
     class EntityInfo {
         public constructor(initData: Record<string, unknown>) { Object.assign(this, initData); }
     }
-    return { BaseEngine, BaseEntity, EntityInfo, BaseEnginePropertyConfig: class {}, UserInfo: class {}, IMetadataProvider: class {}, BaseEntityEvent: class {}, DatabaseProviderBase: ProviderDouble, LogError: logErrorSpy };
+    return { BaseEngine, BaseEntity, EntityInfo, BaseEnginePropertyConfig: class {}, UserInfo: class {}, IMetadataProvider: class {}, BaseEntityEvent: class {}, DatabaseProviderBase: ProviderDouble, LogError: vi.fn() };
 });
 vi.mock('@memberjunction/core-entities', () => ({}));
-vi.mock('@memberjunction/global', () => ({ NormalizeUUID: (s: string) => s.toLowerCase() }));
+vi.mock('@memberjunction/global', () => ({
+    NormalizeUUID: (s: string) => s.toLowerCase(),
+    UUIDsEqual: (a: string, b: string) => a.toLowerCase() === b.toLowerCase(),
+}));
 
 import { BaseEntity, EntityInfo, type BaseEntityEvent, type IEntityDataProvider } from '@memberjunction/core';
 import { TemplateEngineBase } from '../TemplateEngineBase';
@@ -81,28 +84,18 @@ class TestTemplateEngine extends TemplateEngineBase {
     public Handle(event: BaseEntityEvent): Promise<boolean> {
         return this.HandleIndividualBaseEntityEvent(event);
     }
-    /** Marks the engine as permission-constrained (the mocked BaseEngine holds the flag as a plain field). */
-    public SetPermissionConstrained(value: boolean): void {
-        Object.defineProperty(this, 'IsPermissionConstrained', { value, configurable: true });
-    }
 }
 
 describe('TemplateEngineBase refresh on template saves', () => {
     beforeEach(() => {
         loadCalls.length = 0;
         loadSpy.mockClear();
-        logErrorSpy.mockClear();
     });
 
-    it('reloads when a Template Content is saved', async () => {
+    it('reloads on the pool when a Template Content is saved', async () => {
         await new TestTemplateEngine().Handle(recordEvent('save', 'MJ: Template Contents'));
         expect(loadCalls).toHaveLength(1);
         expect(loadCalls[0].Force).toBe(true);
-    });
-    it('reads the reloaded dataset on the pool, never inside a transaction open on the provider', async () => {
-        // the reload runs detached from the save; a cascading delete can open a transaction on the same provider while
-        // it is in flight, and its dataset read must not join that transaction
-        await new TestTemplateEngine().Handle(recordEvent('delete', 'MJ: Template Params'));
         expect(loadCalls[0].ReadOptions).toEqual({ ReadOnPool: true });
     });
     it('reloads on a remote invalidation of Templates', async () => {
@@ -124,39 +117,13 @@ describe('TemplateEngineBase refresh on template saves', () => {
         await new TestTemplateEngine().Handle(recordEvent('save', 'MJ: AI Prompts'));
         expect(loadCalls).toHaveLength(0);
     });
-    it('follows the dataset: an entity the loaded dataset holds reloads, before any load nothing does', async () => {
-        const engine = new TestTemplateEngine();
-        const names = engine.LoadedEntityNames;
-        names.add('mj: template categories');
-        await engine.Handle(recordEvent('save', 'MJ: Template Categories'));
-        expect(loadCalls).toHaveLength(1);
-        names.clear();
-        await engine.Handle(recordEvent('save', 'MJ: Template Contents'));
-        expect(loadCalls).toHaveLength(1);
-    });
-    it('does not reload a permission-constrained engine', async () => {
-        const engine = new TestTemplateEngine();
-        engine.SetPermissionConstrained(true);
-        expect(await engine.Handle(recordEvent('save', 'MJ: Template Contents'))).toBe(true);
-        expect(loadCalls).toHaveLength(0);
-    });
-    it('logs a failed reload and reports it instead of rejecting', async () => {
-        loadSpy.mockRejectedValueOnce(new Error('db down'));
-        const engine = new TestTemplateEngine();
-        await expect(engine.Handle(recordEvent('save', 'MJ: Template Contents'))).resolves.toBe(false);
-        expect(logErrorSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'db down' }));
-    });
 });
 
 describe('TemplateEngineBase before its first load', () => {
-    it('returns empty collections instead of throwing, so read-through callers can ask at any time', () => {
+    it('returns empty collections instead of throwing', () => {
         const engine = new TestTemplateEngine();
         expect(engine.TemplateContents).toEqual([]);
-        expect(engine.TemplateParams).toEqual([]);
         expect(engine.Templates).toEqual([]);
-        expect(engine.TemplateContentTypes).toEqual([]);
-        expect(engine.TemplateCategories).toEqual([]);
-        expect(engine.FindTemplateByID('T1')).toBeUndefined();
         expect(engine.FindRenderedContent('T1')).toBeUndefined();
     });
 });

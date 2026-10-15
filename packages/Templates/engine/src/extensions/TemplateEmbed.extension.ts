@@ -26,10 +26,7 @@ export type TemplateEmbedConfig = {
     data?: any;
 };
 
-/**
- * The part of the nunjucks render context that holds the outer render's escape mode. nunjucks keeps an environment's
- * options at `env.opts` (`@types/nunjucks` calls them `options`, which does not exist at runtime).
- */
+/** The render context's escape mode; nunjucks keeps it at `env.opts` at runtime (`@types/nunjucks` says `options`). */
 type RenderEnvironmentView = { env?: { opts?: { autoescape?: boolean } } };
 
 /**
@@ -285,22 +282,14 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
         return { ...currentContext, ...additionalData };
     }
 
-    /**
-     * Whether the render that reached this tag HTML-escapes its output. A stored template rendered for a model runs in
-     * the engine's raw environment, and its embeds must render raw too, or an embedded `&` still arrives as `&amp;`.
-     * @param context the nunjucks render context the tag was called with
-     */
+    /** Whether the render that reached this tag escapes its output; an embed inside a raw render renders raw too. */
     protected static RendersEscaped(context: RenderEnvironmentView): boolean {
         return context.env?.opts?.autoescape !== false;
     }
 
     /**
-     * Renders the embedded template content with the provided data context, in the outer render's escape mode.
-     *
-     * An escaping render keeps the ad-hoc {@link TemplateEngineServer.RenderTemplateSimple} path. A raw render goes
-     * through {@link TemplateEngineServer.RenderTemplate} with `autoescape: false`, because that is the raw environment
-     * that carries the template extensions (so an embed inside a raw embed still works); unlike the escaping path it
-     * also applies the embedded template's parameter defaults to data the caller left out.
+     * Renders the embedded template content with the provided data context. A raw render goes through
+     * {@link TemplateEngineServer.RenderTemplate}, whose raw environment carries the extensions.
      */
     private async renderEmbeddedTemplate(
         templateEngine: TemplateEngineServer,

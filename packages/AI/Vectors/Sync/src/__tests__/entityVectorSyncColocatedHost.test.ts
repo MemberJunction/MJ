@@ -8,7 +8,7 @@
  * return the global provider itself.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Metadata, type IMetadataProvider } from '@memberjunction/core';
+import { Metadata, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import {
     VectorDBBase,
     type BaseResponse,
@@ -17,7 +17,6 @@ import {
     type ListVectorIDsResult,
 } from '@memberjunction/ai-vectordb';
 import { EntityVectorSyncer } from '../models/entityVectorSync';
-import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
 
 /** A concrete colocated VectorDBBase: only the colocated surface matters here. */
 class StubColocatedVectorDB extends VectorDBBase {
@@ -45,16 +44,14 @@ class StubColocatedVectorDB extends VectorDBBase {
 }
 
 /** Stands in for the SQL Server data provider, which is both the metadata provider and the colocated host. */
-class ColocatedHostProvider extends EntitiesOnlyProvider implements IColocatedVectorHost {
-    public readonly ColocatedDialect: IColocatedVectorHost['ColocatedDialect'] = 'sqlserver';
-    public readonly ColocatedSchema = '__mj';
-    public async RunColocatedSQL<T = Record<string, unknown>>(): Promise<T[]> {
-        return [];
-    }
-}
-
-function colocatedHostProvider(): ColocatedHostProvider {
-    return new ColocatedHostProvider([]);
+function colocatedHostProvider(): IMetadataProvider & IColocatedVectorHost {
+    return {
+        ColocatedDialect: 'sqlserver',
+        ColocatedSchema: '__mj',
+        RunColocatedSQL: async <T = Record<string, unknown>>() => [] as T[],
+        CurrentUser: new UserInfo(),
+        Entities: [],
+    } as IMetadataProvider & IColocatedVectorHost;
 }
 
 describe('EntityVectorSyncer colocated host wiring (#4910)', () => {

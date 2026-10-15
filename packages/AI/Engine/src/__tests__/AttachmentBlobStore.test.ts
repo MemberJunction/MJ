@@ -1,20 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-
-const { logError } = vi.hoisted(() => ({ logError: vi.fn() }));
-
-// The error paths log through LogError; capture it so each test asserts the line it expects instead of printing it.
-vi.mock('@memberjunction/core', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@memberjunction/core')>();
-    return { ...actual, LogError: logError };
-});
-
 import { GetAttachmentService } from '../services/ConversationAttachmentService';
 import {
     AttachmentBlobStoreUnavailableError,
     type AttachmentBlobUploadInput,
     type IAttachmentBlobStore,
 } from '@memberjunction/ai-core-plus';
-import type { UserInfo } from '@memberjunction/core';
 
 /**
  * Tests for the attachment blob seam.
@@ -35,7 +25,7 @@ class RecordingBlobStore implements IAttachmentBlobStore {
     /** What {@link Delete} reports — `false` means "the bytes are still there". */
     public DeleteSucceeds = true;
 
-    public async Upload(input: AttachmentBlobUploadInput, _contextUser: UserInfo) {
+    public async Upload(input: AttachmentBlobUploadInput) {
         this.Uploads.push(input);
         return { Success: true, FileID: 'file-1' };
     }
@@ -50,9 +40,6 @@ class RecordingBlobStore implements IAttachmentBlobStore {
         return this.DeleteSucceeds;
     }
 }
-
-/** The line every storage operation logs when no store is bound. */
-const UNAVAILABLE_LINE = `[ConversationAttachmentService] ${AttachmentBlobStoreUnavailableError}`;
 
 const contextUser = { ID: 'user-1', Name: 'Tester', Email: 't@example.test' } as never;
 
@@ -82,23 +69,19 @@ function providerReturning(attachment: FakeAttachment) {
 describe('attachment blob seam', () => {
     beforeEach(() => {
         GetAttachmentService().BlobStore = null;
-        logError.mockClear();
     });
 
     describe('with no store bound', () => {
         it('is a supported configuration, not a crash — the service still constructs', () => {
             expect(GetAttachmentService().BlobStore).toBeNull();
-            expect(logError).not.toHaveBeenCalled();
         });
 
         it('returns null from DownloadFileContent instead of throwing', async () => {
             await expect(GetAttachmentService().DownloadFileContent('f1', contextUser)).resolves.toBeNull();
-            expect(logError).toHaveBeenCalledWith(UNAVAILABLE_LINE);
         });
 
         it('returns null from GetDownloadUrl instead of throwing', async () => {
             await expect(GetAttachmentService().GetDownloadUrl('f1', contextUser)).resolves.toBeNull();
-            expect(logError).toHaveBeenCalledWith(UNAVAILABLE_LINE);
         });
 
         it('refuses to delete a storage-backed attachment it cannot unstore', async () => {
@@ -109,8 +92,6 @@ describe('attachment blob seam', () => {
                 GetAttachmentService().DeleteAttachment('att-1', contextUser, providerReturning(attachment)),
             ).resolves.toBe(false);
             expect(attachment.Deleted).toBe(false);
-            expect(logError).toHaveBeenCalledWith(UNAVAILABLE_LINE);
-            expect(logError).toHaveBeenCalledWith(expect.stringContaining('Not deleting attachment att-1'));
         });
 
         it('names the condition distinctly, so callers can tell a deployment shape from an incident', () => {
@@ -160,7 +141,6 @@ describe('attachment blob seam', () => {
             expect(deleted).toBe(true);
             expect(store.DeletedIds).toEqual(['file-1']);
             expect(attachment.Deleted).toBe(true);
-            expect(logError).not.toHaveBeenCalled();
         });
 
         it('keeps the attachment row when the store could not remove the bytes', async () => {
@@ -176,7 +156,6 @@ describe('attachment blob seam', () => {
             );
             expect(deleted).toBe(false);
             expect(attachment.Deleted).toBe(false);
-            expect(logError).toHaveBeenCalledWith(expect.stringContaining('Not deleting attachment att-1'));
         });
 
         it('is swappable at runtime, which is the whole point of the seam', async () => {

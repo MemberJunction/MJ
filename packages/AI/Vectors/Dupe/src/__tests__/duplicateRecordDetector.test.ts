@@ -151,7 +151,7 @@ vi.mock('@memberjunction/core', () => {
         PotentialDuplicateResult: class {
             Duplicates: unknown[] = [];
             EntityID = '';
-            RecordCompositeKey: { ToString: () => string; Values: () => string; KeyValuePairs: { FieldName: string; Value: string }[] } | null = null;
+            RecordCompositeKey = null;
             DuplicateRunDetailMatchRecordIDs: unknown[] = [];
             constructor() {
                 this.RecordCompositeKey = { ToString: () => 'key-1', Values: () => 'key-1', KeyValuePairs: [] };
@@ -269,6 +269,14 @@ vi.mock('@memberjunction/ai-vectors', () => {
                     Fields: [],
                     AllowRecordMerge: false,
                 }),
+                EntityByName: vi.fn().mockReturnValue({
+                    ID: 'entity-1',
+                    Name: 'Contacts',
+                    FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+                    PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+                    Fields: [],
+                    AllowRecordMerge: false,
+                }),
                 // ProcessAutoMerges consults the entity's merge policy by NAME.
                 EntityByName: vi.fn().mockReturnValue({
                     ID: 'entity-1', Name: 'Contacts', AllowRecordMerge: true,
@@ -308,8 +316,6 @@ vi.mock('@memberjunction/ai-vector-sync', () => {
         // Rendering's related-data step is covered by duplicateRecordDetectorTemplateText.test.ts;
         // here each record renders its own values, as for a template with no Entity params.
         EntityDocumentTemplateDataBuilder: class {
-            // The shared render sync and detection both use.
-            static RenderDocumentText = vi.fn().mockResolvedValue({ Success: true, Output: 'rendered template text' });
             LoadRelatedData = vi.fn().mockResolvedValue([]);
             MissingRelatedParams = vi.fn().mockReturnValue([]);
             BuildTemplateData = vi.fn((_entity: unknown, record: Record<string, unknown>) => ({ ...record }));
@@ -354,7 +360,6 @@ vi.mock('@memberjunction/templates', () => ({
             Templates: [{
                 ID: 'tmpl-1',
                 Content: [{ TemplateText: '{{Name}}' }],
-                GetHighestPriorityContent() { return this.Content[0]; },
                 Params: [{ Name: 'Entity', Type: 'Record' }],
             }],
             RenderTemplate: vi.fn().mockResolvedValue({ Success: true, Output: 'rendered template text' }),
@@ -367,8 +372,7 @@ vi.mock('@memberjunction/templates', () => ({
 // ─────────────────────────────────────────────
 
 import { DuplicateRecordDetector } from '../duplicateRecordDetector';
-import { CompositeKey, PotentialDuplicateRequest, UserInfo, type BaseEntity, type EntityInfo, type IMetadataProvider, type PotentialDuplicate, type PotentialDuplicateResult, type RecordMergeResult } from '@memberjunction/core';
-import type { MJDuplicateRunEntity, MJEntityDocumentEntity } from '@memberjunction/core-entities';
+import { CompositeKey, PotentialDuplicateRequest, UserInfo } from '@memberjunction/core';
 
 describe('DuplicateRecordDetector', () => {
     let detector: DuplicateRecordDetector;
@@ -447,6 +451,44 @@ describe('DuplicateRecordDetector', () => {
             expect(result.Duplicates).toEqual([]);
         });
 
+        // Every record is its own nearest neighbor (cosine ~1.0), so the source record itself
+        // comes back as the top vector match. It must be dropped at parse time — a record can
+        // never be its own duplicate. The in-process SVS provider returns BARE primary-key values
+        // as metadata.RecordID, which is the shape that previously slipped past the Equals-based
+        // filter (empty/length-mismatched candidate key → Equals returns false → self-match kept).
+        it('should drop the source record itself (bare-PK self-match) at parse time', () => {
+            const sourceKey = {
+                KeyValuePairs: [{ FieldName: 'ID', Value: 'rec-1' }],
+                Values: () => 'rec-1',
+                ToString: () => 'ID|rec-1',
+            };
+            const queryResponse = {
+                success: true, message: 'ok',
+                data: {
+                    matches: [
+                        { id: 'm1', score: 1.0, metadata: { RecordID: 'rec-1', Entity: 'Contacts', TemplateID: 't-1' } }, // self
+                        { id: 'm2', score: 0.85, metadata: { RecordID: 'rec-2', Entity: 'Contacts', TemplateID: 't-1' } },
+                    ],
+                },
+            };
+            const result = (detector as never)['ParseVectorMatches'](queryResponse, sourceKey);
+            expect(result.Duplicates).toHaveLength(1);
+            expect(result.Duplicates[0].KeyValuePairs[0].Value).toBe('rec-2');
+        });
+
+        it('should drop the self-match even when the source RecordID differs only in UUID casing', () => {
+            const sourceKey = {
+                KeyValuePairs: [{ FieldName: 'ID', Value: 'ABC-123' }],
+                Values: () => 'ABC-123',
+                ToString: () => 'ID|ABC-123',
+            };
+            const queryResponse = {
+                success: true, message: 'ok',
+                data: { matches: [{ id: 'm1', score: 1.0, metadata: { RecordID: 'abc-123', Entity: 'Contacts', TemplateID: 't-1' } }] },
+            };
+            const result = (detector as never)['ParseVectorMatches'](queryResponse, sourceKey);
+            expect(result.Duplicates).toHaveLength(0);
+        });
     });
 
     describe('GetDuplicateRecords', () => {
@@ -549,6 +591,62 @@ describe('DuplicateRecordDetector', () => {
         });
     });
 
+    describe('FilterSelfMatches', () => {
+        /** Key fixture with the REAL CompositeKey.Equals semantics (case-insensitive KVP compare). */
+        function makeKey(id: string) {
+            return {
+                KeyValuePairs: [{ FieldName: 'ID', Value: id }],
+                ToString: () => 'ID|' + id,
+                Values: () => id,
+                Equals(other: { KeyValuePairs: { FieldName: string; Value: string }[] }): boolean {
+                    const a = this.KeyValuePairs, b = other?.KeyValuePairs ?? [];
+                    return a.length === b.length && a.every((kv, i) =>
+                        kv.FieldName.toLowerCase() === b[i].FieldName.toLowerCase() &&
+                        String(kv.Value).toLowerCase() === String(b[i].Value).toLowerCase());
+                }
+            };
+        }
+        function makeDup(score: number, id: string) {
+            return { ProbabilityScore: score, LoadFromConcatenatedString: vi.fn(), ...makeKey(id) };
+        }
+
+        it('should remove matches whose composite key matches the source key', () => {
+            const sourceKey = makeKey('abc-123');
+            // self-match deliberately differs in CASE — the Equals-based filter must still catch it
+            const duplicates = [makeDup(0.95, 'ABC-123'), makeDup(0.88, 'def-456')];
+
+            const result = (detector as never)['FilterSelfMatches'](duplicates, sourceKey);
+            expect(result).toHaveLength(1);
+            expect(result[0].ProbabilityScore).toBe(0.88);
+        });
+
+        it('should return all matches when none match the source key', () => {
+            const sourceKey = makeKey('source-1');
+            const duplicates = [makeDup(0.9, 'match-1'), makeDup(0.8, 'match-2')];
+
+            const result = (detector as never)['FilterSelfMatches'](duplicates, sourceKey);
+            expect(result).toHaveLength(2);
+        });
+
+        it('should return empty array when all matches are self-matches', () => {
+            const sourceKey = makeKey('self-1');
+            const duplicates = [makeDup(0.99, 'self-1')];
+
+            const result = (detector as never)['FilterSelfMatches'](duplicates, sourceKey);
+            expect(result).toHaveLength(0);
+        });
+
+        it('should handle empty duplicates array', () => {
+            const sourceKey = {
+                ToString: () => 'ID|any-key',
+                Values: () => 'any-key',
+                KeyValuePairs: [],
+            };
+            const result = (detector as never)['FilterSelfMatches']([], sourceKey);
+            expect(result).toHaveLength(0);
+        });
+    });
+
     describe('_seenPairs deduplication', () => {
         it('should allow the first occurrence of a pair', () => {
             // Access the private _seenPairs via bracket notation
@@ -607,6 +705,226 @@ describe('DuplicateRecordDetector', () => {
             };
             await detector.GetDuplicateRecords(params as never, { ID: 'user-1' } as never);
             expect(seenPairs.size).toBe(0);
+        });
+    });
+
+    describe('buildSourceMetadataMap', () => {
+        it('should build a map with entity name and display fields', () => {
+            // Fields now use IsNameField and DefaultInView instead of NameField
+            const entityInfo = {
+                Name: 'Contacts',
+                NameField: null,
+                Icon: 'fa-user',
+                Fields: [
+                    { Name: 'Name', IsNameField: true, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                    { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 2, IsPrimaryKey: false },
+                    { Name: 'Status', IsNameField: false, DefaultInView: true, Sequence: 3, IsPrimaryKey: false },
+                ],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const mockRecord = {
+                PrimaryKey: {
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'rec-1' }],
+                    Values: () => 'rec-1',
+                    ToCompactURLSegment: () => 'rec-1',
+                },
+                Get: (fieldName: string) => {
+                    const data: Record<string, string> = {
+                        Name: 'John Doe',
+                        Title: 'Manager',
+                        Status: 'Active',
+                    };
+                    return data[fieldName] ?? null;
+                },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([mockRecord], entityInfo);
+            expect(result).toBeInstanceOf(Map);
+            expect(result.size).toBe(1);
+
+            const meta = JSON.parse(result.get('rec-1'));
+            expect(meta.Entity).toBe('Contacts');
+            expect(meta.EntityIcon).toBe('fa-user');
+            expect(meta.Name).toBe('John Doe'); // From IsNameField
+            expect(meta.Title).toBe('Manager');
+            expect(meta.Status).toBe('Active');
+        });
+
+        it('should handle records with no name field', () => {
+            const entityInfo = {
+                Name: 'Items',
+                NameField: null,
+                Icon: null,
+                Fields: [
+                    { Name: 'Description', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                ],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const mockRecord = {
+                PrimaryKey: {
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'item-1' }],
+                    Values: () => 'item-1',
+                    ToCompactURLSegment: () => 'item-1',
+                },
+                Get: (fieldName: string) => {
+                    if (fieldName === 'Description') return 'A test item';
+                    return null;
+                },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([mockRecord], entityInfo);
+            const meta = JSON.parse(result.get('item-1'));
+            expect(meta.Entity).toBe('Items');
+            expect(meta.EntityIcon).toBeUndefined();
+            expect(meta.Name).toBeUndefined(); // No IsNameField
+            expect(meta.Description).toBe('A test item');
+        });
+
+        it('should truncate long display field values to 200 chars', () => {
+            const longText = 'x'.repeat(300);
+            const entityInfo = {
+                Name: 'Notes',
+                NameField: null,
+                Icon: null,
+                Fields: [
+                    { Name: 'Description', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                ],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const mockRecord = {
+                PrimaryKey: {
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'note-1' }],
+                    Values: () => 'note-1',
+                    ToCompactURLSegment: () => 'note-1',
+                },
+                Get: (fieldName: string) => {
+                    if (fieldName === 'Description') return longText;
+                    return null;
+                },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([mockRecord], entityInfo);
+            const meta = JSON.parse(result.get('note-1'));
+            expect(meta.Description).toHaveLength(200); // 197 + '...'
+            expect(meta.Description.endsWith('...')).toBe(true);
+        });
+
+        it('should handle empty records array', () => {
+            const entityInfo = {
+                Name: 'Empty',
+                NameField: null,
+                Icon: null,
+                Fields: [],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([], entityInfo);
+            expect(result.size).toBe(0);
+        });
+
+        it('should skip null field values in display fields', () => {
+            const entityInfo = {
+                Name: 'People',
+                NameField: null,
+                Icon: null,
+                Fields: [
+                    { Name: 'Name', IsNameField: true, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                    { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 2, IsPrimaryKey: false },
+                    { Name: 'Status', IsNameField: false, DefaultInView: true, Sequence: 3, IsPrimaryKey: false },
+                ],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const mockRecord = {
+                PrimaryKey: {
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'p-1' }],
+                    Values: () => 'p-1',
+                    ToCompactURLSegment: () => 'p-1',
+                },
+                Get: (fieldName: string) => {
+                    if (fieldName === 'Name') return 'Alice';
+                    return null; // Title and Status are null
+                },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([mockRecord], entityInfo);
+            const meta = JSON.parse(result.get('p-1'));
+            expect(meta.Name).toBe('Alice');
+            expect(meta.Title).toBeUndefined();
+            expect(meta.Status).toBeUndefined();
+        });
+
+        it('should combine multiple IsNameField fields into Name', () => {
+            const entityInfo = {
+                Name: 'Contacts',
+                NameField: null,
+                Icon: 'fa-user',
+                Fields: [
+                    { Name: 'FirstName', IsNameField: true, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                    { Name: 'LastName', IsNameField: true, DefaultInView: true, Sequence: 2, IsPrimaryKey: false },
+                    { Name: 'Email', IsNameField: false, DefaultInView: true, Sequence: 3, IsPrimaryKey: false },
+                ],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const mockRecord = {
+                PrimaryKey: {
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'c-1' }],
+                    Values: () => 'c-1',
+                    ToCompactURLSegment: () => 'c-1',
+                },
+                Get: (fieldName: string) => {
+                    const data: Record<string, string> = {
+                        FirstName: 'John',
+                        LastName: 'Doe',
+                        Email: 'john@example.com',
+                    };
+                    return data[fieldName] ?? null;
+                },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([mockRecord], entityInfo);
+            const meta = JSON.parse(result.get('c-1'));
+
+            // Combined name from all IsNameField fields
+            expect(meta.Name).toBe('John Doe');
+            // Individual name fields should also be stored
+            expect(meta.FirstName).toBe('John');
+            expect(meta.LastName).toBe('Doe');
+            // Non-name DefaultInView field
+            expect(meta.Email).toBe('john@example.com');
+        });
+
+        it('should fall back to NameField when no IsNameField is set', () => {
+            const entityInfo = {
+                Name: 'OldEntity',
+                NameField: { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                Icon: null,
+                Fields: [
+                    { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                ],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            };
+
+            const mockRecord = {
+                PrimaryKey: {
+                    KeyValuePairs: [{ FieldName: 'ID', Value: 'old-1' }],
+                    Values: () => 'old-1',
+                    ToCompactURLSegment: () => 'old-1',
+                },
+                Get: (fieldName: string) => {
+                    if (fieldName === 'Title') return 'Legacy Record';
+                    return null;
+                },
+            };
+
+            const result = (detector as never)['buildSourceMetadataMap']([mockRecord], entityInfo);
+            const meta = JSON.parse(result.get('old-1'));
+            // Falls back to singular NameField
+            expect(meta.Name).toBe('Legacy Record');
         });
     });
 
@@ -863,7 +1181,7 @@ describe('DuplicateRecordDetector', () => {
  * 8 GB heap: the process died before the run could finish, so whole-entity detection could not
  * complete at all.
  *
- * Retaining them was never load-bearing. ProcessBatch already persists every result as
+ * Retaining them was never load-bearing. processBatch already persists every result as
  * `Duplicate Run Detail` / `Duplicate Run Detail Match` rows, so the array was a second copy of
  * durable data, kept only to feed the post-pass auto-merge and one `.length` read.
  *
@@ -876,84 +1194,59 @@ describe('GetDuplicateRecords — bounded result retention', () => {
     const MAX_RETAINED_RESULTS = 1000;
     const BATCH_SIZE = 500;
 
-    function makeResult(i: number, score: number): PotentialDuplicateResult {
-        // CompositeKey is the module mock's class here; the run reads only these members of the record key
-        const key = new CompositeKey();
-        key.KeyValuePairs = [];
-        key.ToString = () => `rec-${i}`;
-        key.Values = () => `rec-${i}`;
+    function makeResult(i: number, score: number) {
         return {
-            RecordCompositeKey: key,
-            Duplicates: [{ ProbabilityScore: score, ToString: () => `dup-${i}` } as PotentialDuplicate],
+            RecordCompositeKey: { ToString: () => `rec-${i}`, Values: () => `rec-${i}`, KeyValuePairs: [] },
+            Duplicates: [{ ProbabilityScore: score, ToString: () => `dup-${i}` }],
             DuplicateRunDetailMatchRecordIDs: [`match-${i}`],
             EntityID: 'entity-1',
         };
     }
 
-    /** The detector with every expensive seam replaced; retention and auto-merge wiring stay real. */
-    class RetentionDetector extends DuplicateRecordDetector {
-        /** Call order across the run: one 'batch' per processed batch, one 'automerge'. */
-        public readonly Order: string[] = [];
-        public readonly MergeRecords = vi.fn<IMetadataProvider['MergeRecords']>().mockResolvedValue({ Success: true } as RecordMergeResult);
-        private readonly seams: Pick<IMetadataProvider, 'EntityByID' | 'EntityByName' | 'MergeRecords'>;
-        private nextResult = 0;
-
-        constructor(private readonly totalRecords: number, private readonly score: number, allowMerge: boolean) {
-            super();
-            const entity = { ID: 'entity-1', Name: 'Contacts', AllowRecordMerge: allowMerge } as EntityInfo;
-            this.seams = {
-                EntityByID: () => entity,
-                EntityByName: () => entity,
-                MergeRecords: this.MergeRecords,
-            };
-        }
-
-        public override get Metadata(): IMetadataProvider { return this.seams as IMetadataProvider; }
-
-        protected override async ValidateEntityDocument(): Promise<MJEntityDocumentEntity | null> {
-            return {
-                ID: 'doc-1', Entity: 'Contacts', EntityID: 'entity-1',
-                AbsoluteMatchThreshold: 0.95, PotentialMatchThreshold: 0.9,
-                EnableLLMReasoning: false, AutomationLevel: 'AutoMergeAboveAbsolute',
-            } as MJEntityDocumentEntity;
-        }
-        protected override async InitializeProviders(): Promise<void> { /* no providers needed */ }
-        protected override async ResolveOrCreateDuplicateRun(): Promise<MJDuplicateRunEntity> {
-            const run: Pick<MJDuplicateRunEntity, 'ID' | 'LastProcessedOffset' | 'CancellationRequested' | 'Load'> = {
-                ID: 'run-1', LastProcessedOffset: 0, CancellationRequested: false,
-                Load: async () => true,
-            };
-            return run as MJDuplicateRunEntity;
-        }
-        protected override async LoadRecordIDsToCheck(): Promise<string[]> {
-            return Array.from({ length: this.totalRecords }, (_, i) => `rec-${i}`);
-        }
-        protected override async SaveEntity(): Promise<boolean> { return true; }
-        protected override async ProcessBatch(batchIDs: string[]): ReturnType<DuplicateRecordDetector['ProcessBatch']> {
-            this.Order.push('batch');
-            return { Results: batchIDs.map(() => makeResult(this.nextResult++, this.score)), MatchesFound: batchIDs.length };
-        }
-        protected override async ProcessAutoMerges(...args: Parameters<DuplicateRecordDetector['ProcessAutoMerges']>): Promise<void> {
-            this.Order.push('automerge');
-            return super.ProcessAutoMerges(...args);
-        }
-    }
-
+    /** Stub only the seams the loop depends on; retention and auto-merge wiring stay real. */
     function makeDetector(totalRecords: number, score: number, allowMerge = true) {
-        const d = new RetentionDetector(totalRecords, score, allowMerge);
-        return { d, order: d.Order, merge: d.MergeRecords };
+        const d = new DuplicateRecordDetector() as unknown as Record<string, any>;
+        d.ValidateEntityDocument = vi.fn().mockResolvedValue({
+            ID: 'doc-1', Entity: 'Contacts', EntityID: 'entity-1',
+            AbsoluteMatchThreshold: 0.95, PotentialMatchThreshold: 0.9,
+            EnableLLMReasoning: false, AutomationLevel: 'AutoMergeAboveAbsolute',
+        });
+        d.InitializeProviders = vi.fn().mockResolvedValue(undefined);
+        d.ResolveOrCreateDuplicateRun = vi.fn().mockResolvedValue({
+            ID: 'run-1', LastProcessedOffset: 0, CancellationRequested: false,
+            Load: vi.fn().mockResolvedValue(true),
+        });
+        d.LoadRecordIDsToCheck = vi.fn().mockResolvedValue(
+            Array.from({ length: totalRecords }, (_, i) => `rec-${i}`));
+        d.SaveEntity = vi.fn().mockResolvedValue(true);
+        d.Metadata.EntityByName = vi.fn().mockReturnValue({
+            ID: 'entity-1', Name: 'Contacts', AllowRecordMerge: allowMerge,
+        });
+        d.Metadata.MergeRecords = vi.fn().mockResolvedValue({ Success: true });
+
+        const order: string[] = [];
+        let seq = 0;
+        d.processBatch = vi.fn(async (batchIDs: string[]) => {
+            order.push('batch');
+            return { Results: batchIDs.map(() => makeResult(seq++, score)), MatchesFound: batchIDs.length };
+        });
+        const realAutoMerge = d.ProcessAutoMerges.bind(d);
+        d.ProcessAutoMerges = vi.fn(async (...a: unknown[]) => { order.push('automerge'); return realAutoMerge(...a); });
+
+        return { d, order, merge: d.Metadata.MergeRecords as ReturnType<typeof vi.fn> };
     }
 
-    const params: PotentialDuplicateRequest = { EntityID: 'entity-1', EntityDocumentID: 'doc-1', ListID: '', RecordIDs: [], Options: {} };
-    const user = { ID: 'user-1' } as UserInfo;
-    const run = (d: RetentionDetector) => d.GetDuplicateRecords(params, user);
+    const params = { EntityID: 'entity-1', EntityDocumentID: 'doc-1', ListID: '', RecordIDs: [], Options: {} };
+    const user = { ID: 'user-1' };
+    const run = (d: Record<string, any>) => (d as never as DuplicateRecordDetector)
+        .GetDuplicateRecords(params as never, user as never);
 
     it('caps retained results and still reports the honest total', async () => {
         const { d } = makeDetector(2500, 0.5);
         const res = await run(d);
         expect(res.PotentialDuplicateResult.length).toBe(MAX_RETAINED_RESULTS);
-        expect(res.ResultsTruncated).toBe(true);
-        expect(res.TotalRecordsWithDuplicates).toBe(2500);
+        expect((res as never as { ResultsTruncated?: boolean }).ResultsTruncated).toBe(true);
+        expect((res as never as { TotalRecordsWithDuplicates?: number }).TotalRecordsWithDuplicates).toBe(2500);
     });
 
     it('retained footprint does not grow with the size of the run', async () => {
@@ -961,13 +1254,13 @@ describe('GetDuplicateRecords — bounded result retention', () => {
         const b = await run(makeDetector(10000, 0.5).d);
         // 4x the records, identical retained size — the property the OOM violated.
         expect(a.PotentialDuplicateResult.length).toBe(b.PotentialDuplicateResult.length);
-        expect(b.TotalRecordsWithDuplicates).toBe(10000);
+        expect((b as never as { TotalRecordsWithDuplicates?: number }).TotalRecordsWithDuplicates).toBe(10000);
     });
 
     it('leaves a small run exactly as it was', async () => {
         const res = await run(makeDetector(300, 0.5).d);
         expect(res.PotentialDuplicateResult.length).toBe(300);
-        expect(res.ResultsTruncated).toBeUndefined();
+        expect((res as never as { ResultsTruncated?: boolean }).ResultsTruncated).toBeUndefined();
     });
 
     it('still merges every eligible candidate even when results were truncated', async () => {

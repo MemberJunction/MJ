@@ -39,8 +39,7 @@ This package provides the foundational layer for MemberJunction's templating sys
 - **TemplateRenderResult**: Standard result type for template rendering operations
 - **Metadata Access**: Cached getters for templates, content types, categories, contents, and params
 - **Template Lookup**: Convenience method for finding templates by name (case-insensitive)
-- **Content Association**: Automatically associates template contents and params with their parent templates after loading, and indexes templates and their rendered content by ID for O(1) lookups
-- **Self-refresh**: Reloads the dataset when any entity it holds (Templates, Template Contents, Template Params, ...) is saved or deleted, locally or on another server. A save inside an open transaction reloads after the commit (never on a rollback). The reload runs detached from the save, so its dataset reads run on the pool (`DatasetReadOptions.ReadOnPool`) and never join a transaction another unit of work opened on the same provider meanwhile
+- **Content Association**: Automatically associates template contents and params with their parent templates after loading
 
 ## Installation
 
@@ -109,8 +108,6 @@ const result: TemplateRenderResult = {
 | `TemplateContents` | getter | All template content records |
 | `TemplateParams` | getter | All template parameter definitions |
 | `FindTemplate()` | method | Find template by name (case-insensitive) |
-| `FindTemplateByID()` | method | Find template by ID (any case), O(1) |
-| `FindRenderedContent()` | method | The content row a template renders (its `GetHighestPriorityContent()`), as of the last load, O(1) |
 
 ### TemplateRenderResult
 

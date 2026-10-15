@@ -47,7 +47,7 @@ This package is the **server-side rendering engine** for MemberJunction template
 - **Nunjucks Rendering**: Full Nunjucks template syntax with async support
 - **Parameter Validation**: Validates input data against template parameter definitions before rendering
 - **Default Value Merging**: Automatically applies parameter defaults with content-specific overrides
-- **Template Caching**: Compiled Nunjucks templates are cached per template content, together with the text they were compiled from; a saved edit to a content row (same ID, new text) is recompiled on its next render instead of serving the old text
+- **Template Caching**: Compiled Nunjucks templates are cached for performance
 - **Custom Filters**: `json`, `jsoninline`, and `jsonparse` filters for JSON manipulation
 - **Extensible**: Plugin system via `TemplateExtensionBase` for custom Nunjucks tags
 - **AI Prompt Extension**: Execute AI prompts inline within templates
@@ -85,15 +85,9 @@ if (result.Success) {
 }
 ```
 
-Stored templates are HTML-escaped by default too. When the output is plain text for a model rather than HTML — AI
-prompt templates, which `AIPromptRunner` renders this way — pass `{ autoescape: false }` as the sixth argument. The raw
-render keeps the registered extensions and the sandbox guards, a `{% template %}` embed inside it renders raw as well,
-and its compiled templates are cached separately from the escaping render's:
-
-```typescript
-const prompt = await engine.RenderTemplate(template, content, { title: 'Affineur & Owner' }, true, false, { autoescape: false });
-// prompt.Output contains "Affineur & Owner", not "Affineur &amp; Owner"
-```
+Stored templates are HTML-escaped by default. For plain text a model reads (AI prompt templates), pass
+`{ autoescape: false }` as the sixth argument: `Affineur & Owner` then stays `Affineur & Owner`. The raw render keeps
+the registered extensions, and a `{% template %}` embed inside it renders raw too.
 
 ### Simple Template Rendering
 
@@ -229,7 +223,7 @@ graph LR
     style D fill:#7c5295,stroke:#563a6b,color:#fff
 ```
 
-- **AIPrompt Extension**: Executes AI prompts inline within templates using `{% aiprompt %}` tags. On any failure (the model is not found, the driver throws, or it returns a failed result) the error is logged and its text is rendered in place of the response; the render never waits on a failed call
+- **AIPrompt Extension**: Executes AI prompts inline within templates using `{% aiprompt %}` tags
 - **TemplateEmbed Extension**: Embeds other templates within a template using `{% templateembed %}` tags
 
 ## API Reference
@@ -240,7 +234,7 @@ graph LR
 |--------|------|-------------|
 | `Instance` | static getter | Singleton instance |
 | `Config()` | method | Load metadata and initialize Nunjucks environment |
-| `RenderTemplate()` | method | Render a stored template with validation; `options.autoescape: false` renders without HTML escaping |
+| `RenderTemplate()` | method | Render a stored template with validation |
 | `RenderTemplateSimple()` | method | Render an ad-hoc template string |
 | `GetReferencedVariables()` | method | List the top-level variables a template's text reads |
 | `AddTemplate()` | method | Add a template to the Nunjucks loader |
@@ -251,7 +245,7 @@ graph LR
 
 1. **Validation**: Input data is validated against template parameter definitions
 2. **Default Merging**: Missing parameters receive default values (content-specific defaults override global defaults)
-3. **Compilation**: Template text is compiled by Nunjucks (cached per content row, and recompiled when the row's text changed since it was cached)
+3. **Compilation**: Template text is compiled by Nunjucks (cached after first compile)
 4. **Rendering**: Nunjucks processes the template with merged data
 5. **Result**: Returns `TemplateRenderResult` with `Success`, `Output`, and optional `Message`
 

@@ -36,7 +36,6 @@
     "mssql": "^12.2.0"
   },
   "devDependencies": {
-    "@memberjunction/unit-testing": "6.2.0-edge.4",
     "@types/mssql": "^9.1.9",
     "@types/node": "24.10.11",
     "pkgroll": "2.23.0",

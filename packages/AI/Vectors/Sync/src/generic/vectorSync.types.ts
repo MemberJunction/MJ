@@ -1,26 +1,8 @@
-import { BaseEmbeddings } from "@memberjunction/ai";
+import { BaseEmbeddings, EmbedTextsResult } from "@memberjunction/ai";
 import { AIEmbeddingRunner } from "@memberjunction/ai-prompts";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
-import { UserInfo } from "@memberjunction/core";
-
-/** One record's failure in a vectorization run. */
-export type VectorizeRecordError = {
-    RecordID: string;
-    Message: string;
-};
-
-/**
- * The errors one `VectorizeEntity` run collects, by stage. Each run creates its own, so runs of several entity
- * documents at once on one syncer never report each other's failures.
- */
-export type VectorizeRunErrors = {
-    /** Records whose document text was not rendered (a render failure, or incomplete template data). */
-    Render: VectorizeRecordError[];
-    /** Records whose embedding failed. */
-    Embed: VectorizeRecordError[];
-    /** Records whose vector or Entity Record Document was not written. */
-    Upsert: VectorizeRecordError[];
-};
+import { BaseEntity, UserInfo } from "@memberjunction/core";
+import { MJEntityDocumentEntity, MJTemplateContentEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
 
 export type VectorizeEntityParams = {
     entityID: string;
@@ -82,7 +64,7 @@ export type VectorizeProgressUpdate = {
     /** Elapsed time in ms since pipeline start */
     ElapsedMs: number;
     /** Records that failed template rendering, if any. Populated at 'complete' stage. */
-    Errors?: VectorizeRecordError[];
+    Errors?: { RecordID: string; Message: string }[];
 }
 
 export type VectorizeEntityResponse = {
@@ -141,6 +123,36 @@ export type VectorEmeddingData = {
     embeddingModelAPIName: string;
 };
 
+/**
+ * @deprecated Worker contexts are no longer used since worker_threads were replaced
+ * with main-thread async processing. Kept for backward compatibility.
+ */
+export type AnnotateWorkerContext = {
+    executionId: number;
+    entity: BaseEntity;
+    entityDocument: Record<string, unknown>;
+    template: MJTemplateEntityExtended;
+    templateContent: MJTemplateContentEntity;
+    embeddingDriverClass: string;
+    embeddingAPIKey: string;
+    delayTimeMS: number;
+  };
+
+/**
+ * @deprecated Worker contexts are no longer used since worker_threads were replaced
+ * with main-thread async processing. Kept for backward compatibility.
+ */
+export type ArchiveWorkerContext = {
+    executionId: number;
+    entity: BaseEntity;
+    entityDocument: MJEntityDocumentEntity;
+    vectorDBClassKey: string;
+    vectorDBAPIKey: string;
+    templateContent: MJTemplateContentEntity;
+    embeddings: EmbedTextsResult;
+    delayTimeMS: number;
+  };
+  
   export type TemplateParamData = {
     ParamName: string;
     Data: unknown[];

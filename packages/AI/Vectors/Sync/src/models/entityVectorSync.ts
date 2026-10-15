@@ -9,7 +9,7 @@ import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJ
   MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import { Float32VectorToBase64, IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
-import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse, VectorizeProgressUpdate, VectorizeRecordError, VectorizeRunErrors } from '../generic/vectorSync.types';
+import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse, VectorizeProgressUpdate } from '../generic/vectorSync.types';
 import { EntityDocumentConfiguration, EntityDocumentMetadataConfig, EntityDocumentFieldConfig } from '../generic/entityDocumentConfig.types';
 import { CombineExtraFilters, GetEntityDocumentRecordFilter, ParseEntityDocumentConfiguration } from '../generic/entityDocumentConfig';
 import { EntityDocumentCache } from '@memberjunction/entity-documents';
@@ -26,18 +26,6 @@ import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
  * Class that specializes in vectorizing entities using embedding models and upserting them into Vector Databases 
  */
 export class EntityVectorSyncer extends VectorBase {
-  /**
-   * The content an entity document's template renders (its only content row).
-   * @throws Error when the template has no content, so nothing can be vectorized from it
-   */
-  protected static RenderedContentOf(template: MJTemplateEntityExtended): MJTemplateContentEntity {
-    const content = template.GetHighestPriorityContent();
-    if (!content) {
-      throw new Error(`Template ${template.ID} does not have an associated Template Content record`);
-    }
-    return content;
-  }
-
   StartTime: Date;
 
   /** @deprecated Use {@link StartTime}. */
@@ -58,19 +46,12 @@ export class EntityVectorSyncer extends VectorBase {
   set _endTime(value: Date) {
     this.EndTime = value;
   }
-  /**
-   * A new, empty error collection for one {@link VectorizeEntity} run. Errors are never kept on the syncer: the
-   * Vectorize Entity action runs every entity document at once on one syncer, and shared lists made each document
-   * report every other document's failures.
-   */
-  public static NewRunErrors(): VectorizeRunErrors {
-    return { Render: [], Embed: [], Upsert: [] };
-  }
-
-  /** Every error of a run, in stage order. */
-  protected static AllRunErrors(errors: VectorizeRunErrors): VectorizeRecordError[] {
-    return [...errors.Render, ...errors.Embed, ...errors.Upsert];
-  }
+  /** Accumulates render errors across batches so they can be reported through the progress callback */
+  private _renderErrors: { RecordID: string; Message: string }[] = [];
+  /** Accumulates embedding generation errors across batches */
+  private _embedErrors: { RecordID: string; Message: string }[] = [];
+  /** Accumulates vector-DB upsert errors across batches so a failed upsert is reflected in the run's success flag */
+  private _upsertErrors: { RecordID: string; Message: string }[] = [];
 
   /**
    * Returns the active metadata provider — explicit override (via `this.Provider = ...`)
@@ -124,7 +105,9 @@ export class EntityVectorSyncer extends VectorBase {
 
     const startTime: number = new Date().getTime();
     super.CurrentUser = contextUser;
-    const errors = EntityVectorSyncer.NewRunErrors();
+    this._renderErrors = []; // reset for each vectorization run
+    this._embedErrors = []; // reset for each vectorization run
+    this._upsertErrors = []; // reset for each vectorization run
     await TemplateEngineServer.Instance.Config(false, contextUser);
 
     const entityDocument: MJEntityDocumentEntity = await this.GetEntityDocument(params.entityDocumentID);
@@ -149,6 +132,10 @@ export class EntityVectorSyncer extends VectorBase {
       throw new Error(`Template not found with ID ${entityDocument.TemplateID}`);
     }
 
+    if(template.Content.length === 0){
+      throw new Error(`Template ${template.ID} does not have an associated Template Content record`);
+    }
+
     if(template.Content.length > 1){
       throw new Error('Templates used by Entity Documents should only have one associated Template Content record.');
     }
@@ -158,10 +145,10 @@ export class EntityVectorSyncer extends VectorBase {
     // Pipeline tuning: explicit params override config, config overrides defaults
     const pageSize: number = params.listBatchCount || pipelineConfig?.fetchBatchSize || 50;
     const dataStream = new PagedRecords();
-    const templateContent = EntityVectorSyncer.RenderedContentOf(template);
+    const templateContent = template.Content[0];
 
     const vectorCreator = this.createVectorCreator(
-      template, templateContent, obj.embeddingRunner, obj.aiModelID, obj.embeddingModelAPIName, delayTimeMS, errors,
+      template, templateContent, obj.embeddingRunner, obj.aiModelID, obj.embeddingModelAPIName, delayTimeMS,
       params.VectorizeBatchCount || pipelineConfig?.vectorizeBatchSize,
       pipelineConfig?.maxConcurrentEmbeddings,
       vectorIndexEntity.Dimensions ?? undefined
@@ -172,7 +159,7 @@ export class EntityVectorSyncer extends VectorBase {
     const vectorIndexProviderConfig = this.parseProviderConfig(vectorIndexEntity.ProviderConfig);
 
     const vectorUpserter = this.createVectorUpserter(
-      entityDocument, templateContent, obj.vectorDB, AIEngine.Instance.GetProviderIndexName(vectorIndexEntity), delayTimeMS, errors,
+      entityDocument, templateContent, obj.vectorDB, AIEngine.Instance.GetProviderIndexName(vectorIndexEntity), delayTimeMS,
       params.UpsertBatchCount || pipelineConfig?.upsertBatchSize,
       vectorIndexProviderConfig
     );
@@ -185,7 +172,7 @@ export class EntityVectorSyncer extends VectorBase {
         // record (the previous Promise.all(map(...)) issued an N+1 read storm —
         // ~1 RunView per source record — which tripped the sequential/duplicate
         // RunView telemetry). Saves remain per-record (BaseEntity contract).
-        await this.UpsertEntityRecordDocumentBatch(batch, super.CurrentUser, errors);
+        await this.UpsertEntityRecordDocumentBatch(batch, super.CurrentUser);
         return batch;
       },
     });
@@ -206,6 +193,9 @@ export class EntityVectorSyncer extends VectorBase {
     // Throttled to emit only when the percentage changes to avoid flooding PubSub.
     let lastEmittedPct = -1;
     let dataStreamEnded = false;
+    const renderErrors = this._renderErrors; // capture reference for use in Transform closure
+    const embedErrors = this._embedErrors; // capture reference for use in Transform closure
+    const upsertErrors = this._upsertErrors; // capture reference for use in Transform closure
     const progressTracker = new Transform({
       objectMode: true,
       transform(chunk: EmbeddingData, _encoding: BufferEncoding, callback: TransformCallback) {
@@ -216,7 +206,7 @@ export class EntityVectorSyncer extends VectorBase {
 
           // Detect when all records have been processed and data stream is done
           if (dataStreamEnded && processedRecords >= totalRecordsFed) {
-            const allErrors = EntityVectorSyncer.AllRunErrors(errors);
+            const allErrors = [...renderErrors, ...embedErrors, ...upsertErrors];
             onProgress({
               TotalRecords: totalRecordsFed,
               ProcessedRecords: processedRecords,
@@ -251,7 +241,7 @@ export class EntityVectorSyncer extends VectorBase {
       originalEndStream();
     };
 
-    this.startDataPaging(dataStream, params, md, entity, template, templateContent.TemplateText, vectorIndexEntity, entityDocument, pageSize, errors);
+    this.startDataPaging(dataStream, params, md, entity, template, vectorIndexEntity, entityDocument, pageSize);
 
     this.vlog(entityDocument.Name, 'pipeline started');
     // Terminal sink: a Writable that discards each chunk after the
@@ -279,8 +269,8 @@ export class EntityVectorSyncer extends VectorBase {
 
     // Emit final 100% completion with any accumulated render + embed + upsert errors.
     // This post-pipeline emission is authoritative: by the time pipeline() resolves, every
-    // upsert batch has settled, so the run's upsert errors are complete.
-    const allErrors = EntityVectorSyncer.AllRunErrors(errors);
+    // upsert batch has settled, so _upsertErrors is fully populated.
+    const allErrors = [...this._renderErrors, ...this._embedErrors, ...this._upsertErrors];
     if (onProgress) {
       onProgress({
         TotalRecords: totalRecordsFed,
@@ -296,7 +286,7 @@ export class EntityVectorSyncer extends VectorBase {
     // or vector upsert must NOT report success. Callers that inspect `success` (KnowledgePipeline,
     // KnowledgeAgent) already handle the false branch.
     const success = allErrors.length === 0 && (totalRecordsFed === 0 || processedRecords === totalRecordsFed);
-    const errorMessage = EntityVectorSyncer.BuildVectorizeErrorSummary(errors, totalRecordsFed, processedRecords);
+    const errorMessage = this.buildVectorizeErrorSummary(totalRecordsFed, processedRecords);
     const status = success ? 'Complete' : 'CompletedWithErrors';
     return {
       success, status, errorMessage,
@@ -311,16 +301,16 @@ export class EntityVectorSyncer extends VectorBase {
    * Build a human-readable summary of render + embed + upsert failures accumulated during the run,
    * or an empty string when there were none.
    */
-  protected static BuildVectorizeErrorSummary(errors: VectorizeRunErrors, totalFed?: number, processed?: number): string {
+  private buildVectorizeErrorSummary(totalFed?: number, processed?: number): string {
     const parts: string[] = [];
-    if (errors.Render.length > 0) {
-      parts.push(`${errors.Render.length} record(s) failed template rendering`);
+    if (this._renderErrors.length > 0) {
+      parts.push(`${this._renderErrors.length} record(s) failed template rendering`);
     }
-    if (errors.Embed.length > 0) {
-      parts.push(`${errors.Embed.length} record(s) failed embedding generation`);
+    if (this._embedErrors.length > 0) {
+      parts.push(`${this._embedErrors.length} record(s) failed embedding generation`);
     }
-    if (errors.Upsert.length > 0) {
-      parts.push(`${errors.Upsert.length} record(s) failed vector upsert`);
+    if (this._upsertErrors.length > 0) {
+      parts.push(`${this._upsertErrors.length} record(s) failed vector upsert`);
     }
     if (parts.length === 0 && totalFed !== undefined && processed !== undefined && processed < totalFed) {
       parts.push(`${totalFed - processed} record(s) failed to complete the vectorization pipeline`);
@@ -330,8 +320,8 @@ export class EntityVectorSyncer extends VectorBase {
 
   /**
    * Creates an AsyncBatchTransform that renders templates and generates embeddings
-   * in the main thread: a worker thread runs in an isolated V8 context and can't access
-   * ClassFactory registrations.
+   * in the main thread. This replaces the worker_threads-based VectorizeTemplates
+   * worker, which couldn't access ClassFactory registrations in its isolated V8 context.
    */
   private createVectorCreator(
     template: MJTemplateEntityExtended,
@@ -340,7 +330,6 @@ export class EntityVectorSyncer extends VectorBase {
     aiModelID: string,
     embeddingModelAPIName: string,
     delayTimeMS: number,
-    errors: VectorizeRunErrors,
     batchSize?: number,
     concurrencyLimit?: number,
     embeddingDimensions?: number
@@ -349,13 +338,14 @@ export class EntityVectorSyncer extends VectorBase {
       BatchSize: batchSize || 50,
       ConcurrencyLimit: concurrencyLimit ?? 2,
       ProcessBatch: (batch: Record<string, unknown>[]): Promise<EmbeddingData[]> =>
-        this.renderAndEmbedBatch(batch, template, templateContent, embeddingRunner, aiModelID, embeddingModelAPIName, delayTimeMS, errors, embeddingDimensions),
+        this.renderAndEmbedBatch(batch, template, templateContent, embeddingRunner, aiModelID, embeddingModelAPIName, delayTimeMS, embeddingDimensions),
     });
   }
 
   /**
-   * Creates an AsyncBatchTransform that upserts vectors to the vector database in the main thread, for the same
-   * ClassFactory reason as {@link createVectorCreator}.
+   * Creates an AsyncBatchTransform that upserts vectors to the vector database
+   * in the main thread. This replaces the worker_threads-based UpsertVectors
+   * worker for the same ClassFactory reasons.
    */
   private createVectorUpserter(
     entityDocument: MJEntityDocumentEntity,
@@ -363,7 +353,6 @@ export class EntityVectorSyncer extends VectorBase {
     vectorDB: VectorDBBase,
     indexName: string,
     delayTimeMS: number,
-    errors: VectorizeRunErrors,
     batchSize?: number,
     providerConfig?: Record<string, unknown>
   ): AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData> {
@@ -371,41 +360,8 @@ export class EntityVectorSyncer extends VectorBase {
       BatchSize: batchSize || 50,
       ConcurrencyLimit: 2,
       ProcessBatch: (batch: EmbeddingData[]): Promise<EmbeddingData[]> =>
-        this.upsertBatchToVectorDB(batch, entityDocument, templateContent, vectorDB, indexName, delayTimeMS, errors, providerConfig),
+        this.upsertBatchToVectorDB(batch, entityDocument, templateContent, vectorDB, indexName, delayTimeMS, providerConfig),
     });
-  }
-
-  /**
-   * Renders each record's entity document text: the text this run embeds and stores as the record's
-   * `DocumentText`. It renders through {@link EntityDocumentTemplateDataBuilder.RenderDocumentText},
-   * the render duplicate detection queries with. A record whose render fails is logged, recorded as a
-   * render error for the progress callback, and left out.
-   *
-   * @param batch the records' template data
-   * @param template the entity document's template
-   * @param templateContent the content row the template renders
-   * @param errors the run's errors, which a failed render is added to
-   * @returns each rendered text with the record it was rendered from, in batch order
-   */
-  protected async RenderRecordTexts(
-    batch: Record<string, unknown>[],
-    template: MJTemplateEntityExtended,
-    templateContent: MJTemplateContentEntity,
-    errors: VectorizeRunErrors
-  ): Promise<{ text: string; record: Record<string, unknown> }[]> {
-    TemplateEngineServer.Instance.SetupNunjucks();
-    const rendered: { text: string; record: Record<string, unknown> }[] = [];
-    for (const entityData of batch) {
-      const result: TemplateRenderResult = await EntityDocumentTemplateDataBuilder.RenderDocumentText(template, templateContent, entityData);
-      if (result.Success) {
-        rendered.push({ text: result.Output, record: entityData });
-      } else {
-        const recordID = String(entityData.__mj_recordID ?? entityData.ID ?? 'unknown');
-        LogError(`Error rendering template for record ${recordID}`, undefined, result.Message);
-        errors.Render.push({ RecordID: recordID, Message: result.Message });
-      }
-    }
-    return rendered;
   }
 
   /**
@@ -421,10 +377,24 @@ export class EntityVectorSyncer extends VectorBase {
     aiModelID: string,
     embeddingModelAPIName: string,
     delayTimeMS: number,
-    errors: VectorizeRunErrors,
     embeddingDimensions?: number
   ): Promise<EmbeddingData[]> {
-    const validEntries = await this.RenderRecordTexts(batch, template, templateContent, errors);
+    TemplateEngineServer.Instance.SetupNunjucks();
+    const validEntries: { text: string; record: Record<string, unknown> }[] = [];
+
+    for (const entityData of batch) {
+      // No pre-validation — entity records commonly have null fields (e.g. Bio, State)
+      // and the Nunjucks templates handle missing data gracefully via {% if Field %} conditionals.
+      // Pass SuppressWarnings=true since entity doc vectorization doesn't need warnings for missing fields.
+      const result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(template, templateContent, entityData, true, true);
+      if (result.Success) {
+        validEntries.push({ text: result.Output, record: entityData });
+      } else {
+        const recordID = String(entityData.__mj_recordID ?? entityData.ID ?? 'unknown');
+        LogError(`Error rendering template for record ${recordID}`, undefined, result.Message);
+        this._renderErrors.push({ RecordID: recordID, Message: result.Message });
+      }
+    }
 
     if (validEntries.length === 0) {
       return [];
@@ -440,7 +410,7 @@ export class EntityVectorSyncer extends VectorBase {
       LogError(msg);
       for (const entry of validEntries) {
         const recordID = String(entry.record.__mj_recordID ?? entry.record.ID ?? 'unknown');
-        errors.Embed.push({ RecordID: recordID, Message: msg });
+        this._embedErrors.push({ RecordID: recordID, Message: msg });
       }
       return [];
     }
@@ -452,7 +422,7 @@ export class EntityVectorSyncer extends VectorBase {
       LogError(msg);
       for (const entry of validEntries) {
         const recordID = String(entry.record.__mj_recordID ?? entry.record.ID ?? 'unknown');
-        errors.Embed.push({ RecordID: recordID, Message: msg });
+        this._embedErrors.push({ RecordID: recordID, Message: msg });
       }
       return [];
     }
@@ -462,7 +432,7 @@ export class EntityVectorSyncer extends VectorBase {
       LogError(msg);
       for (const entry of validEntries) {
         const recordID = String(entry.record.__mj_recordID ?? entry.record.ID ?? 'unknown');
-        errors.Embed.push({ RecordID: recordID, Message: msg });
+        this._embedErrors.push({ RecordID: recordID, Message: msg });
       }
       return [];
     }
@@ -777,7 +747,6 @@ export class EntityVectorSyncer extends VectorBase {
     vectorDB: VectorDBBase,
     indexName: string,
     delayTimeMS: number,
-    errors: VectorizeRunErrors,
     providerConfig?: Record<string, unknown>
   ): Promise<EmbeddingData[]> {
     // Parse entity document configuration for ID strategy + metadata enrichment settings
@@ -823,7 +792,7 @@ export class EntityVectorSyncer extends VectorBase {
       // Record one error per record in the failed batch so the run's success flag and the
       // progress callback reflect the failure instead of silently reporting success.
       for (const item of batch) {
-        errors.Upsert.push({ RecordID: String(item.__mj_recordID), Message: `Vector upsert failed: ${message}` });
+        this._upsertErrors.push({ RecordID: String(item.__mj_recordID ?? ''), Message: `Vector upsert failed: ${message}` });
       }
     }
 
@@ -843,7 +812,6 @@ export class EntityVectorSyncer extends VectorBase {
 
   /**
    * Starts the async data paging loop that feeds records into the stream pipeline.
-   * `renderedText` is the text of the content the template renders, resolved once by the caller (not per record).
    */
   private startDataPaging(
     dataStream: PagedRecords,
@@ -851,11 +819,9 @@ export class EntityVectorSyncer extends VectorBase {
     md: IMetadataProvider,
     entity: EntityInfo,
     template: MJTemplateEntityExtended,
-    renderedText: string,
     vectorIndexEntity: MJVectorIndexEntity,
     entityDocument: MJEntityDocumentEntity,
-    pageSize: number,
-    errors: VectorizeRunErrors
+    pageSize: number
   ): void {
     const getData = async (): Promise<void> => {
       // Prefer keyset (seek) pagination for entities with a single-column orderable PK.
@@ -895,25 +861,19 @@ export class EntityVectorSyncer extends VectorBase {
 
         pageRecordRequest.Filter = pageFilter;
 
-        const recordsPage: Record<string, unknown>[] = await super.PageRecordsByEntityID<Record<string, unknown>>(pageRecordRequest);
+        const recordsPage: unknown[] = await super.PageRecordsByEntityID<unknown>(pageRecordRequest);
         const relatedData: TemplateParamData[] = await this.GetRelatedTemplateDataForBatch(entity, recordsPage, template);
         const items: Record<string, unknown>[] = [];
 
         this.vlog(entityDocument.Name, `fetched page ${pageIndex + 1} (${recordsPage.length} records)`);
 
-        // A page whose related rows did not all load is not rendered: its documents would describe records without
-        // those rows and overwrite the complete stored text and vector. Duplicate detection refuses the same case.
-        const missingParams = this.templateDataBuilder().MissingRelatedParams(template, relatedData);
-        if (missingParams.length > 0) {
-          this.RecordIncompletePage(entity, recordsPage, missingParams, errors);
-        }
-
-        for (const typedRecord of missingParams.length > 0 ? [] : recordsPage) {
+        for (const record of recordsPage) {
+          const typedRecord = record as Record<string, unknown>;
           const templateData: Record<string, unknown> = await this.GetTemplateData(entity, typedRecord, template, relatedData);
           templateData.__mj_recordID = this.BuildRecordID(entity, typedRecord);
           templateData.__mj_compositeKey = entity.PrimaryKeys.map((key) => `${key.Name}|${typedRecord[key.Name]}`).join('||');
           templateData.VectorIndexID = vectorIndexEntity.ID;
-          templateData.TemplateContent = renderedText;
+          templateData.TemplateContent = template.Content[0].TemplateText;
           templateData.__mj_entityDocument = { ID: entityDocument.ID, EntityID: entityDocument.EntityID, Name: entityDocument.Name };
           items.push(templateData);
         }
@@ -926,7 +886,7 @@ export class EntityVectorSyncer extends VectorBase {
 
         if (useKeysetForThisRun && pkField) {
           // Advance the keyset cursor to the last record's PK value
-          const lastRecord = recordsPage[recordsPage.length - 1];
+          const lastRecord = recordsPage[recordsPage.length - 1] as Record<string, unknown>;
           const lastValue = lastRecord[pkField.Name];
           if (lastValue == null) {
             // Defensive: PK should never be null. If it is, we can't keyset-advance, so stop.
@@ -959,22 +919,6 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   /**
-   * Reports every record of a page whose related template rows could not be loaded. Their stored documents and vectors
-   * are left as they are; the next sync renders them in full.
-   * @param entity the entity being vectorized
-   * @param recordsPage the page's records
-   * @param missingParams the template params whose rows did not load
-   * @param errors the run's errors
-   */
-  protected RecordIncompletePage(entity: EntityInfo, recordsPage: Record<string, unknown>[], missingParams: string[], errors: VectorizeRunErrors): void {
-    const message = `Related rows for template param(s) ${missingParams.join(', ')} could not be loaded; the record's document was not rewritten`;
-    LogError(message);
-    for (const record of recordsPage) {
-      errors.Render.push({ RecordID: this.BuildRecordID(entity, record), Message: message });
-    }
-  }
-
-  /**
    * This method will create a default Entity Document for the given entityID, vectorDatabase, and AIModel
    * @param entityID
    * @param vectorDatabase
@@ -994,7 +938,7 @@ export class EntityVectorSyncer extends VectorBase {
       return `${ef.Name}: {{${ef.Name}}}`;
     }).join(' ');
 
-    const rv: RunView = super.RunView; // the syncer's provider, not the global default
+    const rv: RunView = new RunView();
     const rvResult: RunViewResult<MJEntityDocumentTypeEntity> = await rv.RunView<MJEntityDocumentTypeEntity>({
       EntityName: 'MJ: Entity Document Types',
       ExtraFilter: `Name = 'Record Duplicate'`,
@@ -1385,6 +1329,15 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   /**
+   * Creates or updates the Entity Record Document for a single source record.
+   * Thin back-compat wrapper over {@link UpsertEntityRecordDocumentBatch}; the pipeline
+   * uses the batch path directly to avoid an N+1 read per record.
+   */
+  protected async UpsertEntityRecordDocumentRecords(embeddingData: EmbeddingData, contextUser: UserInfo): Promise<void> {
+    await this.UpsertEntityRecordDocumentBatch([embeddingData], contextUser);
+  }
+
+  /**
    * Creates or updates Entity Record Documents for a batch of source records.
    *
    * **Reads are batched + parallel, saves are per-record.** Previously each record did its own
@@ -1395,11 +1348,8 @@ export class EntityVectorSyncer extends VectorBase {
    * per group, map the results by RecordID, then find-or-create + `Save()` each record (the
    * per-record `Save()` is inherent to the BaseEntity contract). Grouping is usually a single read
    * within one entity's pipeline; a mixed batch produces several views, now executed together.
-   *
-   * @param errors the run's errors: a batch whose existence read failed is not written and each of its records is
-   *   added here
    */
-  protected async UpsertEntityRecordDocumentBatch(batch: EmbeddingData[], contextUser: UserInfo, errors: VectorizeRunErrors): Promise<void> {
+  protected async UpsertEntityRecordDocumentBatch(batch: EmbeddingData[], contextUser: UserInfo): Promise<void> {
     if (batch.length === 0) {
       return;
     }
@@ -1450,62 +1400,32 @@ export class EntityVectorSyncer extends VectorBase {
       const { items } = groupList[gi];
       const result = existenceReads[gi] as RunViewResult<MJEntityRecordDocumentEntity>;
       if (!result?.Success) {
-        // A failed read says nothing about which documents exist. Creating them anyway (as this once did) gives every
-        // record of the batch a second document row, so the batch is not written and is reported as failed; the next
-        // sync writes it.
-        const message = `Could not read the existing Entity Record Documents: ${result?.ErrorMessage || 'no result'}`;
+        // A failed read says nothing about which documents exist; creating them would duplicate every row, so the
+        // batch is not written and is reported as failed
+        const message = `Could not read the existing Entity Record Documents: ${result?.ErrorMessage}`;
         LogError(message);
         for (const item of items) {
-          errors.Upsert.push({ RecordID: String(item.__mj_recordID), Message: message });
+          this._upsertErrors.push({ RecordID: String(item.__mj_recordID ?? ''), Message: message });
         }
         continue;
       }
-      const existingByRecordID = EntityVectorSyncer.GroupByRecordID(result.Results);
+      const existingByRecordID = new Map<string, MJEntityRecordDocumentEntity>();
+      for (const er of result.Results) {
+        existingByRecordID.set(String(er.RecordID), er);
+      }
 
       for (const item of items) {
-        const existing = existingByRecordID.get(NormalizeUUID(String(item.__mj_recordID))) || [];
-        if (existing.length === 0) {
-          await this.SaveEntityRecordDocument(item, undefined, md, contextUser);
-        }
-        // Every row the record has is refreshed: a duplicate left alone keeps serving its old text and vector
-        for (const erd of existing) {
-          await this.SaveEntityRecordDocument(item, erd, md, contextUser);
-        }
+        await this.saveEntityRecordDocument(item, existingByRecordID.get(String(item.__mj_recordID)), md, contextUser);
       }
     }
-  }
-
-  /**
-   * Existing Entity Record Documents grouped by record. The key is the normalized RecordID: the existence read's
-   * `RecordID IN (...)` matches without regard to case, so a stored id in another case is still the record's document
-   * and must be updated rather than duplicated. `NormalizeUUID` (trim + lower-case) is applied to every RecordID, UUID
-   * or not (a composite `F1|v1||F2|v2` or a string key): that is the same case-insensitive equality the database's
-   * collation gives the read. A record can hold more than one row: earlier releases created a second
-   * row whenever the existence read failed, so databases already hold such duplicates. Every row is kept, so each is
-   * refreshed.
-   * @param documents the rows the existence read returned
-   */
-  protected static GroupByRecordID(documents: MJEntityRecordDocumentEntity[]): Map<string, MJEntityRecordDocumentEntity[]> {
-    const byRecordID = new Map<string, MJEntityRecordDocumentEntity[]>();
-    for (const erd of documents) {
-      const key = NormalizeUUID(String(erd.RecordID));
-      const rows = byRecordID.get(key);
-      if (rows) {
-        rows.push(erd);
-      } else {
-        byRecordID.set(key, [erd]);
-      }
-    }
-    return byRecordID;
   }
 
   /**
    * Find-or-create + persist a single Entity Record Document from its embedding data.
    * `existingErd` (when provided) is reused so the caller can resolve existence in a
-   * single batched read rather than one query per record. Protected so a subclass can
-   * observe or redirect the per-document write.
+   * single batched read rather than one query per record.
    */
-  protected async SaveEntityRecordDocument(
+  private async saveEntityRecordDocument(
     embeddingData: EmbeddingData,
     existingErd: MJEntityRecordDocumentEntity | undefined,
     md: IMetadataProvider,

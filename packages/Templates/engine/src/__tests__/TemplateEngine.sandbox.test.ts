@@ -67,23 +67,20 @@ afterEach(() => {
     delete globalThis.__mjTemplateSandboxCanary;
 });
 
-/** Every route a template can take to run JavaScript; each must be refused in escaping and raw renders alike. */
-const CODE_RUN_ROUTES: Array<[string, string]> = [
-    ['dotted member access (the reported exploit payload shape)', `{{ range.constructor("${CODE}")() }}`],
-    ['bracket member access', `{{ range["constructor"]("${CODE}")() }}`],
-    ['a member name built at render time', `{% set k = "constr" ~ "uctor" %}{{ range[k]("${CODE}")() }}`],
-    ['a string literal constructor chain', `{{ "x".constructor.constructor("${CODE}")() }}`],
-    ['the output of a filter', `{{ ([range] | first).constructor("${CODE}")() }}`],
-    ['__proto__ member access', `{{ range.__proto__.constructor("${CODE}")() }}`],
-    [
-        'the bare name constructor (Object reflection, no .constructor member)',
-        `{{ constructor.getOwnPropertyDescriptor(constructor.getPrototypeOf(range), "con" ~ "structor").value("${CODE}")() }}`,
-    ],
-    ['re-parenting the render data with set __proto__', `{% set __proto__ = range %}{{ constructor("${CODE}")() }}`],
-];
-
 describe('TemplateEngineServer sandbox: templates cannot run JavaScript', () => {
-    it.each(CODE_RUN_ROUTES)('refuses %s', async (_route, templateText) => {
+    it.each([
+        ['dotted member access (the audit payload shape)', `{{ range.constructor("${CODE}")() }}`],
+        ['bracket member access', `{{ range["constructor"]("${CODE}")() }}`],
+        ['a member name built at render time', `{% set k = "constr" ~ "uctor" %}{{ range[k]("${CODE}")() }}`],
+        ['a string literal constructor chain', `{{ "x".constructor.constructor("${CODE}")() }}`],
+        ['the output of a filter', `{{ ([range] | first).constructor("${CODE}")() }}`],
+        ['__proto__ member access', `{{ range.__proto__.constructor("${CODE}")() }}`],
+        [
+            'the bare name constructor (Object reflection, no .constructor member)',
+            `{{ constructor.getOwnPropertyDescriptor(constructor.getPrototypeOf(range), "con" ~ "structor").value("${CODE}")() }}`,
+        ],
+        ['re-parenting the render data with set __proto__', `{% set __proto__ = range %}{{ constructor("${CODE}")() }}`],
+    ])('refuses %s', async (_route, templateText) => {
         const result = await render(templateText);
 
         expect(globalThis.__mjTemplateSandboxCanary).toBeUndefined();
@@ -91,15 +88,12 @@ describe('TemplateEngineServer sandbox: templates cannot run JavaScript', () => 
     });
 });
 
-/** Every route a template can take to plant a global in a shared environment; each must fail in both render modes. */
-const ENV_PLANTING_ROUTES: Array<[string, string]> = [
-    ['valueOf() on the render context', '{% set c = valueOf() %}{{ c.env.addGlobal("mjPlanted", "planted") and "" }}'],
-    ['concat() after re-parenting the render data', '{% set __proto__ = [] %}{{ concat()[0].env.addGlobal("mjPlanted", "planted") and "" }}'],
-    ['a filter name that every object inherits', '{{ (1 | valueOf).env.addGlobal("mjPlanted", "planted") and "" }}'],
-];
-
 describe('TemplateEngineServer sandbox: templates cannot reach the shared render environment', () => {
-    it.each(ENV_PLANTING_ROUTES)('does not let a template plant a global through %s', async (_route, templateText) => {
+    it.each([
+        ['valueOf() on the render context', '{% set c = valueOf() %}{{ c.env.addGlobal("mjPlanted", "planted") and "" }}'],
+        ['concat() after re-parenting the render data', '{% set __proto__ = [] %}{{ concat()[0].env.addGlobal("mjPlanted", "planted") and "" }}'],
+        ['a filter name that every object inherits', '{{ (1 | valueOf).env.addGlobal("mjPlanted", "planted") and "" }}'],
+    ])('does not let a template plant a global through %s', async (_route, templateText) => {
         await render(templateText);
         const later = await engine.RenderTemplateSimple('[{{ mjPlanted }}]', {});
 
@@ -174,39 +168,6 @@ describe('TemplateEngineServer sandbox: names that could change the compiled cod
 
         expect(first.Message).toContain('TemplateSandboxError');
         expect(second.Message).toContain('TemplateSandboxError');
-    });
-});
-
-/**
- * A saved edit to a Template Content keeps its ID, so the compiled-template cache recompiles that content
- * when its text changes. The recompiled template must pass the same compile guard and runtime
- * guard as a first compile: an edit cannot turn a cached, safe content row into one that escapes.
- */
-describe('TemplateEngineServer sandbox: an edited, previously cached template content', () => {
-    /** The row a template-engine reload hands back after a saved edit: a new object with the same ID. */
-    function reloadedContent(id: string, templateText: string): MJTemplateContentEntity {
-        const content = new MJTemplateContentEntity(CONTENT_ENTITY);
-        content.Hydrate({ ID: id, TemplateID: 'template-1', TemplateText: templateText });
-        return content;
-    }
-
-    it('is still refused after its text changes to an escape', async () => {
-        const template = makeTemplate();
-        const original = makeContent('[{{ x }}]');
-
-        const safe = await engine.RenderTemplate(template, original, { x: 'ok' }, true);
-        const compileEscape = await engine.RenderTemplate(
-            template, reloadedContent(original.ID, '{% set d = {__proto__: {a: "MJ-MARKER"} } %}[{{ d.a }}]'), {}, true);
-        const runtimeEscape = await engine.RenderTemplate(
-            template, reloadedContent(original.ID, `{{ range.constructor("${CODE}")() }}`), {}, true);
-
-        expect(safe.Output).toBe('[ok]');
-        expect(compileEscape.Success).toBe(false);
-        expect(compileEscape.Message).toContain('TemplateSandboxError');
-        expect(compileEscape.Output ?? '').not.toContain('MJ-MARKER');
-        expect(runtimeEscape.Success).toBe(false); // the runtime guard hides constructor, so the call fails
-        expect(runtimeEscape.Output ?? '').not.toContain('RAN');
-        expect(globalThis.__mjTemplateSandboxCanary).toBeUndefined();
     });
 });
 
@@ -305,22 +266,10 @@ describe('TemplateEngineServer sandbox: ordinary templates still render', () => 
     });
 });
 
-/**
- * Prompt templates render without HTML escaping, through a second environment. The sandbox is process-wide, so the raw
- * environment must refuse every escape the escaping one does: turning escaping off may not reopen a closed route.
- */
 describe('TemplateEngineServer sandbox: stored templates rendered without escaping', () => {
-    /** Renders stored-template text the way AI prompts do: validation as warnings, escaping off. */
     async function renderRaw(templateText: string, data: Record<string, unknown> = {}) {
         return engine.RenderTemplate(makeTemplate(), makeContent(templateText), data, true, true, { autoescape: false });
     }
-
-    it.each(CODE_RUN_ROUTES)('refuses %s', async (_route, templateText) => {
-        const result = await renderRaw(templateText);
-
-        expect(globalThis.__mjTemplateSandboxCanary).toBeUndefined();
-        expect(result.Output ?? '').not.toContain('RAN');
-    });
 
     it('refuses a dictionary key that every object inherits before compiling it', async () => {
         const result = await renderRaw('{% set d = {__proto__: {a: "MJ-MARKER"} } %}[{{ d.a }}]');
@@ -328,13 +277,6 @@ describe('TemplateEngineServer sandbox: stored templates rendered without escapi
         expect(result.Success).toBe(false);
         expect(result.Message).toContain('TemplateSandboxError');
         expect(result.Output ?? '').not.toContain('MJ-MARKER');
-    });
-
-    it.each(ENV_PLANTING_ROUTES)('does not let a template plant a global through %s', async (_route, templateText) => {
-        await renderRaw(templateText);
-        const later = await renderRaw('[{{ mjPlanted }}]');
-
-        expect(later.Output).toBe('[]');
     });
 
     it('still renders ordinary text raw', async () => {

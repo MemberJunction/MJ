@@ -130,7 +130,6 @@ const TEMPLATE = {
     ID: 'tpl-1',
     Name: 'Individual Duplicate',
     Content: [{ ID: 'content-1', TemplateText: '{{FirstName}} {{DOB}} {% for p in Phones %}{{p.Number}}{% endfor %}' }],
-    GetHighestPriorityContent() { return this.Content[0]; },
     Params: [
         { Name: 'Entity', Type: 'Record' },
         { Name: 'Phones', Type: 'Entity', Entity: 'Phones', LinkedParameterField: 'individual_id', ExtraFilter: null },
@@ -225,13 +224,6 @@ describe('DuplicateRecordDetector.GenerateTemplateTexts renders what vector sync
             : { Success: false, Results: [], ErrorMessage: 'Phones is unavailable' });
 
         await expect(detector.render([fakeRecord(SIMPLE_ROW, true)])).rejects.toThrow(/Phones/);
-        expect(mockRenderTemplate).not.toHaveBeenCalled();
-    });
-
-    it('refuses a template with no content to render, before any query or render', async () => {
-        templateEngineState.Templates = [{ ...TEMPLATE, Content: [] }];
-        await expect(detector.render([fakeRecord(SIMPLE_ROW, true)])).rejects.toThrow('Template tpl-1 has no content records');
-        expect(mockRunViewFn).not.toHaveBeenCalled();
         expect(mockRenderTemplate).not.toHaveBeenCalled();
     });
 

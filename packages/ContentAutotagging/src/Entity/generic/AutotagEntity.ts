@@ -1,4 +1,4 @@
-import { RegisterClass, UUIDsEqual, NormalizeUUID, UUIDSet } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import { AutotagBase, AutotagProgressCallback } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
 import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError, EntityInfo, CompositeKey } from "@memberjunction/core";
@@ -13,7 +13,7 @@ import {
  * This replaces the manual interface that was needed before CodeGen emitted the typed accessor.
  */
 type IContentSourceConfiguration = MJContentSourceEntity_IContentSourceConfiguration;
-import { EntityDocumentTemplateParser, EntityDocumentTemplateParserBase } from "@memberjunction/entity-documents";
+import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
 import { TagEngine, TaxonomyMode } from "@memberjunction/tag-engine";
 import { TagScopeContext } from "@memberjunction/tag-engine-base";
@@ -199,7 +199,7 @@ export class AutotagEntity extends AutotagBase {
         contextUser: UserInfo
     ): Promise<void> {
         // Find the source config for this content item
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const rv = new RunView();
         const ciResult = await rv.RunView<{ ID: string; ContentSourceID: string; EntityRecordDocumentID: string | null }>({
             EntityName: 'MJ: Content Items',
             ExtraFilter: `ID='${contentItemTag.ItemID}'`,
@@ -208,12 +208,7 @@ export class AutotagEntity extends AutotagBase {
             MaxRows: 1
         }, contextUser);
 
-        if (!ciResult.Success) {
-            // Unknown, not "no item": the link is skipped and the failure reported
-            LogError(`AutotagEntity: could not read content item ${contentItemTag.ItemID} to link its tag: ${ciResult.ErrorMessage}`);
-            return;
-        }
-        if (ciResult.Results.length === 0) return;
+        if (!ciResult.Success || ciResult.Results.length === 0) return;
         const ci = ciResult.Results[0];
         const erdID = ci.EntityRecordDocumentID;
         if (!erdID) return; // not entity-sourced
@@ -300,11 +295,7 @@ export class AutotagEntity extends AutotagBase {
             BypassCache: true,
         }, contextUser);
 
-        if (!erdResult.Success) {
-            LogError(`AutotagEntity: could not read Entity Record Document ${erdID} to link its tag: ${erdResult.ErrorMessage}`);
-            return;
-        }
-        if (erdResult.Results.length === 0) return;
+        if (!erdResult.Success || erdResult.Results.length === 0) return;
         const erd = erdResult.Results[0];
 
         // Create TaggedItem linking formal Tag to source entity record
@@ -360,19 +351,17 @@ export class AutotagEntity extends AutotagBase {
         if (contentSources.length === 0) return [];
 
         const sourceIDs = contentSources.map(s => `'${s.ID}'`).join(',');
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const rv = new RunView();
         const result = await rv.RunView<MJContentItemEntity>({
             EntityName: 'MJ: Content Items',
             ExtraFilter: `ContentSourceID IN (${sourceIDs}) AND NOT EXISTS (SELECT 1 FROM [__mj].vwContentItemTags cit WHERE cit.ItemID = [__mj].vwContentItems.ID)`,
             ResultType: 'entity_object'
         }, this.contextUser);
 
-        if (!result.Success) {
-            // Unknown, not "none failed": no retries this run, and the failure is reported
-            LogError(`AutotagEntity: could not read the untagged content items to retry: ${result.ErrorMessage}`);
-            return [];
+        if (result.Success) {
+            return result.Results;
         }
-        return result.Results;
+        return [];
     }
 
     public async SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {
@@ -392,9 +381,8 @@ export class AutotagEntity extends AutotagBase {
     }
 
     /**
-     * Process a single entity-type ContentSource: load entity records modified since last run, plus (until the source
-     * is healed, see {@link IsRenderCurrent}) the unmodified records whose stored text an escaping render wrote, render via EntityDocument template,
-     * create/update ERD and ContentItem records.
+     * Process a single entity-type ContentSource: load entity records modified since last run,
+     * render via EntityDocument template, create/update ERD and ContentItem records.
      */
     private async processContentSource(contentSource: MJContentSourceEntity): Promise<MJContentItemEntity[]> {
         const entityID = contentSource.EntityID;
@@ -429,17 +417,13 @@ export class AutotagEntity extends AutotagBase {
         // Get records modified since last run
         const lastRunDate = await this.engine.getContentSourceLastRunDate(contentSource.ID, this.contextUser);
         const modifiedRecords = await this.getModifiedRecords(entityInfo.Name, lastRunDate);
-        // Text stored by an earlier, escaping render is looked for once per source, until a heal pass succeeds
-        const healPending = !AutotagEntity.IsRenderCurrent(contentSource);
-        const escapedDocumentIDs = healPending ? await this.LoadEscapedDocumentIDs(contentSource.ID) : [];
 
-        if (modifiedRecords.length === 0 && escapedDocumentIDs.length === 0) {
-            if (healPending) {
-                await this.MarkRenderCurrent(contentSource);
-            }
+        if (modifiedRecords.length === 0) {
             LogStatus(`AutotagEntity: no modified records for entity "${entityInfo.Name}" since ${lastRunDate.toISOString()}`);
             return [];
         }
+
+        LogStatus(`AutotagEntity: processing ${modifiedRecords.length} modified records for entity "${entityInfo.Name}"`);
 
         // Load existing ERD records for this entity document to enable upsert
         const existingERDs = await this.loadExistingERDs(entityDocumentID, entityID);
@@ -447,19 +431,11 @@ export class AutotagEntity extends AutotagBase {
         // Load existing ContentItems for this source to enable upsert
         const existingContentItems = await this.loadExistingContentItems(contentSource.ID);
 
-        // Unmodified records whose stored text an escaping render produced: re-rendered raw this run
-        const reRenderRecords = await this.LoadReRenderRecords(entityInfo, escapedDocumentIDs, existingERDs, modifiedRecords);
-        LogStatus(`AutotagEntity: processing ${modifiedRecords.length} modified and ${reRenderRecords.length} re-rendered records for entity "${entityInfo.Name}"`);
-
         // Process each record: render template → create/update ERD → create/update ContentItem
         const contentItems: MJContentItemEntity[] = [];
-        const parser = this.CreateDocumentParser();
-        const reRenderSet = new Set(reRenderRecords);
-        // Any failed record blocks the render-version marker, the modified ones too: a record both modified and stored
-        // escaped is processed as modified (not re-rendered), and if it fails its escaped text must still be found
-        let failures = 0;
+        const parser = EntityDocumentTemplateParser.CreateInstance();
 
-        for (const record of [...modifiedRecords, ...reRenderRecords]) {
+        for (const record of modifiedRecords) {
             // RecordID identifies the record for ANY key shape: the bare value for a single-column key
             // (unchanged), 'F1|v1||F2|v2' for a composite key — never just the first column.
             const recordID = CompositeKey.FromEntityRecord(entityInfo, record).ToCompactURLSegment();
@@ -467,7 +443,7 @@ export class AutotagEntity extends AutotagBase {
                 const recordName = this.buildContentItemName(entityInfo, record);
                 const contentItem = await this.processSingleRecord(
                     record, recordID, recordName, contentSource, entityDocument,
-                    templateText, parser, existingERDs, existingContentItems, reRenderSet.has(record)
+                    templateText, parser, existingERDs, existingContentItems
                 );
                 if (contentItem) {
                     contentItems.push(contentItem);
@@ -475,61 +451,10 @@ export class AutotagEntity extends AutotagBase {
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
                 LogError(`AutotagEntity: failed to process record ${recordID} for entity "${entityInfo.Name}": ${msg}`);
-                failures++;
             }
         }
 
-        // A pass with any failed record leaves the heal pending, so the next run looks again
-        if (healPending && failures === 0) {
-            await this.MarkRenderCurrent(contentSource);
-        }
         return contentItems;
-    }
-
-    /**
-     * The version of the entity document render this provider writes. Version 1 renders raw; text stored before it was
-     * HTML-escaped. A source records the version its stored text was healed to in its configuration
-     * ({@link RENDER_VERSION_KEY} in `SourceSpecificConfiguration`), so the search for escaped text runs once per source,
-     * not on every run. Raising it makes every source look for stale text once more.
-     */
-    public static readonly DOCUMENT_RENDER_VERSION = 1;
-
-    /** The `SourceSpecificConfiguration` key holding the render version a source's stored text was healed to. */
-    public static readonly RENDER_VERSION_KEY = 'EntityDocumentRenderVersion';
-
-    /**
-     * Whether the source's stored text was already healed to the current render ({@link DOCUMENT_RENDER_VERSION}).
-     * @param contentSource the content source
-     */
-    public static IsRenderCurrent(contentSource: MJContentSourceEntity): boolean {
-        const recorded = contentSource.ConfigurationObject?.SourceSpecificConfiguration?.[AutotagEntity.RENDER_VERSION_KEY];
-        return recorded === AutotagEntity.DOCUMENT_RENDER_VERSION;
-    }
-
-    /**
-     * Records in the source's configuration that its stored text is healed to the current render. The source is
-     * re-read first, so a concurrent edit to its other settings is kept. A failure is logged, never thrown: the records
-     * this run processed stay processed, and the heal pass simply runs again on the next run, which is safe.
-     * @param contentSource the content source whose heal pass succeeded
-     */
-    protected async MarkRenderCurrent(contentSource: MJContentSourceEntity): Promise<void> {
-        try {
-            const source = await this.ProviderToUse.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources', this.contextUser);
-            if (!(await source.Load(contentSource.ID))) {
-                LogError(`AutotagEntity: could not load content source ${contentSource.ID} to record its render version`);
-                return;
-            }
-            const config = source.ConfigurationObject || {};
-            source.ConfigurationObject = {
-                ...config,
-                SourceSpecificConfiguration: { ...config.SourceSpecificConfiguration, [AutotagEntity.RENDER_VERSION_KEY]: AutotagEntity.DOCUMENT_RENDER_VERSION },
-            };
-            if (!(await source.Save())) {
-                LogError(`AutotagEntity: could not record the render version of content source ${contentSource.ID}: ${source.LatestResult?.CompleteMessage}`);
-            }
-        } catch (e) {
-            LogError(`AutotagEntity: could not record the render version of content source ${contentSource.ID}: ${e instanceof Error ? e.message : String(e)}`);
-        }
     }
 
     /**
@@ -565,7 +490,7 @@ export class AutotagEntity extends AutotagBase {
      * Load an EntityDocument by ID using RunView.
      */
     private async loadEntityDocument(entityDocumentID: string): Promise<MJEntityDocumentEntity | null> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const rv = new RunView();
         const result = await rv.RunView<MJEntityDocumentEntity>({
             EntityName: 'MJ: Entity Documents',
             ExtraFilter: `ID='${entityDocumentID}'`,
@@ -573,10 +498,10 @@ export class AutotagEntity extends AutotagBase {
             MaxRows: 1
         }, this.contextUser);
 
-        if (!result.Success) {
-            throw new Error(`could not read Entity Document ${entityDocumentID}: ${result.ErrorMessage}`);
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0];
         }
-        return result.Results.length > 0 ? result.Results[0] : null;
+        return null;
     }
 
     /**
@@ -595,35 +520,35 @@ export class AutotagEntity extends AutotagBase {
         if (!template || template.Content.length === 0) {
             return null;
         }
-        return template.GetHighestPriorityContent()?.TemplateText || null;
+        return template.Content[0].TemplateText;
     }
 
     /**
      * Query entity records modified since lastRunDate using __mj_UpdatedAt.
      */
     private async getModifiedRecords(entityName: string, lastRunDate: Date): Promise<Record<string, unknown>[]> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const rv = new RunView();
         const result = await rv.RunView<Record<string, unknown>>({
             EntityName: entityName,
             ExtraFilter: `__mj_UpdatedAt > '${lastRunDate.toISOString()}'`,
             ResultType: 'simple'
         }, this.contextUser);
 
-        if (!result.Success) {
-            throw new Error(`could not read the ${entityName} records modified since the last run: ${result.ErrorMessage}`);
+        if (result.Success) {
+            return result.Results;
         }
-        return result.Results;
+        return [];
     }
 
     /**
-     * Load existing EntityRecordDocument records for this entity document, keyed by {@link RecordKey}. A failed read
-     * throws: an empty map would make every record look new and give each a second document and content item.
+     * Load existing EntityRecordDocument records for this entity document,
+     * keyed by normalized RecordID for fast lookup.
      */
     private async loadExistingERDs(
         entityDocumentID: string,
         entityID: string
     ): Promise<Map<string, MJEntityRecordDocumentEntity>> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const rv = new RunView();
         const result = await rv.RunView<MJEntityRecordDocumentEntity>({
             EntityName: 'MJ: Entity Record Documents',
             ExtraFilter: `EntityDocumentID='${entityDocumentID}' AND EntityID='${entityID}'`,
@@ -633,33 +558,27 @@ export class AutotagEntity extends AutotagBase {
             BypassCache: true,
         }, this.contextUser);
         if (!result.Success) {
+            // an empty map would make every record look new and give each a second document and content item
             throw new Error(`could not read the existing Entity Record Documents of Entity Document ${entityDocumentID}: ${result.ErrorMessage}`);
         }
 
         const map = new Map<string, MJEntityRecordDocumentEntity>();
-        for (const erd of result.Results) {
-            map.set(AutotagEntity.RecordKey(erd.RecordID), erd);
+        if (result.Success) {
+            for (const erd of result.Results) {
+                map.set(erd.RecordID, erd);
+            }
         }
         return map;
     }
 
     /**
-     * The key a record id is matched by: trimmed and lower-cased (`NormalizeUUID`, applied to any record id, UUID or
-     * composite), the same case-insensitive equality the database gives the RecordID column, as vector sync matches it.
-     * @param recordID a record id in compact URL-segment form
-     */
-    protected static RecordKey(recordID: string): string {
-        return NormalizeUUID(recordID);
-    }
-
-    /**
-     * Load existing ContentItems for this content source, keyed by normalized EntityRecordDocumentID for fast lookup
-     * during upsert. A failed read throws, for the same reason as {@link loadExistingERDs}.
+     * Load existing ContentItems for this content source, keyed by normalized
+     * EntityRecordDocumentID for fast lookup during upsert.
      */
     private async loadExistingContentItems(
         contentSourceID: string
     ): Promise<Map<string, MJContentItemEntity>> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const rv = new RunView();
         const result = await rv.RunView<MJContentItemEntity>({
             EntityName: 'MJ: Content Items',
             ExtraFilter: `ContentSourceID='${contentSourceID}'`,
@@ -670,108 +589,14 @@ export class AutotagEntity extends AutotagBase {
         }
 
         const map = new Map<string, MJContentItemEntity>();
-        for (const ci of result.Results) {
-            if (ci.EntityRecordDocumentID) {
-                map.set(NormalizeUUID(ci.EntityRecordDocumentID), ci);
+        if (result.Success) {
+            for (const ci of result.Results) {
+                if (ci.EntityRecordDocumentID) {
+                    map.set(NormalizeUUID(ci.EntityRecordDocumentID), ci);
+                }
             }
         }
         return map;
-    }
-
-    /**
-     * The parser that renders this provider's entity documents (raw: the text is tagged by a model and embedded). It
-     * resolves entities through this provider's metadata provider rather than the global default.
-     */
-    protected CreateDocumentParser(): EntityDocumentTemplateParser {
-        const parser = EntityDocumentTemplateParser.CreateInstance();
-        parser.ProviderOverride = this.ProviderToUse;
-        return parser;
-    }
-
-    /**
-     * The Entity Record Document IDs of this source's content items whose text holds an HTML entity an escaping render
-     * writes. Entity documents were once rendered with HTML escaping, so their stored text, the tags read from it and
-     * its embedding say `R&amp;D` where the record says `R&D`. Those records are re-rendered raw even though they have
-     * not changed; see {@link LoadReRenderRecords}. It runs only until the source's heal pass succeeds
-     * ({@link IsRenderCurrent}).
-     *
-     * A record whose data holds such an entity literally is selected too; its re-render matches the stored text and
-     * writes nothing.
-     * @param contentSourceID the content source whose items are checked
-     */
-    protected async LoadEscapedDocumentIDs(contentSourceID: string): Promise<string[]> {
-        const textFilter = EntityDocumentTemplateParserBase.ESCAPED_ENTITIES
-            .map((entity) => `Text LIKE '%${entity}%'`)
-            .join(' OR ');
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const result = await rv.RunView<{ EntityRecordDocumentID: string }>({
-            EntityName: 'MJ: Content Items',
-            ExtraFilter: `ContentSourceID='${contentSourceID}' AND EntityRecordDocumentID IS NOT NULL AND (${textFilter})`,
-            Fields: ['EntityRecordDocumentID'],
-        }, this.contextUser);
-        if (!result.Success) {
-            throw new Error(`AutotagEntity: failed to load escaped content items for source ${contentSourceID}: ${result.ErrorMessage}`);
-        }
-        return result.Results.map((row) => row.EntityRecordDocumentID);
-    }
-
-    /**
-     * The entity records behind the given Entity Record Documents, except those already being processed as modified.
-     * Loaded by primary key in chunks of {@link RE_RENDER_CHUNK_SIZE}, so a large first run never builds one huge filter.
-     * @param entityInfo the content source's entity
-     * @param documentIDs Entity Record Document IDs, from {@link LoadEscapedDocumentIDs}
-     * @param existingERDs this entity document's Entity Record Documents, keyed by {@link RecordKey}
-     * @param modifiedRecords the records this run already processes
-     */
-    protected async LoadReRenderRecords(
-        entityInfo: EntityInfo,
-        documentIDs: string[],
-        existingERDs: Map<string, MJEntityRecordDocumentEntity>,
-        modifiedRecords: Record<string, unknown>[]
-    ): Promise<Record<string, unknown>[]> {
-        if (documentIDs.length === 0) {
-            return [];
-        }
-        const wanted = new UUIDSet(documentIDs);
-        const modifiedIDs = new Set(modifiedRecords.map((r) => AutotagEntity.RecordKey(CompositeKey.FromEntityRecord(entityInfo, r).ToCompactURLSegment())));
-        const keys = [...existingERDs.values()]
-            .filter((erd) => wanted.Has(erd.ID) && !modifiedIDs.has(AutotagEntity.RecordKey(erd.RecordID)))
-            .map((erd) => CompositeKey.FromURLSegment(entityInfo, erd.RecordID));
-        if (keys.length === 0) {
-            return [];
-        }
-
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const chunks: CompositeKey[][] = [];
-        for (let i = 0; i < keys.length; i += AutotagEntity.RE_RENDER_CHUNK_SIZE) {
-            chunks.push(keys.slice(i, i + AutotagEntity.RE_RENDER_CHUNK_SIZE));
-        }
-        const results = await rv.RunViews(chunks.map((chunk) => ({
-            EntityName: entityInfo.Name,
-            ExtraFilter: chunk.map((key) => `(${key.ToWhereClause()})`).join(' OR '),
-            IgnoreMaxRows: true, // bounded by the key filter
-        })), this.contextUser);
-        const records: Record<string, unknown>[] = [];
-        for (const result of results) {
-            if (!result.Success) {
-                throw new Error(`AutotagEntity: failed to load ${entityInfo.Name} records to re-render: ${result.ErrorMessage}`);
-            }
-            records.push(...result.Results);
-        }
-        return records;
-    }
-
-    /** Records per primary-key filter in {@link LoadReRenderRecords}. */
-    protected static readonly RE_RENDER_CHUNK_SIZE = 500;
-
-    /** The text stored on the content item of a record's Entity Record Document, if it has both. */
-    private storedDocumentText(
-        recordID: string,
-        existingERDs: Map<string, MJEntityRecordDocumentEntity>,
-        existingContentItems: Map<string, MJContentItemEntity>
-    ): string | null | undefined {
-        const erd = existingERDs.get(AutotagEntity.RecordKey(recordID));
-        return erd ? existingContentItems.get(NormalizeUUID(erd.ID))?.Text : undefined;
     }
 
     /**
@@ -786,8 +611,7 @@ export class AutotagEntity extends AutotagBase {
         templateText: string,
         parser: EntityDocumentTemplateParser,
         existingERDs: Map<string, MJEntityRecordDocumentEntity>,
-        existingContentItems: Map<string, MJContentItemEntity>,
-        reRenderOnly: boolean
+        existingContentItems: Map<string, MJContentItemEntity>
     ): Promise<MJContentItemEntity | null> {
         const entityID = contentSource.EntityID!;
 
@@ -796,12 +620,6 @@ export class AutotagEntity extends AutotagBase {
 
         if (!renderedText || renderedText.trim().length === 0) {
             LogStatus(`AutotagEntity: empty rendered text for record ${recordID}, skipping`);
-            return null;
-        }
-
-        // An unmodified record re-rendered because its stored text looked escaped, whose data holds those
-        // characters literally: the stored text is already right, so nothing is written or reprocessed.
-        if (reRenderOnly && this.storedDocumentText(recordID, existingERDs, existingContentItems) === renderedText) {
             return null;
         }
 
@@ -832,7 +650,7 @@ export class AutotagEntity extends AutotagBase {
         existingERDs: Map<string, MJEntityRecordDocumentEntity>
     ): Promise<MJEntityRecordDocumentEntity> {
         const md = this.ProviderToUse;
-        let erd = existingERDs.get(AutotagEntity.RecordKey(recordID));
+        let erd = existingERDs.get(recordID);
 
         if (erd) {
             // Update existing
@@ -856,7 +674,7 @@ export class AutotagEntity extends AutotagBase {
         }
 
         // Update cache for subsequent lookups in this batch
-        existingERDs.set(AutotagEntity.RecordKey(recordID), erd);
+        existingERDs.set(recordID, erd);
         return erd;
     }
 

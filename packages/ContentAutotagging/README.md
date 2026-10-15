@@ -116,14 +116,6 @@ not wait for every content source to finish crawling.
 | Websites | `AutotagWebsite` | Crawls web pages and extracts content |
 | RSS Feeds | `AutotagRSSFeed` | Parses RSS/Atom feeds for articles |
 | Azure Blob | `AutotagAzureBlob` | Processes files from Azure Blob Storage |
-| Entity records | `AutotagEntity` | Renders entity records through their Entity Document template |
-
-`AutotagEntity` processes the records modified since the source's last run. It renders them raw, without HTML
-escaping, so the tagging model and the embedding read `R&D`, not `R&amp;D`. Once per source, it re-renders the content
-items whose stored text holds an HTML entity an escaping render writes (`&amp;`, `&lt;`, ...) even when their record is
-unchanged; a record whose data holds the entity literally renders to the same text and is left alone. When that pass
-succeeds the source records `EntityDocumentRenderVersion` in `Configuration.SourceSpecificConfiguration`, and later
-runs skip the search. A pass in which any record fails leaves the version unrecorded, so the next run searches again.
 
 All sources extend `AutotagBase`, which provides the common interface for content discovery and ingestion. Each source's `Autotag()` method accepts an optional `AutotagProgressCallback` for real-time progress reporting. Sources skip gracefully when no content sources of their type are configured in the database.
 

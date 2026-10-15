@@ -391,7 +391,7 @@ export class AutotagWebsite extends AutotagBase {
     protected async processSingleURL(url: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity | null> {
         const { text, checksum: newHash } = await this.FetchAndExtract(url);
 
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const rv = new RunView();
         const results = await rv.RunViews<MJContentItemEntity>([
             {
                 EntityName: 'MJ: Content Items',
@@ -408,17 +408,17 @@ export class AutotagWebsite extends AutotagBase {
         const byChecksum = results[0];
         const byURL = results[1];
         if (!byChecksum.Success || !byURL.Success) {
-            // Unknown, not "new page": creating it anyway would duplicate a page already stored
+            // unknown, not a new page: creating it anyway would duplicate a page already stored
             throw new Error(`could not read the stored content items for ${url}: ${byChecksum.ErrorMessage || byURL.ErrorMessage}`);
         }
 
         // Same content already in DB for this source — unchanged, skip.
-        if (byChecksum.Results.length) {
+        if (byChecksum.Success && byChecksum.Results.length) {
             return null;
         }
 
         // URL exists for this source but content has drifted — update in place.
-        if (byURL.Results.length) {
+        if (byURL.Success && byURL.Results.length) {
             const existing: MJContentItemEntity = byURL.Results[0];
             if (existing.Checksum === newHash) {
                 return null;

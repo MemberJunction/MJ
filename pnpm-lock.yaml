@@ -959,9 +959,6 @@ importers:
         specifier: 6.2.0-edge.4
         version: link:../../Templates/engine
     devDependencies:
-      '@memberjunction/unit-testing':
-        specifier: 6.2.0-edge.4
-        version: link:../../UnitTesting
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -3212,9 +3209,6 @@ importers:
         specifier: ^17.2.4
         version: 17.2.4
     devDependencies:
-      '@memberjunction/unit-testing':
-        specifier: 6.2.0-edge.4
-        version: link:../../../UnitTesting
       '@types/mssql':
         specifier: ^9.1.9
         version: 9.1.9
@@ -3448,9 +3442,6 @@ importers:
         specifier: ^12.2.0
         version: 12.7.0
     devDependencies:
-      '@memberjunction/unit-testing':
-        specifier: 6.2.0-edge.4
-        version: link:../../../UnitTesting
       '@types/mssql':
         specifier: ^9.1.9
         version: 9.1.9
@@ -10826,9 +10817,6 @@ importers:
         specifier: ^0.6.2
         version: 0.6.2
     devDependencies:
-      '@memberjunction/unit-testing':
-        specifier: 6.2.0-edge.4
-        version: link:../UnitTesting
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6

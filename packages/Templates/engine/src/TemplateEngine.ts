@@ -60,7 +60,7 @@ export class TemplateEntityLoader extends nunjucks.Loader {
     }
 }
 
-/** A compiled template together with the text it was compiled from, so a saved edit can be detected and recompiled. */
+/** A compiled template and the text it was compiled from, so a saved edit is recompiled. */
 type CompiledTemplateEntry = { Text: string; Template: nunjucks.Template };
 
 /**
@@ -84,12 +84,6 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
 
     /** Server-side context user, captured on Config() and settable directly (mirrors AIEngine). */
     private _contextUser?: UserInfo;
-    /**
-     * The user the escaping environment's extensions were created for (the first {@link Config} user). The raw
-     * stored-template environment binds its extensions to the same user, so one extension never runs as two different
-     * users depending on the escape flag.
-     */
-    private _extensionsContextUser?: UserInfo;
     private _oneTimeLoadingComplete: boolean = false;
 
     /**
@@ -120,16 +114,12 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         this._templateLoader = new TemplateEntityLoader();
         this._nunjucksEnv = this.createConfiguredNunjucksEnv(true);
         this._nunjucksEnvNoAutoescape = undefined; // rebound lazily against the fresh loader on next no-autoescape render
-        this._nunjucksEnvRawTemplates = undefined; // rebound lazily against the fresh loader on next raw stored-template render
-        this._extensionsContextUser = contextUser;
+        this._nunjucksEnvRawTemplates = undefined;
         this._registeredExtensions = this.registerExtensions(this._nunjucksEnv, contextUser);
     }
 
     /**
-     * Registers every {@link TemplateExtensionBase} subclass with the given environment. Each environment gets its own
-     * extension instances, so the escaping and the raw stored-template environments offer the same extension surface.
-     * @param env the environment to register the extensions on
-     * @param contextUser the user the extensions run as
+     * Registers every {@link TemplateExtensionBase} subclass with the given environment.
      * @returns the extension instances registered on `env`
      */
     private registerExtensions(env: nunjucks.Environment, contextUser?: UserInfo): nunjucks.Extension[] {
@@ -160,20 +150,13 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     public get TemplateContents(): MJTemplateContentEntity[] { return this.base.TemplateContents; }
     public get TemplateParams(): MJTemplateParamEntity[] { return this.base.TemplateParams; }
     public FindTemplate(templateName: string): MJTemplateEntityExtended { return this.base.FindTemplate(templateName); }
-    /** The cached template with this ID (any case); undefined when the cache does not know it. See {@link TemplateEngineBase.FindTemplateByID}. */
     public FindTemplateByID(templateID: string): MJTemplateEntityExtended | undefined { return this.base.FindTemplateByID(templateID); }
 
-    /**
-     * Rebuilds the loader and the escaping environment, and drops the lazily built environments so they rebind to the
-     * new loader. The rebuilt escaping environment does NOT register the template extensions (only the one-time
-     * {@link Config} setup does), while the raw stored-template environment rebuilds WITH them on its next render. After
-     * this call, an escaping stored-template render therefore offers no extension tags, and a raw one does.
-     */
     public SetupNunjucks(): void {
         this._templateLoader = new TemplateEntityLoader();
         this._nunjucksEnv = this.createConfiguredNunjucksEnv(true);
         this._nunjucksEnvNoAutoescape = undefined; // rebound lazily against the fresh loader on next no-autoescape render
-        this._nunjucksEnvRawTemplates = undefined; // rebound lazily against the fresh loader on next raw stored-template render
+        this._nunjucksEnvRawTemplates = undefined;
     }
 
     private _nunjucksEnv: nunjucks.Environment;
@@ -182,17 +165,10 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * {@link RenderTemplateSimple} when a caller opts out of escaping (e.g. plain-text email subject lines,
      * where `Acme & Co` must not become `Acme &amp; Co`). Mirrors the main env's custom filters but — like
      * {@link SetupNunjucks} — intentionally omits the registered extensions; this env serves ad-hoc string
-     * renders, not the stored-Template extension surface. Stored templates rendered without escaping use
-     * {@link _nunjucksEnvRawTemplates} instead, which does carry the extensions. Reset to `undefined` whenever the
-     * loader is rebuilt.
+     * renders, not the stored-Template extension surface. Reset to `undefined` whenever the loader is rebuilt.
      */
     private _nunjucksEnvNoAutoescape?: nunjucks.Environment;
-    /**
-     * Environment with autoescape off AND the registered extensions, for stored templates rendered for a model
-     * ({@link RenderTemplate} with `autoescape: false`). Unlike {@link _nunjucksEnvNoAutoescape} it registers the
-     * extensions, so flipping the escape flag on a stored-template render never silently drops them. Created lazily
-     * by {@link getRawTemplateEnv}; reset to `undefined` whenever the loader is rebuilt.
-     */
+    /** Environment with autoescape off and the registered extensions, for {@link RenderTemplate} with `autoescape: false`. Created lazily. */
     private _nunjucksEnvRawTemplates?: nunjucks.Environment;
     private _templateLoader: TemplateEntityLoader;
     /** The extension instances registered on {@link _nunjucksEnv}. The variable analysis parses their custom tags. */
@@ -246,9 +222,8 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     }
 
     /**
-     * Compiled templates per environment, then per template content ID. Each entry keeps the text it was compiled from,
-     * so a saved edit (same ID, new text) recompiles. Keyed by the environment object, so a template compiled without
-     * escaping can never be served to an escaping render.
+     * Compiled templates per environment, then per template content ID, so a raw compile is never served to an
+     * escaping render.
      */
     private _templateCache = new WeakMap<nunjucks.Environment, Map<string, CompiledTemplateEntry>>();
 
@@ -263,17 +238,14 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     /**
      * Renders a template with the given data.
      * @param templateEntity the template object to render
-     * @param templateContent the template content item (within the template); null (for example a template with no content row)
-     *   returns a failed result instead of throwing
+     * @param templateContent the template content item (within the template)
      * @param data
      * @param SkipValidation if true, validation is skipped entirely (or reduced to warnings depending on SuppressWarnings)
      * @param SuppressWarnings if true AND SkipValidation is true, no validation warnings are logged. When SkipValidation is true but SuppressWarnings is false, validation issues are logged as non-fatal warnings. Defaults to false.
-     * @param options optional render controls. `autoescape` (default `true`) toggles HTML-entity escaping — pass `false`
-     *   when the output is plain text for a model rather than HTML, where `Affineur & Owner` must not become
-     *   `Affineur &amp; Owner`. The raw render keeps the registered template extensions and the sandbox guards, and a
-     *   `{% template %}` embed inside it renders raw too.
+     * @param options `autoescape` (default `true`) toggles HTML escaping; pass `false` when the output is plain text for
+     *   a model, where `Affineur & Owner` must not become `Affineur &amp; Owner`
      */
-    public async RenderTemplate(templateEntity: MJTemplateEntityExtended, templateContent: MJTemplateContentEntity | null, data: any, SkipValidation?: boolean, SuppressWarnings?: boolean, options?: { autoescape?: boolean }): Promise<TemplateRenderResult> {
+    public async RenderTemplate(templateEntity: MJTemplateEntityExtended, templateContent: MJTemplateContentEntity, data: any, SkipValidation?: boolean, SuppressWarnings?: boolean, options?: { autoescape?: boolean }): Promise<TemplateRenderResult> {
         try {
             if (!templateContent) {
                 return {
@@ -397,12 +369,10 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     }
 
     /**
-     * Returns the compiled template for a content row in the given environment, compiling it when the cached copy was
-     * compiled from different text (a saved edit). The cache is per environment, so the same content row compiled for an
-     * escaping and a raw render are two entries. Every compile goes through {@link createNunjucksTemplate}, and every
-     * render through {@link renderTemplateAsync}, so a recompiled edit passes the same sandbox guards as a first compile.
-     * @param templateContentId - must be provided to cache the template; without it the template is compiled every time
-     * @param templateText the content's current text
+     * This method is responsible for creating a new Nunjucks template, caching it, and returning it.
+     * If the templateContentId already had a template created, it will return that template from the cache.
+     * @param templateId - must be provided if you want to cache the template, if not provided the template will not be cached
+     * @param templateText 
      * @param cacheTemplate - if true, the template will be cached, otherwise it will not be cached
      * @param env the environment to compile against; defaults to the shared autoescape environment
      */
@@ -414,6 +384,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
                 this._templateCache.set(env, envCache);
             }
             const cached = envCache.get(templateContentId);
+            // a saved edit keeps the content ID but changes the text, so the text is compared too
             if (cached && cached.Text === templateText) {
                 return cached.Template;
             }
@@ -421,8 +392,11 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
             envCache.set(templateContentId, { Text: templateText, Template: template });
             return template;
         }
-        // no content ID: a dynamic template, compiled fresh and never cached
-        return this.createNunjucksTemplate(templateText, env);
+        else {
+            // we don't have a template ID which means this is a dyanmic template, and so we don't want to do
+            // anything with the cache, we just create a new nunjucks template and return it
+            return this.createNunjucksTemplate(templateText, env);
+        }
     }
 
     /**
@@ -450,25 +424,17 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         return this._nunjucksEnvNoAutoescape;
     }
 
-    /**
-     * Resolves the raw environment for a stored-template {@link RenderTemplate} render with `autoescape: false`. Created
-     * lazily on first use, with the registered extensions, so callers that never opt out pay nothing. The extensions
-     * run as the user the escaping environment's extensions run as; before any {@link Config}, as the current context user.
-     */
+    /** The environment for {@link RenderTemplate} with `autoescape: false`, built on first use with the registered extensions. */
     private getRawTemplateEnv(): nunjucks.Environment {
         if (!this._nunjucksEnvRawTemplates) {
             this._nunjucksEnvRawTemplates = this.createConfiguredNunjucksEnv(false);
-            this.registerExtensions(this._nunjucksEnvRawTemplates, this._extensionsContextUser || this._contextUser);
+            this.registerExtensions(this._nunjucksEnvRawTemplates, this._contextUser);
         }
         return this._nunjucksEnvRawTemplates;
     }
 
-    /**
-     * Drops every compiled template in every environment (the next render of each content row recompiles it) and the
-     * cached {@link GetReferencedVariables} results.
-     */
+    /** Clears the compiled-template cache and the cached {@link GetReferencedVariables} results. */
     public ClearTemplateCache() {
-        // a WeakMap has no clear(), so a fresh map replaces it
         this._templateCache = new WeakMap<nunjucks.Environment, Map<string, CompiledTemplateEntry>>();
         this._referencedVariablesCache.clear();
     }
