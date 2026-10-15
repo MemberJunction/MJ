@@ -66,9 +66,7 @@ export class AgentRunSweepScheduledJobDriver extends BaseScheduledJob {
     }
 
     public FormatNotification(context: ScheduledJobExecutionContext, result: ScheduledJobResult): NotificationContent {
-        // Details is free-form per job type; read the count only when it is a number.
-        const runsFailedValue = result.Details?.['RunsFailed'];
-        const runsFailed = typeof runsFailedValue === 'number' ? runsFailedValue : 0;
+        const runsFailed = (result.Details?.['RunsFailed'] as number) ?? 0;
         if (!result.Success) {
             return {
                 Subject: `Agent-run sweep failed: ${context.Schedule.Name}`,

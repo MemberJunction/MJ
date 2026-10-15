@@ -99,7 +99,7 @@ export interface DataFeatureActivation {
 }
 
 /** Every Activation.Metric value; typed by the entity union, so a CHECK change that drops one is a compile error. */
-const ACTIVATION_METRICS: ReadonlyArray<DataFeatureActivation['Metric']> = ['accuracy', 'macro-f1'];
+const ACTIVATION_METRICS: ReadonlyArray<DataFeatureActivation['Metric']> = ['accuracy'];
 
 /** The pipeline type a spec without `PipelineType` runs as. */
 export const LLM_PIPELINE_TYPE = 'LLM';

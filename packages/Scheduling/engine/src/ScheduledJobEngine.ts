@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Subscription } from 'rxjs';
 import {
     UserInfo,
+    Metadata,
     IMetadataProvider,
     LogError,
     LogStatusEx,
@@ -402,9 +403,8 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
-     * Sets jobs that were paused because their action's class was not loaded back to Active once this server loads
-     * the class, so no person has to re-enable them. A failed read is logged and never stops polling: the other jobs
-     * must still run.
+     * Sets jobs paused for a missing action class back to Active when this server loads the class. A failure is
+     * logged and polling still starts.
      * @private
      */
     private async resumeJobsPausedForMissingClass(contextUser: UserInfo): Promise<void> {
@@ -1063,10 +1063,11 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      */
     private async createJobRun(
         job: MJScheduledJobEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MJScheduledJobRunEntity> {
-        // The same provider the job's execution context gets.
-        const run = await this.Base.ProviderToUse.GetEntityObject<MJScheduledJobRunEntity>(
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
+        const run = await md.GetEntityObject<MJScheduledJobRunEntity>(
             'MJ: Scheduled Job Runs',
             contextUser
         );
@@ -1717,10 +1718,11 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      */
     private async createQueuedJobRun(
         job: MJScheduledJobEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MJScheduledJobRunEntity> {
-        // The same provider the job's execution context gets.
-        const run = await this.Base.ProviderToUse.GetEntityObject<MJScheduledJobRunEntity>(
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
+        const run = await md.GetEntityObject<MJScheduledJobRunEntity>(
             'MJ: Scheduled Job Runs',
             contextUser
         );

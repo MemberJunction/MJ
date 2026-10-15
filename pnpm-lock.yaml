@@ -14903,6 +14903,9 @@ importers:
       '@memberjunction/scheduling-engine-base':
         specifier: 6.2.0-edge.4
         version: link:../base-engine
+      '@memberjunction/sqlserver-dataprovider':
+        specifier: 6.2.0-edge.4
+        version: link:../../SQLServerDataProvider
       '@memberjunction/task-graph':
         specifier: 6.2.0-edge.4
         version: link:../../TaskGraph

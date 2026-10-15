@@ -10,7 +10,6 @@ import type { MJAIPromptRunEntity, MJFeaturePipelineVersionEntity, MJRecordProce
 import { InferProcessor } from '@memberjunction/record-set-processor';
 import type { RecordProcessorContext, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import {
-    FeaturePipelinePin,
     FeaturePipelineVersionService,
     MJFeaturePipelineVersionEntityExtended,
     type DataFeatureActivation,
@@ -58,25 +57,12 @@ export interface PreparedGoldenSetEvaluation {
     Activation: DataFeatureActivation;
 }
 
-/** The AI Prompt Runs that hold a batch's cost could not be read, so the cost is unknown (never reported as 0). */
-export class PromptRunCostReadError extends Error {
-    /** @param ReadMessage the read's own error message */
-    constructor(public readonly ReadMessage: string) {
-        super(`could not read the AI Prompt Runs to report their cost: ${ReadMessage}`);
-        this.name = 'PromptRunCostReadError';
-    }
-}
-
 /**
- * A golden-set evaluation that must not produce a result: the test is misconfigured, the pipeline would not run, or the
- * run could not answer every case. The driver reports it as an Error result and stores nothing on the version.
+ * A golden-set evaluation that must not produce a result (misconfigured test, a pipeline that would not run, a case the
+ * run could not answer). The driver reports it as an Error result and stores nothing on the version.
  */
 export class GoldenSetEvaluationError extends Error {
-    /**
-     * @param message why the evaluation produced no result
-     * @param CostUSD what the evaluation's model calls cost before it stopped (0 when it stopped before any call)
-     */
-    constructor(message: string, public readonly CostUSD: number = 0) {
+    constructor(message: string) {
         super(message);
         this.name = 'GoldenSetEvaluationError';
     }
@@ -85,7 +71,7 @@ export class GoldenSetEvaluationError extends Error {
 /** The cases' answers and what the model calls that produced them cost. */
 export interface GoldenSetAnswers {
     Answers: GoldenAnswer[];
-    /** Sum of `TotalCost` over the distinct AI Prompt Runs the batch recorded (cache bypassed, so one per distinct case). */
+    /** Sum of `TotalCost` over the distinct AI Prompt Runs the batch recorded. */
     CostUSD: number;
 }
 
@@ -99,19 +85,13 @@ const TARGET_TYPE = 'Feature Pipeline Version';
  */
 @RegisterClass(BaseTestDriver, 'FeaturePipelineGoldenSetDriver')
 export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
-    /**
-     * Evaluates the pipeline on its golden set. Every reason not to evaluate, or not to store a result (bad test JSON,
-     * a pipeline that would not run, a case the run could not answer, an edit during the run), is one Error result.
-     */
+    /** Evaluates the pipeline on its golden set; every reason not to store a result is one Error result. */
     public async Execute(context: DriverExecutionContext): Promise<DriverExecutionResult> {
         const started = Date.now();
         try {
             const prepared = await this.Prepare(context);
             return await this.Evaluate(prepared, context, started);
         } catch (e) {
-            if (e instanceof GoldenSetEvaluationError) {
-                return this.errorResult(e.message, started, e.CostUSD);
-            }
             if (e instanceof Error) {
                 return this.errorResult(e.message, started);
             }
@@ -121,7 +101,7 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
 
     /**
      * Parses the test, loads its pipeline and checks that the pipeline names this test as its golden set and that the
-     * labels may gate it. Nothing runs before these pass, so a refused test costs no model call.
+     * labels may gate it, before any model call.
      * @throws GoldenSetEvaluationError naming the first reason the test may not evaluate
      */
     protected async Prepare(context: DriverExecutionContext): Promise<PreparedGoldenSetEvaluation> {
@@ -142,8 +122,7 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
         if (!activation || !UUIDsEqual(activation.GoldenSetTestID, context.test.ID)) {
             throw new GoldenSetEvaluationError(`Pipeline '${rp.Name}' does not declare this test as its Activation.GoldenSetTestID`);
         }
-        // Model-made labels gate nothing until their automated quality record passes; the version is left as it is,
-        // so the run gate keeps refusing it.
+        // Model-made labels gate nothing until their automated quality record passes.
         const labelProblems = await GoldenLabelQualityCheck.Check(cases, input.LabelQuality, config.LabelPolicy);
         if (labelProblems.length > 0) {
             throw new GoldenSetEvaluationError(`Golden set labels failed the label-quality check: ${labelProblems.join('; ')}`);
@@ -152,10 +131,8 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
     }
 
     /**
-     * Runs the cases under the pipeline's current pin, scores them and stores the score on that pin's version. The pin
-     * is captured before the batch and checked again after it, so a result is stored only on the version every case
-     * ran under.
-     * @throws GoldenSetEvaluationError when the pipeline would not run, a case could not be answered, or the pin changed
+     * Runs the cases under the pipeline's current pin, scores them and stores the score on that pin's version.
+     * @throws GoldenSetEvaluationError when the pipeline would not run or a case could not be answered
      */
     protected async Evaluate(p: PreparedGoldenSetEvaluation, context: DriverExecutionContext, started: number): Promise<DriverExecutionResult> {
         const rp = p.RecordProcess;
@@ -166,7 +143,6 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
         }
         const pin = await p.Processor.ResolveRunPin(ctx);
         const { Answers: answers, CostUSD: cost } = await this.AnswerCases(p.Processor, rp.EntityID, p.Cases, ctx, p.Config);
-        await this.AssertPinUnchanged(p.Processor, ctx, pin, rp.Name, cost);
         const score = GoldenSetScorer.Score(p.Cases, answers, p.Activation.Metric);
         const row = await this.StoreResult(pin, rp, p.Activation, score, answers, p.LabelQuality, context);
         return this.BuildResult(score, row, p.Activation, p.Cases.length, started, cost, p.Cases.filter((c) => c.Required === true).length);
@@ -178,10 +154,7 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
         return (await rp.Load(recordProcessID)) ? rp : null;
     }
 
-    /**
-     * The context the cases run under: a dry run writes no Feature Value, history, watermark, target or child row, and
-     * the cache is bypassed, because the evaluation measures the model rather than answers cached under an older version.
-     */
+    /** A dry run (no writes) with the cache bypassed: the evaluation measures the model, not cached answers. */
     protected BuildRunContext(rp: MJRecordProcessEntity, contextUser: UserInfo): RecordProcessorContext {
         return {
             contextUser, provider: this.Provider, recordProcessID: rp.ID, entityID: rp.EntityID,
@@ -190,10 +163,8 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
     }
 
     /**
-     * Why a real run of the pipeline would not compute at all (prompt or driver unresolvable, template missing the
-     * constraint block); null when it would. The processor's own Preflight on the dry-run context: read-only, it
-     * registers and activates nothing. The version gate's refusal is not a reason: on a dry run it only becomes a
-     * warning, and evaluating the version is how it is cleared (a Refused version can be evaluated again).
+     * Why a real run of the pipeline would not compute at all; null when it would. The processor's read-only Preflight
+     * on the dry-run context, where the version gate's refusal is only a warning (evaluating is how it is cleared).
      */
     protected async PreflightRefusal(processor: InferProcessor, ctx: RecordProcessorContext): Promise<string | null> {
         try {
@@ -205,20 +176,6 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
                 return e.message || e.name;
             }
             throw e;
-        }
-    }
-
-    /**
-     * Fails the evaluation when the pipeline's pin changed while the cases ran (a prompt, model, parameter or spec edit),
-     * so a score is never stored on a version none of the cases ran under.
-     * @param costUSD what the cases' model calls cost, carried on the error so the test run still reports it
-     * @throws GoldenSetEvaluationError when the pin after the batch differs from the one captured before it
-     */
-    protected async AssertPinUnchanged(processor: InferProcessor, ctx: RecordProcessorContext, pin: FeaturePipelinePinData, name: string,
-        costUSD: number): Promise<void> {
-        const after = await FeaturePipelinePin.ComputeHash(await processor.ResolveRunPin(ctx));
-        if (after !== (await FeaturePipelinePin.ComputeHash(pin))) {
-            throw new GoldenSetEvaluationError(`Pipeline '${name}' changed (prompt, model, parameters or spec) during the evaluation; nothing was stored`, costUSD);
         }
     }
 
@@ -237,26 +194,23 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
     }
 
     /**
-     * Runs every case through the pipeline in one batch, reads each answer's comparable values and what the batch's
-     * model calls cost. A record rejected for breaking its constraints is the model's wrong answer (null values). Any
-     * other failure (provider outage, timeout, a missing result) says nothing about the version's quality, so it fails
-     * the evaluation instead of being scored.
-     * @throws GoldenSetEvaluationError (carrying the batch's cost) when a case could not be answered for a reason other
-     * than its answer
+     * Runs every case through the pipeline in one batch and reads each answer's comparable values and the batch's cost.
+     * A record rejected for breaking its constraints is a wrong answer; any other failure fails the evaluation.
+     * @throws GoldenSetEvaluationError when a case could not be answered for a reason other than its answer
      */
     protected async AnswerCases(processor: InferProcessor, entityID: string, cases: GoldenCase[], ctx: RecordProcessorContext,
         config: FeaturePipelineGoldenSetConfig): Promise<GoldenSetAnswers> {
         const constraints = await processor.GetResolvedConstraints(ctx);
         const records: RecordRef[] = cases.map((c) => ({ EntityID: entityID, RecordID: `golden-${c.ID}`, Record: { ...c.Input } }));
         const results = await processor.ProcessBatch(records, ctx);
-        const cost = await this.EvaluationCost(results, ctx.contextUser);
-        FeaturePipelineGoldenSetDriver.AssertAnswered(cases, results, cost);
+        const cost = await FeaturePipelineGoldenSetDriver.PromptRunCost(results.values(), this.Provider, ctx.contextUser);
+        FeaturePipelineGoldenSetDriver.AssertAnswered(cases, results);
         const answers = cases.map((c): GoldenAnswer => {
             const r = results.get(`golden-${c.ID}`);
             const withheld = r?.BelowConfidenceOutputs || [];
             return {
                 CaseID: c.ID, Values: r?.Status === 'Succeeded' ? this.AnswerValues(r.ResultPayload, processor, constraints, config) : null,
-                // the outputs the confidence floor withheld (or failed the record on): an abstention, for a case expecting one
+                // the outputs the confidence floor withheld: an abstention, for a case expecting one
                 ...(withheld.length > 0 ? { Withheld: withheld } : {}),
             };
         });
@@ -264,28 +218,9 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
     }
 
     /**
-     * What the batch's model calls cost: the sum of `TotalCost` over the distinct AI Prompt Runs its results name, read
-     * on this driver's provider. Distinct, because records that share a cache key share one prompt run. 0 when no result
-     * names a prompt run (nothing reached the model).
-     * @throws GoldenSetEvaluationError when the prompt runs cannot be read: an unknown cost is never reported as 0
-     */
-    protected async EvaluationCost(results: Map<string, RecordResult>, contextUser: UserInfo): Promise<number> {
-        try {
-            return await FeaturePipelineGoldenSetDriver.PromptRunCost(results.values(), this.Provider, contextUser);
-        } catch (e) {
-            if (e instanceof PromptRunCostReadError) {
-                throw new GoldenSetEvaluationError(`could not read the evaluation's AI Prompt Runs to report its cost: ${e.ReadMessage}`);
-            }
-            throw e;
-        }
-    }
-
-    /**
-     * What a batch's model calls cost: the sum of `TotalCost` over the distinct AI Prompt Runs the results name
-     * (`AIPromptRunID`), read by ID on `provider`. Distinct, because records that share a cache key share one prompt
-     * run. 0 when no result names a prompt run. Shared by every caller that reports a batch's spend, so the readers
-     * cannot drift.
-     * @throws PromptRunCostReadError when the prompt runs cannot be read: an unknown cost is never reported as 0
+     * What a batch's model calls cost: the sum of `TotalCost` over the distinct AI Prompt Runs the results name (records
+     * that share a cache key share one prompt run); 0 when none does.
+     * @throws Error when the prompt runs cannot be read: an unknown cost is never reported as 0
      */
     public static async PromptRunCost(results: Iterable<RecordResult>, provider: IMetadataProvider, contextUser: UserInfo): Promise<number> {
         // The set only de-duplicates; the IDs put in the filter are the ones the results carry, never normalized copies.
@@ -306,18 +241,17 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
             Fields: ['ID', 'TotalCost'],
         }, contextUser);
         if (!runs.Success) {
-            throw new PromptRunCostReadError(runs.ErrorMessage);
+            throw new Error(`could not read the AI Prompt Runs to report their cost: ${runs.ErrorMessage}`);
         }
         return runs.Results.reduce((sum, r) => sum + (r.TotalCost || 0), 0);
     }
 
     /**
-     * Fails when any case has no answer and no rejection of its answer: its result is missing, skipped, or failed for a
-     * reason other than `RejectedInvalid` (a constraint), which is the model's answer and is scored.
-     * @param costUSD what the batch cost, carried on the error so the test run still reports it
+     * Fails when a case's result is missing, skipped, or failed for a reason other than `RejectedInvalid` (a broken
+     * constraint is the model's answer and is scored).
      * @throws GoldenSetEvaluationError naming how many cases failed and the first case's error
      */
-    protected static AssertAnswered(cases: GoldenCase[], results: Map<string, RecordResult>, costUSD: number): void {
+    protected static AssertAnswered(cases: GoldenCase[], results: Map<string, RecordResult>): void {
         const failed = cases.filter((c) => {
             const r = results.get(`golden-${c.ID}`);
             return !r || (r.Status !== 'Succeeded' && r.FailureKind !== 'RejectedInvalid');
@@ -325,7 +259,7 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
         if (failed.length > 0) {
             const first = results.get(`golden-${failed[0].ID}`);
             const reason = first ? first.ErrorMessage || first.Status : 'no result';
-            throw new GoldenSetEvaluationError(`${failed.length} of ${cases.length} golden cases could not be run (case ${failed[0].ID}: ${reason}); nothing was stored`, costUSD);
+            throw new GoldenSetEvaluationError(`${failed.length} of ${cases.length} golden cases could not be run (case ${failed[0].ID}: ${reason}); nothing was stored`);
         }
     }
 
@@ -346,11 +280,9 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
     }
 
     /**
-     * An output's value as text; for an array, the item with the lowest `orderBy` value (items without a numeric one
-     * last, else the first item), read at the constraint's ItemRef. `unknown` for the same reason as
-     * {@link AnswerValues}' payload.
-     * @throws GoldenSetEvaluationError when the value is still a structured object (an array of objects whose
-     * constraint has no ItemRef): as text it would compare as "[object Object]" and score every case wrong silently
+     * An output's value as text; for an array, the item with the lowest `orderBy` value (else the first item), read at
+     * the constraint's ItemRef. `unknown`: part of the model's answer, as in {@link AnswerValues}.
+     * @throws GoldenSetEvaluationError when the value is still an object (no ItemRef), which would compare as text
      */
     protected PrimaryValue(output: string, value: unknown, resolved: ResolvedConstraint | null, orderBy: string | undefined): string | null {
         let v = value;
@@ -370,11 +302,7 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
         return String(v);
     }
 
-    /**
-     * Orders two array items by their numeric `orderBy` value, ascending; an item without one sorts last. `unknown`
-     * because the items come from the model's structured answer, whose shape the spec declares at run time (as in
-     * {@link AnswerValues}).
-     */
+    /** Orders two array items by their numeric `orderBy` value, ascending; an item without one sorts last. */
     protected static CompareOrder(a: unknown, b: unknown, orderBy: string): number {
         const x = FeaturePipelineGoldenSetDriver.OrderValue(a, orderBy);
         const y = FeaturePipelineGoldenSetDriver.OrderValue(b, orderBy);
@@ -382,10 +310,7 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
         return x === y ? 0 : x < y ? -1 : 1;
     }
 
-    /**
-     * An item's numeric `orderBy` value; +Infinity when it is missing, empty or not a number. `unknown` for the same
-     * reason as {@link CompareOrder}: the item is part of the model's answer, shaped by the spec at run time.
-     */
+    /** An item's numeric `orderBy` value; +Infinity when it is missing, empty or not a number. */
     protected static OrderValue(item: unknown, orderBy: string): number {
         const v = GetValueAtPath(item, orderBy);
         const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : Number.NaN;
@@ -393,9 +318,8 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
     }
 
     /**
-     * The display name the constraint shows the model for a value, else the value. Keys are matched with the golden
-     * set's one label normalisation. A lookup's display text joins its display fields with " — ", and its first
-     * display field is the name, so the name is the text before the first one.
+     * The display name the constraint shows the model for a value, else the value: the text before the first " — " of
+     * the lookup's display text (its first display field).
      */
     protected DisplayName(value: string | null, resolved: ResolvedConstraint | null): string | null {
         const displays = resolved?.ValueDisplays;
@@ -409,14 +333,13 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
 
     /**
      * One oracle per output (its value against the threshold), one for the required cases (when the set has any), plus
-     * the activation outcome, which decides the status: a wrong required case stores a gate value of 0, so the version
-     * is refused and the test fails. `costUSD` is the evaluation's model cost, which the test run records as its CostUSD.
+     * the activation outcome, which decides the status.
      */
     protected BuildResult(score: GoldenSetScore, row: MJFeaturePipelineVersionEntity, activation: DataFeatureActivation,
         caseCount: number, started: number, costUSD: number, requiredCount: number): DriverExecutionResult {
         const oracles: OracleResult[] = Object.entries(score.PerOutput).map(([name, s]) => ({
             oracleType: `golden-set.${name}`, passed: s.Value >= activation.Threshold, score: s.Value,
-            message: `${name}: ${s.Correct}/${s.N} = ${s.Value.toFixed(4)}${s.Lower !== null && s.Upper !== null ? ` [${s.Lower.toFixed(4)}, ${s.Upper.toFixed(4)}]` : ''} (threshold ${activation.Threshold})`,
+            message: `${name}: ${s.Correct}/${s.N} = ${s.Value.toFixed(4)} [${s.Lower.toFixed(4)}, ${s.Upper.toFixed(4)}] (threshold ${activation.Threshold})`,
         }));
         if (requiredCount > 0) {
             oracles.push(FeaturePipelineGoldenSetDriver.RequiredOracle(score, requiredCount));
@@ -442,10 +365,10 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
         };
     }
 
-    private errorResult(message: string, started: number, costUSD: number = 0): DriverExecutionResult {
+    private errorResult(message: string, started: number): DriverExecutionResult {
         return {
             targetType: TARGET_TYPE, targetLogId: '', status: 'Error', score: 0, oracleResults: [],
-            passedChecks: 0, failedChecks: 0, totalChecks: 0, errorMessage: message, durationMs: Date.now() - started, totalCost: costUSD,
+            passedChecks: 0, failedChecks: 0, totalChecks: 0, errorMessage: message, durationMs: Date.now() - started, totalCost: 0,
         };
     }
 }

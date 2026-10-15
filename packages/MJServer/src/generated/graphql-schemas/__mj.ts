@@ -53901,7 +53901,7 @@ export class MJFeaturePipelineVersion_ {
     @MaxLength(36)
     GoldenSetTestRunID?: string;
         
-    @Field({nullable: true, description: "Metric of the stored result: accuracy or macro-f1."}) 
+    @Field({nullable: true, description: "Metric of the stored result: accuracy."}) 
     @MaxLength(20)
     Metric?: string;
         
@@ -53926,14 +53926,14 @@ export class MJFeaturePipelineVersion_ {
     @Field({nullable: true, description: "When the version became Active."}) 
     ActivatedAt?: Date;
         
-    @Field({nullable: true, description: "The user whose run activated the version: the context user of the activating golden-set evaluation or on-demand run; for an unattended activation, the user the Feature Pipeline Version Steward scheduled job runs as."}) 
+    @Field({nullable: true, description: "The user whose run activated the version (for an unattended activation, the Feature Pipeline Version Steward job's user)."}) 
     @MaxLength(36)
     ApprovedByUserID?: string;
         
     @Field({nullable: true, description: "When a later Active version superseded this one."}) 
     RetiredAt?: Date;
         
-    @Field({nullable: true, description: "When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version (the records whose latest Pipeline value was written under another version, or under none). NULL until then; cleared when the version is retired or becomes Active again, so each activation is backfilled once."}) 
+    @Field({nullable: true, description: "When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version."}) 
     BackfilledAt?: Date;
         
     @Field() 
@@ -54525,7 +54525,7 @@ export class MJFeatureValueCacheResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Feature Values
 //****************************************************************************
-@ObjectType({ description: "Feature values computed by Feature Pipelines (or entered by people, Source = Human): one row per Feature Value key (record, feature, pipeline version, prompt version, primary AI model, parameters, input, source), updated in place when the same key is recomputed, with provenance, model reasoning and run back-links. Earlier values of a row are in Record Changes. Rows written before the key existed (ValueKeyHash NULL) are kept as history." })
+@ObjectType({ description: "Feature values computed by Feature Pipelines (or entered by people), one row per Feature Value key, updated in place when the same key is recomputed." })
 export class MJFeatureValue_ {
     @Field({description: "Unique identifier for this feature value history record."}) 
     @MaxLength(36)
@@ -54605,7 +54605,7 @@ export class MJFeatureValue_ {
     @Field({description: "Timestamp when this record was last updated."}) 
     _mj__UpdatedAt: Date;
         
-    @Field(() => Int, {nullable: true, description: "Version of the Feature Pipeline (MJ: Feature Pipeline Versions.Version for this RecordProcessID) that computed this value. Part of the FeatureValueKey. NULL on rows written before versioning or by a processor run without a run-level Preflight."}) 
+    @Field(() => Int, {nullable: true, description: "Version of the Feature Pipeline (MJ: Feature Pipeline Versions.Version) that computed this value; part of the FeatureValueKey."}) 
     PipelineVersion?: number;
         
     @Field({nullable: true, description: "Primary AI model the pipeline's prompt is configured to run (highest-priority Active AI Prompt Model). Part of the FeatureValueKey; the model that actually answered is on the linked AI Prompt Run."}) 
@@ -54624,7 +54624,7 @@ export class MJFeatureValue_ {
     @MaxLength(64)
     ValueKeyHash?: string;
         
-    @Field({nullable: true, description: "Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (a value a person entered on the target record, recorded when write-back found it and left it in place). Write-back never overwrites a Human value unless the run sets overwriteHumanValues."}) 
+    @Field({nullable: true, description: "Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (entered by a person, which write-back leaves in place)."}) 
     @MaxLength(20)
     Source?: string;
         
@@ -70062,7 +70062,7 @@ export class MJProcessRun_ {
     @Field(() => Boolean, {nullable: true, description: "When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes."}) 
     DryRun?: boolean;
         
-    @Field({nullable: true, description: "JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, previewed, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types."}) 
+    @Field({nullable: true, description: "JSON summary of a Feature Pipeline run (FeaturePipelineRunResult); NULL for other work types."}) 
     ResultSummary?: string;
         
     @Field({nullable: true}) 

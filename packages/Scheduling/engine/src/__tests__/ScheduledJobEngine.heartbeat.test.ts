@@ -33,6 +33,24 @@ const logStatusMock = vi.fn();
 vi.mock('@memberjunction/core', () => {
     return {
         UserInfo: class UserInfo { ID = 'user-1' },
+        Metadata: class MockMetadata {
+            async GetEntityObject(): Promise<Record<string, unknown>> {
+                return {
+                    ScheduledJobID: '',
+                    ExecutedByUserID: '',
+                    Status: 'Running',
+                    StartedAt: null,
+                    CompletedAt: null,
+                    QueuedAt: null,
+                    Success: false,
+                    ErrorMessage: null,
+                    Save: async () => true,
+                    Load: async () => true,
+                    LatestResult: { CompleteMessage: '' },
+                    ID: 'run-from-md-' + Math.random().toString(36).slice(2)
+                };
+            }
+        },
         IMetadataProvider: class {},
         LogError: (...args: unknown[]) => logErrorMock(...args),
         LogStatusEx: (entry: { message: string }) => logStatusMock(entry?.message ?? ''),
@@ -141,9 +159,8 @@ vi.mock('@memberjunction/scheduling-base-types', () => ({
     NotificationChannel: {}
 }));
 
-/** The scheduling engine base the engine reads jobs and its provider from (the mocked module's Instance). */
-const { fakeBase } = vi.hoisted(() => ({
-    fakeBase: {
+vi.mock('@memberjunction/scheduling-engine-base', () => {
+    const fakeBase = {
         ScheduledJobs: [] as Array<Record<string, unknown>>,
         ScheduledJobTypes: [{ ID: 'type-1', DriverClass: 'TestDriver' }] as Array<Record<string, unknown>>,
         ScheduledJobRuns: [] as Array<Record<string, unknown>>,
@@ -157,23 +174,6 @@ const { fakeBase } = vi.hoisted(() => ({
         ContextUser: { ID: 'user-1' },
         ProviderToUse: {
             MJCoreSchemaName: '__mj',
-            // Run records the engine creates — it uses the base's provider, the one the job's context gets.
-            GetEntityObject: async (): Promise<Record<string, unknown>> => {
-                return {
-                    ScheduledJobID: '',
-                    ExecutedByUserID: '',
-                    Status: 'Running',
-                    StartedAt: null,
-                    CompletedAt: null,
-                    QueuedAt: null,
-                    Success: false,
-                    ErrorMessage: null,
-                    Save: async () => true,
-                    Load: async () => true,
-                    LatestResult: { CompleteMessage: '' },
-                    ID: 'run-from-md-' + Math.random().toString(36).slice(2)
-                };
-            },
             // PlatformKey + Dialect feed ScheduledJobEngine.buildLockSprocCall, which
             // builds the dialect-appropriate sproc call (used by tryAcquireLock /
             // releaseLockIfTokenMatches). Mimic the SQL Server dialect so the engine
@@ -192,17 +192,16 @@ const { fakeBase } = vi.hoisted(() => ({
             })
         },
         RunViewProviderToUse: {}
-    },
-}));
+    };
 
-vi.mock('@memberjunction/scheduling-engine-base', () => ({
-    SchedulingEngineBase: {
-        get Instance() { return fakeBase; }
-    }
-}));
+    return {
+        SchedulingEngineBase: {
+            get Instance() { return fakeBase; }
+        }
+    };
+});
 
-// The engine resumes jobs paused for a missing action class at StartPolling; the real driver pulls in the action
-// engine, which this suite does not mock.
+// The engine resumes jobs paused for a missing action class at StartPolling; the real driver pulls in the action engine.
 vi.mock('../drivers/ActionScheduledJobDriver', () => ({
     ActionScheduledJobDriver: { ResumeJobsPausedForMissingClass: vi.fn().mockResolvedValue([]) }
 }));
@@ -229,10 +228,13 @@ const mockRunViewQueue: Array<{ Success: boolean; Results: unknown[] }> = [];
 
 import { SchedulingEngine } from '../ScheduledJobEngine';
 import type { ScheduledJobExecutionContext } from '../BaseScheduledJob';
-import { UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
 
-const mockUser = new UserInfo();
-const mockBase = fakeBase;
+const mockUser = { ID: 'user-1' };
+const mockBase = SchedulingEngineBase.Instance as Record<string, unknown> & {
+    ScheduledJobs: Array<Record<string, unknown>>;
+    ProviderToUse: { ExecuteSQL: ReturnType<typeof vi.fn>; MJCoreSchemaName: string };
+};
 
 function makeJob(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
     return {
@@ -279,7 +281,7 @@ async function captureHeartbeat(job: Record<string, unknown>): Promise<() => Pro
     mockExecuteSQLQueue.push([{ Acquired: 1 }]);
     mockExecuteSQLQueue.push([{ Released: 1 }]);
 
-    await engine.ExecuteScheduledJobs(mockUser);
+    await engine.ExecuteScheduledJobs(mockUser as never);
     if (!captured) {
         throw new Error('Plugin did not receive a heartbeat closure');
     }
@@ -341,7 +343,7 @@ function lastSprocCall(name: string): unknown[] | undefined {
 describe('H0: the plugin runs on the provider the engine read the job with', () => {
     it('hands the plugin the engine\'s provider in its context', async () => {
         mockBase.ScheduledJobs = [makeJob()];
-        let provider: IMetadataProvider | undefined;
+        let provider: ScheduledJobExecutionContext['Provider'] | undefined;
         createInstanceImpl = () => ({
             Execute: async (context: ScheduledJobExecutionContext) => {
                 provider = context.Provider;
@@ -350,7 +352,7 @@ describe('H0: the plugin runs on the provider the engine read the job with', () 
         });
         mockExecuteSQLQueue.push([{ Acquired: 1 }]);
         mockExecuteSQLQueue.push([{ Released: 1 }]);
-        await SchedulingEngine.Instance.ExecuteScheduledJobs(mockUser);
+        await SchedulingEngine.Instance.ExecuteScheduledJobs(mockUser as never);
         expect(provider).toBe(mockBase.ProviderToUse);
     });
 });
@@ -437,7 +439,7 @@ describe('H3: heartbeat is a no-op in Concurrent mode', () => {
         // path). Queue an acquire=0 so it takes the no-lock branch.
         mockExecuteSQLQueue.push([{ Acquired: 0 }]);
 
-        await engine.ExecuteScheduledJobs(mockUser);
+        await engine.ExecuteScheduledJobs(mockUser as never);
         expect(captured).toBeDefined();
 
         const callsBefore = mockBase.ProviderToUse.ExecuteSQL.mock.calls.length;

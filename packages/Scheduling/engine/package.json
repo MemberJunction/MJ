@@ -34,6 +34,7 @@
     "@memberjunction/rubrics": "6.2.0-edge.4",
     "@memberjunction/scheduling-base-types": "6.2.0-edge.4",
     "@memberjunction/scheduling-engine-base": "6.2.0-edge.4",
+    "@memberjunction/sqlserver-dataprovider": "6.2.0-edge.4",
     "@memberjunction/task-graph": "6.2.0-edge.4",
     "@memberjunction/templates": "6.2.0-edge.4",
     "@memberjunction/testing-engine": "6.2.0-edge.4",

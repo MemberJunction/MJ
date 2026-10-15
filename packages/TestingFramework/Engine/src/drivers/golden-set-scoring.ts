@@ -1,7 +1,7 @@
 /**
  * @fileoverview Scoring for Feature Pipeline golden sets: per-output accuracy (alternates accepted, case-insensitive)
- * or macro-F1 over primary labels, Wilson 95% intervals, and the pipeline result = the lowest output, or 0 when a
- * required case is wrong. A case can expect an abstention (the output withheld below its confidence floor, or no answer).
+ * with Wilson 95% intervals, and the pipeline result = the lowest output, or 0 when a required case is wrong. A case
+ * can expect an abstention.
  * @module @memberjunction/testing-engine
  */
 import type { MJFeaturePipelineVersionEntity } from '@memberjunction/core-entities';
@@ -16,27 +16,15 @@ export interface GoldenCase {
      * entity has; the scorer never reads them, it only passes them to the pipeline and hashes them.
      */
     Input: Record<string, unknown>;
-    /**
-     * Per output, the accepted labels; the first is the primary. For an output in {@link ExpectAbstain} these are the
-     * accepted abstain values (e.g. "Unknown"), and may be empty.
-     */
+    /** Per output, the accepted labels (first = primary); for an {@link ExpectAbstain} output, accepted abstain values. */
     Expected: Record<string, string[]>;
-    /**
-     * Outputs whose correct answer is an abstention: the output was withheld below its confidence floor, or answered
-     * nothing (null, an empty list), or answered one of its `Expected` labels. A record that failed for another reason is
-     * not an abstention. An output listed here is scored even when its `Expected` list is empty.
-     */
+    /** Outputs whose correct answer is an abstention: withheld below the confidence floor, no answer, or an `Expected` label. */
     ExpectAbstain?: string[];
-    /**
-     * A must-pass case: when any output it scores is wrong, the golden set fails whatever its accuracy (the gate value is
-     * 0, so the version is refused), and the result names the case ({@link GoldenSetScore.RequiredFailures}).
-     */
+    /** A must-pass case: when any output it scores is wrong, the gate value is 0 whatever the accuracy. */
     Required?: boolean;
     /**
-     * Where the labels came from: `human` = entered by an app user (product data, accepted as supplied);
-     * `model-consensus` = two independent model labelers agreed; `model-adjudicated` = a third labeler decided;
-     * `specification` = fixed by the pipeline's written rule rather than judged (an injection attempt must abstain or be
-     * ignored), so no labeler labels it and the label-quality record does not cover it.
+     * Where the labels came from: `human` (an app user), `model-consensus` (two model labelers agreed),
+     * `model-adjudicated` (a third labeler decided), `specification` (fixed by the pipeline's written rule, not labelled).
      */
     LabelSource: 'human' | 'model-consensus' | 'model-adjudicated' | 'specification';
 }
@@ -49,8 +37,8 @@ export interface GoldenAnswer {
     /** Outputs the pipeline withheld below their confidence floor; absent when none. */
     Withheld?: string[];
 }
-/** One output's score: correct answers of N, the metric value and its Wilson interval (accuracy only). */
-export interface OutputScore { Correct: number; N: number; Value: number; Lower: number | null; Upper: number | null; }
+/** One output's score: correct answers of N, the accuracy and its Wilson interval. */
+export interface OutputScore { Correct: number; N: number; Value: number; Lower: number; Upper: number; }
 /** A golden set's score: per output, and the pipeline's result (its lowest output, or 0 when a required case is wrong). */
 export interface GoldenSetScore {
     Metric: NonNullable<MJFeaturePipelineVersionEntity['Metric']>;
@@ -68,11 +56,8 @@ export interface GoldenSetScore {
     LabelSources: Record<string, number>;
 }
 
-/** One scored case of one output: the truth and prediction as compared (abstentions as {@link ABSTAIN}) and the verdict. */
-interface ScoredPair { CaseID: string; truth: string; predicted: string | null; correct: boolean; }
-
-/** The class an abstention scores as under macro-F1: the expected and the given abstention compare equal. */
-const ABSTAIN = '(abstain)';
+/** One scored case of one output and its verdict. */
+interface ScoredPair { CaseID: string; correct: boolean; }
 
 /** Golden-set scoring; pure and deterministic. */
 export class GoldenSetScorer {
@@ -92,10 +77,7 @@ export class GoldenSetScorer {
         return { Lower: centre - half, Upper: centre + half };
     }
 
-    /**
-     * Scores a golden set. Outputs are those named in the cases' `Expected` or `ExpectAbstain`; a failed record counts as
-     * wrong (except an output it was failed on below its confidence floor, when the case expects that output to abstain).
-     */
+    /** Scores a golden set. Outputs are those named in the cases' `Expected` or `ExpectAbstain`; a failed record is wrong. */
     public static Score(cases: GoldenCase[], answers: GoldenAnswer[], metric: GoldenSetScore['Metric']): GoldenSetScore {
         const byCase = new Map(answers.map((a) => [a.CaseID, a]));
         const outputs = [...new Set(cases.flatMap((c) => [...Object.keys(c.Expected), ...(c.ExpectAbstain || [])]))];
@@ -103,7 +85,7 @@ export class GoldenSetScorer {
         const wrongByCase = new Map<string, string[]>();
         for (const output of outputs) {
             const pairs = GoldenSetScorer.ScoredPairs(cases, byCase, output);
-            perOutput[output] = GoldenSetScorer.ScoreOutput(pairs, metric);
+            perOutput[output] = GoldenSetScorer.ScoreOutput(pairs);
             for (const p of pairs.filter((x) => !x.correct)) {
                 wrongByCase.set(p.CaseID, [...(wrongByCase.get(p.CaseID) || []), output]);
             }
@@ -133,33 +115,17 @@ export class GoldenSetScorer {
                 const withheld = (answer?.Withheld || []).includes(output);
                 // An answered record that gave nothing abstained; a record that failed for another reason did not answer at all
                 const abstained = withheld || (!!answer?.Values && (predicted === null || accepted.includes(norm(predicted))));
-                return { CaseID: c.ID, truth: ABSTAIN, predicted: abstained ? ABSTAIN : predicted, correct: abstained };
+                return { CaseID: c.ID, correct: abstained };
             }
-            return { CaseID: c.ID, truth: c.Expected[output][0], predicted, correct: predicted !== null && accepted.includes(norm(predicted)) };
+            return { CaseID: c.ID, correct: predicted !== null && accepted.includes(norm(predicted)) };
         });
     }
 
-    /** One output's score over its scored cases. */
-    protected static ScoreOutput(pairs: ScoredPair[], metric: GoldenSetScore['Metric']): OutputScore {
+    /** One output's accuracy over its scored cases. */
+    protected static ScoreOutput(pairs: ScoredPair[]): OutputScore {
         const correct = pairs.filter((p) => p.correct).length;
-        if (metric === 'macro-f1') {
-            return { Correct: correct, N: pairs.length, Value: GoldenSetScorer.MacroF1(pairs), Lower: null, Upper: null };
-        }
         const w = GoldenSetScorer.WilsonInterval(correct, pairs.length);
         return { Correct: correct, N: pairs.length, Value: pairs.length > 0 ? correct / pairs.length : 0, Lower: w.Lower, Upper: w.Upper };
-    }
-
-    /** Macro-averaged F1 over the primary labels (alternates are not accepted: F1 is per class). */
-    protected static MacroF1(pairs: Array<{ truth: string; predicted: string | null }>): number {
-        const norm = GoldenSetScorer.NormalizeLabel;
-        const classes = [...new Set(pairs.map((p) => norm(p.truth)))];
-        const f1s = classes.map((c) => {
-            const tp = pairs.filter((p) => norm(p.truth) === c && norm(p.predicted) === c).length;
-            const fp = pairs.filter((p) => norm(p.truth) !== c && norm(p.predicted) === c).length;
-            const fn = pairs.filter((p) => norm(p.truth) === c && norm(p.predicted) !== c).length;
-            return tp === 0 ? 0 : (2 * tp) / (2 * tp + fp + fn);
-        });
-        return f1s.length === 0 ? 0 : f1s.reduce((a, b) => a + b, 0) / f1s.length;
     }
 
     /** How many cases came from each label source. */
@@ -171,10 +137,7 @@ export class GoldenSetScorer {
         return counts;
     }
 
-    /**
-     * A label as every golden-set comparison sees it: trimmed and lower-cased; null is ''. The one normalisation for
-     * scoring and for labeler agreement, so the two can never disagree about whether two labels are the same.
-     */
+    /** A label as every golden-set comparison (scoring and labeler agreement) sees it: trimmed, lower-cased; null is ''. */
     public static NormalizeLabel(s: string | null): string {
         return (s || '').trim().toLowerCase();
     }

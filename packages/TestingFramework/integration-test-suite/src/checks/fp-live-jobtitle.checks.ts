@@ -59,7 +59,7 @@ export class JobTitleConsistency {
     /**
      * Adds to `ctx.CostUSD` what the batch's model calls cost, read by prompt-run ID
      * ({@link FeaturePipelineGoldenSetDriver.PromptRunCost}), so nothing else running at the same time is counted.
-     * @throws PromptRunCostReadError when the prompt runs cannot be read: an unknown cost is never reported as 0
+     * @throws Error when the prompt runs cannot be read: an unknown cost is never reported as 0
      */
     public static async RecordCost(ctx: IntegrationCheckContext, results: Map<string, RecordResult>): Promise<void> {
         ctx.CostUSD = (ctx.CostUSD || 0) + await FeaturePipelineGoldenSetDriver.PromptRunCost(results.values(), ctx.Provider, ctx.User);

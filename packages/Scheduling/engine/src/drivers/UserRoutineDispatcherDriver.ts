@@ -211,7 +211,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     }
 
     public FormatNotification(context: ScheduledJobExecutionContext, result: ScheduledJobResult): NotificationContent {
-        const details = this.numericDetails(result.Details);
+        const details = (result.Details ?? {}) as Record<string, number>;
         if (!result.Success) {
             return {
                 Subject: `User Routine Dispatcher failed: ${context.Schedule.Name}`,
@@ -228,20 +228,6 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             Priority: (details['Failed'] ?? 0) > 0 ? 'Normal' : 'Low',
             Metadata: details,
         };
-    }
-
-    /**
-     * The numeric counters of a run's Details (free-form per job type): every entry whose value is a number, so the
-     * notification never shows a non-number as a count.
-     */
-    private numericDetails(details: ScheduledJobResult['Details']): Record<string, number> {
-        const counters: Record<string, number> = {};
-        for (const [key, value] of Object.entries(details ?? {})) {
-            if (typeof value === 'number') {
-                counters[key] = value;
-            }
-        }
-        return counters;
     }
 
     // ========================================================================

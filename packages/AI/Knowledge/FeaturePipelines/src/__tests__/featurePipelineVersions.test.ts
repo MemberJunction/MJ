@@ -660,7 +660,6 @@ describe('FeaturePipelineVersionService.PlanUnattended', () => {
         expect(await plan(pinA, { Activation: stored08 })).toEqual({ Kind: 'none', Version: 1 });
         // dated from when the stored result was saved, so the run that produced it does not count as the new evaluation
         expect(await plan(pinA, { Activation: gate })).toEqual({ Kind: 'evaluate', Version: 1, GoldenSetTestID: 'T-1', Since: measured });
-        expect((await plan(pinA, { Activation: { ...stored08, Metric: 'macro-f1' } })).Kind).toBe('evaluate');
         expect(await plan(pinA, { Activation: { ...stored08, GoldenSetTestID: 'T-2' } })).toMatchObject({ Kind: 'evaluate', GoldenSetTestID: 'T-2' });
         expect(await plan(pinA, { Activation: gate, Unattended: { AutoEvaluate: false } })).toMatchObject({ Kind: 'held', Version: 1 });
     });

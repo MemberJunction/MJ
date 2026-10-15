@@ -915,7 +915,7 @@ describe('DataFeatureSpec — Activation validation', () => {
 
   it('accepts a complete gate, at a threshold of 1 included', () => {
     expect(activationPaths(gated({ GoldenSetTestID: 'T-1', Metric: 'accuracy', Threshold: 0.9 }))).toEqual([]);
-    expect(activationPaths(gated({ GoldenSetTestID: 'T-1', Metric: 'macro-f1', Threshold: 1 }))).toEqual([]);
+    expect(activationPaths(gated({ GoldenSetTestID: 'T-1', Metric: 'accuracy', Threshold: 1 }))).toEqual([]);
   });
   it('accepts a spec without one', () => {
     expect(activationPaths(specOf({ Name: 'JT', PromptID: 'prompt-1', Outputs: [] }))).toEqual([]);

@@ -227,12 +227,9 @@ export class ActionLogRetentionScheduledJobDriver extends BaseScheduledJob {
     }
 
     public FormatNotification(context: ScheduledJobExecutionContext, result: ScheduledJobResult): NotificationContent {
-        // Details is free-form per job type; read each value only when it has the expected type.
-        const deletedValue = result.Details?.['Deleted'];
-        const failedValue = result.Details?.['Failed'];
-        const deleted = typeof deletedValue === 'number' ? deletedValue : 0;
-        const failed = typeof failedValue === 'number' ? failedValue : 0;
-        const reachedCap = result.Details?.['ReachedCap'] === true;
+        const deleted = (result.Details?.['Deleted'] as number) ?? 0;
+        const failed = (result.Details?.['Failed'] as number) ?? 0;
+        const reachedCap = (result.Details?.['ReachedCap'] as boolean) ?? false;
         if (!result.Success) {
             return {
                 Subject: `Action-log purge failed: ${context.Schedule.Name}`,

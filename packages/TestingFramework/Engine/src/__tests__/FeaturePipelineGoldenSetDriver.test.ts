@@ -70,7 +70,6 @@ interface Harness {
     processor: InferProcessor;
     processBatch: Mock<(records: RecordRef[], ctx: RecordProcessorContext) => Promise<Map<string, RecordResult>>>;
     preflight: MockInstance<InferProcessor['Preflight']>;
-    resolvePin: MockInstance<InferProcessor['ResolveRunPin']>;
     record: MockInstance<FeaturePipelineVersionService['RecordGoldenSetResult']>;
 }
 
@@ -85,8 +84,6 @@ interface HarnessOptions {
     rowFound?: boolean;
     /** The test's InputDefinition JSON as stored, instead of `{ Cases }`. */
     inputDefinition?: string;
-    /** What successive ResolveRunPin calls return (the last one repeats); default PIN. */
-    pins?: FeaturePipelinePinData[];
 }
 
 async function harness(o: HarnessOptions = {}): Promise<Harness> {
@@ -95,11 +92,7 @@ async function harness(o: HarnessOptions = {}): Promise<Harness> {
     const processBatch = vi.fn<(records: RecordRef[], ctx: RecordProcessorContext) => Promise<Map<string, RecordResult>>>()
         .mockResolvedValue(o.results || new Map());
     vi.spyOn(processor, 'ProcessBatch').mockImplementation(processBatch);
-    const pins = o.pins || [PIN];
-    const resolvePin = vi.spyOn(processor, 'ResolveRunPin').mockResolvedValue(pins[pins.length - 1]);
-    for (const pin of pins.slice(0, -1)) {
-        resolvePin.mockResolvedValueOnce(pin);
-    }
+    vi.spyOn(processor, 'ResolveRunPin').mockResolvedValue(PIN);
     const preflight = vi.spyOn(processor, 'Preflight').mockResolvedValue(undefined);
     vi.spyOn(processor, 'GetResolvedConstraints').mockResolvedValue(o.constraints || new Map());
     const version = await realEntity(MJFeaturePipelineVersionEntity, 'MJ: Feature Pipeline Versions',
@@ -114,7 +107,7 @@ async function harness(o: HarnessOptions = {}): Promise<Harness> {
     const contextUser = new UserInfo(undefined, { ID: 'U-1', Name: 'Evaluator', Email: 'evaluator@example.com' });
     const driver = new TestableGoldenSetDriver(o.rowFound === false ? null : rp);
     const context: DriverExecutionContext = { test, testRun, contextUser, options: {}, oracleRegistry: new Map() };
-    return { driver, context, processor, processBatch, preflight, resolvePin, record };
+    return { driver, context, processor, processBatch, preflight, record };
 }
 
 const human = (id: string, expected: Record<string, string[]>): GoldenCase => ({ ID: id, Input: { T: id }, Expected: expected, LabelSource: 'human' });
@@ -128,40 +121,20 @@ beforeEach(() => {
 });
 
 describe('FeaturePipelineGoldenSetDriver refusals', () => {
-    it('refuses a pipeline that does not name this test as its golden set', async () => {
-        const r = await harness({ goldenSetTestID: 'CCCCCCCC-0000-0000-0000-00000000000C' });
+    it.each<[string, HarnessOptions, string]>([
+        ['a pipeline that does not name this test as its golden set', { goldenSetTestID: 'CCCCCCCC-0000-0000-0000-00000000000C' }, 'does not declare this test'],
+        // the test ID matches whatever its case; the model-made labels then have no passing record
+        ['model-made labels without a passing label-quality record', { goldenSetTestID: TEST_ID.toLowerCase() }, 'label-quality check'],
+        ['a Record Process that does not exist', { rowFound: false }, `Record Process '${RP_ID}' not found`],
+        ['a Configuration without RecordProcessID', { config: { RecordProcessID: '' } }, 'Configuration.RecordProcessID is required'],
+        ['an InputDefinition without Cases', { inputDefinition: '{}' }, 'the golden set has no cases'],
+    ])('refuses %s before any case runs', async (_name, options, message) => {
+        const r = await harness(options);
         const result = await r.driver.Execute(r.context);
         expect(result.status).toBe('Error');
-        expect(result.errorMessage).toContain('does not declare this test');
-        expect(r.processBatch).not.toHaveBeenCalled();
-    });
-    it('matches the test ID whatever its case, then refuses model-made labels without a passing record before any case runs', async () => {
-        const r = await harness({ goldenSetTestID: TEST_ID.toLowerCase() });
-        const result = await r.driver.Execute(r.context);
-        expect(result.status).toBe('Error');
-        expect(result.errorMessage).toContain('label-quality check');
+        expect(result.errorMessage).toContain(message);
         expect(r.processBatch).not.toHaveBeenCalled();
         expect(r.record).not.toHaveBeenCalled();
-    });
-    it('refuses when the Record Process does not exist', async () => {
-        const r = await harness({ rowFound: false });
-        const result = await r.driver.Execute(r.context);
-        expect(result.status).toBe('Error');
-        expect(result.errorMessage).toContain(`Record Process '${RP_ID}' not found`);
-        expect(r.processBatch).not.toHaveBeenCalled();
-    });
-    it('refuses a Configuration without RecordProcessID', async () => {
-        const r = await harness({ config: { RecordProcessID: '' } });
-        const result = await r.driver.Execute(r.context);
-        expect(result.status).toBe('Error');
-        expect(result.errorMessage).toBe('Configuration.RecordProcessID is required');
-    });
-    it('refuses an InputDefinition without Cases as an empty golden set', async () => {
-        const r = await harness({ inputDefinition: '{}' });
-        const result = await r.driver.Execute(r.context);
-        expect(result.status).toBe('Error');
-        expect(result.errorMessage).toContain('the golden set has no cases');
-        expect(r.processBatch).not.toHaveBeenCalled();
     });
 });
 
@@ -252,29 +225,19 @@ describe('FeaturePipelineGoldenSetDriver evaluation', () => {
         expect(JSON.parse(r.record.mock.calls[0][0].Result.Details).Answers).toEqual([{ CaseID: 'g1', Values: { JobFunctions: 'Operations' } }]);
     });
 
-    it('compares an array output\'s first item by value when no order or display name is configured', async () => {
-        const results = new Map<string, RecordResult>([
-            ['golden-g1', ok({ JobFunctions: [{ JobFunctionID: 'JF-SAL', Rank: 2 }, { JobFunctionID: 'JF-OPS', Rank: 1 }] })],
-        ]);
-        const r = await harness({
-            cases: [human('g1', { JobFunctions: ['JF-SAL'] })], outputs: [output('JobFunctions')], results,
-            constraints: new Map([['JobFunctions', { Type: 'lookup', OnViolation: 'fail', ItemRef: '$.JobFunctionID' }]]),
-        });
-        await r.driver.Execute(r.context);
-        expect(JSON.parse(r.record.mock.calls[0][0].Result.Details).Answers).toEqual([{ CaseID: 'g1', Values: { JobFunctions: 'JF-SAL' } }]);
-    });
-
-    it('sorts items without a numeric order value last', async () => {
+    it.each<[string, Partial<FeaturePipelineGoldenSetConfig>, string]>([
+        ['the first item when no order is configured', {}, 'A'],
+        ['the lowest numeric order, items without one last', { Outputs: { JobFunctions: { PrimaryItemOrderBy: 'Rank' } } }, 'D'],
+    ])('compares an array output\'s primary item by value: %s', async (_name, config, expected) => {
         const results = new Map<string, RecordResult>([
             ['golden-g1', ok({ JobFunctions: [{ JobFunctionID: 'A' }, { JobFunctionID: 'B', Rank: 'x' }, { JobFunctionID: 'C', Rank: 2 }, { JobFunctionID: 'D', Rank: '1' }] })],
         ]);
         const r = await harness({
-            cases: [human('g1', { JobFunctions: ['D'] })], outputs: [output('JobFunctions')], results,
+            cases: [human('g1', { JobFunctions: [expected] })], outputs: [output('JobFunctions')], results, config,
             constraints: new Map([['JobFunctions', { Type: 'lookup', OnViolation: 'fail', ItemRef: '$.JobFunctionID' }]]),
-            config: { Outputs: { JobFunctions: { PrimaryItemOrderBy: 'Rank' } } },
         });
         await r.driver.Execute(r.context);
-        expect(JSON.parse(r.record.mock.calls[0][0].Result.Details).Answers).toEqual([{ CaseID: 'g1', Values: { JobFunctions: 'D' } }]);
+        expect(JSON.parse(r.record.mock.calls[0][0].Result.Details).Answers).toEqual([{ CaseID: 'g1', Values: { JobFunctions: expected } }]);
     });
 
     it('fails, storing nothing, when an array of objects has no ItemRef to compare', async () => {
@@ -286,56 +249,19 @@ describe('FeaturePipelineGoldenSetDriver evaluation', () => {
         expect(r.record).not.toHaveBeenCalled();
     });
 
-    it('ends the evaluation as an Error, storing nothing, when a case failed for a reason other than its answer', async () => {
-        const results = new Map<string, RecordResult>([
-            ['golden-g1', ok({ SeniorityLevel: 'C-Level' })],
-            ['golden-g2', { Status: 'Failed', ErrorMessage: 'provider unavailable (503)' }],
-            ['golden-g3', { Status: 'Failed', ErrorMessage: 'provider unavailable (503)' }],
-        ]);
+    it.each<[string, Map<string, RecordResult>, string]>([
+        ['failed for a reason other than its answer', new Map<string, RecordResult>([['golden-g1', ok({ SeniorityLevel: 'C-Level' })],
+            ['golden-g2', { Status: 'Failed', ErrorMessage: 'provider unavailable (503)' }], ['golden-g3', { Status: 'Failed', ErrorMessage: 'provider unavailable (503)' }]]),
+        '2 of 3 golden cases could not be run (case g2: provider unavailable (503)); nothing was stored'],
+        ['was skipped', new Map<string, RecordResult>([...allOk(cases.slice(0, 2), { SeniorityLevel: 'Owner' }), ['golden-g3', { Status: 'Skipped' }]]),
+            '1 of 3 golden cases could not be run (case g3: Skipped); nothing was stored'],
+        ['has no result', allOk(cases.slice(0, 2), { SeniorityLevel: 'Owner' }), '1 of 3 golden cases could not be run (case g3: no result); nothing was stored'],
+    ])('ends the evaluation as an Error, storing nothing, when a case %s', async (_name, results, message) => {
         const r = await harness({ cases, outputs: [output('SeniorityLevel')], results });
         const result = await r.driver.Execute(r.context);
         expect(result.status).toBe('Error');
-        expect(result.errorMessage).toBe('2 of 3 golden cases could not be run (case g2: provider unavailable (503)); nothing was stored');
+        expect(result.errorMessage).toBe(message);
         expect(r.record).not.toHaveBeenCalled();
-    });
-
-    it('ends the evaluation as an Error, storing nothing, when a case was skipped', async () => {
-        const results = new Map<string, RecordResult>([
-            ['golden-g1', ok({ SeniorityLevel: 'C-Level' })],
-            ['golden-g2', ok({ SeniorityLevel: 'Owner' })],
-            ['golden-g3', { Status: 'Skipped' }],
-        ]);
-        const r = await harness({ cases, outputs: [output('SeniorityLevel')], results });
-        const result = await r.driver.Execute(r.context);
-        expect(result.status).toBe('Error');
-        expect(result.errorMessage).toBe('1 of 3 golden cases could not be run (case g3: Skipped); nothing was stored');
-        expect(r.record).not.toHaveBeenCalled();
-    });
-
-    it('treats a case with no result as not run', async () => {
-        const r = await harness({ cases, outputs: [output('SeniorityLevel')], results: allOk(cases.slice(0, 2), { SeniorityLevel: 'Owner' }) });
-        const result = await r.driver.Execute(r.context);
-        expect(result.errorMessage).toBe('1 of 3 golden cases could not be run (case g3: no result); nothing was stored');
-        expect(r.record).not.toHaveBeenCalled();
-    });
-
-    it('stores nothing when the pipeline\'s pin changed while the cases ran', async () => {
-        const edited: FeaturePipelinePinData = { ...PIN, PromptVersionHash: 'h-edited' };
-        const r = await harness({ cases, outputs: [output('SeniorityLevel')], results: allOk(cases, { SeniorityLevel: 'Owner' }), pins: [PIN, edited] });
-        const result = await r.driver.Execute(r.context);
-        expect(result.status).toBe('Error');
-        expect(result.errorMessage).toContain('changed (prompt, model, parameters or spec) during the evaluation; nothing was stored');
-        expect(r.record).not.toHaveBeenCalled();
-    });
-
-    it('stores the result under the pin captured before the batch', async () => {
-        const r = await harness({ cases, outputs: [output('SeniorityLevel')], results: allOk(cases, { SeniorityLevel: 'Owner' }) });
-        await r.driver.Execute(r.context);
-        const resolvePin = r.resolvePin;
-        expect(resolvePin).toHaveBeenCalledTimes(2);
-        expect(resolvePin.mock.invocationCallOrder[0]).toBeLessThan(r.processBatch.mock.invocationCallOrder[0]);
-        expect(resolvePin.mock.invocationCallOrder[1]).toBeGreaterThan(r.processBatch.mock.invocationCallOrder[0]);
-        expect(r.record.mock.calls[0][0].Pin).toEqual(PIN);
     });
 });
 
@@ -352,51 +278,17 @@ describe('FeaturePipelineGoldenSetDriver preflight', () => {
         expect(r.processor.WritesHistory).toBe(true);
     });
 
-    it('refuses a pipeline whose Preflight fails with an empty message, naming the error', async () => {
+    it.each<[string, string, string]>([
+        ['its message', 'the template does not render the constraint block', 'the template does not render the constraint block'],
+        ['the error name when the message is empty', '', 'ConstraintBlockMissingError'],
+    ])('refuses a pipeline whose Preflight fails, naming %s, storing nothing', async (_name, message, named) => {
         const r = await harness({ cases, outputs: [output('SeniorityLevel')], results: allOk(cases, { SeniorityLevel: 'C-Level' }) });
-        r.preflight.mockRejectedValue(new ConstraintBlockMissingError('Job Title Prompt', ''));
+        r.preflight.mockRejectedValue(new ConstraintBlockMissingError('Job Title Prompt', message));
         const result = await r.driver.Execute(r.context);
         expect(result.status).toBe('Error');
-        expect(result.errorMessage).toBe("Pipeline 'JT' would not run: ConstraintBlockMissingError");
+        expect(result.errorMessage).toBe(`Pipeline 'JT' would not run: ${named}`);
         expect(r.processBatch).not.toHaveBeenCalled();
         expect(r.record).not.toHaveBeenCalled();
-    });
-
-    it('refuses a pipeline whose Preflight fails (template without the constraint block), storing nothing', async () => {
-        const r = await harness({ cases, outputs: [output('SeniorityLevel')], results: allOk(cases, { SeniorityLevel: 'C-Level' }) });
-        r.preflight.mockRejectedValue(new ConstraintBlockMissingError('Job Title Prompt', 'the template does not render the constraint block'));
-        const result = await r.driver.Execute(r.context);
-        expect(result.status).toBe('Error');
-        expect(result.errorMessage).toBe("Pipeline 'JT' would not run: the template does not render the constraint block");
-        expect(r.processBatch).not.toHaveBeenCalled();
-        expect(r.record).not.toHaveBeenCalled();
-    });
-});
-
-describe('FeaturePipelineGoldenSetDriver.LoadRecordProcess', () => {
-    async function withProvider(loads: boolean) {
-        const r = await harness();
-        const rp = await realEntity(MJRecordProcessEntity, 'MJ: Record Processes', { ID: RP_ID, Name: 'JT', EntityID: ENTITY_ID });
-        const load = vi.spyOn(rp, 'Load').mockResolvedValue(loads);
-        const provider = new EntitiesOnlyProvider([]);
-        const getEntityObject = vi.spyOn(provider, 'GetEntityObject').mockResolvedValue(rp);
-        const driver = new FeaturePipelineGoldenSetDriver();
-        driver.Provider = provider;
-        return { r, driver, load, getEntityObject };
-    }
-
-    it('reads the row on the driver\'s provider and reports a row that does not load as not found', async () => {
-        const { r, driver, load, getEntityObject } = await withProvider(false);
-        const result = await driver.Execute(r.context);
-        expect(getEntityObject).toHaveBeenCalledWith('MJ: Record Processes', r.context.contextUser);
-        expect(load).toHaveBeenCalledWith(RP_ID);
-        expect(result.errorMessage).toBe(`Record Process '${RP_ID}' not found`);
-    });
-
-    it('evaluates the row it loaded', async () => {
-        const { r, driver } = await withProvider(true);
-        const result = await driver.Execute(r.context);
-        expect(result.errorMessage).toContain('label-quality check');
     });
 });
 
@@ -405,8 +297,8 @@ describe('FeaturePipelineGoldenSetDriver evaluation cost', () => {
     type CostRow = { ID: string; TotalCost: number | null };
 
     /** The harness with the driver on a provider that answers the prompt-run read with the given rows. */
-    async function withCosts(results: Map<string, RecordResult>, rows: CostRow[], o: HarnessOptions = {}, success = true) {
-        const r = await harness({ cases, outputs: [output('SeniorityLevel')], results, ...o });
+    async function withCosts(results: Map<string, RecordResult>, rows: CostRow[], success = true) {
+        const r = await harness({ cases, outputs: [output('SeniorityLevel')], results });
         const provider = new EntitiesOnlyProvider([]);
         const reads: RunViewParams[] = [];
         vi.spyOn(provider, 'RunView').mockImplementation(async (params: RunViewParams): Promise<RunViewResult<CostRow>> => {
@@ -429,41 +321,12 @@ describe('FeaturePipelineGoldenSetDriver evaluation cost', () => {
         expect(reads[0]).toMatchObject({ EntityName: 'MJ: AI Prompt Runs', Fields: ['ID', 'TotalCost'], ExtraFilter: "ID IN ('RUN-A','RUN-B')" });
     });
 
-    it('reports 0 without reading anything when no result names a prompt run', async () => {
-        const results = new Map<string, RecordResult>(cases.map((c) => [`golden-${c.ID}`, answered(undefined)]));
-        const { r, reads } = await withCosts(results, []);
-        const result = await r.driver.Execute(r.context);
-        expect(result.totalCost).toBe(0);
-        expect(reads).toHaveLength(0);
-    });
-
-    it('still reports what the model calls cost when the evaluation stops after them (the pin changed)', async () => {
-        const results = new Map<string, RecordResult>(cases.map((c) => [`golden-${c.ID}`, answered('RUN-A')]));
-        const edited: FeaturePipelinePinData = { ...PIN, PromptVersionHash: 'h2' };
-        const { r } = await withCosts(results, [{ ID: 'RUN-A', TotalCost: 0.001 }], { pins: [PIN, edited] });
-        const result = await r.driver.Execute(r.context);
-        expect(result.status).toBe('Error');
-        expect(result.errorMessage).toContain('changed');
-        expect(result.totalCost).toBeCloseTo(0.001, 10);
-        expect(r.record).not.toHaveBeenCalled();
-    });
-
-    it('still reports what the model calls cost when a case could not be run', async () => {
-        const results = new Map<string, RecordResult>([['golden-g1', answered('RUN-A')], ['golden-g2', answered('RUN-B')],
-            ['golden-g3', { Status: 'Failed', ErrorMessage: '503 unavailable', AIPromptRunID: 'RUN-C' }]]);
-        const { r } = await withCosts(results, [{ ID: 'RUN-A', TotalCost: 0.001 }, { ID: 'RUN-B', TotalCost: 0.002 }, { ID: 'RUN-C', TotalCost: null }]);
-        const result = await r.driver.Execute(r.context);
-        expect(result.status).toBe('Error');
-        expect(result.errorMessage).toContain('could not be run');
-        expect(result.totalCost).toBeCloseTo(0.003, 10);
-    });
-
     it('fails, storing nothing, when the prompt runs cannot be read (an unknown cost is never reported as 0)', async () => {
         const results = new Map<string, RecordResult>(cases.map((c) => [`golden-${c.ID}`, answered('RUN-A')]));
-        const { r } = await withCosts(results, [], {}, false);
+        const { r } = await withCosts(results, [], false);
         const result = await r.driver.Execute(r.context);
         expect(result.status).toBe('Error');
-        expect(result.errorMessage).toBe("could not read the evaluation's AI Prompt Runs to report its cost: timeout");
+        expect(result.errorMessage).toBe('could not read the AI Prompt Runs to report their cost: timeout');
         expect(r.record).not.toHaveBeenCalled();
     });
 });

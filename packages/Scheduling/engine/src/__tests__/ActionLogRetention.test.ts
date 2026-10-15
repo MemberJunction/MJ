@@ -21,7 +21,6 @@ import {
 } from '../drivers/ActionLogRetentionScheduledJobDriver';
 import type { MJActionExecutionLogEntity, MJScheduledJobEntity } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
-import { TestContext, TestScheduledJob } from './helpers/scheduling-doubles';
 
 const NOW = new Date('2026-08-08T12:00:00.000Z');
 const USER = { ID: 'user-1' } as UserInfo;
@@ -179,28 +178,5 @@ describe('ValidateConfiguration', () => {
 describe('the per-run ceiling', () => {
     it('has a default, so a first run against a neglected table cannot be unbounded', () => {
         expect(DEFAULT_MAX_DELETES_PER_RUN).toBeGreaterThan(0);
-    });
-});
-
-describe('FormatNotification', () => {
-    const context = TestContext(new TestScheduledJob({ Name: 'Purge' }));
-
-    it('reports the counts and the ceiling note from well-typed details', () => {
-        const n = new ActionLogRetentionScheduledJobDriver().FormatNotification(context, {
-            Success: true, Details: { Deleted: 4, Failed: 1, ReachedCap: true },
-        });
-        expect(n.Subject).toBe('Action-log purge: 4 expired row(s) removed');
-        expect(n.Body).toContain('could not remove 1');
-        expect(n.Body).toContain('per-run ceiling');
-    });
-
-    it('treats details of the wrong type as absent', () => {
-        const n = new ActionLogRetentionScheduledJobDriver().FormatNotification(context, {
-            Success: true, Details: { Deleted: '4', Failed: '1', ReachedCap: 'true' },
-        });
-        expect(n.Subject).toBe('Action-log purge: 0 expired row(s) removed');
-        expect(n.Body).not.toContain('could not remove');
-        expect(n.Body).not.toContain('per-run ceiling');
-        expect(n.Metadata).toEqual({ Deleted: 0, Failed: 0, ReachedCap: false });
     });
 });

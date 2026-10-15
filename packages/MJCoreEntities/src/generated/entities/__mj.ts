@@ -21212,15 +21212,14 @@ export const MJFeaturePipelineVersionSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: The MJ: Test Runs row of the evaluation whose result is stored here.`),
-    Metric: z.union([z.literal('accuracy'), z.literal('macro-f1')]).nullable().describe(`
+    Metric: z.literal('accuracy').nullable().describe(`
         * * Field Name: Metric
         * * Display Name: Metric
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
     *   * accuracy
-    *   * macro-f1
-        * * Description: Metric of the stored result: accuracy or macro-f1.`),
+        * * Description: Metric of the stored result: accuracy.`),
     Threshold: z.number().nullable().describe(`
         * * Field Name: Threshold
         * * Display Name: Threshold
@@ -21261,7 +21260,7 @@ export const MJFeaturePipelineVersionSchema = z.object({
         * * Display Name: Approved By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
-        * * Description: The user whose run activated the version: the context user of the activating golden-set evaluation or on-demand run; for an unattended activation, the user the Feature Pipeline Version Steward scheduled job runs as.`),
+        * * Description: The user whose run activated the version (for an unattended activation, the Feature Pipeline Version Steward job's user).`),
     RetiredAt: z.date().nullable().describe(`
         * * Field Name: RetiredAt
         * * Display Name: Retired At
@@ -21271,7 +21270,7 @@ export const MJFeaturePipelineVersionSchema = z.object({
         * * Field Name: BackfilledAt
         * * Display Name: Backfilled At
         * * SQL Data Type: datetimeoffset
-        * * Description: When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version (the records whose latest Pipeline value was written under another version, or under none). NULL until then; cleared when the version is retired or becomes Active again, so each activation is backfilled once.`),
+        * * Description: When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -21561,7 +21560,7 @@ export const MJFeatureValueSchema = z.object({
         * * Field Name: PipelineVersion
         * * Display Name: Pipeline Version
         * * SQL Data Type: int
-        * * Description: Version of the Feature Pipeline (MJ: Feature Pipeline Versions.Version for this RecordProcessID) that computed this value. Part of the FeatureValueKey. NULL on rows written before versioning or by a processor run without a run-level Preflight.`),
+        * * Description: Version of the Feature Pipeline (MJ: Feature Pipeline Versions.Version) that computed this value; part of the FeatureValueKey.`),
     AIModelID: z.string().nullable().describe(`
         * * Field Name: AIModelID
         * * Display Name: AI Model
@@ -21592,7 +21591,7 @@ export const MJFeatureValueSchema = z.object({
     * * Possible Values 
     *   * Human
     *   * Pipeline
-        * * Description: Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (a value a person entered on the target record, recorded when write-back found it and left it in place). Write-back never overwrites a Human value unless the run sets overwriteHumanValues.`),
+        * * Description: Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (entered by a person, which write-back leaves in place).`),
     RecordProcess: z.string().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process
@@ -27296,7 +27295,7 @@ export const MJProcessRunSchema = z.object({
         * * Field Name: ResultSummary
         * * Display Name: Result Summary
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, previewed, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types.`),
+        * * Description: JSON summary of a Feature Pipeline run (FeaturePipelineRunResult); NULL for other work types.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process Name
@@ -99119,13 +99118,12 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
     * * Value List Type: List
     * * Possible Values 
     *   * accuracy
-    *   * macro-f1
-    * * Description: Metric of the stored result: accuracy or macro-f1.
+    * * Description: Metric of the stored result: accuracy.
     */
-    get Metric(): 'accuracy' | 'macro-f1' | null {
+    get Metric(): 'accuracy' | null {
         return this.Get('Metric');
     }
-    set Metric(value: 'accuracy' | 'macro-f1' | null) {
+    set Metric(value: 'accuracy' | null) {
         this.Set('Metric', value);
     }
 
@@ -99225,7 +99223,7 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
     * * Display Name: Approved By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
-    * * Description: The user whose run activated the version: the context user of the activating golden-set evaluation or on-demand run; for an unattended activation, the user the Feature Pipeline Version Steward scheduled job runs as.
+    * * Description: The user whose run activated the version (for an unattended activation, the Feature Pipeline Version Steward job's user).
     */
     get ApprovedByUserID(): string | null {
         return this.Get('ApprovedByUserID');
@@ -99251,7 +99249,7 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
     * * Field Name: BackfilledAt
     * * Display Name: Backfilled At
     * * SQL Data Type: datetimeoffset
-    * * Description: When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version (the records whose latest Pipeline value was written under another version, or under none). NULL until then; cleared when the version is retired or becomes Active again, so each activation is backfilled once.
+    * * Description: When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version.
     */
     get BackfilledAt(): Date | null {
         return this.Get('BackfilledAt');
@@ -99649,7 +99647,7 @@ export class MJFeatureValueCacheEntity extends BaseEntity<MJFeatureValueCacheEnt
  * * Schema: __mj
  * * Base Table: FeatureValue
  * * Base View: vwFeatureValues
- * * @description Feature values computed by Feature Pipelines (or entered by people, Source = Human): one row per Feature Value key (record, feature, pipeline version, prompt version, primary AI model, parameters, input, source), updated in place when the same key is recomputed, with provenance, model reasoning and run back-links. Earlier values of a row are in Record Changes. Rows written before the key existed (ValueKeyHash NULL) are kept as history.
+ * * @description Feature values computed by Feature Pipelines (or entered by people), one row per Feature Value key, updated in place when the same key is recomputed.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -99968,7 +99966,7 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     * * Field Name: PipelineVersion
     * * Display Name: Pipeline Version
     * * SQL Data Type: int
-    * * Description: Version of the Feature Pipeline (MJ: Feature Pipeline Versions.Version for this RecordProcessID) that computed this value. Part of the FeatureValueKey. NULL on rows written before versioning or by a processor run without a run-level Preflight.
+    * * Description: Version of the Feature Pipeline (MJ: Feature Pipeline Versions.Version) that computed this value; part of the FeatureValueKey.
     */
     get PipelineVersion(): number | null {
         return this.Get('PipelineVersion');
@@ -100039,7 +100037,7 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     * * Possible Values 
     *   * Human
     *   * Pipeline
-    * * Description: Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (a value a person entered on the target record, recorded when write-back found it and left it in place). Write-back never overwrites a Human value unless the run sets overwriteHumanValues.
+    * * Description: Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (entered by a person, which write-back leaves in place).
     */
     get Source(): 'Human' | 'Pipeline' {
         return this.Get('Source');
@@ -114695,7 +114693,7 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
     * * Field Name: ResultSummary
     * * Display Name: Result Summary
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, previewed, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types.
+    * * Description: JSON summary of a Feature Pipeline run (FeaturePipelineRunResult); NULL for other work types.
     */
     get ResultSummary(): string | null {
         return this.Get('ResultSummary');

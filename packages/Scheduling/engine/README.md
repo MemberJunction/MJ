@@ -284,19 +284,9 @@ The engine loads the job list ONCE at `StartPolling` time. Runtime changes to th
 
 ### Action jobs whose class is not loaded
 
-An Action job whose action is class-based (Custom / Generated) needs that class registered in the server that runs it.
-When an app is installed database-only — its metadata and scheduled jobs are in the database, its server package is not
-loaded — the action would fail on every run. Instead, `ActionScheduledJobDriver` **pauses** the job: it sets
-`Status = 'Paused'`, writes `"PausedForMissingClass": "<class key>"` into the job's `Configuration`, and records one failed
-run whose message says which class is missing and how to install it. Runtime actions have no class and are never paused.
-
-A server that loads the class resumes the job at its next start: `StartPolling` first sets every job marked
-`PausedForMissingClass` whose class this server now loads back to `Active` and removes the marker (logged as
-`📅 Scheduled Jobs: resumed N job(s) …`).
-
-**Pausing such a job by hand.** The marker stays in `Configuration` until a resume removes it. A person who pauses an
-auto-paused job by hand, wanting it to stay paused, must also remove `PausedForMissingClass` from its `Configuration`;
-otherwise the first server that loads the class sets it back to Active.
+When a class-based action's class is not registered in the server (its app installed database-only), `ActionScheduledJobDriver`
+pauses the job instead of failing it on every run: `Status = 'Paused'` and `"PausedForMissingClass": "<class key>"` in its
+`Configuration`. At its next start, a server that loads the class sets the job back to `Active` and removes the marker.
 
 ### Graceful shutdown
 

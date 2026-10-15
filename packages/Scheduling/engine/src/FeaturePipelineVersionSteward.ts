@@ -12,11 +12,8 @@ import { InferProcessor, RecordProcessExecutor } from '@memberjunction/record-se
 import type { ProcessRunResult, RecordProcessorContext } from '@memberjunction/record-set-processor-base';
 import { TestEngine } from '@memberjunction/testing-engine';
 
-/** Every action the steward records. */
-export const STEWARD_ACTIONS = ['none', 'evaluated', 'backfilled', 'held', 'refused', 'error'] as const;
-
 /** What the steward did for one pipeline. */
-export type StewardAction = typeof STEWARD_ACTIONS[number];
+export type StewardAction = 'none' | 'evaluated' | 'backfilled' | 'held' | 'refused' | 'error';
 
 /** One recorded steward decision (stored in the Scheduled Job Run's `Details.Outcomes`). */
 export interface StewardOutcome {
@@ -36,8 +33,6 @@ export interface StewardOutcome {
 export interface StewardRunParams {
     ContextUser: UserInfo;
     Provider: IMetadataProvider;
-    /** Limit the pass to these pipelines (default: every Active Infer Record Process). */
-    RecordProcessIDs?: string[];
     /** The scheduled job run the pass belongs to; a backfill's Process Run links back to it. */
     ScheduledJobRunID?: string;
     /** Renews the scheduled job's lease; called after each pipeline and during a backfill. */
@@ -59,31 +54,6 @@ export class FeaturePipelineVersionSteward extends BaseSingleton<FeaturePipeline
         super();
     }
 
-    /**
-     * The outcomes stored in a steward run's `Details`; values that are not outcomes are skipped.
-     * @param details - a Scheduled Job Run's `Details`, read back from JSON
-     */
-    public static OutcomesFromDetails(details: Record<string, unknown> | undefined): StewardOutcome[] {
-        const outcomes = details?.Outcomes;
-        return Array.isArray(outcomes) ? outcomes.filter((o) => FeaturePipelineVersionSteward.IsOutcome(o)) : [];
-    }
-
-    /**
-     * Whether a value read back from JSON is a steward outcome.
-     * @param value - one element of a stored outcome list; `unknown` because it comes from JSON the steward did not
-     * necessarily write (a run's Details can be edited), and is narrowed here field by field.
-     */
-    public static IsOutcome(value: unknown): value is StewardOutcome {
-        if (typeof value !== 'object' || value === null) {
-            return false;
-        }
-        return 'RecordProcessID' in value && typeof value.RecordProcessID === 'string'
-            && 'Name' in value && typeof value.Name === 'string'
-            && 'Version' in value && (value.Version === null || typeof value.Version === 'number')
-            && 'Action' in value && STEWARD_ACTIONS.some((a) => a === value.Action)
-            && 'Detail' in value && typeof value.Detail === 'string';
-    }
-
     /** One pass. A pipeline that throws is recorded as `error`; the others still run. */
     public async RunOnce(p: StewardRunParams): Promise<StewardOutcome[]> {
         const outcomes: StewardOutcome[] = [];
@@ -98,14 +68,11 @@ export class FeaturePipelineVersionSteward extends BaseSingleton<FeaturePipeline
         return outcomes;
     }
 
-    /** The Active Infer Record Processes of the pass. */
+    /** The Active Infer Record Processes. */
     protected async LoadPipelines(p: StewardRunParams): Promise<MJRecordProcessEntity[]> {
-        const ids = p.RecordProcessIDs && p.RecordProcessIDs.length > 0
-            ? ` AND ID IN (${p.RecordProcessIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`
-            : '';
         const rv = await RunView.FromMetadataProvider(p.Provider).RunView<MJRecordProcessEntity>({
             EntityName: 'MJ: Record Processes',
-            ExtraFilter: `WorkType='Infer' AND Status='Active'${ids}`,
+            ExtraFilter: `WorkType='Infer' AND Status='Active'`,
             OrderBy: 'Name',
             ResultType: 'entity_object', // InferProcessor.FromRecordProcess takes the entity
         }, p.ContextUser);
@@ -162,9 +129,8 @@ export class FeaturePipelineVersionSteward extends BaseSingleton<FeaturePipeline
     }
 
     /**
-     * Runs the golden-set test once per (version as planned, golden-set content); an earlier run since then is recorded
-     * `held`, so an evaluation that cannot complete (e.g. its labels fail the label-quality check) is not repeated
-     * every pass.
+     * Runs the golden-set test once per version and golden-set content; an earlier run since then is recorded `held`,
+     * so an evaluation that cannot complete is not repeated every pass.
      */
     protected async Evaluate(rp: MJRecordProcessEntity, plan: Extract<ActionablePlan, { Kind: 'evaluate' }>, p: StewardRunParams): Promise<StewardOutcome> {
         await TestEngine.Instance.Config(false, p.ContextUser, p.Provider);
@@ -186,15 +152,9 @@ export class FeaturePipelineVersionSteward extends BaseSingleton<FeaturePipeline
     }
 
     /**
-     * The one on-demand backfill of a changed version, over named records (so the pipeline's own scope, which may
-     * select only records without a value, does not exclude them) and without the watermark skip (an UpdatedAt or
-     * checksum watermark written before the change would skip a record whose source row did not change, and every
-     * named record needs a value under this version). A run that attempted every named record marks the version
-     * backfilled even when some records failed, so a failing record is retried by the next version change, not every
-     * pass (its failure is in that run's `MJ: Process Run Details`). A run that did not ({@link AttemptedEveryRecord}:
-     * refused, paused, or stopped by its error-rate breaker) is recorded `error` and not marked, so the next pass runs it
-     * again: an ungated version is activated by that run, so marking it would leave the pipeline refused with nothing
-     * left to start the run.
+     * The one backfill of a changed version: over the named records, without the watermark skip (a watermark written
+     * before the change would skip records that need a value under this version). Only a run that attempted every
+     * record marks the version backfilled; any other run is recorded `error` and retried on the next pass.
      */
     protected async Backfill(rp: MJRecordProcessEntity, plan: Extract<ActionablePlan, { Kind: 'backfill' }>, p: StewardRunParams): Promise<StewardOutcome> {
         const run = await new RecordProcessExecutor().RunByID(rp.ID, {
@@ -215,10 +175,8 @@ export class FeaturePipelineVersionSteward extends BaseSingleton<FeaturePipeline
     }
 
     /**
-     * Whether a backfill run attempted every record it was given: it completed, or it ended `Failed` (a run with a
-     * failed record ends so) after handing every record to the processor. `Processed` counts every record handed out,
-     * the skipped ones included, so it is compared alone. A failed run of no records attempted nothing, and its failure
-     * is the run's own (a refusal before the first record).
+     * Whether a backfill run attempted every record: it completed, or it ended `Failed` (a failed record) after
+     * processing every record. A failed run of no records failed before the first record.
      */
     protected AttemptedEveryRecord(run: ProcessRunResult, recordCount: number): boolean {
         if (run.Status === 'Completed') {

@@ -5,18 +5,10 @@
 
 import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
-import {
-    ValidationResult,
-    UserInfo,
-    ValidationErrorInfo,
-    ValidationErrorType,
-    IMetadataProvider,
-    RunView,
-    LogError,
-    DatabaseProviderBase
-} from '@memberjunction/core';
+import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType, IMetadataProvider, RunView, LogError } from '@memberjunction/core';
 import { MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { ActionEngineServer } from '@memberjunction/actions';
+import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import {
     ScheduledJobResult,
     NotificationContent,
@@ -24,19 +16,9 @@ import {
 } from '@memberjunction/scheduling-base-types';
 import { ActionParam } from '@memberjunction/actions-base';
 
-/** What an Action job's run stores in `ScheduledJobRun.Details`. */
-export interface ActionJobResultDetails {
-    /** The action's result code, when it returned one. */
-    ResultCode?: string;
-    /** Whether the action succeeded. */
-    IsSuccess: boolean;
-    /** The action's parameters after the run, outputs included. */
-    OutputParams?: ActionParam[];
-}
-
-/** Marker the driver writes into a job it paused because the action's class is not loaded. */
+/** Marker the driver writes into the Configuration of a job it paused because the action's class is not loaded. */
 export interface PausedForMissingClassMarker {
-    /** The action's DriverClass (or name) that was not registered when the job was paused. */
+    /** The action's class key (DriverClass, or name) that was not registered when the job was paused. */
     PausedForMissingClass?: string;
 }
 
@@ -53,7 +35,12 @@ export interface PausedForMissingClassMarker {
  *   }>
  * }
  *
- * Execution result details (stored in ScheduledJobRun.Details): {@link ActionJobResultDetails}.
+ * Execution result details (stored in ScheduledJobRun.Details):
+ * {
+ *   ResultCode: string,
+ *   IsSuccess: boolean,
+ *   OutputParams?: any
+ * }
  */
 @RegisterClass(BaseScheduledJob, 'ActionScheduledJobDriver')
 export class ActionScheduledJobDriver extends BaseScheduledJob {
@@ -68,8 +55,8 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
             throw new Error(`Action with ID ${config.ActionID} not found`);
         }
 
-        // A class-based action whose class is not registered here would fail on every run (its app is installed
-        // database-only). Runtime actions run in the sandbox and have no class to look up.
+        // A class-based action whose class is not registered here (its app installed database-only) would fail on
+        // every run. Runtime actions have no class.
         if (!ActionEngineServer.Instance.IsActionClassLoaded(action)) {
             return this.PauseForMissingClass(context, action.Name, ActionEngineServer.Instance.ActionClassKey(action));
         }
@@ -79,7 +66,7 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
         // Process parameters (static values or SQL queries). Heartbeat per param
         // so a config with several slow `SQL Statement` params keeps its lease
         // renewed during prep (GH #2749).
-        const params = await this.processParams(config.Params || [], context.ContextUser, context.Provider, context.heartbeat);
+        const params = await this.processParams(config.Params || [], context.ContextUser, context.heartbeat);
 
         // Beat once more right before the action runs. NOTE (documented caveat):
         // a single long-running action cannot beat mid-call — that is precisely
@@ -94,32 +81,24 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
             Params: params
         });
 
-        const details: ActionJobResultDetails = {
-            ResultCode: actionResult.Result?.ResultCode,
-            IsSuccess: actionResult.Success,
-            OutputParams: actionResult.Params
-        };
         return {
             Success: actionResult.Success,
             ErrorMessage: actionResult.Message || undefined,
-            Details: { ...details } // an interface has no index signature; the spread is the plain record Details takes
+            Details: {
+                ResultCode: actionResult.Result?.ResultCode,
+                IsSuccess: actionResult.Success,
+                OutputParams: actionResult.Params
+            }
         };
     }
 
     /**
-     * Pauses the job because its action's class is not loaded here (a database-only install of the app), marking which
-     * class, so it stops failing on every run. A server that loads the class resumes it at its next start.
-     *
-     * The pause is saved on a fresh copy of the job read through the context's provider, never on `context.Schedule`:
-     * that shared entity was read before the engine acquired the job's lock, and a full save of it would write its stale
-     * lock columns back over the live lock. The saved copy replaces the shared entry in the scheduling engine's cache,
-     * whose Active-only filter then drops the job from dispatch.
+     * Pauses the job and marks the missing class; a server that loads the class resumes it at its next start. The
+     * pause is saved on a fresh copy of the job: `context.Schedule` was read before the engine took the job's lock,
+     * so saving it would write stale lock columns over the live lock.
      */
     protected async PauseForMissingClass(context: ScheduledJobExecutionContext, actionName: string, actionClass: string): Promise<ScheduledJobResult> {
-        const message = `Action '${actionName}': class '${actionClass}' is not loaded on this server, so its app's server package is ` +
-            `not installed here (a database-only install). The job was paused so it stops failing on every run; once the ` +
-            `package is installed (mj app install, or MJAPI's dynamicPackages), a server that loads it sets the job back to ` +
-            `Active at its next start.`;
+        const message = `Action '${actionName}': class '${actionClass}' is not loaded on this server (its app's server package is not installed here), so the job was paused until a server that loads it starts.`;
         const job = await context.Provider.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', context.ContextUser);
         if (!(await job.Load(context.Schedule.ID))) {
             return { Success: false, ErrorMessage: `${message} Pausing the job failed: the job could not be read.` };
@@ -133,14 +112,8 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
     }
 
     /**
-     * Sets each job paused for a missing action class back to Active when that class is now registered, and removes the
-     * marker. ScheduledJobEngine calls it in StartPolling, before it loads the active jobs. The `LIKE` only narrows the read; the decision is the parsed `PausedForMissingClass`
-     * field (no substring classification).
-     *
-     * Only unlocked rows are resumed. The server that paused a job still holds its lock until it has saved the run and
-     * its statistics; resuming that row with a full save would write the lock columns and the pre-run statistics read
-     * here back over the live row. A paused row is never dispatched, so once its lock is released it stays unlocked and
-     * the next start resumes it.
+     * Sets each unlocked job paused for a missing action class back to Active when that class is now registered, and
+     * removes the marker. A locked row is skipped: the pausing server still holds it and saves its run afterwards.
      * @returns the names of the resumed jobs.
      */
     public static async ResumeJobsPausedForMissingClass(contextUser: UserInfo, provider: IMetadataProvider): Promise<string[]> {
@@ -162,11 +135,8 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
         return resumed;
     }
 
-    /** Resumes one unlocked paused job when its marked class is now registered; logs a failed save. */
+    /** Resumes one paused job when its marked class is now registered; logs a failed save. */
     private static async resumeIfClassLoaded(job: MJScheduledJobEntity): Promise<boolean> {
-        if (job.LockToken != null) {
-            return false; // still held by the server that paused it (see ResumeJobsPausedForMissingClass)
-        }
         const config = SafeJSONParse<ActionJobConfiguration & PausedForMissingClassMarker>(job.Configuration || '{}');
         const missing = config?.PausedForMissingClass;
         if (!config || !missing || !ActionEngineServer.Instance.IsActionClassRegistered(missing)) {
@@ -182,7 +152,7 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
         return false;
     }
 
-    public ValidateConfiguration(schedule: MJScheduledJobEntity): ValidationResult {
+    public ValidateConfiguration(schedule: any): ValidationResult {
         const result = new ValidationResult();
 
         try {
@@ -247,8 +217,7 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
         context: ScheduledJobExecutionContext,
         result: ScheduledJobResult
     ): NotificationContent {
-        // Details is free-form per job type; read the result code only when it is a string.
-        const resultCode = typeof result.Details?.ResultCode === 'string' ? result.Details.ResultCode : undefined;
+        const details = result.Details as any;
 
         const subject = result.Success
             ? `Scheduled Action Completed: ${context.Schedule.Name}`
@@ -256,7 +225,7 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
 
         const body = result.Success
             ? `The scheduled action "${context.Schedule.Name}" completed successfully.\n\n` +
-              `Result Code: ${resultCode || 'N/A'}`
+              `Result Code: ${details?.ResultCode || 'N/A'}`
             : `The scheduled action "${context.Schedule.Name}" failed.\n\n` +
               `Error: ${result.ErrorMessage}`;
 
@@ -267,7 +236,7 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
             Metadata: {
                 ScheduleID: context.Schedule.ID,
                 JobType: 'Action',
-                ResultCode: resultCode
+                ResultCode: details?.ResultCode
             }
         };
     }
@@ -275,7 +244,6 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
     private async processParams(
         params: ActionJobConfiguration['Params'],
         contextUser: UserInfo,
-        provider: IMetadataProvider,
         heartbeat?: () => Promise<void>
     ): Promise<ActionParam[]> {
         if (!params) {
@@ -296,7 +264,7 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
                 continue;
             }
 
-            let value: ActionParam['Value'] = null;
+            let value: any = null;
 
             switch (param.ValueType) {
                 case 'Static':
@@ -306,7 +274,7 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
                     break;
 
                 case 'SQL Statement':
-                    value = await this.executeSQL(param.Value, provider, contextUser);
+                    value = await this.executeSQL(param.Value);
                     break;
             }
 
@@ -320,17 +288,11 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
         return result;
     }
 
-    /**
-     * Runs a `SQL Statement` param's query on the job's provider; a failed query, or a provider that cannot run SQL,
-     * logs and yields null.
-     */
-    private async executeSQL(sql: string, provider: IMetadataProvider, contextUser: UserInfo): Promise<Record<string, unknown>[] | null> {
-        if (!(provider instanceof DatabaseProviderBase)) {
-            this.logError(`A 'SQL Statement' param needs a database provider, and this job's provider cannot run SQL: ${sql}`);
-            return null;
-        }
+    private async executeSQL(sql: string, provider?: IMetadataProvider): Promise<any> {
         try {
-            return await provider.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
+            const sqlProvider = (provider ?? Metadata.Provider) as SQLServerDataProvider;
+            const result = await sqlProvider.ExecuteSQL(sql);
+            return result;
         } catch (error) {
             this.logError(`Error executing SQL: ${sql}`, error);
             return null;

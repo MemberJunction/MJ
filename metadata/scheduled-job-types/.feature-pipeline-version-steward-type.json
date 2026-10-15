@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Feature Pipeline Version Steward",
-      "Description": "Completes Feature Pipeline version changes without a person: for every Active Infer Record Process it runs the golden-set test of a gated pipeline's unevaluated version (once per version and golden-set content) and the one on-demand backfill of a changed version, recording each decision in the run's Details.Outcomes. A pipeline opts out per step with DataFeatureSpec.Unattended.AutoEvaluate / AutoBackfill = false. Optional Configuration: { \"RecordProcessIDs\": [\"<id>\"] }.",
+      "Description": "Completes Feature Pipeline version changes without a person: for every Active Infer Record Process it runs the golden-set test of a gated pipeline's unevaluated version (once per version and golden-set content) and the one on-demand backfill of a changed version, recording each decision in the run's Details.Outcomes. A pipeline opts out per step with DataFeatureSpec.Unattended.AutoEvaluate / AutoBackfill = false.",
       "DriverClass": "FeaturePipelineVersionStewardDriver",
       "DomainRunEntity": "MJ: Process Runs",
       "DomainRunEntityFKey": "ScheduledJobRunID",

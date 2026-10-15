@@ -34,21 +34,12 @@ describe('GoldenSetScorer.Score', () => {
         const s = GoldenSetScorer.Score(cases, [answers[0], { CaseID: 'g2', Values: null }, answers[2]], 'accuracy');
         expect(s.PerOutput.SeniorityLevel.Correct).toBe(1);
     });
-    it('computes macro-F1 over the primary labels', () => {
-        const s = GoldenSetScorer.Score(cases, answers, 'macro-f1');
-        // SeniorityLevel: classes C-Level (F1 1), Individual Contributor (2·1/(2+1+0)=0.667), Director (0) → 0.556;
-        // JobFunctions: Executive (2·1/(2+0+1)=0.667), Sales (0) → 0.333; the result is the lowest output.
-        expect(s.Value).toBeCloseTo(1 / 3, 3);
-        expect(s.Lower).toBeNull();
-        expect(s.Upper).toBeNull();
-        expect(s.PerOutput.SeniorityLevel).toMatchObject({ Correct: 2, N: 3, Lower: null, Upper: null });
-        expect(s.PerOutput.SeniorityLevel.Value).toBeCloseTo(5 / 9, 6);
-    });
     it('scores each output only over the cases that label it', () => {
         const partial: GoldenCase[] = [...cases, { ID: 'g4', Input: { CurrentJobTitle: 'Clerk' }, Expected: { JobFunctions: ['Operations'] }, LabelSource: 'human' }];
         const s = GoldenSetScorer.Score(partial, [...answers, { CaseID: 'g4', Values: { SeniorityLevel: 'Manager', JobFunctions: 'Operations' } }], 'accuracy');
         expect(s.PerOutput.SeniorityLevel).toMatchObject({ Correct: 2, N: 3 });
         expect(s.PerOutput.JobFunctions).toMatchObject({ Correct: 3, N: 4 });
+        expect(s.Value).toBeCloseTo(2 / 3, 6); // the weaker output, not JobFunctions' 3/4
         expect(s.N).toBe(4);
         expect(s.LabelSources).toEqual({ 'model-consensus': 2, 'model-adjudicated': 1, human: 1 });
     });
@@ -107,11 +98,5 @@ describe('GoldenSetScorer — required and abstention cases', () => {
         expect(s.RequiredFailures).toEqual([]);
         expect(s.Value).toBe(0);
         expect(s.MeasuredValue).toBe(0);
-    });
-
-    it('scores an abstention as its own class under macro-F1', () => {
-        const s = GoldenSetScorer.Score([labelled, hostile],
-            [right, { CaseID: 'h1', Values: { SeniorityLevel: null, JobFunctions: null }, Withheld: ['SeniorityLevel'] }], 'macro-f1');
-        expect(s.PerOutput.SeniorityLevel.Value).toBe(1);
     });
 });

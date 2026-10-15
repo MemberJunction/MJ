@@ -39,14 +39,12 @@ class TestRecordProcess extends MJRecordProcessEntity {
     override get EntityID(): string { return 'ENT-1'; }
 }
 
-/** A scheduled job whose Configuration lives in memory. */
+/** The steward's scheduled job. */
 class TestStewardJob extends MJScheduledJobEntity {
-    constructor(private configuration: string | null) {
+    constructor() {
         super(new EntityInfo());
     }
     override get Name(): string { return 'Feature Pipeline Version Steward'; }
-    override get Configuration(): string | null { return this.configuration; }
-    override set Configuration(value: string | null) { this.configuration = value; }
 }
 
 /** A scheduled-job run with an in-memory ID. */
@@ -125,18 +123,15 @@ describe('FeaturePipelineVersionSteward.RunOnce', () => {
         expect(plan.mock.calls[0][0]).toMatchObject({ RecordProcessID: 'RP-1', Pin: { PromptVersionHash: 'h' }, ...spec, Provider: provider });
     });
 
-    it('limits the pass to the pipelines it is given', async () => {
-        plan.mockResolvedValue({ Kind: 'none', Version: 1 });
-        await steward.RunOnce({ ContextUser: user, Provider: provider, RecordProcessIDs: ['RP-1', "R'2"] });
-        expect(provider.Views[0].ExtraFilter).toBe("WorkType='Infer' AND Status='Active' AND ID IN ('RP-1','R''2')");
-    });
-
-    it('does not re-run an evaluation that already ran for this version and golden set', async () => {
+    it('evaluates a version once: at most once per pass, and not again after an earlier run for it', async () => {
         plan.mockResolvedValue({ Kind: 'evaluate', Version: 2, GoldenSetTestID: 'T-1', Since: new Date('2026-10-01T00:00:00Z') });
+        runTest.mockResolvedValue({ testRunId: 'TR-1', status: 'Failed' });
+        expect((await steward.RunOnce({ ContextUser: user, Provider: provider })).map((o) => o.Action)).toEqual(['evaluated', 'held']);
+        expect(runTest).toHaveBeenCalledTimes(1);
         provider.TestRuns = [{ ID: 'TR-0', Status: 'Error', ErrorMessage: 'Golden set labels failed the label-quality check: …' }];
         const out = await steward.RunOnce({ ContextUser: user, Provider: provider });
         expect(out).toMatchObject([{ Action: 'held', TestRunID: 'TR-0', Detail: expect.stringContaining('TR-0') }]);
-        expect(runTest).not.toHaveBeenCalled();
+        expect(runTest).toHaveBeenCalledTimes(1);
     });
 
     it('counts a run of the test as this evaluation only from the later of the version\'s date and the test\'s last change', async () => {
@@ -151,14 +146,6 @@ describe('FeaturePipelineVersionSteward.RunOnce', () => {
             "TestID='T''1' AND StartedAt >= '2026-10-10T00:00:00.000Z'",
         ]);
         expect(testRunReads[0]).toMatchObject({ OrderBy: 'StartedAt DESC', MaxRows: 1 });
-    });
-
-    it('evaluates at most once per pass', async () => {
-        plan.mockResolvedValue({ Kind: 'evaluate', Version: 2, GoldenSetTestID: 'T-1', Since: new Date('2026-10-01T00:00:00Z') });
-        runTest.mockResolvedValue({ testRunId: 'TR-1', status: 'Failed' });
-        const out = await steward.RunOnce({ ContextUser: user, Provider: provider });
-        expect(runTest).toHaveBeenCalledTimes(1);
-        expect(out.map((o) => o.Action)).toEqual(['evaluated', 'held']);
     });
 
     it('records held and refused plans without running anything', async () => {
@@ -222,47 +209,29 @@ describe('FeaturePipelineVersionSteward.RunOnce', () => {
 });
 
 describe('FeaturePipelineVersionStewardDriver', () => {
-    const context = (configuration: string | null): ScheduledJobExecutionContext => ({
-        Schedule: new TestStewardJob(configuration), Run: new TestStewardJobRun(), ContextUser: user, Provider: provider,
+    const context = (): ScheduledJobExecutionContext => ({
+        Schedule: new TestStewardJob(), Run: new TestStewardJobRun(), ContextUser: user, Provider: provider,
     });
     const driver = new FeaturePipelineVersionStewardDriver();
 
-    it('runs the pass on the provider the engine read the job with, limited by the job\'s Configuration', async () => {
+    it('runs the pass on the provider the engine read the job with', async () => {
         plan.mockResolvedValue({ Kind: 'none', Version: 1 });
-        const result = await driver.Execute(context(JSON.stringify({ RecordProcessIDs: ['RP-1'] })));
+        const result = await driver.Execute(context());
         expect(result).toMatchObject({ Success: true, Details: { Outcomes: [{ RecordProcessID: 'RP-1', Action: 'none' }] } });
-        expect(provider.Views[0].ExtraFilter).toContain("ID IN ('RP-1')");
         expect(plan.mock.calls[0][0].Provider).toBe(provider);
-    });
-
-    it('runs every pipeline when the job has no Configuration', async () => {
-        plan.mockResolvedValue({ Kind: 'none', Version: 1 });
-        expect((await driver.Execute(context(null))).Success).toBe(true);
-        expect(provider.Views[0].ExtraFilter).toBe("WorkType='Infer' AND Status='Active'");
     });
 
     it('fails the run, naming each pipeline that errored', async () => {
         plan.mockRejectedValue(new Error('boom'));
-        expect(await driver.Execute(context('{}'))).toMatchObject({ Success: false, ErrorMessage: 'Pipeline RP-1: boom' });
+        expect(await driver.Execute(context())).toMatchObject({ Success: false, ErrorMessage: 'Pipeline RP-1: boom' });
     });
 
-    it('validates RecordProcessIDs as an array of IDs', () => {
-        expect(driver.ValidateConfiguration(new TestStewardJob('{}')).Success).toBe(true);
-        expect(driver.ValidateConfiguration(new TestStewardJob(null)).Success).toBe(true);
-        expect(driver.ValidateConfiguration(new TestStewardJob(JSON.stringify({ RecordProcessIDs: ['RP-1'] }))).Success).toBe(true);
-        expect(driver.ValidateConfiguration(new TestStewardJob(JSON.stringify({ RecordProcessIDs: 'RP-1' }))).Errors[0].Source).toBe('Configuration.RecordProcessIDs');
-        expect(driver.ValidateConfiguration(new TestStewardJob(JSON.stringify({ RecordProcessIDs: [7] }))).Success).toBe(false);
-        expect(driver.ValidateConfiguration(new TestStewardJob('{not json')).Errors[0].Source).toBe('Configuration');
-    });
-
-    it('notifies the actions taken, and ignores Details it cannot read', () => {
+    it('notifies the actions taken', () => {
         const outcomes: StewardOutcome[] = [
             { RecordProcessID: 'RP-1', Name: 'Job titles', Version: 2, Action: 'backfilled', Detail: 'backfill run Completed: 2 processed, 0 failed, 0 skipped' },
             { RecordProcessID: 'RP-2', Name: 'Other', Version: 1, Action: 'none', Detail: 'nothing to do' },
         ];
-        const n = driver.FormatNotification(context('{}'), { Success: true, Details: { Outcomes: outcomes } });
+        const n = driver.FormatNotification(context(), { Success: true, Details: { Outcomes: outcomes } });
         expect(n).toMatchObject({ Subject: 'Feature Pipeline Version Steward: 1 action(s)', Body: 'Job titles v2: backfilled — backfill run Completed: 2 processed, 0 failed, 0 skipped', Priority: 'Low' });
-        const unreadable = driver.FormatNotification(context('{}'), { Success: false, Details: { Outcomes: [{ Action: 7 }, 'x'] } });
-        expect(unreadable).toMatchObject({ Subject: 'Feature Pipeline Version Steward: errors', Body: 'No version changes.', Priority: 'High' });
     });
 });

@@ -57,21 +57,6 @@ describe('GoldenLabelQualityCheck.Check (re-checked before every evaluation)', (
         expect((await GoldenLabelQualityCheck.Check(edited, labelQuality))[0]).toMatch(/CasesSha256/);
         expect((await GoldenLabelQualityCheck.Check(cases, undefined))[0]).toMatch(/no labelQuality record/);
         expect((await GoldenLabelQualityCheck.Check(cases, labelQuality, { MinAgreementLower: 0.7, MaxExcluded: 0 })).join(' ')).toMatch(/excluded/);
-        const sameVendor = { ...labelQuality, Labelers: labelQuality.Labelers.map((l) => ({ ...l, Vendor: l.ID === 'A' ? l.Vendor : 'OpenAI' })) };
-        expect((await GoldenLabelQualityCheck.Check(cases, sameVendor)).join(' ')).toMatch(/two different vendors/);
-    });
-    it('refuses a record whose agreement evidence does not cover every labelled output or every labelled case', async () => {
-        const { cases, labelQuality } = await GoldenLabelQualityCheck.Adjudicate(labelled(52, 4, 1), OUTPUTS, labelers);
-        expect((await GoldenLabelQualityCheck.Check(cases, { ...labelQuality, PerOutput: {} })).join(' '))
-            .toMatch(/JobFunctions: the labelQuality record has no labeler agreement.*SeniorityLevel: the labelQuality record has no labeler agreement/);
-        const { SeniorityLevel, ...onlyJobFunctions } = labelQuality.PerOutput;
-        expect(SeniorityLevel).toBeDefined();
-        expect((await GoldenLabelQualityCheck.Check(cases, { ...labelQuality, PerOutput: onlyJobFunctions })).join(' '))
-            .toMatch(/SeniorityLevel: the labelQuality record has no labeler agreement/);
-        const small = { Agree: 10, N: 10, Lower: 0.72, Upper: 1 };
-        const shrunk = { ...labelQuality, PerOutput: { ...labelQuality.PerOutput, JobFunctions: { AB: small, AC: labelQuality.PerOutput.JobFunctions.AC } } };
-        expect((await GoldenLabelQualityCheck.Check(cases, shrunk)).join(' '))
-            .toMatch(/JobFunctions: labelers A and B were compared on 10 cases, but 52 were labelled/);
     });
     it('refuses an empty golden set', async () => {
         expect(await GoldenLabelQualityCheck.Check([], undefined)).toEqual(['the golden set has no cases']);

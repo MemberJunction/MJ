@@ -18,10 +18,11 @@ export interface ScheduledJobResult {
     ErrorMessage?: string;
 
     /**
-     * Job-type specific execution details, stored as JSON in `ScheduledJobRun.Details`. Each driver documents its own
-     * shape (e.g. `ActionJobResultDetails`, `AgentJobResultDetails`); a reader narrows the values it uses.
+     * Job-type specific execution details
+     * For Agents: { AgentRunID: string, TokensUsed: number, Cost: number }
+     * For Actions: { ResultCode: string, IsSuccess: boolean, OutputParams: any }
      */
-    Details?: Record<string, unknown>;
+    Details?: Record<string, any>;
 }
 
 /**

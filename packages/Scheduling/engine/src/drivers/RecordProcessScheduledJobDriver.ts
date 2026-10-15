@@ -79,7 +79,7 @@ export class RecordProcessScheduledJobDriver extends BaseScheduledJob {
     }
 
     public FormatNotification(context: ScheduledJobExecutionContext, result: ScheduledJobResult): NotificationContent {
-        const d = result.Details;
+        const d = result.Details as Record<string, unknown> | undefined;
         return {
             Subject: result.Success
                 ? `Record Process Completed: ${context.Schedule.Name}`

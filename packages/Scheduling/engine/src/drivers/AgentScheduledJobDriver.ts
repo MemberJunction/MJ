@@ -5,8 +5,7 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
-import { ValidationResult, UserInfo, ValidationErrorInfo, ValidationErrorType, IMetadataProvider } from '@memberjunction/core';
-import { MJAIAgentRunEntity, MJScheduledJobEntity } from '@memberjunction/core-entities';
+import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType, IMetadataProvider } from '@memberjunction/core';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import {
@@ -14,20 +13,6 @@ import {
     NotificationContent,
     AgentJobConfiguration
 } from '@memberjunction/scheduling-base-types';
-
-/** What an Agent job's run stores in `ScheduledJobRun.Details`. */
-export interface AgentJobResultDetails {
-    /** The agent run this job started. */
-    AgentRunID: string;
-    /** Tokens the run used. */
-    TokensUsed: MJAIAgentRunEntity['TotalTokensUsed'];
-    /** The run's cost. */
-    Cost: MJAIAgentRunEntity['TotalCost'];
-    /** The conversation the run wrote to, when it has one. */
-    ConversationID: MJAIAgentRunEntity['ConversationID'];
-    /** The run's final status. */
-    Status: MJAIAgentRunEntity['Status'];
-}
 
 /**
  * Driver for executing scheduled AI Agent jobs
@@ -42,7 +27,13 @@ export interface AgentJobResultDetails {
  *   OverrideModelID?: string
  * }
  *
- * Execution result details (stored in ScheduledJobRun.Details): {@link AgentJobResultDetails}.
+ * Execution result details (stored in ScheduledJobRun.Details):
+ * {
+ *   AgentRunID: string,
+ *   TokensUsed: number,
+ *   Cost: number,
+ *   ConversationID?: string
+ * }
  */
 @RegisterClass(BaseScheduledJob, 'AgentScheduledJobDriver')
 export class AgentScheduledJobDriver extends BaseScheduledJob {
@@ -51,7 +42,7 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         const config = this.parseConfiguration<AgentJobConfiguration>(context.Schedule);
 
         // Load the agent entity
-        const agent = await this.loadAgent(config.AgentID, context.ContextUser, context.Provider);
+        const agent = await this.loadAgent(config.AgentID, context.ContextUser);
 
         // A workflow SUBMITS and detaches — it returns a handle as soon as its steps are scheduled,
         // not a result. A scheduled job that ran one would record success the moment the graph was
@@ -102,21 +93,20 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         }
 
         // Build result with agent-specific details
-        const details: AgentJobResultDetails = {
-            AgentRunID: result.agentRun.ID,
-            TokensUsed: result.agentRun.TotalTokensUsed,
-            Cost: result.agentRun.TotalCost,
-            ConversationID: result.agentRun.ConversationID,
-            Status: result.agentRun.Status
-        };
         return {
             Success: result.success,
             ErrorMessage: result.agentRun.ErrorMessage || undefined,
-            Details: { ...details } // an interface has no index signature; the spread is the plain record Details takes
+            Details: {
+                AgentRunID: result.agentRun.ID,
+                TokensUsed: result.agentRun.TotalTokensUsed,
+                Cost: result.agentRun.TotalCost,
+                ConversationID: result.agentRun.ConversationID,
+                Status: result.agentRun.Status
+            }
         };
     }
 
-    public ValidateConfiguration(schedule: MJScheduledJobEntity): ValidationResult {
+    public ValidateConfiguration(schedule: any): ValidationResult {
         const result = new ValidationResult();
 
         try {
@@ -165,10 +155,7 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         result: ScheduledJobResult
     ): NotificationContent {
         const config = this.parseConfiguration<AgentJobConfiguration>(context.Schedule);
-        // Details is free-form per job type; read each value only when it has the expected type.
-        const tokensUsed = typeof result.Details?.TokensUsed === 'number' ? result.Details.TokensUsed : undefined;
-        const cost = typeof result.Details?.Cost === 'number' ? result.Details.Cost : undefined;
-        const agentRunID = typeof result.Details?.AgentRunID === 'string' ? result.Details.AgentRunID : undefined;
+        const details = result.Details as any;
 
         const subject = result.Success
             ? `Scheduled Agent Completed: ${context.Schedule.Name}`
@@ -176,12 +163,12 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
 
         const body = result.Success
             ? `The scheduled agent "${context.Schedule.Name}" completed successfully.\n\n` +
-              `Tokens Used: ${tokensUsed || 'N/A'}\n` +
-              `Cost: $${cost?.toFixed(6) || 'N/A'}\n` +
-              `Agent Run ID: ${agentRunID}`
+              `Tokens Used: ${details?.TokensUsed || 'N/A'}\n` +
+              `Cost: $${details?.Cost?.toFixed(6) || 'N/A'}\n` +
+              `Agent Run ID: ${details?.AgentRunID}`
             : `The scheduled agent "${context.Schedule.Name}" failed.\n\n` +
               `Error: ${result.ErrorMessage}\n` +
-              `Agent Run ID: ${agentRunID || 'N/A'}`;
+              `Agent Run ID: ${details?.AgentRunID || 'N/A'}`;
 
         return {
             Subject: subject,
@@ -191,13 +178,14 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
                 ScheduleID: context.Schedule.ID,
                 JobType: 'Agent',
                 AgentID: config.AgentID,
-                AgentRunID: agentRunID
+                AgentRunID: details?.AgentRunID
             }
         };
     }
 
-    private async loadAgent(agentId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<MJAIAgentEntityExtended> {
-        const agent = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', contextUser);
+    private async loadAgent(agentId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<MJAIAgentEntityExtended> {
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
+        const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', contextUser);
         const loaded = await agent.Load(agentId);
 
         if (!loaded) {

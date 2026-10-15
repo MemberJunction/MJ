@@ -181,9 +181,8 @@ export class IntegrationSyncScheduledJobDriver extends BaseScheduledJob {
         context: ScheduledJobExecutionContext,
         details: Record<string, unknown> | undefined
     ): string {
-        // Details is free-form per job type; format the duration only when it is a number.
-        const durationMs = details?.Duration;
-        const durationStr = typeof durationMs === 'number' ? `${(durationMs / 1000).toFixed(1)}s` : 'N/A';
+        const durationMs = details?.Duration as number | undefined;
+        const durationStr = durationMs != null ? `${(durationMs / 1000).toFixed(1)}s` : 'N/A';
 
         return [
             `The scheduled integration sync "${context.Schedule.Name}" completed successfully.`,

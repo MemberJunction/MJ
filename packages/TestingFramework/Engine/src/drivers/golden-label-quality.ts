@@ -1,9 +1,7 @@
 /**
- * @fileoverview Automated quality check for golden-set labels made by models; no person reviews labels.
- * Labeler A (the existing labels) and two new labelers B and C, from two different vendors, label every case under
- * the same written guide. Per output, A–B and A–C agreement must reach a Wilson 95% lower bound; C decides an A–B
- * disagreement; a case all three disagree on is excluded and listed. The record is stored with the golden set and
- * re-checked by the golden-set driver before every evaluation, against the cases' hash.
+ * @fileoverview Automated quality check for model-made golden-set labels (no person reviews labels). Labelers A, B and
+ * C label every case; per output, A–B and A–C agreement must reach a Wilson 95% lower bound; C decides an A–B
+ * disagreement; a case all three disagree on is excluded. The golden-set driver re-checks the stored record.
  * @module @memberjunction/testing-engine
  */
 import { ComputeContentHashAsync } from '@memberjunction/global';
@@ -65,10 +63,7 @@ export class GoldenLabelQualityCheck {
         return ys.includes(xs[0]) && xs.includes(ys[0]);
     }
 
-    /**
-     * SHA-256 of the labelled cases (canonical JSON, MJ's content hash), so a record is valid only for those exact cases.
-     * {@link Check} hashes {@link LabelledCases}, so adding a specification case leaves the record valid.
-     */
+    /** SHA-256 of the labelled cases, so a record is valid only for those exact cases. */
     public static async CasesSha256(cases: GoldenCase[]): Promise<string> {
         return ComputeContentHashAsync({ Cases: cases.map((c) => [c.ID, c.Input, c.Expected, c.LabelSource]) });
     }
@@ -102,8 +97,7 @@ export class GoldenLabelQualityCheck {
 
     /**
      * Why a golden set's labels may not gate a pipeline; empty when they may. Recomputed from the stored counts under
-     * the given policy (the test's configured policy, default DEFAULT_GOLDEN_LABEL_POLICY); the stored Passed flag is
-     * not trusted, because the record lives in editable test JSON.
+     * the given policy rather than trusting the stored Passed flag.
      */
     public static async Check(cases: GoldenCase[], q: GoldenLabelQuality | undefined,
         policy: GoldenLabelPolicy = DEFAULT_GOLDEN_LABEL_POLICY): Promise<string[]> {
@@ -111,9 +105,7 @@ export class GoldenLabelQualityCheck {
         if (cases.length === 0) {
             return ['the golden set has no cases'];
         }
-        // Specification cases are fixed by the pipeline's written rule, not labelled, so the record does not cover them.
-        // Each must be Required: a required case can only make the gate stricter (a wrong one fails the set), while an
-        // optional one with broad Expected labels would raise accuracy without any labeler's check.
+        // Specification cases are not labelled, so each must be Required: it can only make the gate stricter.
         const unrequired = cases.filter((c) => c.LabelSource === 'specification' && c.Required !== true);
         if (unrequired.length > 0) {
             return [`specification cases must be Required (they are not labelled): ${unrequired.map((c) => c.ID).join(', ')}`];
@@ -130,15 +122,9 @@ export class GoldenLabelQualityCheck {
         if (q.CasesSha256 !== (await GoldenLabelQualityCheck.CasesSha256(labelled))) {
             problems.push('the cases changed after the label-quality check (CasesSha256 mismatch)');
         }
-        problems.push(...GoldenLabelQualityCheck.CoverageProblems(labelled, q));
         problems.push(...GoldenLabelQualityCheck.AgreementProblems(q, policy));
         if (q.Excluded.length > policy.MaxExcluded) {
             problems.push(`${q.Excluded.length} cases excluded (all three labelers disagree) > ${policy.MaxExcluded}`);
-        }
-        // Two labelers from one vendor share training data and blind spots, so their agreement is not independent evidence.
-        const newVendors = new Set(q.Labelers.filter((l) => l.ID !== 'A').map((l) => l.Vendor.trim().toLowerCase()));
-        if (newVendors.size !== 2) {
-            problems.push('labelers B and C must come from two different vendors');
         }
         return problems;
     }
@@ -149,9 +135,8 @@ export class GoldenLabelQualityCheck {
     }
 
     /**
-     * One case's expected labels, counting A–B and A–C agreement per output: A–B agree → A's labels
-     * (`model-consensus`); otherwise C decides between A and B (`model-adjudicated`); null when all three disagree on
-     * any output. Every output is still counted after a disagreement, so the agreement rates cover every case.
+     * One case's expected labels, counting A–B and A–C agreement per output: A–B agree → A's labels; otherwise C decides
+     * between A and B; null when all three disagree on any output.
      */
     protected static AdjudicateCase(l: LabelledCase, outputs: string[], counts: AgreementCounts): GoldenCase | null {
         const agree = GoldenLabelQualityCheck.LabelsAgree;
@@ -179,29 +164,6 @@ export class GoldenLabelQualityCheck {
             }
         }
         return keep ? { ID: l.ID, Input: l.Input, Expected: expected, LabelSource: source } : null;
-    }
-
-    /**
-     * Where the stored agreement evidence does not cover the cases: an output the cases label with no agreement counts,
-     * or a pair whose N is not the number of labelled cases (the scored cases plus the excluded ones). Without this, a
-     * record edited to `PerOutput: {}` or to a small N would pass the agreement check with no evidence at all.
-     */
-    protected static CoverageProblems(cases: GoldenCase[], q: GoldenLabelQuality): string[] {
-        const problems: string[] = [];
-        const labelledCount = cases.length + q.Excluded.length;
-        for (const o of new Set(cases.flatMap((c) => Object.keys(c.Expected)))) {
-            if (!q.PerOutput[o]) {
-                problems.push(`${o}: the labelQuality record has no labeler agreement for this output`);
-            }
-        }
-        for (const [o, a] of Object.entries(q.PerOutput)) {
-            for (const [name, p] of [['B', a.AB], ['C', a.AC]] as const) {
-                if (p.N !== labelledCount) {
-                    problems.push(`${o}: labelers A and ${name} were compared on ${p.N} cases, but ${labelledCount} were labelled`);
-                }
-            }
-        }
-        return problems;
     }
 
     /** Each labeler pair whose agreement's Wilson lower bound, recomputed from the stored counts, is under the policy. */

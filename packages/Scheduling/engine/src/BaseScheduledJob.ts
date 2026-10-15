@@ -14,10 +14,7 @@ export interface ScheduledJobExecutionContext {
     Schedule: MJScheduledJobEntity;
     Run: MJScheduledJobRunEntity;
     ContextUser: UserInfo;
-    /**
-     * The provider the engine read this job with. A plugin's reads and writes use it, never the process default: a
-     * server hosting more than one connection must run the job on the same one it read the job from.
-     */
+    /** The provider the engine read this job with; the plugin's reads and writes use it. */
     Provider: IMetadataProvider;
 
     /**
