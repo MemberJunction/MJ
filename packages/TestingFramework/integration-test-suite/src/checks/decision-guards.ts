@@ -1,6 +1,6 @@
 /**
- * decision-guards.ts — the network guards the openai-decisions and subq-mercury-decisions bundles put over
- * the decision drivers: a guarded driver is the shipped class with only `SendRequest`, its one network
+ * decision-guards.ts — the network guards the subq-mercury-decisions bundle puts over the decision
+ * drivers: a guarded driver is the shipped class with only `SendRequest`, its one network
  * call, replaced. It records each request and answers only while a check arms it, refusing with a 500
  * otherwise, so no request leaves the process.
  *

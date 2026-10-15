@@ -514,11 +514,11 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
             return { success: false, errorMessage: `Question '${key}': the choice '${String(choice)}' is not one of the options (${values.join(', ')})` };
         }
         const raw = IsSystemOneWireObject(answer['probabilities']) ? answer['probabilities'] : {};
-        const probabilities = NormalizeDecisionProbabilities(values.map(value => [value, raw[value]]));
+        const probabilities = normalize(values.map(value => [value, raw[value]]));
         if (!probabilities) {
             return { success: false, errorMessage: `Question '${key}': the Choice probabilities sum to 0` };
         }
-        return { success: true, answer: { Kind: 'Choice', Value: choice, Probabilities: probabilities, Confidence: ReadDecisionConfidence(answer, probabilities) } };
+        return { success: true, answer: { Kind: 'Choice', Value: choice, Probabilities: probabilities, Confidence: readConfidence(answer, probabilities) } };
     }
 
     /** A Score's probabilities come keyed by level index ("0", "1", …); MJ keys them by level name. */
@@ -532,13 +532,13 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
             return { success: false, errorMessage: `Question '${key}': the Score value is not a finite number` };
         }
         const raw = IsSystemOneWireObject(answer['probabilities']) ? answer['probabilities'] : {};
-        const probabilities = NormalizeDecisionProbabilities(question.Levels.map((level, i) => [level, raw[String(i)]]));
+        const probabilities = normalize(question.Levels.map((level, i) => [level, raw[String(i)]]));
         if (!probabilities) {
             return { success: false, errorMessage: `Question '${key}': the Score probabilities sum to 0` };
         }
         return {
             success: true,
-            answer: { Kind: 'Score', Value: clamp(score, 0, question.Levels.length - 1), Probabilities: probabilities, Confidence: ReadDecisionConfidence(answer, probabilities) },
+            answer: { Kind: 'Score', Value: clamp(score, 0, question.Levels.length - 1), Probabilities: probabilities, Confidence: readConfidence(answer, probabilities) },
         };
     }
 }
@@ -617,11 +617,10 @@ function finiteOr(value: unknown, fallback: number): number {
 }
 
 /**
- * Builds a distribution over the given keys, in order, renormalised to sum to 1: decision APIs round
- * each probability. A missing, negative or non-numeric entry counts as 0. Returns undefined when the
- * entries sum to 0. Shared by every decision driver that maps a vendor's probabilities onto MJ's.
+ * Builds a distribution over the given keys, in order. A missing, negative or non-numeric entry
+ * counts as 0. Returns undefined when the entries sum to 0.
  */
-export function NormalizeDecisionProbabilities(entries: Array<[string, unknown]>): Record<string, number> | undefined {
+function normalize(entries: Array<[string, unknown]>): Record<string, number> | undefined {
     const values = entries.map(([name, raw]): [string, number] => [name, Math.max(0, finiteOr(raw, 0))]);
     const sum = values.reduce((total, [, p]) => total + p, 0);
     if (sum <= 0) {
@@ -634,11 +633,8 @@ export function NormalizeDecisionProbabilities(entries: Array<[string, unknown]>
     return result;
 }
 
-/**
- * A decision answer's confidence: the API's own `confidence`, clamped to [0, 1]; when it sends none,
- * the top probability of the (normalised) distribution.
- */
-export function ReadDecisionConfidence(answer: SystemOneWireObject, probabilities: Record<string, number>): number {
+/** The API's own confidence, clamped; when it sends none, the top probability. */
+function readConfidence(answer: SystemOneWireObject, probabilities: Record<string, number>): number {
     const confidence = answer['confidence'];
     return typeof confidence === 'number' && Number.isFinite(confidence)
         ? clamp(confidence, 0, 1)

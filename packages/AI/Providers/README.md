@@ -17,7 +17,7 @@ Direct integrations with large language model APIs.
 | [Groq](./Groq/readme.md) | `@memberjunction/ai-groq` | Wrapper for Groq AI LPU inference engine |
 | [Inception](./Inception/README.md) | `@memberjunction/ai-inception` | Inception Labs' Mercury diffusion models: the Mercury chat models, and the Mercury Decide decision model on Inception's Decisions API |
 | [Mistral](./Mistral/readme.md) | `@memberjunction/ai-mistral` | Wrapper for Mistral AI Models |
-| [OpenAI](./OpenAI/readme.md) | `@memberjunction/ai-openai` | Wrapper for OpenAI AI Models (GPT-4, etc.), including the Decisions API decision model (GPT-6 Luna Decisions, public beta) |
+| [OpenAI](./OpenAI/readme.md) | `@memberjunction/ai-openai` | Wrapper for OpenAI AI Models (GPT-4, etc.) |
 | [xAI](./xAI/README.md) | `@memberjunction/ai-xai` | Wrapper for xAI models (Grok) |
 
 ### Cloud Platform Providers

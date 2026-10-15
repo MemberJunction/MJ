@@ -1346,17 +1346,6 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT120 - OpenAI Decisions API (GPT-6 Luna Decisions)",
-            "Sequence": 48,
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "F3DB307B-52CE-4CDC-BE47-313E37982723"
-          }
-        },
-        {
-          "fields": {
-            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT121 - SubQ Snap and Mercury Decide Decision Models",
             "Sequence": 48,
             "Status": "Active"

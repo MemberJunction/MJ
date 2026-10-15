@@ -102,19 +102,15 @@ SiliconFlow) through the same Decisions API, so the `Kev-4B` model's OpenRouter 
 `Default Decision` does not bind Kev-4B, but as an active Decision model it is one of the
 power-matched fallbacks, after Jev and `LLM Decision`, for any host that has this key.
 
-**GPT-6 Luna Decisions and Mercury Decide.** OpenRouter also serves these through the same Decisions
-API, in the System One format, so each model's OpenRouter row uses `OpenRouterDecision` and the same key,
-with a pinned slug. Each model's own vendor route has the higher priority.
-- `openai/gpt-6-luna-decisions-20261006`, served by OpenAI, 1,050,000-token context. The other route is
-  `OpenAIDecision` in [`@memberjunction/ai-openai`](../OpenAI/readme.md).
-- `inception/mercury-decide-20260930`, served by Inception, 65,536-token context, text only. The other
-  route is `InceptionDecision` in [`@memberjunction/ai-inception`](../Inception/README.md). The free
-  variant (`inception/mercury-decide:free`) is not in the catalog: it has its own rate limits and data
-  policy.
+**Mercury Decide.** OpenRouter also serves it through the same Decisions API, in the System One format,
+so the model's OpenRouter row uses `OpenRouterDecision` and the same key, with a pinned slug:
+`inception/mercury-decide-20260930`, served by Inception, 65,536-token context, text only. Its own
+vendor route, `InceptionDecision` in [`@memberjunction/ai-inception`](../Inception/README.md), has the
+higher priority. The free variant (`inception/mercury-decide:free`) is not in the catalog: it has its
+own rate limits and data policy.
 
-Both are `Default Decision` power-matched fallbacks for a host with this key, GPT-6 Luna Decisions the
-first and Mercury Decide among the last, because the fallbacks follow PowerRank distance from
-`Default Decision`'s target rank.
+It is a `Default Decision` power-matched fallback for a host with this key, among the last, because the
+fallbacks follow PowerRank distance from `Default Decision`'s target rank.
 
 **The wire format.** Jev and Kev speak the System One decisions format. `OpenRouterDecision` extends
 `BaseSystemOneDecision` (`@memberjunction/ai`), which owns the request and answer mapping; this class

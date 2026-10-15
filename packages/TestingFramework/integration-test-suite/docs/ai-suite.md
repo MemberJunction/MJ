@@ -1,6 +1,6 @@
 # AI Suite — the AI-stack integration bundles
 
-**Scope:** every shipped integration-check bundle that exercises MemberJunction's AI stack — skills governance, cost accounting, the dual-path permission helpers, persisted embeddings and their binary vector columns, the agent loop's deterministic seams, the conversation-compaction assembly layer, the live prompt/agent smoke runners, concurrent-persistence stress, the AI code-authoring Remote Operation, and the Clef, Kev, Perplexity Decider, GPT-6 Luna Decisions, SubQ Snap and Mercury Decide decision-model drivers. **17 bundles, 114 checks total**, all registered on the shared `IntegrationCheckRegistry` in this package (`src/checks/*.checks.ts`) and dispatched by the metadata-driven `IntegrationTestDriver` via `mj test`. **Tier split:** 13 bundles / 107 checks are **deterministic** (two of them mutation-gated) (no LLM call, members of the *"Integration Tests — Deterministic"* suite, the blocking CI gate) and 4 bundles / 7 checks are **live-model** (real token-costing model calls, members of the *"Integration Tests — Live Model"* suite). Run the deterministic tier with `npm run test:integration` from repo root (= `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"`); run the live tier with `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Live Model"`; run one bundle with `MJ_INTEGRATION_TEST=1 npx mj test run --name "<IT record name>"`. Since the **2026-07-20 gate inversion** (`packages/TestingFramework/testing-integration/src/tiers.ts:7-11`), the live-model tier is **ON by default — opt out with `RUN_AGENT_TESTS=0`** (invoking the Live Model suite is already an explicit act; `RUN_AGENT_TESTS=1` still means on for backward compatibility). CI pins `RUN_AGENT_TESTS=0`.
+**Scope:** every shipped integration-check bundle that exercises MemberJunction's AI stack — skills governance, cost accounting, the dual-path permission helpers, persisted embeddings and their binary vector columns, the agent loop's deterministic seams, the conversation-compaction assembly layer, the live prompt/agent smoke runners, concurrent-persistence stress, the AI code-authoring Remote Operation, and the Clef, Kev, Perplexity Decider, SubQ Snap and Mercury Decide decision-model drivers. **16 bundles, 107 checks total**, all registered on the shared `IntegrationCheckRegistry` in this package (`src/checks/*.checks.ts`) and dispatched by the metadata-driven `IntegrationTestDriver` via `mj test`. **Tier split:** 12 bundles / 100 checks are **deterministic** (two of them mutation-gated) (no LLM call, members of the *"Integration Tests — Deterministic"* suite, the blocking CI gate) and 4 bundles / 7 checks are **live-model** (real token-costing model calls, members of the *"Integration Tests — Live Model"* suite). Run the deterministic tier with `npm run test:integration` from repo root (= `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"`); run the live tier with `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Live Model"`; run one bundle with `MJ_INTEGRATION_TEST=1 npx mj test run --name "<IT record name>"`. Since the **2026-07-20 gate inversion** (`packages/TestingFramework/testing-integration/src/tiers.ts:7-11`), the live-model tier is **ON by default — opt out with `RUN_AGENT_TESTS=0`** (invoking the Live Model suite is already an explicit act; `RUN_AGENT_TESTS=1` still means on for backward compatibility). CI pins `RUN_AGENT_TESTS=0`.
 
 Design ancestor: [test-catalog.md](./test-catalog.md) **Domain 4 — AI Stack Deterministic Seams**. Defect cross-references: [bug-register.md](../../../../plans/integration-test-expansion/bug-register.md). Next expansion for this family: [agents-extended-suite-proposal.md](../../../../plans/integration-test-expansion/agents-extended-suite-proposal.md) (see the closing section).
 
@@ -13,7 +13,7 @@ Design ancestor: [test-catalog.md](./test-catalog.md) **Domain 4 — AI Stack De
 
 The mutation axis is **not** a separate suite: several deterministic AI bundles mutate the DB by design (own tagged fixtures only, FK-ordered teardown) and are deliberately NOT `RequiresMutation`-gated, mirroring `runquery-cache` (stated in the `conversation-compaction` and `agent-loop-standin` headers).
 
-All thirteen deterministic bundles honor the family's **anti-vacuity / loud-skip discipline**: data-dependent checks count their subjects and skip-as-pass with an explicit `console.warn` (never silently), while legs that can always run assert unconditionally.
+All twelve deterministic bundles honor the family's **anti-vacuity / loud-skip discipline**: data-dependent checks count their subjects and skip-as-pass with an explicit `console.warn` (never silently), while legs that can always run assert unconditionally.
 
 ---
 
@@ -32,7 +32,6 @@ All thirteen deterministic bundles honor the family's **anti-vacuity / loud-skip
 | `cloudflare-clef` | 6 | CF1–CF6 | deterministic | server | IT108 | Deterministic |
 | `systemone-kev` | 10 | KV1–KV10 | deterministic | server | IT109 | Deterministic |
 | `perplexity-decider` | 5 | PX1–PX5 | deterministic | server | IT110 | Deterministic |
-| `openai-decisions` | 7 | OD1–OD7 | deterministic | server | IT120 (provisional) | Deterministic |
 | `subq-mercury-decisions` | 8 | SM1–SM8 | deterministic | server | IT121 (provisional) | Deterministic |
 | `prompt-runner` | 1 | PR1 | live-model | server | IT16 | Live Model |
 | `agent-runner` | 1 | AR1 | live-model | server | IT17 | Live Model |
@@ -422,58 +421,7 @@ pnpm mj test run "IT101 - Binary Fields and Vector Columns"
 
 ---
 
-## 16. `openai-decisions` (OD1–OD7) — OpenAI's GPT-6 Luna Decisions, through guarded stand-ins
-
-**Machinery under test.** The `GPT-6 Luna Decisions` model (`metadata/ai-models/.openai-decision-models.json`): `gpt-6-luna` on OpenAI's Decisions API, which is in public beta. The bundle covers its two routes, OpenAI's own Decisions API through the `OpenAIDecision` driver (`@memberjunction/ai-openai`) and OpenRouter's Decisions API through `OpenRouterDecision`, from the synced metadata through `AIDecisionRunner` to the request each route would send. It also covers what the runner does with the model: a refusal failing over between the routes, a credential bound to the model's OpenAI row, and `Default Decision`'s candidate order and selection.
-
-**The two wire formats.**
-- OpenAI's Decisions API has its own format: an ordered array of named questions (`predicate`, `choice` with `choices`, `score` with `levels`) and answers with array probabilities. Its shapes come from openai-node 7.30.0, and `OpenAIDecision` does not extend `BaseSystemOneDecision`.
-- OpenRouter answers for the same model in the System One format, so `OpenRouterDecision` maps it unchanged.
-- OD4's scripted OpenRouter answer is the body OpenRouter returned in a live call on October 7, 2026.
-
-**No network.** For the whole bundle, `OpenAIDecision` and `OpenRouterDecision` are replaced by `GuardedOpenAIDecision` and `GuardedOpenRouterDecision`. Each overrides only `SendRequest`, the driver's one network call, records each request, and answers only while a check arms it. Otherwise it refuses with a 500, so nothing can reach api.openai.com or openrouter.ai.
-
-Everything else is real:
-- the prompt, model and vendor rows, and candidate selection;
-- credential resolution: legacy `apiKeys` entries, or a bound `MJ: Credentials` row in OD6 and OD7;
-- the drivers' URL, header and body building, and the answer mapping;
-- `BaseDecision`'s validation, the failover loop and the `MJ: AI Prompt Runs` rows.
-
-OD7 registers the shared `ScriptedDecision` over every decision driver class, as KV4 does. `SCRIPTED_DECISION_DRIVER_CLASSES` now includes `OpenAIDecision`, because the model joins `Default Decision`'s power-matched fallbacks.
-
-**Transport.** Server-only by necessity: the guards are ClassFactory registrations in the test process.
-
-**Fixtures / lifecycle.**
-- The model is shipped metadata, read only.
-- OD5 and OD7 use `DecisionRunnerProbe` to read the candidates and the failed attempts.
-- OD6 and OD7 create real `API Key` credentials through `CredentialEngine`, with bindings on the model's OpenAI Inference Provider row (`decision-fixtures.ts`). They delete them in a `finally`.
-- Every runner check tracks its prompt runs in `DecisionFixtures` and deletes them in a `finally`; Teardown deletes anything a failed check left, then restores both drivers.
-- The guards (`decision-guards.ts`, whose `GuardedOpenRouterDecision` the subq-mercury-decisions bundle shares) and the assertions both bundles use (`decision-fixtures.ts`) are shared.
-
-**Tier.** All 7 deterministic, ungated. Break-it checks, each run against the built suite and then reversed:
-
-| Break | Fails |
-|---|---|
-| the OpenRouter row's `APIName` pushed unpinned (`openai/gpt-6-luna-decisions`) | OD1 ("OpenRouter row: APIName"), OD4 (the request body's `model`) |
-| `@RegisterClass(BaseDecision, 'OpenAIDecision')` removed | OD2 ("the shipped OpenAIDecision is not registered under 'OpenAIDecision'") |
-| `OpenAIDecision` sends its questions without a `name` | OD3, OD6 (the request body) |
-| a mapping failure or refusal made `Fatal` with no failover | OD5 ("OpenRouter requests — expected 1, got 0") |
-| the credential's JSON kept as the API key (no `ParseSystemOneCredential`) | OD2 (the credential's endpoint not read), OD6 ("the bearer is the credential's JSON, not its token") |
-| the model bound to `Default Decision` above Jev | OD7 ("first candidate — expected Jev / OpenRouter / OpenRouterDecision, got GPT-6 Luna Decisions / OpenAI / OpenAIDecision") |
-
-| Id | Name (abridged) | Asserted observable | Failure it catches |
-|---|---|---|---|
-| `openai-decisions.OD1` | Catalog rows | Active `Decision` model, PowerRank 57, separate from the `GPT-6 Luna` LLM, with no effective `Decision` limits; one OpenAI Model Developer row; an Active OpenAI Inference Provider row naming `OpenAIDecision` and `gpt-6-luna`, with no input-token limit, at a higher priority than an Active OpenRouter row naming `OpenRouterDecision` and `openai/gpt-6-luna-decisions-20261006` with 1,050,000 input tokens; a Realtime cost row on each vendor at $0.10 per million input tokens, $0 output; the OpenAI vendor takes an `API Key` | metadata that did not sync, a wrong driver or APIName, an unpinned OpenRouter alias, an undocumented limit, a wrong price |
-| `openai-decisions.OD2` | ClassFactory builds the driver | the shipped `OpenAIDecision` is registered under its key; `CreateInstance` builds a subclass of it (the bundle's guard) that reads a credential's `endpoint` and appends `/decisions`; the default endpoint is `https://api.openai.com/v1/decisions` | the package not registering its class, or a JSON credential's endpoint not read |
-| `openai-decisions.OD3` | A runner call on OpenAI | `ExecuteDecision` with `override` naming the model and OpenAI succeeds with `OpenAIDecision`; one request to the default endpoint with `Bearer <key>` and body `{ model: 'gpt-6-luna', input: <state>, questions: [predicate, choice, score] }`, in order and named by key; OpenRouter gets nothing; the answers map (Choice renormalised from 0.98, Score keyed by level label); the row names the model, OpenAI and Default Decision, succeeded, has 1,000 input tokens and a $0.0001 cost from the cost row | a broken request or answer mapping, the run recorded against the wrong model or vendor, a missing cost row |
-| `openai-decisions.OD4` | A runner call on OpenRouter | the same on OpenRouter succeeds with `OpenRouterDecision`; one request to `https://openrouter.ai/api/alpha/decisions` with body `{ model: 'openai/gpt-6-luna-decisions-20261006', state, questions }`; the live-recorded answers map; the row has 406 input tokens and OpenRouter's reported $0.0000406 | the row's pinned APIName not sent, the run recorded against the wrong vendor |
-| `openai-decisions.OD5` | A refusal fails over | with keys for both routes, the candidates are OpenAI then OpenRouter; OpenAI declines the Choice question; the runner logs one failed attempt on OpenAI with `Question 'team': OpenAI declined to answer it (refusal)` that allowed failover; OpenRouter answers; one request to each route | a refusal mapped as an answer, or a refusal that stops the failover loop |
-| `openai-decisions.OD6` | A bound credential | the model on OpenAI has no credential first; a real `API Key` credential bound to its OpenAI Inference Provider row (the model also has an Active Model Developer row on OpenAI) sends `Bearer <token>`, not the JSON, and the answers map | the credential's JSON sent as the bearer, or a binding on the serving row missed |
-| `openai-decisions.OD7` | Default Decision's selection is unchanged | the candidates are Jev / OpenRouter, then LLM Decision / MemberJunction, then the fallbacks, the first two being the model on OpenAI then on OpenRouter (its PowerRank, 57, is Default Decision's target rank); the model on OpenAI has no credential, and the run (scripted driver) selects the first of Jev and LLM Decision with a credential, its selection info listing the same candidates; with a credential bound to the model's OpenAI row, the order is the same, that row has a credential and is still behind both, and the selection does not change; with every other decision driver failing with `ServiceUnavailable`, the run logs a failed attempt for each credentialed candidate ahead of the model on OpenAI (LLM Decision among them) and the model answers | the new model jumping ahead of the bound candidates, or being selected once credentialed; a rank change that moves it among the fallbacks, which the READMEs and changeset describe; the failover to it no longer happening |
-
----
-
-## 17. `subq-mercury-decisions` (SM1–SM8) — SubQ Snap and Mercury Decide, through guarded stand-ins
+## 16. `subq-mercury-decisions` (SM1–SM8) — SubQ Snap and Mercury Decide, through guarded stand-ins
 
 **Machinery under test.** Two decision models whose APIs speak System One exactly:
 - `SubQ Snap` (`metadata/ai-models/.subq-snap-models.json`), `subq-snap-preview` on Subquadratic's SubQ Decisions API (`POST https://api.subq.ai/v1/systemone`, public preview), through `SubQDecision` (`@memberjunction/ai-systemone`);

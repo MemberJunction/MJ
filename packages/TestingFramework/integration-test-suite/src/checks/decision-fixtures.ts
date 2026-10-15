@@ -1,10 +1,10 @@
 /**
  * decision-fixtures.ts — throwaway decision-routing fixtures for the decision-model bundles
- * (cloudflare-clef, systemone-kev, perplexity-decider, openai-decisions, subq-mercury-decisions): real
+ * (cloudflare-clef, systemone-kev, perplexity-decider, subq-mercury-decisions): real
  * `MJ: Credentials` rows created through `CredentialEngine`, `MJ: AI Credential Bindings` rows, a test
  * Decision prompt with its own model bindings, a test Decision model with model-vendor rows under keys
  * the check chooses, a probe runner, a driver that is always unavailable, and the cleanup for all of
- * them; and the lookups and assertions the openai-decisions and subq-mercury-decisions bundles share.
+ * them; and the lookups and assertions the subq-mercury-decisions bundle uses.
  *
  * NOT a check bundle: it registers nothing on import.
  *
@@ -153,7 +153,7 @@ export async function ReadDecisionPromptRun(ctx: IntegrationCheckContext, id: st
     return RequireRows(result, `prompt run ${id}`)[0];
 }
 
-// ─── Shared lookups and assertions (openai-decisions, subq-mercury-decisions) ────────────────────────
+// ─── Shared lookups and assertions (subq-mercury-decisions) ────────────────────────
 
 /** Asserts `actual` is a number within 1e-9 of `expected`. */
 export function AssertClose(actual: number | null | undefined, expected: number, message: string): void {

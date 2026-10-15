@@ -51,7 +51,6 @@ import { AiProvidersChecks } from '../checks/ai-providers.checks';
 import { CloudflareClefChecks } from '../checks/cloudflare-clef.checks';
 import { SystemOneKevChecks } from '../checks/systemone-kev.checks';
 import { PerplexityDeciderChecks } from '../checks/perplexity-decider.checks';
-import { OpenAIDecisionsChecks } from '../checks/openai-decisions.checks';
 import { SubQMercuryDecisionsChecks } from '../checks/subq-mercury-decisions.checks';
 import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
@@ -170,7 +169,6 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['cloudflare-clef', CloudflareClefChecks, 6], // CF1-CF6 Clef/Clef-flash metadata, driver registration, runner calls through an HTTP stand-in: envelope failures and failover, a bare response, a JSON credential's account (IT108)
         ['systemone-kev', SystemOneKevChecks, 10], // KV1-KV10 Kev metadata, SystemOneDecision registration, runner calls against loopback System One servers: Default Decision selection, bound credentials, per-row routing, failover and error classification, Kev-4B on OpenRouter, a binding on the serving row of a two-row model (IT109)
         ['perplexity-decider', PerplexityDeciderChecks, 5], // PX1-PX5 Perplexity Decider metadata, PerplexityDecision registration, runner calls through an HTTP stand-in: the quickstart request and response, a bound credential's token, Default Decision selection and failover (IT110)
-        ['openai-decisions', OpenAIDecisionsChecks, 7], // OD1-OD7 GPT-6 Luna Decisions metadata, OpenAIDecision registration, runner calls through guarded OpenAI and OpenRouter stand-ins: request and answer mapping, a refusal failing over, a bound credential, Default Decision selection (IT120, provisional)
         ['subq-mercury-decisions', SubQMercuryDecisionsChecks, 8], // SM1-SM8 SubQ Snap and Mercury Decide metadata, SubQDecision and InceptionDecision registration, runner calls through guarded SubQ, Inception and OpenRouter stand-ins: request and answer mapping per route, bound credentials, 422 and 402 failing over, Default Decision's order with the new models last (IT121, provisional)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
@@ -311,7 +309,6 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'metadata-sync': 9,
         'metadata-sync-push': 10,
         'nested-transactions': 11,
-        'openai-decisions': 7,
         'open-app-teardown': 2,
         'permission-engine': 15,
         'perplexity-decider': 5,
@@ -387,7 +384,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(118);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(117);
     });
 });
 

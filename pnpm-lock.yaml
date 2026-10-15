@@ -16088,9 +16088,6 @@ importers:
       '@memberjunction/ai-inception':
         specifier: 6.2.0-edge.4
         version: link:../../AI/Providers/Inception
-      '@memberjunction/ai-openai':
-        specifier: 6.2.0-edge.4
-        version: link:../../AI/Providers/OpenAI
       '@memberjunction/ai-openrouter':
         specifier: 6.2.0-edge.4
         version: link:../../AI/Providers/OpenRouter
