@@ -156,6 +156,13 @@
               (RecordOpenRequested)="OnInvocationOpenRequested($event)">
             </mj-agent-invocations>
           </div>
+          <div class="agent-pane agent-pane--rubrics" [class.agent-pane--hidden]="ActiveFormTab !== 'rubrics'">
+            <mj-agent-rubrics
+              [Provider]="Provider"
+              [AgentID]="record.ID"
+              [Active]="ActiveFormTab === 'rubrics'">
+            </mj-agent-rubrics>
+          </div>
         }
 
         <!-- Single Pane Layout with Expander Panels -->
@@ -429,7 +436,7 @@
                                     }
                                   </div>
                                 </div>
-                                @if (execution.Result) {
+                                @if (HasExecutionResult(execution)) {
                                   <div class="result-section">
                                     <h5><i class="fa-solid fa-file-text"></i> Result</h5>
                                     <mj-code-editor

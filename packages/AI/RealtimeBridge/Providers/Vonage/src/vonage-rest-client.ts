@@ -48,6 +48,8 @@ export interface VonageOutboundCallLike {
     ncco: NccoAction[];
     /** Optional lifecycle event-webhook URL. */
     event_url?: string[];
+    /** Answering-machine detection behaviour (`'hangup'` | `'continue'`). */
+    machine_detection?: 'hangup' | 'continue';
 }
 
 /** The created-call resource `createOutboundCall(...)` resolves to (we read only `uuid`). */
@@ -191,6 +193,7 @@ export class RealVonageVoiceClient implements IVonageVoiceLike {
             from: { type: 'phone', number: params.From },
             ncco: params.Ncco,
             ...(params.EventUrl ? { event_url: [params.EventUrl] } : {}),
+            ...(params.MachineDetection ? { machine_detection: params.MachineDetection } : {}),
         });
         if (!created?.uuid) {
             throw new Error('Vonage createOutboundCall returned no call UUID.');

@@ -36,7 +36,7 @@
  * If the entity is ALREADY FLS-enabled (a real administrator configured it), the fixture
  * refuses to mutate and the bundle skips-as-pass with a loud note.
  */
-import { RunView, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityWriteDenialMessage } from '@memberjunction/core';
+import { RunView, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityWriteDenialMessage, CompositeKey } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, RunViewParams, EntityFieldInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -50,6 +50,8 @@ import {
 } from '@memberjunction/testing-integration';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { MJEntityEntity, MJEntityFieldPermissionEntity, MJEmployeeEntity } from '@memberjunction/core-entities';
+import { SearchEnricher } from '@memberjunction/search-engine';
+import type { SearchResultItem } from '@memberjunction/search-engine';
 
 // ─────────────────────────────────────────────────────────────────── helpers
 
@@ -986,6 +988,77 @@ export async function CheckFls23_RecordChangeCacheSlotStillProjects(ctx: Integra
     return CheckFls23RecordChangeCacheSlotStillProjects(ctx);
 }
 
+/** The entity's name field — the column a record-name lookup reads. */
+function NameFieldOf(entity: EntityInfo): EntityFieldInfo {
+    const field = entity.Fields.find(f => f.IsNameField) ?? entity.NameField;
+    Assert(!!field, `${entity.Name} must have a name field for the record-name checks`);
+    return field!;
+}
+
+/** A search hit for the fixture employee with no name yet, so the enricher must look one up. */
+function UnnamedSearchHit(fx: FlsFixture): SearchResultItem {
+    return {
+        ID: `fls24-${fx.FixtureEmployeeID}`,
+        EntityName: fx.EntityName,
+        RecordID: fx.FixtureEmployeeID!,
+        SourceType: 'entity',
+        Title: `${fx.EntityName} Record`,
+        Snippet: '',
+        Score: 1,
+        ScoreBreakdown: {},
+        Tags: [],
+        MatchedAt: new Date(),
+        ResultType: 'entity-record',
+    };
+}
+
+/** Every record-name path a server-side caller can take, as one user. */
+async function RecordNamesAs(ctx: IntegrationCheckContext, fx: FlsFixture, user: UserInfo): Promise<{ Single: string; Batch: string; Search: string }> {
+    const key = CompositeKey.FromURLSegment(FlsEntity(ctx), fx.FixtureEmployeeID!);
+    const single = await ctx.Provider.GetEntityRecordName(fx.EntityName, key, user);
+    const [batch] = await ctx.Provider.GetEntityRecordNames([{ EntityName: fx.EntityName, CompositeKey: key }], user);
+    const enricher = new SearchEnricher();
+    enricher.Provider = ctx.Provider;
+    const hit = UnnamedSearchHit(fx);
+    await enricher.Enrich([hit], user);
+    return { Single: single ?? '', Batch: batch?.RecordName ?? '', Search: hit.RecordName ?? '' };
+}
+
+/**
+ * FLS24 — a read-denied name field withholds the record's name from every server-side lookup:
+ * the provider's single and batch lookups and search-result enrichment, not only the GraphQL
+ * resolver. The writer looks the name up first, so a copy kept from that lookup must not be
+ * served to the reader either.
+ */
+export async function CheckFls24RecordNameWithheldFromEveryLookup(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS24')) return;
+    const fx = ctx.FlsFixture!;
+    const nameField = NameFieldOf(FlsEntity(ctx));
+    const original = await LoadEfpRow(ctx, nameField.ID, fx.RoleIDs!.Reader);
+    const restore: [MJEntityFieldPermissionEntity['ReadAccess'], MJEntityFieldPermissionEntity['UpdateAccess'], MJEntityFieldPermissionEntity['CreateAccess']] =
+        [original.ReadAccess, original.UpdateAccess, original.CreateAccess];
+
+    const writerBefore = await RecordNamesAs(ctx, fx, fx.Writer!);
+    Assert(writerBefore.Single !== '', 'precondition: the fixture employee must have a name the writer can read');
+
+    const [ok, msg] = await setRule(ctx, nameField.ID, fx.RoleIDs!.Reader, 'Deny', 'No Access', 'No Access');
+    Assert(ok, `denying the reader the name field must be permitted: ${msg}`);
+    try {
+        await ctx.Provider.Refresh();
+        const reader = await RecordNamesAs(ctx, fx, fx.Reader!);
+        AssertEqual(reader.Single, '', 'the provider single lookup must withhold a read-denied name');
+        AssertEqual(reader.Batch, '', 'the provider batch lookup must withhold a read-denied name');
+        AssertEqual(reader.Search, '', 'search enrichment must withhold a read-denied name');
+
+        const writerAfter = await RecordNamesAs(ctx, fx, fx.Writer!);
+        AssertEqual(writerAfter.Single, writerBefore.Single, 'an unrestricted user must still get the name');
+        AssertEqual(writerAfter.Search, writerBefore.Single, 'an unrestricted user must still get the name in search');
+    } finally {
+        await setRule(ctx, nameField.ID, fx.RoleIDs!.Reader, ...restore);
+        await ctx.Provider.Refresh().catch(() => undefined);
+    }
+}
+
 /** FLS19 — rows targeting unrestrictable fields (primary keys) are rejected at save time (4.6). */
 export async function CheckFls19UnrestrictableTargetRejected(ctx: IntegrationCheckContext): Promise<void> {
     if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS19')) return;
@@ -1101,6 +1174,7 @@ export const FlsEnforcementChecks: NamedCheck[] = [
     { Id: 'fls-enforcement.FLS20', Name: 'FLS20: the typed-accessor gate throws the ambiguous message on a read-denied field', Fn: CheckFls20AccessorGateThrows },
     { Id: 'fls-enforcement.FLS22', Name: 'FLS22: the Record Changes payload is projected against the entity each row is ABOUT — denied keys dropped from ChangesJSON/FullRecordJSON, ChangesDescription withheld, and an unrestricted caller still gets everything', Fn: CheckFls22RecordChangePayloadProjected },
     { Id: 'fls-enforcement.FLS23', Name: 'FLS23: the Record Changes projection holds on the SHARED cache slot — the reader is served from the writer-warmed slot and still gets a narrowed payload', Fn: CheckFls23RecordChangeCacheSlotStillProjects },
+    { Id: 'fls-enforcement.FLS24', Name: 'FLS24: a read-denied name field withholds the record name from the provider lookups and search enrichment, including after an unrestricted user looked it up', Fn: CheckFls24RecordNameWithheldFromEveryLookup },
     { Id: 'fls-enforcement.FLS21', Name: 'FLS21: full-metadata-refresh cost is measured and recorded (the per-debounced-burst price of a permission change)', Fn: CheckFls21RefreshCostVisibility }
 ];
 

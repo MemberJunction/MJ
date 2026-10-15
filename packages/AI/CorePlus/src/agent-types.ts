@@ -17,7 +17,7 @@ import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
 import { AgentDecisionRequest, AgentDecisionResult, AgentFinishIf } from './agent-decisions';
-import { AIAPIKey } from '@memberjunction/ai';
+import { AIAPIKey, AICredentialScope } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionParam } from '@memberjunction/actions-base';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
@@ -364,6 +364,17 @@ export interface AgentPipelineRequest {
 }
 
 /**
+ * One image a client tool returns for the model to see. `Base64` is raw base64 without a data
+ * URL prefix.
+ */
+export interface ClientToolMediaItem {
+    MimeType: string;
+    Base64: string;
+    Width?: number;
+    Height?: number;
+}
+
+/**
  * Response from a client tool execution — returned to the server when
  * the client finishes running the tool.
  */
@@ -374,6 +385,8 @@ export interface ClientToolResponse {
     Success: boolean;
     /** The tool result (if successful) */
     Result?: unknown;
+    /** Images for the model, when the tool returns any. */
+    Media?: ClientToolMediaItem[];
     /** Error message (if failed) */
     ErrorMessage?: string;
 }
@@ -388,6 +401,8 @@ export interface ClientToolResultSummary {
     Success: boolean;
     /** Result data from the tool */
     Result?: unknown;
+    /** Images for the model, when the tool returns any. */
+    Media?: ClientToolMediaItem[];
     /** Error message if the tool failed */
     ErrorMessage?: string;
 }
@@ -1035,6 +1050,19 @@ export interface InputArtifact {
 }
 
 /**
+ * How a run carries forward the work of a predecessor the user stopped.
+ * - `'full_stack'`: the stopped run's own message stack (its prompts' turns, its action invocations and
+ *   results, delegations) is resumed into this run in the same shape the loop builds while running, so
+ *   the agent picks up where it left off. Falls back to `'summary'` when the stack cannot be resumed.
+ * - `'summary'`: the stopped run's completed action and tool results are rendered into one
+ *   carried-forward message.
+ *
+ * The default is `'full_stack'` (`BaseAgent.DefaultStopContinuationMode`); a caller sets
+ * `ExecuteAgentParams.stopContinuationMode` only to choose `'summary'`.
+ */
+export type StopContinuationMode = 'full_stack' | 'summary';
+
+/**
  * Parameters required to execute an AI Agent.
  *
  * @template TContext - Type of the context object passed through agent and action execution.
@@ -1248,6 +1276,22 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     apiKeys?: AIAPIKey[];
     /**
+     * Which credentials the run may spend; omitted means `'Any'`. `'RuntimeOnly'` restricts the run's
+     * model calls to {@link apiKeys}: a vendor the run carries no key for is not used, rather than
+     * falling back to the platform's credentials. See `AICredentialScope` in `@memberjunction/ai`.
+     *
+     * Covered: every prompt the agent runs and the ones it starts on its own behalf (JSON repair, the
+     * result-selector judge, summarize, compaction, naming), decision calls, self-check rubrics,
+     * sub-agents, realtime sessions and actions. An action that calls a vendor directly gets the run's
+     * key through `RunActionParams.RuntimeAPIKeyResolver`; one that runs its own prompt or agent is
+     * handed only the scope, not the keys, so under `'RuntimeOnly'` it fails rather than spending the
+     * platform's.
+     *
+     * Not covered: retrieval reranking (`AIRerankerRunner`, the search rerankers) and vector
+     * embeddings outside a prompt run, which are platform infrastructure and resolve their own keys.
+     */
+    CredentialScope?: AICredentialScope;
+    /**
      * Optional ID of the last run in a run chain.
      * When provided, this links the new run to a previous run, allowing
      * agents to maintain context across multiple interactions.
@@ -1296,6 +1340,14 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     ConversationHistoryFrom?: Date;
 
     /**
+     * The conversation branch this run belongs to. Meaningful only with {@link conversationId}.
+     * The framework reads the conversation on the run's behalf only along that branch's path:
+     * history retrieval tools, offered artifacts, cross-turn compaction and the previous
+     * turn's tool results. Omitted, the run reads the trunk (rows with no branch).
+     */
+    ConversationBranchID?: string;
+
+    /**
      * Optional flag to automatically populate the payload from the last run.
      * When true and lastRunId is provided, the framework will:
      * 1. Load the last run's FinalPayload
@@ -1305,6 +1357,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * bandwidth by avoiding passing large payloads back and forth.
      */
     autoPopulateLastRunPayload?: boolean;
+
+    /**
+     * How this run carries forward a predecessor the user stopped (see {@link StopContinuationMode}).
+     * Defaults to `'full_stack'`: the stopped run's message stack is resumed so the agent continues
+     * where it left off. `'summary'` carries only its completed results, for callers that want that.
+     */
+    stopContinuationMode?: StopContinuationMode;
 
     /**
      * Per-request Plan Mode toggle. Defaults OFF (undefined/false) — no behavior change unless

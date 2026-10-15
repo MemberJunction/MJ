@@ -1,0 +1,40 @@
+.wq-discard-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 320px;
+}
+
+.wq-discard-message {
+    margin: 0;
+    color: var(--mj-text-secondary);
+    font-size: 0.9rem;
+}
+
+.wq-discard-label {
+    font-size: 0.8rem;
+    color: var(--mj-text-secondary);
+}
+
+.wq-discard-reason {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    font: inherit;
+    resize: vertical;
+}
+
+.wq-discard-reason:focus {
+    outline: none;
+    border-color: var(--mj-border-focus);
+}
+
+.wq-discard-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-start;
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Conversations: Fork",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "9979C87D-27C6-46EC-B287-8CFF7E30B3FD"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T19:00:01.514Z",
+      "checksum": "e34554b96a0eb2e63f3f9096a27690fbd1c4cac8eee629c9b50588a5778a0efa"
+    }
+  }
+]

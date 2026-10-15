@@ -408,18 +408,14 @@ export class SearchService {
 
     /**
      * Recently opened records for search empty states, newest first — same
-     * source as the omnibar's '#' empty state (MJ: User Record Logs via
-     * UserInfoEngine). Fail-soft: any error yields [] rather than blocking
+     * source as the omnibar's '#' empty state (MJ: User Record Logs, queried
+     * through UserInfoEngine.LoadRecentRecordLogs). Fail-soft: any error yields [] rather than blocking
      * the surface. Display names resolve via GetEntityRecordNames with the
      * record ID as fallback.
      */
     public async GetRecentlyOpenedRecords(max = 3): Promise<RecentRecordItem[]> {
         try {
-            const engine = UserInfoEngine.Instance;
-            await engine.Config(false, this.Provider.CurrentUser ?? undefined); // no-op when loaded
-            const logs = [...engine.UserRecordLogs]
-                .sort((a, b) => new Date(b.LatestAt).getTime() - new Date(a.LatestAt).getTime())
-                .slice(0, max);
+            const logs = await UserInfoEngine.Instance.LoadRecentRecordLogs(max, this.Provider.CurrentUser ?? undefined, this.Provider);
             if (logs.length === 0) {
                 return [];
             }

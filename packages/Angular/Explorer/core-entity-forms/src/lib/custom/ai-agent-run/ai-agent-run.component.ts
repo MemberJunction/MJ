@@ -331,6 +331,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
     this.clearWorkflowPoll();
@@ -999,8 +1000,8 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     try {
       let parsedCount = 0;
       
-      // Parse all fields that exist
-      if (this.record?.Result) {
+      // Parse each field whose panel is shown
+      if (this.ShowResultPanel) {
         this.ParsedResult; // Triggers parsing and caching
         parsedCount++;
       }
@@ -1049,6 +1050,14 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   /** @deprecated Use {@link ShowPayloadDiff}. */
   get showPayloadDiff(): boolean {
     return this.ShowPayloadDiff;
+  }
+
+  /**
+   * True for an older run that has `Result` but no `FinalPayload`. When `FinalPayload` is set it
+   * holds the same JSON and has its own panel.
+   */
+  get ShowResultPanel(): boolean {
+    return !!this.record?.Result && !this.record?.FinalPayload;
   }
 
   /**

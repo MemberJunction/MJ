@@ -48,6 +48,7 @@ vi.mock('../generic/logging', () => ({
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     LogStatusEx: vi.fn(),
+    LogWarning: vi.fn(),
     LogStatusVerbose: vi.fn(),
 }));
 

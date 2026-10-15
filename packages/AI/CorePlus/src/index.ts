@@ -1,5 +1,6 @@
 export * from './model-run.types';
 export * from './prompt.types';
+export * from './prompt-run-messages.types';
 export * from './agent-types';
 export * from './agent-failure-message';
 export * from './agent-payload-change-request';
@@ -18,6 +19,14 @@ export * from './agent-decisions';
 export * from './agent-run-steps';
 export * from './app-context';
 export * from './client-tool-resolver';
+export * from './agent-settings';
+export * from './json-schema-subset';
+export * from './realtime-channel-descriptor';
+export * from './realtime-channel-exposure';
+export * from './realtime-channel-scope';
+export * from './realtime-session-policy';
+export * from './realtime-session-events';
+export * from './client-tool-media';
 export * from './artifact-tool-library';
 
 export * from './MJAIPromptEntityExtended';
