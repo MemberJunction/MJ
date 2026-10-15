@@ -14,7 +14,10 @@ import { createHash } from 'crypto';
 import { BaseEntity, LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
+import {
+    ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID,
+    WithAgentRunDataTrustApplied
+} from '@memberjunction/ai-core-plus';
 import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
 import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ConversationEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
@@ -449,6 +452,13 @@ export class AgentRunner {
             // Flag to prevent late progress callbacks from overwriting final status
             // Progress callbacks fire async and may complete AFTER agent returns
             let agentExecutionCompleted = false;
+            // Progress saves run one at a time on this chain, and the final update awaits it.
+            // EnsureSaveComplete() alone is not enough: it resolves on the entity's 'save' event,
+            // which BaseEntity raises before the save finishes committing, so a progress save
+            // can still be in flight when the final update calls Save(). BaseEntity.Save() hands
+            // a concurrent caller the in-flight save's promise, so the final status was dropped
+            // and the detail stayed 'In-Progress' with the last progress message.
+            let progressSaves: Promise<void> = Promise.resolve();
 
             // Wrap progress callback to update agent response detail
             const originalOnProgress = params.onProgress;
@@ -466,11 +476,20 @@ export class AgentRunner {
 
                     // Update the agent response detail with progress message
                     if (agentResponseDetail && progress.message) {
-                        agentResponseDetail.Message = progress.message;
-                        const saved = await agentResponseDetail.Save();
-                        if (!saved) {
-                            LogError(`Failed to save agent response detail progress update: ${AgentRunner.saveFailureReason(agentResponseDetail)}`);
-                        }
+                        const detail = agentResponseDetail;
+                        const message: string = progress.message;
+                        progressSaves = progressSaves.then(async () => {
+                            try {
+                                detail.Message = message;
+                                if (!(await detail.Save())) {
+                                    LogError(`Failed to save agent response detail progress update: ${AgentRunner.saveFailureReason(detail)}`);
+                                }
+                            } catch (error) {
+                                // A failed progress save must not break the chain the final update awaits
+                                LogError(`Failed to save agent response detail progress update: ${error}`, undefined, error);
+                            }
+                        });
+                        await progressSaves;
                     }
                     // Call original callback if provided
                     if (originalOnProgress) {
@@ -542,8 +561,9 @@ export class AgentRunner {
             // Step 5: Update agent response detail with final result.
             const updateDetail = async () => {
                 if (agentResponseDetail && agentResponseDetailId) {
-                    // Wait for any in-flight progress save to complete
-                    // EnsureSaveComplete() resolves immediately if no save in progress
+                    // Wait for every queued progress save (none can be added: the flag is set),
+                    // then for any other save still in flight on this entity
+                    await progressSaves;
                     await agentResponseDetail.EnsureSaveComplete();
 
                     LogStatus('Updating agent response detail with final result');
@@ -2161,8 +2181,10 @@ export class AgentRunner {
             if (!contextUser?.ReturningVisitorContext) {
                 return;
             }
-            // Gate 2: need a conversation to read from, and an explicit caller scope always wins.
-            if (!conversationId || params.PrimaryScopeRecordID || (params.data?.PrimaryScopeRecordID as string | undefined)) {
+            // Gate 2: need a conversation to read from, and an explicit caller scope always wins — a data scope only when
+            // the run will honour it (TrustReservedRunData; BaseAgent.Execute drops it otherwise).
+            const runData = WithAgentRunDataTrustApplied(params).Params.data;
+            if (!conversationId || params.PrimaryScopeRecordID || (runData?.PrimaryScopeRecordID as string | undefined)) {
                 return;
             }
             const convo = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
@@ -2325,7 +2347,7 @@ export class AgentRunner {
 
                         let content: string | Buffer = '';
                         if (row.ContentMode === 'File' && row.FileID) {
-                            const downloaded = await this.downloadArtifactFileContent(row.FileID, contextUser);
+                            const downloaded = await this.DownloadArtifactFileContent(row.FileID, contextUser);
                             if (downloaded) {
                                 content = downloaded;
                             } else {
@@ -2459,22 +2481,27 @@ export class AgentRunner {
 
     /**
      * Downloads binary content for a file-backed artifact from MJStorage.
-     * Uses FileStorageEngine to resolve the storage account and driver,
-     * then fetches the file by its ProviderKey.
+     * Reads the `MJ: Files` row as the user, then resolves it through
+     * `FileStorageEngine.ResolveFileObject`, which applies the storage-account gate and the
+     * tracked-file rule before any driver call — the same path every other file-ID route uses.
      *
      * @param fileId - The MJ: Files entity ID referenced by ArtifactVersion.FileID
      * @param contextUser - User context for storage driver authentication
      * @returns Buffer of file content, or null if download fails
      */
-    private async downloadArtifactFileContent(fileId: string, contextUser: UserInfo): Promise<Buffer | null> {
+    protected async DownloadArtifactFileContent(fileId: string, contextUser: UserInfo): Promise<Buffer | null> {
+        if (!IsValidUUID(fileId)) {
+            LogError(`[AgentRunner] Refusing to read artifact file content: '${fileId}' is not a file ID`);
+            return null;
+        }
         try {
             await FileStorageEngine.Instance.Config(false, contextUser);
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this._provider);
             const fileResult = await rv.RunView<{ ID: string; Name: string; ContentType: string; ProviderID: string; ProviderKey: string }>(
                 {
                     EntityName: 'MJ: Files',
-                    ExtraFilter: `ID = '${fileId}'`,
+                    ExtraFilter: `ID = '${EscapeSQLString(fileId.trim())}'`,
                     Fields: ['ID', 'Name', 'ContentType', 'ProviderID', 'ProviderKey'],
                     ResultType: 'simple',
                 },
@@ -2486,16 +2513,13 @@ export class AgentRunner {
                 return null;
             }
 
-            const file = fileResult.Results[0];
-            const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
-            if (accounts.length === 0) {
-                LogError(`[AgentRunner] No FileStorageAccount found for ProviderID: ${file.ProviderID}`);
+            // Account gate and tracked-file rule first; a refusal throws and is logged below.
+            const resolved = await FileStorageEngine.Instance.ResolveFileObject(fileResult.Results[0], contextUser, 'Read', this._provider);
+            if (!resolved) {
+                LogError(`[AgentRunner] No FileStorageAccount found for ProviderID: ${fileResult.Results[0].ProviderID}`);
                 return null;
             }
-
-            const driver = await FileStorageEngine.Instance.GetDriver(accounts[0].ID, contextUser);
-            const objectName = file.ProviderKey ?? file.Name;
-            const content = await driver.GetObject({ fullPath: objectName });
+            const content = await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey });
 
             // GetObject returns string or Buffer depending on provider
             if (Buffer.isBuffer(content)) {
