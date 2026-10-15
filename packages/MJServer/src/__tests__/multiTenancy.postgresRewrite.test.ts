@@ -20,7 +20,7 @@ import {
 import { PostgreSQLDataProvider } from '@memberjunction/postgresql-dataprovider';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { IsBalancedSQLFragment, SplitTopLevelAndTerms } from '@memberjunction/sql-parser';
-import { CreateTenantPreRunViewHook } from '../multiTenancy/index.js';
+import { createTenantPreRunViewHook } from '../multiTenancy/index.js';
 import type { MultiTenancyConfig } from '../config.js';
 
 const TENANT_TERM = `(("OrganizationID" = 't1'))`;
@@ -108,7 +108,7 @@ describe('Multi-tenancy on PostgreSQL — the provider rewrite cannot reach the 
         savedProvider = Metadata.Provider;
         Metadata.Provider = provider;
         ClearAllDataHooks();
-        RegisterDataHook('PreRunView', CreateTenantPreRunViewHook(tenantConfig()));
+        RegisterDataHook('PreRunView', createTenantPreRunViewHook(tenantConfig()));
         user = new UserInfo(provider, { ID: 'U1', Email: 'u1@example.com' });
         user.TenantContext = { TenantID: 't1', Source: 'header' };
     });

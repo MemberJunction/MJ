@@ -41,6 +41,7 @@ import {
     type RunQueryResult,
     type RunViewParams,
     type RunViewResult,
+    type RunViewWithCacheCheckResult,
     type SaveSQLResult,
     type TransactionGroupBase,
 } from '@memberjunction/core';
@@ -170,6 +171,18 @@ function savedView(entity: EntityInfo, whereClause: string, customWhereClause: b
 
 const user = () => new UserInfo(null as unknown as IMetadataProvider, { ID: 'U1', Email: 'u1@example.com' });
 
+/**
+ * Runs one view through `RunViewsWithCacheCheck` with a client cache status, so the provider builds
+ * the cache-check WHERE clause and runs its status query. Returns that view's result.
+ */
+async function cacheCheck(provider: ContainmentTestProvider, params: RunViewParams): Promise<RunViewWithCacheCheckResult | undefined> {
+    const response = await provider.RunViewsWithCacheCheck(
+        [{ params, cacheStatus: { maxUpdatedAt: '2026-01-01T00:00:00.000Z', rowCount: 1 } }],
+        user(),
+    );
+    return response.results.find((r) => r.viewIndex === 0);
+}
+
 describe('GenericDatabaseProvider — a caller-supplied WHERE piece cannot close its parentheses', () => {
     beforeEach(() => ClearAllDataHooks());
     afterEach(() => ClearAllDataHooks());
@@ -239,19 +252,19 @@ describe('GenericDatabaseProvider — a caller-supplied WHERE piece cannot close
     it('the cache-check WHERE builder refuses an ExtraFilter that closes the wrapper, and runs no SQL', async () => {
         const provider = new ContainmentTestProvider([rlsProtectedEntity()]);
 
-        const statuses = await provider.GetRunViewsDatabaseStatus([{ EntityName: 'Conversations', ExtraFilter: '1=1) OR (1=1' }], user());
+        const result = await cacheCheck(provider, { EntityName: 'Conversations', ExtraFilter: '1=1) OR (1=1' });
 
         expect(provider.ExecutedSQL).toEqual([]);
-        expect(statuses[0].Success).toBe(false);
-        expect(statuses[0].ErrorMessage).toMatch(/ExtraFilter.*parenthesis/);
+        expect(result?.status).toBe('error');
+        expect(result?.errorMessage).toMatch(/ExtraFilter.*parenthesis/);
     });
 
     it('the cache-check WHERE builder keeps a balanced ExtraFilter ANDed with row-level security', async () => {
         const provider = new ContainmentTestProvider([rlsProtectedEntity()]);
 
-        const statuses = await provider.GetRunViewsDatabaseStatus([{ EntityName: 'Conversations', ExtraFilter: "Name = 'a' OR Name = 'b'" }], user());
+        const result = await cacheCheck(provider, { EntityName: 'Conversations', ExtraFilter: "Name = 'a' OR Name = 'b'" });
 
-        expect(statuses[0].Success).toBe(true);
+        expect(result?.status).not.toBe('error');
         expect(provider.ExecutedSQL[0]).toContain(`WHERE (Name = 'a' OR Name = 'b') AND (${RLS_CLAUSE})`);
     });
 
@@ -319,9 +332,9 @@ describe('GenericDatabaseProvider — a platform rewrite of the ExtraFilter stay
     it('does the same in the cache-check WHERE builder', async () => {
         const provider = new RewritingTestProvider([rlsProtectedEntity()]);
 
-        const statuses = await provider.GetRunViewsDatabaseStatus([{ EntityName: 'Conversations', ExtraFilter: tenantShaped }], user());
+        const result = await cacheCheck(provider, { EntityName: 'Conversations', ExtraFilter: tenantShaped });
 
-        expect(statuses[0].Success).toBe(true);
+        expect(result?.status).not.toBe('error');
         expect(provider.ExecutedSQL[0]).toContain(`WHERE (((Flag = TRUE)) AND ((OrganizationID = 't1'))) AND (${RLS_CLAUSE})`);
     });
 
