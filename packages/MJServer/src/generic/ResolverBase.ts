@@ -38,7 +38,7 @@ import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
-import { SQLParser } from '@memberjunction/sql-parser';
+import { SQLParser, IsBalancedSQLFragment, LexSQL } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate } from './PushStatusResolver.js';
@@ -947,6 +947,15 @@ export class ResolverBase {
    * The screen is `ClientClauseScreen` in `@memberjunction/generic-database-provider`, shared
    * with the REST view routes, ad-hoc list sources, and the provider's saved-view checks.
    *
+   * Before that parse, the fragment must be balanced on its own (`IsBalancedSQLFragment`). The
+   * provider and the tenant hook splice it inside parentheses and AND their own filters after
+   * it, so a fragment that closes those parentheses (`1=1) OR (1=1`) would leave row-level
+   * security, API-key row filters and tenant scope on one side of an OR the caller controls.
+   * The parse wraps the fragment in parentheses too, which is why it cannot catch this alone.
+   * A backslash inside a quoted string or identifier is refused as well: the parser reads `\'`
+   * inside a plain literal as an escaped quote, but SQL Server and PostgreSQL end the literal
+   * there, so the text after it could be code that the parse-based checks never saw.
+   *
    * RLS is applied by RunView as an outer WHERE around the entity being queried, not compiled
    * into the view, and RunView removes denied fields from its own result only. A subquery reads a
    * base view directly with neither, so the screen refuses one over any entity the user reads under
@@ -960,7 +969,24 @@ export class ResolverBase {
     user?: UserInfo,
     options?: { LeaveUnparseableToProvider?: boolean },
   ): void {
-    ClientClauseScreen.AssertClauseUsesEntityBaseViews(clause, label, provider?.Entities ?? [], this.dialectForProvider(provider), user, options);
+    if (!clause?.trim()) return;
+
+    // The balance and backslash checks run before the shared screen: it parses the fragment
+    // inside its own parentheses, so it cannot see a fragment that closes the parentheses the
+    // provider and the tenant hook splice it into.
+    const dialect = this.dialectForProvider(provider);
+    if (SQLParser.HasStackedStatements(clause, dialect)) {
+      throw new Error(`Invalid ${label}: multiple statements are not permitted in client-supplied filters`);
+    }
+    const balance = IsBalancedSQLFragment(clause, dialect);
+    if (!balance.IsBalanced) {
+      throw new Error(`Invalid ${label}: ${balance.Reason}`);
+    }
+    if (this.hasBackslashInQuotes(clause, dialect)) {
+      throw new Error(`Invalid ${label}: a backslash inside a quoted string or identifier is not permitted in client-supplied filters`);
+    }
+
+    ClientClauseScreen.AssertClauseUsesEntityBaseViews(clause, label, provider?.Entities ?? [], dialect, user, options);
   }
 
   /**
@@ -1060,6 +1086,14 @@ export class ResolverBase {
     for (const aggregate of clauses.aggregates ?? []) {
       this.assertClientClauseUsesEntityBaseViews(aggregate?.expression, 'Aggregate', provider, user, { LeaveUnparseableToProvider: true });
     }
+  }
+
+  /**
+   * True when a string literal or quoted identifier in `clause`, read the way the database reads
+   * it, contains a backslash (see {@link assertClientClauseUsesEntityBaseViews}).
+   */
+  private hasBackslashInQuotes(clause: string, dialect: SQLParserDialect): boolean {
+    return LexSQL(clause, dialect).some((t) => (t.Kind === 'string' || t.Kind === 'identifier') && t.Text.includes('\\'));
   }
 
   /** Write/DDL node walk shared with the clause screen; see `ClientClauseScreen.AstContainsWriteNode`. */
