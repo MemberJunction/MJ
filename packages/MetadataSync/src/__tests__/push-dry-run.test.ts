@@ -161,7 +161,7 @@ describe('push --dry-run reports what a real push would do (#4529)', () => {
     expect(dry.status).toBe('updated');
     expect(logs).toContain('[DRY RUN] Would update TestEntity record');
     expect(service.Changes).toHaveLength(1);
-    expect(service.Changes[0]).toMatchObject({ entityName: 'TestEntity', Operation: 'updated' });
+    expect(service.Changes[0]).toMatchObject({ entityName: 'TestEntity', operation: 'updated' });
     expect(service.Changes[0].fields.map((f) => f.field)).toEqual(['Name']);
     expect(mockEntityInstance.saveCalls).toBe(0);
     // The file is left as it was: no sync block rewrite in a dry run.

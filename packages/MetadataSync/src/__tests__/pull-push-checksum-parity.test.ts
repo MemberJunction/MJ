@@ -41,7 +41,7 @@ describe('pull/push sync checksum parity (#4530)', () => {
   /** Runs push's checksum over the record as it reads it back from disk. */
   async function pushChecksum(record: RecordData): Promise<string> {
     const payload = pushService['buildRecordChecksumPayload'](record, { ...record.fields });
-    return syncEngine.CalculateChecksumWithFileContent(payload, entityDir);
+    return syncEngine.calculateChecksumWithFileContent(payload, entityDir);
   }
 
   it('matches for a record with no composition axes', async () => {
