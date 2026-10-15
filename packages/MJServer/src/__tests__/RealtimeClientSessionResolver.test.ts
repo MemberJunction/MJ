@@ -3198,22 +3198,44 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect((writeSegmentMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(SYSTEM_USER);
     });
 
-    it('recording writes stay entirely on the caller for a normal authenticated user', async () => {
-        currentProvider = makeRecordingProvider();
-        // A named caller owning the session (the recording provider stamps UserID 'anon-1', so re-stamp).
-        const session = makeSessionEntity({ UserID: 'user-1' });
+    it('a UI-only owner stores a closed session recording as SYSTEM after caller ownership is proven (#5195)', async () => {
+        const session = makeSessionEntity({ UserID: 'user-1', Status: 'Closed' });
         const agent = makeSessionEntity({ ID: 'co-agent-1' });
         currentProvider = {
-            GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agents' ? agent : session)),
+            GetEntityObject: vi.fn(async (name: string, user: UserInfo) => {
+                if (name === 'MJ: AI Agents') {
+                    // Simulate the stock UI role lacking the store's entity permissions.
+                    if (user !== SYSTEM_USER) throw new Error('UI role cannot create MJ: Files');
+                    return agent;
+                }
+                return session;
+            }),
         };
-        const resolver = makeResolver();
-
-        const result = await resolver.UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true);
-
+        const result = await makeResolver().UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true);
         expect(result.Success).toBe(true);
-        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agents', USER);
-        expect((storeRecordingMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(USER);
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agent Sessions', USER);
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agents', SYSTEM_USER);
+        expect(resolveStorageMock.mock.calls[0][1]).toBe(SYSTEM_USER);
+        expect(storeRecordingMock.mock.calls[0][0]).toMatchObject({ ContextUser: SYSTEM_USER });
+        expect(deleteSegmentsMock).toHaveBeenCalledWith('session-1', 'storage-acct-1', SYSTEM_USER);
+    });
+
+    it('rejects an unauthorized recording caller before store elevation', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity({ UserID: 'someone-else' }));
+        await expect(makeResolver().UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true))
+            .rejects.toThrow(/do not own/i);
         expect(getSystemUserMock).not.toHaveBeenCalled();
+        expect(resolveStorageMock).not.toHaveBeenCalled();
+        expect(storeRecordingMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses a signed-in owner without consent before store elevation', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity({ UserID: 'user-1' }));
+        const result = await makeResolver().UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, false);
+        expect(result.Success).toBe(false);
+        expect(getSystemUserMock).not.toHaveBeenCalled();
+        expect(resolveStorageMock).not.toHaveBeenCalled();
+        expect(storeRecordingMock).not.toHaveBeenCalled();
     });
 
     /** Provider routing a hidden-tool-turn RelayRealtimeToolTurn call: session, prompt run, detail. */
