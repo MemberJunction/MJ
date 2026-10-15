@@ -137,8 +137,9 @@ import {
     DeepInfraLLM,
 } from '@memberjunction/ai-deepinfra';
 
-// @memberjunction/ai-inception (1 classes)
+// @memberjunction/ai-inception (2 classes)
 import {
+    InceptionDecision,
     InceptionLLM,
 } from '@memberjunction/ai-inception';
 
@@ -163,9 +164,10 @@ import {
     SiliconFlowLLM,
 } from '@memberjunction/ai-siliconflow';
 
-// @memberjunction/ai-systemone (2 classes)
+// @memberjunction/ai-systemone (3 classes)
 import {
     PerplexityDecision,
+    SubQDecision,
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
@@ -1453,6 +1455,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAILiveRealtime,
     OpenAIRealtime,
     DeepInfraLLM,
+    InceptionDecision,
     InceptionLLM,
     LlamaCppLLM,
     MiniMaxLLM,
@@ -1460,6 +1463,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenRouterLLM,
     SiliconFlowLLM,
     PerplexityDecision,
+    SubQDecision,
     SystemOneDecision,
     GeminiEnterpriseRealtime,
     VertexLLM,
@@ -1613,12 +1617,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
-    MJCompanyIntegrationFieldMapEntity,
-    MJCompanyIntegrationRecordMapEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
@@ -1817,12 +1821,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
     MJRecordCloneLogItemEntity,
-    MJRecordGeoCodeEntity,
-    MJRecordLinkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordGeoCodeEntity,
+    MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
     MJRecordProcessCategoryEntity,
@@ -2021,12 +2025,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     UpdateTypeformAction,
     WatchNewJotFormSubmissionsAction,
     WatchNewSurveyMonkeyResponsesAction,
-    WatchNewTypeformResponsesAction,
-    AttachTagsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    WatchNewTypeformResponsesAction,
+    AttachTagsAction,
     CreateUserAction_actions_bizapps_lms,
     DetachTagsAction,
     EnrollUserAction,
@@ -2225,12 +2229,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioRunFeaturePipelineServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
-    PredictiveStudioScoreRecordSetServerOperation,
-    PredictiveStudioStartExperimentSessionServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioScoreRecordSetServerOperation,
+    PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
@@ -2429,12 +2433,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
-    PostalCodeLookupAction,
-    PreviewDocumentAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    PostalCodeLookupAction,
+    PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
     RefreshListFromSourceAction,
@@ -2522,7 +2526,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1071;
+export const CLASS_REGISTRATIONS_COUNT = 1073;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
