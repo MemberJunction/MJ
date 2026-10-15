@@ -54,7 +54,7 @@ export async function ResolveStorageAccountIDForProvider(
     await FileStorageEngine.Instance.Config(false, contextUser, provider);
     let accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerID);
     if (accounts.length === 0) {
-        await FileStorageEngine.Instance.Config(true, contextUser, provider);
+        await FileStorageEngine.Instance.RefreshAfterMiss(provider);
         accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerID);
     }
     return accounts[0]?.ID ?? null;
@@ -152,8 +152,12 @@ export function RecordingFolder(sessionID: string): string {
  * the file's own provider/account) — NOT a public pre-signed link. Used to stream a recording to an
  * authorized browser securely. Never throws.
  *
+ * Gated for `contextUser` twice over: the `MJ: Files` row is loaded as the caller, and the storage gate
+ * (`FileStorageEngine.ResolveFileObject`) then requires Read on the account the row's provider resolves to and refuses
+ * an object another row tracks when the caller cannot read that row. A refusal is logged and returns `null`.
+ *
  * @param fileID The `MJ: Files` id of the recording.
- * @returns `{ Bytes, MimeType }` or `null` when the file/account/object can't be resolved.
+ * @returns `{ Bytes, MimeType }` or `null` when the file/account/object can't be resolved or the caller is refused.
  */
 export async function ReadRealtimeRecordingFile(
     fileID: string, contextUser: UserInfo, provider: IMetadataProvider
@@ -163,12 +167,12 @@ export async function ReadRealtimeRecordingFile(
         if (!await file.Load(fileID) || !file.ProviderKey) {
             return null;
         }
-        const accountID = await ResolveStorageAccountIDForProvider(file.ProviderID, contextUser, provider);
-        if (!accountID) {
+        // Resolve the provider's account and driver through the storage gate (throws on refusal — logged below).
+        const resolved = await FileStorageEngine.Instance.ResolveFileObject(file, contextUser, 'Read', provider);
+        if (!resolved) {
             return null;
         }
-        const driver = await FileStorageEngine.Instance.GetDriver(accountID, contextUser);
-        const bytes = await driver.GetObject({ fullPath: file.ProviderKey });
+        const bytes = await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey });
         if (!bytes || bytes.length === 0) {
             return null;
         }

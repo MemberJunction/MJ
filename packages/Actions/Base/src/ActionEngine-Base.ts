@@ -2,6 +2,7 @@ import { BaseEngine, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyCon
 import { EntityChangeContext } from './EntityChangeContext';
 import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { MJActionEntityExtended } from "./MJActionEntityExtended";
+import type { ActionRunAudience } from "./ActionAudience";
 
 
 export class ActionLibrary {
@@ -131,6 +132,14 @@ export class ActionResult {
     * A code that indicates the outcome of the action. Will be one of the possible ResultCodes enumerated in the MJActionResultCodeEntity
     */
    public Result?: MJActionResultCodeEntity;
+
+   /**
+    * The result code as text: the action's own `ActionResultSimple.ResultCode`, or the code of a refusal the
+    * engine made without running the action ({@link AUDIENCE_UNSUPPORTED_RESULT_CODE}). Set whether or not it
+    * matches one of the action's metadata result codes — {@link Result} is that match, `undefined` when there is
+    * none. Absent when the run ended without a code (a timeout, an exception, a validation or filter refusal).
+    */
+   public ResultCode?: string;
 
    /**
     * Whenever an action is executed a log entry is created. This log entry is stored in the database and can be used to track the execution of the action. This property contains the log entry object for the action that was run.
@@ -345,6 +354,37 @@ export class RunActionParams<TContext = any> {
     * platform's keys inside a run restricted to the caller's.
     */
    public CredentialScope?: RuntimeCredentialScope;
+
+   /**
+    * Everyone besides {@link ContextUser} who will see what this action returns — set by BaseAgent, per
+    * dispatch, from the agent run's audience (`ExecuteAgentParams.Audience`) when it adds a reader. Not on
+    * {@link Context}, for the reason {@link RuntimeAPIKeyResolver} is not: the context is the agent's own
+    * object, shared by every action in the run. The model cannot set it.
+    *
+    * **The engine gates on it.** When it adds a reader beyond the caller, `ActionEngineServer.RunAction`
+    * refuses — result code {@link AUDIENCE_UNSUPPORTED_RESULT_CODE}, without running the action or writing an
+    * execution log row — any action whose class does not declare `SupportsAudience`, and every runtime-defined
+    * or deferred action. For an action it lets through, it first normalizes this to the distinct readers
+    * beyond the caller ({@link ActionAudienceReaders}), and clears it when the audience adds nobody, so an
+    * action may treat "present" as "there is a room" and `Readers` as exactly the people to check.
+    *
+    * An action that declares support must return only what every reader may see: pass the audience to the
+    * search engine (`SearchParams.Audience`), check each reader's entitlement to anything it scopes by, and
+    * leave out counts or other aggregates computed before that filtering.
+    */
+   public Audience?: ActionRunAudience;
+
+   /**
+    * The agent run's scope — its tenant (`PrimaryScopeRecordID`) and secondary dimensions — set by BaseAgent on
+    * every dispatch inside an agent run, from the run's validated scope (`ExecuteAgentParams.PrimaryScope*` /
+    * `SecondaryScopes`, as written to the `MJ: AI Agent Runs` row). Fields are `null` when the run is unscoped;
+    * the object itself is ABSENT outside an agent run. Per dispatch and not on {@link Context}, for the reason
+    * {@link Audience} is not: the context is the agent's own object. The model cannot set it.
+    *
+    * An action that scopes by tenant must treat it as authoritative over its own parameters, which inside a Loop
+    * agent are model-written: default a missing tenant to the run's, and refuse one the run does not carry.
+    */
+   public RunScope?: ActionRunScope;
 
    /**
     * Optional AbortSignal that is aborted when the action exceeds its wall-clock
@@ -608,3 +648,44 @@ export type RuntimeAPIKeyResolver = (driverClass: string) => string | undefined;
  * does not depend on that one.
  */
 export type RuntimeCredentialScope = 'Any' | 'RuntimeOnly';
+
+/**
+ * One secondary scope dimension's value. The same union as `SecondaryScopeValue` in
+ * `@memberjunction/ai-core-plus`, declared here because that package depends on this one.
+ *
+ * Nothing here ties the two together; the compiler does only where code converts one into the other, and each
+ * conversion guards one direction. In `@memberjunction/ai-agents`, BaseAgent assigns `SecondaryScopeValue` records
+ * into {@link ActionRunScope} (so a value added to `SecondaryScopeValue` alone fails there) and passes the run's
+ * {@link ActionRunScope} back into its memory, RAG and scoped-prompt inputs, typed `SecondaryScopeValue` (so a value
+ * added here alone fails there). Scoped Search in `@memberjunction/core-actions` makes the second conversion too.
+ * Removing those conversions removes the guard: keep the two unions identical by hand.
+ */
+export type ActionRunScopeValue = string | number | boolean | string[];
+
+/**
+ * An agent run's scope, as BaseAgent hands it to each action dispatch ({@link RunActionParams.RunScope}).
+ * `null` fields mean the run carries no such scope; the whole object is absent outside an agent run.
+ */
+export interface ActionRunScope {
+   /** The primary scope entity's name (e.g. `'Organizations'`), or `null` when the run names none. */
+   PrimaryScopeEntityName?: string | null;
+   /** The run's tenant: the record ID within the primary scope entity, or `null` when the run has none. */
+   PrimaryScopeRecordID: string | null;
+   /** The run's secondary dimensions (with the agent's configured defaults applied), or `null` when it has none. */
+   SecondaryScopes?: Record<string, ActionRunScopeValue> | null;
+}
+
+/**
+ * Whether an agent run's scope bounds what the run may reach: it carries a tenant (a non-blank
+ * `PrimaryScopeRecordID`) or at least one secondary dimension. `false` outside an agent run (`undefined`) and for an
+ * unscoped run's nulls; a primary entity name alone bounds nothing. The one predicate for "this run is
+ * tenant-scoped": BaseAgent withholds work that would run outside the scope (task graphs) when it holds, and an
+ * action that searches without a tenant (the Search action) refuses to run.
+ */
+export function ActionRunScopeIsBounded(scope: ActionRunScope | null | undefined): boolean {
+   if (!scope) return false;
+   const tenant = scope.PrimaryScopeRecordID;
+   if (typeof tenant === 'string' && tenant.trim().length > 0) return true;
+   const secondary = scope.SecondaryScopes;
+   return secondary !== null && typeof secondary === 'object' && Object.keys(secondary).length > 0;
+}
