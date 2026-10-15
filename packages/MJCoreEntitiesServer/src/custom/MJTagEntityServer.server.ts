@@ -2,8 +2,7 @@ import { BaseEntity, EntitySaveOptions, LogError, LogStatus, RunView, SimpleEmbe
 import { Float32VectorToBase64, RegisterClass } from '@memberjunction/global';
 import { MJTagEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { TagEngine } from '@memberjunction/tag-engine';
-import { AIEngine } from '@memberjunction/aiengine';
-import { SaveTimeAISettings } from '@memberjunction/ai';
+import { EmbedTextLocalHelper } from './util';
 
 /**
  * Server-side Tag entity that:
@@ -28,7 +27,7 @@ export class MJTagEntityServer extends MJTagEntity {
     }
 
     protected override async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
-        return AIEngine.EmbedTextLocalForEntity(this, textToEmbed);
+        return EmbedTextLocalHelper(this, textToEmbed);
     }
 
     public override SupportsEmbedTextLocal(): boolean {
@@ -136,30 +135,15 @@ export class MJTagEntityServer extends MJTagEntity {
      * Refresh `EmbeddingVector` + `EmbeddingVectorBinary` + `EmbeddingModelID` when the tag is new or its
      * Name/Description has changed. Failures here log and clear the vector
      * fields rather than blocking the save — the tag is still functional, just
-     * without semantic matching until the next successful refresh. While the host has switched
-     * save-time embeddings off (`SaveTimeAISettings`, kind `embeddings`) nothing is computed or cleared:
-     * the stored vector is left as it is. With {@link SkipEmbeddings} set (`mj sync push` sets it so a
-     * short-lived CLI never loads an embedding model) a changed tag's now-stale vector is cleared instead of
-     * recomputed; `TagEngine` embeds and persists every tag without a vector when it loads, and on every
-     * 'MJ: Tags' change while it is loaded (`TagEngine.EmbedMissingTags`).
+     * without semantic matching until the next successful refresh.
      */
     private async refreshEmbeddingIfNeeded(): Promise<void> {
-        if (SaveTimeAISettings.Instance.IsDisabled('Embeddings')) return;
-
         const nameField = this.GetFieldByName('Name');
         const descField = this.GetFieldByName('Description');
-        // `?? false` on purpose: a missing field object means "not dirty"; false is the real value here.
         const nameDirty = !this.IsSaved || (nameField?.Dirty ?? false);
         const descDirty = !this.IsSaved || (descField?.Dirty ?? false);
 
         if (!nameDirty && !descDirty) return;
-
-        if (this.SkipEmbeddings) {
-            this.EmbeddingVector = null;
-            this.EmbeddingVectorBinary = null;
-            this.EmbeddingModelID = null;
-            return;
-        }
 
         const trimmedName = this.Name?.trim();
         if (!trimmedName) {

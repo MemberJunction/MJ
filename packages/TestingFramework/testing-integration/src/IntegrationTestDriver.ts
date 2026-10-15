@@ -47,7 +47,7 @@ import { BootstrapIntegrationClient } from './bootstrap-client';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import type { IntegrationCheckContext, RlsFixture } from './check';
 import { IntegrationCheckRegistry } from './check-registry';
-import { IntegrationTestConfig, IntegrationCheckSelection, IntegrationCheckSelectionConfig } from './types';
+import { IntegrationTestConfig, IntegrationCheckSelectionConfig } from './types';
 import { IntegrationTier, TIER_ENV_GATE, IsTierEnabled } from './tiers';
 import { TestOutcome, WriteOutcomesFile } from './test-runner';
 import { DiscoverRlsFixture } from './rls-fixture';
@@ -164,39 +164,6 @@ export class IntegrationTestDriver extends BaseTestDriver {
             );
         }
 
-        // 2c) Tier scopes: process state that content binds to this test's tier (e.g. the
-        //     deterministic tier switches off the save-time AI prompts). Entered only now — after
-        //     the gates, so a skipped test changes nothing — and always undone when this test ends.
-        //     Entering has its own try, so only a throwing Enter is reported as a scope-setup
-        //     failure (EnterTierScopes already undoes any scope it entered before throwing). An
-        //     error from the run itself is reported as such, still as a result: a re-throw would
-        //     leave the TestRun 'Running'.
-        let exitTierScopes: () => void;
-        try {
-            exitTierScopes = IntegrationCheckRegistry.Instance.EnterTierScopes(tier);
-        } catch (scopeErr) {
-            return this.buildErrorResult(context, startTime, `Tier scope setup failed: ${scopeErr instanceof Error ? scopeErr.message : String(scopeErr)}`);
-        }
-        try {
-            return await this.ExecuteSelected(context, startTime, selectors, transport);
-        } catch (runErr) {
-            return this.buildErrorResult(context, startTime, `Integration test execution failed: ${runErr instanceof Error ? runErr.message : String(runErr)}`);
-        } finally {
-            exitTierScopes();
-        }
-    }
-
-    /**
-     * Steps 3–5 of {@link Execute}: run the selected bundles under a deadline and build the result.
-     * Runs inside the test's tier scopes; whatever it throws, {@link Execute} reports as an
-     * execution failure (never as a scope-setup failure) after exiting the scopes.
-     */
-    protected async ExecuteSelected(
-        context: DriverExecutionContext,
-        startTime: number,
-        selectors: IntegrationCheckSelection[],
-        transport: 'server' | 'client'
-    ): Promise<DriverExecutionResult> {
         // 3) Arm a driver-side timeout (the engine never applies one). The timer flips `timedOut`
         //    to abort the loop BETWEEN checks; the `deadline` additionally bounds EACH check via a
         //    per-check race (C6), so a single hung check can't run past the budget forever.

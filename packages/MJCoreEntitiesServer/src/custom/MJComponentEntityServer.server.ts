@@ -7,8 +7,7 @@ import {
 } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { MJComponentEntityExtended } from "@memberjunction/core-entities";
-import { AIEngine } from "@memberjunction/aiengine";
-import { SaveTimeAISettings } from "@memberjunction/ai";
+import { EmbedTextLocalHelper } from "./util";
 import { FormScopeRefusalResult } from "./FormScopeGuard";
 import { ComponentGuardRefusal, type GuardedComponentRow } from "./FormComponentGuard";
 
@@ -46,49 +45,22 @@ export class MJComponentEntityServer extends MJComponentEntityExtended  {
             this.RegisterResultHistoryEntry(FormScopeRefusalResult(operation, refusal));
             return false;
         }
-        // The host can switch save-time embeddings off (SaveTimeAISettings, kind 'embeddings'): then
-        // nothing is computed and the stored vectors are left as they are.
-        if (SaveTimeAISettings.Instance.IsDisabled('Embeddings')) {
-            // leave the vector columns untouched
-        } else if (this.SkipEmbeddings) {
-            this.ClearDeferredVectors();
-        } else {
-            await this.GenerateEmbeddingsByFieldName([
-                {
-                    fieldName: "FunctionalRequirements",
-                    vectorFieldName: "FunctionalRequirementsVector",
-                    modelFieldName: "FunctionalRequirementsVectorEmbeddingModelID",
-                    binaryVectorFieldName: "FunctionalRequirementsVectorBinary"
-                },
-                {
-                    fieldName: "TechnicalDesign",
-                    vectorFieldName: "TechnicalDesignVector",
-                    modelFieldName: "TechnicalDesignVectorEmbeddingModelID",
-                    binaryVectorFieldName: "TechnicalDesignVectorBinary"
-                }
-            ]);
-        }
+        await this.GenerateEmbeddingsByFieldName([
+            { 
+                fieldName: "FunctionalRequirements", 
+                vectorFieldName: "FunctionalRequirementsVector", 
+                modelFieldName: "FunctionalRequirementsVectorEmbeddingModelID",
+                binaryVectorFieldName: "FunctionalRequirementsVectorBinary"
+            },
+            { 
+                fieldName: "TechnicalDesign", 
+                vectorFieldName: "TechnicalDesignVector", 
+                modelFieldName: "TechnicalDesignVectorEmbeddingModelID",
+                binaryVectorFieldName: "TechnicalDesignVectorBinary"
+            }
+        ]);
         const saveResult: boolean = await super.Save(options);
         return saveResult;
-    }
-
-    /**
-     * With {@link SkipEmbeddings} set (`mj sync push` sets it so a short-lived CLI never loads the embedding model),
-     * each vector whose source text changed is cleared instead of recomputed — it would otherwise keep describing
-     * the old text. `ComponentMetadataEngineServer` embeds and persists every component vector that is missing at
-     * server startup and after every component save in that server that leaves one missing (`EmbedMissingComponentVectors`).
-     */
-    protected ClearDeferredVectors(): void {
-        if (!this.IsSaved || this.GetFieldByName('FunctionalRequirements')?.Dirty) {
-            this.FunctionalRequirementsVector = null;
-            this.FunctionalRequirementsVectorBinary = null;
-            this.FunctionalRequirementsVectorEmbeddingModelID = null;
-        }
-        if (!this.IsSaved || this.GetFieldByName('TechnicalDesign')?.Dirty) {
-            this.TechnicalDesignVector = null;
-            this.TechnicalDesignVectorBinary = null;
-            this.TechnicalDesignVectorEmbeddingModelID = null;
-        }
     }
 
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -106,7 +78,7 @@ export class MJComponentEntityServer extends MJComponentEntityExtended  {
      * @returns 
      */
     protected override async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
-        return AIEngine.EmbedTextLocalForEntity(this, textToEmbed);
+        return EmbedTextLocalHelper(this, textToEmbed);
     }
 
     /** This component as the guard reads it. Built here because `ActiveUser` is protected on `BaseEntity`. */

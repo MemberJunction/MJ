@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { stubViews } = vi.hoisted(() => ({
     /** Each stub base, by the instance the server class built on it: the test's typed view of the stub's members. */
@@ -94,7 +94,6 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 });
 
 import { MJRemoteOperationEntityServer } from '../custom/MJRemoteOperationEntityServer.server';
-import { SaveTimeAISettings } from '@memberjunction/ai';
 
 /**
  * The mocked base class's test-only surface: it records field dirtiness through SetFieldDirty and holds IsSaved as a
@@ -198,31 +197,5 @@ describe('MJRemoteOperationEntityServer Code Generation Skip for Cloned / Pre-po
 
         expect(result).toBe(true);
         expect(generateCodeSpy).not.toHaveBeenCalled();
-    });
-
-    describe('host switch saveTimeAI.CodeGeneration = false', () => {
-        afterEach(() => {
-            SaveTimeAISettings.Instance.Config = {};
-        });
-
-        it('saves a new AI op without calling GenerateCode, keeping its current code', async () => {
-            SaveTimeAISettings.Instance.Config = { CodeGeneration: false };
-            setSaved(op, false);
-            op.Code = null;
-
-            expect(await op.Save()).toBe(true);
-            expect(generateCodeSpy).not.toHaveBeenCalled();
-            expect(op.Code).toBeNull();
-        });
-
-        it('wins over ForceCodeGeneration', async () => {
-            SaveTimeAISettings.Instance.Config = { CodeGeneration: false };
-            setSaved(op, false);
-            op.Code = 'existing';
-            op.ForceCodeGeneration = true;
-
-            expect(await op.Save()).toBe(true);
-            expect(generateCodeSpy).not.toHaveBeenCalled();
-        });
     });
 });

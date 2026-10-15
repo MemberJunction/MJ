@@ -71,8 +71,7 @@ function requireWire(ctx: IntegrationCheckContext): GraphQLDataProvider {
 async function setupClientFixtures(ctx: IntegrationCheckContext): Promise<void> {
     requireWire(ctx);
     const fixtures: RenderFixtures = clientFixtures = {
-        Provider: ctx.Provider,
-        Category: await CreateRenderCategory(ctx.Provider, ctx.User),
+        Category: await CreateRenderCategory(ctx.User),
         Queries: new Map(),
         Variants: []
     };

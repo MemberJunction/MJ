@@ -18,14 +18,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Mock external dependencies BEFORE importing source
 // ---------------------------------------------------------------------------
 
-vi.mock('@memberjunction/ai', async (importOriginal) => {
-    // The real save-time AI switch: AIEngine reads it, and these tests set it. This file's BaseSingleton mock
-    // hands out a fresh instance per call, so the switch is pinned to one shared instance here.
-    const real = (await importOriginal<typeof import('@memberjunction/ai')>()).SaveTimeAISettings;
-    const shared = new real();
-    class SaveTimeAISettings extends real {
-        public static override get Instance(): InstanceType<typeof real> { return shared; }
-    }
+vi.mock('@memberjunction/ai', () => {
     const ChatMessageRole = {
         system: 'system',
         user: 'user',
@@ -39,7 +32,6 @@ vi.mock('@memberjunction/ai', async (importOriginal) => {
     }
 
     return {
-        SaveTimeAISettings,
         ChatMessageRole,
         ChatParams,
         BaseLLM: class BaseLLM {},
@@ -86,7 +78,6 @@ vi.mock('@memberjunction/core', () => ({
         Set(_field: string, _val: unknown) {}
     },
     LogError: vi.fn(),
-    LogStatus: vi.fn(),
     Metadata: class Metadata {},
     UserInfo: class UserInfo {},
     IMetadataProvider: class IMetadataProvider {},
@@ -223,11 +214,6 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
     MJAIPromptCategoryEntityExtended: class MJAIPromptCategoryEntityExtended {},
 }));
 
-/** A cached agent note/example row as the tests below seed it; each test's row type adds the fields it reads. */
-interface CachedAgentRow {
-    ID: string;
-}
-
 const { mockBaseInstance } = vi.hoisted(() => ({ mockBaseInstance: {
     Loaded: true,
     Agents: [],
@@ -238,8 +224,8 @@ const { mockBaseInstance } = vi.hoisted(() => ({ mockBaseInstance: {
     AgentConfigurations: [],
     AgentNoteTypes: [],
     AgentPermissions: [],
-    AgentNotes: new Array<CachedAgentRow>(),
-    AgentExamples: new Array<CachedAgentRow>(),
+    AgentNotes: [],
+    AgentExamples: [],
     VendorTypeDefinitions: [],
     Vendors: [],
     ModelVendors: [],
@@ -303,14 +289,6 @@ const { mockBaseInstance } = vi.hoisted(() => ({ mockBaseInstance: {
     GetCredentialBindingsForTarget: vi.fn().mockReturnValue([]),
     HasCredentialBindings: vi.fn().mockReturnValue(false),
     Config: vi.fn().mockResolvedValue(undefined),
-    /** AIEngine subscribes to base-engine changes once its note/example embeddings load; tests emit through `handler`. */
-    DataChange$: {
-        handler: null as ((event: { config: { EntityName: string } }) => void) | null,
-        subscribe(handler: (event: { config: { EntityName: string } }) => void) {
-            this.handler = handler;
-            return { unsubscribe: () => undefined };
-        },
-    },
 } }));
 
 vi.mock('@memberjunction/ai-engine-base', () => ({
@@ -371,10 +349,7 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 // Import subject under test AFTER mocks
 // ---------------------------------------------------------------------------
 
-import { SaveTimeAISettings } from '@memberjunction/ai';
 import { AIEngine, AIActionParams, EntityAIActionParams } from '../AIEngine';
-import { EmbeddingUnavailableError } from '../services/EmbeddingBackfill';
-import { UserInfo, type BaseEntity } from '@memberjunction/core';
 import { MJGlobal, Float32VectorToBase64 } from '@memberjunction/global';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import type { ChatMessageContent } from '@memberjunction/ai';
@@ -1245,7 +1220,7 @@ describe('AIEngine', () => {
         });
 
         beforeEach(() => {
-            testEngine = TestableAIEngine.CreateForTest();
+            testEngine = new TestableAIEngine();
         });
 
         it('should return true when no scope filters are set (accept everything)', () => {
@@ -1308,7 +1283,7 @@ describe('AIEngine', () => {
         });
 
         beforeEach(() => {
-            testEngine = TestableAIEngine.CreateForTest();
+            testEngine = new TestableAIEngine();
         });
 
         it('should return true when no scope filters are set (accept everything)', () => {
@@ -1351,13 +1326,13 @@ describe('AIEngine', () => {
 
     describe('RemoveSingleNoteEmbedding', () => {
         it('should no-op safely when the vector service is not initialized', () => {
-            const engine2 = TestableAIEngine.CreateForTest();
+            const engine2 = new TestableAIEngine();
             engine2.setNoteVectorServiceForTest(null);
             expect(() => engine2.RemoveSingleNoteEmbedding('note-1')).not.toThrow();
         });
 
         it('should delegate to SimpleVectorService.RemoveVector with the note ID', () => {
-            const engine2 = TestableAIEngine.CreateForTest();
+            const engine2 = new TestableAIEngine();
             const removeSpy = vi.fn().mockReturnValue(true);
             engine2.setNoteVectorServiceForTest({ RemoveVector: removeSpy });
             engine2.RemoveSingleNoteEmbedding('note-42');
@@ -1368,13 +1343,13 @@ describe('AIEngine', () => {
 
     describe('RemoveSingleExampleEmbedding', () => {
         it('should no-op safely when the vector service is not initialized', () => {
-            const engine2 = TestableAIEngine.CreateForTest();
+            const engine2 = new TestableAIEngine();
             engine2.setExampleVectorServiceForTest(null);
             expect(() => engine2.RemoveSingleExampleEmbedding('ex-1')).not.toThrow();
         });
 
         it('should delegate to SimpleVectorService.RemoveVector with the example ID', () => {
-            const engine2 = TestableAIEngine.CreateForTest();
+            const engine2 = new TestableAIEngine();
             const removeSpy = vi.fn().mockReturnValue(true);
             engine2.setExampleVectorServiceForTest({ RemoveVector: removeSpy });
             engine2.RemoveSingleExampleEmbedding('ex-42');
@@ -1931,188 +1906,6 @@ describe('AIEngine', () => {
             expect(aiEngineReg.options.deferred).toBe(true);
             expect(aiEngineReg.options.deferredDelay).toBe(15000);
             expect(aiEngineReg.options.description).toContain('Server-side AI Engine and Embeddings Pre-Warming');
-        });
-    });
-
-    // ======================================================================
-    // EmbedMissingNoteAndExampleVectors — the later path for rows saved with SkipEmbeddings (mj sync push)
-    // ======================================================================
-
-    describe('EmbedMissingNoteAndExampleVectors', () => {
-        const VECTOR = [0.5, -0.25, 3];
-
-        /** A cached note/example row: the fields the backfill reads and writes, and a spied Save. */
-        interface VectorRow {
-            ID: string;
-            Note?: string | null;
-            ExampleInput?: string;
-            Status: string;
-            EmbeddingVector: string | null;
-            EmbeddingVectorBinary: string | null;
-            EmbeddingModelID: string | null;
-            EntityInfo: { Name: string };
-            PrimaryKey: { ToConcatenatedString(): string };
-            LatestResult: null;
-            Save: ReturnType<typeof vi.fn>;
-        }
-
-        function row(id: string, text: { Note?: string | null; ExampleInput?: string }, vector: string | null = null, saveResult = true): VectorRow {
-            return {
-                ID: id, ...text, Status: 'Active', EmbeddingVector: vector, EmbeddingVectorBinary: null, EmbeddingModelID: null,
-                EntityInfo: { Name: text.Note !== undefined ? 'MJ: AI Agent Notes' : 'MJ: AI Agent Examples' }, LatestResult: null,
-                PrimaryKey: { ToConcatenatedString: () => `ID|${id}` },
-                Save: vi.fn().mockResolvedValue(saveResult),
-            };
-        }
-
-        /** The base engine's cached rows. */
-        const backfillState = mockBaseInstance;
-
-        let embedSpy: ReturnType<typeof vi.spyOn>;
-
-        beforeEach(() => {
-            embedSpy = vi.spyOn(engine, 'EmbedTextLocal');
-            embedSpy.mockResolvedValue({ result: { vector: VECTOR }, model: { ID: 'model-local' } });
-        });
-
-        afterEach(() => {
-            backfillState.AgentNotes = [];
-            backfillState.AgentExamples = [];
-            embedSpy.mockRestore();
-        });
-
-        it('embeds and saves every note/example with text but no vector; leaves embedded rows and empty texts alone', async () => {
-            const note = row('n-pushed', { Note: 'a pushed note' });
-            const embeddedNote = row('n-has', { Note: 'has one' }, JSON.stringify(VECTOR));
-            const emptyNote = row('n-empty', { Note: '  ' });
-            const example = row('e-pushed', { ExampleInput: 'a pushed example' });
-            backfillState.AgentNotes = [note, embeddedNote, emptyNote];
-            backfillState.AgentExamples = [example];
-
-            expect(await engine.EmbedMissingNoteAndExampleVectors()).toBe(2);
-
-            expect(embedSpy).toHaveBeenCalledTimes(2);
-            expect(embedSpy).toHaveBeenCalledWith('a pushed note');
-            expect(embedSpy).toHaveBeenCalledWith('a pushed example');
-            expect(JSON.parse(note.EmbeddingVector || 'null')).toEqual(VECTOR);
-            expect(note.EmbeddingVectorBinary).not.toBeNull();
-            expect(note.EmbeddingModelID).toBe('model-local');
-            expect(note.Save).toHaveBeenCalledTimes(1);
-            expect(example.Save).toHaveBeenCalledTimes(1);
-            expect(embeddedNote.Save).not.toHaveBeenCalled();
-            expect(emptyNote.Save).not.toHaveBeenCalled();
-        });
-
-        it('computes nothing while the host has switched save-time embeddings off', async () => {
-            const note = row('n-off', { Note: 'a pushed note' });
-            backfillState.AgentNotes = [note];
-            SaveTimeAISettings.Instance.Config = { Embeddings: false };
-            try {
-                expect(await engine.EmbedMissingNoteAndExampleVectors()).toBe(0);
-            } finally {
-                SaveTimeAISettings.Instance.Config = {};
-            }
-            expect(embedSpy).not.toHaveBeenCalled();
-            expect(note.Save).not.toHaveBeenCalled();
-        });
-
-        it('a failed save puts the cached row back to "no vector", so the next pass retries', async () => {
-            const note = row('n-fail', { Note: 'a pushed note' }, null, false);
-            backfillState.AgentNotes = [note];
-
-            expect(await engine.EmbedMissingNoteAndExampleVectors()).toBe(0);
-            expect(note.EmbeddingVector).toBeNull();
-            expect(note.EmbeddingModelID).toBeNull();
-        });
-
-        it('runs when the embeddings load at startup, then on every note/example change — and not on other entities', async () => {
-            vi.spyOn(engine, 'Config').mockResolvedValue(undefined);
-            vi.spyOn(engine, 'RefreshNoteEmbeddings').mockResolvedValue(undefined);
-            vi.spyOn(engine, 'RefreshExampleEmbeddings').mockResolvedValue(undefined);
-            const atStartup = row('n-startup', { Note: 'pushed before startup' });
-            backfillState.AgentNotes = [atStartup];
-
-            await engine.HandleStartup();
-            await vi.waitFor(() => expect(atStartup.Save).toHaveBeenCalledTimes(1));
-
-            const later = row('e-later', { ExampleInput: 'pushed after startup' });
-            backfillState.AgentExamples = [later];
-            const changes = mockBaseInstance.DataChange$;
-            changes.handler?.({ config: { EntityName: 'MJ: AI Models' } });
-            await new Promise((resolve) => setTimeout(resolve, 0));
-            expect(later.Save).not.toHaveBeenCalled();
-
-            changes.handler?.({ config: { EntityName: 'MJ: AI Agent Examples' } });
-            await vi.waitFor(() => expect(later.Save).toHaveBeenCalledTimes(1));
-        });
-
-        it('startup and a similarity search wait for the embeddings to load, never for the backfill', async () => {
-            vi.spyOn(engine, 'Config').mockResolvedValue(undefined);
-            vi.spyOn(engine, 'RefreshNoteEmbeddings').mockResolvedValue(undefined);
-            vi.spyOn(engine, 'RefreshExampleEmbeddings').mockResolvedValue(undefined);
-            const pending = row('n-slow', { Note: 'pushed before startup' });
-            backfillState.AgentNotes = [pending];
-            // The local model never answers: anything that awaited the backfill would hang.
-            embedSpy.mockReturnValue(new Promise(() => undefined));
-
-            await engine.HandleStartup();
-            await vi.waitFor(() => expect(embedSpy).toHaveBeenCalledTimes(1)); // the backfill started …
-            expect(pending.Save).not.toHaveBeenCalled(); // … and is still running
-            await expect(engine.FindSimilarAgentNotes('anything')).resolves.toBeDefined();
-        });
-    });
-
-    describe('EmbedTextLocalForEntity (the entity saves\' local embedding call)', () => {
-        let engine: TestableAIEngine;
-        let configSpy: ReturnType<typeof vi.spyOn>;
-        let embedSpy: ReturnType<typeof vi.spyOn>;
-        /** The entity's current user, the only part of the entity the call reads. */
-        const userOf = (userID: string): UserInfo => Object.assign(new UserInfo(), { ID: userID });
-        const entity = (userID: string): Pick<BaseEntity, 'ContextCurrentUser'> => ({ ContextCurrentUser: userOf(userID) });
-
-        beforeEach(() => {
-            engine = TestableAIEngine.CreateForTest();
-            configSpy = vi.spyOn(engine, 'Config').mockResolvedValue(undefined);
-            embedSpy = vi.spyOn(engine, 'EmbedTextLocal');
-            vi.spyOn(AIEngine, 'Instance', 'get').mockReturnValue(engine);
-        });
-        afterEach(() => {
-            vi.restoreAllMocks();
-        });
-
-        it('loads the engine as the entity\'s current user, then embeds the text locally', async () => {
-            embedSpy.mockResolvedValue({ result: { vector: [0.1, 0.2] }, model: { ID: 'model-1' } });
-
-            await AIEngine.EmbedTextLocalForEntity(entity('user-123'), 'hello world');
-
-            expect(configSpy).toHaveBeenCalledWith(false, { ID: 'user-123' });
-            expect(embedSpy).toHaveBeenCalledWith('hello world');
-            expect(configSpy.mock.invocationCallOrder[0]).toBeLessThan(embedSpy.mock.invocationCallOrder[0]);
-        });
-
-        it('returns the vector and the model it came from', async () => {
-            const vector = [0.1, 0.2, 0.3, 0.4];
-            embedSpy.mockResolvedValue({ result: { vector }, model: { ID: 'embed-model-42' } });
-
-            expect(await AIEngine.EmbedTextLocalForEntity(entity('user-1'), 'some text')).toEqual({ vector, modelID: 'embed-model-42' });
-        });
-
-        it('throws EmbeddingUnavailableError, without calling the model, when no local embedding model is configured', async () => {
-            vi.spyOn(engine, 'HighestPowerLocalEmbeddingModel', 'get').mockReturnValue(null);
-
-            await expect(AIEngine.EmbedTextLocalForEntity(entity('user-1'), 'text')).rejects.toBeInstanceOf(EmbeddingUnavailableError);
-            expect(embedSpy).not.toHaveBeenCalled();
-        });
-
-        it.each([
-            ['no result', null],
-            ['no vector', { result: { vector: null }, model: { ID: 'model-1' } }],
-            ['no model ID', { result: { vector: [0.1] }, model: { ID: null } }],
-            ['no result property', { model: { ID: 'model-1' } }],
-        ])('throws when the local model returns %s', async (_label, value) => {
-            embedSpy.mockResolvedValue(value);
-
-            await expect(AIEngine.EmbedTextLocalForEntity(entity('user-1'), 'text')).rejects.toThrow('Failed to generate embedding');
         });
     });
 });

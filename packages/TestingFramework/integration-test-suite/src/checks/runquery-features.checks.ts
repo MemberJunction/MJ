@@ -38,7 +38,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { DeterministicEntityFactory } from './deterministic-entity-factory';
+import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 /** The saved query the paging + cache checks (QF5/QF6/QF7) reuse. */
 interface RunQueryFeatureFixtures {
@@ -71,7 +71,7 @@ const ADHOC_SIX_ROWS =
  * mid-Setup crash still leaves Teardown a reference to whatever was created (partial-safe).
  */
 export async function CreateRunQueryFeatureFixtures(ctx: IntegrationCheckContext): Promise<void> {
-    const md = ctx.Provider; // one provider for the category and its queries
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
     const schema = ctx.Schema ?? '__mj';
     const user = ctx.User;
 
@@ -86,12 +86,12 @@ export async function CreateRunQueryFeatureFixtures(ctx: IntegrationCheckContext
     // A stable, deterministically ORDERED read: single uniqueidentifier column, hundreds of rows.
     // ORDER BY ID makes page1/page2 disjointness deterministic within a platform. (Follows the
     // `runquery-cache` precedent of referencing a core __mj view by unquoted schema.view.)
-    const pageQuery = await DeterministicEntityFactory.NewQuery(ctx.Provider, user);
+    const pageQuery = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', user);
     pageQuery.Name = `RunQuery Features Page ${Date.now()}`;
     pageQuery.CategoryID = category.ID;
     pageQuery.SQL = `SELECT ID FROM ${schema}.vwEntities ORDER BY ID`;
     pageQuery.Status = 'Approved';
-    if (!await pageQuery.Save()) {
+    if (!await pageQuery.Save(FixtureQuerySaveOptions())) {
         throw new Error(`Fixture page query save failed: ${pageQuery.LatestResult?.CompleteMessage}`);
     }
     featureFixtures.PageQuery = pageQuery;
@@ -375,20 +375,20 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
         Name: 'QF12 (RQ-F2): two same-named queries — CategoryPath and CategoryID each disambiguate to the right one',
         Fn: async (ctx): Promise<void> => {
             const { PageQuery, Category } = requireFixtures();
-            const md = ctx.Provider; // the same provider as the twin query it holds
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
             // A CHILD category holding a query with the SAME NAME as the fixture PageQuery.
             const child = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', ctx.User);
             child.Name = `QF12 Child ${Date.now()}`;
             child.ParentID = Category.ID;
             child.UserID = ctx.User.ID;
             Assert(await child.Save(), `QF12 child category save: ${child.LatestResult?.CompleteMessage}`);
-            const twin = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
+            const twin = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
             try {
                 twin.Name = PageQuery.Name; // deliberate name collision
                 twin.CategoryID = child.ID;
                 twin.SQL = 'SELECT 1 AS TwinMarker';
                 twin.Status = 'Approved';
-                Assert(await twin.Save(), `QF12 twin query save: ${twin.LatestResult?.CompleteMessage}`);
+                Assert(await twin.Save(FixtureQuerySaveOptions()), `QF12 twin query save: ${twin.LatestResult?.CompleteMessage}`);
                 await QueryEngine.Instance.Config(true, ctx.User);
 
                 const rq = new RunQuery();
@@ -419,14 +419,15 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const { Category } = requireFixtures();
             const schema = ctx.Schema ?? '__mj';
-            const q = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const q = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
             try {
                 q.Name = `QF13 Injection Probe ${Date.now()}`;
                 q.CategoryID = Category.ID;
                 q.SQL = `SELECT COUNT(*) AS Cnt FROM ${schema}.vwEntities WHERE Name = {{ nameParam | sqlString }}`;
                 q.UsesTemplate = true;
                 q.Status = 'Approved';
-                Assert(await q.Save(), `QF13 query save: ${q.LatestResult?.CompleteMessage}`);
+                Assert(await q.Save(FixtureQuerySaveOptions()), `QF13 query save: ${q.LatestResult?.CompleteMessage}`);
                 // MJQueryEntityServer auto-extracts the Query Parameter row from the template on save.
                 await QueryEngine.Instance.Config(true, ctx.User);
 
@@ -456,14 +457,15 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const { Category } = requireFixtures();
             const schema = ctx.Schema ?? '__mj';
-            const q = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const q = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
             try {
                 q.Name = `QF14 Wildcard Probe ${Date.now()}`;
                 q.CategoryID = Category.ID;
                 q.SQL = `SELECT COUNT(*) AS Cnt FROM ${schema}.vwEntities WHERE Name = {{ pat | sqlString }}`;
                 q.UsesTemplate = true;
                 q.Status = 'Approved';
-                Assert(await q.Save(), `QF14 query save: ${q.LatestResult?.CompleteMessage}`);
+                Assert(await q.Save(FixtureQuerySaveOptions()), `QF14 query save: ${q.LatestResult?.CompleteMessage}`);
                 // MJQueryEntityServer auto-extracts the Query Parameter row from the template on save.
                 await QueryEngine.Instance.Config(true, ctx.User);
 
@@ -488,14 +490,15 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const { Category } = requireFixtures();
             const schema = ctx.Schema ?? '__mj';
-            const q = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const q = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
             try {
                 q.Name = `QF15 Identifier Probe ${Date.now()}`;
                 q.CategoryID = Category.ID;
                 q.SQL = `SELECT {{ col | sqlIdentifier }} FROM ${schema}.vwEntities WHERE 1=0`;
                 q.UsesTemplate = true;
                 q.Status = 'Approved';
-                Assert(await q.Save(), `QF15 query save: ${q.LatestResult?.CompleteMessage}`);
+                Assert(await q.Save(FixtureQuerySaveOptions()), `QF15 query save: ${q.LatestResult?.CompleteMessage}`);
                 // MJQueryEntityServer auto-extracts the Query Parameter row from the template on save.
                 await QueryEngine.Instance.Config(true, ctx.User);
 

@@ -10,7 +10,7 @@ import { SummarizeResult } from "@memberjunction/ai";
 import { AIModelConfiguration } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup, SimpleEmbeddingResult } from "@memberjunction/core";
+import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
 import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
@@ -31,7 +31,6 @@ import { MJAIActionEntity, MJActionEntity,
 import { AIEngineBase, ResolvedModelPersona, ResolvedAgentPersona, EffectiveAgentPersona, EffectiveAgentPermissions } from "@memberjunction/ai-engine-base";
 import { ReadStoredVector, SimpleVectorService, VectorInputEntry } from "@memberjunction/ai-vectors-memory";
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
-import { EmbeddingBackfill, EmbeddingUnavailableError } from "./services/EmbeddingBackfill";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
 import { ActionEngineBase } from "@memberjunction/actions-base";
 import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended } from "@memberjunction/ai-core-plus";
@@ -99,21 +98,6 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
     // Tracks whether the lazily-generated local embeddings (notes, examples) have been built
     private _embeddingsGenerated: boolean = false;
-
-    // EmbedMissingNoteAndExampleVectors: the shared backfill, one per entity, plus the subscription that triggers it on changes
-    private _noteBackfill = new EmbeddingBackfill<MJAIAgentNoteEntity>({
-        Name: 'AIEngine (agent notes)',
-        Slots: [EmbeddingBackfill.StandardSlot<MJAIAgentNoteEntity>(note => note.Note)],
-        LoadCandidates: async () => this.AgentNotes,
-        EmbedText: text => this.embedTextLocalRequired(text),
-    });
-    private _exampleBackfill = new EmbeddingBackfill<MJAIAgentExampleEntity>({
-        Name: 'AIEngine (agent examples)',
-        Slots: [EmbeddingBackfill.StandardSlot<MJAIAgentExampleEntity>(example => example.ExampleInput)],
-        LoadCandidates: async () => this.AgentExamples,
-        EmbedText: text => this.embedTextLocalRequired(text),
-    });
-    private _vectorChangeSubscription: { unsubscribe(): void } | null = null;
 
     /**
      * In-memory query embedding cache.
@@ -652,51 +636,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                     // FindSimilar* call for the lifetime of the process.
                     this._embeddingsPromise = null;
                 }
-                // Notes/examples saved without a vector (mj sync push sets SkipEmbeddings) get one now, and — from
-                // here on, in this process only — whenever such a row changes. Started, not awaited: a similarity
-                // search waits for the embeddings to load, never for this backfill.
-                this.startNoteAndExampleBackfill();
             })();
         }
         await this._embeddingsPromise;
-    }
-
-    /**
-     * Embeds every agent note (its `Note`) and agent example (its `ExampleInput`) that has text but no stored vector
-     * with the local embedding model and persists the vector on the record; the entity's save adds it to the
-     * note/example vector service. These are the rows saved with `SkipEmbeddings` — `mj sync push` sets it so a
-     * short-lived CLI never loads the ~50MB model; the server entity subclasses then clear a now-stale vector instead
-     * of computing it.
-     *
-     * The work is done by one {@link EmbeddingBackfill} per entity (one pass at a time, at most
-     * `EmbeddingBackfillSettings.BatchSize` records per pass, the rest in later passes; a failed record is retried;
-     * nothing is computed while `SaveTimeAISettings` has `embeddings` off). It is started, without being awaited,
-     * once the note/example embeddings load ({@link ensureEmbeddingsGenerated}: at server startup via
-     * {@link HandleStartup}, or on the first similarity search), and again on every later 'MJ: AI Agent Notes' /
-     * 'MJ: AI Agent Examples' change in this process — never in a process that has not loaded embeddings, so the CLI
-     * that pushed the rows does not load the model after all. Call this to run it and wait for it.
-     * @returns how many records the two backfills saved with new vectors
-     */
-    public async EmbedMissingNoteAndExampleVectors(): Promise<number> {
-        return (await this._noteBackfill.Run()) + (await this._exampleBackfill.Run());
-    }
-
-    /**
-     * Starts both backfills (not awaited) and subscribes (once) to the base engine's data changes, so a note or
-     * example saved without a vector after the embeddings loaded is embedded too.
-     */
-    private startNoteAndExampleBackfill(): void {
-        this._noteBackfill.Trigger();
-        this._exampleBackfill.Trigger();
-        if (this._vectorChangeSubscription) return;
-        this._vectorChangeSubscription = this.Base.DataChange$.subscribe(event => {
-            const name = event.config.EntityName;
-            if (name === 'MJ: AI Agent Notes') {
-                this._noteBackfill.Trigger();
-            } else if (name === 'MJ: AI Agent Examples') {
-                this._exampleBackfill.Trigger();
-            }
-        });
     }
 
     // ========================================================================
@@ -1100,37 +1042,6 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get LowestPowerLocalEmbeddingModel(): MJAIModelEntityExtended | null {
         const models = this.LocalEmbeddingModels;
         return models && models.length > 0 ? models[models.length - 1] : null;
-    }
-
-    /**
-     * Embeds an entity's text with the local embedding model, loading the engine as the entity's current user
-     * (`BaseEntity.ContextCurrentUser`) first. It is the embedding call of the server-side entity saves (their
-     * `EmbedTextLocal` overrides in `@memberjunction/core-entities-server`) and of the backfills that embed records
-     * of those entities (`QueryEngineServer`, `ComponentMetadataEngineServer`).
-     * @param entity the entity whose text is embedded
-     * @param textToEmbed the text to embed
-     * @returns the vector and the model it came from
-     * @throws EmbeddingUnavailableError when no local embedding model is configured
-     * @throws Error when no vector or model comes back ({@link EmbeddingBackfill.RequireLocalVector})
-     */
-    public static async EmbedTextLocalForEntity(entity: Pick<BaseEntity, 'ContextCurrentUser'>, textToEmbed: string): Promise<SimpleEmbeddingResult> {
-        const engine = AIEngine.Instance;
-        await engine.Config(false, entity.ContextCurrentUser);
-        return engine.embedTextLocalRequired(textToEmbed);
-    }
-
-    /**
-     * Embeds a text with the local model, or throws. Checks for a local model first, so a host without one gets a
-     * typed {@link EmbeddingUnavailableError} — the backfills stop on it with one line — instead of one
-     * "no local embedding model" line per text from {@link EmbedTextLocal}.
-     * @throws EmbeddingUnavailableError when no local embedding model is configured
-     * @throws Error when no vector or model comes back
-     */
-    private async embedTextLocalRequired(text: string): Promise<SimpleEmbeddingResult> {
-        if (!this.HighestPowerLocalEmbeddingModel) {
-            throw new EmbeddingUnavailableError('no local embedding model is configured');
-        }
-        return EmbeddingBackfill.RequireLocalVector(await this.EmbedTextLocal(text));
     }
 
     /**

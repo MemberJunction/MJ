@@ -22,7 +22,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, RunQueryFixtures } from '@memberjunction/testing-integration';
-import { DeterministicEntityFactory } from './deterministic-entity-factory';
+import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 /** All fixture-mutated settings share this prefix so teardown can sweep leftovers. */
 export const RUNQUERY_SETTING_PREFIX = 'mj.integrationtest.rq';
@@ -99,7 +99,7 @@ async function createSetting(user: UserInfo, tag: string): Promise<MJUserSetting
  * bootstrap). Forces QueryEngine to refresh so resolveQuery sees them.
  */
 export async function CreateRunQueryFixtures(ctx: IntegrationCheckContext): Promise<RunQueryFixtures> {
-    const md = ctx.Provider; // the fixture's own provider, for the category as for its queries
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
     const schema = ctx.Schema ?? '__mj';
     const user = ctx.User;
 
@@ -119,17 +119,17 @@ export async function CreateRunQueryFixtures(ctx: IntegrationCheckContext): Prom
 
     const countSQL = `SELECT COUNT(*) AS SettingCount FROM ${schema}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
 
-    const ttlQuery = await DeterministicEntityFactory.NewQuery(ctx.Provider, user);
+    const ttlQuery = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', user);
     ttlQuery.Name = `CacheTest TTL ${Date.now()}`;
     ttlQuery.CategoryID = category.ID;
     ttlQuery.SQL = countSQL;
     ttlQuery.Status = 'Approved';
-    if (!await ttlQuery.Save()) {
+    if (!await ttlQuery.Save(FixtureQuerySaveOptions())) {
         throw new Error(`TTL fixture query save failed: ${ttlQuery.LatestResult?.CompleteMessage}`);
     }
     fixtures.TtlQuery = ttlQuery;
 
-    const validatedQuery = await DeterministicEntityFactory.NewQuery(ctx.Provider, user);
+    const validatedQuery = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', user);
     validatedQuery.Name = `CacheTest Validated ${Date.now()}`;
     validatedQuery.CategoryID = category.ID;
     validatedQuery.SQL = countSQL;
@@ -149,7 +149,7 @@ export async function CreateRunQueryFixtures(ctx: IntegrationCheckContext): Prom
         `SELECT MAX(${q.QuoteIdentifier('__mj_UpdatedAt')}) AS ${q.QuoteIdentifier('MaxUpdatedAt')}, ` +
         `COUNT(*) AS ${q.QuoteIdentifier('RowCount')} ` +
         `FROM ${schema}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
-    if (!await validatedQuery.Save()) {
+    if (!await validatedQuery.Save(FixtureQuerySaveOptions())) {
         throw new Error(`Validated fixture query save failed: ${validatedQuery.LatestResult?.CompleteMessage}`);
     }
     fixtures.ValidatedQuery = validatedQuery;
@@ -214,25 +214,25 @@ const DEFINITION_SETTLE_MS = 3500;
 
 /**
  * A throwaway query in the fixture category whose SQL returns a `Marker` column, so a check can
- * tell which version of the SQL produced the rows it got. Built by {@link DeterministicEntityFactory}, so its saves make no
- * AI enrichment call.
+ * tell which version of the SQL produced the rows it got. Saved without AI enrichment.
  */
 async function createMarkerQuery(ctx: IntegrationCheckContext, label: string, sql: string, reusable = false): Promise<MJQueryEntity> {
     const { Category } = requireFixtures(ctx);
-    const query = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
     query.Name = `CacheTest Def ${label} ${Date.now()}`;
     query.CategoryID = Category.ID;
     query.SQL = sql;
     query.Status = 'Approved';
     query.Reusable = reusable;
-    Assert(await query.Save(), `${label} fixture save failed: ${query.LatestResult?.CompleteMessage}`);
+    Assert(await query.Save(FixtureQuerySaveOptions()), `${label} fixture save failed: ${query.LatestResult?.CompleteMessage}`);
     return query;
 }
 
-/** Applies `edit` to `query`, saves it (its enrichment opt-out is sticky across re-saves), and lets the engine catch up. */
+/** Applies `edit` to `query`, saves it the way the fixtures are saved, and lets the engine catch up. */
 async function editQuery(query: MJQueryEntity, edit: (q: MJQueryEntity) => void): Promise<void> {
     edit(query);
-    Assert(await query.Save(), `query edit failed: ${query.LatestResult?.CompleteMessage}`);
+    Assert(await query.Save(FixtureQuerySaveOptions()), `query edit failed: ${query.LatestResult?.CompleteMessage}`);
     await Sleep(ENGINE_SETTLE_MS);
 }
 
@@ -431,12 +431,13 @@ export const RunQueryCacheChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const { Category } = requireFixtures(ctx);
             const rq = new RunQuery();
-            const broken = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const broken = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
             broken.Name = `CacheTest Broken ${Date.now()}`;
             broken.CategoryID = Category.ID;
             broken.SQL = 'SELECT FROM nowhere_at_all';
             broken.Status = 'Approved';
-            Assert(await broken.Save(), `broken fixture save failed: ${broken.LatestResult?.CompleteMessage}`);
+            Assert(await broken.Save(FixtureQuerySaveOptions()), `broken fixture save failed: ${broken.LatestResult?.CompleteMessage}`);
             try {
                 await QueryEngine.Instance.Config(true, ctx.User);
                 ctx.Storage.ResetCounts();
@@ -493,7 +494,7 @@ export const RunQueryCacheChecks: NamedCheck[] = [
             // now carries the resolved query's full CategoryPath. This check builds the collision
             // shape directly: two queries, one shared name, two categories, DISTINGUISHABLE rows.
             const { Category } = requireFixtures(ctx);
-            const md = ctx.Provider; // one provider for the categories and the queries of this fixture
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
             const rq = new RunQuery();
             const stamp = Date.now();
             const sharedName = `CacheTest Collide ${stamp}`;
@@ -505,19 +506,19 @@ export const RunQueryCacheChecks: NamedCheck[] = [
             let queryA: MJQueryEntity | undefined;
             let queryB: MJQueryEntity | undefined;
             try {
-                queryA = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
+                queryA = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
                 queryA.Name = sharedName;
                 queryA.CategoryID = Category.ID;
                 queryA.SQL = `SELECT 'A' AS Slot`;
                 queryA.Status = 'Approved';
-                Assert(await queryA.Save(), `query A save failed: ${queryA.LatestResult?.CompleteMessage}`);
+                Assert(await queryA.Save(FixtureQuerySaveOptions()), `query A save failed: ${queryA.LatestResult?.CompleteMessage}`);
 
-                queryB = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
+                queryB = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
                 queryB.Name = sharedName;
                 queryB.CategoryID = categoryB.ID;
                 queryB.SQL = `SELECT 'B' AS Slot`;
                 queryB.Status = 'Approved';
-                Assert(await queryB.Save(), `query B save failed: ${queryB.LatestResult?.CompleteMessage}`);
+                Assert(await queryB.Save(FixtureQuerySaveOptions()), `query B save failed: ${queryB.LatestResult?.CompleteMessage}`);
 
                 // resolveQuery reads the QueryEngine cache — refresh so both fixtures resolve,
                 // then take each query's CANONICAL CategoryPath from the engine (guarantees the
@@ -569,7 +570,7 @@ export const RunQueryCacheChecks: NamedCheck[] = [
                 return;
             }
             const { Category } = requireFixtures(ctx);
-            const md = ctx.Provider; // one provider for the query, its bridge row and the entity lookup
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
             const rq = new RunQuery();
             const settingsEntity = md.EntityByName('MJ: User Settings');
             Assert(!!settingsEntity, "entity 'MJ: User Settings' must exist");
@@ -577,12 +578,12 @@ export const RunQueryCacheChecks: NamedCheck[] = [
             let query: MJQueryEntity | undefined;
             let bridge: MJQueryEntityEntity | undefined;
             try {
-                query = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
+                query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
                 query.Name = `CacheTest Perm ${Date.now()}`;
                 query.CategoryID = Category.ID;
                 query.SQL = `SELECT COUNT(*) AS SettingCount FROM ${ctx.Schema ?? '__mj'}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
                 query.Status = 'Approved';
-                Assert(await query.Save(), `perm fixture query save failed: ${query.LatestResult?.CompleteMessage}`);
+                Assert(await query.Save(FixtureQuerySaveOptions()), `perm fixture query save failed: ${query.LatestResult?.CompleteMessage}`);
 
                 // The Query Entities bridge row is what makes the FULL check consult entity
                 // CanRead — without it both checks trivially allow and the check is vacuous.
@@ -771,11 +772,12 @@ export const RunQueryCacheChecks: NamedCheck[] = [
                 const platform = (ctx.Provider as unknown as DatabaseProviderBase).PlatformKey;
                 const dialect = QueryEngine.Instance.SQLDialects.find(d => d.PlatformKey === platform);
                 Assert(!!dialect, `precondition: an SQL dialect row must exist for platform '${platform}'`);
-                variant = await DeterministicEntityFactory.NewQuerySQL(ctx.Provider, ctx.User);
+                const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+                variant = await md.GetEntityObject<MJQuerySQLEntity>('MJ: Query SQLs', ctx.User);
                 variant.QueryID = query.ID;
                 variant.SQLDialectID = dialect!.ID;
                 variant.SQL = `SELECT 'dialect' AS Marker`;
-                Assert(await variant.Save(), `variant save failed: ${variant.LatestResult?.CompleteMessage}`);
+                Assert(await variant.Save(FixtureQuerySaveOptions()), `variant save failed: ${variant.LatestResult?.CompleteMessage}`);
                 await Sleep(ENGINE_SETTLE_MS);
 
                 const afterEdit = await runCached(ctx, { QueryID: query.ID });

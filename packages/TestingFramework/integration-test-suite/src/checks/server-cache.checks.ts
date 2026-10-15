@@ -23,7 +23,7 @@ import { UniqueFilter } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck } from '@memberjunction/testing-integration';
-import { DeterministicEntityFactory } from './deterministic-entity-factory';
+import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 const ENTITY = 'MJ: Entities';
 const SMALL_ENTITY = 'MJ: Query Categories';
@@ -785,7 +785,7 @@ export const ServerCacheChecks: NamedCheck[] = [
             // carry the parent Category name). This check verifies that after renaming the parent
             // category, cached child rows reflect the new name. Self-contained: creates and
             // deletes a throwaway Category + Query, so no real data is touched.
-            const md = ctx.Provider; // one provider for the category and its query
+            const md = new Metadata(); // global-provider-ok: integration test — single-provider process by design
             const rv = new RunView();
 
             const category = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', ctx.User);
@@ -794,12 +794,12 @@ export const ServerCacheChecks: NamedCheck[] = [
             Assert(await category.Save(), `category fixture save failed: ${category.LatestResult?.CompleteMessage ?? 'unknown'}`);
             const originalName = category.Name;
 
-            const query = await DeterministicEntityFactory.NewQuery(ctx.Provider, ctx.User);
+            const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
             query.Name = `zzz-integrationtest-query-${Date.now()}`;
             query.CategoryID = category.ID;
             query.SQL = 'SELECT 1 AS X';
             query.Status = 'Approved';
-            Assert(await query.Save(), `query fixture save failed: ${query.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            Assert(await query.Save(FixtureQuerySaveOptions()), `query fixture save failed: ${query.LatestResult?.CompleteMessage ?? 'unknown'}`);
 
             const params = () => ({ EntityName: 'MJ: Queries', ExtraFilter: `CategoryID='${category.ID}'`, Fields: ['Name', 'Category'], ResultType: 'simple' as const });
             try {

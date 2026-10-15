@@ -218,19 +218,6 @@ gate is honored identically everywhere. Gating exists at two granularities:
   silently dropped). A bundle selector can also opt mutation checks in declaratively via
   `config.runMutationTests: true`, independent of env.
 
-**Tier scopes — process state bound to a tier.** Some check content has to change host behaviour
-for the tests of one tier only. It registers an `IntegrationTierScope`
-([`tier-scope.ts`](../packages/TestingFramework/testing-integration/src/tier-scope.ts)) with
-`IntegrationCheckRegistry.RegisterTierScope`: a name, the tiers it binds to, and an `Enter()` that
-applies the change and returns the function that undoes it. The driver enters every scope bound to
-a test's tier right before it runs that test's bundles (after the gates, so a skipped test changes
-nothing) and exits them in a `finally` when the test ends, whatever the outcome. A scope that
-throws on `Enter` fails the test as "Tier scope setup failed"; an error from the run itself keeps
-its own message. The suite registers one: `deterministic-host.ts` switches every save-time AI
-prompt off (`SaveTimeAISettings`, see §3.3) for the `deterministic` and `mutation` tiers. A scope
-changes **process-global** state, so a parallel suite run that mixes tiers sees it for every test in
-flight, and a timed-out check that keeps running in the background sees the restored state.
-
 Adjacent gates outside the tier enum: the Predictive Studio *flow* rigs
 (`integration-test-suite/rigs/ps-*.ts`) run only under `PS_INTEGRATION=1` (they also need the
 Python sidecar), the cross-server rig under `RUN_CROSS_SERVER=1`, and client-transport tests
@@ -426,14 +413,6 @@ RUN_AGENT_TESTS=1 MJ_INTEGRATION_TEST=1 pnpm mj test suite --name "Integration T
 # Client-transport tests — start MJAPI first: (cd packages/MJAPI && npm run start)
 # For the DETERMINISTIC tier (zero live model calls), start that MJAPI with
 #   MJ_DISABLE_TASK_GRAPH_DISPATCHER=1   (otherwise it executes the task graphs IT71/TG6 submits, running real agents)
-# and a section in its mj.config.cjs that turns the save-time AI prompts off (otherwise saves that
-# arrive over GraphQL run query/template parameter enrichment, smart-filter or code generation
-# server-side):
-#   saveTimeAI: { QueryParameters: false, TemplateParameters: false, ViewSmartFilters: false, CodeGeneration: false }
-# (`Embeddings` stays on: a local in-process model, no credentials, no AI Prompt Run.) The test
-# process turns the same switches off for its own in-process saves only while a deterministic- or
-# mutation-tier test runs (a tier scope entered by the driver, §2.5); live-model tests and other test
-# types keep them on.
 MJ_INTEGRATION_TEST=1 pnpm mj test run --name "IT03 - Client GraphQL Cache Integrity"
 
 # Validate definitions without executing (driver resolvable, Configuration parses)
@@ -487,8 +466,7 @@ npx tsx packages/TestingFramework/integration-test-suite/rigs/cross-server-inval
 edit a template and re-run it in one process, delete a cascading AI Prompt (direct, group, batched,
 forced failure), race two cascading deletes for the same row, inject a non-dooming fault into a
 cascading delete that joined the caller's transaction, and race the in-transaction metadata refresh
-against a pool reload, and prove that a query or tag saved the way `mj sync push` saves it (no embedding)
-gets its vector when `QueryEngineServer` / `TagEngine` load. Each one's needs (SQL Server, live model credentials), what it mutates, and
+against a pool reload. Each one's needs (SQL Server, live model credentials), what it mutates, and
 the shared exit-code contract (0 pass, 1 an expectation failed, 2 bootstrap or usage error) are in
 the [suite README](../packages/TestingFramework/integration-test-suite/README.md#feature-pipeline-and-transaction-rigs-rigsfeature-pipelines).
 Run them on a private database. `pnpm run check:rigs` in the suite package type-checks them (the
@@ -578,13 +556,6 @@ the rest: nightly `RUN_MUTATION_TESTS=1` + the cross-server Redis rig; weekly Li
 
 - **Deterministic by default.** No credentials, no LLM calls, no reliance on specific business
   data. Gate anything else behind the right tier flag.
-- **Create queries, query SQLs and template contents through `DeterministicEntityFactory`**
-  ([`checks/deterministic-entity-factory.ts`](../packages/TestingFramework/integration-test-suite/src/checks/deterministic-entity-factory.ts)):
-  `NewQuery`, `NewQuerySQL`, `NewTemplateContent`. Saving one runs an AI enrichment stage; the
-  factory sets the entity's `SkipAIEnrichment` flag so the save makes no model call. A plain
-  `GetEntityObject` works in-process only because the deterministic tier scope switches the
-  prompts off — but under client transport the save runs inside MJAPI, which needs the
-  `saveTimeAI` host section shown in §3.3.
 - **Self-cleaning fixtures only.** Create your own throwaway rows (clearly-prefixed names,
   e.g. `mj-frbu-test-*`, or tagged `(mj-integration-test — safe to delete)`) and delete them in
   teardown, FK-safe order. Be **reference-only** toward pre-existing records.

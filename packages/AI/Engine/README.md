@@ -152,53 +152,6 @@ const exampleMatches: ExampleMatchResult[] = await AIEngine.Instance.FindSimilar
 
 The relevant code paths live in [`src/AIEngine.ts`](./src/AIEngine.ts) and [`packages/MJCoreEntitiesServer/src/custom/MJAIAgentNoteEntityServer.server.ts`](../../MJCoreEntitiesServer/src/custom/MJAIAgentNoteEntityServer.server.ts).
 
-### EmbeddingBackfill (records saved without a vector)
-
-`mj sync push` saves with `BaseEntity.SkipEmbeddings`, so a short-lived CLI never loads the local embedding model;
-the record's save clears a now-stale vector instead of computing it. `EmbeddingBackfill<T>` is the one later path
-that gives such records their vector: `AIEngine` (agent notes and examples), `TagEngine`, `QueryEngineServer` and
-`ComponentMetadataEngineServer` each own one and start it when they load and when such records change.
-
-- **One pass at a time**: `Run()` during a pass joins it and schedules exactly one more pass; `Trigger()` starts a run
-  without waiting (engines use it, so a similarity search never waits for a backfill). `RunUntilDone()` is the awaited
-  mode — the same bounded passes back to back until every record needing a vector has been tried once; TagEngine's
-  load uses it. A run during a pass is never dropped: it runs right after the pass or in the scheduled later pass.
-- **Bounded per pass**: at most `EmbeddingBackfillSettings.BatchSize` records per pass (default 100); the rest continue
-  in later passes `PassDelayMs` apart (default 10 s) on their own. MJServer installs both from the `embeddingBackfill`
-  section of `mj.config.cjs` (`BatchSize`, `PassDelaySeconds`).
-- **Embed → index → write → save → put back on failure**: `OnEmbedded` hands the computed vectors to the owner's
-  in-memory index before the save, whatever the save does (de-duplication must not depend on persistence); each
-  record's vector columns are written (JSON, float32 binary, model ID) and saved through the entity; a failed
-  embedding or save restores the columns, so the next run retries.
-- **Failures never starve the rest**: a record that fails is skipped for the rest of the run (the chain of passes
-  until none is left), and so is a row a full database read returns with nothing to embed (e.g. whitespace-only text,
-  which `<> ''` lets through on PostgreSQL); the next read asks for that many more rows. Every continuing pass saves
-  or skips at least one record, so a run always ends; it ends with one error line counting its failures (each
-  failure is also logged as it happens).
-- **Stops when embedding is unavailable**: an `EmbeddingUnavailableError` from the embedder (AIEngine throws it when
-  no local model is configured), or a batch embedder that throws or returns a result list not matching the texts, ends the run with one
-  error line and no later pass. Only these exact signals count: a text the model rejects is that record's failure
-  (skipped for the rest of the run) and the pass goes on.
-- **Hook failures are their own signal**: a throw from `OnEmbedded` is logged as an index failure (counted at the end
-  of the run) and does not stop the save.
-- **Index rebuilds keep unsaved vectors**: `ReplayUnsavedVectors(records)` hands `OnEmbedded` again the vectors of
-  records whose save failed, for an owner that rebuilt its index from persisted vectors (QueryEngineServer on every
-  `MJ: Queries` change, TagEngine on every load).
-- **Honours `SaveTimeAISettings`**: nothing is computed while `embeddings` is off.
-- `EmbeddingBackfill.RequireLocalVector` is the shared "a local embedding must have a vector and a model" check
-  (`AIEngine.EmbedTextLocalForEntity`, which the entity saves use, applies it).
-
-```typescript
-const backfill = new EmbeddingBackfill<MJQueryEntity>({
-    Name: 'QueryEngineServer',
-    Slots: [EmbeddingBackfill.StandardSlot<MJQueryEntity>(q => MJQueryEntityServer.CompositeEmbeddingText(q))],
-    LoadCandidates: async () => QueryEngine.Instance.Queries,
-    EmbedText: (text, query) => AIEngine.EmbedTextLocalForEntity(query, text),
-    OnEmbedded: (query, vectors) => queryIndex.AddVector(query.ID, vectors[0].vector, { Name: query.Name }),
-});
-backfill.Trigger();
-```
-
 ### ConversationAttachmentService
 
 Manages media attachments (images, audio, video, files) in agent conversations:

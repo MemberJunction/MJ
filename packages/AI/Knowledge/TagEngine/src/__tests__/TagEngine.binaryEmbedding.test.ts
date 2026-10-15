@@ -3,7 +3,7 @@
  * (base64 of little-endian float32 bytes). The binary column is read first and wins when valid;
  * JSON is the fallback. Fresh embeddings are written to both.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UserInfo } from '@memberjunction/core';
 import type { EmbeddingRunParams, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 
@@ -18,7 +18,6 @@ interface FakeTag {
     EmbeddingVector: string | null;
     EmbeddingVectorBinary: string | null;
     EmbeddingModelID: string | null;
-    PrimaryKey: { ToConcatenatedString(): string };
     Save: () => Promise<boolean>;
 }
 
@@ -63,10 +62,7 @@ const h = vi.hoisted(() => {
     const loadVectors = vi.fn();
     const addVector = vi.fn();
     const logError = vi.fn();
-    const logStatus = vi.fn();
-    /** The handler TagEngine registers on the base engine's DataChange$; tests call it to emit a change. */
-    const dataChange: { handler: ((event: { config: { EntityName: string } }) => void) | null } = { handler: null };
-    return { state, embedCalls, runEmbedding, findNearest, removeVector, loadVectors, addVector, logError, logStatus, dataChange };
+    return { state, embedCalls, runEmbedding, findNearest, removeVector, loadVectors, addVector, logError };
 });
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
@@ -82,9 +78,8 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 
 vi.mock('@memberjunction/core', () => ({
     UserInfo: class {},
-    EntitySaveOptions: class { SkipAsyncValidation?: boolean = undefined; },
     LogError: h.logError,
-    LogStatus: h.logStatus,
+    LogStatus: vi.fn(),
     Metadata: class { Entities = []; CurrentUser = {}; },
     RunView: class { RunView = vi.fn().mockResolvedValue({ Success: true, Results: [] }); },
     BaseEntity: class {},
@@ -97,10 +92,6 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
-    // Reached through the real @memberjunction/aiengine entry (the aiengine mock below takes EmbeddingBackfill
-    // from it): @memberjunction/actions-base subclasses these when it loads.
-    MJEntityActionEntity: class {},
-    MJActionEntity: class {},
     MJAIModelPriceUnitTypeEntity: class {},
     MJTagEntity: class {},
     MJTaggedItemEntity: class {},
@@ -132,12 +123,6 @@ vi.mock('@memberjunction/tag-engine-base', () => ({
     TagEngineBase: {
         Instance: {
             Config: vi.fn().mockResolvedValue(undefined),
-            DataChange$: {
-                subscribe: (handler: (event: { config: { EntityName: string } }) => void) => {
-                    h.dataChange.handler = handler;
-                    return { unsubscribe: () => undefined };
-                },
-            },
             get Tags() { return h.state.tags; },
             GetTagByID: (id: string) => h.state.tags.find(t => t.ID.toLowerCase() === id.toLowerCase()),
             GetTagByName: (name: string) => h.state.tags.find(t => t.Name.toLowerCase() === name.trim().toLowerCase()),
@@ -161,22 +146,11 @@ vi.mock('@memberjunction/ai-vectors-memory', async () => ({
     VectorEntry: class {},
 }));
 
-vi.mock('@memberjunction/ai', async (importOriginal) => ({
-    // The real save-time AI switch, pinned to one shared instance: this file's BaseSingleton mock hands out a
-    // fresh instance per call, which would forget the config a test sets.
-    SaveTimeAISettings: await (async () => {
-        const real = (await importOriginal<typeof import('@memberjunction/ai')>()).SaveTimeAISettings;
-        const shared = new real();
-        return class SaveTimeAISettings extends real {
-            public static override get Instance(): InstanceType<typeof real> { return shared; }
-        };
-    })(),
+vi.mock('@memberjunction/ai', () => ({
     BaseEmbeddings: class {},
 }));
 
-vi.mock('@memberjunction/aiengine', async () => ({
-    // The real shared backfill from the package entry, so TagEngine's load and EmbedMissingTags run its actual loop.
-    EmbeddingBackfill: (await vi.importActual<typeof import('@memberjunction/aiengine')>('@memberjunction/aiengine')).EmbeddingBackfill,
+vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         Instance: {
             Config: vi.fn(),
@@ -191,7 +165,6 @@ vi.mock('@memberjunction/aiengine', async () => ({
 
 import { Base64ToFloat32Vector } from '@memberjunction/global';
 import { TagEngine } from '../TagEngine';
-import { SaveTimeAISettings } from '@memberjunction/ai';
 
 const PROMPT_MODEL_ID = 'model-prompt';
 const OTHER_MODEL_ID = 'model-other';
@@ -220,7 +193,6 @@ function makeTag(id: string, name: string, cols: PersistedColumns = {}): FakeTag
         EmbeddingVector: json == null ? null : typeof json === 'string' ? json : JSON.stringify(json),
         EmbeddingVectorBinary: cols.binary ?? null,
         EmbeddingModelID: cols.modelID ?? null,
-        PrimaryKey: { ToConcatenatedString: () => `ID|${id}` },
         Save: async () => {
             h.state.saved.push({
                 ID: tag.ID,
@@ -268,7 +240,6 @@ describe('TagEngine reads and writes the binary embedding column', () => {
         h.loadVectors.mockClear();
         h.addVector.mockClear();
         h.logError.mockClear();
-        h.logStatus.mockClear();
         h.state.saved = [];
         loadCatalog();
         engine = new TagEngine();
@@ -338,71 +309,6 @@ describe('TagEngine reads and writes the binary embedding column', () => {
                 expect(decoded).toHaveLength(fromJSON.length);
                 decoded.forEach((v, i) => expect(v).toBeCloseTo(fromJSON[i], 6));
             }
-        });
-    });
-
-    describe('the load embeds through the shared backfill, awaited', () => {
-        it('waits until every tag has a vector, over more than one backfill pass (default 100 per pass)', async () => {
-            h.state.tags = Array.from({ length: 120 }, (_, i) => makeTag(`tag-${i}`, `Tag ${i}`));
-
-            await engine.Config(true, user);
-
-            expect(new Set(h.state.saved.map(s => s.ID)).size).toBe(120);
-            expect(h.state.tags.every(t => t.EmbeddingModelID === PROMPT_MODEL_ID)).toBe(true);
-            expect(h.addVector).toHaveBeenCalledTimes(120);
-        });
-
-        it('a tag whose save fails is still indexed for de-duplication, put back to "no vector", and retried by the next run', async () => {
-            const failing = makeTag('tag-fail', 'Failing Tag');
-            failing.Save = async () => false;
-            h.state.tags = [makeTag('tag-ok', 'Fine Tag'), failing];
-
-            await engine.Config(true, user);
-
-            // ResolveTag's semantic match searches this index: the tag must be in it although its vector could not be persisted.
-            expect(h.addVector.mock.calls.map(c => c[0]).sort()).toEqual(['tag-fail', 'tag-ok']);
-            expect(h.addVector).toHaveBeenCalledWith('tag-fail', [0.1, 0.2, 0.3], { Name: 'Failing Tag', ParentID: null });
-            expect(failing.EmbeddingVector).toBeNull();
-            expect(failing.EmbeddingVectorBinary).toBeNull();
-            expect(failing.EmbeddingModelID).toBeNull();
-
-            h.state.saved = [];
-            failing.Save = makeTag('tag-fail', 'Failing Tag').Save;
-            expect(await engine.EmbedMissingTags()).toBe(1);
-            expect(h.state.saved.map(s => s.ID)).toEqual(['tag-fail']);
-        });
-
-        it('a reload (Config(true)) keeps a failed-save tag in the rebuilt index even when embedding is down then', async () => {
-            const failing = makeTag('tag-fail', 'Failing Tag');
-            failing.Save = async () => false;
-            h.state.tags = [makeTag('tag-ok', 'Fine Tag'), failing];
-            await engine.Config(true, user);
-
-            h.addVector.mockClear();
-            h.runEmbedding.mockResolvedValueOnce({
-                Success: false, Vectors: [], PromptRunID: null, TokensUsed: 0, Cost: 0, ErrorMessage: 'runner down', ExecutionTimeMs: 0, ModelID: PROMPT_MODEL_ID,
-            });
-            await engine.Config(true, user);
-
-            expect(h.addVector).toHaveBeenCalledWith('tag-fail', [0.1, 0.2, 0.3], { Name: 'Failing Tag', ParentID: null });
-        });
-
-        it('a kept vector from another tag model is not put back into the index after the model changed', async () => {
-            const failing = makeTag('tag-fail', 'Failing Tag');
-            failing.Save = async () => false;
-            h.state.tags = [failing];
-            await engine.Config(true, user);
-
-            // The tag model changes; embedding with the new model is down for this load.
-            h.state.promptModels = [{ PromptID: TAG_PROMPT_ID, ModelID: OTHER_MODEL_ID, Priority: 10, Status: 'Active', ConfigurationID: null }];
-            h.addVector.mockClear();
-            h.runEmbedding.mockResolvedValueOnce({
-                Success: false, Vectors: [], PromptRunID: null, TokensUsed: 0, Cost: 0, ErrorMessage: 'runner down', ExecutionTimeMs: 0, ModelID: OTHER_MODEL_ID,
-            });
-            await engine.Config(true, user);
-
-            // A PROMPT_MODEL_ID vector must not be compared with OTHER_MODEL_ID ones.
-            expect(h.addVector).not.toHaveBeenCalled();
         });
     });
 
@@ -499,97 +405,6 @@ describe('TagEngine reads and writes the binary embedding column', () => {
             expect(h.removeVector).toHaveBeenCalledWith('tag-1');
             expect(h.addVector).not.toHaveBeenCalled();
             expect(h.logError).not.toHaveBeenCalled();
-        });
-    });
-
-    describe('EmbedMissingTags (tags saved without a vector after the load, e.g. by mj sync push)', () => {
-        it('embeds, indexes and persists a tag that has no vector; a tag with a current vector is left alone', async () => {
-            h.state.tags = [makeTag('tag-1', 'Machine Learning', { binary: toBinary([0.5, -1.5, 0.25]), modelID: PROMPT_MODEL_ID })];
-            await engine.Config(true, user);
-            h.embedCalls.length = 0;
-            h.addVector.mockClear();
-            h.state.saved = [];
-
-            h.state.tags.push(makeTag('tag-2', 'Pushed Tag'));
-            expect(await engine.EmbedMissingTags()).toBe(1);
-
-            expect(h.embedCalls).toHaveLength(1);
-            expect(h.embedCalls[0].Texts).toHaveLength(1);
-            expect(h.addVector).toHaveBeenCalledTimes(1);
-            expect(h.state.saved.map(s => s.ID)).toEqual(['tag-2']);
-            expect(h.state.saved[0].EmbeddingModelID).toBe(PROMPT_MODEL_ID);
-        });
-
-        it('re-embeds a tag saved after the load whose vector came from another model, with the tag model', async () => {
-            h.state.tags = [makeTag('tag-1', 'Machine Learning', { binary: toBinary([0.5, -1.5, 0.25]), modelID: PROMPT_MODEL_ID })];
-            await engine.Config(true, user);
-            h.embedCalls.length = 0;
-            h.state.saved = [];
-
-            h.state.tags.push(makeTag('tag-old-model', 'Pushed Elsewhere', { binary: toBinary([1, 2, 3]), modelID: 'some-other-model' }));
-            expect(await engine.EmbedMissingTags()).toBe(1);
-
-            expect(h.embedCalls).toHaveLength(1);
-            expect(h.state.saved.map(s => s.ID)).toEqual(['tag-old-model']);
-            expect(h.state.saved[0].EmbeddingModelID).toBe(PROMPT_MODEL_ID);
-        });
-
-        it("runs on an 'MJ: Tags' change while the engine is loaded, and not on other entities' changes", async () => {
-            h.state.tags = [makeTag('tag-1', 'Machine Learning', { binary: toBinary([0.5, -1.5, 0.25]), modelID: PROMPT_MODEL_ID })];
-            await engine.Config(true, user);
-            h.state.saved = [];
-            h.state.tags.push(makeTag('tag-3', 'Pushed Later'));
-
-            h.dataChange.handler?.({ config: { EntityName: 'MJ: Tag Scopes' } });
-            await new Promise((resolve) => setTimeout(resolve, 0));
-            expect(h.state.saved).toHaveLength(0);
-
-            h.dataChange.handler?.({ config: { EntityName: 'MJ: Tags' } });
-            await vi.waitFor(() => expect(h.state.saved.map(s => s.ID)).toEqual(['tag-3']));
-        });
-    });
-
-    describe('saveTimeAI.Embeddings = false', () => {
-        afterEach(() => {
-            SaveTimeAISettings.Instance.Config = {};
-        });
-
-        it('the load hydrates persisted vectors but embeds and persists nothing', async () => {
-            SaveTimeAISettings.Instance.Config = { Embeddings: false };
-            h.state.tags = [
-                makeTag('tag-1', 'Machine Learning', { binary: toBinary([0.5, -1.5, 0.25]), modelID: PROMPT_MODEL_ID }),
-                makeTag('tag-2', 'Pushed Tag'),
-            ];
-
-            await engine.Config(true, user);
-
-            expect(h.embedCalls).toHaveLength(0);
-            expect(h.state.saved).toHaveLength(0);
-            expect(hydratedVectors().get('tag-1')).toEqual([0.5, -1.5, 0.25]);
-            // Semantic matching is incomplete, and the load says so.
-            expect(h.logStatus).toHaveBeenCalledWith(expect.stringContaining('1 tag(s) without a current vector left unembedded (saveTimeAI.Embeddings is off)'));
-        });
-
-        it('EmbedMissingTags computes nothing', async () => {
-            h.state.tags = [makeTag('tag-1', 'Machine Learning', { binary: toBinary([0.5, -1.5, 0.25]), modelID: PROMPT_MODEL_ID })];
-            await engine.Config(true, user);
-            h.embedCalls.length = 0;
-            SaveTimeAISettings.Instance.Config = { Embeddings: false };
-            h.state.tags.push(makeTag('tag-2', 'Pushed Tag'));
-
-            expect(await engine.EmbedMissingTags()).toBe(0);
-            expect(h.embedCalls).toHaveLength(0);
-        });
-
-        it('a tag the engine re-embeds after a rename (the save path) is not embedded', async () => {
-            h.state.tags = [makeTag('tag-1', 'Machine Learning', { binary: toBinary([0.5, -1.5, 0.25]), modelID: PROMPT_MODEL_ID })];
-            await engine.Config(true, user);
-            h.embedCalls.length = 0;
-            SaveTimeAISettings.Instance.Config = { Embeddings: false };
-
-            await engine.ReEmbedTag(h.state.tags[0]);
-
-            expect(h.embedCalls).toHaveLength(0);
         });
     });
 });

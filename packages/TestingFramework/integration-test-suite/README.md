@@ -136,7 +136,6 @@ triggers or hold locks.
 | `cascade-delete-lock-race.ts [--mode joined\|owned] [--flip lock-hints]` | SQL Server; two sessions on one pool | one scratch AI Prompt; `--flip lock-hints` is a mutation run that is expected to FAIL |
 | `joined-delete-rollback-guard.ts` | SQL Server | two scratch AI Prompts, deleted at the end |
 | `in-transaction-refresh-race.ts` | SQL Server (DMVs); the scenarios depend on `READ_COMMITTED_SNAPSHOT` | no — updates one Entity row inside a transaction it always rolls back |
-| `deferred-embeddings.ts` | SQL Server; the local embedding model (in-process, no credentials). Turns save-time AI prompts off for its own process | scratch queries and one scratch tag, deleted at the end |
 
 The rigs sit outside the package's `tsconfig` `include`, so `pnpm build` does not type-check them;
 `pnpm run check:rigs` (`tsconfig.rigs.json`) does, for this folder and `rigs/lib/rig-cli.ts`; it also runs as part of

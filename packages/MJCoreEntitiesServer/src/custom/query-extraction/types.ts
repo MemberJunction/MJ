@@ -127,10 +127,7 @@ export interface QuerySyncContext {
     /** Caller-provided tested parameter sample values (paramName → sampleValue).
      *  When present, these take highest priority over AI-generated or heuristic sampleValues. */
     parameterHints?: Map<string, string>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
-    /** When true, the pipeline skips the AI enrichment stage and relies on the deterministic
-     *  parse plus heuristic descriptions. Extraction of parameters, fields, entities and
-     *  dependencies still runs. Required: the caller resolves the save's `SkipEntityAIActions`, the
-     *  per-instance flag and the host switch once (`MJQueryEntityServer`), so the pipeline never
-     *  re-derives it. */
-    SkipAIEnrichment: boolean;
+    /** Skip the AI enrichment stage, so the deterministic extraction alone decides parameters
+     *  and fields (with heuristic descriptions). Set from the save's `SkipEntityAIActions`. */
+    SkipAIEnrichment?: boolean;
 }

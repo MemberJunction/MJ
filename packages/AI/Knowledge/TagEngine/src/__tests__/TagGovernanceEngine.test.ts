@@ -42,7 +42,6 @@ vi.mock('@memberjunction/core', () => {
         Metadata: MockMetadata,
         RunView: MockRunView,
         UserInfo: class {},
-        EntitySaveOptions: class { SkipAsyncValidation?: boolean = undefined; },
         LogError: vi.fn(),
         LogStatus: vi.fn(),
         BaseEntity: class {},
@@ -56,10 +55,6 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
-    // Reached through the real @memberjunction/aiengine entry (the aiengine mock below takes EmbeddingBackfill
-    // from it): @memberjunction/actions-base subclasses these when it loads.
-    MJEntityActionEntity: class {},
-    MJActionEntity: class {},
     // Imported by PriceUnitTypes in @memberjunction/ai-engine-base. Same wholesale-mock
     // caveat as above: unlisted means uncollectable, not merely unmocked.
     MJAIModelPriceUnitTypeEntity: class {},
@@ -97,9 +92,7 @@ vi.mock('@memberjunction/clustering-engine', () => ({
     },
 }));
 
-vi.mock('@memberjunction/aiengine', async () => ({
-    // The real shared backfill from the package entry: TagEngine, which this engine uses, owns one.
-    EmbeddingBackfill: (await vi.importActual<typeof import('@memberjunction/aiengine')>('@memberjunction/aiengine')).EmbeddingBackfill,
+vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: { Instance: { Config: vi.fn(), Prompts: [], Models: [] } },
 }));
 

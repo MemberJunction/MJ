@@ -12458,9 +12458,6 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
-      '@memberjunction/unit-testing':
-        specifier: 6.2.0-edge.4
-        version: link:../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -16304,9 +16301,6 @@ importers:
       '@memberjunction/storage':
         specifier: 6.2.0-edge.4
         version: link:../../MJStorage
-      '@memberjunction/tag-engine':
-        specifier: 6.2.0-edge.4
-        version: link:../../AI/Knowledge/TagEngine
       '@memberjunction/task-graph':
         specifier: 6.2.0-edge.4
         version: link:../../TaskGraph

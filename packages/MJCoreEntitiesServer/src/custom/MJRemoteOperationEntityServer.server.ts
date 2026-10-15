@@ -5,7 +5,6 @@ import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { DocumentationEngine, MJLibraryEntityExtended, MJLibraryItemEntityExtended } from "@memberjunction/doc-utils";
-import { SaveTimeAISettings } from "@memberjunction/ai";
 
 /** The shape `GenerateCode()` returns — the AI-authored body + its explanation + the libraries it declared. */
 interface RemoteOperationGeneratedCode {
@@ -83,17 +82,12 @@ export class MJRemoteOperationEntityServer extends MJRemoteOperationEntity {
         }
     }
 
-    /**
-     * AI regeneration runs only for `GenerationType='AI'` ops whose `Description` changed (or new/forced) and
-     * that aren't locked — and never while the host has switched save-time code generation off
-     * (`SaveTimeAISettings`, kind `CodeGeneration`); the operation then saves with its current code.
-     */
+    /** AI regeneration runs only for `GenerationType='AI'` ops whose `Description` changed (or new/forced) and that aren't locked. */
     protected ShouldRegenerate(): boolean {
         return (
             this.GenerationType === 'AI' &&
             !this.CodeLocked &&
-            (this.GetFieldByName('Description').Dirty || (!this.IsSaved && !this.Code) || this.ForceCodeGeneration) &&
-            !SaveTimeAISettings.Instance.IsDisabled('CodeGeneration')
+            (this.GetFieldByName('Description').Dirty || (!this.IsSaved && !this.Code) || this.ForceCodeGeneration)
         );
     }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock the bootstrap so the driver never touches a real DB/cache. getActiveIntegrationStorage
 // returns a minimal instrumented-storage stub (only SetCount/ResetCounts are exercised here).
@@ -36,8 +36,7 @@ vi.mock('../bootstrap-client', () => ({ BootstrapIntegrationClient: () => mockCl
 import { IntegrationTestDriver } from '../IntegrationTestDriver';
 import { MJAPIUnreachableError } from '../bootstrap-shared';
 import { IntegrationCheckRegistry } from '../check-registry';
-import type { DriverExecutionContext, DriverExecutionResult, IOracle } from '@memberjunction/testing-engine';
-import type { IntegrationCheckSelection } from '../types';
+import type { DriverExecutionContext, IOracle } from '@memberjunction/testing-engine';
 import type { MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
 
@@ -296,114 +295,7 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(order).toEqual(['setup', 'check', 'teardown']);
     });
 
-    describe('tier scopes', () => {
-        /** Observed scope state: `active` is true only between the scope's Enter and its exit. */
-        const observed = { active: false, enters: 0, exits: 0, seenByCheck: [] as boolean[] };
-        const scopeName = 'unit-deterministic-scope';
-
-        beforeEach(() => {
-            observed.active = false;
-            observed.enters = 0;
-            observed.exits = 0;
-            observed.seenByCheck = [];
-            const reg = IntegrationCheckRegistry.Instance;
-            reg.UnregisterTierScope(scopeName);
-            reg.RegisterTierScope({
-                Name: scopeName,
-                Tiers: ['deterministic', 'mutation'],
-                Enter: () => {
-                    observed.active = true;
-                    observed.enters++;
-                    return () => { observed.active = false; observed.exits++; };
-                }
-            });
-            reg.Register({ Id: 'unitscope.A', Name: 'scopeA', Fn: async () => { observed.seenByCheck.push(observed.active); } });
-            reg.Register({ Id: 'unitscopethrow.A', Name: 'scopeThrow', Fn: async () => { observed.seenByCheck.push(observed.active); throw new Error('boom'); } });
-        });
-
-        it('a deterministic test runs its checks inside the scope and leaves it afterwards', async () => {
-            const result = await new IntegrationTestDriver().Execute(makeContext({ tier: 'deterministic', checks: [{ type: 'unitscope' }] }));
-            expect(result.status).toBe('Passed');
-            expect(observed.seenByCheck).toEqual([true]);
-            expect(observed.active).toBe(false);
-            expect([observed.enters, observed.exits]).toEqual([1, 1]);
-        });
-
-        it('a live-model test never enters a scope bound to other tiers', async () => {
-            delete process.env.RUN_AGENT_TESTS;
-            const result = await new IntegrationTestDriver().Execute(makeContext({ tier: 'live-model', checks: [{ type: 'unitscope' }] }));
-            expect(result.status).toBe('Passed');
-            expect(observed.seenByCheck).toEqual([false]);
-            expect(observed.enters).toBe(0);
-        });
-
-        it('a gated (skipped) test does not enter the scope', async () => {
-            const result = await new IntegrationTestDriver().Execute(makeContext({ tier: 'mutation', checks: [{ type: 'unitscope' }] }));
-            expect(result.status).toBe('Skipped');
-            expect(observed.enters).toBe(0);
-        });
-
-        it('the scope is exited even when a check fails', async () => {
-            const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitscopethrow' }] }));
-            expect(result.status).toBe('Failed');
-            expect(observed.seenByCheck).toEqual([true]);
-            expect(observed.active).toBe(false);
-            expect([observed.enters, observed.exits]).toEqual([1, 1]);
-        });
-
-        it('a different scope under an existing name is rejected', () => {
-            expect(() => IntegrationCheckRegistry.Instance.RegisterTierScope({
-                Name: scopeName,
-                Tiers: ['live-model'],
-                Enter: () => () => { /* no-op */ }
-            })).toThrow(/already registered/);
-        });
-    });
-
     describe('error labelling', () => {
-        const throwingScope = 'unit-throwing-scope';
-
-        afterEach(() => {
-            IntegrationCheckRegistry.Instance.UnregisterTierScope(throwingScope);
-        });
-
-        /** A driver whose run step throws, as a bundle or result-building failure would. */
-        class ThrowingRunDriver extends IntegrationTestDriver {
-            protected override async ExecuteSelected(
-                _context: DriverExecutionContext,
-                _startTime: number,
-                _selectors: IntegrationCheckSelection[],
-                _transport: 'server' | 'client'
-            ): Promise<DriverExecutionResult> {
-                throw new Error('result assembly blew up');
-            }
-        }
-
-        it('a scope whose Enter throws is reported as a scope-setup failure', async () => {
-            IntegrationCheckRegistry.Instance.RegisterTierScope({
-                Name: throwingScope,
-                Tiers: ['deterministic'],
-                Enter: () => { throw new Error('cannot switch'); }
-            });
-            const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitpass' }] }));
-            expect(result.status).toBe('Error');
-            expect(result.errorMessage).toMatch(/^Tier scope setup failed: cannot switch/);
-        });
-
-        it('an error from the run itself keeps its own label (not "Tier scope setup failed") and the scopes are exited', async () => {
-            let active = false;
-            IntegrationCheckRegistry.Instance.RegisterTierScope({
-                Name: throwingScope,
-                Tiers: ['deterministic'],
-                Enter: () => { active = true; return () => { active = false; }; }
-            });
-            const result = await new ThrowingRunDriver().Execute(makeContext({ checks: [{ type: 'unitpass' }] }));
-            expect(result.status).toBe('Error');
-            expect(result.errorMessage).toMatch(/^Integration test execution failed: result assembly blew up/);
-            expect(result.errorMessage).not.toMatch(/Tier scope/);
-            expect(active).toBe(false);
-        });
-
         it('a client-transport test whose MJAPI is unreachable is Skipped as an environment gap', async () => {
             mockClientBootstrap.mockImplementationOnce(async () => { throw new MJAPIUnreachableError('http://localhost:1/graphql', 'ECONNREFUSED'); });
             const result = await new IntegrationTestDriver().Execute(makeContext({ transport: 'client', checks: [{ type: 'unitpass' }] }));

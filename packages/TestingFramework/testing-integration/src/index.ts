@@ -6,7 +6,6 @@
  */
 export * from './config';
 export * from './tiers';
-export * from './tier-scope';
 export * from './instrumented-cache';
 export * from './test-runner';
 export * from './bootstrap';

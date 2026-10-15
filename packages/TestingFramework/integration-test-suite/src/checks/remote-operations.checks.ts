@@ -18,6 +18,7 @@ import { RunView } from '@memberjunction/core';
 import type { UserInfo, RemoteOpProgress } from '@memberjunction/core';
 import {
     MJTemplateEntity,
+    MJTemplateContentEntity,
     MJActionCategoryEntity,
     MJRecordProcessEntity,
     MJProcessRunEntity,
@@ -33,7 +34,7 @@ import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import type { RemoteOpsFixture } from '@memberjunction/testing-integration';
-import { DeterministicEntityFactory } from './deterministic-entity-factory';
+import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 const ACT_ENTITY = 'MJ: Action Categories';
 const PREFIX = 'mj-remote-op-test';
@@ -219,14 +220,14 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('remote-operations', {
         Assert(await tmpl.Save(), `creating test template failed: ${tmpl.LatestResult?.CompleteMessage}`);
         fx.Tmpl = tmpl;
 
-        const content = await DeterministicEntityFactory.NewTemplateContent(ctx.Provider, user);
+        const content = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents', user);
         content.NewRecord();
         content.TemplateID = tmpl.ID;
         content.TypeID = textTypeID;
         content.TemplateText = 'Hello {{ name }}';
         content.Priority = 1;
         content.IsActive = true;
-        Assert(await content.Save(), `creating test template content failed: ${content.LatestResult?.CompleteMessage}`);
+        Assert(await content.Save(FixtureQuerySaveOptions()), `creating test template content failed: ${content.LatestResult?.CompleteMessage}`);
         fx.Content = content;
 
         // ── RecordProcess.RunNow fixtures: 2 throwaway Action Categories (Description null) + a FieldRules process ──

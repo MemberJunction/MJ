@@ -118,7 +118,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...actual, RunView: StubRunView, LogError: vi.fn() };
 });
 
-vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { EmbedTextLocalForEntity: vi.fn() } }));
+vi.mock('../custom/util.js', () => ({ EmbedTextLocalHelper: vi.fn() }));
 
 vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();

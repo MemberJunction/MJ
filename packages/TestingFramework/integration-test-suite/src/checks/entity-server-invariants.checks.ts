@@ -61,7 +61,7 @@ import {
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { DeterministicEntityFactory } from './deterministic-entity-factory';
+import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 const TAG_ENTITY = 'MJ: Tags';
 const SCOPE_ENTITY = 'MJ: Tag Scopes';
@@ -469,12 +469,12 @@ export const EntityServerInvariantsChecks: NamedCheck[] = [
                     EntityName: TEMPLATE_CONTENT_TYPE_ENTITY, MaxRows: 1, Fields: ['ID'], ResultType: 'simple',
                 }, ctx.User);
                 Assert(typeRow.Success && typeRow.Results.length > 0, 'a Template Content Type must exist');
-                const content = await DeterministicEntityFactory.NewTemplateContent(ctx.Provider, ctx.User);
+                const content = await ctx.Provider.GetEntityObject<MJTemplateContentEntity>(TEMPLATE_CONTENT_ENTITY, ctx.User);
                 content.TemplateID = tpl.ID;
                 content.TypeID = typeRow.Results[0].ID;
                 content.TemplateText = `Hello {{ itAlphaParam }} and {{ itBetaParam }} ${FIXTURE_TAG}`;
                 content.Priority = 1;
-                Assert(await content.Save(), `ESI9 content save: ${content.LatestResult?.CompleteMessage}`);
+                Assert(await content.Save(FixtureQuerySaveOptions()), `ESI9 content save: ${content.LatestResult?.CompleteMessage}`);
                 contentID = content.ID;
 
                 const params1 = await new RunView().RunView<{ ID: string; Name: string }>({
@@ -488,7 +488,7 @@ export const EntityServerInvariantsChecks: NamedCheck[] = [
 
                 // Case-flip re-save: the diff is case-insensitive → still exactly 2 rows, no dup.
                 content.TemplateText = `Hello {{ ITALPHAPARAM }} and {{ itBetaParam }} ${FIXTURE_TAG}`;
-                Assert(await content.Save(), `ESI9 case-flip re-save: ${content.LatestResult?.CompleteMessage}`);
+                Assert(await content.Save(FixtureQuerySaveOptions()), `ESI9 case-flip re-save: ${content.LatestResult?.CompleteMessage}`);
                 const params2 = await new RunView().RunView<{ ID: string; Name: string }>({
                     EntityName: TEMPLATE_PARAM_ENTITY, ExtraFilter: `TemplateID='${tpl.ID}'`,
                     Fields: ['ID', 'Name'], ResultType: 'simple', BypassCache: true,

@@ -48,7 +48,7 @@ import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
 import { createMediaStreamRouter } from './rest/MediaStreamHandler.js';
 import { createRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.js';
-import { REALTIME_SDP_EXCHANGE_PATH, SaveTimeAISettings } from '@memberjunction/ai';
+import { REALTIME_SDP_EXCHANGE_PATH } from '@memberjunction/ai';
 import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 import { createWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
 import {
@@ -91,7 +91,7 @@ import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-a
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
-import { EmbeddingBackfillSettings, GetAttachmentService } from '@memberjunction/aiengine';
+import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
@@ -460,14 +460,6 @@ export const Serve = async (resolverPaths: Array<string>, app: Application = Cre
   }
 
 const setupComplete$ = new ReplaySubject(1);
-
-  // Install the saveTimeAI switches and the embedding-backfill bounds before anything starts an engine (the
-  // database setup below runs the startup engines), so the first entity save and the first backfill pass already
-  // honour them. SaveTimeAIConfig in @memberjunction/ai lists each switch and every exclusion (all but Duplicate
-  // Runs, by design); EmbeddingBackfillConfig in @memberjunction/aiengine documents the bounds.
-  SaveTimeAISettings.Instance.Config = configInfo.saveTimeAI;
-  EmbeddingBackfillSettings.Instance.Config = configInfo.embeddingBackfill;
-
   const dbType = GetDbType();
   const dataSources: DataSourceInfo[] = [];
 

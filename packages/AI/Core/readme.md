@@ -141,7 +141,6 @@ Pure (no DOM, no Node APIs), so the browser and the meeting bot read avatar piec
 | `AIErrorInfo` / `AIErrorType` | Structured error types: rate limit, authentication, context length, content filter, etc. |
 | `serializeMessageContent()` / `deserializeMessageContent()` | Content block serialization for database storage |
 | `parseBase64DataUrl()` / `createBase64DataUrl()` | Base64 data URL utilities |
-| `SaveTimeAISettings` / `SaveTimeAIConfig` / `SaveTimeAIKind` | The host's switches for the AI work server entity saves do (query/template parameter enrichment, view smart filters, code generation, embeddings) and the automatic embedding paths behind them. Only an explicit `false` disables a kind. MJServer installs them from the `saveTimeAI` config section; every reader — entity servers, `AIEngine`, `TagEngine`, `QueryEngineServer`, `ComponentMetadataEngineServer` — reads this one process-wide `BaseSingleton`. The full table is in the `SaveTimeAIConfig` JSDoc and the `@memberjunction/core-entities-server` README. |
 
 ## Usage Examples
 

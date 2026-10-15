@@ -11,7 +11,7 @@
  * MJ way (`SELECT ID FROM mjit_render.RenderItem`) runs unchanged on both platforms through the
  * PostgreSQL provider's identifier auto-quoting.
  */
-import { DatabaseProviderBase, RunView } from '@memberjunction/core';
+import { DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
 import type { DatabasePlatform, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { QueryEngine } from '@memberjunction/core-entities';
 import type {
@@ -22,7 +22,7 @@ import type {
 } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { DeterministicEntityFactory } from './deterministic-entity-factory';
+import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 /** Schema that holds the fixture table. Created and dropped by the bundle. */
 export const RENDER_SCHEMA = 'mjit_render';
@@ -216,8 +216,6 @@ export interface RenderQueryDefinition {
 
 /** Everything the bundle created in the database, for lookups and teardown. */
 export interface RenderFixtures {
-    /** The provider the fixture rows are created on and deleted through (the check context's provider). */
-    Provider: IMetadataProvider;
     Category: MJQueryCategoryEntity;
     /** Saved queries by Name, in creation order. */
     Queries: Map<string, MJQueryEntity>;
@@ -226,8 +224,9 @@ export interface RenderFixtures {
 }
 
 /** Creates the per-run category that owns every fixture query. */
-export async function CreateRenderCategory(provider: IMetadataProvider, user: UserInfo): Promise<MJQueryCategoryEntity> {
-    const category = await provider.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', user);
+export async function CreateRenderCategory(user: UserInfo): Promise<MJQueryCategoryEntity> {
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const category = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', user);
     category.Name = `IT Render ${Date.now()}`;
     category.UserID = user.ID;
     if (!await category.Save()) {
@@ -245,31 +244,33 @@ export async function CreateRenderQuery(
     definition: RenderQueryDefinition,
     user: UserInfo
 ): Promise<MJQueryEntity> {
-    const query = await DeterministicEntityFactory.NewQuery(fixtures.Provider, user);
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', user);
     query.Name = definition.Name;
     query.CategoryID = fixtures.Category.ID;
     query.SQL = definition.SQL;
     query.Status = 'Approved';
     query.Reusable = definition.Reusable ?? false;
-    if (!await query.Save()) {
+    if (!await query.Save(FixtureQuerySaveOptions())) {
         throw new Error(`Fixture query '${definition.Name}' save failed: ${query.LatestResult?.CompleteMessage}`);
     }
     fixtures.Queries.set(definition.Name, query);
     for (const [platform, sql] of Object.entries(definition.Variants ?? {})) {
         if (sql) {
-            fixtures.Variants.push(await createVariant(fixtures.Provider, query, platform, sql, user));
+            fixtures.Variants.push(await createVariant(query, platform, sql, user));
         }
     }
     return query;
 }
 
-async function createVariant(provider: IMetadataProvider, query: MJQueryEntity, platformKey: string, sql: string, user: UserInfo): Promise<MJQuerySQLEntity> {
+async function createVariant(query: MJQueryEntity, platformKey: string, sql: string, user: UserInfo): Promise<MJQuerySQLEntity> {
     const dialect = await findDialect(platformKey, user);
-    const variant = await DeterministicEntityFactory.NewQuerySQL(provider, user);
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const variant = await md.GetEntityObject<MJQuerySQLEntity>('MJ: Query SQLs', user);
     variant.QueryID = query.ID;
     variant.SQLDialectID = dialect.ID;
     variant.SQL = sql;
-    if (!await variant.Save()) {
+    if (!await variant.Save(FixtureQuerySaveOptions())) {
         throw new Error(`Variant for '${query.Name}' (${platformKey}) save failed: ${variant.LatestResult?.CompleteMessage}`);
     }
     return variant;

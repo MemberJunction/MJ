@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { stubViews } = vi.hoisted(() => ({
     /** Each stub base, by the instance the server class built on it: the test's typed view of the stub's members. */
@@ -96,7 +96,6 @@ vi.mock('@memberjunction/doc-utils', () => ({
 }));
 
 import { MJActionEntityServer } from '../custom/MJActionEntityServer.server';
-import { SaveTimeAISettings } from '@memberjunction/ai';
 
 /**
  * The mocked base class's test-only surface: it records field dirtiness through SetFieldDirty and holds IsSaved as a
@@ -200,44 +199,5 @@ describe('MJActionEntityServer Code Generation Skip for Cloned / Pre-populated A
 
         expect(result).toBe(true);
         expect(generateCodeSpy).toHaveBeenCalledTimes(1);
-    });
-
-    describe('host switch saveTimeAI.CodeGeneration = false', () => {
-        afterEach(() => {
-            SaveTimeAISettings.Instance.Config = {};
-        });
-
-        it('saves a new Generated action without calling GenerateCode, keeping its current code', async () => {
-            SaveTimeAISettings.Instance.Config = { CodeGeneration: false };
-            setSaved(action, false);
-            action.Code = null;
-
-            const result = await action.Save();
-
-            expect(result).toBe(true);
-            expect(generateCodeSpy).not.toHaveBeenCalled();
-            expect(action.Code).toBeNull();
-        });
-
-        it('wins over ForceCodeGeneration and a dirty UserPrompt', async () => {
-            SaveTimeAISettings.Instance.Config = { CodeGeneration: false };
-            setSaved(action, true);
-            action.Code = 'old code';
-            action.ForceCodeGeneration = true;
-            setFieldDirty(action, 'UserPrompt', true);
-
-            expect(await action.Save()).toBe(true);
-            expect(generateCodeSpy).not.toHaveBeenCalled();
-            expect(action.Code).toBe('old code');
-        });
-
-        it('another kind switched off still generates', async () => {
-            SaveTimeAISettings.Instance.Config = { QueryParameters: false, ViewSmartFilters: false };
-            setSaved(action, false);
-            action.Code = null;
-
-            expect(await action.Save()).toBe(true);
-            expect(generateCodeSpy).toHaveBeenCalledTimes(1);
-        });
     });
 });

@@ -31,7 +31,7 @@ import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import type { TemplatesFixture } from '@memberjunction/testing-integration';
-import { DeterministicEntityFactory } from './deterministic-entity-factory';
+import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 const PREFIX = `mj-templates-it-${Date.now()}`;
 const TEMPLATE_TEXT = 'Hello {{ name }}! You have {{ count }} items.';
@@ -206,7 +206,7 @@ export const TemplatesChecks: NamedCheck[] = [
             // Round-trip an UPDATE: entity save → forced Config refresh → new text renders
             const newText = 'Goodbye {{ name }}!';
             f.Content.TemplateText = newText;
-            Assert(await f.Content.Save(), `updating fixture TemplateText failed: ${f.Content.LatestResult?.CompleteMessage}`);
+            Assert(await f.Content.Save(FixtureQuerySaveOptions()), `updating fixture TemplateText failed: ${f.Content.LatestResult?.CompleteMessage}`);
             await engine.Config(true, ctx.User, ctx.Provider);
 
             const t2 = engineTemplate(ctx);
@@ -289,14 +289,14 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('templates', {
         Assert(await tmpl.Save(), `creating fixture template failed: ${tmpl.LatestResult?.CompleteMessage}`);
         fixture.Template = tmpl;
 
-        const content = await DeterministicEntityFactory.NewTemplateContent(ctx.Provider, user);
+        const content = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents', user);
         content.NewRecord();
         content.TemplateID = tmpl.ID;
         content.TypeID = textTypeID;
         content.TemplateText = TEMPLATE_TEXT;
         content.Priority = 1;
         content.IsActive = true;
-        Assert(await content.Save(), `creating fixture template content failed: ${content.LatestResult?.CompleteMessage}`);
+        Assert(await content.Save(FixtureQuerySaveOptions()), `creating fixture template content failed: ${content.LatestResult?.CompleteMessage}`);
         fixture.Content = content;
 
         // The content save pipeline auto-extracts params for {{ name }} / {{ count }} (server

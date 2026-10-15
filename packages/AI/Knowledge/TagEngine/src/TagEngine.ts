@@ -1,10 +1,9 @@
 import { BaseSingleton, Float32VectorToBase64, MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { SaveTimeAISettings } from '@memberjunction/ai';
-import { UserInfo, LogError, LogStatus, Metadata, EntitySaveOptions, type SimpleEmbeddingResult } from '@memberjunction/core';
+import { UserInfo, LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { MJTagEntity, MJTaggedItemEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { TagEngineBase, TagTreeNode, TagScopeContext, type TaggedItemLookup } from '@memberjunction/tag-engine-base';
 import { ReadStoredVector, SimpleVectorService, VectorEntry, VectorInputEntry } from '@memberjunction/ai-vectors-memory';
-import { AIEngine, EmbeddingBackfill } from '@memberjunction/aiengine';
+import { AIEngine } from '@memberjunction/aiengine';
 import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
 import type { EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import type { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
@@ -91,9 +90,6 @@ interface EmbeddingModelInfo {
     APIName: string;
 }
 
-/** The fields of a tag its embedding is built from and indexed under: the text (name, description) and the index metadata. */
-export type TagEmbeddingSource = Pick<MJTagEntity, 'ID' | 'Name' | 'Description' | 'ParentID'>;
-
 /**
  * Server-only Tag Engine that wraps TagEngineBase via composition and adds
  * semantic embedding support for tag resolution.
@@ -124,26 +120,6 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     private _loading = false;
     private _loadingPromise: Promise<void> | null = null;
     private _contextUser: UserInfo | undefined;
-    private _dataChangeSubscription: { unsubscribe(): void } | null = null;
-    /** Gives a vector to the tags without a usable one for the tag model (see {@link EmbedMissingTags}). */
-    private _backfill = new EmbeddingBackfill<MJTagEntity>({
-        Name: 'TagEngine',
-        Slots: [EmbeddingBackfill.StandardSlot<MJTagEntity>(tag => this.buildTagEmbeddingText(tag))],
-        // Nothing to do until the engine is loaded with an embedding model.
-        LoadCandidates: async () => (this._tagVectorService && this._tagEmbeddingModel ? this.Tags : []),
-        // A vector from another model is as good as none: similarity is only meaningful within one model.
-        NeedsVector: tag => !!this._tagEmbeddingModel && !this.tryHydrateFromPersisted(tag, this._tagEmbeddingModel.ModelID),
-        EmbedTexts: texts => this.embedTextsWithTagModel(texts),
-        // Indexed whether or not the save then succeeds: ResolveTag's de-duplication must find every existing tag,
-        // and a failed save is retried by a later run while the index already holds the vector.
-        // Only a vector of the current tag model: a kept vector replayed after the model changed must not enter.
-        OnEmbedded: (tag, vectors) => {
-            if (this._tagEmbeddingModel && UUIDsEqual(vectors[0].modelID, this._tagEmbeddingModel.ModelID)) {
-                this._tagVectorService?.AddVector(NormalizeUUID(tag.ID), vectors[0].vector, { Name: tag.Name, ParentID: tag.ParentID });
-            }
-        },
-        SaveOptions: TagEngine.vectorSaveOptions(),
-    });
 
     /**
      * Mutex for ResolveTag — ensures only one tag resolution runs at a time.
@@ -271,65 +247,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         this._contextUser = contextUser;
         await TagEngineBase.Instance.Config(forceRefresh ?? false, contextUser);
         await this.refreshTagEmbeddings(contextUser);
-        this.subscribeToTagChanges();
         this._loaded = true;
-    }
-
-    /**
-     * Subscribes (once) to the base engine's 'MJ: Tags' changes so a tag saved without a vector while
-     * this engine is loaded — e.g. by `mj sync push`, which saves with SkipEmbeddings — is embedded
-     * without waiting for the next load ({@link EmbedMissingTags}).
-     */
-    private subscribeToTagChanges(): void {
-        if (this._dataChangeSubscription) return;
-        this._dataChangeSubscription = TagEngineBase.Instance.DataChange$.subscribe(event => {
-            if (event.config.EntityName === 'MJ: Tags') {
-                this._backfill.Trigger();
-            }
-        });
-    }
-
-    /**
-     * Embeds every tag that has no usable persisted vector for the configured model, persists it and adds it to the
-     * vector service. The load ({@link refreshTagEmbeddings}) runs the same backfill in awaited mode; this runs it for
-     * tags saved after the load (e.g. by `mj sync push`, which saves with SkipEmbeddings). Started, without being
-     * awaited, on every 'MJ: Tags' change once the engine is loaded; call this to run it and wait for it.
-     *
-     * The work is done by the shared {@link EmbeddingBackfill} with the tag model (tracked AIEmbeddingRunner runs):
-     * one pass at a time, at most `EmbeddingBackfillSettings.BatchSize` tags per pass with the rest in later passes,
-     * a computed vector indexed even when its save fails (the save is retried by the next run), nothing computed
-     * while the host has switched save-time embeddings off. No-op until the engine is loaded with an embedding model.
-     * @returns how many tags were saved with new vectors
-     */
-    public async EmbedMissingTags(): Promise<number> {
-        return this._backfill.Run();
-    }
-
-    /** The options a vector-only save uses: skip async validation — nothing else on the tag changed. */
-    private static vectorSaveOptions(): EntitySaveOptions {
-        const options = new EntitySaveOptions();
-        options.SkipAsyncValidation = true;
-        return options;
-    }
-
-    /**
-     * Embeds texts with the tag model in batches of {@link TAG_EMBED_BATCH_SIZE} (tracked AIEmbeddingRunner runs).
-     * @returns one result per text, in order; null for a text whose batch got no vector
-     */
-    private async embedTextsWithTagModel(texts: string[]): Promise<Array<SimpleEmbeddingResult | null>> {
-        const model = this._tagEmbeddingModel;
-        if (!model) return texts.map(() => null);
-        const promptID = this.resolveTagSemanticPromptID();
-        const results: Array<SimpleEmbeddingResult | null> = [];
-        for (let i = 0; i < texts.length; i += TagEngine.TAG_EMBED_BATCH_SIZE) {
-            const batch = texts.slice(i, i + TagEngine.TAG_EMBED_BATCH_SIZE);
-            const vectors = await this.runTagEmbeddingBatch(batch, promptID, model);
-            for (let j = 0; j < batch.length; j++) {
-                const vector = vectors?.[j];
-                results.push(vector && vector.length > 0 ? { vector, modelID: model.ModelID } : null);
-            }
-        }
-        return results;
     }
 
     /**
@@ -362,34 +280,49 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             return;
         }
 
-        // Hydration strategy:
-        //   1. Hydrate from the persisted vector (EmbeddingVectorBinary, else EmbeddingVector) when EmbeddingModelID
-        //      matches the currently configured model — zero embedding calls for these.
-        //   2. Embed and persist the tags missing a vector or pinned to a stale model through the shared backfill, in
-        //      its batches, and WAIT for it: ResolveTag's semantic de-duplication needs every existing tag's vector,
-        //      so the load does not finish before every tag has been embedded once and indexed — a tag whose save
-        //      fails is indexed anyway and retried by the next run. While the host has switched save-time embeddings
-        //      off nothing is computed, and the load says how many tags it left without a vector.
+        // Phase 1c.1 hydration strategy:
+        //   1. Hydrate from the persisted vector (EmbeddingVectorBinary, else EmbeddingVector) when EmbeddingModelID matches
+        //      the currently configured model — zero LLM calls for these.
+        //   2. Re-embed only tags missing a vector or pinned to a stale model.
+        //   3. Persist the freshly-computed vectors back to the entity so the
+        //      next cold start can hydrate them too.
+        const configuredModelID = modelInfo.ModelID;
         const hydrated: VectorInputEntry<TagEmbeddingMetadata>[] = [];
+        const toCompute: MJTagEntity[] = [];
+
         for (const tag of tags) {
-            const cached = this.tryHydrateFromPersisted(tag, modelInfo.ModelID);
+            const cached = this.tryHydrateFromPersisted(tag, configuredModelID);
             if (cached) {
                 hydrated.push(cached);
+            } else {
+                toCompute.push(tag);
             }
         }
+
         if (hydrated.length > 0) {
             this._tagVectorService.LoadVectors(hydrated);
             LogStatus(`TagEngine: Hydrated ${hydrated.length}/${tags.length} tag embeddings from persisted cache.`);
         }
-        // Tags embedded earlier whose save failed have no persisted vector: put their computed vectors back into the
-        // new index, so de-duplication still finds them while the backfill skips them for the rest of its run.
-        this._backfill.ReplayUnsavedVectors(tags);
-        if (hydrated.length === tags.length) return;
-        if (SaveTimeAISettings.Instance.IsDisabled('Embeddings')) {
-            LogStatus(`TagEngine: ${tags.length - hydrated.length} tag(s) without a current vector left unembedded (saveTimeAI.Embeddings is off); semantic matching cannot find them until a load with embeddings on.`);
+
+        if (toCompute.length === 0) {
             return;
         }
-        await this._backfill.RunUntilDone();
+
+        const fresh = await this.generateTagEmbeddings(toCompute, modelInfo);
+        if (fresh.length === 0) {
+            LogStatus(`TagEngine: Failed to compute embeddings for ${toCompute.length} tag(s) needing refresh.`);
+            return;
+        }
+
+        // Push freshly-computed vectors into the in-memory cache.
+        for (const entry of fresh) {
+            this._tagVectorService.AddVector(entry.key, entry.vector, entry.metadata);
+        }
+
+        // Persist them back so the next cold start hits the cache path.
+        await this.persistFreshEmbeddings(toCompute, fresh, configuredModelID);
+
+        LogStatus(`TagEngine: Computed and persisted ${fresh.length} fresh tag embeddings (${hydrated.length} were cached).`);
     }
 
     /**
@@ -575,29 +508,6 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         modelInfo: EmbeddingModelInfo
     ): Promise<VectorEntry<TagEmbeddingMetadata>[]> {
         const entries: VectorEntry<TagEmbeddingMetadata>[] = [];
-        const vectors = await this.runTagEmbeddingBatch(texts, promptID, modelInfo);
-        if (!vectors) return entries;
-        for (let j = 0; j < batch.length; j++) {
-            if (vectors[j]?.length > 0) {
-                entries.push({
-                    key: NormalizeUUID(batch[j].ID),
-                    vector: vectors[j],
-                    metadata: { Name: batch[j].Name, ParentID: batch[j].ParentID }
-                });
-            }
-        }
-        return entries;
-    }
-
-    /**
-     * One tracked AIEmbeddingRunner call for a batch of texts, pinned to `modelInfo`.
-     * @returns one vector per text, in order, or null when the call failed or returned the wrong count
-     */
-    private async runTagEmbeddingBatch(
-        texts: string[],
-        promptID: string | undefined,
-        modelInfo: EmbeddingModelInfo
-    ): Promise<number[][] | null> {
         try {
             const runner = new AIEmbeddingRunner();
             const result: EmbeddingRunResult = await runner.RunEmbedding({
@@ -605,19 +515,28 @@ export class TagEngine extends BaseSingleton<TagEngine> {
                 PromptID: promptID,
                 ModelID: modelInfo.ModelID,
                 ContextUser: this._contextUser!,
-                Description: `Tag semantic embeddings (batch of ${texts.length})`
+                Description: `Tag semantic embeddings (batch of ${batch.length})`
             });
 
-            if (!result.Success || result.Vectors.length !== texts.length) {
-                LogError(`TagEngine: AIEmbeddingRunner returned ${result.Vectors.length} vectors for ${texts.length} texts: ${result.ErrorMessage ?? 'unknown error'}`);
-                return null;
+            if (!result.Success || result.Vectors.length !== batch.length) {
+                LogError(`TagEngine: AIEmbeddingRunner returned ${result.Vectors.length} vectors for ${batch.length} texts: ${result.ErrorMessage ?? 'unknown error'}`);
+                return entries;
             }
-            return result.Vectors;
+
+            for (let j = 0; j < batch.length; j++) {
+                if (result.Vectors[j]?.length > 0) {
+                    entries.push({
+                        key: NormalizeUUID(batch[j].ID),
+                        vector: result.Vectors[j],
+                        metadata: { Name: batch[j].Name, ParentID: batch[j].ParentID }
+                    });
+                }
+            }
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`TagEngine: AIEmbeddingRunner batch embed failed: ${msg}`);
-            return null;
         }
+        return entries;
     }
 
     /**
@@ -639,7 +558,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      * Build the text string to embed for a given tag.
      * Combines name and description for richer semantic representation.
      */
-    private buildTagEmbeddingText(tag: TagEmbeddingSource): string {
+    private buildTagEmbeddingText(tag: MJTagEntity): string {
         if (tag.Description && tag.Description.trim().length > 0) {
             return `${tag.Name}: ${tag.Description}`;
         }
@@ -1215,10 +1134,9 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      * Uses AIEmbeddingRunner for tracked runs, pinned to the model the other tag vectors came from.
      * No-op if no vector service available.
      */
-    private async addTagToVectorService(tag: TagEmbeddingSource): Promise<void> {
+    private async addTagToVectorService(tag: MJTagEntity): Promise<void> {
         const modelInfo = this._tagEmbeddingModel;
-        // A tag created or renamed through the engine is save-time work: skipped while embeddings are off.
-        if (!this._tagVectorService || !this._contextUser || !modelInfo || SaveTimeAISettings.Instance.IsDisabled('Embeddings')) {
+        if (!this._tagVectorService || !this._contextUser || !modelInfo) {
             return;
         }
 
@@ -1254,7 +1172,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      *
      * @param tag - The tag entity with the updated name/description already saved
      */
-    public async ReEmbedTag(tag: TagEmbeddingSource): Promise<void> {
+    public async ReEmbedTag(tag: MJTagEntity): Promise<void> {
         await this.addTagToVectorService(tag);
     }
 

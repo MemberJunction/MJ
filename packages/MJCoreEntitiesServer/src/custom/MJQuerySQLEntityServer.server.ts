@@ -9,8 +9,6 @@ import { MJQuerySQLEntity, QueryEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJQueryEntityServer } from './MJQueryEntityServer.server';
-import { SaveEnrichmentOptOut } from './saveEnrichmentOptOut';
-import type { ISaveEnrichmentOptOut } from './saveEnrichmentOptOut';
 
 /**
  * Server-side subclass for MJ: Query SQLs.
@@ -25,14 +23,7 @@ import type { ISaveEnrichmentOptOut } from './saveEnrichmentOptOut';
  * no force refresh needed.
  */
 @RegisterClass(BaseEntity, 'MJ: Query SQLs')
-export class MJQuerySQLEntityServer extends MJQuerySQLEntity implements ISaveEnrichmentOptOut {
-    /** When true, the parent-query re-extraction this save triggers skips the AI enrichment stage
-     *  (see `MJQueryEntityServer.SkipAIEnrichment`). Set it before `Save()`; left unset, the parent
-     *  query's own flag applies. A save whose options carry `SkipEntityAIActions` skips it for that
-     *  save. The host switch (`SaveTimeAISettings`, `QueryParameters`) applies either way. Precedence:
-     *  {@link SaveEnrichmentOptOut.ShouldSkip}. */
-    public SkipAIEnrichment?: boolean;
-
+export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const saveResult = await super.Save(options);
         if (!saveResult) {
@@ -43,7 +34,7 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity implements ISaveEnr
         // current environment's database platform. A SQL Server environment
         // receiving a PostgreSQL variant (or vice versa) should not re-extract.
         try {
-            await this.triggerParentExtractionIfDialectMatches(SaveEnrichmentOptOut.FromSaveOptions(options));
+            await this.triggerParentExtractionIfDialectMatches(options?.SkipEntityAIActions === true);
         } catch (e) {
             // Non-fatal — the QuerySQL record saved successfully, extraction
             // is a side effect that can be retried by re-saving the record.
@@ -64,11 +55,7 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity implements ISaveEnr
         }
     }
 
-    /**
-     * Re-runs the parent query's extraction when this variant is for the current platform.
-     * @param saveRequest The save's own enrichment request ({@link SaveEnrichmentOptOut.FromSaveOptions}).
-     */
-    private async triggerParentExtractionIfDialectMatches(saveRequest: true | undefined): Promise<void> {
+    private async triggerParentExtractionIfDialectMatches(skipAIEnrichment: boolean): Promise<void> {
         const currentPlatform = resolveDbPlatformFromEnv() ?? 'sqlserver';
 
         await this.ensureQueryEngineLoaded();
@@ -88,9 +75,7 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity implements ISaveEnr
         // will find the dialect variant via GetPlatformSQL().
         if (parentQuery.SQL && parentQuery.SQL.trim().length > 0) {
             LogStatus(`[MJQuerySQLEntityServer] Triggering re-extraction on "${parentQuery.Name}" — dialect variant saved for ${currentPlatform}`);
-            // The save's SkipEntityAIActions skips enrichment for this run; otherwise this variant's own
-            // flag; neither set (undefined) = the parent query's flag applies.
-            await parentQuery.RerunExtraction(SaveEnrichmentOptOut.FirstRequest(saveRequest, this.SkipAIEnrichment));
+            await parentQuery.RerunExtraction(skipAIEnrichment);
         }
     }
 
