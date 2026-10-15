@@ -995,7 +995,9 @@ export class AIPromptRunner extends BaseModelRunner {
   private async loadTemplate(templateId: string, _contextUser?: UserInfo): Promise<MJTemplateEntityExtended | null> {
     try {
       // Use the template engine to find the template
-      const template = this._templateEngine.Templates.find((t: MJTemplateEntityExtended) => UUIDsEqual(t.ID, templateId));
+      const template = typeof this._templateEngine.FindTemplateByID === 'function'
+        ? this._templateEngine.FindTemplateByID(templateId)
+        : this._templateEngine.Templates.find((t: MJTemplateEntityExtended) => UUIDsEqual(t.ID, templateId));
       return template || null;
     } catch (error) {
       this.logError(error, {
@@ -3581,8 +3583,7 @@ export class AIPromptRunner extends BaseModelRunner {
     
     // Clean validation syntax if needed
     if (parsedResult && (cleanValidationSyntax || (!skipValidation && prompt.OutputExample))) {
-      const validator = new JSONValidator();
-      parsedResult = validator.cleanValidationSyntax<unknown>(parsedResult);
+      parsedResult = this._jsonValidator.cleanValidationSyntax<unknown>(parsedResult);
     }
     
     return parsedResult;
@@ -4080,7 +4081,9 @@ export class AIPromptRunner extends BaseModelRunner {
     const problems: string[] = [];
     const addPromptTemplate = (templateId: string | null, promptName: string): void => {
       if (!templateId) return;
-      const template = this._templateEngine.Templates.find((t) => UUIDsEqual(t.ID, templateId));
+      const template = typeof this._templateEngine.FindTemplateByID === 'function'
+        ? this._templateEngine.FindTemplateByID(templateId)
+        : this._templateEngine.Templates.find((t) => UUIDsEqual(t.ID, templateId));
       const text = template?.GetHighestPriorityContent()?.TemplateText;
       if (!text) {
         problems.push(`the template of prompt "${promptName}" was not found`);

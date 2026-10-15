@@ -28,7 +28,7 @@ import { InitConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInf
 import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
 import { LoadAgentManagementTools } from './tools/agentManagementTools.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, ResolvePayloadAtStart } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, ResolvePayloadAtStart, ResolvePayloadAtEnd } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
@@ -2261,9 +2261,13 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             }
 
             const step = steps[stepNumber - 1];
-            // A step can store its start payload as a pointer to an earlier step's end; export the resolved payload.
+            // A step can store its start or end payload as a pointer to an earlier step's end; export the resolved payloads.
             const stepsById = IndexByUUID(steps);
-            const stepData: Record<string, unknown> = { ...step.GetAll(), PayloadAtStart: ResolvePayloadAtStart(step, stepsById) };
+            const stepData: Record<string, unknown> = {
+                ...step.GetAll(),
+                PayloadAtStart: ResolvePayloadAtStart(step, stepsById),
+                PayloadAtEnd: ResolvePayloadAtEnd(step, stepsById),
+            };
 
             // Determine output file path
             const runIdShort = (props.runId as string).substring(0, 8);

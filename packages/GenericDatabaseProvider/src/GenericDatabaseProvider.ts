@@ -264,13 +264,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     private static _sqlLoggingSessionsKey: string = 'MJ_GenericDatabaseProvider_SqlLoggingSessions';
+    private static _cachedSqlLoggingSessions: Map<string, SqlLoggingSessionImpl> | null = null;
     private get _sqlLoggingSessions(): Map<string, SqlLoggingSessionImpl> {
+        if (GenericDatabaseProvider._cachedSqlLoggingSessions) {
+            return GenericDatabaseProvider._cachedSqlLoggingSessions;
+        }
         const g = MJGlobal.Instance.GetGlobalObjectStore();
         if (g) {
             if (!g[GenericDatabaseProvider._sqlLoggingSessionsKey]) {
                 g[GenericDatabaseProvider._sqlLoggingSessionsKey] = new Map<string, SqlLoggingSessionImpl>();
             }
-            return g[GenericDatabaseProvider._sqlLoggingSessionsKey];
+            GenericDatabaseProvider._cachedSqlLoggingSessions = g[GenericDatabaseProvider._sqlLoggingSessionsKey] as Map<string, SqlLoggingSessionImpl>;
+            return GenericDatabaseProvider._cachedSqlLoggingSessions;
         } else {
             throw new Error('No global object store available for SQL logging session');
         }
@@ -871,8 +876,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             processedRows = await this.AdjustDatetimeFields(processedRows, datetimeFields, entityInfo);
         }
 
-        // Step 2: Encryption decryption
-        const encryptedFields = entityInfo.Fields.filter((field) => field.Encrypt && field.EncryptionKeyID);
+        // Step 2: Encryption decryption — memoized per EntityInfo (like DatetimeFields/BinaryFields)
+        const encryptedFields = GenericDatabaseProvider.getEncryptedFields(entityInfo);
         if (encryptedFields.length === 0) return processedRows;
 
         const encryptionEngine = EncryptionEngine.Instance;
@@ -908,6 +913,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             return processedRow;
         }));
+    }
+
+    private static _encryptedFieldsCache = new WeakMap<EntityInfo, { fieldCount: number; fields: EntityFieldInfo[] }>();
+    private static getEncryptedFields(entityInfo: EntityInfo): EntityFieldInfo[] {
+        let entry = GenericDatabaseProvider._encryptedFieldsCache.get(entityInfo);
+        if (!entry || entry.fieldCount !== entityInfo.Fields.length) {
+            entry = {
+                fieldCount: entityInfo.Fields.length,
+                fields: entityInfo.Fields.filter((field) => field.Encrypt && field.EncryptionKeyID),
+            };
+            GenericDatabaseProvider._encryptedFieldsCache.set(entityInfo, entry);
+        }
+        return entry.fields;
     }
 
     /**
@@ -5245,9 +5263,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Trim trailing spaces for fixed-width char fields (char/nchar pad with spaces on both SQL Server and PG)
             for (const field of entityInfo.Fields) {
-                if (field.TSType === EntityFieldTSType.String &&
-                    field.Type.toLowerCase().includes('char') &&
-                    !field.Type.toLowerCase().includes('varchar')) {
+                const isFixedWidth = field.FixedWidthColumn ?? (field.TSType === EntityFieldTSType.String && (field.Type.trim().toLowerCase() === 'char' || field.Type.trim().toLowerCase() === 'nchar'));
+                if (isFixedWidth) {
                     const val = ret[field.Name];
                     if (typeof val === 'string') ret[field.Name] = val.trimEnd();
                 }

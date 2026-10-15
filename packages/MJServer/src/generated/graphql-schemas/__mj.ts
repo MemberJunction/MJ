@@ -5997,7 +5997,7 @@ export class MJAIAgentRunStep_ {
     @Field({nullable: true, description: "JSON serialization of the Payload state at the start of this step. NULL when PayloadAtStartSourceStepID is set; the starting payload is then the PayloadAtEnd of that step."}) 
     PayloadAtStart?: string;
         
-    @Field({nullable: true, description: "JSON serialization of the Payload state at the end of this step"}) 
+    @Field({nullable: true, description: "JSON serialization of the Payload state at the end of this step. NULL when PayloadAtEndSourceStepID is set; the ending payload is then the PayloadAtEnd of that step."}) 
     PayloadAtEnd?: string;
         
     @Field({nullable: true, description: "Result of the final payload validation for this step. Pass indicates successful\nvalidation, Retry means validation failed but will retry, Fail means validation failed\npermanently, Warn means validation failed but execution continues."}) 
@@ -6034,6 +6034,10 @@ export class MJAIAgentRunStep_ {
     @MaxLength(36)
     PayloadAtStartSourceStepID?: string;
         
+    @Field({nullable: true, description: "When set, PayloadAtEnd is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's ending payload."}) 
+    @MaxLength(36)
+    PayloadAtEndSourceStepID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     AgentRun?: string;
@@ -6045,6 +6049,10 @@ export class MJAIAgentRunStep_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     PayloadAtStartSourceStep?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    PayloadAtEndSourceStep?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -6150,6 +6158,9 @@ export class CreateMJAIAgentRunStepInput {
     @Field({ nullable: true })
     PayloadAtStartSourceStepID: string | null;
 
+    @Field({ nullable: true })
+    PayloadAtEndSourceStepID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -6237,6 +6248,9 @@ export class UpdateMJAIAgentRunStepInput {
 
     @Field({ nullable: true })
     PayloadAtStartSourceStepID?: string | null;
+
+    @Field({ nullable: true })
+    PayloadAtEndSourceStepID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
