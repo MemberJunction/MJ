@@ -61,7 +61,29 @@ describe('SelectExtractor — rung precedence', () => {
     });
 
     it('returns null when nothing applies anywhere', () => {
-        expect(SelectExtractor({ FileType: 'pdf' })).toBeNull();
+        expect(SelectExtractor({ FileType: 'pdf', ByCapability: false })).toBeNull();
+        expect(SelectExtractor({ FileType: 'no-extractor-reads-this' })).toBeNull();
+    });
+});
+
+describe('SelectExtractor — metadata and capability rungs', () => {
+    it("takes the file type's extractor from metadata before looking for one by capability", () => {
+        const selected = SelectExtractor({ FileType: 'csv', FileTypeExtractorKey: 'cascade-sheet' });
+        expect(selected).toMatchObject({ Key: 'cascade-sheet', From: 'FileType' });
+    });
+
+    it('finds an extractor that NAMES the file type when nothing is configured — a PDF reads out of the box', () => {
+        expect(SelectExtractor({ FileType: 'pdf' })).toMatchObject({ Key: 'cascade-pdf', From: 'Capability' });
+    });
+
+    it('never picks a wildcard extractor by capability, which would claim every format', () => {
+        // 'cascade-any' sorts ahead of 'cascade-sheet' and claims '*'.
+        expect(SelectExtractor({ FileType: 'xlsx' })).toMatchObject({ Key: 'cascade-sheet' });
+    });
+
+    it('still prefers the content type over capability', () => {
+        const selected = SelectExtractor({ FileType: 'pdf', ContentTypeExtractorKey: 'cascade-any' });
+        expect(selected).toMatchObject({ Key: 'cascade-any', From: 'ContentType' });
     });
 });
 

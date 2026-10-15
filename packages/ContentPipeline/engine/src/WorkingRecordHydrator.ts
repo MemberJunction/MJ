@@ -40,6 +40,10 @@ const PIPELINE_STATUS_EXTENSIONS: readonly (readonly [string, string])[] = [
     // Extract reaches it, which it did not when this lived only in the extension space.
     ['ExtractorKey', 'extractorKey'],
     ['ExtractorKeyOverride', 'extractorKeyOverride'],
+    // The receipt Embed wrote. Delete reads it to find the vector to remove, and a re-embed reuses
+    // it so the new vector replaces the old one. Without it Delete found "nothing to remove" and
+    // marked the row Deleted with its vector still live and searchable.
+    ['VectorRecordID', 'vectorRecordID'],
 ];
 
 export class WorkingRecordHydrator {
@@ -82,6 +86,19 @@ export class WorkingRecordHydrator {
         const contentSourceID = entityObject.Get('ContentSourceID');
         if (typeof contentSourceID === 'string') {
             record.SetExtension('Pipeline', 'contentSourceID', contentSourceID);
+        }
+        // A chunk has no ContentSourceID of its own: it belongs to a source through its item. The
+        // item is what Embed and Delete route through, and the position is part of the vector's
+        // identity in metadata.
+        if (entity === 'Content Item Chunk') {
+            const itemID = this.readString(entityObject, 'ContentItemID');
+            if (itemID) {
+                record.SetExtension('Pipeline', 'contentItemID', itemID);
+            }
+            const sequence = entityObject.Get('Sequence');
+            if (typeof sequence === 'number') {
+                record.SetExtension('Pipeline', 'sequence', sequence);
+            }
         }
         // The stored statuses two gates read: the pending-delete skip in PipelineProcessor and the
         // metadata-only path in EmbedStage. Publishing them here is what makes those gates work on

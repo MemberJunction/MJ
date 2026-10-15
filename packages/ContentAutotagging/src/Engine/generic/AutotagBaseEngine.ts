@@ -1,15 +1,21 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IRunViewProvider, DatabaseProviderBase, Metadata, RunView, UserInfo, LogError, LogStatus, EntityInfo, EntityFieldInfo } from '@memberjunction/core'
-import { MJGlobal, UUIDsEqual, NormalizeUUID, IsValidUUID, RegisterClass, uuidv4 } from '@memberjunction/global'
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IRunViewProvider, DatabaseProviderBase, Metadata, RunView, UserInfo, LogError, LogStatus, EntityInfo } from '@memberjunction/core'
+import { MJGlobal, UUIDsEqual, NormalizeUUID, RegisterClass, uuidv4 } from '@memberjunction/global'
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentFileTypeEntity,
     MJContentProcessRunEntity, MJContentTypeEntity, MJContentSourceTypeEntity,
     MJContentTypeAttributeEntity, MJContentSourceParamEntity, MJContentItemTagEntity,
     MJContentItemAttributeEntity, MJContentSourceTypeParamEntity,
     MJContentProcessRunEntity_IContentProcessRunConfiguration,
-    MJContentItemDuplicateEntity, MJTaggedItemEntity,
+    MJContentItemDuplicateEntity,
     MJEntityRecordDocumentEntity, MJContentItemChunkEntity, MJVectorIndexEntity
 } from '@memberjunction/core-entities'
-import type { MJContentSourceEntity_IContentSourceConfiguration } from '@memberjunction/core-entities'
+import {
+    ContentVectorMetadataBuilder,
+    ResolveContentVectorStorageConfig,
+    type ChunkTextStorage,
+    type ResolvedVectorStorageConfig,
+    type VectorIDStrategy,
+} from './ContentVectorMetadata'
 import { ContentSourceParams, ContentSourceTypeParams, ContentSourceTypeParamValue } from './content.types'
 import { RateLimiter } from './RateLimiter'
 import pdfParse from 'pdf-parse'
@@ -35,7 +41,7 @@ import {
     ResolveSegmenter,
 } from '@memberjunction/ai-segmentation'
 import { VectorDBBase, VectorRecord, BaseResponse } from '@memberjunction/ai-vectordb'
-import { TagEngine } from '@memberjunction/tag-engine'
+import { ContentItemTagBridge, TagEngine } from '@memberjunction/tag-engine'
 import { TagEngineBase } from '@memberjunction/tag-engine-base'
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities'
 
@@ -72,53 +78,9 @@ export interface ResolvedVectorInfrastructure {
     providerConfig?: Record<string, unknown>;
 }
 
-/**
- * How a chunk's vector-DB record id is derived — `'recordId'` (the chunk's own PK, purge-safe) or
- * `'hash'` (deterministic, EntityDocument-parity). Derived from the generated JSONType interface so
- * it tracks the metadata definition. See {@link AutotagBaseEngine.resolveChunkVectorID}.
- */
-export type VectorIDStrategy = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['VectorIDStrategy']>;
-/**
- * Whether an item always embeds as chunk rows (`'alwaysChunk'`) or embeds as a single item-level
- * vector when it fits in one chunk (`'mixed'`). Derived from the generated JSONType interface.
- */
-export type ChunkTextStorage = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['ChunkTextStorage']>;
-/** Vector-metadata shaping config (field strategy, per-field rules, curated toggles). Derived from the generated JSONType interface. */
-export type VectorMetadataConfig = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['VectorMetadata']>;
-/** Per-field vector-metadata rule (inclusion, truncation, StoreAs coercion). Derived from {@link VectorMetadataConfig}. */
-export type VectorMetadataFieldConfig = NonNullable<VectorMetadataConfig['Fields']>[string];
-
-/**
- * Vector-storage behavior resolved for a single content item, derived from its ContentSource
- * configuration (falling back to its ContentType defaults, then hardcoded defaults). Produced by
- * {@link AutotagBaseEngine.resolveItemVectorStorageConfig}.
- */
-export interface ResolvedVectorStorageConfig {
-    vectorIDStrategy: VectorIDStrategy;
-    chunkTextStorage: ChunkTextStorage;
-    /** How vector metadata is shaped (undefined ⇒ the curated default set). */
-    metadata?: VectorMetadataConfig;
-    /**
-     * The entity this source declares its vectors to be, from `ContentSource.Configuration`. Read only
-     * to decide whether the per-vector `Entity` key can be omitted ({@link AutotagBaseEngine.canOmitEntityMetadataKey});
-     * the value itself is never written to metadata, and search validates it at attribution time.
-     */
-    vectorEntityName?: VectorEntityName;
-}
-
-/** The entity a source declares its vectors to be. Derived from the generated JSONType interface. */
-export type VectorEntityName = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['VectorEntityName']>;
-
-/** Column types that cannot be stored in vector metadata at all (binary/rowversion). */
-const UNSTORABLE_METADATA_TYPES = new Set(['varbinary', 'image', 'binary', 'timestamp', 'rowversion']);
-/** SQL column types stored as JS numbers in vector metadata without an explicit StoreAs. */
-const NUMERIC_SQL_TYPES = new Set(['int', 'bigint', 'smallint', 'tinyint', 'float', 'real', 'decimal', 'numeric', 'money', 'smallmoney']);
-/** Default truncation limit (characters) for large string metadata fields. */
-const DEFAULT_METADATA_TRUNCATION = 1000;
-
-/** Default vector-storage behavior when neither the ContentSource nor its ContentType configures it. */
-const DEFAULT_VECTOR_ID_STRATEGY: VectorIDStrategy = 'recordId';
-const DEFAULT_CHUNK_TEXT_STORAGE: ChunkTextStorage = 'alwaysChunk';
+// The vector-storage types, the storage-config cascade and the metadata builder live in
+// ContentVectorMetadata, shared with the content pipeline's Embed stage so both write identical
+// vector metadata. They are re-exported from this package's root as before.
 
 /**
  * One embedding unit produced from a ContentItem: a slice of its text plus the id minted for the
@@ -680,149 +642,16 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     /**
      * Bridge a ContentItemTag to the formal MJ Tag taxonomy.
-     * Uses TagEngine.ResolveTag() in auto-grow mode by default.
      *
-     * After resolving/creating the formal Tag, also creates a TaggedItem record:
-     * - For Entity sources: tags the original entity record (e.g., Products row)
-     * - For non-Entity sources (RSS, Website, etc.): tags the ContentItem itself
+     * Delegates to {@link ContentItemTagBridge} in the tag engine, which the content pipeline's Tag
+     * stage calls too — one set of governance rules for both.
      */
     private async bridgeContentItemTagToTaxonomy(
         contentItemTag: MJContentItemTagEntity,
         parentTagName: string | null,
         contextUser: UserInfo
     ): Promise<void> {
-        try {
-            // If the LLM suggested a parent tag, resolve it first (through the same
-            // mutex, to prevent duplicate parents under concurrent batch processing)
-            // and CAPTURE its ID so a NEWLY-created child can be nested under it.
-            // Previously the parent's ID was discarded and children were always
-            // created flat — which is why the generated taxonomy came out as one big
-            // flat list with no parent/child nesting.
-            let parentTagID: string | null = null;
-            if (parentTagName) {
-                const parentTag = await TagEngine.Instance.ResolveTag(
-                    parentTagName, 0, 'auto-grow', null, 0.80, contextUser
-                );
-                parentTagID = parentTag?.ID ?? null;
-            }
-
-            // Resolve the tag with rootID=null so matching searches the WHOLE
-            // taxonomy (reusing an existing tag wherever possible — passing the
-            // parent as rootID would scope the search to that subtree and spawn
-            // duplicates of existing root-level tags). parentIDForNew nests a
-            // freshly-created tag under the LLM-suggested parent and runs it
-            // through ValidateAutoGrow governance (MaxChildren / depth), so nesting
-            // is deterministically rule-compliant. Existing tags keep their place.
-            const formalTag = await TagEngine.Instance.ResolveTag(
-                contentItemTag.Tag,
-                contentItemTag.Weight,
-                'auto-grow',
-                null,   // global search — reuse existing tags, avoid duplicates
-                0.80,   // similarity threshold — lower to catch plurals/variants like "AI Agent" vs "AI Agents"
-                contextUser,
-                parentTagID ? { parentIDForNew: parentTagID } : undefined
-            );
-
-            if (formalTag) {
-                // Link ContentItemTag to formal Tag
-                contentItemTag.TagID = formalTag.ID;
-                await contentItemTag.Save();
-
-                // Create TaggedItem linking the formal Tag to the appropriate entity record
-                await this.createTaggedItemFromContentItemTag(
-                    contentItemTag, formalTag.ID, contextUser
-                );
-            }
-        } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            LogError(`[TaxonomyBridge] Failed for tag "${contentItemTag.Tag}": ${msg}`);
-        }
-    }
-
-    /**
-     * Creates a TaggedItem record linking a formal Tag to the appropriate entity record.
-     *
-     * For Entity-sourced content items: resolves the EntityRecordDocument to find the
-     * original entity (e.g., Products) and record ID, then tags that entity record.
-     *
-     * For non-Entity-sourced content items (RSS, Website, Cloud Storage): tags the
-     * ContentItem itself (EntityID = "MJ: Content Items" entity, RecordID = content item ID).
-     */
-    private async createTaggedItemFromContentItemTag(
-        contentItemTag: MJContentItemTagEntity,
-        tagID: string,
-        contextUser: UserInfo
-    ): Promise<void> {
-        try {
-            const md = this.ProviderToUse;
-            let entityID: string;
-            let recordID: string;
-
-            // Load the content item to determine source type
-            const rv = new RunView();
-            const ciResult = await rv.RunView<{
-                ID: string;
-                EntityRecordDocumentID: string | null;
-                ContentSourceID: string;
-            }>({
-                EntityName: 'MJ: Content Items',
-                ExtraFilter: `ID='${contentItemTag.ItemID}'`,
-                ResultType: 'simple',
-                Fields: ['ID', 'EntityRecordDocumentID', 'ContentSourceID'],
-                MaxRows: 1,
-            }, contextUser);
-
-            if (!ciResult.Success || ciResult.Results.length === 0) return;
-            const ci = ciResult.Results[0];
-
-            if (ci.EntityRecordDocumentID) {
-                // Entity source — resolve to the original entity record
-                const erdResult = await rv.RunView<{
-                    EntityID: string;
-                    RecordID: string;
-                }>({
-                    EntityName: 'MJ: Entity Record Documents',
-                    ExtraFilter: `ID='${ci.EntityRecordDocumentID}'`,
-                    ResultType: 'simple',
-                    Fields: ['EntityID', 'RecordID'],
-                    MaxRows: 1,
-                }, contextUser);
-
-                if (!erdResult.Success || erdResult.Results.length === 0) return;
-                entityID = erdResult.Results[0].EntityID;
-                recordID = erdResult.Results[0].RecordID;
-            } else {
-                // Non-entity source — tag the ContentItem itself
-                const contentItemsEntity = md.EntityByName('MJ: Content Items');
-                if (!contentItemsEntity) return;
-                entityID = contentItemsEntity.ID;
-                recordID = contentItemTag.ItemID;
-            }
-
-            // Check if this TaggedItem already exists (avoid duplicates)
-            const existingResult = await rv.RunView<{ ID: string }>({
-                EntityName: 'MJ: Tagged Items',
-                ExtraFilter: `TagID='${tagID}' AND EntityID='${entityID}' AND RecordID='${recordID}'`,
-                ResultType: 'simple',
-                Fields: ['ID'],
-                MaxRows: 1,
-            }, contextUser);
-
-            if (existingResult.Success && existingResult.Results.length > 0) return; // Already exists
-
-            // Create the TaggedItem
-            const taggedItem = await md.GetEntityObject<MJTaggedItemEntity>('MJ: Tagged Items', contextUser);
-            taggedItem.NewRecord();
-            taggedItem.TagID = tagID;
-            taggedItem.EntityID = entityID;
-            taggedItem.RecordID = recordID;
-            taggedItem.Weight = contentItemTag.Weight;
-            await taggedItem.Save();
-        } catch (e) {
-            // Non-critical — the ContentItemTag is already saved, TaggedItem is supplemental
-            const msg = e instanceof Error ? e.message : String(e);
-            LogError(`[TaxonomyBridge] Failed to create TaggedItem for tag "${contentItemTag.Tag}": ${msg}`);
-        }
+        await new ContentItemTagBridge(this.ProviderToUse).Bridge(contentItemTag, parentTagName, contextUser);
     }
 
     /**
@@ -3057,24 +2886,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * ConfigurationObject accessors emitted by CodeGen for each entity's Configuration JSONType.
      */
     protected resolveItemVectorStorageConfig(item: MJContentItemEntity): ResolvedVectorStorageConfig {
-        const source = this.khEngine.GetContentSourceByID(item.ContentSourceID);
-        const srcCfg = source?.ConfigurationObject;
-
-        const contentType = this.khEngine.GetContentTypeByID(item.ContentTypeID);
-        const typeCfg = contentType?.ConfigurationObject;
-
-        return {
-            vectorIDStrategy: srcCfg?.VectorIDStrategy ?? typeCfg?.VectorIDStrategy ?? DEFAULT_VECTOR_ID_STRATEGY,
-            chunkTextStorage: srcCfg?.ChunkTextStorage ?? typeCfg?.ChunkTextStorage ?? DEFAULT_CHUNK_TEXT_STORAGE,
-            metadata: srcCfg?.VectorMetadata ?? typeCfg?.VectorMetadata ?? undefined,
-            // Source only — deliberately NOT part of the ContentType cascade the other knobs use. The
-            // others describe HOW to store a vector, which a content type can sensibly default for every
-            // source that adopts it. This one asserts WHAT the vectors are, and it decides which entity's
-            // permissions search evaluates, so a type-level default would make that assertion on behalf of
-            // sources the type's author never saw — including ones storing their vectors at a different
-            // level, where the declaration would be wrong.
-            vectorEntityName: srcCfg?.VectorEntityName,
-        };
+        return ResolveContentVectorStorageConfig(
+            this.khEngine.GetContentSourceByID(item.ContentSourceID),
+            this.khEngine.GetContentTypeByID(item.ContentTypeID),
+        );
     }
 
     /**
@@ -3157,368 +2972,23 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         config: ResolvedVectorStorageConfig,
         contentItemEntity: EntityInfo | undefined
     ): Record<string, string | number | boolean | string[]> {
-        const item = chunk.item;
-        const metaCfg = config.metadata;
-        const strategy = metaCfg?.FieldStrategy;
-        const explicit = strategy === 'explicit';
-        const meta: Record<string, string | number | boolean | string[]> = {};
-
-        this.addContentSystemMetadata(meta, chunk, isItemLevel, explicit, config);
-
-        if (!strategy) {
-            this.addCuratedMetadata(meta, item);
-        } else {
-            const all = item.GetAll() as Record<string, unknown>;
-            this.addEntityIconMetadata(meta, contentItemEntity, metaCfg, explicit);
-            this.addUpdatedAtMetadata(meta, all, metaCfg, explicit);
-            // Display fields LAST so an explicitly-configured field (e.g. __mj_UpdatedAt with a
-            // StoreAs override) wins over the toggle-driven default value — matches the entity side.
-            this.addStrategyDisplayFields(meta, all, contentItemEntity, metaCfg);
-        }
-
-        this.addTagsMetadata(meta, tags, metaCfg, explicit);
-
-        // Optional embedded-text copy (surfaces as the search snippet). Off by default — external
-        // hydrators read the authoritative text from the row. Honored under every strategy.
-        if (metaCfg?.IncludeText && chunk.text) {
-            meta['Text'] = chunk.text.substring(0, DEFAULT_METADATA_TRUNCATION);
-        }
-
-        this.enforceAttributionKey(meta, chunk, explicit, config);
-        return meta;
-    }
-
-    /**
-     * Add the identity/system keys. `Entity` is present unless the source declares its vector entity
-     * and {@link canOmitEntityMetadataKey} allows dropping it, in which case `ContentSourceID` takes
-     * its place as the key search attributes through. Under 'explicit' the rest are omitted (minimal
-     * metadata); otherwise `RecordID` — plus `ContentItemID` / `Sequence` for chunk vectors — are
-     * included so an external hydrator can fetch the row(s).
-     */
-    private addContentSystemMetadata(
-        meta: Record<string, string | number | boolean | string[]>,
-        chunk: EmbeddingChunk,
-        isItemLevel: boolean,
-        explicit: boolean,
-        config: ResolvedVectorStorageConfig
-    ): void {
-        if (this.canOmitEntityMetadataKey(config, explicit)) {
-            // The invariant that makes omission safe, and the whole reason this is not just a deletion:
-            // a vector with no `Entity` key must still carry the key attribution resolves THROUGH, or the
-            // match reaches search with nothing to resolve and is discarded without being shown. Written
-            // unconditionally — a source configuring `ContentSourceID` in its own field list is applied
-            // later (display fields go last) and so still wins, StoreAs coercion included.
-            meta['ContentSourceID'] = chunk.item.ContentSourceID;
-            return;
-        }
-        meta['Entity'] = isItemLevel ? 'MJ: Content Items' : 'MJ: Content Item Chunks';
-        if (explicit) return;
-        if (isItemLevel) {
-            meta['RecordID'] = chunk.item.ID;
-        } else {
-            meta['RecordID'] = chunk.chunkID;
-            meta['ContentItemID'] = chunk.item.ID;
-            meta['Sequence'] = chunk.chunkIndex;
-        }
-    }
-
-    /**
-     * Last line of defence for the omission invariant: when `Entity` was dropped, the vector MUST leave
-     * here carrying a `ContentSourceID` search can actually resolve — a non-empty **string**.
-     *
-     * The promoted key is written before the strategy's own display fields, deliberately, so a source
-     * that configures `ContentSourceID` with its own rules wins. That is right for every coercion but
-     * one: `StoreAs: 'boolean'` assigns `Boolean(value)` unconditionally
-     * ({@link setCoercedFieldValue} — the numeric and epoch branches are guarded, that one is not), so
-     * the configured rule would replace the id with `true`. The reader requires a string
-     * (`typeof contentSourceID === 'string'`), so the match would arrive attributable-by-design and
-     * unattributable-in-fact — the silent drop this feature exists to prevent, reintroduced by a field
-     * rule that looks unrelated.
-     *
-     * So configured rules win up to the point where they would break attribution, and no further.
-     */
-    private enforceAttributionKey(
-        meta: Record<string, string | number | boolean | string[]>,
-        chunk: EmbeddingChunk,
-        explicit: boolean,
-        config: ResolvedVectorStorageConfig
-    ): void {
-        if (!this.canOmitEntityMetadataKey(config, explicit)) {
-            return;
-        }
-        const current = meta['ContentSourceID'];
-        if (typeof current === 'string' && current.trim().length > 0) {
-            return;
-        }
-        LogStatus(
-            `[Autotag] Content source ${chunk.item.ContentSourceID} configures ContentSourceID in a way ` +
-            `that leaves no resolvable value (${JSON.stringify(current)}), and its vectors omit the Entity ` +
-            `key — restoring the id so search can still attribute them. Remove the StoreAs override on ` +
-            `ContentSourceID, or set VectorEntityName aside and let Entity be written instead.`
-        );
-        meta['ContentSourceID'] = chunk.item.ContentSourceID;
-    }
-
-    /**
-     * Whether this source's vectors may omit the `Entity` metadata key and let search resolve the entity
-     * from the source's declaration instead of carrying it on every vector.
-     *
-     * Each condition closes a way attribution could otherwise fail, and attribution failure is not a
-     * cosmetic loss: a match search cannot name is discarded by the permission filter, not returned
-     * unlabelled.
-     *
-     * - **`explicit` only.** The other strategies document a populated metadata set; dropping a key their
-     *   consumers are told is always there would be a behavior change for them.
-     * - **A declaration must exist**, and must resolve to the chunk entity or a subtype of it — see
-     *   {@link declarationWillResolve}. Without one nothing downstream can answer what the vector is.
-     * - **`'alwaysChunk'` only.** One declaration names one entity, and `'mixed'` emits ContentItem-level
-     *   vectors for single-chunk items and ContentItemChunk-level vectors for the rest
-     *   ({@link isItemLevelVector}) — two entities out of one source, which a single declaration cannot
-     *   describe. Written as an allowlist so a storage mode added later keeps writing the key until
-     *   someone decides otherwise.
-     * - **`'recordId'` only.** Under `explicit` the `RecordID` key is dropped too, leaving the vector's own
-     *   id as the only pointer back to a row — which IS the chunk id under `'recordId'`, and a SHA-1 digest
-     *   under `'hash'` ({@link resolveChunkVectorID}). Omitting `Entity` under `'hash'` would attribute the
-     *   match successfully and then hand search an id that resolves against no row: the same silent
-     *   disappearance, one step further along.
-     *
-     * The level IS checked here (it was not, originally, and that was wrong — the reader validates
-     * family membership, which both content-item entities satisfy, so a chunk-level source declaring the
-     * item entity passed both sides and pointed search at a table holding none of its ids).
-     */
-    private canOmitEntityMetadataKey(config: ResolvedVectorStorageConfig, explicit: boolean): boolean {
-        // Trimmed, because the reader trims before deciding whether a declaration exists
-        // (`declaredVectorEntityName`). A whitespace-only value is truthy here and empty there, so the
-        // untrimmed test would omit the key against a declaration the reader then refuses.
-        const declared = config.vectorEntityName?.trim();
-        if (!explicit
-            || !declared
-            || config.chunkTextStorage !== 'alwaysChunk'
-            || config.vectorIDStrategy !== 'recordId') {
-            return false;
-        }
-        return this.declarationWillResolve(declared);
-    }
-
-    /** Declarations already reported as unresolvable, so the warning is once per run, not per vector. */
-    private readonly unresolvableDeclarations = new Set<string>();
-
-    /**
-     * Whether a declared entity name resolves in metadata — checked HERE, before the `Entity` key is
-     * dropped, and not left to the reader.
-     *
-     * This asymmetry is the difference between a recoverable mistake and an unrecoverable one. The
-     * reader refuses a name it cannot resolve and falls through to `'Unknown'`, at which point the
-     * results are silently discarded — but by then the vectors were written without `Entity`, so
-     * correcting the name does not bring them back. Only a full re-embed does. The likeliest way in is
-     * the most ordinary: a core entity written without its `MJ: ` prefix.
-     *
-     * Keeping the key when the name does not resolve costs one redundant metadata field and loses
-     * nothing. So this deliberately fails SAFE rather than fail-closed.
-     *
-     * It checks resolution only, not whether the entity is in the content-item family. That refusal is
-     * the reader's security decision to make (an arbitrary entity name in a writable blob must not
-     * choose which permissions apply), and it is not something the write side should be able to
-     * pre-approve.
-     */
-    private declarationWillResolve(declared: string): boolean {
-        const entity = this.ProviderToUse.EntityByName(declared);
-        if (!entity) {
-            this.refuseDeclarationOnce(
-                declared,
-                `does not resolve in metadata (core entities carry the \`MJ: \` prefix)`
-            );
-            return false;
-        }
-        // Level, not just family. Omission requires `alwaysChunk`, so every vector this gate governs is
-        // chunk-level and its id is a ContentItemChunk primary key. A declaration naming the ITEM entity
-        // — or a subtype of it, which is what the config docs steer you toward when row-level security
-        // lives on an extension — would therefore point search at a table containing none of these ids.
-        // The read side validates family membership only, so this is the only place the mismatch can be
-        // caught before the key is gone for good.
-        if (!this.isChunkLevelEntity(entity)) {
-            this.refuseDeclarationOnce(
-                declared,
-                `is not "${AutotagBaseEngine.CHUNK_ENTITY_NAME}" or a subtype of it, but this source stores ` +
-                `chunk-level vectors (ChunkTextStorage 'alwaysChunk'), so their ids are chunk keys`
-            );
-            return false;
-        }
-        return true;
-    }
-
-    /** The entity whose rows chunk-level vectors actually are. */
-    private static readonly CHUNK_ENTITY_NAME = 'MJ: Content Item Chunks';
-
-    /**
-     * Whether an entity IS-A {@link CHUNK_ENTITY_NAME} — itself, or a subtype somewhere up its IS-A
-     * chain, so a consumer may still declare an extension carrying its own row-level security.
-     *
-     * Walks `ParentID` through `this.ProviderToUse` rather than `EntityInfo.ParentChain`, which resolves
-     * each step against the process-global `Metadata.Provider` by design — mixing the two would resolve
-     * the declaration on one metadata set and walk its ancestry on another.
-     */
-    private isChunkLevelEntity(entity: EntityInfo): boolean {
-        const visited = new Set<string>();
-        let current: EntityInfo | undefined = entity;
-        while (current) {
-            if (current.Name === AutotagBaseEngine.CHUNK_ENTITY_NAME) {
-                return true;
-            }
-            if (!current.ParentID || visited.has(current.ID)) {
-                return false; // root reached, or a cycle in the metadata
-            }
-            visited.add(current.ID);
-            current = this.ProviderToUse.EntityByID(current.ParentID) ?? undefined;
-        }
-        return false;
-    }
-
-    /** Report a refused declaration once per run — this is evaluated per vector, so per-call would spam. */
-    private refuseDeclarationOnce(declared: string, because: string): void {
-        if (this.unresolvableDeclarations.has(declared)) {
-            return;
-        }
-        this.unresolvableDeclarations.add(declared);
-        LogStatus(
-            `[Autotag] Vector entity declaration "${declared}" ${because}. Keeping the \`Entity\` key ` +
-            `rather than omitting it — search would otherwise have no way to attribute these vectors, ` +
-            `and because the key would never have been written, correcting the configuration later would ` +
-            `not recover them without a re-embed.`
+        return this.vectorMetadataBuilder.Build(
+            { Item: chunk.item, IsItemLevel: isItemLevel, ChunkID: chunk.chunkID, ChunkIndex: chunk.chunkIndex, Text: chunk.text },
+            tags,
+            config,
+            contentItemEntity,
         );
     }
 
-    /** The curated default content metadata set (historical behavior when no FieldStrategy is set). */
-    private addCuratedMetadata(
-        meta: Record<string, string | number | boolean | string[]>,
-        item: MJContentItemEntity
-    ): void {
-        meta['ContentSourceID'] = item.ContentSourceID;
-        meta['ContentSourceTypeID'] = item.ContentSourceTypeID;
-        if (item.Name) meta['Title'] = item.Name.substring(0, DEFAULT_METADATA_TRUNCATION);
-        if (item.Description) meta['Description'] = item.Description.substring(0, DEFAULT_METADATA_TRUNCATION);
-        if (item.URL) meta['URL'] = item.URL;
-    }
-
-    /** Add the strategy-selected ContentItem fields, with per-field StoreAs coercion + truncation. */
-    private addStrategyDisplayFields(
-        meta: Record<string, string | number | boolean | string[]>,
-        all: Record<string, unknown>,
-        contentItemEntity: EntityInfo | undefined,
-        metaCfg: VectorMetadataConfig | undefined
-    ): void {
-        for (const field of this.getContentDisplayFields(contentItemEntity, metaCfg)) {
-            const value = all[field.Name];
-            if (value == null) continue;
-            this.setCoercedFieldValue(meta, field, value, metaCfg);
-        }
-    }
-
     /**
-     * Resolve which ContentItem fields go into metadata for the configured strategy. Mirrors the
-     * entity pipeline: 'include'/'explicit' take only fields explicitly marked Included (candidate
-     * set is the full field list; only unstorable binary types are refused); 'all'/'exclude' take
-     * the conservative eligible set (no PKs, uniqueidentifiers, binary, or __mj_* fields) minus any
-     * marked Included:false.
+     * The shared builder, one per engine so a refused vector-entity declaration is reported once
+     * rather than per vector. Bound to this engine's provider.
      */
-    private getContentDisplayFields(
-        entityInfo: EntityInfo | undefined,
-        metaCfg: VectorMetadataConfig | undefined
-    ): EntityFieldInfo[] {
-        if (!entityInfo) return [];
-        const strategy = metaCfg?.FieldStrategy;
-        const overrides = metaCfg?.Fields ?? {};
-
-        if (strategy === 'include' || strategy === 'explicit') {
-            return entityInfo.Fields.filter(f => {
-                if (overrides[f.Name]?.Included !== true) return false;
-                if (UNSTORABLE_METADATA_TYPES.has(f.Type.toLowerCase())) {
-                    LogError(`Field "${f.Name}" is a binary type (${f.Type}) and cannot be stored in vector metadata — ignoring its explicit inclusion`);
-                    return false;
-                }
-                return true;
-            });
-        }
-
-        const skip = new Set(['uniqueidentifier', ...UNSTORABLE_METADATA_TYPES]);
-        return entityInfo.Fields.filter(f =>
-            !f.IsPrimaryKey &&
-            !f.Name.startsWith('__mj_') &&
-            !skip.has(f.Type.toLowerCase()) &&
-            overrides[f.Name]?.Included !== false
-        );
+    private get vectorMetadataBuilder(): ContentVectorMetadataBuilder {
+        this._vectorMetadataBuilder ??= new ContentVectorMetadataBuilder(this.ProviderToUse);
+        return this._vectorMetadataBuilder;
     }
-
-    /** Store one field's value with its configured/typed coercion (epoch/number/boolean/UUID/string). */
-    private setCoercedFieldValue(
-        meta: Record<string, string | number | boolean | string[]>,
-        field: EntityFieldInfo,
-        value: unknown,
-        metaCfg: VectorMetadataConfig | undefined
-    ): void {
-        const storeAs = metaCfg?.Fields?.[field.Name]?.StoreAs;
-        const fieldType = field.Type?.toLowerCase() ?? '';
-
-        if (storeAs === 'epochSeconds' || storeAs === 'epochMilliseconds') {
-            const ms = new Date(String(value)).getTime();
-            if (!Number.isNaN(ms)) meta[field.Name] = storeAs === 'epochSeconds' ? Math.floor(ms / 1000) : ms;
-        } else if (storeAs === 'number' || (storeAs == null && NUMERIC_SQL_TYPES.has(fieldType))) {
-            const n = Number(value);
-            if (!Number.isNaN(n)) meta[field.Name] = n;
-        } else if (storeAs === 'boolean') {
-            meta[field.Name] = Boolean(value);
-        } else if (fieldType === 'uniqueidentifier' && typeof value === 'string' && IsValidUUID(value)) {
-            meta[field.Name] = NormalizeUUID(value);
-        } else {
-            meta[field.Name] = String(value).substring(0, this.resolveMetadataTruncationLimit(field, metaCfg));
-        }
-    }
-
-    /** Per-field truncation: explicit override → field MaxLength (if small) → global default. */
-    private resolveMetadataTruncationLimit(field: EntityFieldInfo, metaCfg: VectorMetadataConfig | undefined): number {
-        const fieldCfg = metaCfg?.Fields?.[field.Name];
-        if (fieldCfg?.TruncationLimit != null && fieldCfg.TruncationLimit > 0) return fieldCfg.TruncationLimit;
-        if (field.MaxLength && field.MaxLength > 0 && field.MaxLength <= 5000) return field.MaxLength;
-        return metaCfg?.DefaultTruncationLimit ?? DEFAULT_METADATA_TRUNCATION;
-    }
-
-    /** Add the content entity's icon: default on under a set strategy, opt-in under 'explicit'. */
-    private addEntityIconMetadata(
-        meta: Record<string, string | number | boolean | string[]>,
-        entityInfo: EntityInfo | undefined,
-        metaCfg: VectorMetadataConfig | undefined,
-        explicit: boolean
-    ): void {
-        const include = explicit ? metaCfg?.IncludeEntityIcon === true : metaCfg?.IncludeEntityIcon !== false;
-        if (entityInfo?.Icon && include) meta['EntityIcon'] = entityInfo.Icon;
-    }
-
-    /** Add __mj_UpdatedAt for recency: default on under a set strategy, opt-in under 'explicit'. */
-    private addUpdatedAtMetadata(
-        meta: Record<string, string | number | boolean | string[]>,
-        all: Record<string, unknown>,
-        metaCfg: VectorMetadataConfig | undefined,
-        explicit: boolean
-    ): void {
-        const include = explicit ? metaCfg?.IncludeUpdatedAt === true : metaCfg?.IncludeUpdatedAt !== false;
-        if (all['__mj_UpdatedAt'] && include) meta['__mj_UpdatedAt'] = String(all['__mj_UpdatedAt']);
-    }
-
-    /**
-     * Add the item's Tags array. Tags aren't a ContentItem field (they're derived), so they're a
-     * toggle like icon/updatedAt: on by default (and under the curated default), opt-in under
-     * 'explicit'.
-     */
-    private addTagsMetadata(
-        meta: Record<string, string | number | boolean | string[]>,
-        tags: string[] | undefined,
-        metaCfg: VectorMetadataConfig | undefined,
-        explicit: boolean
-    ): void {
-        if (!tags || tags.length === 0) return;
-        const include = explicit ? metaCfg?.IncludeTags === true : metaCfg?.IncludeTags !== false;
-        if (include) meta['Tags'] = tags;
-    }
+    private _vectorMetadataBuilder?: ContentVectorMetadataBuilder;
 
     /** Load all tags for the given items in a single RunView call */
     private async loadTagsForItems(

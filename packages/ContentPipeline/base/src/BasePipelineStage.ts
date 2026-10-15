@@ -95,6 +95,18 @@ export abstract class BasePipelineStage {
         return 'Complete';
     }
 
+    /**
+     * The value {@link StatusField} takes when this stage ends Skipped or finally Failed, or `null`
+     * to leave the column as it is.
+     *
+     * Same reasoning as {@link CompleteStatus}: the vocabulary belongs to the column. `DeleteStatus`
+     * admits only Pending and Deleted, so a delete that could not finish has no value to record —
+     * it stays Pending, which is also what lets a later run, with the cause fixed, finish the job.
+     */
+    public StatusForOutcome(outcome: 'Skipped' | 'Failed'): string | null {
+        return outcome;
+    }
+
     /** What this stage reads and writes. Defaults to declaring nothing. */
     public get Declaration(): StageDeclaration {
         return { Reads: [], Writes: [], ReadsExtensions: [], WritesExtensions: [] };

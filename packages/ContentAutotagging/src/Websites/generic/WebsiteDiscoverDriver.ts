@@ -13,7 +13,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { HttpGet } from '@memberjunction/network-utils';
+import { HttpGet, SafeFetch } from '@memberjunction/network-utils';
 import {
     AccessArtifact,
     BaseDiscoverDriver,
@@ -101,13 +101,48 @@ export class WebsiteDiscoverDriver extends BaseDiscoverDriver {
             if (request.Signal.aborted) {
                 return;
             }
-            // No checksum: a crawl knows a page exists, not what it contains. Extract computes one
-            // from the text it fetches, which is the first point anything cheap is available.
-            yield { URL: link };
+            // A crawl knows a page exists, not what it holds. The server's own validators — ETag,
+            // Last-Modified, Content-Length — are the cheapest honest change signal there is, so
+            // each page gets one HEAD request. Without a checksum an existing page is treated as
+            // unchanged, which is right for a server that offers no validators and wrong only there.
+            const checksum = request.Parameters.SkipValidatorChecksum === 'true'
+                ? undefined
+                : await this.validatorChecksum(link, request);
+            yield { URL: link, ...(checksum ? { Checksum: checksum } : {}) };
             found++;
             if (found % 25 === 0) {
                 request.ReportProgress(`crawled ${found} page(s)`);
             }
+        }
+    }
+
+    /**
+     * A checksum from the page's HTTP validators, or undefined when the server offers none.
+     *
+     * Best-effort: a page whose HEAD fails is still discovered, just without a change signal. The
+     * session goes only to the source's own origin, and not across a redirect elsewhere.
+     */
+    private async validatorChecksum(url: string, request: DiscoverRequest): Promise<string | undefined> {
+        try {
+            const sameOrigin = new URL(url).origin === new URL(request.URL).origin;
+            const response = await SafeFetch(url, {
+                method: 'HEAD',
+                signal: request.Signal,
+                ...(sameOrigin && request.Access?.Headers ? { headers: { ...request.Access.Headers } } : {}),
+                StripHeadersOnCrossOriginRedirect: true,
+            });
+            if (!response.ok) {
+                return undefined;
+            }
+            const etag = response.headers.get('etag');
+            if (etag) {
+                return `etag:${etag}`;
+            }
+            const modified = response.headers.get('last-modified');
+            const length = response.headers.get('content-length');
+            return modified ? `modified:${modified}|${length ?? ''}` : undefined;
+        } catch {
+            return undefined;
         }
     }
 }

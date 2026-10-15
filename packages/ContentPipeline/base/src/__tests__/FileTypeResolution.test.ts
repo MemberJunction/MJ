@@ -99,3 +99,23 @@ describe('IsPlausibleText — the fallback sanity check', () => {
         expect(IsPlausibleText('café — naïve — 日本語')).toBe(true);
     });
 });
+
+describe("the source's default file type", () => {
+    it('loses to the item\'s own extension — a source set to "HTML" holds the odd .xlsx', () => {
+        expect(ResolveFileType({ SourceDefault: 'html', FileName: 'https://x.test/q3.xlsx' })).toEqual({
+            FileType: 'xlsx',
+            Evidence: 'Extension',
+        });
+    });
+
+    it('loses to a byte signature', () => {
+        expect(ResolveFileType({ SourceDefault: 'html', Signature: 'pdf' }).FileType).toBe('pdf');
+    });
+
+    it('answers only when nothing about the item itself said anything', () => {
+        expect(ResolveFileType({ SourceDefault: 'HTML', FileName: 'https://x.test/page' })).toEqual({
+            FileType: 'html',
+            Evidence: 'SourceDefault',
+        });
+    });
+});

@@ -34,12 +34,30 @@ export interface PipelineTuning {
      * tagging and embedding rather than in the read itself.
      */
     MaxBlockCharacters?: number;
+    /**
+     * How many members an archive may unpack into. No default: an archive is untrusted input, so
+     * an archive is refused rather than unpacked without a limit. Shipped on the Extract Record
+     * Processes; a source can override it with a `MaxArchiveMembers` setting.
+     */
+    MaxArchiveMembers?: number;
+    /**
+     * How many bytes an archive may expand to, in total. No default, for the same reason as
+     * {@link MaxArchiveMembers}; a source overrides it with a `MaxArchiveBytes` setting.
+     */
+    MaxArchiveBytes?: number;
 }
 
-/** The defaults every knob falls back to. */
-export const DefaultPipelineTuning: Required<Omit<PipelineTuning, 'MaxBlockCharacters'>> & {
+/** A run's tuning, resolved: every knob with a default has a value, the rest are null when unset. */
+export type ResolvedPipelineTuning = Required<
+    Omit<PipelineTuning, 'MaxBlockCharacters' | 'MaxArchiveMembers' | 'MaxArchiveBytes'>
+> & {
     MaxBlockCharacters: number | null;
-} = {
+    MaxArchiveMembers: number | null;
+    MaxArchiveBytes: number | null;
+};
+
+/** The defaults the knobs that have one fall back to. The archive limits deliberately have none. */
+export const DefaultPipelineTuning: Omit<ResolvedPipelineTuning, 'MaxArchiveMembers' | 'MaxArchiveBytes'> = {
     ProgressEveryItems: 25,
     MinimumPrintableRatio: 0.85,
     MaxBlockCharacters: null,
@@ -51,14 +69,14 @@ export const DefaultPipelineTuning: Required<Omit<PipelineTuning, 'MaxBlockChara
  * Invalid values fall back rather than throwing: a typo in configuration should not take a run down,
  * and the default is always a sane number.
  */
-export function ResolveTuning(configuration: Readonly<Record<string, unknown>> | undefined): Required<
-    Omit<PipelineTuning, 'MaxBlockCharacters'>
-> & { MaxBlockCharacters: number | null } {
+export function ResolveTuning(configuration: Readonly<Record<string, unknown>> | undefined): ResolvedPipelineTuning {
     const raw = (configuration?.Tuning ?? {}) as PipelineTuning;
     return {
         ProgressEveryItems: positiveInteger(raw.ProgressEveryItems, DefaultPipelineTuning.ProgressEveryItems),
         MinimumPrintableRatio: ratio(raw.MinimumPrintableRatio, DefaultPipelineTuning.MinimumPrintableRatio),
         MaxBlockCharacters: positiveIntegerOrNull(raw.MaxBlockCharacters),
+        MaxArchiveMembers: positiveIntegerOrNull(raw.MaxArchiveMembers),
+        MaxArchiveBytes: positiveIntegerOrNull(raw.MaxArchiveBytes),
     };
 }
 

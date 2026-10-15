@@ -18,7 +18,8 @@ import '../stages/index.js';
 function contextWith(configuration: Record<string, unknown> = {}): StageContext {
     return {
         ContextUser: {} as never,
-        Provider: {} as never,
+        // No entity metadata: a chunk whose references cannot be checked is kept as a tombstone.
+        Provider: { EntityByName: () => undefined } as never,
         Configuration: configuration,
         IsTest: false,
         Scope: 'Filter',
@@ -76,7 +77,7 @@ describe('every other stage skips a pending-delete record', () => {
         Committer: () =>
             ({ Commit: async () => ({ RecordID: 'C1', ColumnsWritten: [], Created: false }) }) as unknown as WorkingRecordCommitter,
     });
-    const rsContext = { contextUser: {}, provider: {} } as never;
+    const rsContext = { contextUser: {}, provider: { EntityByName: () => undefined } } as never;
     const ref = { EntityID: 'E1', RecordID: 'C1' } as never;
 
     it('skips a record marked pending delete', async () => {
@@ -108,5 +109,38 @@ describe('every other stage skips a pending-delete record', () => {
         );
         const result = await processor.ProcessRecord(ref, rsContext);
         expect(result.Status).toBe('Succeeded');
+    });
+});
+
+describe('what is left behind once the vector is gone', () => {
+    const referencedBy = (count: number | null) =>
+        ({
+            EntityByName: () => ({
+                RelatedEntities: [{ RelatedEntity: 'Usage Log', RelatedEntityJoinField: 'ContentItemChunkID' }],
+            }),
+            RunView: async () => ({ Success: count !== null, Results: [], TotalRowCount: count ?? 0 }),
+        }) as never;
+
+    const internals = (stage: DeleteStage) =>
+        stage as unknown as { isReferenced(id: string, context: StageContext): Promise<boolean> };
+
+    it('keeps a chunk something references, so usage history still points at real text', async () => {
+        const context = { ...contextWith(), Provider: referencedBy(2) };
+        expect(await internals(new DeleteStage()).isReferenced('C1', context)).toBe(true);
+    });
+
+    it('lets an unreferenced chunk go', async () => {
+        const context = { ...contextWith(), Provider: referencedBy(0) };
+        expect(await internals(new DeleteStage()).isReferenced('C1', context)).toBe(false);
+    });
+
+    it('counts a failed check as referenced — losing history is worse than keeping a row', async () => {
+        const context = { ...contextWith(), Provider: referencedBy(null) };
+        expect(await internals(new DeleteStage()).isReferenced('C1', context)).toBe(true);
+    });
+
+    it("leaves a delete that could not finish Pending: neither Skipped nor Failed is in DeleteStatus's vocabulary", () => {
+        expect(new DeleteStage().StatusForOutcome('Skipped')).toBeNull();
+        expect(new DeleteStage().StatusForOutcome('Failed')).toBeNull();
     });
 });

@@ -46,7 +46,11 @@
       "Configuration": {
         "Stages": [
           "Extract"
-        ]
+        ],
+        "Tuning": {
+          "MaxArchiveMembers": 10000,
+          "MaxArchiveBytes": 536870912
+        }
       }
     },
     "primaryKey": {
@@ -84,7 +88,7 @@
     "entity": "MJ: Record Processes",
     "fields": {
       "Name": "Content Pipeline \u2014 Segment",
-      "Description": "Splits each pending Content Item's text into Content Item Chunks using the segmenter its source or content type names. A re-segmentation that yields fewer chunks marks the leftovers for deletion rather than leaving them searchable.",
+      "Description": "Splits each pending Content Item's text into Content Item Chunks using the segmenter its source or content type names. A re-segmentation mints a fresh set of chunks and marks the previous set for deletion, so a chunk always means the text it was created with.",
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",
       "Status": "Active",
       "WorkType": "Pipeline Stage",
@@ -138,7 +142,7 @@
     "entity": "MJ: Record Processes",
     "fields": {
       "Name": "Content Pipeline \u2014 Delete",
-      "Description": "Removes everything a Content Item marked for deletion produced \u2014 its vector, its kept bytes \u2014 then marks its chunks and expanded children so each goes through this same stage in turn. A record whose removal could not be attempted stays Pending rather than being marked Deleted.",
+      "Description": "Removes everything a Content Item marked for deletion produced \u2014 its vector, its kept bytes \u2014 then marks its chunks and expanded children for removal. Its chunks are removed by the Delete Chunks process, its child items by this one in turn. A record whose removal could not be attempted stays Pending rather than being marked Deleted.",
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",
       "Status": "Active",
       "WorkType": "Pipeline Stage",
@@ -164,6 +168,33 @@
   {
     "entity": "MJ: Record Processes",
     "fields": {
+      "Name": "Content Pipeline \u2014 Delete Chunks",
+      "Description": "Removes the vector of each Content Item Chunk marked for deletion \u2014 a deleted item's chunks, and the chunks a re-segmentation replaced. A chunk nothing references is then removed outright; one that something references (usage history, a citation) is kept as a tombstone so that history still points at real text.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Item Chunks",
+      "Status": "Active",
+      "WorkType": "Pipeline Stage",
+      "ScopeType": "Filter",
+      "ScopeFilter": "DeleteStatus = 'Pending'",
+      "OnChangeEnabled": false,
+      "ScheduleEnabled": false,
+      "OnDemandEnabled": true,
+      "SkipUnchanged": false,
+      "WatermarkStrategy": "Checksum",
+      "BatchSize": 50,
+      "MaxConcurrency": 1,
+      "Configuration": {
+        "Stages": [
+          "Delete"
+        ]
+      }
+    },
+    "primaryKey": {
+      "ID": "3A7E3C40-89A1-4D0D-8FF1-EF7C53EAE00E"
+    }
+  },
+  {
+    "entity": "MJ: Record Processes",
+    "fields": {
       "Name": "Content Pipeline \u2014 Test (Discover then Extract)",
       "Description": "A chained dry run over a single source: walks it, then extracts what the walk produced, and commits nothing. The produced items exist only in memory, which is what makes this a test of the chain rather than of two stages that happen to have run.",
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Sources",
@@ -183,7 +214,11 @@
           "Extract"
         ],
         "IsTest": true,
-        "StageBudgetMs": 60000
+        "StageBudgetMs": 60000,
+        "Tuning": {
+          "MaxArchiveMembers": 10000,
+          "MaxArchiveBytes": 536870912
+        }
       }
     },
     "primaryKey": {

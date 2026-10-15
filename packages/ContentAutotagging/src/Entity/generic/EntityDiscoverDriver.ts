@@ -16,9 +16,18 @@
  * @module @memberjunction/content-autotagging
  */
 
-import { RegisterClass } from '@memberjunction/global';
-import { CompositeKey, RunView } from '@memberjunction/core';
-import { BaseDiscoverDriver, DiscoverRequest, DiscoveredItem } from '@memberjunction/content-pipeline-base';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { BaseEntity, CompositeKey, FieldValueCollection, RunView } from '@memberjunction/core';
+import { KnowledgeHubMetadataEngine, MJEntityDocumentEntity } from '@memberjunction/core-entities';
+import { EntityDocumentTemplateParser } from '@memberjunction/entity-documents';
+import { TemplateEngineServer } from '@memberjunction/templates';
+import {
+    BaseDiscoverDriver,
+    DiscoverRequest,
+    DiscoveredItem,
+    LocatorFetchRequest,
+    LocatorFetchResponse,
+} from '@memberjunction/content-pipeline-base';
 
 /** How many rows to read per round trip. */
 const PageSize = 500;
@@ -76,5 +85,65 @@ export class EntityDiscoverDriver extends BaseDiscoverDriver {
             page++;
             request.ReportProgress(`read ${page * PageSize} record(s)`);
         }
+    }
+
+    /**
+     * Render one record as text, through the source's Entity Document template.
+     *
+     * The locator is a record id — there is nothing at it to fetch. What an Entity source's content
+     * IS is the record as its Entity Document renders it, which is what the autotagger embeds too, so
+     * both read the same text for the same row.
+     */
+    public async Fetch(request: LocatorFetchRequest): Promise<LocatorFetchResponse> {
+        const knowledge = KnowledgeHubMetadataEngine.Instance;
+        await knowledge.Config(false, request.ContextUser, request.Provider);
+        const source = knowledge.GetContentSourceByID(request.ContentSourceID);
+        const entityID = request.Parameters.EntityID ?? source?.EntityID ?? (request.Configuration.EntityID as string | undefined);
+        const documentID = source?.EntityDocumentID;
+        if (!entityID || !documentID) {
+            throw new Error('This Entity source names no entity or no Entity Document, so its records cannot be rendered');
+        }
+        const entityInfo = request.Provider.EntityByID(entityID);
+        if (!entityInfo) {
+            throw new Error(`Entity '${entityID}' is not in metadata`);
+        }
+
+        const record = await request.Provider.GetEntityObject<BaseEntity>(entityInfo.Name, request.ContextUser);
+        if (!(await record.InnerLoad(CompositeKey.FromURLSegment(entityInfo, request.URL)))) {
+            throw new Error(`${entityInfo.Name} record '${request.URL}' was not found`);
+        }
+
+        const template = await this.templateText(documentID, request);
+        const text = await EntityDocumentTemplateParser.CreateInstance().Parse(
+            template,
+            entityID,
+            record.GetAll() as Record<string, unknown>,
+            request.ContextUser,
+        );
+        return { Content: new TextEncoder().encode(text ?? ''), ContentType: 'text/plain', ResolvedURL: `${request.URL}.txt` };
+    }
+
+    /** The Entity Document's template text. */
+    private async templateText(documentID: string, request: LocatorFetchRequest): Promise<string> {
+        const documents = await RunView.FromMetadataProvider(request.Provider).RunView<MJEntityDocumentEntity>(
+            {
+                EntityName: 'MJ: Entity Documents',
+                ExtraFilter: FieldValueCollection.FromObject({ ID: documentID }).ToWhereClause(),
+                ResultType: 'entity_object',
+                MaxRows: 1,
+            },
+            request.ContextUser,
+        );
+        const templateID = documents.Success ? documents.Results[0]?.TemplateID : undefined;
+        if (!templateID) {
+            throw new Error(`Entity Document '${documentID}' has no template`);
+        }
+        await TemplateEngineServer.Instance.Config(false, request.ContextUser, request.Provider);
+        const template = TemplateEngineServer.Instance.Templates.find((t) => UUIDsEqual(t.ID, templateID));
+        const content = template?.Content[0]?.TemplateText;
+        if (!content) {
+            throw new Error(`Template '${templateID}' for Entity Document '${documentID}' has no content`);
+        }
+        return content;
     }
 }

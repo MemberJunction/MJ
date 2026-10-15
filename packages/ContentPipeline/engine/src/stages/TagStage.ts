@@ -8,11 +8,11 @@
  * @module @memberjunction/content-pipeline
  */
 
-import { CompositeKey, LogError, RunView } from '@memberjunction/core';
-import { EscapeSQLString } from '@memberjunction/global';
-import { AutotagBaseEngine } from '@memberjunction/content-autotagging';
+import { LogError, RunView } from '@memberjunction/core';
+
+import { ContentItemTagBridge } from '@memberjunction/tag-engine';
 import { MANAGED_PROMPT_CLASSIFIER } from '../ManagedPromptClassifier.js';
-import { MJContentItemTagEntity } from '@memberjunction/core-entities';
+import { MJContentItemChunkEntity, MJContentItemTagEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseContentClassifier,
@@ -27,6 +27,7 @@ import {
     WorkingRecord,
     WorkingRecordEntity,
 } from '@memberjunction/content-pipeline-base';
+import { WhereEqual } from '../Filters.js';
 
 /** The registered name. */
 export const TAG_STAGE = 'Tag';
@@ -68,6 +69,7 @@ export class TagStage extends BasePipelineStage {
                 Text: text,
                 Title: (record.Get('Title') as string | null) ?? null,
                 RecordID: record.Identity.RecordID,
+                ContentSourceID: record.GetExtension<string>('Pipeline', 'contentSourceID') ?? null,
                 Parameters: (context.Configuration.Parameters as Record<string, string>) ?? {},
                 ContextUser: context.ContextUser,
                 Provider: context.Provider,
@@ -92,39 +94,64 @@ export class TagStage extends BasePipelineStage {
             record.SetExtension(`${TAG_STAGE}.${classifier.Key}`, key, value);
         }
 
-        // The extension space alone is not a destination. Tags left there vanish when the run ends,
-        // which made a successful Tag stage a no-op: the record went Complete and nothing was
-        // tagged. MJ already has the table for this, so they are written to MJ: Content Item Tags.
-        const saved = await this.persistTags(record, result.Tags, context);
+        if (result.Tags.length === 0) {
+            // Nothing concluded is not "no tags apply". Replacing the item's tags with an empty set
+            // would wipe good tags every time a model call came back thin — so they are kept.
+            return Outcome.Skipped(`${classifier.Key} returned no tags; existing tags kept`);
+        }
+
+        // The extension space alone is not a destination: tags left there vanish when the run ends.
+        // MJ already has the table for this, so they are written to MJ: Content Item Tags.
+        const changes = await this.persistTags(record, result.Tags, context);
+        if (changes.Changed) {
+            // Tags ride in the vector's metadata. A record already embedded needs that metadata
+            // refreshed — but not a new vector, since its text did not change.
+            await this.flagMetadataRefresh(record, context);
+        }
 
         context.ReportProgress(`classified into ${result.Tags.length} tag(s)`);
-        return Outcome.Complete(`${saved} of ${result.Tags.length} tag(s) saved via ${classifier.Key}`);
+        return Outcome.Complete(
+            `${result.Tags.length} tag(s) via ${classifier.Key}: ${changes.Added} added, ${changes.Removed} removed`,
+        );
     }
 
     /**
-     * Write the classifier's tags to `MJ: Content Item Tags`.
+     * Make `MJ: Content Item Tags` match what the classifier just concluded.
      *
-     * Replace rather than append: a re-tagged item should end up with what the classifier just
-     * concluded, not that plus everything it ever concluded before. Existing rows are removed first,
-     * and a tag that fails to save is logged rather than failing the record — losing one tag is not
-     * worth re-running the model call that produced the other forty.
+     * A diff rather than delete-everything-then-insert: a tag that survives keeps its row (and its
+     * link into the taxonomy), and nothing is removed until the replacement set is known to be
+     * non-empty. A tag that fails to save is logged rather than failing the record — losing one tag
+     * is not worth re-running the model call that produced the rest.
      */
     private async persistTags(
         record: WorkingRecord,
         tags: readonly ClassifiedTag[],
         context: StageContext,
-    ): Promise<number> {
+    ): Promise<{ Changed: boolean; Added: number; Removed: number }> {
         const itemID = record.Identity.RecordID;
         if (!itemID || context.IsTest) {
-            // A test run computes everything and commits nothing; an uncommitted record has no id to
-            // hang tags from.
-            return 0;
+            // A test run computes everything and commits nothing.
+            return { Changed: false, Added: 0, Removed: 0 };
         }
 
-        await this.clearExistingTags(itemID, context);
-
-        let saved = 0;
+        const existing = await this.existingTags(itemID, context);
+        const wanted = new Map<string, ClassifiedTag>();
         for (const tag of tags) {
+            wanted.set(tag.Name.trim().toLowerCase(), tag);
+        }
+
+        let added = 0;
+        const bridge = new ContentItemTagBridge(context.Provider);
+        for (const [name, tag] of wanted) {
+            const kept = existing.get(name);
+            if (kept) {
+                const weight = this.weightOf(tag);
+                if (weight !== null && kept.Weight !== weight) {
+                    kept.Weight = weight;
+                    await kept.Save();
+                }
+                continue;
+            }
             const entity = await context.Provider.GetEntityObject<MJContentItemTagEntity>(
                 'MJ: Content Item Tags',
                 context.ContextUser,
@@ -132,12 +159,15 @@ export class TagStage extends BasePipelineStage {
             entity.NewRecord();
             entity.ItemID = itemID;
             entity.Tag = tag.Name;
-            if (typeof tag.Score === 'number') {
-                entity.Weight = Math.max(0, Math.min(1, tag.Score));
+            const weight = this.weightOf(tag);
+            if (weight !== null) {
+                entity.Weight = weight;
             }
             if (await entity.Save()) {
-                saved++;
-                await this.bridgeToTaxonomy(entity, context);
+                added++;
+                // Promote the keyword into the governed taxonomy — through the tag engine, the same
+                // bridge the autotagger uses, and with no dependency on the autotagger being loaded.
+                await bridge.Bridge(entity, tag.Parent ?? null, context.ContextUser);
             } else {
                 LogError(
                     `TagStage: could not save tag '${tag.Name}' for content item '${itemID}': ` +
@@ -145,59 +175,77 @@ export class TagStage extends BasePipelineStage {
                 );
             }
         }
-        return saved;
-    }
 
-    /**
-     * Remove the tags a previous classification left.
-     *
-     * Replace rather than append: a re-tagged item should end up with what the classifier just
-     * concluded, not that plus everything it ever concluded before.
-     */
-    private async clearExistingTags(itemID: string, context: StageContext): Promise<void> {
-        const rv = RunView.FromMetadataProvider(context.Provider);
-        const existing = await rv.RunView<{ ID: string }>(
-            { EntityName: 'MJ: Content Item Tags', ExtraFilter: `ItemID='${EscapeSQLString(itemID)}'` },
-            context.ContextUser,
-        );
-        if (!existing.Success) {
-            return;
-        }
-        for (const row of existing.Results) {
-            const entity = await context.Provider.GetEntityObject<MJContentItemTagEntity>(
-                'MJ: Content Item Tags',
-                context.ContextUser,
-            );
-            if (await entity.InnerLoad(CompositeKey.FromID(row.ID))) { // first-pk-ok: MJ core content entity, single-column ID
-                await entity.Delete();
+        let removed = 0;
+        for (const [name, row] of existing) {
+            if (!wanted.has(name) && (await row.Delete())) {
+                removed++;
             }
         }
+        return { Changed: added > 0 || removed > 0, Added: added, Removed: removed };
+    }
+
+    /** The item's current tags, by normalized name. */
+    private async existingTags(itemID: string, context: StageContext): Promise<Map<string, MJContentItemTagEntity>> {
+        const rv = RunView.FromMetadataProvider(context.Provider);
+        const result = await rv.RunView<MJContentItemTagEntity>(
+            {
+                EntityName: 'MJ: Content Item Tags',
+                ExtraFilter: WhereEqual({ ItemID: itemID }),
+                ResultType: 'entity_object',
+            },
+            context.ContextUser,
+        );
+        if (!result.Success) {
+            // Without knowing what is there, a diff would delete nothing and duplicate everything.
+            throw new TransientStageError(`Reading the existing tags for '${itemID}' failed: ${result.ErrorMessage}`);
+        }
+        const byName = new Map<string, MJContentItemTagEntity>();
+        for (const row of result.Results) {
+            byName.set(row.Tag.trim().toLowerCase(), row);
+        }
+        return byName;
+    }
+
+    private weightOf(tag: ClassifiedTag): number | null {
+        return typeof tag.Score === 'number' ? Math.max(0, Math.min(1, tag.Score)) : null;
     }
 
     /**
-     * Hand a saved tag to the taxonomy bridge.
+     * Ask Embed to refresh the stored metadata of everything already embedded for this item.
      *
-     * Writing the `MJ: Content Item Tags` row is only half of tagging: the other half is promoting
-     * the keyword into a governed `MJ: Tags` row and linking the item to it, with whatever auto-grow
-     * rules the deployment set. That bridge already exists on the autotagging engine, so it is
-     * reused rather than reimplemented — a second implementation would be a second set of governance
-     * rules, which is exactly the outcome governance exists to prevent.
-     *
-     * Best-effort: a tag that could not be promoted is still a tag that was saved, and failing the
-     * record would throw away the rest of the classification over taxonomy bookkeeping.
+     * `MetadataOnly` is set only where embedding is `Complete`: a record still Pending will be
+     * embedded with the new tags anyway, and one that Failed has no vector to update. The item's own
+     * status rides on its commit; its chunks are written here, since nothing else visits them.
      */
-    private async bridgeToTaxonomy(tag: MJContentItemTagEntity, context: StageContext): Promise<void> {
-        const bridge = AutotagBaseEngine.Instance?.OnContentItemTagSaved;
-        if (!bridge) {
+    private async flagMetadataRefresh(record: WorkingRecord, context: StageContext): Promise<void> {
+        if (record.GetExtension<string>('Pipeline', 'embeddingStatus') === 'Complete') {
+            record.SetExtension('Pipeline', 'columns', {
+                ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
+                EmbeddingStatus: 'MetadataOnly',
+            });
+        }
+        const itemID = record.Identity.RecordID;
+        if (!itemID) {
             return;
         }
-        try {
-            await bridge(tag, null, context.ContextUser);
-        } catch (error) {
-            LogError(
-                `TagStage: the taxonomy bridge failed for '${tag.Tag}': ` +
-                    `${error instanceof Error ? error.message : String(error)}`,
-            );
+        const chunks = await RunView.FromMetadataProvider(context.Provider).RunView<MJContentItemChunkEntity>(
+            {
+                EntityName: 'MJ: Content Item Chunks',
+                ExtraFilter: WhereEqual({ ContentItemID: itemID, EmbeddingStatus: 'Complete', DeleteStatus: null }),
+                ResultType: 'entity_object',
+            },
+            context.ContextUser,
+        );
+        if (!chunks.Success) {
+            LogError(`TagStage: could not flag the chunks of '${itemID}' for a metadata refresh: ${chunks.ErrorMessage}`);
+            return;
+        }
+        for (const chunk of chunks.Results) {
+            chunk.EmbeddingStatus = 'MetadataOnly';
+            if (!(await chunk.Save())) {
+                LogError(`TagStage: could not flag chunk '${chunk.ID}' for a metadata refresh`);
+            }
         }
     }
 

@@ -96,6 +96,38 @@ export interface DiscoverRequest {
     ReportProgress(message: string): void;
 }
 
+/** What a driver is asked to read back: one locator it produced. */
+export interface LocatorFetchRequest {
+    /** The locator the driver yielded as the item's URL — a path, an object key, a record id. */
+    URL: string;
+    /** The Content Source's primary key. */
+    ContentSourceID: string;
+    /** The source's URL column — for a file source, the root its locators must stay inside. */
+    SourceURL: string;
+    /** `Configuration.SourceSpecificConfiguration`, flattened, as for {@link DiscoverRequest}. */
+    Parameters: Readonly<Record<string, string>>;
+    /** The source's full parsed `Configuration`. */
+    Configuration: Readonly<Record<string, unknown>>;
+    /** The open session, when this source needs one. */
+    Access?: AccessArtifact | null;
+    /** The acting user. */
+    ContextUser: UserInfo;
+    /** The provider to read through. */
+    Provider: IMetadataProvider;
+    /** Fires when the run is asked to stop. */
+    Signal: AbortSignal;
+}
+
+/** The bytes behind a locator. */
+export interface LocatorFetchResponse {
+    /** The bytes. */
+    Content: Uint8Array;
+    /** What the store said the bytes are, when it said. A weak signal, not a declaration. */
+    ContentType?: string;
+    /** A name to resolve a file type from — the path or object key. */
+    ResolvedURL?: string;
+}
+
 /**
  * A registered way of finding out what exists at a source.
  *
@@ -125,6 +157,16 @@ export abstract class BaseDiscoverDriver {
      * concerns beyond honouring `Signal`.
      */
     public abstract Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem>;
+
+    /**
+     * Read the bytes behind a locator this driver produced.
+     *
+     * The driver that minted an identifier is the one that knows how to dereference it: a disk path,
+     * an object key in a storage account, a record id rendered through a template. Extract asks the
+     * source's driver first and falls back to HTTP only when the driver does not implement this —
+     * so a driver whose locators are http(s) URLs need not.
+     */
+    public Fetch?(request: LocatorFetchRequest): Promise<LocatorFetchResponse>;
 
     /** Resolve a registered driver by key, returning null rather than a hollow base instance. */
     public static Resolve(key: string): BaseDiscoverDriver | null {

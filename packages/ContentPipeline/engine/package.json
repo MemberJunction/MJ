@@ -34,7 +34,8 @@
     "@memberjunction/record-set-processor": "6.2.0-edge.3",
     "@memberjunction/record-set-processor-base": "6.2.0-edge.3",
     "@memberjunction/storage": "6.2.0-edge.3",
-    "@memberjunction/tag-engine": "6.2.0-edge.3"
+    "@memberjunction/tag-engine": "6.2.0-edge.3",
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

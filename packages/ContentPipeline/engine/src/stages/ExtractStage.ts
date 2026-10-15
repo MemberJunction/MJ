@@ -12,11 +12,12 @@
  */
 
 import { CompositeKey, LogError, LogStatus } from '@memberjunction/core';
-import { MJFileEntity } from '@memberjunction/core-entities';
+import { KnowledgeHubMetadataEngine, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
-import { DetectionCatalog } from '../DetectionCatalog.js';
+import { DetectionCatalog, DetectionRules } from '../DetectionCatalog.js';
 import { RegisterClass } from '@memberjunction/global';
 import {
+    BaseDiscoverDriver,
     BasePipelineStage,
     ClassifyUnresolved,
     CheckContentTypeSignatures,
@@ -96,11 +97,18 @@ export class ExtractStage extends BasePipelineStage {
         const confidence = ResolveConfidence(context.Configuration);
         const rules = await this.detection(context).Rules();
         const signature = DetectByteSignature(fetched.Content, rules.Signatures);
+        // A FileType is only a declaration when something said it about THIS item — a discover
+        // driver reading the listing, a splitting extractor naming its member. One with no recorded
+        // confidence was inherited from the source's default when the row was created, and a source
+        // set to "HTML" holds the odd .txt or .xlsx: that must not outrank the item's own extension.
+        const storedFileType = record.Get('FileType') as string | null;
+        const declared = record.GetConfidence('FileType') > 0;
         const fileType = ResolveFileType({
-            Declared: record.Get('FileType') as string | null,
+            Declared: declared ? storedFileType : null,
             Signature: signature?.FileType ?? null,
             SignatureIsUnambiguous: signature?.Unambiguous ?? false,
             FileName: fetched.ResolvedURL ?? url,
+            SourceDefault: declared ? null : storedFileType,
         });
         if (fileType.FileType) {
             record.Propose(
@@ -123,12 +131,22 @@ export class ExtractStage extends BasePipelineStage {
             record.Propose('ContentType', match.ContentType, match.Confidence, `${EXTRACT_STAGE}.Signature`);
         }
 
-        const strategy = ClassifyUnresolved(fileType.FileType);
+        // Metadata's word on what is text outranks the built-in lists.
+        const strategy = ClassifyUnresolved(fileType.FileType, rules);
         if (strategy === 'MultiModal') {
             return this.handleNonText(record, fileType.FileType as string, resolved, fetched.Content, fetched.ContentType, context, confidence);
         }
 
-        return this.read(record, context, fetched.Content, fileType.FileType ?? '', url, resolved, confidence);
+        return this.read(
+            record,
+            context,
+            fetched.Content,
+            fileType.FileType ?? '',
+            url,
+            resolved,
+            confidence,
+            rules.ExtractorByFileType.get(fileType.FileType ?? '') ?? null,
+        );
     }
 
     /**
@@ -171,25 +189,44 @@ export class ExtractStage extends BasePipelineStage {
     }
     private _detection?: DetectionCatalog;
 
-    /** Fetch, distinguishing a transport failure that might recover from one that will not. */
-    private async fetch(url: string, resolved: ResolvedSource, context: StageContext) {
+    /**
+     * Fetch, distinguishing a transport failure that might recover from one that will not.
+     *
+     * The source's own discover driver is asked first: it minted the locator, so it knows what one
+     * is — a disk path, an object key in a storage account, a record id. Only a driver that does not
+     * read its own locators falls through to HTTP, which is the only thing a plain URL fetch can do.
+     */
+    private async fetch(url: string, resolved: ResolvedSource, context: StageContext): Promise<FetchedBytes> {
         try {
-            // Access opens the session; the fetcher moves the bytes. A source that needs no session
-            // gets null and the fetch is exactly what it always was.
-            // No resolved source means no source configuration, so there is nothing to open a
-            // session against — the fetch is the plain one it has always been.
+            // Access opens the session; the fetcher moves the bytes. No resolved source means no
+            // source configuration, so there is nothing to open a session against.
             const access = resolved.Resolved ? await context.ResolveAccess(resolved.ContentSourceID) : null;
+            const driver = resolved.Resolved?.DriverClass ? BaseDiscoverDriver.Resolve(resolved.Resolved.DriverClass) : null;
+            if (driver?.Fetch) {
+                return await driver.Fetch({
+                    URL: url,
+                    ContentSourceID: resolved.ContentSourceID,
+                    SourceURL: resolved.Resolved?.URL ?? '',
+                    Parameters: resolved.Parameters,
+                    Configuration: resolved.Resolved?.Configuration ?? {},
+                    Access: access,
+                    ContextUser: context.ContextUser,
+                    Provider: context.Provider,
+                    Signal: context.Signal,
+                });
+            }
             return await ContentFetcher.Resolve().Fetch({
                 URL: url,
                 ContentSourceID: resolved.ContentSourceID,
+                SourceURL: resolved.Resolved?.URL,
                 Parameters: resolved.Parameters,
                 Access: access ?? undefined,
                 Signal: context.Signal,
             });
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            // A 4xx will never succeed; anything else might, so it is worth another attempt.
-            if (/HTTP 4\d\d/.test(message)) {
+            // A 4xx will never succeed, nor will a locator outside its source; anything else might.
+            if (/HTTP 4\d\d|outside|not found|does not exist|ENOENT/i.test(message)) {
                 throw new FatalStageError(`Cannot fetch '${url}': ${message}`);
             }
             throw new TransientStageError(`Fetching '${url}' failed: ${message}`, { cause: error });
@@ -205,8 +242,9 @@ export class ExtractStage extends BasePipelineStage {
         url: string,
         resolved: ResolvedSource,
         confidence: ResolvedConfidenceScale,
+        fileTypeExtractorKey: string | null,
     ): Promise<StageOutcome> {
-        const selected = this.selectExtractor(record, fileType, resolved);
+        const selected = this.selectExtractor(record, fileType, resolved, fileTypeExtractorKey);
         if (!selected) {
             return this.plainTextFallback(record, content, fileType, context, confidence);
         }
@@ -216,6 +254,7 @@ export class ExtractStage extends BasePipelineStage {
             FileType: fileType,
             URL: url,
             Parameters: resolved.Parameters,
+            Tuning: ResolveTuning(context.Configuration),
             Signal: context.Signal,
             ReportProgress: (m) => context.ReportProgress(m),
         });
@@ -223,12 +262,8 @@ export class ExtractStage extends BasePipelineStage {
             return Outcome.Skipped(`${selected.Key} found no content in this ${fileType || 'file'}`);
         }
 
-        record.SetExtension(EXTRACT_STAGE, 'extractorKey', selected.Key);
         // The receipt of what actually ran, so a misrouted item can be found and corrected later.
-        record.SetExtension('Pipeline', 'columns', {
-            ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
-            ExtractorKey: selected.Key,
-        });
+        this.recordExtractor(record, selected.Key);
         record.SetExtension(EXTRACT_STAGE, 'isFallback', result.IsFallback === true);
 
         if (result.Blocks.length === 1) {
@@ -240,12 +275,14 @@ export class ExtractStage extends BasePipelineStage {
         // Several blocks: this artifact EXPANDED into other documents. Every block becomes a child
         // item and the container keeps its own identity — overwriting it with the first block's
         // content would lose the container and silently mislabel one of its members as the whole.
+        const rules = await this.detection(context).Rules();
         for (const block of result.Blocks) {
             const child = this.toChild(record, block, url, confidence);
-            // A member that is not text needs its bytes kept now, while they are in hand. Its URL
-            // points at the container, so nothing can fetch it again later.
             if (block.Content) {
-                await this.keepChildBytes(child, block.Content, resolved, context);
+                // A member handed back as bytes goes through Extract's own detection and cascade
+                // now, while the bytes are in hand: its URL points at the container, so nothing can
+                // fetch it again later.
+                await this.extractMember(child, block, resolved, context, confidence, rules);
             }
             record.AddChild(child);
         }
@@ -253,31 +290,139 @@ export class ExtractStage extends BasePipelineStage {
     }
 
     /**
+     * Read one expanded member, exactly as Extract reads any document.
+     *
+     * Ends in one of three places, and never in a child left Pending with no bytes behind it — that
+     * child's URL is the container's, so a later Extract would fetch the container and expand it
+     * again underneath its own member:
+     *   * text read now — the child is created Complete;
+     *   * bytes kept as an MJ File — the child is created Pending and read from them on its turn
+     *     (a non-text member for the multi-modal path, or one that itself expands, like a nested
+     *     archive or a workbook);
+     *   * neither possible — the child is recorded and marked complete with nothing to do.
+     */
+    private async extractMember(
+        child: WorkingRecord,
+        block: ContentBlock,
+        resolved: ResolvedSource,
+        context: StageContext,
+        confidence: ResolvedConfidenceScale,
+        rules: DetectionRules,
+    ): Promise<void> {
+        const bytes = block.Content!;
+        const signature = DetectByteSignature(bytes, rules.Signatures);
+        const fileType = ResolveFileType({
+            Declared: null,
+            Signature: signature?.FileType ?? null,
+            SignatureIsUnambiguous: signature?.Unambiguous ?? false,
+            FileName: block.Key ?? '',
+        });
+        const type = fileType.FileType ?? '';
+        if (type) {
+            child.Propose(
+                'FileType',
+                type,
+                confidence[FileTypeEvidenceConfidenceKey[fileType.Evidence ?? 'Extension']],
+                `${EXTRACT_STAGE}.Member`,
+            );
+        }
+
+        if (ClassifyUnresolved(type || null, rules) === 'MultiModal') {
+            child.Propose('Modality', this.modalityFor(type), confidence.Modality, `${EXTRACT_STAGE}.Member`);
+            await this.keepOrComplete(child, bytes, resolved, context);
+            return;
+        }
+
+        const selected = this.selectExtractor(child, type, resolved, rules.ExtractorByFileType.get(type) ?? null);
+        if (!selected) {
+            const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+            if (IsPlausibleText(text, ResolveTuning(context.Configuration).MinimumPrintableRatio)) {
+                child.Propose('Text', text, confidence.FallbackText, `${EXTRACT_STAGE}.PlainTextFallback`);
+            } else {
+                child.MarkComplete();
+            }
+            return;
+        }
+
+        const result = await selected.Extractor.Extract({
+            Content: bytes,
+            FileType: type,
+            URL: child.Identity.EphemeralID,
+            Parameters: resolved.Parameters,
+            Tuning: ResolveTuning(context.Configuration),
+            Signal: context.Signal,
+            ReportProgress: (m) => context.ReportProgress(m),
+        });
+        this.recordExtractor(child, selected.Key);
+        if (result.Blocks.length === 1 && result.Blocks[0].Text) {
+            this.applyBlock(child, result.Blocks[0], result.IsFallback === true, confidence);
+            return;
+        }
+        if (result.Blocks.length > 1) {
+            // The member itself expands. Its own turn does that, from its kept bytes, so its
+            // children nest under it rather than flattening into this container.
+            child.SetExtension('Pipeline', 'columns', {
+                ...(child.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
+                ExtractorKeyOverride: selected.Key,
+            });
+            await this.keepOrComplete(child, bytes, resolved, context);
+            return;
+        }
+        // Nothing in it.
+        child.MarkComplete();
+    }
+
+    /** Keep a member's bytes for its own turn, or — when they cannot be kept — close it out. */
+    private async keepOrComplete(
+        child: WorkingRecord,
+        content: Uint8Array,
+        resolved: ResolvedSource,
+        context: StageContext,
+    ): Promise<void> {
+        if (!(await this.keepChildBytes(child, content, resolved, context))) {
+            child.MarkComplete();
+        }
+    }
+
+    /** The receipt of which extractor read a record. */
+    private recordExtractor(record: WorkingRecord, key: string): void {
+        record.SetExtension(EXTRACT_STAGE, 'extractorKey', key);
+        record.SetExtension('Pipeline', 'columns', {
+            ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
+            ExtractorKey: key,
+        });
+    }
+
+    /**
      * Keep an expanded member's bytes, and point the child at them.
      *
-     * Best-effort: a member whose bytes could not be kept is still worth recording, and it will be
-     * skipped by Extract rather than silently read as the container it came from. Failing the whole
-     * archive because one member could not be stored would lose the other members too.
+     * Best-effort: a member whose bytes could not be kept is still worth recording, and the caller
+     * closes it out rather than leaving it to be read as the container it came from. Failing the
+     * whole archive because one member could not be stored would lose the other members too.
+     *
+     * @returns Whether the bytes were kept.
      */
     private async keepChildBytes(
         child: WorkingRecord,
         content: Uint8Array,
         resolved: ResolvedSource,
         context: StageContext,
-    ): Promise<void> {
+    ): Promise<boolean> {
         try {
             const objectKey = await this.persistDurableCopy(child, resolved, content, undefined, context);
             if (!objectKey) {
                 LogStatus(
-                    `ExtractStage: '${child.Identity.EphemeralID}' is not text and this source keeps no ` +
-                        'durable copies, so its bytes are not retained.',
+                    `ExtractStage: '${child.Identity.EphemeralID}' needs its bytes kept to be read on its ` +
+                        'own turn, and this source keeps no durable copies, so it is recorded but not read.',
                 );
             }
+            return objectKey !== null;
         } catch (error) {
             LogError(
                 `ExtractStage: could not keep bytes for '${child.Identity.EphemeralID}': ` +
                     `${error instanceof Error ? error.message : String(error)}`,
             );
+            return false;
         }
     }
 
@@ -286,9 +431,15 @@ export class ExtractStage extends BasePipelineStage {
      *
      * The stored override comes first — it outlives the run that set it, which is what lets an
      * operator correct a misrouted item — then one stamped by a splitting extractor earlier in this
-     * same run, then the source's own choice, its content type's, and finally the fallback.
+     * same run, then the source's own choice, its content type's, its file type's, any extractor that
+     * declares it reads this format, and finally the fallback.
      */
-    private selectExtractor(record: WorkingRecord, fileType: string, resolved: ResolvedSource) {
+    private selectExtractor(
+        record: WorkingRecord,
+        fileType: string,
+        resolved: ResolvedSource,
+        fileTypeExtractorKey: string | null,
+    ) {
         return SelectExtractor({
             FileType: fileType,
             ExtractorKeyOverride:
@@ -298,6 +449,7 @@ export class ExtractStage extends BasePipelineStage {
             SourceCandidates: resolved.Extractors,
             SourceExtractorKey: resolved.SourceExtractorKey,
             ContentTypeExtractorKey: resolved.ContentTypeExtractorKey,
+            FileTypeExtractorKey: fileTypeExtractorKey,
             FallbackExtractorKey: resolved.FallbackExtractorKey,
         });
     }
@@ -512,18 +664,9 @@ export class ExtractStage extends BasePipelineStage {
         const child = new WorkingRecord(new WorkingRecordIdentity('Content Item', url));
         if (block.Text) {
             child.Propose('Text', block.Text, confidence.ExtractorText, EXTRACT_STAGE);
-        } else if (block.Content) {
-            // A member that is not text — a PDF or an image inside an archive. It gets the modality
-            // its bytes imply and stays Pending for Extract rather than being committed as a
-            // successful read of nothing, so the multi-modal path picks it up on its own turn.
-            child.Propose(
-                'Modality',
-                this.modalityFor(block.FileType ?? ''),
-                confidence.Modality,
-                `${EXTRACT_STAGE}.Split`,
-            );
-            child.SetExtension(EXTRACT_STAGE, 'content', block.Content);
         }
+        // A member handed back as bytes gets its file type and modality from extractMember, which
+        // reads the bytes — guessing here from the name alone labelled every unknown member an image.
         if (block.Title) {
             child.Propose('Title', block.Title, block.TitleConfidence ?? confidence.ExtractorTitle, EXTRACT_STAGE);
         }
@@ -560,7 +703,9 @@ export class ExtractStage extends BasePipelineStage {
             Parameters: resolved?.Parameters ?? {},
             Extractors: Array.isArray(settings.Extractors) ? (settings.Extractors as SourceExtractorCandidate[]) : [],
             SourceExtractorKey: (settings.ExtractorKey as string | undefined) ?? null,
-            ContentTypeExtractorKey: (context.Configuration.ContentTypeExtractorKey as string | undefined) ?? null,
+            // The content type's column, as the migration describes it. Reading it from run Options
+            // made a per-type default per-run, and left it unset on the shipped process.
+            ContentTypeExtractorKey: await this.contentTypeExtractorKey(contentSourceID, context),
             FallbackExtractorKey: (context.Configuration.FallbackExtractorKey as string | undefined) ?? null,
             MultiModalEnabled: this.multiModalEnabled(settings, context),
             FileStorageAccountID: (settings.FileStorageAccountID as string | undefined)
@@ -571,6 +716,18 @@ export class ExtractStage extends BasePipelineStage {
                 ?? null,
             ObjectKeyValues: (context.Configuration.ObjectKeyValues as Record<string, string> | undefined) ?? {},
         };
+    }
+
+    /** `ContentType.ExtractorKey` for the source's content type, from the cached metadata. */
+    private async contentTypeExtractorKey(contentSourceID: string, context: StageContext): Promise<string | null> {
+        if (!contentSourceID) {
+            return null;
+        }
+        const knowledge = KnowledgeHubMetadataEngine.Instance;
+        await knowledge.Config(false, context.ContextUser, context.Provider);
+        const source = knowledge.GetContentSourceByID(contentSourceID);
+        const contentType = source?.ContentTypeID ? knowledge.GetContentTypeByID(source.ContentTypeID) : undefined;
+        return contentType?.ExtractorKey ?? null;
     }
 
     /**
@@ -586,6 +743,13 @@ export class ExtractStage extends BasePipelineStage {
         }
         return context.Configuration.SupportsMultiModal === true;
     }
+}
+
+/** Bytes in hand, wherever they came from. */
+interface FetchedBytes {
+    Content: Uint8Array;
+    ContentType?: string;
+    ResolvedURL?: string;
 }
 
 /** What Extract needs to know about the source behind a record. */

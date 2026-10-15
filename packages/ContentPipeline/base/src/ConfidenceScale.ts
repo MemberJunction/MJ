@@ -36,8 +36,13 @@ export const ConfidenceScale = {
     FileTypeDeclared: 7,
     /** A byte signature, where nothing was declared. */
     FileTypeSignature: 5,
-    /** A filename extension — the weakest, last-resort signal. */
+    /** A filename extension. */
     FileTypeExtension: 2,
+    /**
+     * The source's default file type, inherited by an item nothing else describes. Weakest of all:
+     * a source set to "HTML" routinely holds the odd .txt, .csv or .xlsx.
+     */
+    FileTypeSourceDefault: 1,
 
     /** A content type recognised from the document's own structure. */
     ContentTypeStructural: 7,
@@ -105,4 +110,5 @@ export const FileTypeEvidenceConfidenceKey = {
     ByteCorrection: 'FileTypeByteCorrection',
     Signature: 'FileTypeSignature',
     Extension: 'FileTypeExtension',
+    SourceDefault: 'FileTypeSourceDefault',
 } as const satisfies Record<string, ConfidenceScaleKey>;

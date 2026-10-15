@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
+import { ContentItemTagBridge } from '@memberjunction/tag-engine';
 import {
     BaseContentClassifier,
     ClassifyRequest,
@@ -99,6 +100,9 @@ function item(text: string | null): WorkingRecord {
 beforeEach(() => {
     classifyImpl = async () => ({ Tags: [] });
     vi.restoreAllMocks();
+    // Promoting tags into the taxonomy needs TagEngine and a database; what is covered here is the
+    // stage's own decisions, so the shared bridge is stubbed.
+    vi.spyOn(ContentItemTagBridge.prototype, 'Bridge').mockResolvedValue(undefined);
     savedTags.length = 0;
 });
 

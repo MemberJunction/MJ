@@ -25,7 +25,7 @@ import {
     WorkingRecord,
     WorkingRecordEntity,
 } from '@memberjunction/content-pipeline-base';
-import { EscapeSQLString } from '@memberjunction/global';
+
 import { GetEntityName } from './EntityFieldMap.js';
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { ChildCommitDefaults, WorkingRecordCommitter } from './WorkingRecordCommitter.js';
@@ -33,6 +33,7 @@ import { WorkingRecordHydrator } from './WorkingRecordHydrator.js';
 import { ContentPipelineDeleteMarker } from './ContentPipelineDeleteMarker.js';
 import { ReconcileChildren } from './ChildReconciliation.js';
 import { AccessResolver } from './AccessResolver.js';
+import { WhereEqual } from './Filters.js';
 
 /** How a {@link PipelineProcessor} was configured for this run. */
 export interface PipelineProcessorConfig {
@@ -217,13 +218,16 @@ export class PipelineProcessor implements IRecordProcessor {
         if (this.config.IsTest) {
             return null;
         }
+        if (record.GetExtension<boolean>('Pipeline', 'purged')) {
+            return [];
+        }
         const last = this.stages[this.stages.length - 1];
         const status = this.statusFor(outcome, {}, last);
         if (status === null) {
             return null;
         }
         const committer = this.storage.Committer(context.provider, context.contextUser);
-        const result = await committer.Commit(record, last.StatusField, status);
+        const result = await committer.Commit(record, last.StatusField, status, outcome.Status === 'Complete');
         return [...result.ColumnsWritten];
     }
 
@@ -282,11 +286,23 @@ export class PipelineProcessor implements IRecordProcessor {
                     0,
                 );
             }
-            const outcome = await this.runStages(working, context, hints, key);
+            let outcome = await this.runStages(working, context, hints, key);
+            // Children before the parent. The parent's commit is what says "done" — Discover's
+            // clears ForceDiscovery — so committing it first meant a child that failed, or a
+            // restart mid-loop, left items that were found and never created, with nothing to
+            // bring the source back round. Committing a child is idempotent (it matches its row by
+            // URL), so redoing the lot on the next attempt is safe.
+            let children = 0;
+            if (outcome.Status === 'Complete') {
+                const persisted = await this.persistChildren(working, record, context);
+                children = persisted.Committed;
+                if (persisted.Failed > 0) {
+                    outcome = Outcome.Retry(
+                        `${persisted.Failed} of ${working.Children.length} produced record(s) could not be committed`,
+                    );
+                }
+            }
             const committed = await this.persist(working, outcome, hints, context);
-            const children = outcome.Status === 'Complete'
-                ? await this.persistChildren(working, record, context)
-                : 0;
             return this.toRecordResult(outcome, started, hints, committed, children, working.Children.length);
         } catch (error) {
             return this.toRecordResult(this.classify(error), started, hints, null, 0, 0);
@@ -480,6 +496,10 @@ export class PipelineProcessor implements IRecordProcessor {
         if (this.config.IsTest) {
             return null;
         }
+        if (working.GetExtension<boolean>('Pipeline', 'purged')) {
+            // The stage removed the row itself; there is nothing left to write a status to.
+            return [];
+        }
         const lastStage = this.stages[this.stages.length - 1];
         const status = this.statusFor(outcome, hints, lastStage);
         if (status === null) {
@@ -489,7 +509,7 @@ export class PipelineProcessor implements IRecordProcessor {
             return null;
         }
         const committer = this.storage.Committer(context.provider, context.contextUser);
-        const result = await committer.Commit(working, lastStage.StatusField, status);
+        const result = await committer.Commit(working, lastStage.StatusField, status, outcome.Status === 'Complete');
         return [...result.ColumnsWritten];
     }
 
@@ -503,18 +523,21 @@ export class PipelineProcessor implements IRecordProcessor {
         working: WorkingRecord,
         record: RecordRef,
         context: RecordProcessorContext,
-    ): Promise<number> {
+    ): Promise<{ Committed: number; Failed: number }> {
         if (working.Children.length === 0) {
-            return 0;
+            return { Committed: 0, Failed: 0 };
         }
         const committer = this.storage.Committer(context.provider, context.contextUser);
         const defaults = this.childDefaults(working);
         let committed = 0;
+        let failed = 0;
 
         for (const child of working.Children) {
             const outcome = await this.persistOneChild(child, working, defaults, committer);
             if (outcome.Status === 'Succeeded' && !this.config.IsTest) {
                 committed++;
+            } else if (outcome.Status === 'Failed') {
+                failed++;
             }
             await this.progress?.RecordChildOutcome?.(
                 record,
@@ -524,8 +547,12 @@ export class PipelineProcessor implements IRecordProcessor {
             );
         }
 
-        await this.sweepOrphans(working, context);
-        return committed;
+        if (failed === 0) {
+            // Only a complete set of children says what no longer exists. Sweeping after a partial
+            // commit would mark live children as orphans because their commit failed.
+            await this.sweepOrphans(working, context);
+        }
+        return { Committed: committed, Failed: failed };
     }
 
     /**
@@ -623,7 +650,7 @@ export class PipelineProcessor implements IRecordProcessor {
         const existing = await rv.RunView<{ ID: string; URL: string }>(
             {
                 EntityName: 'MJ: Content Items',
-                ExtraFilter: `ParentID='${working.Identity.RecordID}' AND (DeleteStatus IS NULL OR DeleteStatus <> 'Deleted')`,
+                ExtraFilter: `${WhereEqual({ ParentID: working.Identity.RecordID })} AND (DeleteStatus IS NULL OR DeleteStatus <> 'Deleted')`,
             },
             context.contextUser,
         );
@@ -652,37 +679,44 @@ export class PipelineProcessor implements IRecordProcessor {
     }
 
     /**
-     * Mark chunks a shrinking re-segmentation left behind.
+     * Retire every chunk a re-segmentation replaced.
      *
-     * Chunks are identified by position, so re-segmenting text that now yields five chunks where it
-     * yielded eight updates the first five in place and leaves three orphans. They are not visibly
-     * wrong — they hold real text from the previous version of the document — which is exactly why
-     * this is easy to miss: they stay searchable, and they answer questions about content that no
-     * longer says what they say. The autotagger superseded them; nothing here did.
+     * Re-segmenting mints a fresh set of chunks rather than overwriting the old ones by position.
+     * Overwriting chunk N with different text kept its identity while changing what it said — so
+     * anything that recorded using chunk N now pointed at text it never saw — and a shorter result
+     * left the tail behind, still searchable, answering questions about content that no longer says
+     * what it says.
      *
-     * Marked rather than deleted, so removal goes through the Delete stage like everything else and
-     * takes their vectors with it.
+     * The previous chunks are marked rather than deleted, so their vectors go through the Delete
+     * stage like everything else. Delete then removes a chunk's row outright unless something
+     * references it, in which case it stays as a tombstone and that history stays intact.
      */
     private async removeSupersededChunks(
         working: WorkingRecord,
         context: RecordProcessorContext,
     ): Promise<void> {
-        const produced = working.Children.length;
+        const current = new Set(
+            working.Children.map((c) => c.Identity.RecordID).filter((id): id is string => !!id).map((id) => id.toUpperCase()),
+        );
         const rv = RunView.FromMetadataProvider(context.provider);
-        const leftover = await rv.RunView<{ ID: string }>(
+        const live = await rv.RunView<{ ID: string }>(
             {
                 EntityName: 'MJ: Content Item Chunks',
-                ExtraFilter:
-                    `ContentItemID='${EscapeSQLString(working.Identity.RecordID!)}' AND Sequence >= ${produced} ` +
-                    `AND (DeleteStatus IS NULL OR DeleteStatus <> 'Deleted')`,
+                ExtraFilter: WhereEqual({ ContentItemID: working.Identity.RecordID, DeleteStatus: null }),
+                Fields: ['ID'],
+                ResultType: 'simple',
             },
             context.contextUser,
         );
-        if (!leftover.Success || leftover.Results.length === 0) {
+        if (!live.Success) {
+            return;
+        }
+        const superseded = live.Results.filter((chunk) => !current.has(chunk.ID.toUpperCase()));
+        if (superseded.length === 0) {
             return;
         }
         const marker = new ContentPipelineDeleteMarker(context.provider, context.contextUser);
-        for (const chunk of leftover.Results) {
+        for (const chunk of superseded) {
             try {
                 await marker.MarkForDeletion('MJ: Content Item Chunks', chunk.ID);
             } catch (error) {
@@ -749,7 +783,12 @@ export class PipelineProcessor implements IRecordProcessor {
             return 'Pending';
         }
         const text = child.Get('Text');
-        return typeof text === 'string' && text.length > 0 ? 'Complete' : 'Pending';
+        if (typeof text === 'string' && text.length > 0) {
+            return 'Complete';
+        }
+        // Produced with the completion signal raised and no text: there is nothing for Extract to
+        // do, and leaving it Pending would have Extract fetch its URL — the container's.
+        return child.IsComplete ? 'Skipped' : 'Pending';
     }
 
     /**
@@ -764,14 +803,14 @@ export class PipelineProcessor implements IRecordProcessor {
             case 'Complete':
                 return stage.CompleteStatus;
             case 'Skipped':
-                return 'Skipped';
+                return stage.StatusForOutcome('Skipped');
             case 'Failed':
             case 'Retry': {
                 const final =
                     !outcome.IsTransient ||
                     this.config.Scope === 'Filter' ||
                     (hints.Attempt ?? 1) >= (hints.MaxAttempts ?? 1);
-                return final ? 'Failed' : null;
+                return final ? stage.StatusForOutcome('Failed') : null;
             }
         }
     }

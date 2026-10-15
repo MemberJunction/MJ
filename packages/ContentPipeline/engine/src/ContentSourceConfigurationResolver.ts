@@ -129,7 +129,14 @@ export class ContentSourceConfigurationResolver {
     private async load(contentSourceID: string, contextUser: UserInfo): Promise<ResolvedSourceConfiguration> {
         const engine = KnowledgeHubMetadataEngine.Instance;
         await engine.Config(false, contextUser, this.provider);
-        const source = engine.ContentSources.find((s) => UUIDsEqual(s.ID, contentSourceID));
+        let source = engine.ContentSources.find((s) => UUIDsEqual(s.ID, contentSourceID));
+        if (!source) {
+            // The engine loads once per process, so a worker that started before this source was
+            // created would fail every one of its items until restarted. Refresh once — the
+            // engine is a handful of metadata rows — and only then call it missing.
+            await engine.Config(true, contextUser, this.provider);
+            source = engine.ContentSources.find((s) => UUIDsEqual(s.ID, contentSourceID));
+        }
         if (!source) {
             throw new Error(`Content Source '${contentSourceID}' not found`);
         }

@@ -101,10 +101,7 @@ export class DetectionCatalog {
             if (fileType.ExtractorKey) {
                 extractors.set(key, fileType.ExtractorKey);
             }
-            const signature = this.parseSignature(key, fileType.ByteSignature, fileType.Name);
-            if (signature) {
-                signatures.push(signature);
-            }
+            signatures.push(...this.parseSignatures(key, fileType.ByteSignature, fileType.Name));
         }
 
         const structural: StructuralSignatureRow[] = [];
@@ -115,8 +112,11 @@ export class DetectionCatalog {
             }
         }
 
-        // Longest magic first, so a signature that is a prefix of another never shadows it.
-        signatures.sort((a, b) => b.Magic.length - a.Magic.length);
+        // Longest first, so a signature that is a prefix of another never shadows it. Magic bytes
+        // and text prefixes are kept in one list and separated by the matcher, which tries every
+        // magic number before any prefix.
+        const specificity = (s: Signature) => s.Magic.length + (s.TextPrefix?.length ?? 0);
+        signatures.sort((a, b) => specificity(b) - specificity(a));
         return {
             Signatures: signatures,
             Structural: structural,
@@ -136,30 +136,47 @@ export class DetectionCatalog {
         return trimmed.startsWith('.') ? trimmed.slice(1) : trimmed;
     }
 
-    /** One `ByteSignature` row, or null when it holds nothing usable. */
-    private parseSignature(fileType: string, stored: string | null, name: string | null): Signature | null {
+    /**
+     * The signatures one `ByteSignature` row declares, which may be none.
+     *
+     * A row can declare several text prefixes, because one format often has more than one opening:
+     * HTML begins `<!DOCTYPE html` or `<html`, JSON begins `{` or `[`. Forcing a row per opening
+     * would mean a Content File Type row per opening, which is not what a Content File Type is.
+     */
+    private parseSignatures(fileType: string, stored: string | null, name: string | null): Signature[] {
         if (!stored) {
-            return null;
+            return [];
         }
         try {
-            const parsed = JSON.parse(stored) as { Magic?: unknown; Offset?: unknown; Unambiguous?: unknown };
+            const parsed = JSON.parse(stored) as {
+                Magic?: unknown;
+                Offset?: unknown;
+                TextPrefix?: unknown;
+                Unambiguous?: unknown;
+            };
             const magic = Array.isArray(parsed.Magic)
                 ? parsed.Magic.filter((b): b is number => typeof b === 'number')
                 : [];
-            if (magic.length === 0) {
-                return null;
+            const prefixes = (Array.isArray(parsed.TextPrefix) ? parsed.TextPrefix : [parsed.TextPrefix])
+                .filter((p): p is string => typeof p === 'string')
+                .map((p) => p.trim().toLowerCase())
+                .filter((p) => p.length > 0);
+            // Defaults to ambiguous: a signature that claims it may override a declared type should
+            // have to say so, because getting that wrong silently mislabels content.
+            const unambiguous = parsed.Unambiguous === true;
+            const offset = typeof parsed.Offset === 'number' ? parsed.Offset : undefined;
+
+            const signatures: Signature[] = [];
+            if (magic.length > 0) {
+                signatures.push({ FileType: fileType, Magic: magic, Offset: offset, Unambiguous: unambiguous });
             }
-            return {
-                FileType: fileType,
-                Magic: magic,
-                Offset: typeof parsed.Offset === 'number' ? parsed.Offset : undefined,
-                // Defaults to ambiguous: a signature that claims it may override a declared type
-                // should have to say so, because getting that wrong silently mislabels content.
-                Unambiguous: parsed.Unambiguous === true,
-            };
+            for (const prefix of prefixes) {
+                signatures.push({ FileType: fileType, Magic: [], TextPrefix: prefix, Unambiguous: unambiguous });
+            }
+            return signatures;
         } catch {
             LogError(`DetectionCatalog: Content File Type '${name ?? fileType}' has an unparseable ByteSignature`);
-            return null;
+            return [];
         }
     }
 

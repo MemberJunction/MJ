@@ -18,7 +18,13 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { BaseDiscoverDriver, DiscoverRequest, DiscoveredItem } from '@memberjunction/content-pipeline-base';
+import {
+    BaseDiscoverDriver,
+    DiscoverRequest,
+    DiscoveredItem,
+    LocatorFetchRequest,
+    LocatorFetchResponse,
+} from '@memberjunction/content-pipeline-base';
 import { FileStorageEngine, ResolveStorageDriver } from '@memberjunction/storage';
 
 /** Registered under the name `ContentSourceType.DriverClass` already carries for this source type. */
@@ -61,12 +67,23 @@ export class CloudStorageDiscoverDriver extends BaseDiscoverDriver {
     }
 
     /**
+     * Read an object this walk listed, through the same storage provider it was listed from.
+     *
+     * The locator is the object's path within that provider, which is meaningless to an HTTP fetch.
+     */
+    public async Fetch(request: LocatorFetchRequest): Promise<LocatorFetchResponse> {
+        const driver = await this.resolveProvider(request);
+        const bytes = await driver.GetObject({ fullPath: request.URL });
+        return { Content: new Uint8Array(bytes), ResolvedURL: request.URL };
+    }
+
+    /**
      * The storage provider this source is configured for.
      *
      * `FileStorageProviderKey` is the field name the Cloud Storage source type already declares in
      * its `RequiredFields`, so an existing source needs no new configuration.
      */
-    private async resolveProvider(request: DiscoverRequest) {
+    private async resolveProvider(request: DiscoverRequest | LocatorFetchRequest) {
         const providerKey = request.Parameters.FileStorageProviderKey;
         if (!providerKey) {
             throw new Error(

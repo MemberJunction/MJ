@@ -1,4 +1,5 @@
 export * from './generic/AutotagBaseEngine'
+export * from './generic/ContentVectorMetadata'
 export * from './generic/ClassificationContextResolver'
 export * from './generic/FieldPathResolver'
 export * from './generic/RateLimiter'

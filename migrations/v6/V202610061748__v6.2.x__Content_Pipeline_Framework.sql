@@ -29,6 +29,12 @@
   There is deliberately no DiscoveryStatus: a status column has to be re-armed to run again, which
   is a second mechanism for something the schedule already decides.
 
+  There is deliberately no unique index on (ContentSourceID, URL). The Entity and LocalFS
+  autotaggers have long stored many items under one URL, so the index cannot be created wherever
+  they have run, and URL is nvarchar(2000) — past the index key limit. Matching an item to its row by
+  URL is the pipeline's job, in code; a source whose URLs are not unique is simply not a candidate
+  for change detection, and its rows still get in.
+
   Every change is additive. Naming follows the conventions already in these tables: SegmenterKey /
   CleanerKey establish the nvarchar(100) "registered class key" pattern, and the status columns on
   Content Item are nvarchar(40) over a five-value list.
@@ -75,15 +81,6 @@ GO
 ALTER TABLE ${flyway:defaultSchema}.ContentItem
     ADD CONSTRAINT FK_ContentItem_File
     FOREIGN KEY (FileID) REFERENCES ${flyway:defaultSchema}.[File](ID);
-GO
-
--- A URL identifies an item within its source. Without this, a re-walk racing a scheduled run (or
--- two triggers firing at once) creates a second item for the same URL, and every chunk and vector
--- below it is duplicated too. Filtered so that rows without a URL are unconstrained, and so that a
--- soft-deleted item does not block re-discovering the same URL later.
-CREATE UNIQUE INDEX UQ_ContentItem_Source_URL
-    ON ${flyway:defaultSchema}.ContentItem (ContentSourceID, URL)
-    WHERE URL IS NOT NULL AND DeleteStatus IS NULL;
 GO
 
 -- Existing rows have already been through extraction and segmentation under the autotagger, so
@@ -275,7 +272,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level2type = N'COLUMN', @level2name = 'ExtractorKey';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'The magic bytes identifying this file type, as JSON: {"Magic":[37,80,68,70],"Offset":0,"Unambiguous":true}. Unambiguous means a match may override a declared type; a container format such as zip recognises without identifying, so it may not.',
+    @value = N'How this file type is recognised from its own content, as JSON. Either magic bytes - {"Magic":[37,80,68,70],"Offset":0,"Unambiguous":true} - or, for a text format, the characters it opens with: {"TextPrefix":["<!doctype html","<html"]}, matched after a byte-order mark and leading whitespace are stripped and case is folded. Unambiguous means a match may override a declared type; a container format such as zip recognises without identifying, so it may not.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = 'ContentFileType',
     @level2type = N'COLUMN', @level2name = 'ByteSignature';
@@ -672,7 +669,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B193AD50-0E66-EF11-A752-C0A5E8ACCB22'),
             'ByteSignature',
             'Byte Signature',
-            'The magic bytes identifying this file type, as JSON: {"Magic":[37,80,68,70],"Offset":0,"Unambiguous":true}. Unambiguous means a match may override a declared type; a container format such as zip recognises without identifying, so it may not.',
+            'How this file type is recognised from its own content, as JSON. Either magic bytes - {"Magic":[37,80,68,70],"Offset":0,"Unambiguous":true} - or, for a text format, the characters it opens with: {"TextPrefix":["<!doctype html","<html"]}, matched after a byte-order mark and leading whitespace are stripped and case is folded. Unambiguous means a match may override a declared type; a container format such as zip recognises without identifying, so it may not.',
             'nvarchar',
             -1,
             0,

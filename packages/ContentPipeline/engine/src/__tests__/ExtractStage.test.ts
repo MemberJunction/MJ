@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
+import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import {
     BaseContentExtractor,
     ExtractRequest,
@@ -53,6 +54,9 @@ function stubFetch(text: string): void {
 
 beforeEach(() => {
     vi.restoreAllMocks();
+    // ContentType.ExtractorKey is read from the Knowledge Hub cache; no database here, so no rows.
+    vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+    vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'GetContentSourceByID').mockReturnValue(undefined);
     blocks = { Blocks: [{ Text: 'read by the html extractor', Title: 'Document title' }] };
     vi.spyOn(ContentSourceConfigurationResolver.prototype, 'Resolve').mockResolvedValue({
         ContentSourceID: 'SRC-1',

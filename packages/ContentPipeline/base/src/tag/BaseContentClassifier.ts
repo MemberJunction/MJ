@@ -20,6 +20,11 @@ export interface ClassifyRequest {
     Title: string | null;
     /** The Content Item being classified. */
     RecordID: string | null;
+    /**
+     * The Content Source it belongs to, so a classifier can read what the source and its content
+     * type say about classifying it — tag counts, attributes, classification context.
+     */
+    ContentSourceID?: string | null;
     /** The source's type-specific settings. */
     Parameters: Readonly<Record<string, string>>;
     /** The acting user. */
@@ -40,6 +45,8 @@ export interface ClassifiedTag {
     Score?: number;
     /** An existing `MJ: Tags` row this matched, when the classifier resolved one. */
     TagID?: string;
+    /** A parent the classifier suggested, used to nest the tag when it is new to the taxonomy. */
+    Parent?: string;
 }
 
 /** What a classifier concluded. */

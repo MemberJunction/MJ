@@ -20,6 +20,7 @@
 import { BaseEntity, CompositeKey, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { WorkingRecordEntity } from '@memberjunction/content-pipeline-base';
 import { GetEntityName, GetStatusFields } from './EntityFieldMap.js';
+import { WhereEqual } from './Filters.js';
 
 /** What a reset did. */
 export interface ResetResult {
@@ -95,12 +96,12 @@ export class ContentPipelineResetService {
     ): Promise<ResetResult> {
         const user = this.requireUser(contextUser);
         const fields = this.fieldsFor('Content Item', options);
-        const failedClause = fields.map((f) => `${f} = 'Failed'`).join(' OR ');
+        const failedClause = fields.map((f) => `(${WhereEqual({ [f]: 'Failed' })})`).join(' OR ');
         const rv = RunView.FromMetadataProvider(this.provider);
         const result = await rv.RunView<{ ID: string }>(
             {
                 EntityName: GetEntityName('Content Item'),
-                ExtraFilter: `ContentSourceID='${contentSourceID}' AND (${failedClause})`,
+                ExtraFilter: `${WhereEqual({ ContentSourceID: contentSourceID })} AND (${failedClause})`,
             },
             user,
         );

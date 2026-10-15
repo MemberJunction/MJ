@@ -13,6 +13,7 @@
 import { BaseEntity, CompositeKey, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 
 import { PipelineEntityName } from './EntityFieldMap';
+import { WhereEqual } from './Filters.js';
 
 /** Marks a deleted item's dependents pending. */
 export class ContentPipelineDeleteMarker {
@@ -36,11 +37,11 @@ export class ContentPipelineDeleteMarker {
             [
                 {
                     EntityName: 'MJ: Content Item Chunks',
-                    ExtraFilter: `ContentItemID='${contentItemID}' AND (DeleteStatus IS NULL OR DeleteStatus <> 'Deleted')`,
+                    ExtraFilter: `${WhereEqual({ ContentItemID: contentItemID })} AND (DeleteStatus IS NULL OR DeleteStatus <> 'Deleted')`,
                 },
                 {
                     EntityName: 'MJ: Content Items',
-                    ExtraFilter: `ParentID='${contentItemID}' AND (DeleteStatus IS NULL OR DeleteStatus <> 'Deleted')`,
+                    ExtraFilter: `${WhereEqual({ ParentID: contentItemID })} AND (DeleteStatus IS NULL OR DeleteStatus <> 'Deleted')`,
                 },
             ],
             user,

@@ -2,7 +2,7 @@ import { RegisterClass } from "@memberjunction/global";
 import fs from 'fs';
 import { AutotagBase, AutotagProgressCallback } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
-import { IMetadataProvider, UserInfo, Metadata, RunView } from "@memberjunction/core";
+import { FieldValueCollection, IMetadataProvider, UserInfo, Metadata, RunView } from "@memberjunction/core";
 import { MJContentSourceEntity, MJContentItemEntity } from "@memberjunction/core-entities";
 import { OpenAI } from "openai";
 import path from 'path';
@@ -146,14 +146,38 @@ export class AutotagLocalFileSystem extends AutotagBase {
             // Each file is its own content item, so the params carry that file's path rather than
             // the directory's — the previous code mutated the shared URL as it descended.
             const params: ContentSourceParams = { ...contentSourceParams, URL: item.URL };
-            if (created && new Date(created.toUTCString()) > lastRunDate) {
-                contentItems.push(await this.SetAddedContentItem(item.URL, params));
+            const touched = [created, modified].some((d) => d && new Date(d.toUTCString()) > lastRunDate);
+            if (!touched) {
+                continue;
             }
-            else if (modified && new Date(modified.toUTCString()) > lastRunDate) {
+            // Added-vs-modified is decided by whether this source already holds the file, not by its
+            // timestamps. CreatedAt comes from ctime, which moves on every write, so an edited file
+            // looked "added" and was inserted a second time beside the row it already had.
+            if (await this.hasContentItem(params, contextUser)) {
                 contentItems.push(await this.SetModifiedContentItem(item.URL, params));
+            } else {
+                contentItems.push(await this.SetAddedContentItem(item.URL, params));
             }
         }
         return contentItems;
+    }
+
+    /** Whether this source already has a content item for this file. */
+    private async hasContentItem(params: ContentSourceParams, contextUser: UserInfo): Promise<boolean> {
+        const result = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Content Items',
+                ExtraFilter: FieldValueCollection.FromObject({
+                    ContentSourceID: params.contentSourceID,
+                    URL: params.URL,
+                }).ToWhereClause(),
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            },
+            contextUser,
+        );
+        return result.Success && result.Results.length > 0;
     }
 
     public async SetAddedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity> { 

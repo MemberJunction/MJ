@@ -9,11 +9,18 @@
  * Deliberately free of MJ dependencies: parsing bytes needs no provider, no user and no metadata, so
  * anything that has bytes can use this, and it can be tested without standing up a database.
  *
- * Parsers are imported on demand. A deployment that never reads spreadsheets should not pay to load
- * a spreadsheet parser, and these libraries do real work at module scope.
+ * The parsers are static default imports. `exceljs` is CommonJS, so under native ESM a dynamic
+ * `import('exceljs')` exposes it only as `default` — `(await import('exceljs')).Workbook` is
+ * undefined and every spreadsheet failed with "Workbook is not a constructor". The default import is
+ * also how the Core Actions imported all three before this module existed, and keeps this package in
+ * line with MJ's no-dynamic-import rule.
  *
  * @module @memberjunction/document-parsing
  */
+
+import pdfParse from 'pdf-parse';
+import mammoth from 'mammoth';
+import ExcelJS from 'exceljs';
 
 /** Text extracted from a document, with whatever the format could say about itself. */
 export interface ParsedDocument {
@@ -59,7 +66,6 @@ export interface ParsedSheet {
  * empty document is worth recording.
  */
 export async function ParsePdf(bytes: Uint8Array | Buffer): Promise<ParsedDocument> {
-    const { default: pdfParse } = await import('pdf-parse');
     const parsed = await pdfParse(toBuffer(bytes));
     const title = typeof parsed.info?.Title === 'string' ? parsed.info.Title.trim() : '';
     return {
@@ -73,7 +79,6 @@ export async function ParsePdf(bytes: Uint8Array | Buffer): Promise<ParsedDocume
 
 /** Extract the raw text of a Word document, without its formatting. */
 export async function ParseWord(bytes: Uint8Array | Buffer): Promise<ParsedDocument> {
-    const mammoth = await import('mammoth');
     const result = await mammoth.extractRawText({ buffer: toBuffer(bytes) });
     return { Text: result.value?.trim() ?? '' };
 }
@@ -86,7 +91,6 @@ export async function ParseWord(bytes: Uint8Array | Buffer): Promise<ParsedDocum
  * and lists. Collapsing them would mean one caller always throwing away work the other needed.
  */
 export async function ParseWordToHtml(bytes: Uint8Array | Buffer): Promise<ParsedHtml> {
-    const mammoth = await import('mammoth');
     const result = await mammoth.convertToHtml({ buffer: toBuffer(bytes) });
     // The messages carry what the converter could not represent — an unsupported style, a dropped
     // element. Returning them rather than the HTML alone is what lets a caller tell a faithful
@@ -102,9 +106,8 @@ export async function ParseWordToHtml(bytes: Uint8Array | Buffer): Promise<Parse
  * Flattening in here would force one of them to parse the text back apart.
  */
 export async function ParseSpreadsheet(bytes: Uint8Array | Buffer): Promise<ParsedSheet[]> {
-    const ExcelJS = await import('exceljs');
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(toBuffer(bytes) as never);
+    await workbook.xlsx.load(toBuffer(bytes) as unknown as ExcelJS.Buffer);
 
     const sheets: ParsedSheet[] = [];
     workbook.eachSheet((worksheet) => {

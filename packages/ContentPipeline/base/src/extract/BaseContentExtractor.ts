@@ -8,6 +8,7 @@
  */
 
 import { MJGlobal } from '@memberjunction/global';
+import { ResolvedPipelineTuning } from '../PipelineTuning.js';
 
 /** What the Extract stage has in hand when it asks a extractor to read. */
 export interface ExtractRequest {
@@ -19,6 +20,12 @@ export interface ExtractRequest {
     URL: string;
     /** The source's type-specific settings, already defaulted and validated. */
     Parameters: Readonly<Record<string, string>>;
+    /**
+     * The run's resolved tuning, from its Record Process's `Configuration.Tuning` — limits an
+     * extractor enforces, such as how far an archive may expand. Optional so an extractor called
+     * outside a run still works; an extractor that needs a limit and finds none must refuse.
+     */
+    Tuning?: ResolvedPipelineTuning;
     /** Fires when the run is asked to stop. A extractor doing heavy work checks it. */
     Signal: AbortSignal;
     /** Report progress during a long read. */

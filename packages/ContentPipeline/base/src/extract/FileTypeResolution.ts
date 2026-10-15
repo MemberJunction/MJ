@@ -19,8 +19,10 @@ export type FileTypeEvidence =
     | 'ByteCorrection'
     /** A byte signature, where nothing was declared. */
     | 'Signature'
-    /** A filename extension — the weakest, last-resort signal. */
-    | 'Extension';
+    /** A filename extension. */
+    | 'Extension'
+    /** The source's default type, when nothing about the item itself said anything. */
+    | 'SourceDefault';
 
 /** A resolved file type and why. */
 export interface ResolvedFileType {
@@ -40,6 +42,12 @@ export interface FileTypeInputs {
     SignatureIsUnambiguous?: boolean;
     /** The filename or URL to take an extension from. */
     FileName?: string | null;
+    /**
+     * The source's default file type — what an item inherits when it is created. Not a
+     * declaration: it says what the source mostly holds, not what this item is, so it answers only
+     * when the item's own bytes and name said nothing.
+     */
+    SourceDefault?: string | null;
 }
 
 /** Formats a plain-text read is a reasonable fallback for. */
@@ -57,7 +65,8 @@ const NON_TEXT_FORMATS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 't
  *    Ambiguous byte evidence leaves a declaration standing, because a source that states a type is
  *    usually right and a sniffer that is unsure is usually not.
  * 3. **Byte-signature sniffing**, when nothing was declared.
- * 4. **A filename extension**, the weakest and last-resort signal.
+ * 4. **A filename extension**.
+ * 5. **The source's default**, which describes the source rather than the item.
  */
 export function ResolveFileType(inputs: FileTypeInputs): ResolvedFileType {
     const declared = normalize(inputs.Declared);
@@ -76,6 +85,10 @@ export function ResolveFileType(inputs: FileTypeInputs): ResolvedFileType {
     const extension = extensionOf(inputs.FileName);
     if (extension) {
         return { FileType: extension, Evidence: 'Extension' };
+    }
+    const sourceDefault = normalize(inputs.SourceDefault);
+    if (sourceDefault) {
+        return { FileType: sourceDefault, Evidence: 'SourceDefault' };
     }
     return { FileType: null, Evidence: null };
 }

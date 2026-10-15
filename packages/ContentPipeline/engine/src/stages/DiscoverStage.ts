@@ -91,8 +91,11 @@ export class DiscoverStage extends BasePipelineStage {
         // A completed walk clears the one-shot and stamps when it happened. Together these ARE the
         // readiness answer — "schedule due OR ForceDiscovery" — so there is no status to re-arm, and
         // a cancelled walk above leaves the bit set and the source still due.
-        record.SetExtension('Pipeline', 'columns', {
-            ...(record.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
+        //
+        // Completion columns, not plain columns: they are written only if the walk is still a
+        // success once everything it found has been committed. A walk whose items could not all be
+        // saved must leave the bit set, or the items it failed to save are never created.
+        record.SetExtension('Pipeline', 'completionColumns', {
             ForceDiscovery: false,
             LastDiscoveredAt: new Date(),
         });

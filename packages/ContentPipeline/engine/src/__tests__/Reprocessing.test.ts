@@ -35,8 +35,10 @@ describe('change detection', () => {
         expect(harness().contentChanged(item('new'), row({ Text: 'old' }, []))).toBe(true);
     });
 
-    it('treats a record with no text yet as changed, so it proceeds', () => {
-        expect(harness().contentChanged(item(), row({ Text: 'old' }, []))).toBe(true);
+    it('treats a record with neither checksum nor text as UNCHANGED — nothing says it moved', () => {
+        // A crawl reports that a page exists, not what it holds. Calling that "changed" sent every
+        // such item back through the whole pipeline on every walk.
+        expect(harness().contentChanged(item(), row({ Text: 'old' }, []))).toBe(false);
     });
 });
 
@@ -68,9 +70,10 @@ describe('flat downstream reset', () => {
 });
 
 describe('how a produced record is recognized', () => {
-    it('identifies an item by URL WITHIN its source', () => {
+    it('identifies an item by URL WITHIN its source, and only a LIVE one', () => {
+        // A URL that comes back after its item was deleted must not bind to the tombstone.
         expect(harness().matchFilter(item(), { ContentSourceID: 'S1' })).toBe(
-            "ContentSourceID='S1' AND URL='https://x.test/a'",
+            "ContentSourceID='S1' AND URL='https://x.test/a' AND DeleteStatus IS NULL",
         );
     });
 
@@ -79,14 +82,12 @@ describe('how a produced record is recognized', () => {
         expect(harness().matchFilter(odd, { ContentSourceID: 'S1' })).toContain("it''s");
     });
 
-    it('identifies a chunk by its SEQUENCE within its item — chunks have no URL', () => {
+    it('NEVER matches a chunk: re-segmenting mints new chunks and retires the old set', () => {
+        // Overwriting chunk N kept its identity while changing what it said, so anything that had
+        // recorded using it now pointed at text it never saw.
         const c = chunk();
         c.SetExtension('Pipeline', 'columns', { Sequence: 3 });
-        expect(harness().matchFilter(c, { ContentItemID: 'I1' })).toBe("ContentItemID='I1' AND Sequence=3");
-    });
-
-    it('declines to match a chunk with no sequence rather than guessing', () => {
-        expect(harness().matchFilter(chunk(), { ContentItemID: 'I1' })).toBeNull();
+        expect(harness().matchFilter(c, { ContentItemID: 'I1' })).toBeNull();
     });
 
     it('declines to match when there is no scope to match within', () => {

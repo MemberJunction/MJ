@@ -68,6 +68,15 @@ export interface AccessArtifact {
     /** Query parameters to append, for sources that authenticate in the URL. */
     QueryParameters?: Readonly<Record<string, string>>;
     /**
+     * The origins this session may be presented to, as `https://host[:port]`.
+     *
+     * Unset means the origin of the source's own URL and nothing else. A source's items can live
+     * anywhere — an RSS feed links to every article site on the web — and a session that went to
+     * every item URL would hand an API key to all of them. A driver whose content is served from a
+     * different host than the source URL (an API, a CDN it controls) lists those hosts here.
+     */
+    Origins?: readonly string[];
+    /**
      * When this stops being valid.
      *
      * The resolver renews on expiry rather than on failure, so a long run does not discover its

@@ -16,11 +16,11 @@
  * @module @memberjunction/content-pipeline
  */
 
-import { CompositeKey, LogError } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import { RegisterClass } from '@memberjunction/global';
-import { VectorTargetResolver } from '../VectorTarget.js';
+import { IsRouteFailure, VectorRecordRouter } from '../VectorRouting.js';
 import {
     BasePipelineStage,
     Outcome,
@@ -32,6 +32,7 @@ import {
     WorkingRecordEntity,
 } from '@memberjunction/content-pipeline-base';
 import { ContentPipelineDeleteMarker } from '../ContentPipelineDeleteMarker.js';
+import { WhereEqual } from '../Filters.js';
 
 /** The registered name for the chunk-level stage. */
 export const DELETE_STAGE = 'Delete';
@@ -56,6 +57,15 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
      */
     public override get CompleteStatus(): string {
         return 'Deleted';
+    }
+
+    /**
+     * Neither 'Skipped' nor 'Failed' is in `DeleteStatus`'s CHECK constraint, and either would
+     * assert something untrue: the record's vector or kept bytes are still out there. It stays
+     * Pending — the failure is in the run's detail row — so the next Delete run tries again.
+     */
+    public override StatusForOutcome(_outcome: 'Skipped' | 'Failed'): string | null {
+        return null;
     }
 
     public override get Declaration(): StageDeclaration {
@@ -110,6 +120,9 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
         }
         // Getting here means every removal either succeeded or was genuinely unnecessary, which is
         // what makes marking safe.
+        if (await this.Purge(record, context)) {
+            removed.push('row');
+        }
         return Outcome.Complete(removed.length > 0 ? `removed ${removed.join(', ')}` : 'nothing to remove');
     }
 
@@ -121,6 +134,16 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
      */
     protected async markDependents(_record: WorkingRecord, _context: StageContext): Promise<number> {
         return 0;
+    }
+
+    /**
+     * Remove the row itself, once everything outside it is gone.
+     *
+     * The base keeps every row as a tombstone. A variant whose rows carry no history worth keeping
+     * overrides this; returning true tells the processor there is no row left to commit a status to.
+     */
+    protected async Purge(_record: WorkingRecord, _context: StageContext): Promise<boolean> {
+        return false;
     }
 
     /**
@@ -174,6 +197,10 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
      * vector to remove, which is genuinely absent; a record that carries one and whose removal could
      * not be attempted is NOT, and the difference decides whether this record may be marked Deleted.
      *
+     * Routed through the same {@link VectorRecordRouter} Embed writes through, so the delete reaches
+     * the index AND the namespace the write did. Without the namespace Pinecone reports success and
+     * removes nothing.
+     *
      * @returns Whether a vector was removed, or null when removal was skipped rather than
      *          unnecessary — the caller refuses to mark a skipped record Deleted.
      */
@@ -183,30 +210,39 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
             // Nothing was ever embedded for this record.
             return false;
         }
-        const contentSourceID = record.GetExtension<string>('Pipeline', 'contentSourceID');
-        if (!contentSourceID) {
-            // There IS a vector, and no way to work out which index holds it. Skipped, not absent.
+        const routes = await VectorRecordRouter.Create(context.Provider, context.ContextUser).Route([record]);
+        const route = routes.get(record.Identity.Key) ?? { Error: 'no route was resolved' };
+        if (IsRouteFailure(route)) {
+            // There IS a vector, and no way to work out where it lives. Skipped, not absent.
             LogError(
-                `DeleteStage: '${record.Identity.Key}' has VectorRecordID '${vectorRecordID}' but no ` +
-                    'Content Source, so its index cannot be resolved and the vector cannot be removed.',
+                `DeleteStage: '${record.Identity.Key}' has VectorRecordID '${vectorRecordID}' but its vector ` +
+                    `cannot be located: ${route.Error}`,
+            );
+            return null;
+        }
+        const target = route.Target;
+        if (target.Database.IsReadOnly) {
+            LogError(
+                `DeleteStage: the vector database for '${record.Identity.Key}' is read-only, so its ` +
+                    'vector cannot be removed.',
             );
             return null;
         }
         try {
-            const target = await new VectorTargetResolver(context.Provider, context.ContextUser).Resolve(
-                contentSourceID,
-            );
-            if (target.Database.IsReadOnly) {
-                LogError(
-                    `DeleteStage: the vector database for '${record.Identity.Key}' is read-only, so its ` +
-                        'vector cannot be removed.',
-                );
-                return null;
-            }
-            await target.Database.DeleteRecords(
-                [{ id: vectorRecordID, values: [] }],
+            const response = await target.Database.DeleteRecords(
+                [
+                    {
+                        id: vectorRecordID,
+                        values: [],
+                        ...(route.Directives ? { providerTemporaryDirectives: route.Directives } : {}),
+                    },
+                ],
                 target.IndexName,
+                target.ProviderConfig,
             );
+            if (response.success === false) {
+                throw new Error(response.message || 'the vector store refused the delete');
+            }
             return true;
         } catch (error) {
             // Leave the record Pending so the next attempt repeats the removal. Removal is
@@ -221,7 +257,6 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
     }
 }
 
-
 /**
  * Delete over Content Item Chunk — the leaf case.
  */
@@ -229,6 +264,62 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
 export class DeleteStage extends BaseDeleteStage {
     public readonly Name = DELETE_STAGE;
     public readonly Entity: WorkingRecordEntity = 'Content Item Chunk';
+
+    /**
+     * Hard-delete a chunk nothing references; keep one that something does.
+     *
+     * A superseded chunk is noise once its vector is gone — unless something recorded that it was
+     * used: a citation, a retrieval log, feedback. That history is only meaningful while the chunk
+     * it points at exists, so such a chunk stays as a tombstone (`DeleteStatus = 'Deleted'`).
+     *
+     * "Referenced" is read from metadata, not hardcoded: any entity with a foreign key to Content
+     * Item Chunk counts, including ones a layer above MJ adds for its own usage tracking. That layer
+     * gets soft-deletion for its used chunks without this stage knowing it exists.
+     */
+    protected override async Purge(record: WorkingRecord, context: StageContext): Promise<boolean> {
+        const chunkID = record.Identity.RecordID;
+        if (!chunkID || context.IsTest || (await this.isReferenced(chunkID, context))) {
+            return false;
+        }
+        const chunk = await context.Provider.GetEntityObject<BaseEntity>('MJ: Content Item Chunks', context.ContextUser);
+        if (!(await chunk.InnerLoad(CompositeKey.FromID(chunkID)))) { // first-pk-ok: MJ core content entity, single-column ID
+            return false;
+        }
+        if (!(await chunk.Delete())) {
+            // Not a failure of the delete: the vector is gone. The row stays as a tombstone.
+            LogError(`DeleteStage: could not remove chunk row '${chunkID}'; keeping it as a tombstone`);
+            return false;
+        }
+        record.SetExtension('Pipeline', 'purged', true);
+        return true;
+    }
+
+    /** Whether any entity holds a foreign key to this chunk. */
+    private async isReferenced(chunkID: string, context: StageContext): Promise<boolean> {
+        const chunkEntity = context.Provider.EntityByName('MJ: Content Item Chunks');
+        if (!chunkEntity) {
+            return true; // Cannot tell, so keep it.
+        }
+        const rv = RunView.FromMetadataProvider(context.Provider);
+        for (const relation of chunkEntity.RelatedEntities) {
+            if (!relation.RelatedEntity || !relation.RelatedEntityJoinField) {
+                continue;
+            }
+            const result = await rv.RunView(
+                {
+                    EntityName: relation.RelatedEntity,
+                    ExtraFilter: WhereEqual({ [relation.RelatedEntityJoinField]: chunkID }),
+                    ResultType: 'count_only',
+                },
+                context.ContextUser,
+            );
+            if (!result.Success || (result.TotalRowCount ?? 0) > 0) {
+                // A failed check counts as referenced: losing history is worse than keeping a row.
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 /**

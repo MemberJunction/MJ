@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import ExcelJS from 'exceljs';
 import {
     IsImageContentType,
+    ParseSpreadsheet,
     IsPdfContentType,
     IsSpreadsheetContentType,
     IsTextContentType,
@@ -59,5 +61,21 @@ describe('rendering sheets as text', () => {
             { Name: 'Q2', Rows: [['b']] },
         ]);
         expect(text).toBe('a\n\nb');
+    });
+});
+
+describe('parsing a real workbook', () => {
+    // The regression this guards: under native ESM a dynamic import of CommonJS exceljs had no named
+    // Workbook, so every .xlsx threw "Workbook is not a constructor" — in Get File Content too.
+    it('reads every worksheet of an .xlsx, by name and in order', async () => {
+        const workbook = new ExcelJS.Workbook();
+        workbook.addWorksheet('Q1').addRows([['Region', 'Revenue'], ['North', 1000]]);
+        workbook.addWorksheet('Q2').addRow(['South', 2000]);
+        const bytes = new Uint8Array(await workbook.xlsx.writeBuffer());
+
+        const sheets = await ParseSpreadsheet(bytes);
+
+        expect(sheets.map((s) => s.Name)).toEqual(['Q1', 'Q2']);
+        expect(SheetsToText(sheets)).toBe('Region\tRevenue\nNorth\t1000\n\nSouth\t2000');
     });
 });

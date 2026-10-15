@@ -12,9 +12,11 @@
  * @module @memberjunction/content-pipeline
  */
 
-import { IMetadataProvider, LogStatus, UserInfo } from '@memberjunction/core';
+import { BaseEntity, IMetadataProvider, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import {
     KnowledgeHubMetadataEngine,
+    MJContentSourceEntity,
+    MJContentTypeEntity,
     MJVectorDatabaseEntity,
     MJVectorIndexEntity,
 } from '@memberjunction/core-entities';
@@ -22,6 +24,7 @@ import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import { AIEngine } from '@memberjunction/aiengine';
+import { WhereEqual } from './Filters.js';
 
 /** Everything a stage needs to read or write this record's vectors. */
 export interface ResolvedVectorTarget {
@@ -70,15 +73,7 @@ export class VectorTargetResolver {
     }
 
     private async load(contentSourceID: string): Promise<ResolvedVectorTarget> {
-        const knowledge = KnowledgeHubMetadataEngine.Instance;
-        await knowledge.Config(false, this.contextUser, this.provider);
-        const source = knowledge.ContentSources.find((s) => UUIDsEqual(s.ID, contentSourceID));
-        if (!source) {
-            throw new Error(`Content Source '${contentSourceID}' not found`);
-        }
-        const contentType = source.ContentTypeID
-            ? knowledge.ContentTypes.find((t) => UUIDsEqual(t.ID, source.ContentTypeID))
-            : undefined;
+        const { source, contentType } = await this.loadSource(contentSourceID);
 
         // Source first, then its content type. Nothing falls back to a global default: writing a
         // tenant's vectors into whichever index happened to be first is worse than refusing.
@@ -91,7 +86,11 @@ export class VectorTargetResolver {
         }
 
         await AIEngine.Instance.Config(false, this.contextUser, this.provider);
-        const index = AIEngine.Instance.VectorIndexes?.find((i) => UUIDsEqual(i.ID, indexID));
+        const index = await this.aiRow<MJVectorIndexEntity>(
+            AIEngine.Instance.VectorIndexes ?? [],
+            'MJ: Vector Indexes',
+            indexID,
+        );
         if (!index) {
             throw new Error(`Vector Index '${indexID}' is not in metadata`);
         }
@@ -113,11 +112,64 @@ export class VectorTargetResolver {
     /** The `MJ: Vector Databases` row naming the driver class and the credential for its key. */
     private async loadDatabase(databaseID: string): Promise<MJVectorDatabaseEntity> {
         await AIEngine.Instance.Config(false, this.contextUser, this.provider);
-        const entity = AIEngine.Instance.VectorDatabases?.find((d) => UUIDsEqual(d.ID, databaseID));
+        const entity = await this.aiRow<MJVectorDatabaseEntity>(
+            AIEngine.Instance.VectorDatabases ?? [],
+            'MJ: Vector Databases',
+            databaseID,
+        );
         if (!entity) {
             throw new Error(`Vector Database '${databaseID}' is not in metadata`);
         }
         return entity;
+    }
+
+    /**
+     * The source and its content type from the Knowledge Hub cache.
+     *
+     * A miss refreshes the engine once, the same as every other pipeline lookup of a source: the
+     * engine loads once per process, so a worker that started before the source was created would
+     * otherwise fail every item until restarted — which is what happened to a worker on 9/25. The
+     * engine is a handful of metadata rows, so a refresh is cheap, and it leaves the cache right.
+     */
+    private async loadSource(
+        contentSourceID: string,
+    ): Promise<{ source: MJContentSourceEntity; contentType: MJContentTypeEntity | undefined }> {
+        const knowledge = KnowledgeHubMetadataEngine.Instance;
+        await knowledge.Config(false, this.contextUser, this.provider);
+        const lookup = () => {
+            const source = knowledge.GetContentSourceByID(contentSourceID);
+            const contentType = source?.ContentTypeID ? knowledge.GetContentTypeByID(source.ContentTypeID) : undefined;
+            return { source, contentType };
+        };
+        let found = lookup();
+        if (!found.source || (found.source.ContentTypeID && !found.contentType)) {
+            await knowledge.Config(true, this.contextUser, this.provider);
+            found = lookup();
+        }
+        if (!found.source) {
+            throw new Error(`Content Source '${contentSourceID}' not found`);
+        }
+        return { source: found.source, contentType: found.contentType };
+    }
+
+    /**
+     * A vector index or database from `AIEngine`'s cache, or the one row from the database on a miss.
+     *
+     * Not an engine refresh, unlike {@link loadSource}: `AIEngine` reloads every model, prompt, agent
+     * and vendor to pick up one row, and it applies a save to its vector indexes only as a debounced
+     * full refresh seconds later. One RunView for the missing row costs nothing on the normal path.
+     * Belongs in BaseEngine as a get-or-load; until then it is here.
+     */
+    private async aiRow<T extends BaseEntity>(cached: readonly T[], entityName: string, id: string): Promise<T | undefined> {
+        const hit = cached.find((row) => UUIDsEqual(row.Get('ID') as string, id));
+        if (hit) {
+            return hit;
+        }
+        const result = await RunView.FromMetadataProvider(this.provider).RunView<T>(
+            { EntityName: entityName, ExtraFilter: WhereEqual({ ID: id }), ResultType: 'entity_object' },
+            this.contextUser,
+        );
+        return result.Success ? result.Results[0] : undefined;
     }
 
     /** Build the registered provider, with whatever key its credential supplies. */

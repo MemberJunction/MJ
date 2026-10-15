@@ -17,7 +17,13 @@
 import fs from 'fs';
 import path from 'path';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseDiscoverDriver, DiscoverRequest, DiscoveredItem } from '@memberjunction/content-pipeline-base';
+import {
+    BaseDiscoverDriver,
+    DiscoverRequest,
+    DiscoveredItem,
+    LocatorFetchRequest,
+    LocatorFetchResponse,
+} from '@memberjunction/content-pipeline-base';
 
 /** Registered under the name `ContentSourceType.DriverClass` already carries for this source type. */
 @RegisterClass(BaseDiscoverDriver, 'AutotagLocalFileSystem')
@@ -29,6 +35,26 @@ export class LocalFileSystemDiscoverDriver extends BaseDiscoverDriver {
             throw new Error(`Local File System source path '${request.URL}' does not exist`);
         }
         yield* this.walk(request.URL, request);
+    }
+
+    /**
+     * Read a file this walk found.
+     *
+     * Confined to the source's root. A locator is a row in the database, and a server that reads
+     * whatever path a row names reads `/etc/passwd` for anyone who can edit a content item — so a
+     * path that resolves outside the root (through `..` or a symlink) is refused, not read.
+     */
+    public async Fetch(request: LocatorFetchRequest): Promise<LocatorFetchResponse> {
+        if (!request.SourceURL) {
+            throw new Error('This Local File System source has no root path, so no file can be read from it');
+        }
+        const root = await fs.promises.realpath(request.SourceURL);
+        const target = await fs.promises.realpath(path.resolve(root, request.URL));
+        const relative = path.relative(root, target);
+        if (relative.startsWith('..') || path.isAbsolute(relative)) {
+            throw new Error(`'${request.URL}' is outside the source's root '${request.SourceURL}'`);
+        }
+        return { Content: new Uint8Array(await fs.promises.readFile(target)), ResolvedURL: target };
     }
 
     /**

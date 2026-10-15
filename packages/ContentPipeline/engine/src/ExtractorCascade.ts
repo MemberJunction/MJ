@@ -8,6 +8,7 @@
  * @module @memberjunction/content-pipeline
  */
 
+import { MJGlobal } from '@memberjunction/global';
 import { BaseContentExtractor } from '@memberjunction/content-pipeline-base';
 
 /** One candidate extractor a source nominates, with its rank. */
@@ -30,12 +31,19 @@ export interface ExtractorCascadeInputs {
     SourceExtractorKey?: string | null;
     /** `ContentType.ExtractorKey` — one sensible default for this kind of content generally. */
     ContentTypeExtractorKey?: string | null;
+    /** `ContentFileType.ExtractorKey` — the extractor metadata says reads this file type. */
+    FileTypeExtractorKey?: string | null;
+    /**
+     * Whether to fall back to any registered extractor that declares support for the file type.
+     * Default true: it is what reads a PDF on a database nobody has configured.
+     */
+    ByCapability?: boolean;
     /** The built-in last rung. */
     FallbackExtractorKey?: string | null;
 }
 
 /** Which rung of the cascade produced the extractor. */
-export type ExtractorSource = 'Override' | 'SourceCandidate' | 'Source' | 'ContentType' | 'Fallback';
+export type ExtractorSource = 'Override' | 'SourceCandidate' | 'Source' | 'ContentType' | 'FileType' | 'Capability' | 'Fallback';
 
 /** The selected extractor and where it came from. */
 export interface SelectedExtractor {
@@ -81,8 +89,42 @@ export function SelectExtractor(inputs: ExtractorCascadeInputs): SelectedExtract
         return { ...contentType, From: 'ContentType' };
     }
 
+    const byFileType = applicable(inputs.FileTypeExtractorKey, fileType);
+    if (byFileType) {
+        return { ...byFileType, From: 'FileType' };
+    }
+
+    if (inputs.ByCapability !== false && fileType) {
+        // Every extractor already says which file types it reads. Without this rung a PDF reached
+        // the plain-text fallback on any database whose metadata named no extractor for it — which
+        // is every database, out of the box.
+        // Only an extractor that NAMES the file type: a wildcard one (plain text claims '*') would
+        // otherwise win for every format it happens to sort ahead of.
+        for (const key of RegisteredExtractorKeys()) {
+            const capable = applicable(key, fileType);
+            if (capable && capable.Extractor.SupportedFileTypes.map((t) => t.toLowerCase()).includes(fileType)) {
+                return { ...capable, From: 'Capability' };
+            }
+        }
+    }
+
     const fallback = applicable(inputs.FallbackExtractorKey, fileType);
     return fallback ? { ...fallback, From: 'Fallback' } : null;
+}
+
+/**
+ * Every registered extractor key, highest registration priority first and then by name, so the
+ * capability rung picks the same extractor on every run and a deployment's own registration of a
+ * format outranks the built-in one.
+ */
+function RegisteredExtractorKeys(): string[] {
+    const best = new Map<string, number>();
+    for (const registration of MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseContentExtractor)) {
+        if (registration.Key) {
+            best.set(registration.Key, Math.max(best.get(registration.Key) ?? -Infinity, registration.Priority));
+        }
+    }
+    return [...best.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([key]) => key);
 }
 
 /** Resolve a key and keep it only if it supports this file type. */

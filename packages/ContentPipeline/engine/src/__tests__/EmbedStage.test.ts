@@ -9,6 +9,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StageContext, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
+import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { EmbedContentItemStage, EmbedStage } from '../stages/EmbedStage.js';
 // Importing the barrel fires every stage's @RegisterClass, which is what a host does via
 // LoadContentPipelineStages().
@@ -50,7 +51,7 @@ function internals(stage: EmbedStage) {
     return stage as unknown as {
         vectorIdFor(r: WorkingRecord): string;
         textFor(r: WorkingRecord): string;
-        metadataFor(r: WorkingRecord): Record<string, unknown>;
+        BuildVectorMetadata(r: WorkingRecord, route: unknown, tags: string[], context: StageContext): Record<string, unknown>;
         operationFor(r: WorkingRecord): string;
     };
 }
@@ -70,20 +71,33 @@ describe('EmbedStage — the per-record step is light', () => {
         expect(outcome.Status).toBe('Skipped');
     });
 
-    it('does NOT skip a non-text record, which is embedded from its own bytes', async () => {
-        // An image or a video has no text by nature. Skipping it for "no text" made the entire
-        // non-text corpus silently unsearchable.
+    it('SKIPS a non-text record with no text, rather than embedding an empty string', async () => {
+        // Embedding is text-in: every image would get the vector of '' and be equally "similar" to
+        // every query.
         const record = chunk('c1', null);
         record.Propose('Modality', 'image', 5, 'Extract');
         const outcome = await new EmbedStage().Run(record, contextWith());
-        expect(outcome.Status).toBe('Complete');
+        expect(outcome.Status).toBe('Skipped');
+        expect(outcome.Message).toContain('text-only');
+    });
+
+    it('embeds a non-text record that DOES carry text, such as a caption', async () => {
+        const record = chunk('c1', 'A bar chart of quarterly revenue');
+        record.Propose('Modality', 'image', 5, 'Extract');
+        expect((await new EmbedStage().Run(record, contextWith())).Status).toBe('Complete');
     });
 
     it('takes the operation from the HYDRATED status, never from a message', async () => {
         const stage = internals(new EmbedStage());
-        expect(stage.operationFor(chunk('c1', 'text', 'MetadataOnly'))).toBe('MetadataOnly');
+        const embedded = chunk('c1', 'text', 'MetadataOnly');
+        embedded.SetExtension('Pipeline', 'vectorRecordID', 'v1');
+        expect(stage.operationFor(embedded)).toBe('MetadataOnly');
         expect(stage.operationFor(chunk('c2', 'text', 'Pending'))).toBe('Full');
         expect(stage.operationFor(chunk('c3', 'text'))).toBe('Full');
+    });
+
+    it('turns a metadata refresh with no stored vector into a full embed — there is nothing to update', () => {
+        expect(internals(new EmbedStage()).operationFor(chunk('c1', 'text', 'MetadataOnly'))).toBe('Full');
     });
 });
 
@@ -104,15 +118,41 @@ describe('what Embed writes to the store', () => {
         expect(internals(new EmbedStage()).textFor(record)).toBe('From: Quarterly Report\n\nthe body');
     });
 
-    it('carries title and modality alongside the vector', () => {
+    const item = (fields: Record<string, unknown>) =>
+        ({ ...fields, GetAll: () => fields }) as never;
+    const metadataContext = { ...contextWith(), Provider: { EntityByName: () => undefined } as never };
+
+    it('writes the same metadata keys the autotagger does, tags included', () => {
         const record = chunk('c1', 'text');
-        record.Propose('Title', 'Quarterly', 5, 'Extract');
-        record.Propose('Modality', 'text', 5, 'Extract');
-        expect(internals(new EmbedStage()).metadataFor(record)).toMatchObject({
+        record.SetExtension('Pipeline', 'sequence', 3);
+        const route = {
+            Item: item({ ID: 'I1', ContentSourceID: 'S1', ContentSourceTypeID: 'T1', ContentTypeID: 'CT1', Name: 'Report', Description: null, URL: 'https://x/r' }),
+        };
+        expect(internals(new EmbedStage()).BuildVectorMetadata(record, route, ['finance', 'q3'], metadataContext)).toEqual({
+            Entity: 'MJ: Content Item Chunks',
             RecordID: 'c1',
-            Title: 'Quarterly',
-            Modality: 'text',
+            ContentItemID: 'I1',
+            Sequence: 3,
+            ContentSourceID: 'S1',
+            ContentSourceTypeID: 'T1',
+            Title: 'Report',
+            URL: 'https://x/r',
+            Tags: ['finance', 'q3'],
         });
+    });
+
+    it("takes its shape from the source's VectorMetadata, not from code — truncation, tags, text", () => {
+        vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'GetContentSourceByID').mockReturnValue({
+            ConfigurationObject: { VectorMetadata: { DefaultTruncationLimit: 4, IncludeTags: false, IncludeText: true } },
+        } as never);
+        vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'GetContentTypeByID').mockReturnValue(undefined);
+        const route = {
+            Item: item({ ID: 'I1', ContentSourceID: 'S1', ContentSourceTypeID: 'T1', ContentTypeID: 'CT1', Name: 'Quarterly Report', URL: 'u' }),
+        };
+        const meta = internals(new EmbedStage()).BuildVectorMetadata(chunk('c1', 'the body'), route, ['finance'], metadataContext);
+        expect(meta.Title).toBe('Quar');
+        expect(meta.Text).toBe('the ');
+        expect(meta.Tags).toBeUndefined();
     });
 });
 

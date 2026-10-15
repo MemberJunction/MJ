@@ -1,10 +1,15 @@
 # Content Pipeline Framework — Implementation Plan
 
 **Branch**: `feat/content-pipeline-framework` (from `next`, tracking `origin/feat/content-pipeline-framework`)
-**Shape**: ONE large PR covering the whole Framework track.
-**Specs**: PR [#4744](https://github.com/MemberJunction/MJ/pull/4744) + the architecture artifact
-(*The Content Pipeline*, 2026-09-29, Dray). **The artifact is canonical** where the two disagree.
-**Status**: plan only — no code written yet.
+**Shape**: ONE large PR covering the framework's stage logic, working record and drivers.
+**Spec of record**: `plans/content-pipeline-framework-merged.md` (PR
+[#4744](https://github.com/MemberJunction/MJ/pull/4744), branch `dray/content-pipeline-framework`) —
+*Record Set Processing + Work Queue, merged*. Where any other document disagrees with it, the merged plan
+wins. The architecture artifact (*The Content Pipeline*, 2026-09-29) and the two competing plans in
+#4744 (`content-pipeline-framework.md`, `content-pipeline-framework-workqueue.md`) are background: they
+describe the same stages, and are read for detail the merged plan leaves to "the stage logic", never to
+override it.
+**Status**: implemented; second review round (2026-10-07 / 2026-10-15) addressed.
 
 ---
 
@@ -13,7 +18,7 @@
 | # | Decision |
 |---|---|
 | 1 | **One PR**, not a series. Phases below are build order and review milestones, not separate PRs. |
-| 2 | **Artifact numbering is canonical**: F0–F13, including the **Delete stage (F12)** and **metadata-only embed (F13)**. fw.md's F12 (per-record claiming) is deferred — the Work Queue's lease supersedes it. |
+| 2 | **The merged plan's phases are the numbering of record.** Its M0–M6 are Record Set Processing's contract additions and the Work Queue bridge; its **M7 applies the queue to "the stage logic, working record and drivers"** — which is what this PR builds. The `F` labels in §6 are this PR's internal milestones only; each row names the merged-plan phase it belongs to, and the reviewers' phase mapping on the merged plan is authoritative where the two differ. |
 | 3 | **Build Work-Queue-compatible.** See §3 — "available" needs qualifying. |
 | 4 | **No dependency on `AutotagBaseEngine`.** It stays in the tree, untouched, and is removed separately. We do not call it, extend it, or import it. |
 | 5 | **No dependency on `@memberjunction/ai-knowledge-pipeline`.** Temporarily parallel, eventually removed. We do not call it. |
@@ -55,7 +60,7 @@ Verified against `origin/next` @ `705ab4e7d5`.
 | Fact | Consequence |
 |---|---|
 | PR #4744 is **docs-only** — 3 files, 860 lines, unmerged | The specs are not on our branch. Read from `origin/dray/content-pipeline-framework`. |
-| The artifact names `content-pipeline-framework-merged.md` as its framework plan, but that file has **zero** F-phase references | The F track lives in `content-pipeline-framework.md` lines 222–293. That is the detailed source; the artifact overrides it where they differ. |
+| The merged plan is the spec of record but has no stage-by-stage phases — M7 says only that stage logic, working record and drivers are "the same as in the other two plans" | Stage *detail* is read from `content-pipeline-framework.md` lines 222–293, as background under the merged plan. Where the two disagree, the merged plan wins. |
 
 ### Schema delta (verified in `packages/MJCoreEntities/src/generated/entities/__mj.ts`)
 
@@ -205,24 +210,27 @@ Stages register as `@RegisterClass(BasePipelineStage, 'Discover')` — the same 
 
 Milestones within the one PR. Each is independently reviewable and leaves the branch green.
 
-| # | Phase | Work |
-|---|---|---|
-| **1** | F0 | Migration: `FieldConfidence` ×3, `ExtractionStatus`, `SegmentationStatus`, `ContentItem.DeleteStatus`, `ExtractorKey`, `ExtractorKeyOverride`, `ContentItem.Modality`, Access-driver ref, multi-modal flags, file-reference field, `WorkType` CHECK + `'Pipeline Stage'`, embedding-status value for F13 — **one migration, all of it**, so CodeGen runs once. Then the base package: `WorkingRecord`, hydrators/committers, stage contract. |
-| **2** ✅ | F1 | DONE — proven end-to-end on a real DB (work type registers, Record Process row accepts `Pipeline Stage`, NoOp runs, commit lands).  — `content-pipeline` engine: `EntityFieldMap`, hydrator, committer, `PipelineProcessor` (18 tests). Remaining: registry wiring, `PipelineRecordProcessRunner`, `NoOpStage` against a real Record Process row. Stage registry; `PipelineProcessor`; `PipelineRecordProcessRunner` (the `BuildSource`/`BuildProcessor` workaround that makes tracker injection possible); `NoOpStage` proven against a real `Record Process` row. |
-| **3** ✅ | F2 | DONE — one detail row, opened `Pending` on start, carrying live progress, finalized in place. `PipelineProcessRunTracker` — `OpenDetail` on start, update in place via `ReportProgress`, finalize on `RecordResult`. Constructed **only** by the runner, so the queue bridge swaps it at one site. |
-| **4** ⬆️ | F3 | **NOT IN MJ — higher layer.** Access, credentials and role-based control are application-layer concerns; base MJ holds content data and assumes the caller is entitled to it. MJ keeps only an injectable fetcher on Extract so a higher layer supplies authenticated retrieval. ~~Access as a registered driver contract: `OpenSession`, role-based credential resolution, promise-cached handshake, eviction on failure/staleness, directly-callable entry point. Metadata: `ContentSourceTypeParam` rows per type. |
-| **5** | F4 | `DiscoverStage` — progress, stop signal, child results. |
-| **6** | F5 | `ExtractStage` + `BaseContentReader` cascade + plain-text fallback. |
-| **7** | F6 | Test mode — chained in-memory stage list, commit skipped, run-budget dial (record cap + per-stage wall clock). |
-| **8** | F7 | `TagStage` (via `ai-prompts` behind `IContentClassifier`) + `SegmentStage` (via `ai-segmentation`). |
-| **9** | F8 | `EmbedStage` — per-record step, batched generation + upsert in `finalize`, via `ai-vectors` / `ai-vectordb`. |
-| **10** | F9 | Multi-modal default/override cascade + durable copies inside Extract, keyed via `FieldPathResolver`. |
-| **11** | F10 | Archive reader — multi-block split via `ParentID`, per-child detail rows. |
-| **12** | F11 | Change detection (checksum), flat reset (`ContentPipelineResetService`), parent/child reconciliation by URL. |
-| **13** | F12 | **Delete stage** — chunk purge as a callable stage operation, pending-delete skip in every stage, conditional commit. |
-| **14** | F13 | Embed's metadata-only operation; vector-store provider update awaited, routed by namespace + index, batched. |
+| # | Milestone | Merged plan | Work |
+|---|---|---|---|
+| **1** | F0 | M7 — working record (schema) | Migration: `FieldConfidence` ×3, `ExtractionStatus`, `SegmentationStatus`, `ContentItem.DeleteStatus`, `ExtractorKey`, `ExtractorKeyOverride`, `ContentItem.Modality`, Access-driver ref, multi-modal flags, file-reference field, `WorkType` CHECK + `'Pipeline Stage'`, embedding-status value for F13 — **one migration, all of it**, so CodeGen runs once. Then the base package: `WorkingRecord`, hydrators/committers, stage contract. |
+| **2** ✅ | F1 | M7 — on M1/M2 seams | DONE — proven end-to-end on a real DB (work type registers, Record Process row accepts `Pipeline Stage`, NoOp runs, commit lands).  — `content-pipeline` engine: `EntityFieldMap`, hydrator, committer, `PipelineProcessor` (18 tests). Remaining: registry wiring, `PipelineRecordProcessRunner`, `NoOpStage` against a real Record Process row. Stage registry; `PipelineProcessor`; `PipelineRecordProcessRunner` (the `BuildSource`/`BuildProcessor` workaround that makes tracker injection possible); `NoOpStage` proven against a real `Record Process` row. |
+| **3** ✅ | F2 | M1 (detail rows, child results) | DONE — one detail row, opened `Pending` on start, carrying live progress, finalized in place. `PipelineProcessRunTracker` — `OpenDetail` on start, update in place via `ReportProgress`, finalize on `RecordResult`. Constructed **only** by the runner, so the queue bridge swaps it at one site. |
+| **4** ⬆️ | F3 | — (higher layer) | **NOT IN MJ — higher layer.** Access, credentials and role-based control are application-layer concerns; base MJ holds content data and assumes the caller is entitled to it. MJ keeps only an injectable fetcher on Extract so a higher layer supplies authenticated retrieval. ~~Access as a registered driver contract: `OpenSession`, role-based credential resolution, promise-cached handshake, eviction on failure/staleness, directly-callable entry point. Metadata: `ContentSourceTypeParam` rows per type. |
+| **5** | F4 | M7 — stage logic | `DiscoverStage` — progress, stop signal, child results. |
+| **6** | F5 | M7 — stage logic | `ExtractStage` + `BaseContentReader` cascade + plain-text fallback. |
+| **7** | F6 | M7 — stage logic | Test mode — chained in-memory stage list, commit skipped, run-budget dial (record cap + per-stage wall clock). |
+| **8** | F7 | M7 — stage logic | `TagStage` (via `ai-prompts` behind `IContentClassifier`) + `SegmentStage` (via `ai-segmentation`). |
+| **9** | F8 | M7 — stage logic | `EmbedStage` — per-record step, batched generation + upsert in `finalize`, via `ai-vectors` / `ai-vectordb`. |
+| **10** | F9 | M7 — drivers | Multi-modal default/override cascade + durable copies inside Extract, keyed via `FieldPathResolver`. |
+| **11** | F10 | M7 — stage logic | Archive reader — multi-block split via `ParentID`, per-child detail rows. |
+| **12** | F11 | M7 — working record | Change detection (checksum), flat reset (`ContentPipelineResetService`), parent/child reconciliation by URL. |
+| **13** | F12 | M7 — stage logic | **Delete stage** — chunk purge as a callable stage operation, pending-delete skip in every stage, conditional commit. |
+| **14** | F13 | M7 — stage logic | Embed's metadata-only operation; vector-store provider update awaited, routed by namespace + index, batched. |
+| **15** ✅ | Review 2 | M7 + the vector providers | Delete/re-embed lifecycle routed per record (`VectorRecordRouter`), receipts hydrated, chunks superseded on re-segment and purged unless referenced, metadata-only updates through the providers' own `UpdateRecords`, Extract fetching through each source's own driver, sessions bound to their origin, the Tag prompt fed its template variables, and the `content-pipeline` integration bundle (IT107). |
 
-Out of scope, stated explicitly in the PR body: the RSP↔queue bridge (S/M track), per-record claiming,
+Out of scope, stated explicitly in the PR body: merged-plan phases **M0–M6** (the record-cap fix, RSP's
+contract additions, the scope-provider registry, `ScopeType = 'Queue'`, `WorkQueueSource`,
+`QueueAwareTracker`) and the queue half of M7, per-record claiming,
 `AutotagBaseEngine` retirement, `ai-knowledge-pipeline` retirement, and the PG migration counterpart.
 
 ---
@@ -286,5 +294,6 @@ Data access via `RunView`/`RunViews`/engines — never hand-rolled SQL or GraphQ
 
 ## 8. Next step
 
-Launch the Docker SQL Server container at `next`'s migration level, confirm it is exclusively ours, then
-begin milestone 1 with the F0 migration.
+Merge `next`, regenerate the migration's CodeGen tail against a database synced to `next`'s metadata,
+and settle the two items the reviewers hold open: whether scheduled discovery is the deployment's job,
+and whether MJ ships a reference Access driver.

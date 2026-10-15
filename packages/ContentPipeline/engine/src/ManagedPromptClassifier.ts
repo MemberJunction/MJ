@@ -14,18 +14,22 @@
  * @module @memberjunction/content-pipeline
  */
 
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, RunView } from '@memberjunction/core';
+import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
+import { ClassificationContextResolver, IContentSourceClassificationConfiguration } from '@memberjunction/content-autotagging';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { TagEngine } from '@memberjunction/tag-engine';
 import {
     BaseContentClassifier,
+    FatalStageError,
     ClassifiedTag,
     ClassifyRequest,
     ClassifyResult,
 } from '@memberjunction/content-pipeline-base';
+import { WhereEqual } from './Filters.js';
 
 /** The registered key, and the name of the prompt MJ manages for this. */
 export const MANAGED_PROMPT_CLASSIFIER = 'ContentAutotagging';
@@ -58,12 +62,15 @@ export class ManagedPromptClassifier extends BaseContentClassifier {
         const params = new AIPromptParams();
         params.prompt = prompt;
         params.contextUser = request.ContextUser;
+        // The template's own variable names. Passing `text` / `taxonomy` meant the model never saw
+        // the document — `contentText` rendered empty — and classified nothing at all.
         params.data = {
-            text: request.Text,
+            ...(await this.promptContext(request)),
+            contentText: request.Text,
             title: request.Title ?? '',
             // The vocabulary the deployment already governs. Without it the model invents its own
             // tags every run and the taxonomy grows a synonym for everything it already has.
-            taxonomy: await this.taxonomy(request),
+            existingTaxonomy: (await this.taxonomy(request)) || undefined,
             ...request.Parameters,
         };
         params.skipValidation = false;
@@ -72,9 +79,14 @@ export class ManagedPromptClassifier extends BaseContentClassifier {
         // two different parts of the taxonomy.
         params.additionalParameters = { temperature: 0.0 };
 
-        const result = await new AIPromptRunner().ExecutePrompt<{ keywords?: unknown }>(params);
+        const result = await new AIPromptRunner().ExecutePrompt<{ keywords?: unknown; isValidContent?: boolean }>(params);
         if (!result.success) {
             throw new Error(`The '${MANAGED_PROMPT_NAME}' prompt failed: ${result.errorMessage ?? 'unknown error'}`);
+        }
+        if (result.result?.isValidContent === false) {
+            // The template's own escape hatch: the text is not the content type it claims to be.
+            request.ReportProgress('the model judged this not to be the configured content type');
+            return { Tags: [], Extensions: { PromptRunID: result.promptRun?.ID ?? null, IsValidContent: false } };
         }
         const tags = this.toTags(result.result?.keywords);
         request.ReportProgress(`the model returned ${tags.length} tag(s)`);
@@ -82,6 +94,106 @@ export class ManagedPromptClassifier extends BaseContentClassifier {
             Tags: tags,
             Extensions: { PromptRunID: result.promptRun?.ID ?? null },
         };
+    }
+
+    /**
+     * What the source and its content type say about classifying this item — the same inputs the
+     * autotagger gives the same prompt, so one prompt behaves the same under either caller.
+     *
+     * The tag-count bounds come from the content type and nowhere else. `MinTags` / `MaxTags` are
+     * required columns and every source names a content type, so changing them is an edit to a
+     * Content Type row — there is no default in code to drift from it.
+     */
+    private async promptContext(request: ClassifyRequest): Promise<Record<string, unknown>> {
+        const { source, contentType } = await this.resolveContentType(request);
+        const knowledge = KnowledgeHubMetadataEngine.Instance;
+        const sourceType = knowledge.GetContentSourceTypeByID(source.ContentSourceTypeID);
+        // A source type can declare that its content has no meaningful "type" to validate against.
+        const requiresContentType =
+            (sourceType?.ConfigurationObject as { RequiresContentType?: boolean } | null)?.RequiresContentType !== false;
+
+        return {
+            contentSourceType: sourceType?.Name ?? 'content source',
+            contentType: requiresContentType ? contentType.Name : undefined,
+            minTags: contentType.MinTags,
+            maxTags: contentType.MaxTags,
+            additionalAttributePrompts: await this.attributePrompts(contentType.ID, request),
+            classificationContext: await this.classificationContext(source.ConfigurationObject ?? null, contentType.ID, request),
+        };
+    }
+
+    /**
+     * The item's source and content type, from cached metadata.
+     *
+     * A miss refreshes the cache once — a worker that started before the source existed would
+     * otherwise fail every item until restarted — and only then fails. Fatal, not retried: a source
+     * with no resolvable content type will not grow one on the next attempt, and classifying it
+     * against bounds nobody configured would be a guess presented as a decision.
+     */
+    private async resolveContentType(request: ClassifyRequest) {
+        const knowledge = KnowledgeHubMetadataEngine.Instance;
+        await knowledge.Config(false, request.ContextUser, request.Provider);
+        if (!request.ContentSourceID) {
+            throw new FatalStageError('Classification needs the Content Source the item belongs to, and none was given');
+        }
+        const lookup = () => {
+            const source = knowledge.GetContentSourceByID(request.ContentSourceID!);
+            const contentType = source ? knowledge.GetContentTypeByID(source.ContentTypeID) : undefined;
+            return { source, contentType };
+        };
+        let found = lookup();
+        if (!found.source || !found.contentType) {
+            await knowledge.Config(true, request.ContextUser, request.Provider);
+            found = lookup();
+        }
+        if (!found.source || !found.contentType) {
+            throw new FatalStageError(
+                `Content Source '${request.ContentSourceID}' or its Content Type is not in metadata, so there are no tag bounds to classify with`,
+            );
+        }
+        return { source: found.source, contentType: found.contentType };
+    }
+
+    /** The content type's extra extraction prompts, phrased exactly as the autotagger phrases them. */
+    private async attributePrompts(contentTypeID: string, request: ClassifyRequest): Promise<string> {
+        const result = await RunView.FromMetadataProvider(request.Provider).RunView<{ Name: string; Prompt: string }>(
+            {
+                EntityName: 'MJ: Content Type Attributes',
+                ExtraFilter: WhereEqual({ ContentTypeID: contentTypeID }),
+                Fields: ['Name', 'Prompt'],
+                ResultType: 'simple',
+            },
+            request.ContextUser,
+        );
+        if (!result.Success) {
+            return '';
+        }
+        return result.Results.map(
+            (attr) =>
+                `${attr.Prompt}. The data must be included in the above described JSON file in this key-value format:     { "${attr.Name}": (value of ${attr.Name} here)}`,
+        ).join('\n');
+    }
+
+    /** The org / content-type / source classification context, through the shared resolver. */
+    private async classificationContext(
+        sourceConfig: unknown,
+        contentTypeID: string,
+        request: ClassifyRequest,
+    ): Promise<string | undefined> {
+        try {
+            return await ClassificationContextResolver.ResolveEffectiveContext(
+                (sourceConfig as IContentSourceClassificationConfiguration | null) ?? null,
+                contentTypeID,
+                KnowledgeHubMetadataEngine.Instance.ContentTypes,
+                request.ContextUser,
+                request.Provider,
+            );
+        } catch (error) {
+            LogStatus(
+                `ManagedPromptClassifier: no classification context (${error instanceof Error ? error.message : String(error)})`,
+            );
+            return undefined;
+        }
     }
 
     /**
@@ -139,9 +251,11 @@ export class ManagedPromptClassifier extends BaseContentClassifier {
             if (!name) {
                 continue;
             }
+            const parent = (entry.parentTag ?? '').trim();
             tags.push({
                 Name: name,
                 Score: typeof entry.weight === 'number' ? Math.max(0, Math.min(1, entry.weight)) : 0.5,
+                ...(parent ? { Parent: parent } : {}),
             });
         }
         return tags;

@@ -8,10 +8,11 @@
 
 import { BaseEntity, CompositeKey, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { WorkingRecord, WorkingRecordEntity } from '@memberjunction/content-pipeline-base';
-import { EscapeSQLString } from '@memberjunction/global';
+
 import { HasContentChanged } from './ChildReconciliation.js';
 import { GetEntityFieldMap, GetEntityName, GetStatusFields } from './EntityFieldMap.js';
 import { LookupResolver, UnresolvedLookupPolicy } from './LookupResolver.js';
+import { WhereEqual } from './Filters.js';
 
 /** Columns a child record inherits from whatever produced it. */
 export type ChildCommitDefaults = Readonly<Record<string, unknown>>;
@@ -53,7 +54,12 @@ export class WorkingRecordCommitter {
      * @param statusField The status column for the stage that just ran.
      * @param status What to set it to.
      */
-    public async Commit(record: WorkingRecord, statusField: string | null, status: string): Promise<CommitResult> {
+    public async Commit(
+        record: WorkingRecord,
+        statusField: string | null,
+        status: string,
+        succeeded = true,
+    ): Promise<CommitResult> {
         const entityObject = await this.load(record);
         const created = !record.Identity.IsPersisted;
         const written = await this.applyChangedFields(record, entityObject);
@@ -61,6 +67,11 @@ export class WorkingRecordCommitter {
         // computed from the text that was just read. Nothing competes for these on confidence, and
         // without this they were silently dropped on every parent commit.
         written.push(...this.applyColumns(record, entityObject));
+        if (succeeded) {
+            // Columns that assert the stage finished — Discover clearing its one-shot. Written only
+            // on success, so a failure leaves the record still due rather than looking done.
+            written.push(...this.applyColumns(record, entityObject, 'completionColumns'));
+        }
 
         if (statusField) {
             entityObject.Set(statusField, status);
@@ -132,6 +143,10 @@ export class WorkingRecordCommitter {
             // Content moved on, so every downstream stage has to redo its work. Reset is flat, and
             // reaches each stage's own status field directly.
             written.push(...this.resetDownstream(child, entityObject, statusField));
+            // And record what it moved on TO. The producing stage's columns — the checksum above all
+            // — were applied only when the row was created, so a changed item kept its old checksum
+            // and looked changed again on every later walk.
+            written.push(...this.applyColumns(child, entityObject));
         }
         this.applyConfidence(child, entityObject, written, rediscovered);
         this.applyCompletionSignal(child, entityObject, statusField, written);
@@ -171,7 +186,10 @@ export class WorkingRecordCommitter {
         }
         const proposedText = child.Get('Text');
         if (typeof proposedText !== 'string' || proposedText.length === 0) {
-            return true;
+            // Neither a checksum nor text: nothing here says the content moved. Calling that
+            // "changed" reprocessed every such item on every walk — a crawl reports that a page
+            // exists, not what it holds. A source that can detect change supplies a checksum.
+            return false;
         }
         return entityObject.Get('Text') !== proposedText;
     }
@@ -234,7 +252,7 @@ export class WorkingRecordCommitter {
         }
         const rv = RunView.FromMetadataProvider(this.provider);
         const result = await rv.RunView<{ ID: string }>(
-            { EntityName: GetEntityName(child.Entity), ExtraFilter: filter, MaxRows: 1 },
+            { EntityName: GetEntityName(child.Entity), ExtraFilter: filter, OrderBy: '__mj_CreatedAt', MaxRows: 1 },
             this.contextUser,
         );
         if (result.Success && result.Results.length > 0) {
@@ -245,27 +263,24 @@ export class WorkingRecordCommitter {
     /**
      * How a produced record is recognized as one that already exists.
      *
-     * Each entity has its own stable identity, and neither is a free choice:
-     *
      * - A **Content Item** is identified by its URL within its source. A URL from one source must
-     *   never match a record from another, hence the scope.
-     * - A **Content Item Chunk** has no URL at all; it is identified by its position within its
-     *   item. Re-segmenting the same text yields the same sequence numbers, so chunk N updates
-     *   chunk N rather than minting a replacement — which would orphan the old chunk's vector.
+     *   never match a record from another, hence the scope. Only a live row matches: a URL that
+     *   comes back after its item was deleted gets a fresh row rather than binding to the tombstone
+     *   and staying deleted. Where a source holds several items under one URL — the older Entity
+     *   and LocalFS autotaggers did — the oldest is matched, deterministically; such a source is not
+     *   really a candidate for change detection, and its rows still get in.
+     * - A **Content Item Chunk** never matches. Re-segmenting mints new chunks and the processor
+     *   retires the old set, so a chunk's identity always means the same text.
      */
     private matchFilter(child: WorkingRecord, parentDefaults: ChildCommitDefaults): string | null {
         if (child.Entity === 'Content Item Chunk') {
-            const itemID = parentDefaults.ContentItemID;
-            const sequence = (child.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}).Sequence;
-            return typeof itemID === 'string' && typeof sequence === 'number'
-                ? `ContentItemID='${itemID}' AND Sequence=${sequence}`
-                : null;
+            return null;
         }
         const sourceID = parentDefaults.ContentSourceID;
         if (typeof sourceID !== 'string' || !child.Identity.EphemeralID) {
             return null;
         }
-        return `ContentSourceID='${EscapeSQLString(sourceID)}' AND URL='${EscapeSQLString(child.Identity.EphemeralID)}'`;
+        return WhereEqual({ ContentSourceID: sourceID, URL: child.Identity.EphemeralID, DeleteStatus: null });
     }
 
     /**
@@ -274,8 +289,12 @@ export class WorkingRecordCommitter {
      * Only columns the entity actually has are written, so a stage can set something meaningful for
      * one entity without breaking a pipeline that runs it over another.
      */
-    private applyColumns(record: WorkingRecord, entityObject: BaseEntity): string[] {
-        const columns = record.GetExtension<Record<string, unknown>>('Pipeline', 'columns');
+    private applyColumns(
+        record: WorkingRecord,
+        entityObject: BaseEntity,
+        extension: 'columns' | 'completionColumns' = 'columns',
+    ): string[] {
+        const columns = record.GetExtension<Record<string, unknown>>('Pipeline', extension);
         if (!columns) {
             return [];
         }

@@ -10,6 +10,10 @@
 "@memberjunction/server": minor
 "@memberjunction/server-bootstrap": minor
 "@memberjunction/ng-core-entity-forms": minor
+"@memberjunction/ai-vectordb": minor
+"@memberjunction/ai-vectors-pinecone": minor
+"@memberjunction/network-utils": minor
+"@memberjunction/tag-engine": minor
 ---
 
 Add the content pipeline framework: a generic processor that runs registered stages over Content
@@ -48,5 +52,23 @@ Schema (all additive, on `__mj`): `FieldConfidence` on Content Source / Item / C
 `Modality`, `Date`, `Decorator` and `FileID` on Content Item; `Decorator` on Content Item Chunk;
 `ForceDiscovery` and `LastDiscoveredAt` on Content Source; `ExtractorKey` and
 `StructuralSignature` on Content Type; `ByteSignature`, `IsText` and `ExtractorKey` on Content File
-Type; a unique index on (ContentSourceID, URL); `'Pipeline Stage'` on the Record Process `WorkType`
-CHECK constraint; and `'MetadataOnly'` on both `EmbeddingStatus` CHECK constraints.
+Type; `'Pipeline Stage'` on the Record Process `WorkType` CHECK constraint; and `'MetadataOnly'` on
+both `EmbeddingStatus` CHECK constraints. There is deliberately no unique index on (ContentSourceID,
+URL): the Entity and LocalFS autotaggers store many items under one URL, so matching by URL is done
+in code, and a source whose URLs are not unique is simply not a candidate for change detection.
+
+Where each record's vector lives is decided per record by `VectorRecordRouter`, which Embed and Delete
+share so a delete reaches the namespace the write used. It asks the provider for its directives
+through MJ's generic `GetSourceRecordFieldPaths` / `BuildProviderDirectives`, so routing tenants to
+their own namespaces is configuration on the index (`namespaceField`, including IS-A paths such as
+`ContentSourceID.OrganizationID`), and a layer above MJ that needs more registers its own router.
+`VectorDBBase.UpdateRecords` and `DeleteRecords` take the index and provider config as
+`CreateRecords` does; Pinecone's update is now awaited, namespace-routed and batched, which is what
+lets a metadata-only refresh leave the stored vector untouched. Re-segmenting supersedes every
+previous chunk; Delete removes a chunk's row outright unless some entity references it.
+
+`@memberjunction/tag-engine` gains `ContentItemTagBridge`, the content-tag-to-taxonomy promotion the
+autotagger and the pipeline now share. `@memberjunction/network-utils`' `SafeFetch` gains
+`StripHeadersOnCrossOriginRedirect`, which the pipeline uses so a source's credentials never follow a
+redirect to another host. Get File Content reads `.xlsx` again: `document-parsing` imports its
+parsers statically.
