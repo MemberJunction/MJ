@@ -1565,9 +1565,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
   }
 
-  // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then keep a
-  // periodic staleness sweep running. Self-registers with ShutdownRegistry, so its timer is cleared
-  // by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
+  // Launch the AI Agent Session janitor: close orphaned, stale, and over-deadline sessions,
+  // then recover lost realtime recordings from their crash-recovery shards (storage reads and writes).
+  // Its ShutdownRegistry registration stops the timer and bounds the wait for active recovery.
   if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
     SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
       .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
