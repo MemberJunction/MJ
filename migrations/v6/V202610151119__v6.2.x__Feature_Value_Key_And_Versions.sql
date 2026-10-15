@@ -1260,7 +1260,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CA9E4797-3E8A-4942-AFE9-274CD49872A7'),
             'Metric',
             'Metric',
-            'Metric of the stored result: accuracy or macro-f1.',
+            'Metric of the stored result: accuracy.',
             'nvarchar',
             40,
             0,
@@ -1764,7 +1764,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CA9E4797-3E8A-4942-AFE9-274CD49872A7'),
             'ApprovedByUserID',
             'Approved By User ID',
-            'The user whose run activated the version: the context user of the activating golden-set evaluation or on-demand run; for an unattended activation, the user the Feature Pipeline Version Steward scheduled job runs as.',
+            'The user whose run activated the version (for an unattended activation, the Feature Pipeline Version Steward job''s user).',
             'uniqueidentifier',
             16,
             0,
@@ -1890,7 +1890,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CA9E4797-3E8A-4942-AFE9-274CD49872A7'),
             'BackfilledAt',
             'Backfilled At',
-            'When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version (the records whose latest Pipeline value was written under another version, or under none). NULL until then; cleared when the version is retired or becomes Active again, so each activation is backfilled once.',
+            'When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version.',
             'datetimeoffset',
             10,
             34,
@@ -2142,7 +2142,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '3BED585D-B150-4899-AB06-8A19624EA9BE'),
             'PipelineVersion',
             'Pipeline Version',
-            'Version of the Feature Pipeline (MJ: Feature Pipeline Versions.Version for this RecordProcessID) that computed this value. Part of the FeatureValueKey. NULL on rows written before versioning or by a processor run without a run-level Preflight.',
+            'Version of the Feature Pipeline (MJ: Feature Pipeline Versions.Version) that computed this value; part of the FeatureValueKey.',
             'int',
             4,
             10,
@@ -2457,7 +2457,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '3BED585D-B150-4899-AB06-8A19624EA9BE'),
             'Source',
             'Source',
-            'Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (a value a person entered on the target record, recorded when write-back found it and left it in place). Write-back never overwrites a Human value unless the run sets overwriteHumanValues.',
+            'Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (entered by a person, which write-back leaves in place).',
             'nvarchar',
             40,
             0,
@@ -2520,7 +2520,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9989A9A4-5546-4552-A765-B27EE399BFEA'),
             'ResultSummary',
             'Result Summary',
-            'JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, previewed, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types.',
+            'JSON summary of a Feature Pipeline run (FeaturePipelineRunResult); NULL for other work types.',
             'nvarchar',
             -1,
             0,
@@ -2718,12 +2718,6 @@ INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
                                        ('f795c993-2dbd-406c-af8a-ba3483d6059d', '5E2CE44B-A3E0-4A00-B20B-FE08DDCEE16C', 1, 'accuracy', 'accuracy', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 7bda8840-d91f-44c7-adf9-c0251ede89fa */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('7bda8840-d91f-44c7-adf9-c0251ede89fa', '5E2CE44B-A3E0-4A00-B20B-FE08DDCEE16C', 2, 'macro-f1', 'macro-f1', GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to update ValueListType for entity field ID 5E2CE44B-A3E0-4A00-B20B-FE08DDCEE16C */
 UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='5E2CE44B-A3E0-4A00-B20B-FE08DDCEE16C';
