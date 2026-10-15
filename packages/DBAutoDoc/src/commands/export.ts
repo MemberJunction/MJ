@@ -2,7 +2,7 @@
  * Export command - Generate SQL and Markdown documentation
  */
 
-import { Command, Flags } from '@oclif/core';
+import { Command, Flags, Interfaces } from '@oclif/core';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import chalk from 'chalk';
@@ -15,15 +15,19 @@ import { ReportGenerator } from '../generators/ReportGenerator.js';
 import { HTMLGenerator } from '../generators/HTMLGenerator.js';
 import { CSVGenerator } from '../generators/CSVGenerator.js';
 import { MermaidGenerator } from '../generators/MermaidGenerator.js';
-import { ErdClusterer } from '../generators/ErdClusterer.js';
-import { ErdClusterGenerator, ErdColumnMode } from '../generators/ErdClusterGenerator.js';
-import { ErdClusterPlan } from '../generators/ErdClusterer.js';
-import { ErdConfig } from '../types/config.js';
+import { ErdClusterer, ErdClusterPlan } from '../generators/ErdClusterer.js';
+import { ErdClusterGenerator } from '../generators/ErdClusterGenerator.js';
+import { ERD_DEFAULTS, ErdColumnMode, ErdConfig, ErdMode } from '../types/config.js';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
 // DatabaseConnection is lazy-imported only when --apply is used (requires DB credentials)
 
 /** Sub-directory of the output directory that holds the subject-area diagrams. */
 const ERD_CLUSTER_DIR = 'erd';
+
+const ERD_MODES: ErdMode[] = ['full', 'clusters', 'both'];
+const ERD_COLUMN_MODES: ErdColumnMode[] = ['all', 'keys', 'none'];
+
+type ExportFlags = Interfaces.InferredFlags<typeof Export.flags>;
 
 export default class Export extends Command {
   static description = 'Export documentation in multiple formats (SQL, Markdown, HTML, CSV, Mermaid)';
@@ -55,12 +59,28 @@ export default class Export extends Command {
     apply: Flags.boolean({ description: 'Apply SQL to database', default: false }),
     'approved-only': Flags.boolean({ description: 'Only export approved items', default: false }),
     'confidence-threshold': Flags.string({ description: 'Minimum confidence threshold', default: '0' }),
-    'erd-mode': Flags.string({ description: 'ERD layout: full (one diagram), clusters (one per subject area), both. Overrides output.erd.mode', options: ['full', 'clusters', 'both'] }),
-    'erd-columns': Flags.string({ description: 'Columns drawn per entity: all, keys (PK/FK only), none. Overrides output.erd.columns', options: ['all', 'keys', 'none'] }),
-    'erd-hub-min-inbound': Flags.integer({ description: 'A table referenced by at least this many tables is a subject-area hub (default 8)' }),
-    'erd-lookup-max-rows': Flags.integer({ description: 'A table that references nothing and has fewer rows than this is a reference table, listed not drawn (default 5000)' }),
-    'erd-page-size': Flags.integer({ description: 'Tables per diagram page beyond the hub (default 50)' }),
-    'erd-min-cluster-size': Flags.integer({ description: 'Subject areas smaller than this fold into a neighbour (default 4)' })
+    'erd-mode': Flags.custom<ErdMode>({ options: ERD_MODES })({
+      description: 'ERD layout: full (one diagram), clusters (one per subject area), both. Overrides output.erd.mode'
+    }),
+    'erd-columns': Flags.custom<ErdColumnMode>({ options: ERD_COLUMN_MODES })({
+      description: 'Columns drawn per entity: all, keys (PK/FK only), none. Overrides output.erd.columns'
+    }),
+    'erd-hub-min-inbound': Flags.integer({
+      min: 1,
+      description: `A table referenced by at least this many tables is a subject-area hub (default ${ERD_DEFAULTS.hubMinInbound})`
+    }),
+    'erd-lookup-max-rows': Flags.integer({
+      min: 1,
+      description: `A table that references nothing and has fewer rows than this is a reference table, listed not drawn (default ${ERD_DEFAULTS.lookupMaxRows})`
+    }),
+    'erd-page-size': Flags.integer({
+      min: 1,
+      description: `Tables per diagram page beyond the hub (default ${ERD_DEFAULTS.pageSize})`
+    }),
+    'erd-min-cluster-size': Flags.integer({
+      min: 1,
+      description: `Subject areas smaller than this fold into a neighbour (default ${ERD_DEFAULTS.minClusterSize})`
+    })
   };
 
   async run(): Promise<void> {
@@ -176,11 +196,19 @@ export default class Export extends Command {
       const erd = this.resolveErdConfig(config?.output?.erd, flags);
       // The plan is built whenever an output needs it: the HTML's Subject Areas section links to the
       // cluster pages, so requesting --html in clusters mode also writes them.
-      const clusterPlan: ErdClusterPlan | undefined = (generateMermaid || generateHTML) && erd.mode !== 'full'
+      let clusterPlan: ErdClusterPlan | undefined = (generateMermaid || generateHTML) && erd.mode !== 'full'
         ? new ErdClusterer().Plan(state, erd)
         : undefined;
       for (const warning of clusterPlan?.Warnings ?? []) {
         this.warn(`ERD ${warning}`);
+      }
+      if (clusterPlan && clusterPlan.Clusters.length === 0) {
+        // Nothing is referenced often enough to anchor an area: fall back to the single diagram
+        // rather than leaving the documentation with no ERD at all.
+        this.warn(`ERD: no table is referenced by at least ${clusterPlan.Options.hubMinInbound} others, so there are no subject areas; `
+          + 'drawing the full diagram instead (lower --erd-hub-min-inbound to cluster)');
+        clusterPlan = undefined;
+        erd.mode = 'full';
       }
 
       // Generate HTML
@@ -279,17 +307,15 @@ export default class Export extends Command {
   }
 
   /** Merge the ERD settings: defaults, then config.output.erd, then the export flags. */
-  private resolveErdConfig(configured: ErdConfig | undefined, flags: Record<string, unknown>): ErdConfig & { mode: 'full' | 'clusters' | 'both' } {
-    const mode = (flags['erd-mode'] as ErdConfig['mode']) ?? configured?.mode ?? 'full';
-    const columns = (flags['erd-columns'] as ErdColumnMode | undefined) ?? configured?.columns;
+  private resolveErdConfig(configured: ErdConfig | undefined, flags: ExportFlags): ErdConfig & { mode: ErdMode } {
     return {
       ...configured,
-      mode,
-      columns,
-      hubMinInbound: (flags['erd-hub-min-inbound'] as number | undefined) ?? configured?.hubMinInbound,
-      lookupMaxRows: (flags['erd-lookup-max-rows'] as number | undefined) ?? configured?.lookupMaxRows,
-      pageSize: (flags['erd-page-size'] as number | undefined) ?? configured?.pageSize,
-      minClusterSize: (flags['erd-min-cluster-size'] as number | undefined) ?? configured?.minClusterSize,
+      mode: flags['erd-mode'] ?? configured?.mode ?? 'full',
+      columns: flags['erd-columns'] ?? configured?.columns,
+      hubMinInbound: flags['erd-hub-min-inbound'] ?? configured?.hubMinInbound,
+      lookupMaxRows: flags['erd-lookup-max-rows'] ?? configured?.lookupMaxRows,
+      pageSize: flags['erd-page-size'] ?? configured?.pageSize,
+      minClusterSize: flags['erd-min-cluster-size'] ?? configured?.minClusterSize,
     };
   }
 }

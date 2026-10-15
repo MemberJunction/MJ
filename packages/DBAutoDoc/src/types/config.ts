@@ -372,18 +372,32 @@ export interface OutputConfig {
  * which Mermaid refuses above ~50,000 characters of source; `clusters` splits the FK graph into
  * hub-centred subject areas that each fit. Every value can be overridden per run by an export flag.
  */
+/** `full`: one schema-wide diagram. `clusters`: one diagram per subject area. `both`: write both. */
+export type ErdMode = 'full' | 'clusters' | 'both';
+
+/** Columns drawn in each ERD entity: every column, primary and foreign keys only, or none. */
+export type ErdColumnMode = 'all' | 'keys' | 'none';
+
+/** Defaults for the numeric `ErdConfig` settings; the single source the CLI flag help and the docs quote. */
+export const ERD_DEFAULTS = {
+  hubMinInbound: 8,
+  lookupMaxRows: 5000,
+  pageSize: 50,
+  minClusterSize: 4,
+} as const;
+
 export interface ErdConfig {
-  /** `full` (default): one diagram. `clusters`: one diagram per subject area. `both`: write both. */
-  mode?: 'full' | 'clusters' | 'both';
-  /** Columns drawn in each entity: every column (`all`, the default for `full`), primary and foreign keys only (`keys`, the default for clusters), or none. */
-  columns?: 'all' | 'keys' | 'none';
-  /** A table referenced by at least this many other tables becomes a cluster hub (default 8). */
+  /** Default `full`. */
+  mode?: ErdMode;
+  /** Default `all` for the full diagram and `keys` for subject-area diagrams. */
+  columns?: ErdColumnMode;
+  /** A table referenced by at least this many other tables becomes a cluster hub (default `ERD_DEFAULTS.hubMinInbound`). */
   hubMinInbound?: number;
-  /** A table that references nothing and has fewer rows than this is a reference (lookup) table, listed rather than drawn (default 5000). */
+  /** A table that references nothing and has fewer rows than this is a reference (lookup) table, listed rather than drawn (default `ERD_DEFAULTS.lookupMaxRows`). */
   lookupMaxRows?: number;
-  /** Tables per diagram page beyond the hub; a larger cluster is paginated (default 50). */
+  /** Tables per diagram page beyond the hub; a larger cluster is paginated (default `ERD_DEFAULTS.pageSize`). */
   pageSize?: number;
-  /** A hub whose cluster is smaller than this is folded into the neighbouring cluster it links to most (default 4). */
+  /** A hub whose cluster is smaller than this is folded into the neighbouring cluster it links to most (default `ERD_DEFAULTS.minClusterSize`). */
   minClusterSize?: number;
   /** Table names always treated as hubs, in addition to those found by hubMinInbound. */
   hubs?: string[];

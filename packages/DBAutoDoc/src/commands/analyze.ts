@@ -83,7 +83,8 @@ export default class Analyze extends Command {
         resumeFromState: flags.resume,
         reanalyzeBelowConfidence,
         maxIterations,
-        skipSampling: flags['skip-sampling'],
+        // --pruning-only runs the FK pruning pass alone; sampling would be new work it never asked for
+        skipSampling: flags['skip-sampling'] || flags['pruning-only'],
         onProgress: (message, data) => {
           if (data) {
             spinner.succeed(`${message}: ${JSON.stringify(data)}`);

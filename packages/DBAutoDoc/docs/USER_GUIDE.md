@@ -1285,7 +1285,6 @@ Confidence = (
 contents to `customInstructions`, separated by `---`. Paths are relative to the config file. A file that
 cannot be read fails configuration loading with the setting name and resolved path in the error.
 
-
 ### Iteration Tracking
 
 Each table tracks description iterations:
@@ -2122,11 +2121,6 @@ Detailed analysis metrics:
 
 ### Resume from Checkpoint
 
-A resumed run also finishes an interrupted data-sampling pass: state is saved every 25 tables during
-sampling, and on resume only the tables whose columns have no statistics yet are sampled (the log reports
-how many).
-
-
 **Problem:** Previous analysis was interrupted
 
 **Solution:**
@@ -2144,6 +2138,11 @@ The `--resume` flag:
 - Continues from where analysis stopped
 - Uses same configuration as original run
 - Much faster than starting over
+
+A resumed run also finishes an interrupted data-sampling pass: state is saved every 25 tables during
+sampling, and on resume only the tables whose columns have no statistics yet are sampled (the log reports
+how many). A run that was analyzed with `--skip-sampling` stays unsampled on resume; `--pruning-only`
+never samples.
 
 ### Out of Memory
 

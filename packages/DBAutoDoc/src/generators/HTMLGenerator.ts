@@ -5,6 +5,9 @@
 import { DatabaseDocumentation } from '../types/state.js';
 import { ErdClusterPlan } from './ErdClusterer.js';
 
+/** Hub descriptions are long; the Subject Areas table shows this much of each. */
+const SUBJECT_AREA_DESCRIPTION_CHARS = 200;
+
 export interface HTMLGeneratorOptions {
   approvedOnly?: boolean;
   confidenceThreshold?: number;
@@ -766,11 +769,10 @@ export class HTMLGenerator {
     lines.push('<tbody>');
     for (const cluster of plan.Clusters) {
       const hub = plan.TableOf(cluster.Hub);
-      const base = `${dir}/cluster-${cluster.HubName.replace(/[^A-Za-z0-9_]/g, '_')}`;
       const pages = cluster.Pages.length > 1
-        ? cluster.Pages.map(p => `<a href="${this.escapeHtml(base)}-${p.Number}.html">page ${p.Number}</a>`).join(', ')
-        : `<a href="${this.escapeHtml(base)}.html">diagram</a>`;
-      lines.push(`<tr><td><a href="#table-${this.toAnchor(hub.name)}">${this.escapeHtml(cluster.HubName)}</a></td><td>${cluster.Tables.length}</td><td>${pages}</td><td>${this.escapeHtml((hub.description ?? '').slice(0, 200))}</td></tr>`);
+        ? cluster.Pages.map(p => `<a href="${this.escapeHtml(`${dir}/${p.BaseName}`)}.html">page ${p.Number}</a>`).join(', ')
+        : `<a href="${this.escapeHtml(`${dir}/${cluster.Pages[0].BaseName}`)}.html">diagram</a>`;
+      lines.push(`<tr><td><a href="#table-${this.toAnchor(hub.name)}">${this.escapeHtml(cluster.HubName)}</a></td><td>${cluster.Tables.length}</td><td>${pages}</td><td>${this.escapeHtml((hub.description ?? '').slice(0, SUBJECT_AREA_DESCRIPTION_CHARS))}</td></tr>`);
     }
     lines.push('</tbody>');
     lines.push('</table>');

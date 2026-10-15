@@ -1,5 +1,4 @@
 import { Command, Flags } from '@oclif/core';
-import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
 
 export default class DbDocAnalyze extends Command {
   static description = 'Analyze database and generate documentation (delegates to db-auto-doc analyze)';

@@ -170,7 +170,7 @@ describe('ConfigLoader - applyDefaults', () => {
       output: { stateFile: './s.json', sqlFile: './o.sql', markdownFile: './o.md' },
       seedContext: {
         file: './context.md',
-        overallPurpose: 'AQHA System'
+        overallPurpose: 'Membership system'
       }
     };
 
@@ -179,15 +179,15 @@ describe('ConfigLoader - applyDefaults', () => {
         return JSON.stringify(configWithSeedFile);
       }
       if (String(filePath).endsWith('context.md')) {
-        return '# Detailed AQHA Markdown Documentation';
+        return '# Detailed data dictionary';
       }
       throw new Error(`File not found: ${filePath}`);
     });
 
     const config = await ConfigLoader.load('/tmp/config.json');
     expect(config.ai.model).toBe('gemini-3.8-flash');
-    expect(config.seedContext?.customInstructions).toBe('# Detailed AQHA Markdown Documentation');
-    expect(config.seedContext?.overallPurpose).toBe('AQHA System');
+    expect(config.seedContext?.customInstructions).toBe('# Detailed data dictionary');
+    expect(config.seedContext?.overallPurpose).toBe('Membership system');
   });
 });
 

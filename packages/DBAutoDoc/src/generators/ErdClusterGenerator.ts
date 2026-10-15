@@ -6,9 +6,8 @@
  */
 
 import { DatabaseDocumentation, ColumnDefinition } from '../types/state.js';
-import { ErdCluster, ErdClusterPage, ErdClusterPlan } from './ErdClusterer.js';
-
-export type ErdColumnMode = 'all' | 'keys' | 'none';
+import { ErdColumnMode } from '../types/config.js';
+import { ErdCluster, ErdClusterPage, ErdClusterPlan, ErdEdge } from './ErdClusterer.js';
 
 export interface ErdClusterGeneratorOptions {
   /** Which columns each entity shows. Default `keys`. */
@@ -31,8 +30,12 @@ export interface ErdClusterOutput {
   IndexMarkdown: string;
 }
 
-/** Mermaid's default maxTextSize is 50,000; pages are capped well below it, this is the viewer's ceiling. */
+/** Mermaid's default maxTextSize is 50,000; pages stay well below it, this is the viewer's ceiling. */
 const VIEWER_MAX_TEXT_SIZE = 200000;
+/** Mermaid's default maxEdges is 500; a hub page can carry more relationships than that. */
+const VIEWER_MAX_EDGES = 5000;
+/** Hub descriptions are long; the index shows this much of each. */
+const INDEX_DESCRIPTION_CHARS = 160;
 
 export class ErdClusterGenerator {
   public Generate(state: DatabaseDocumentation, plan: ErdClusterPlan, options: ErdClusterGeneratorOptions = {}): ErdClusterOutput {
@@ -40,28 +43,33 @@ export class ErdClusterGenerator {
     const files: ErdClusterFile[] = [];
     for (const cluster of plan.Clusters) {
       for (const page of cluster.Pages) {
-        const multi = cluster.Pages.length > 1;
-        const baseName = `cluster-${this.identifier(cluster.HubName)}${multi ? `-${page.Number}` : ''}`;
-        const title = `${cluster.HubName}${multi ? ` (${page.Number} of ${cluster.Pages.length})` : ''} — ${page.Tables.length} tables`;
-        const mermaid = this.renderPage(plan, cluster, page, columns);
-        files.push({ BaseName: baseName, Title: title, Cluster: cluster, Page: page, Mermaid: mermaid, Html: this.renderPageHtml(state, plan, cluster, page, title, mermaid) });
+        const title = `${page.Title} — ${page.Tables.length} tables`;
+        const mermaid = this.RenderPage(plan, cluster, page, columns);
+        files.push({
+          BaseName: page.BaseName,
+          Title: title,
+          Cluster: cluster,
+          Page: page,
+          Mermaid: mermaid,
+          Html: this.renderPageHtml(state, plan, cluster, page, title, mermaid),
+        });
       }
     }
-    return { Files: files, IndexHtml: this.renderIndexHtml(state, plan, files), IndexMarkdown: this.renderIndexMarkdown(state, plan, files) };
+    return {
+      Files: files,
+      IndexHtml: this.renderIndexHtml(state, plan, files),
+      IndexMarkdown: this.renderIndexMarkdown(state, plan, files),
+    };
   }
 
   /** The Mermaid source for one page: its tables and the FK edges between them. */
   public RenderPage(plan: ErdClusterPlan, cluster: ErdCluster, page: ErdClusterPage, columns: ErdColumnMode = 'keys'): string {
-    return this.renderPage(plan, cluster, page, columns);
-  }
-
-  private renderPage(plan: ErdClusterPlan, cluster: ErdCluster, page: ErdClusterPage, columns: ErdColumnMode): string {
     const onPage = new Set(page.Tables);
     const lines: string[] = ['erDiagram'];
     for (const key of page.Tables) {
-      const table = plan.TableOf(key);
-      lines.push(`    ${this.identifier(table.name)} {`);
-      for (const column of table.columns) {
+      // Entity and relationship lines must agree on the name; the plan's display name is unique across schemas
+      lines.push(`    ${this.identifier(plan.NameOf(key))} {`);
+      for (const column of plan.TableOf(key).columns) {
         if (!this.showColumn(column, columns)) continue;
         const flags = [column.isPrimaryKey && 'PK', column.isForeignKey && 'FK'].filter(Boolean).join(',');
         const type = (column.dataType || 'unknown').replace(/\s+/g, '_');
@@ -71,7 +79,9 @@ export class ErdClusterGenerator {
     }
     for (const edge of cluster.InternalEdges) {
       if (onPage.has(edge.From) && onPage.has(edge.To)) {
-        lines.push(`    ${this.identifier(plan.NameOf(edge.To))} ||--o{ ${this.identifier(plan.NameOf(edge.From))} : "${this.identifier(edge.FromColumn || '')}"`);
+        const parent = this.identifier(plan.NameOf(edge.To));
+        const child = this.identifier(plan.NameOf(edge.From));
+        lines.push(`    ${parent} ||--o{ ${child} : "${this.identifier(edge.FromColumn || '')}"`);
       }
     }
     return lines.join('\n');
@@ -88,20 +98,30 @@ export class ErdClusterGenerator {
     return name.replace(/[^A-Za-z0-9_]/g, '_');
   }
 
+  /** `label` plus the tables at the far end of `edges`, each with how many edges reach it. */
+  private linkedAreas(plan: ErdClusterPlan, label: string, edges: ErdEdge[], farEnd: (e: ErdEdge) => string): string {
+    if (edges.length === 0) return '';
+    const counts = new Map<string, number>();
+    for (const e of edges) counts.set(farEnd(e), (counts.get(farEnd(e)) ?? 0) + 1);
+    const items = [...counts]
+      .sort((a, b) => b[1] - a[1])
+      .map(([t, n]) => `${this.escape(plan.NameOf(t))} <span class="count">(${n})</span>`)
+      .join(', ');
+    return `<h3>${label}</h3><p class="refs">${items}</p>`;
+  }
+
   private renderPageHtml(state: DatabaseDocumentation, plan: ErdClusterPlan, cluster: ErdCluster, page: ErdClusterPage, title: string, mermaid: string): string {
     const hub = plan.TableOf(cluster.Hub);
-    const otherPages = cluster.Pages.length > 1
-      ? `<p>Pages: ${cluster.Pages.map(p => p.Number === page.Number ? `<strong>${p.Number}</strong>` : `<a href="cluster-${this.identifier(cluster.HubName)}-${p.Number}.html">${p.Number}</a>`).join(' · ')}</p>`
+    const pageLinks = cluster.Pages
+      .map(p => p.Number === page.Number ? `<strong>${p.Number}</strong>` : `<a href="${p.BaseName}.html">${p.Number}</a>`)
+      .join(' · ');
+    const otherPages = cluster.Pages.length > 1 ? `<p>Pages: ${pageLinks}</p>` : '';
+    const referenceItems = cluster.ReferenceTables
+      .map(r => `${this.escape(r.Table)} <span class="count">(${r.UsedBy})</span>`)
+      .join(', ');
+    const references = cluster.ReferenceTables.length > 0
+      ? `<h3>Reference tables used by this area</h3><p class="refs">${referenceItems}</p>`
       : '';
-    const refs = cluster.ReferenceTables.length > 0
-      ? `<h3>Reference tables used by this area</h3><p class="refs">${cluster.ReferenceTables.map(r => `${this.escape(r.Table)} <span class="count">(${r.UsedBy})</span>`).join(', ')}</p>`
-      : '';
-    const links = (label: string, edges: typeof cluster.OutboundEdges, pick: (e: typeof edges[number]) => string) => {
-      if (edges.length === 0) return '';
-      const counts = new Map<string, number>();
-      for (const e of edges) counts.set(pick(e), (counts.get(pick(e)) ?? 0) + 1);
-      return `<h3>${label}</h3><p class="refs">${[...counts].sort((a, b) => b[1] - a[1]).map(([t, n]) => `${this.escape(plan.NameOf(t))} <span class="count">(${n})</span>`).join(', ')}</p>`;
-    };
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -127,10 +147,10 @@ ${otherPages}
 <pre class="mermaid">
 ${this.escape(mermaid)}
 </pre>
-${refs}
-${links('References tables in other areas', cluster.OutboundEdges, e => e.To)}
-${links('Referenced from other areas', cluster.InboundEdges, e => e.From)}
-<script>mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose', maxTextSize: ${VIEWER_MAX_TEXT_SIZE}, maxEdges: 5000 });<\/script>
+${references}
+${this.linkedAreas(plan, 'References tables in other areas', cluster.OutboundEdges, e => e.To)}
+${this.linkedAreas(plan, 'Referenced from other areas', cluster.InboundEdges, e => e.From)}
+<script>mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose', maxTextSize: ${VIEWER_MAX_TEXT_SIZE}, maxEdges: ${VIEWER_MAX_EDGES} });<\/script>
 </body>
 </html>`;
   }
@@ -138,10 +158,15 @@ ${links('Referenced from other areas', cluster.InboundEdges, e => e.From)}
   private renderIndexHtml(state: DatabaseDocumentation, plan: ErdClusterPlan, files: ErdClusterFile[]): string {
     const rows = files.map(f => {
       const hub = plan.TableOf(f.Cluster.Hub);
-      return `<tr><td><a href="${f.BaseName}.html">${this.escape(f.Title)}</a></td><td>${f.Cluster.Tables.length}</td><td>${f.Cluster.InternalEdges.length}</td><td>${f.Cluster.OutboundEdges.length} / ${f.Cluster.InboundEdges.length}</td><td>${this.escape((hub.description ?? '').slice(0, 160))}</td></tr>`;
+      const description = this.escape((hub.description ?? '').slice(0, INDEX_DESCRIPTION_CHARS));
+      return `<tr><td><a href="${f.BaseName}.html">${this.escape(f.Title)}</a></td>`
+        + `<td>${f.Cluster.Tables.length}</td><td>${f.Cluster.InternalEdges.length}</td>`
+        + `<td>${f.Cluster.OutboundEdges.length} / ${f.Cluster.InboundEdges.length}</td><td>${description}</td></tr>`;
     }).join('\n');
-    const list = (title: string, items: string[]) => items.length === 0 ? '' : `<h2>${title} (${items.length})</h2><p class="refs">${items.map(i => this.escape(i)).join(', ')}</p>`;
-    const covered = plan.Clusters.reduce((n, c) => n + c.Tables.length, 0);
+    const list = (title: string, items: string[]) => items.length === 0
+      ? ''
+      : `<h2>${title} (${items.length})</h2><p class="refs">${items.map(i => this.escape(i)).join(', ')}</p>`;
+    const summary = this.planSummary(plan, 'html');
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -161,7 +186,7 @@ ${links('Referenced from other areas', cluster.InboundEdges, e => e.From)}
 <body>
 <p><a href="../documentation.html">Documentation</a></p>
 <h1>Subject areas — ${this.escape(state.database.name)}</h1>
-<p class="meta">${plan.TotalTables} tables and ${plan.TotalEdges} foreign-key relationships. ${plan.Clusters.length} subject areas cover ${covered} tables; hubs are tables referenced by at least ${plan.Options.hubMinInbound} others, reference tables are those that reference nothing and hold fewer than ${plan.Options.lookupMaxRows.toLocaleString()} rows.</p>
+<p class="meta">${summary}</p>
 <table>
 <thead><tr><th>Subject area</th><th>Tables</th><th>FKs inside</th><th>Links out / in</th><th>Hub description</th></tr></thead>
 <tbody>
@@ -177,27 +202,40 @@ ${list('Excluded by configuration', plan.ExcludedTables)}
   }
 
   private renderIndexMarkdown(state: DatabaseDocumentation, plan: ErdClusterPlan, files: ErdClusterFile[]): string {
-    const covered = plan.Clusters.reduce((n, c) => n + c.Tables.length, 0);
     const md: string[] = [
       `# Subject areas — ${state.database.name}`,
       '',
-      `${plan.TotalTables} tables and ${plan.TotalEdges} foreign-key relationships. ${plan.Clusters.length} subject areas cover ${covered} tables (hubs: referenced by ≥ ${plan.Options.hubMinInbound}; reference tables: reference nothing and < ${plan.Options.lookupMaxRows.toLocaleString()} rows).`,
+      this.planSummary(plan, 'markdown'),
       '',
       '| Subject area | Tables | FKs inside | Links out / in | Hub description |',
       '|---|---|---|---|---|',
     ];
     for (const f of files) {
       const hub = plan.TableOf(f.Cluster.Hub);
-      md.push(`| [${f.Title}](${f.BaseName}.html) | ${f.Cluster.Tables.length} | ${f.Cluster.InternalEdges.length} | ${f.Cluster.OutboundEdges.length} / ${f.Cluster.InboundEdges.length} | ${(hub.description ?? '').replace(/\|/g, '/').slice(0, 160)} |`);
+      const description = (hub.description ?? '').replace(/\|/g, '/').slice(0, INDEX_DESCRIPTION_CHARS);
+      const c = f.Cluster;
+      md.push(`| [${f.Title}](${f.BaseName}.html) | ${c.Tables.length} | ${c.InternalEdges.length} | ${c.OutboundEdges.length} / ${c.InboundEdges.length} | ${description} |`);
     }
     md.push('', '## Membership', '');
     for (const c of plan.Clusters) md.push(`**${c.HubName}**: ${c.Tables.map(plan.NameOf).join(', ')}`, '');
-    const section = (title: string, items: string[]) => { if (items.length) md.push(`## ${title} (${items.length})`, '', items.join(', '), ''); };
+    const section = (title: string, items: string[]) => {
+      if (items.length > 0) md.push(`## ${title} (${items.length})`, '', items.join(', '), '');
+    };
     section('Reference tables (listed, not drawn)', plan.ReferenceTables.map(r => `${r.Table} (${r.ReferencedBy})`));
     section('Tables with no foreign keys', plan.IsolatedTables);
     section('Connected tables outside every subject area', plan.UnassignedTables);
     section('Excluded by configuration', plan.ExcludedTables);
     return md.join('\n');
+  }
+
+  /** The one-paragraph description of how the plan was built, shared by both indexes. */
+  private planSummary(plan: ErdClusterPlan, format: 'html' | 'markdown'): string {
+    const covered = plan.Clusters.reduce((n, c) => n + c.Tables.length, 0);
+    const rows = plan.Options.lookupMaxRows.toLocaleString();
+    const head = `${plan.TotalTables} tables and ${plan.TotalEdges} foreign-key relationships. ${plan.Clusters.length} subject areas cover ${covered} tables`;
+    return format === 'html'
+      ? `${head}; hubs are tables referenced by at least ${plan.Options.hubMinInbound} others, reference tables are those that reference nothing and hold fewer than ${rows} rows.`
+      : `${head} (hubs: referenced by ≥ ${plan.Options.hubMinInbound}; reference tables: reference nothing and < ${rows} rows).`;
   }
 
   private escape(text: string): string {

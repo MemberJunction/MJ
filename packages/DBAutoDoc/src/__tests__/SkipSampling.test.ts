@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AnalysisOrchestrator } from '../core/AnalysisOrchestrator.js';
 import { DBAutoDocConfig } from '../types/config.js';
+import { DatabaseDocumentation } from '../types/state.js';
+import { StateManager } from '../state/StateManager.js';
 
 const mockDriver = {
   getExistingDescriptions: vi.fn().mockResolvedValue([]),
@@ -112,6 +114,13 @@ function createTestConfig(overrides?: Partial<DBAutoDocConfig>): DBAutoDocConfig
   };
 }
 
+/** Exposes the protected resume hook so a test can stub the state file without casting through unknown. */
+class ResumableOrchestrator extends AnalysisOrchestrator {
+  public override loadAndMergeState(statePath: string, stateManager: StateManager): Promise<DatabaseDocumentation> {
+    return super.loadAndMergeState(statePath, stateManager);
+  }
+}
+
 describe('Resumed sampling in AnalysisOrchestrator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -125,10 +134,9 @@ describe('Resumed sampling in AnalysisOrchestrator', () => {
       columns: [{ name: 'Id', dataType: 'int', isNullable: false, isPrimaryKey: true, isForeignKey: false, descriptionIterations: [] }] };
     const resumedState = { version: '1.0.0', database: { name: 'TestDB', server: 'localhost' }, summary: {}, phases: { descriptionGeneration: [] },
       schemas: [{ name: 'dbo', tables: [sampled, unsampled], descriptionIterations: [] }] };
-    vi.spyOn(AnalysisOrchestrator.prototype as unknown as { loadAndMergeState: () => Promise<unknown> }, 'loadAndMergeState')
-      .mockResolvedValue(resumedState);
+    vi.spyOn(ResumableOrchestrator.prototype, 'loadAndMergeState').mockResolvedValue(resumedState as unknown as DatabaseDocumentation);
 
-    const orchestrator = new AnalysisOrchestrator({
+    const orchestrator = new ResumableOrchestrator({
       config: createTestConfig(),
       resumeFromState: './output/run-1/state.json',
       maxIterations: 0,
@@ -140,6 +148,27 @@ describe('Resumed sampling in AnalysisOrchestrator', () => {
     expect(progressMessages).toContain('Sampling table data [1/1]: dbo.Orders');
     expect(mockAnalyzeTable).toHaveBeenCalledTimes(1);
     expect(mockAnalyzeTable).toHaveBeenCalledWith('dbo', 'Orders', unsampled.columns);
+  });
+
+  it('does not start sampling on a resume when the resumed run skipped it', async () => {
+    const progressMessages: string[] = [];
+    const unsampled = { name: 'Orders', rowCount: 500, dependsOn: [], dependents: [], descriptionIterations: [],
+      columns: [{ name: 'Id', dataType: 'int', isNullable: false, isPrimaryKey: true, isForeignKey: false, descriptionIterations: [] }] };
+    const resumedState = { version: '1.0.0', database: { name: 'TestDB', server: 'localhost' }, summary: {},
+      phases: { descriptionGeneration: [], dataSampling: { status: 'skipped', startedAt: '2026-01-01T00:00:00Z', sampledTables: 0, totalTables: 1 } },
+      schemas: [{ name: 'dbo', tables: [unsampled], descriptionIterations: [] }] };
+    vi.spyOn(ResumableOrchestrator.prototype, 'loadAndMergeState').mockResolvedValue(resumedState as unknown as DatabaseDocumentation);
+
+    const orchestrator = new ResumableOrchestrator({
+      config: createTestConfig(),
+      resumeFromState: './output/run-1/state.json',
+      maxIterations: 0,
+      onProgress: (msg) => progressMessages.push(msg)
+    });
+    const result = await orchestrator.Execute();
+    expect(result.success).toBe(true);
+    expect(progressMessages.some(m => m.startsWith('Table data sampling skipped (the resumed run skipped it'))).toBe(true);
+    expect(mockAnalyzeTable).not.toHaveBeenCalled();
   });
 });
 
@@ -184,7 +213,7 @@ describe('SkipSampling in AnalysisOrchestrator', () => {
   it('skips organic-key detection with a warning when sampling is skipped', async () => {
     const progressMessages: string[] = [];
     const config = createTestConfig();
-    config.analysis.organicKeyDetection = { enabled: true } as NonNullable<DBAutoDocConfig['analysis']['organicKeyDetection']>;
+    config.analysis.organicKeyDetection = { enabled: true, provider: 'gemini', model: 'test-model' } as DBAutoDocConfig['analysis']['organicKeyDetection'];
     const orchestrator = new AnalysisOrchestrator({
       config,
       skipSampling: true,
@@ -193,7 +222,7 @@ describe('SkipSampling in AnalysisOrchestrator', () => {
     });
     const result = await orchestrator.Execute();
     expect(result.success).toBe(true);
-    expect(progressMessages.some(m => m.startsWith('Organic-key detection skipped'))).toBe(true);
+    expect(progressMessages).toContain('Organic-key detection skipped: it needs column statistics and no table has been sampled');
     expect(progressMessages).not.toContain('Running organic-key detection');
   });
 

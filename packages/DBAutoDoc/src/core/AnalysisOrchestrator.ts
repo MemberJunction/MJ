@@ -21,11 +21,15 @@ import { MarkdownGenerator } from '../generators/MarkdownGenerator.js';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
 import { SampleQueryGenerator } from '../generators/SampleQueryGenerator.js';
 import { DBAutoDocConfig } from '../types/config.js';
-import { DatabaseDocumentation, AnalysisRun } from '../types/state.js';
+import { DatabaseDocumentation, AnalysisRun, DataSamplingPhase, TableDefinition } from '../types/state.js';
 import { DiscoveryTriggerAnalyzer } from '../discovery/DiscoveryTriggerAnalyzer.js';
 import { DiscoveryEngine } from '../discovery/DiscoveryEngine.js';
 import { OrganicKeyDetector } from '../discovery/OrganicKeyDetector.js';
+import type { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { DetectedOrganicKeysOutput } from '../discovery/OrganicKeyTranslator.js';
+
+/** Tables sampled between state saves; an interrupted run resumes from the last multiple. */
+const SAMPLING_CHECKPOINT_INTERVAL = 25;
 
 export interface AnalysisOptions {
   config: DBAutoDocConfig;
@@ -160,61 +164,7 @@ export class AnalysisOrchestrator {
 
       }
 
-      // Analyze data. On a fresh run every table is sampled; on a resume only the tables whose
-      // columns carry no statistics yet, so an interrupted sampling pass picks up from its last
-      // 25-table checkpoint instead of being skipped along with introspection.
-      const samplingSkipped = this.skipSampling === true || this.config.analysis.skipSampling === true;
-      if (samplingSkipped) {
-        this.onProgress('Table data sampling skipped');
-      } else {
-        const driver = db.getDriver();
-        const pending = state.schemas
-          .flatMap(schema => schema.tables.map(table => ({ schema, table })))
-          .filter(({ table }) => !this.resumeFromState || !this.tableHasStatistics(table));
-        const totalTables = state.schemas.reduce((sum, s) => sum + s.tables.length, 0);
-
-        if (pending.length === 0) {
-          this.onProgress('Table data already sampled', { tables: totalTables });
-        } else {
-          if (this.resumeFromState && pending.length < totalTables) {
-            this.onProgress(`Resuming table data sampling: ${pending.length} of ${totalTables} tables have no statistics yet`, {
-              pending: pending.length, total: totalTables
-            });
-          }
-          this.onProgress('Analyzing table data');
-          const sampler = new DataSampler(driver, this.config.analysis);
-          let samplingErrors = 0;
-          let tableIndex = 0;
-
-          for (const { schema, table } of pending) {
-            tableIndex++;
-            this.onProgress(`Sampling table data [${tableIndex}/${pending.length}]: ${schema.name}.${table.name}`);
-            try {
-              await sampler.analyzeTable(schema.name, table.name, table.columns);
-            } catch (error) {
-              samplingErrors++;
-              const errorMsg = `Warning: Failed to analyze data for ${schema.name}.${table.name}: ${(error as Error).message}`;
-              console.error(errorMsg);
-              this.onProgress(errorMsg, { schema: schema.name, table: table.name, error: (error as Error).message });
-              // Continue with next table - partial data better than no data
-            }
-
-            // Periodic save every 25 tables so an interrupted run resumes from here
-            if (tableIndex % 25 === 0) {
-              stateManager.updateSummary(state);
-              await stateManager.save(state);
-            }
-          }
-          this.onProgress('Data analysis complete', {
-            tablesAnalyzed: pending.length - samplingErrors,
-            errors: samplingErrors
-          });
-
-          // Save state after sampling
-          stateManager.updateSummary(state);
-          await stateManager.save(state);
-        }
-      }
+      await this.sampleTableData(state, db.getDriver(), stateManager);
 
       // Relationship Discovery Phase (if enabled)
       // Runs on both fresh and resumed runs; resumes from partial progress if interrupted
@@ -440,10 +390,11 @@ export class AnalysisOrchestrator {
       // fed to the additionalSchemaInfo generator so CodeGen writes the
       // EntityOrganicKey / EntityOrganicKeyRelatedEntity metadata.
       let organicKeyOutput: DetectedOrganicKeysOutput | undefined;
-      if (this.config.analysis.organicKeyDetection?.enabled && samplingSkipped) {
+      const hasStatistics = state.schemas.some(schema => schema.tables.some(table => this.tableHasStatistics(table)));
+      if (this.config.analysis.organicKeyDetection?.enabled && !hasStatistics) {
         // The semantic prefilter's cardinality gate only applies to columns that carry statistics;
-        // without sampling every column would become a candidate and the normalizer fan-out is unbounded.
-        const warning = 'Organic-key detection skipped: it needs column statistics and table data sampling was skipped';
+        // without any, every column would become a candidate and the normalizer fan-out is unbounded.
+        const warning = 'Organic-key detection skipped: it needs column statistics and no table has been sampled';
         console.warn(warning);
         this.onProgress(warning);
       } else if (this.config.analysis.organicKeyDetection?.enabled) {
@@ -531,7 +482,7 @@ export class AnalysisOrchestrator {
   /**
    * Load existing state and prepare for resumption
    */
-  private async loadAndMergeState(
+  protected async loadAndMergeState(
     resumePath: string,
     stateManager: StateManager
   ): Promise<DatabaseDocumentation> {
@@ -544,8 +495,98 @@ export class AnalysisOrchestrator {
     return existingState;
   }
 
+  /**
+   * Sample table data (row counts, distinct counts, sample values) into the state.
+   *
+   * A fresh run samples every table. A resume samples only the tables whose columns carry no
+   * statistics, so an interrupted pass continues from its last checkpoint — unless the state records
+   * that its run skipped sampling, in which case the resume honours that choice.
+   */
+  private async sampleTableData(state: DatabaseDocumentation, driver: BaseAutoDocDriver, stateManager: StateManager): Promise<void> {
+    const totalTables = state.schemas.reduce((sum, s) => sum + s.tables.length, 0);
+    const previous = state.phases.dataSampling;
+    const skipRequested = this.skipSampling === true || this.config.analysis.skipSampling === true;
+    const skipInherited = this.resumeFromState != null && previous?.status === 'skipped';
+
+    if (skipRequested || skipInherited) {
+      this.onProgress(skipInherited && !skipRequested
+        ? 'Table data sampling skipped (the resumed run skipped it; pass no --resume, or run analyze without --skip-sampling on a fresh run, to sample)'
+        : 'Table data sampling skipped');
+      state.phases.dataSampling = {
+        status: 'skipped',
+        startedAt: previous?.startedAt ?? new Date().toISOString(),
+        sampledTables: previous?.sampledTables ?? 0,
+        totalTables,
+      };
+      return;
+    }
+
+    const pending = state.schemas
+      .flatMap(schema => schema.tables.map(table => ({ schema, table })))
+      .filter(({ table }) => !this.resumeFromState || !this.tableHasStatistics(table));
+
+    if (pending.length === 0) {
+      this.onProgress('Table data already sampled', { tables: totalTables });
+      state.phases.dataSampling = {
+        status: 'completed',
+        startedAt: previous?.startedAt ?? new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        sampledTables: totalTables,
+        totalTables,
+      };
+      return;
+    }
+    if (this.resumeFromState && pending.length < totalTables) {
+      this.onProgress(`Resuming table data sampling: ${pending.length} of ${totalTables} tables have no statistics yet`, {
+        pending: pending.length, total: totalTables
+      });
+    }
+
+    const phase: DataSamplingPhase = {
+      status: 'partial',
+      startedAt: previous?.startedAt ?? new Date().toISOString(),
+      sampledTables: totalTables - pending.length,
+      totalTables,
+    };
+    state.phases.dataSampling = phase;
+
+    this.onProgress('Analyzing table data');
+    const sampler = new DataSampler(driver, this.config.analysis);
+    let samplingErrors = 0;
+    let tableIndex = 0;
+    for (const { schema, table } of pending) {
+      tableIndex++;
+      this.onProgress(`Sampling table data [${tableIndex}/${pending.length}]: ${schema.name}.${table.name}`);
+      try {
+        await sampler.analyzeTable(schema.name, table.name, table.columns);
+      } catch (error) {
+        samplingErrors++;
+        const errorMsg = `Warning: Failed to analyze data for ${schema.name}.${table.name}: ${(error as Error).message}`;
+        console.error(errorMsg);
+        this.onProgress(errorMsg, { schema: schema.name, table: table.name, error: (error as Error).message });
+        // Continue with next table - partial data better than no data
+      }
+      phase.sampledTables++;
+
+      // Checkpoint so an interrupted run resumes from here instead of from the start
+      if (tableIndex % SAMPLING_CHECKPOINT_INTERVAL === 0) {
+        stateManager.updateSummary(state);
+        await stateManager.save(state);
+      }
+    }
+    this.onProgress('Data analysis complete', {
+      tablesAnalyzed: pending.length - samplingErrors,
+      errors: samplingErrors
+    });
+
+    phase.status = 'completed';
+    phase.completedAt = new Date().toISOString();
+    stateManager.updateSummary(state);
+    await stateManager.save(state);
+  }
+
   /** A table counts as sampled once any of its columns carries statistics. */
-  private tableHasStatistics(table: { columns: Array<{ statistics?: unknown }> }): boolean {
+  private tableHasStatistics(table: TableDefinition): boolean {
     return table.columns.some(column => column.statistics !== undefined);
   }
 

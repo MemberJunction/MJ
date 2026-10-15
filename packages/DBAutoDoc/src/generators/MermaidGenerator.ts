@@ -3,13 +3,14 @@
  */
 
 import { DatabaseDocumentation } from '../types/state.js';
+import { ErdColumnMode } from '../types/config.js';
 
 export interface MermaidGeneratorOptions {
   approvedOnly?: boolean;
   confidenceThreshold?: number;
   includeComments?: boolean;
   /** Columns drawn per entity: every column (default), primary/foreign keys only, or none. */
-  columns?: 'all' | 'keys' | 'none';
+  columns?: ErdColumnMode;
 }
 
 export class MermaidGenerator {

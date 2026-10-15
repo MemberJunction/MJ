@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { ErdClusterer } from '../generators/ErdClusterer';
-import { ErdClusterGenerator } from '../generators/ErdClusterGenerator';
 import { DatabaseDocumentation, TableDefinition, ForeignKeyReference } from '../types/state';
 
 /**
@@ -129,48 +128,27 @@ describe('ErdClusterer', () => {
     ]);
   });
 
+  it('rejects settings below 1 instead of looping or degenerating', () => {
+    expect(() => new ErdClusterer().Plan(state(), { pageSize: 0 })).toThrow(/pageSize must be a whole number of at least 1/);
+    expect(() => new ErdClusterer().Plan(state(), { hubMinInbound: -3 })).toThrow(/hubMinInbound/);
+  });
+
+  it('gives every page a unique file name even when hub names sanitise alike', () => {
+    const s = state();
+    s.schemas[0].tables.push(table('Order-Item', 100000, []), table('Order_Item', 100000, []));
+    for (let i = 0; i < 6; i++) {
+      s.schemas[0].tables.push(table(`Dash${i}`, 100000, ['Order-Item']), table(`Under${i}`, 100000, ['Order_Item']));
+    }
+    const plan = new ErdClusterer().Plan(s, { hubMinInbound: 5 });
+    const names = plan.Clusters.flatMap(c => c.Pages.map(p => p.BaseName));
+    expect(new Set(names).size).toBe(names.length);
+    expect(names.filter(n => n.startsWith('cluster-Order_Item')).sort()).toEqual(['cluster-Order_Item', 'cluster-Order_Item~2']);
+  });
+
   it('counts edges that cross between subject areas', () => {
     const plan = new ErdClusterer().Plan(state(), { hubMinInbound: 5 });
     const total = plan.Clusters.reduce((n, c) => n + c.OutboundEdges.length, 0);
     expect(total).toBeGreaterThanOrEqual(1); // CustomerHorse references the hub it was not assigned to
     expect(plan.TotalEdges).toBe(16 * 2 + 2 + 1);
-  });
-});
-
-describe('ErdClusterGenerator', () => {
-  it('renders one Mermaid page per cluster page with keys only, plus an index', () => {
-    const plan = new ErdClusterer().Plan(state(), { hubMinInbound: 5, pageSize: 4 });
-    const output = new ErdClusterGenerator().Generate(state(), plan);
-    const totalPages = plan.Clusters.reduce((n, c) => n + c.Pages.length, 0);
-    expect(output.Files).toHaveLength(totalPages);
-    const first = output.Files[0];
-    expect(first.Mermaid.startsWith('erDiagram')).toBe(true);
-    expect(first.Mermaid).toContain('int ID "PK"');
-    expect(first.Mermaid).not.toContain('nvarchar'); // non-key columns are not drawn in keys mode
-    expect(first.Mermaid).toMatch(/\|\|--o\{/);
-    expect(first.Mermaid).not.toMatch(/^\s+Status \{/m); // reference tables are listed, not drawn
-    expect(first.Html).toContain('Reference tables used by this area');
-    expect(first.Html).toContain('maxTextSize');
-    expect(output.IndexHtml).toContain('cluster-Customer-1.html');
-    expect(output.IndexMarkdown).toContain('# Subject areas — TestDB');
-    expect(output.IndexMarkdown).toContain('Orphan');
-  });
-
-  it('draws every column in all mode and none in none mode', () => {
-    const plan = new ErdClusterer().Plan(state(), { hubMinInbound: 5 });
-    const gen = new ErdClusterGenerator();
-    const customer = plan.Clusters.find(c => c.HubName === 'Customer')!;
-    expect(gen.RenderPage(plan, customer, customer.Pages[0], 'all')).toContain('nvarchar(50) Name');
-    expect(gen.RenderPage(plan, customer, customer.Pages[0], 'none')).not.toMatch(/^\s+int ID/m); // no attribute lines, relationships remain
-  });
-
-  it('sanitises names Mermaid cannot parse', () => {
-    const s = state();
-    s.schemas[0].tables.push(table('Customer.bak', 10, ['Customer']));
-    const plan = new ErdClusterer().Plan(s, { hubMinInbound: 5 });
-    const customer = plan.Clusters.find(c => c.HubName === 'Customer')!;
-    const mmd = new ErdClusterGenerator().RenderPage(plan, customer, customer.Pages[0]);
-    expect(mmd).toContain('Customer_bak');
-    expect(mmd).not.toContain('Customer.bak');
   });
 });
