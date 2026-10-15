@@ -1,8 +1,8 @@
 {
   "name": "@memberjunction/ai-systemone",
   "type": "module",
-  "version": "6.2.0-edge.3",
-  "description": "MemberJunction drivers for System One decision APIs: any server with POST /v1/systemone (Kev on Modal, llama.cpp llama-server, TypeSafe), and Perplexity's Decisions API (pplx-decider-v1-27b)",
+  "version": "6.2.0-edge.4",
+  "description": "MemberJunction drivers for System One decision APIs: any server with POST /v1/systemone (Kev on Modal, llama.cpp llama-server, TypeSafe), Perplexity's Decisions API (pplx-decider-v1-27b) and Subquadratic's SubQ Decisions API (SubQ Snap)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -20,8 +20,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "6.2.0-edge.3",
-    "@memberjunction/global": "6.2.0-edge.3"
+    "@memberjunction/ai": "6.2.0-edge.4",
+    "@memberjunction/global": "6.2.0-edge.4"
   },
   "repository": {
     "type": "git",

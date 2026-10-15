@@ -1,10 +1,11 @@
-import { BaseEntity, EntitySaveOptions } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
+import { BaseEntity, BaseEntityResult, EntitySaveOptions, IMetadataProvider, LogError, RunView } from "@memberjunction/core";
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { MJConversationDetailEntityExtended } from "@memberjunction/core-entities";
 
 /**
  * Server-side subclass of MJConversationDetailEntity that automatically tracks
- * when the original message content has been modified.
+ * when the original message content has been modified, and checks the fork of
+ * each new message.
  *
  * When a user edits their message after initial creation, the OriginalMessageChanged
  * flag is set to true, allowing the UI to display an "(Edited)" indicator. This is
@@ -26,19 +27,75 @@ import { MJConversationDetailEntityExtended } from "@memberjunction/core-entitie
  * run server-side (`ProviderType === 'Database'`), which is exactly where it was being
  * shadowed out. Inheriting composes the two behaviors instead: this class flags the edit,
  * then delegates to the permission gate via `super.Save`.
+ *
+ * A new row keeps the `BranchID` its writer set (null is Main). On create, a non-null `BranchID`
+ * must name a fork of the same conversation; otherwise `Save` returns `false` with a result
+ * entry and nothing is written.
  */
 @RegisterClass(BaseEntity, "MJ: Conversation Details")
 export class MJConversationDetailEntityServer extends MJConversationDetailEntityExtended {
     /**
-     * Override Save to detect message changes and set the OriginalMessageChanged flag.
-     * This is done as pre-processing before calling super.Save() to ensure it's a single DB round trip.
+     * Sets the OriginalMessageChanged flag on a genuine message edit, checks a new row's fork,
+     * then calls super.Save(). Returns `false` without saving when the fork check fails.
      */
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         if (this.ShouldFlagOriginalMessageChanged()) {
             this.OriginalMessageChanged = true;
         }
-
+        const problem = await this.CheckBranchOnCreate();
+        if (problem) {
+            this.recordCreateFailure(problem);
+            return false;
+        }
         return super.Save(options);
+    }
+
+    /**
+     * On create, a non-null BranchID must name a fork of the same conversation. Returns why the save
+     * must fail, or null when it may go on. An existing row, a Main row (null BranchID), a row with no
+     * ConversationID and a save with no context user are not checked.
+     */
+    public async CheckBranchOnCreate(): Promise<string | null> {
+        if (this.IsSaved || this.BranchID == null || !this.ConversationID) {
+            return null;
+        }
+        const user = this.ContextCurrentUser;
+        if (!user) {
+            return null;
+        }
+        const branchId = this.BranchID;
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse as unknown as IMetadataProvider);
+            const result = await rv.RunView<{ ID: string; ConversationID: string }>({
+                EntityName: 'MJ: Conversation Branches',
+                ExtraFilter: `ID='${EscapeSQLString(branchId)}'`,
+                Fields: ['ID', 'ConversationID'],
+                ResultType: 'simple',
+            }, user);
+            if (!result.Success) {
+                LogError(`MJConversationDetailEntityServer: could not read fork ${branchId}: ${result.ErrorMessage}`);
+                return 'Unable to check the fork of this message.';
+            }
+            const fork = result.Results?.[0];
+            if (!fork || !UUIDsEqual(fork.ConversationID, this.ConversationID)) {
+                return `Fork ${branchId} does not belong to conversation ${this.ConversationID}.`;
+            }
+            return null;
+        } catch (error) {
+            LogError(`MJConversationDetailEntityServer: could not read fork ${branchId}: ${error instanceof Error ? error.message : String(error)}`);
+            return 'Unable to check the fork of this message.';
+        }
+    }
+
+    /** Records a failed create in the result history, so callers see why nothing was written. */
+    private recordCreateFailure(message: string): void {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = 'create';
+        result.Message = message;
+        result.StartedAt = new Date();
+        result.EndedAt = new Date();
+        this.RegisterResultHistoryEntry(result);
     }
 
     /**

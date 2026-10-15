@@ -6,6 +6,7 @@
 import { RelationshipDiscoveryPhase, CachedColumnStats } from './discovery.js';
 import { SampleQuery, SampleQueryGenerationSummary } from './sample-queries.js';
 import { OrganicKeyCluster, OrganicKeyDetectionPhase } from './organic-keys.js';
+import type { AutoDocPluginStateSection } from '../plugins/types.js';
 
 export interface DatabaseDocumentation {
   version: string;
@@ -21,6 +22,12 @@ export interface DatabaseDocumentation {
    */
   organicKeyClusters?: OrganicKeyCluster[];
   resumedFromFile?: string; // Path to the state file this analysis resumed from
+  /**
+   * Per-plugin sections, keyed by plugin registration name. Each holds the plugin's hook-run
+   * history and whatever data the plugin chose to persist. Absent in state files from runs
+   * that loaded no plugins.
+   */
+  plugins?: Record<string, AutoDocPluginStateSection>;
 }
 
 /**
@@ -50,6 +57,8 @@ export interface DatabaseInfo {
   name: string;
   server: string;
   analyzedAt: string;
+  /** Database platform the run connected to. Absent in state files from older versions. */
+  provider?: 'sqlserver' | 'mysql' | 'postgresql' | 'oracle';
 }
 
 export interface SeedContext {

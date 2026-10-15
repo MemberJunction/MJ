@@ -182,6 +182,11 @@ module.exports = {
     level: 'standard',  // 'minimal' | 'standard' | 'verbose' | 'debug'
   },
 
+  // Template data that prompt runs store — see "Prompt run template data" below
+  aiPromptRuns: {
+    templateDataCapture: 'None',  // 'None' | 'Referenced' | 'Full'
+  },
+
   // Realtime WebRTC SDP broker router (/realtime/sdp-exchange)
   // Enabled by default; can be disabled via MJ_REALTIME_ENABLED=false or realtime.enabled: false
   realtime: {
@@ -196,6 +201,18 @@ module.exports = {
   },
 };
 ```
+
+### Prompt run template data (`aiPromptRuns`)
+
+`aiPromptRuns.templateDataCapture` is the server default for the template inputs that a prompt run stores in `AIPromptRun.Messages`:
+
+| Value | What a run stores |
+|---|---|
+| `'None'` (default) | Top-level key names and byte sizes only, no values |
+| `'Referenced'` | Only the keys that the prompt's templates read |
+| `'Full'` | All keys |
+
+A value on the prompt (`AIPrompt.TemplateDataCapture`) or on the call (`AIPromptParams.TemplateDataCapture`) overrides it. MJServer checks the value when it starts: any other value stops MJAPI with `Configuration validation failed`. For the full rules, see [Template data capture](../AI/Prompts/README.md#template-data-capture) in the AI Prompts README.
 
 ### Debugging GraphQL requests
 
@@ -970,6 +987,7 @@ For full architecture details, refer to the **[Server Extensions Guide](../../gu
 5. Core integrations (Twilio, Vonage, RingCentral, Teams meetings) register their management services directly into `loader.Services` under `'TwilioTelephonyService'`, `'VonageTelephonyService'`, `'RingCentralTelephonyService'`, and `'TeamsMeetingsService'`.
 6. Open App server packages listed in `dynamicPackages.server[]` declare their extensions (`MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`). The host `mj.config.cjs` `serverExtensions[]` overlays those by `DriverClass`.
 7. Core routes (`/graphql`, `/health`, `/auth`, `/media`, `/schema`, `/mcp`) are protected by a reserved roots registry; extensions attempting to claim a reserved root fail closed during bootstrap.
+8. MJServer's global CORS middleware runs before every extension. An extension with its own origin policy sets `OwnsCORS: true` in its config; global CORS then skips its `RootPath`, so its preflights reach the extension and no origin is reflected onto its responses. See the guide's "Owning CORS for Your RootPath" section. Express's `X-Powered-By` header is disabled app-wide.
 
 ### Configuration
 

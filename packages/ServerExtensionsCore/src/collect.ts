@@ -30,6 +30,7 @@ function cloneConfig(config: ServerExtensionConfig): ServerExtensionConfig {
         DriverClass: config.DriverClass,
         RootPath: config.RootPath,
         Phase: config.Phase,
+        ...(config.OwnsCORS !== undefined ? { OwnsCORS: config.OwnsCORS } : {}),
         Settings: { ...(config.Settings ?? {}) },
     };
 }
@@ -95,6 +96,15 @@ export function NormalizeServerExtensionConfigs(
                 invalid(options, `serverExtensions[${i}] ('${driverClass}') Phase must be 'pre-auth' or 'post-auth'${source}`);
             }
         }
+        let ownsCORS: boolean | undefined = undefined;
+        if (rec.OwnsCORS !== undefined) {
+            if (typeof rec.OwnsCORS === 'boolean') {
+                ownsCORS = rec.OwnsCORS;
+            } else {
+                // Fail toward MJServer's global CORS: a malformed flag must not strip CORS handling.
+                invalid(options, `serverExtensions[${i}] ('${driverClass}') OwnsCORS must be a boolean; ignoring it${source}`);
+            }
+        }
         const settings =
             rec.Settings != null && typeof rec.Settings === 'object' && !Array.isArray(rec.Settings)
                 ? { ...(rec.Settings as Record<string, unknown>) }
@@ -107,6 +117,7 @@ export function NormalizeServerExtensionConfigs(
             DriverClass: driverClass,
             RootPath: rootPath,
             Phase: phase,
+            ...(ownsCORS !== undefined ? { OwnsCORS: ownsCORS } : {}),
             Settings: settings,
         });
     }
@@ -178,7 +189,8 @@ export function extractServerExtensionsFromPackageJson(
  *
  * - Identity is `DriverClass`.
  * - Later discovered entries replace earlier ones (ClassFactory last-wins).
- * - Host overlay wins `Enabled` and `RootPath` when the host provides them;
+ * - Host overlay wins `Enabled` and `RootPath` when the host provides them; an `Enabled`
+ *   left unset inherits the discovered value, and a host-only entry without one is enabled;
  *   `Settings` is `{ ...discovered, ...host }`.
  * - Host-only DriverClasses append after discovered ones.
  * - A host `Enabled: false` entry is kept so the loader skips that DriverClass
@@ -213,15 +225,19 @@ export function MergeServerExtensionConfigs(
         }
         const existing = byClass.get(key);
         if (!existing) {
-            remember(key, cloneConfig({ ...entry, DriverClass: key }));
+            // A host entry may omit Enabled (the host schema no longer defaults it, so an overlay can
+            // inherit a published entry's value); a host-only entry has nothing to inherit — enabled.
+            remember(key, cloneConfig({ ...entry, DriverClass: key, Enabled: entry.Enabled ?? true }));
             continue;
         }
         const hostRoot = typeof entry.RootPath === 'string' ? entry.RootPath.trim() : '';
+        const ownsCORS = entry.OwnsCORS ?? existing.OwnsCORS;
         remember(key, {
-            Enabled: entry.Enabled ?? existing.Enabled,
+            Enabled: entry.Enabled ?? existing.Enabled ?? true,
             DriverClass: key,
             RootPath: hostRoot || existing.RootPath,
             Phase: entry.Phase ?? existing.Phase,
+            ...(ownsCORS !== undefined ? { OwnsCORS: ownsCORS } : {}),
             Settings: { ...(existing.Settings ?? {}), ...(entry.Settings ?? {}) },
         });
     }
@@ -400,7 +416,8 @@ export function prepareServerExtensionConfigs(
 export function DescribeServerExtensionMount(config: ServerExtensionConfig): string {
     const state = config.Enabled ? 'enabled' : 'disabled';
     const phase = (config.Phase ?? 'pre-auth').toUpperCase();
-    return `${config.DriverClass} at ${config.RootPath} (${state}, ${phase}; host mj.config.cjs serverExtensions[] can set Enabled: false to suppress)`;
+    const cors = config.OwnsCORS === true ? ', owns CORS' : '';
+    return `${config.DriverClass} at ${config.RootPath} (${state}, ${phase}${cors}; host mj.config.cjs serverExtensions[] can set Enabled: false to suppress)`;
 }
 
 /** @deprecated Use {@link DescribeServerExtensionMount}. */

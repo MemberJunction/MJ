@@ -339,11 +339,14 @@
     </div>
   </div>
 
-  <!-- Tab Container - with dynamic tab bar visibility -->
+  <!-- Tab Container - with dynamic tab bar visibility. A call's Share menu offers it as "Main content" under
+       "This panel", except to a call inside it. -->
   <mj-tab-container
     id="mj-main-content"
     role="main"
     tabindex="-1"
+    mjSharePanel="Main content"
+    mjSharePanelIcon="fa-solid fa-table-cells-large"
     [class.hide-tab-bar]="!tabBarVisible"
     (firstResourceLoadComplete)="onFirstResourceLoadComplete()"
     (layoutInitError)="handleLayoutError()">

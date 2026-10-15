@@ -1,7 +1,8 @@
+import type { AutoDocPluginConfigEntry } from '../plugins/types.js';
+
 /**
  * Configuration types for DBAutoDoc
  */
-
 export interface DBAutoDocConfig {
   version: string;
   database: DatabaseConfig;
@@ -12,6 +13,11 @@ export interface DBAutoDocConfig {
   tables: TableFilterConfig;
   seedContext?: SeedContextConfig;
   groundTruth?: GroundTruthConfig;
+  /**
+   * Plugins to run. Built-in plugins run by default unless listed here with `Enabled: false`;
+   * external plugins are listed with a `Module` (npm package or file path) to load.
+   */
+  plugins?: AutoDocPluginConfigEntry[];
 }
 
 /**

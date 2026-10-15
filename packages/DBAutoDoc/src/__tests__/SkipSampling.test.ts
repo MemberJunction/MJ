@@ -64,8 +64,7 @@ vi.mock('../state/StateManager.js', () => {
   class StateManager {
     createInitialState = vi.fn().mockReturnValue({
       version: '1.0.0',
-      database: 'TestDB',
-      server: 'localhost',
+      database: { name: 'TestDB', server: 'localhost', analyzedAt: '2026-01-01T00:00:00Z' },
       schemas: [],
       summary: {},
       phases: { descriptionGeneration: [] }

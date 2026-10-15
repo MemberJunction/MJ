@@ -8,6 +8,7 @@
 
 export * from './lib/livekit-room.component';
 export * from './lib/components/livekit-participant-tile.component';
+export * from './lib/components/livekit-participant-audio.component';
 export * from './lib/components/livekit-control-bar.component';
 export * from './lib/components/livekit-chat-panel.component';
 export * from './lib/components/livekit-device-menu.component';

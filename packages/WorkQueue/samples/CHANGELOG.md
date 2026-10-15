@@ -1,5 +1,17 @@
 # @memberjunction/work-queue-samples
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [25f7b82]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/work-queue-engine@6.2.0-edge.4
+  - @memberjunction/work-queue-core@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Minor Changes

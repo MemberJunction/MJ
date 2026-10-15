@@ -58,6 +58,7 @@ export * from './AgentDataPreloader';
 export * from './agent-context-injector';
 export * from './agent-memory-context-builder';
 export * from './agent-pre-execution-rag';
+export * from './agent-audience';
 export * from './memory-manager-agent';
 export * from './memory-note-gate';
 export * from './query-builder-agent';
@@ -78,6 +79,7 @@ export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall, Delegated
 export * from './realtime/realtime-client-session-service';
 export * from './realtime/realtime-coagent-config';
 export * from './realtime/realtime-vendor-resolution';
+export * from './realtime/realtime-video-output-gate';
 export * from './realtime/realtime-narration';
 export * from './realtime/realtime-delegation-narrator';
 export * from './realtime/realtime-coagent-resolution';
