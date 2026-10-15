@@ -922,6 +922,7 @@ export class ResolverBase {
     clause: string | undefined | null,
     label: string,
     provider?: IMetadataProvider,
+    user?: UserInfo,
   ): void {
     if (!clause?.trim()) return;
 
@@ -950,12 +951,7 @@ export class ResolverBase {
       const table = this.stripSqlIdent(t.TableName);
       const schema = this.stripSqlIdent(t.SchemaName);
       if (table.toLowerCase() === '__mj_clause_screen') continue;
-      const qualified = `${schema}.${table}`.toLowerCase();
-      const bare = table.toLowerCase();
-      if (allowed.qualified.has(qualified) || allowed.bare.has(bare)) continue;
-      throw new Error(
-        `Invalid ${label}: subquery must use an entity base view, not '${schema}.${table}'`,
-      );
+      this.assertTableRefReadable(allowed, schema, table, label, user);
     }
   }
 
@@ -1066,10 +1062,11 @@ export class ResolverBase {
       overrideExcludeFilter?: string | null;
     },
     provider?: IMetadataProvider,
+    user?: UserInfo,
   ): void {
-    this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider);
-    this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider);
-    this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider);
+    this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider, user);
+    this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider, user);
+    this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider, user);
   }
 
   /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */
@@ -1204,17 +1201,6 @@ export class ResolverBase {
     try {
       if (!viewInfo || !userPayload) return null;
 
-      // SECURITY: GraphQL ExtraFilter may contain IN (SELECT … FROM <base view>).
-      // Screen at this boundary: parse, reject writes, allow only entity BaseViews.
-      this.screenClientViewClauses(
-        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
-        provider as unknown as IMetadataProvider,
-      );
-
-      // Check API key scope authorization for view operations
-      await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
-
-      const md = provider
       // Prefer the authenticated session's payload user — it is the authoritative per-request
       // identity and (for magic-link sessions) carries the per-session resource scope / synthesized
       // roles that drive RLS. The cached lookup is a fallback for paths where the payload user
@@ -1222,6 +1208,20 @@ export class ResolverBase {
       const user = this.GetUserFromPayload(userPayload)
         ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
       if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
+
+      // SECURITY: GraphQL ExtraFilter may contain IN (SELECT … FROM <base view>).
+      // Screen at this boundary: parse, reject writes, allow only entity BaseViews the
+      // acting user can read (subqueries do not inherit the top entity's permission check).
+      this.screenClientViewClauses(
+        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
+        provider as unknown as IMetadataProvider,
+        user,
+      );
+
+      // Check API key scope authorization for view operations
+      await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
+
+      const md = provider
 
       const entityInfo = md.Entities.find((e) => e.Name === viewInfo.Entity);
       if (!entityInfo) throw new Error(`Entity ${viewInfo.Entity} not found in metadata`);
@@ -1381,6 +1381,7 @@ export class ResolverBase {
             overrideExcludeFilter: param.overrideExcludeFilter,
           },
           md,
+          contextUser ?? undefined,
         );
 
         if (param.viewInfo) {

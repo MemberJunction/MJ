@@ -40,6 +40,10 @@ class AdhocQueryInput {
  *
  * Security:
  * - SQL validated by the provider (SQLExpressionValidator, single read query) — blocks mutations
+ * - Authorizes the RENDERED SQL: every table reference must be an entity base view the caller
+ *   reads unscoped (CanRead, no row-level filter, no denied fields). Entities with row/field
+ *   policy for this user are refused — raw SQL cannot apply that policy, so those reads belong
+ *   on RunView.
  * - Read-only provider only (no fallback to read-write)
  * - Configurable timeout (default 30s), enforced by the database
  * - Requires authenticated user (standard GraphQL auth, no @RequireSystemUser)
