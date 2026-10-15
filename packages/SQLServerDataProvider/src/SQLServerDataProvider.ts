@@ -824,7 +824,7 @@ export class SQLServerDataProvider
     // Build array of SQL statements for batch execution
     const sqlStatements: string[] = [];
     for (const { query } of items) {
-      // CacheValidationSQL should return MaxUpdatedAt and RowCount
+      // CacheValidationSQL returns MaxUpdatedAt and a row count (TotalRows or RowCount)
       sqlStatements.push(query.CacheValidationSQL!);
     }
 
@@ -837,16 +837,8 @@ export class SQLServerDataProvider
         const { index } = items[i];
         const resultSet = resultSets[i];
 
-        if (resultSet && resultSet.length > 0) {
-          const row = resultSet[0] as { MaxUpdatedAt: Date | string | null; RowCount: number };
-          results.set(index, {
-            success: true,
-            rowCount: row.RowCount,
-            maxUpdatedAt: row.MaxUpdatedAt ? new Date(row.MaxUpdatedAt).toISOString() : undefined,
-          });
-        } else {
-          results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
-        }
+        // Shared reader: accepts the documented `TotalRows` as well as `RowCount`.
+        results.set(index, this.QueryCacheStatusFromRow(resultSet?.[0] as Record<string, unknown> | undefined));
       }
     } catch (e) {
       // If batch fails, mark all items as failed
@@ -906,8 +898,7 @@ export class SQLServerDataProvider
       // unconditional GetEffectiveBaseView) so a Building/DriftHold/Disabled/never-minted snapshot probes the
       // LIVE base view — mirroring the read path — instead of a held or missing materialized_vw wrapper.
       const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
-      const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${effectiveView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
-      sqlStatements.push(statusSQL);
+      sqlStatements.push(this.BuildCacheStatusSQL(entityInfo, effectiveView, whereSQL));
     }
 
     try {
@@ -931,11 +922,15 @@ export class SQLServerDataProvider
         }
       }
     } catch (e) {
-      // If batch fails, mark all items as failed
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      for (const { index } of items) {
-        results.set(index, { success: false, errorMessage });
-      }
+      // One bad statement fails the WHOLE batch on SQL Server, which used to mark every item
+      // failed — so a single problematic entity blinded the sweep for its entire engine. Fall back
+      // to the per-item path, which runs each probe on its own and fails only what deserves it
+      //.
+      LogStatusEx({
+        message: `SQLServerDataProvider.getBatchedServerCacheStatus: batched probe failed (${e instanceof Error ? e.message : String(e)}) — retrying ${items.length} probe(s) individually`,
+        verboseOnly: true,
+      });
+      return await super.getBatchedServerCacheStatus(items, contextUser);
     }
 
     return results;
@@ -1351,7 +1346,20 @@ export class SQLServerDataProvider
     isUpdate: boolean,
     _spName: string,
   ): SaveCallBinding {
-    const uniqueSuffix = this.allocateSaveCallSuffix(entity);
+    return this.renderSaveCallBindingWithSuffix(entity, fieldValues, isUpdate, this.allocateSaveCallSuffix(entity));
+  }
+
+  /**
+   * The binding for a given variable suffix. Split out of RenderSaveCallBinding so the update
+   * replay form can re-render a subset of the fields under the SAME suffix without allocating
+   * another one (inside a TransactionGroup that would consume a `_n` ordinal).
+   */
+  private renderSaveCallBindingWithSuffix(
+    entity: BaseEntity,
+    fieldValues: Map<EntityFieldInfo, unknown>,
+    isUpdate: boolean,
+    uniqueSuffix: string,
+  ): Extract<SaveCallBinding, { kind: 'mssql-declare-exec' }> {
     const declarations: string[] = [];
     const setStatements: string[] = [];
     const execParams: string[] = [];
@@ -1456,6 +1464,37 @@ export class SQLServerDataProvider
     return `${this.renderDeclareSetHead(binding)}${createBranch}${updateBranch}`;
   }
 
+  /**
+   * Replay form of an UPDATE for the SQL log (never executed): `EXEC spUpdate` with only the
+   * fields this save changed, plus the primary key. The update procs keep every column whose
+   * parameter is not passed (`ISNULL(@p, [Col])`), so replaying the recording applies exactly
+   * the change that was made and leaves the target's other columns — including settings a
+   * consumer tuned on an MJ-owned row — alone. A field changed to NULL still carries its
+   * `_Clear` companion (derived from the same map). A save whose changes touch no proc
+   * parameter has nothing to replay, so it is logged as a comment. A hand-written update proc
+   * (spUpdateGenerated off) makes no ISNULL promise, so it keeps the full-row form.
+   */
+  protected override RenderReplayUpdateSQL(
+    binding: SaveCallBinding,
+    entity: BaseEntity,
+    changedFieldValues: Map<EntityFieldInfo, unknown>,
+  ): string | undefined {
+    if (binding.kind !== 'mssql-declare-exec') {
+      throw new Error(`SQLServerDataProvider.RenderReplayUpdateSQL: unexpected binding kind '${binding.kind}'`);
+    }
+    const info = entity.EntityInfo;
+    if (!info.spUpdateGenerated) {
+      return undefined;
+    }
+    if (changedFieldValues.size === 0) {
+      const key = entity.PrimaryKey.ToString().replace(/[\r\n]+/g, ' ');
+      return `-- ${info.Name} (${key}): saved with no field changes; nothing to replay`;
+    }
+    const changed = this.renderSaveCallBindingWithSuffix(entity, changedFieldValues, true, binding.suffix);
+    const spName = this.GetCreateUpdateSPName(entity, false);
+    return `${this.renderDeclareSetHead(changed)}EXEC [${info.SchemaName}].${spName} ${changed.callArgsSQL}`;
+  }
+
   /** `DECLARE ...\n\nSET ...\n\n` when the binding declares variables, else empty. */
   private renderDeclareSetHead(binding: Extract<SaveCallBinding, { kind: 'mssql-declare-exec' }>): string {
     return binding.preambleSQL ? `${binding.preambleSQL}\n\n${binding.setSQL}\n\n` : '';
@@ -1511,13 +1550,13 @@ export class SQLServerDataProvider
                                                                                         @Source='Clone',
                                                                                         @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
-    const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entity.EntityInfo.Name}',
+    const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entity.EntityInfo.Name}',
                                                                                         @RecordID=@ID,
                                                                                         @UserID='${payload.userID}',
                                                                                         @Type='${payload.type}',
-                                                                                        @ChangesJSON='${payload.changesJSON}',
-                                                                                        @ChangesDescription='${payload.changesDescription}',
-                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
+                                                                                        @ChangesJSON=N'${payload.changesJSON}',
+                                                                                        @ChangesDescription=N'${payload.changesDescription}',
+                                                                                        @FullRecordJSON=N'${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
                                                                                         @Comments=null${lineageClause}`;
 
@@ -1755,7 +1794,6 @@ export class SQLServerDataProvider
     );
     if (!payload) return null;
 
-    const quotes = wrapRecordIdInQuotes ? "'" : '';
     const lineageClause = payload.source === 'Restore'
       ? `,
                                                                                         @Source='Restore',
@@ -1767,13 +1805,13 @@ export class SQLServerDataProvider
                                                                                         @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
 
-    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
-                                                                                        @RecordID=${quotes}${recordID}${quotes},
+    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entityName}',
+                                                                                        @RecordID=${wrapRecordIdInQuotes ? `N'${recordID}'` : recordID},
                                                                                         @UserID='${payload.userID}',
                                                                                         @Type='${payload.type}',
-                                                                                        @ChangesJSON='${payload.changesJSON}',
-                                                                                        @ChangesDescription='${payload.changesDescription}',
-                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
+                                                                                        @ChangesJSON=N'${payload.changesJSON}',
+                                                                                        @ChangesDescription=N'${payload.changesDescription}',
+                                                                                        @FullRecordJSON=N'${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
                                                                                         @Comments=null${lineageClause}`;
   }
@@ -2089,7 +2127,7 @@ export class SQLServerDataProvider
    * @remarks
    * - Always creates a new Request object for each query to avoid "EREQINPROG" errors
    * - Handles both positional (?) and named (@param) parameter styles
-   * - Automatically uses active transaction if one exists, otherwise uses connection pool
+   * - Uses the ambient transaction when the caller is part of it (#4786), otherwise uses connection pool
    * - Handles SQL logging in parallel with query execution
    * - Provides automatic retry with pool connection if transaction fails
    * 
@@ -2118,7 +2156,8 @@ export class SQLServerDataProvider
     
     if (connectionSource instanceof sql.Transaction) {
       transaction = connectionSource;
-    } else if (!connectionSource && !loggingOptions?.ignoreAmbientTransaction) {
+    } else if (!connectionSource && !loggingOptions?.ignoreAmbientTransaction && this.IsCallerInAmbientTransaction()) {
+      // A caller outside the open transaction's scope runs on the pool as if none were open (#4786).
       this.AssertAmbientTransactionUsable();
       transaction = this._transaction;
     }
@@ -2388,9 +2427,12 @@ export class SQLServerDataProvider
     contextUser?: UserInfo,
   ): Promise<any[][]> {
     try {
-      // A read that does not join the ambient transaction cannot autocommit anything on the pool,
-      // which is what the doomed-transaction assert protects; skip it for that case (#4514).
-      if (!options?.ignoreAmbientTransaction) {
+      // A batch joins the ambient transaction only when the caller opted in (default) AND is in
+      // its scope (#4786) — a caller outside that scope runs on the pool as if none were open. A
+      // read that does not join it cannot autocommit anything on the pool, which is what the
+      // doomed-transaction assert protects; skip the assert for that case too (#4514).
+      const joinsAmbient = !options?.ignoreAmbientTransaction && this.IsCallerInAmbientTransaction();
+      if (joinsAmbient) {
         this.AssertAmbientTransactionUsable();
       }
       // Build combined batch SQL and parameters (same as static method)
@@ -2446,7 +2488,7 @@ export class SQLServerDataProvider
       // Create execution context
       const context: SQLExecutionContext = {
         pool: this._pool,
-        transaction: options?.ignoreAmbientTransaction ? null : this._transaction,
+        transaction: joinsAmbient ? this._transaction : null,
         logSqlStatement: this._logSqlStatement.bind(this),
         clearTransaction: () => { 
           this._transaction = null;
@@ -2656,12 +2698,12 @@ DECLARE ${varName} NVARCHAR(MAX) = (
 );
 IF ${varName} IS NOT NULL
     EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal
-        @EntityName='${safeEntityName}',
-        @RecordID='${recordID}',
+        @EntityName=N'${safeEntityName}',
+        @RecordID=N'${recordID}',
         @UserID='${safeUserId}',
         @Type='Update',
-        @ChangesJSON='${safeChangesJSON}',
-        @ChangesDescription='${safeChangesDesc}',
+        @ChangesJSON=N'${safeChangesJSON}',
+        @ChangesDescription=N'${safeChangesDesc}',
         @FullRecordJSON=${varName},
         @Status='Complete',
         @Comments=NULL${lineageClause};`;
@@ -2796,9 +2838,13 @@ IF ${varName} IS NOT NULL
   /**
    * Override RefreshIfNeeded to skip refresh when a transaction is active
    * This prevents conflicts between metadata refresh operations and active transactions
+   * @param providerToUse - passed through to the base implementation
+   * @param bypassMinCheckInterval - passed through; event-driven callers (a metadata change notice
+   *   from another server) set it so the check throttle cannot drop their check. Dropping the
+   *   arguments here used to discard it.
    * @returns Promise<boolean> - true if refresh was performed, false if skipped or no refresh needed
    */
-  public async RefreshIfNeeded(): Promise<boolean> {
+  public async RefreshIfNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
     // Skip refresh if a transaction is active
     if (this.IsTransactionActive) {
       LogStatus('Skipping metadata refresh - transaction is active');
@@ -2806,7 +2852,7 @@ IF ${varName} IS NOT NULL
     }
 
     // Call parent implementation if no transaction
-    return super.RefreshIfNeeded();
+    return super.RefreshIfNeeded(providerToUse, bypassMinCheckInterval);
   }
 
   override get FileSystemProvider(): IFileSystemProvider {

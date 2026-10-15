@@ -3,8 +3,14 @@ import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTyp
 import nunjucks from 'nunjucks';
 import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
+import { HardenNunjucksRuntime } from "./NunjucksSandbox";
+import { CollectReferencedVariables, ReferencedVariablesResult } from "./TemplateVariableAnalysis";
 import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
-  
+
+// Stored templates are user-editable, so nunjucks is guarded as soon as the engine loads. The guard
+// is process-wide: it also covers nunjucks environments that other packages create.
+HardenNunjucksRuntime();
+
 /**
  * This class extends the nunjucks loader to allow adding templates directly to the loader
  */
@@ -95,7 +101,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         this.ensureNunjucksInitialized(contextUser);
     }
 
-    /** One-time nunjucks environment + registered-extension setup, performed after the base templates load. */
+    /** One-time nunjucks environment + registered-extension setup. {@link Config} and {@link GetReferencedVariables} call it. */
     private ensureNunjucksInitialized(contextUser?: UserInfo): void {
         if (this._oneTimeLoadingComplete) {
             return;
@@ -107,6 +113,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         this._nunjucksEnvNoAutoescape = undefined; // rebound lazily against the fresh loader on next no-autoescape render
 
         // get all of the extensions that are registered and register them with nunjucks
+        this._registeredExtensions = [];
         const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
         if (extensions && extensions.length > 0) {
             for (const ext of extensions) {
@@ -114,6 +121,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
                 const instance = new SubClassConstructor(contextUser!);
                 if (ext.Key) {
                     this._nunjucksEnv.addExtension(ext.Key, instance);
+                    this._registeredExtensions.push(instance);
                 }
             }
         }
@@ -148,6 +156,8 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      */
     private _nunjucksEnvNoAutoescape?: nunjucks.Environment;
     private _templateLoader: TemplateEntityLoader;
+    /** The extension instances registered on {@link _nunjucksEnv}. The variable analysis parses their custom tags. */
+    private _registeredExtensions: nunjucks.Extension[] = [];
 
     /**
      * Builds a Nunjucks environment bound to the shared template loader with our custom filters applied.
@@ -200,6 +210,9 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * Cache for templates that have been created by nunjucks so we don't have to create them over and over
      */
     private _templateCache: Map<string, any> = new Map<string, any>();
+
+    /** {@link GetReferencedVariables} results by template text. */
+    private _referencedVariablesCache = new Map<string, ReferencedVariablesResult>();
 
     public AddTemplate(templateEntity: MJTemplateEntityExtended) {
         this._templateLoader.AddTemplate(templateEntity.ID, templateEntity);
@@ -311,6 +324,32 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     }
 
     /**
+     * Returns the top-level variable names a template's text reads, following stored templates it
+     * pulls in by literal name (`{% include %}`, `{% import %}`, `{% from %}`, `{% extends %}`,
+     * `{% template %}`). It sets up the Nunjucks environment first, so the registered extensions' tags
+     * parse before the first {@link Config} too. The result is frozen and cached per template text until
+     * {@link ClearTemplateCache}; a result whose text does not parse is not cached.
+     */
+    public GetReferencedVariables(templateText: string): ReferencedVariablesResult {
+        const cached = this._referencedVariablesCache.get(templateText);
+        if (cached) {
+            return cached;
+        }
+        this.ensureNunjucksInitialized(this.ContextUser);
+        const result = Object.freeze(CollectReferencedVariables(templateText, {
+            Extensions: this._registeredExtensions,
+            ResolveTemplateTexts: (name) => {
+                const template = this.FindTemplate(name);
+                return template ? template.Content.map((c) => c.TemplateText).filter((t): t is string => !!t) : null;
+            },
+        }));
+        if (!result.ParseFailed) {
+            this._referencedVariablesCache.set(templateText, result);
+        }
+        return result;
+    }
+
+    /**
      * This method is responsible for creating a new Nunjucks template, caching it, and returning it.
      * If the templateContentId already had a template created, it will return that template from the cache.
      * @param templateId - must be provided if you want to cache the template, if not provided the template will not be cached
@@ -358,8 +397,10 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         return this._nunjucksEnvNoAutoescape;
     }
 
+    /** Clears the compiled-template cache and the cached {@link GetReferencedVariables} results. */
     public ClearTemplateCache() {
         this._templateCache.clear();
+        this._referencedVariablesCache.clear();
     }
 
     /**
@@ -368,6 +409,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param data the data to render the template with
      */
     protected async renderTemplateAsync(template: nunjucks.Template, data: any): Promise<string> {
+        HardenNunjucksRuntime(); // no-op unless something replaced a guarded nunjucks hook
         return new Promise((resolve, reject) => {
             template.render(data, (err, result) => {
                 if (err) {

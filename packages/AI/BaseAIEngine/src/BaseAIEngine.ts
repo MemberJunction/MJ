@@ -1,5 +1,6 @@
+import { PermissionConstrainedError } from '@memberjunction/core';
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual, NormalizeUUID, MJGlobal } from "@memberjunction/global";
+import { UUIDsEqual, NormalizeUUID, MJGlobal, IndexByUUID, UUIDSet } from "@memberjunction/global";
 import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ParseVendorConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
@@ -41,7 +42,7 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAIPersonaVendorEntity,
          MJAIModelPersonaEntity,
          MJAIAgentPersonaEntity,
-         ArtifactMetadataEngine} from "@memberjunction/core-entities";
+         ArtifactMetadataEngine, FileStorageEngineBase, type MJAIAgentEntity} from "@memberjunction/core-entities";
 import { BasePriceUnitType, NormalizedUsage } from "./PriceUnitTypes";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { AISkillPermissionHelper, EffectiveSkillPermissions } from "./AISkillPermissionHelper";
@@ -545,6 +546,24 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         }
     }
 
+    /**
+     * Configs that {@link AdditionalLoading} never reads, so a save or delete can update them in place.
+     *
+     * BaseEngine refuses in-place updates for every config of an engine that overrides
+     * AdditionalLoading, because that method may derive state from the rows. Those configs instead
+     * reload in full after a 1.5 s debounce, and a caller that saves a row and reads it back inside
+     * that window misses it. AdditionalLoading here only rebuilds model, vendor, configuration and
+     * prompt state, so these configs don't need the full reload.
+     *
+     * If AdditionalLoading starts deriving anything from one of these, remove it from this set.
+     */
+    private static readonly IMMEDIATE_MUTATION_PROPERTIES: ReadonlySet<string> = new Set(['_vectorIndexes']);
+
+    protected override canUseImmediateMutation(config: BaseEnginePropertyConfig, skipAdditionalLoadingCheck: boolean = false): boolean {
+        const independent = AIEngineBase.IMMEDIATE_MUTATION_PROPERTIES.has(config.PropertyName);
+        return super.canUseImmediateMutation(config, skipAdditionalLoadingCheck || independent);
+    }
+
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // Clear the configuration chain cache when data is reloaded
         this._configurationChainCache.clear();
@@ -631,6 +650,35 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         for (const model of this._models) {
             if (model.ModelVendors) replaceContents(model.ModelVendors, vendorsByModel.get(keyFor(model.ID)) ?? []);
         }
+    }
+
+    /**
+     * The collections {@link AdditionalLoading} attaches to parents. When these read zero while
+     * the child arrays are full, the derived state has been lost — the failure that row counts
+     * cannot show (model selection then finds no vendor candidates).
+     */
+    protected override GetDerivedStateCensus(): Record<string, number> {
+        const count = <TParent>(parents: TParent[] | undefined, children: (p: TParent) => unknown[] | undefined) => {
+            let withChildren = 0;
+            let attached = 0;
+            for (const parent of parents ?? []) {
+                const n = children(parent)?.length ?? 0;
+                if (n > 0) withChildren++;
+                attached += n;
+            }
+            return { withChildren, attached };
+        };
+        const models = count(this._models, m => m.ModelVendors);
+        const categories = count(this._promptCategories, c => c.Prompts);
+        const agents = count(this._agents, a => a.Notes);
+        return {
+            ModelsWithVendors: models.withChildren,
+            VendorsAttached: models.attached,
+            CategoriesWithPrompts: categories.withChildren,
+            PromptsAttached: categories.attached,
+            AgentsWithNotes: agents.withChildren,
+            NotesAttached: agents.attached,
+        };
     }
 
     /**
@@ -891,6 +939,21 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this.GetConfigData<MJAIAgentEntityExtended>('_agents');
     }
 
+    /**
+     * The agents this user may read, or none: `Agents` throws {@link PermissionConstrainedError} when the engine could not
+     * load them for the current user, which is right for code that needs them and wrong for a screen that must keep rendering
+     * (a conversation, a mention picker, a task's agent name) for a user who holds no read on MJ: AI Agents. Such code reads
+     * this instead and gets an empty list, the same way `IsPermissionConstrained` tells it to.
+     */
+    public get ReadableAgents(): MJAIAgentEntityExtended[] {
+        try {
+            return this.Agents;
+        } catch (error) {
+            if (error instanceof PermissionConstrainedError) return [];
+            throw error;
+        }
+    }
+
     public get AgentRelationships(): MJAIAgentRelationshipEntity[] {
         return this.GetConfigData<MJAIAgentRelationshipEntity>('_agentRelationships');
     }
@@ -950,6 +1013,86 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      *  assignment strategies and default storage accounts (category → parent → root). */
     public get AgentCategories(): MJAIAgentCategoryEntity[] {
         return this.GetConfigData<MJAIAgentCategoryEntity>('_agentCategories');
+    }
+
+    /** Agents already warned this process about an ambiguous storage-account fallback (keyed by agent ID, else name). */
+    private _storageFallbackWarnedAgents = new Set<string>();
+
+    /**
+     * Resolves the file storage account an agent's files should go to. This is the golden path for
+     * agent storage routing, so agents, actions and UI that need "where would this agent store a file?"
+     * all get the same answer. It reads only cached metadata (this engine plus `FileStorageEngineBase`,
+     * which the caller is expected to have configured), so it is safe on client and server.
+     *
+     * Resolution chain (first non-null wins):
+     * 1. `overrideStorageAccountId` — a runtime override
+     * 2. Agent-level `DefaultStorageAccountID`
+     * 3. Category hierarchy — walks up the agent's category tree via `ParentID` (cycle-safe)
+     * 4. Agent Type-level `DefaultStorageAccountID`
+     * 5. System fallback — {@link FileStorageEngineBase.ResolveDefaultAccount} over the active accounts:
+     *    the single active account, or when several are active the most recently updated one (ties
+     *    broken by ID). An ambiguous fallback logs a warning once per agent per process.
+     *
+     * @param agent - The agent being resolved for
+     * @param overrideStorageAccountId - Optional runtime override; wins outright when set
+     * @returns The storage account ID, or `null` when no account is configured or active
+     */
+    public ResolveAgentStorageAccountID(
+        agent: Pick<MJAIAgentEntity, 'ID' | 'Name' | 'CategoryID' | 'TypeID' | 'DefaultStorageAccountID'>,
+        overrideStorageAccountId?: string | null
+    ): string | null {
+        if (overrideStorageAccountId) return overrideStorageAccountId;
+        if (agent.DefaultStorageAccountID) return agent.DefaultStorageAccountID;
+
+        const categoryAccountId = this.resolveCategoryStorageAccountID(agent.CategoryID);
+        if (categoryAccountId) return categoryAccountId;
+
+        const agentType = agent.TypeID ? this.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID)) : undefined;
+        if (agentType?.DefaultStorageAccountID) return agentType.DefaultStorageAccountID;
+
+        const resolution = FileStorageEngineBase.Instance.ResolveDefaultAccount();
+        if (resolution.Ambiguous && resolution.Chosen) {
+            this.warnAmbiguousStorageFallback(agent, agentType?.Name, resolution.Candidates.map(c => `'${c.account.Name}' (${c.provider.Name})`), resolution.Chosen.account.Name);
+        }
+        return resolution.Chosen?.account.ID ?? null;
+    }
+
+    /** Walks up the category tree from `categoryId` and returns the first `DefaultStorageAccountID` found. */
+    private resolveCategoryStorageAccountID(categoryId: string | null): string | null {
+        const categoriesById = IndexByUUID(this.AgentCategories);
+        const visited = new UUIDSet();
+        let currentId = categoryId;
+        while (currentId && !visited.Has(currentId)) {
+            visited.Add(currentId);
+            const category = categoriesById.Get(currentId);
+            if (!category) return null;
+            if (category.DefaultStorageAccountID) return category.DefaultStorageAccountID;
+            currentId = category.ParentID;
+        }
+        return null;
+    }
+
+    /** Logs, once per agent per process, which storage account an ambiguous fallback chose and how to pin one. */
+    private warnAmbiguousStorageFallback(
+        agent: Pick<MJAIAgentEntity, 'ID' | 'Name' | 'CategoryID'>,
+        agentTypeName: string | undefined,
+        candidateLabels: string[],
+        chosenName: string
+    ): void {
+        const agentName = agent.Name || agent.ID;
+        const key = agent.ID || agentName;
+        if (this._storageFallbackWarnedAgents.has(key)) return;
+        this._storageFallbackWarnedAgents.add(key);
+
+        const categoryName = agent.CategoryID
+            ? this.AgentCategories.find(c => UUIDsEqual(c.ID, agent.CategoryID))?.Name || agent.CategoryID
+            : 'none';
+        LogStatus(
+            `⚠️ Multiple active file storage accounts (${candidateLabels.join(', ')}) and no DefaultStorageAccountID is configured ` +
+            `for agent '${agentName}', category '${categoryName}', or agent type '${agentTypeName ?? 'unknown'}'. ` +
+            `Using '${chosenName}' (most recently updated). To choose explicitly, set DefaultStorageAccountID on ` +
+            `the agent, its category, or its agent type.`
+        );
     }
 
     public GetAgentByName(agentName: string): MJAIAgentEntityExtended {

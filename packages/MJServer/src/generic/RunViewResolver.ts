@@ -1212,12 +1212,29 @@ export class RunViewResolver extends ResolverBase {
     @Ctx() { providers, userPayload }: AppContext
   ): Promise<RunViewsWithCacheCheckOutput> {
     try {
+      // Same scope as RunViews: this is the transport RunViews uses for a CacheLocal batch.
+      await this.CheckAPIKeyScopeAuthorization('view:batch', '*', userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
 
       // Cast provider to SQLServerDataProvider to access RunViewsWithCacheCheck method
       const sqlProvider = provider as unknown as SQLServerDataProvider;
       if (!sqlProvider.RunViewsWithCacheCheck) {
         throw new Error('Provider does not support RunViewsWithCacheCheck');
+      }
+
+      // SECURITY: same GraphQL-boundary clause screen as RunViews, before the provider runs.
+      const user = this.GetUserFromPayload(userPayload);
+      for (const item of input) {
+        this.screenClientViewClauses(
+          {
+            extraFilter: item.params.ExtraFilter,
+            orderBy: item.params.OrderBy,
+            userSearchString: item.params.UserSearchString,
+            overrideExcludeFilter: item.params.OverrideExcludeFilter,
+          },
+          provider,
+          user,
+        );
       }
 
       // Convert GraphQL input types to core types
@@ -1248,6 +1265,10 @@ export class RunViewResolver extends ResolverBase {
           // otherwise a CacheLocal batch's DataSource:'Materialized' request silently reads the live view.
           DataSource: item.params.DataSource,
           IncludeBinaryFields: item.params.IncludeBinaryFields,
+          // BypassCache likewise — the input type (RunDynamicViewInput) has always declared it, and its
+          // own description promises "the pre-check cache lookup is skipped". Dropping it here left the
+          // provider free to answer a deliberate database read from the server cache.
+          BypassCache: item.params.BypassCache,
           AfterKey: item.params.AfterKey
             ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
             : undefined,

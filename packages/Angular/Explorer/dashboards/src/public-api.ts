@@ -15,6 +15,7 @@ export * from './ThemeStudio/theme-studio-dashboard.component';
 export * from './ThemeStudio/theme-studio-resource.component';
 export * from './ThemeStudio/theme-manager-dashboard.component';
 export * from './ThemeStudio/theme-manager-resource.component';
+export * from './LoginStudio/login-studio-resource.component';
 export * from './DevTools';
 export * from './Admin';
 export * from './Lists';
@@ -165,6 +166,10 @@ export {
   DashboardShareDialogComponent,
   ShareDialogResult
 } from './DashboardBrowser/dashboard-share-dialog.component';
+
+// Dashboards app pages (the Library is DashboardBrowserResourceComponent above)
+export { DashboardsCategoriesResourceComponent, LoadDashboardsCategoriesResource } from './DashboardBrowser/dashboards-categories-resource.component';
+export * from './shared/dashboards-app.helpers';
 
 // Home Application and Dashboard
 export { HomeApplication } from './Home/home-application';

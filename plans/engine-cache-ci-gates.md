@@ -64,13 +64,31 @@ Checks to write, each pinning a defect the review found:
 
 ## Sequencing
 
-1. `engine-cache-architecture` merges (defect fixes + its own unit tests).
-2. Rebase this branch onto it — parts 2 and 3 reference `InvalidateIndexGroup`, the user-cache stamp
-   key, `BaseEngineSweeper` and the rig, none of which exist on `c7a30c7c03`.
-3. Land part 1 at any time; it is independent.
+1. **Part 1 lands first, and has** — PR #4908, merged 2026-09-30. It is independent of the engine
+   work, and until it was in, every real-Redis test pinning those fixes was `skipIf`-skipped in CI,
+   so that branch would have merged with its own regression net switched off.
+2. `engine-cache-architecture` merges (defect fixes + its own unit tests).
+3. Rebase parts 2 and 3 onto it — they reference `InvalidateIndexGroup`, the user-cache stamp key,
+   `BaseEngineSweeper` and the rig, none of which exist on `next` yet.
 
 ## Status
 
-- Part 1: written, workflow parses, script syntax-checked. Not executed — it needs a GitHub runner.
-- Parts 2 and 3: specified above, not written.
-- Nothing committed.
+- **Part 1: merged** (PR #4908). In that PR's CI run, shard 3 reported
+  `Redis-gated suites: 6 passed, 0 skipped`. The reviewer independently confirmed the gate rejects a
+  skipped run: without `REDIS_URL`, vitest's JSON report shows `numPendingTests: 6` and
+  `success: true`, which the script refuses.
+- **Follow-up (this branch):** four items the reviewer raised on #4908.
+  - `REDIS_URL` declared on the `test` task in `turbo.json`. Turbo 2.x runs tasks in strict env
+    mode, so it was stripping the variable before vitest started: the main test step skipped the
+    suites and only the gate ran them for real. Declaring it also puts it in the task's cache key,
+    so turbo cannot replay a result produced without Redis.
+  - `.github/scripts/check-redis-suites-ran.mjs` added to `test.yml`'s `paths:` triggers, so a PR
+    that edits only the gate still runs the workflow — the other guard scripts are listed for the
+    same reason.
+  - `REDIS_KEY_PREFIX` removed from the job: nothing reads it. The gated suites set their own
+    prefix (`test-integration`), and each job has its own Redis container, so there is no keyspace
+    to share.
+  - Comments corrected: "two integration files" (there is one on `next`; the guard discovers them by
+    convention anyway), and the script's citation of "plan §16.7", which lives in a plan that is not
+    in this repo.
+- **Parts 2 and 3: specified above, not written.**

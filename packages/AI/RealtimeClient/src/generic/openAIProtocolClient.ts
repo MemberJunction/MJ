@@ -952,6 +952,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
      * `'listening'` only after all of that (obligation #7).
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
+        this.AssertTransportSupported(config);
         this.sessionObject = this.resolveSessionObject(config);
         this.micStream = micStream;
         this.closedByConsumer = false;
@@ -1038,6 +1039,9 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
         const sampleRate = this.resolveSampleRate(config);
         this.playback = this.createPlayback(sampleRate);
+        // The agent voice plays through Web Audio only; publish it so a host recorder can mix
+        // it in (issue #5153). Null for playbacks with no output stream (fakes, no WebAudio).
+        this.publishRemoteMediaStream(this.playback.GetOutputStream?.() ?? null);
         this.micCapture = await this.createMicCapture(micStream, sampleRate, (base64Pcm16) => this.sendMicChunk(base64Pcm16));
         // Audio-activity capability (base obligation #9): agent side taps the playout engine's
         // master gain; user side meters the mic stream. Null-safe — test fakes / no-WebAudio
@@ -1045,6 +1049,16 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         this.attachOutputAudioMeter(this.playback?.CreateMeter?.() ?? null);
         this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
         this.setState('listening');
+    }
+
+    /** Rebinds the PCM capture and the input meter to the stream's current track (obligation #10); the socket stays open. */
+    public async ReplaceMicrophone(micStream: MediaStream): Promise<void> {
+        if (!this.micCapture) {
+            return;
+        }
+        this.micCapture.Rebind(micStream);
+        this.micStream = micStream;
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
     }
 
     /**
@@ -1067,6 +1081,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         this.micCapture = null;
         this.playback?.Close();
         this.playback = null;
+        this.clearRemoteMediaStream();
         if (this.socket) {
             try {
                 this.socket.close();

@@ -2447,7 +2447,7 @@ export const MJAIAgentRunStepSchema = z.object({
         * * Field Name: PayloadAtStart
         * * Display Name: Payload At Start
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON serialization of the Payload state at the start of this step`),
+        * * Description: JSON serialization of the Payload state at the start of this step. NULL when PayloadAtStartSourceStepID is set; the starting payload is then the PayloadAtEnd of that step.`),
     PayloadAtEnd: z.string().nullable().describe(`
         * * Field Name: PayloadAtEnd
         * * Display Name: Payload At End
@@ -2519,6 +2519,12 @@ detailed information about what validation rules failed.`),
         * * Display Name: Native Tool Results Sent
         * * SQL Data Type: bit
         * * Description: For native tool-calling steps: 1 = the results of this step's tool calls were returned to the model as native tool-result turns, 0 = as the markdown action-results user message. NULL for envelope steps and for rows predating the feature.`),
+    PayloadAtStartSourceStepID: z.string().nullable().describe(`
+        * * Field Name: PayloadAtStartSourceStepID
+        * * Display Name: Payload At Start Source Step ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+        * * Description: When set, PayloadAtStart is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's starting payload.`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
         * * Display Name: Agent Run Context
@@ -2526,6 +2532,10 @@ detailed information about what validation rules failed.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Step Context
+        * * SQL Data Type: nvarchar(255)`),
+    PayloadAtStartSourceStep: z.string().nullable().describe(`
+        * * Field Name: PayloadAtStartSourceStep
+        * * Display Name: Payload At Start Source Step
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -2624,7 +2634,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Field Name: Result
         * * Display Name: Result
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Final result or output from the agent execution, stored as JSON or text`),
+        * * Description: Deprecated. No longer written by agent runs; use FinalPayload, which holds the same value. Kept for existing rows and external readers.`),
     AgentState: z.string().nullable().describe(`
         * * Field Name: AgentState
         * * Display Name: Agent State
@@ -7461,6 +7471,16 @@ export const MJAIPromptSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJAIPromptEntity_IAIPromptConfiguration
         * * Description: Per-prompt call-time configuration bag (JSON, IAIPromptConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the prompt Configuration cascade — AIPromptModel rows inherit from it per key and may override — and itself layered on top of the resolved AIModel/AIModelVendor ModelConfiguration. NULL = contributes nothing.`),
+    TemplateDataCapture: z.union([z.literal('Full'), z.literal('None'), z.literal('Referenced')]).nullable().describe(`
+        * * Field Name: TemplateDataCapture
+        * * Display Name: Template Data Capture
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Full
+    *   * None
+    *   * Referenced
+        * * Description: Which template inputs (data, templateData) prompt runs store in Messages: None (shape only), Referenced (only keys the template uses) or Full. NULL uses the server default.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template Text
@@ -13238,7 +13258,7 @@ export const MJContentFileTypeSchema = z.object({
         * * Field Name: ByteSignature
         * * Display Name: Byte Signature
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: The magic bytes identifying this file type, as JSON: {"Magic":[37,80,68,70],"Offset":0,"Unambiguous":true}. Unambiguous means a match may override a declared type; a container format such as zip recognises without identifying, so it may not.`),
+        * * Description: How this file type is recognised from its own content, as JSON. Either magic bytes - {"Magic":[37,80,68,70],"Offset":0,"Unambiguous":true} - or, for a text format, the characters it opens with: {"TextPrefix":["<!doctype html","<html"]}, matched after a byte-order mark and leading whitespace are stripped and case is folded. Unambiguous means a match may override a declared type; a container format such as zip recognises without identifying, so it may not.`),
     IsText: z.boolean().nullable().describe(`
         * * Field Name: IsText
         * * Display Name: Is Text
@@ -13847,7 +13867,7 @@ export const MJContentItemSchema = z.object({
         * * Description: What kind of content this item holds: text, image, audio, video or multimodal. Determines whether the item can be embedded without extracted text.`),
     Date: z.date().nullable().describe(`
         * * Field Name: Date
-        * * Display Name: Date
+        * * Display Name: Content Date
         * * SQL Data Type: datetimeoffset
         * * Description: The date the content itself carries — published, issued or authored — as opposed to when this row was created.`),
     Decorator: z.string().nullable().describe(`
@@ -14756,6 +14776,85 @@ export const MJConversationArtifactSchema = z.object({
 export type MJConversationArtifactEntityType = z.infer<typeof MJConversationArtifactSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Conversation Branches
+ */
+export const MJConversationBranchSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ConversationID: z.string().describe(`
+        * * Field Name: ConversationID
+        * * Display Name: Conversation
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+        * * Description: The conversation this fork belongs to.`),
+    ParentBranchID: z.string().nullable().describe(`
+        * * Field Name: ParentBranchID
+        * * Display Name: Parent Branch
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)
+        * * Description: The fork this one started from. NULL means it started from Main, or before the first message when ForkFromSequence is also NULL.`),
+    ForkFromSequence: z.number().nullable().describe(`
+        * * Field Name: ForkFromSequence
+        * * Display Name: Fork From Sequence
+        * * SQL Data Type: int
+        * * Description: Sequence of the last message shared with the parent path. NULL means the fork starts before the first message, in which case ParentBranchID is also NULL.`),
+    Name: z.string().nullable().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional name of the fork. With no name, the UI shows a default label from Kind: a Fork is named from its first message.`),
+    Kind: z.union([z.literal('Edit'), z.literal('Fork'), z.literal('Regenerate')]).describe(`
+        * * Field Name: Kind
+        * * Display Name: Kind
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Fork
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Edit
+    *   * Fork
+    *   * Regenerate
+        * * Description: How the fork started: Fork (Fork from here), Edit (a sent message was edited) or Regenerate (an answer was regenerated).`),
+    SourceDetailID: z.string().nullable().describe(`
+        * * Field Name: SourceDetailID
+        * * Display Name: Source Detail
+        * * SQL Data Type: uniqueidentifier
+        * * Description: The edited message (Kind Edit) or the replaced answer (Kind Regenerate); NULL otherwise. Not a foreign key, to avoid a CodeGen cascade cycle with ConversationDetail.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The person who started the fork.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Conversation: z.string().nullable().describe(`
+        * * Field Name: Conversation
+        * * Display Name: Conversation Detail
+        * * SQL Data Type: nvarchar(255)`),
+    ParentBranch: z.string().nullable().describe(`
+        * * Field Name: ParentBranch
+        * * Display Name: Parent Branch Detail
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJConversationBranchEntityType = z.infer<typeof MJConversationBranchSchema>;
+
+/**
  * zod schema definition for the entity MJ: Conversation Compaction Runs
  */
 export const MJConversationCompactionRunSchema = z.object({
@@ -15214,6 +15313,17 @@ export const MJConversationDetailSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.`),
+    BranchID: z.string().nullable().describe(`
+        * * Field Name: BranchID
+        * * Display Name: Branch
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)
+        * * Description: The fork this message belongs to. NULL means Main (the trunk). Every writer sets it explicitly.`),
+    ReplacedAt: z.date().nullable().describe(`
+        * * Field Name: ReplacedAt
+        * * Display Name: Replaced At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When a rerun of this message's turn replaced it (Regenerate or Save and resend while forking is off). A replaced row is kept for audit, is hidden from the user and is never sent to an agent. NULL means the row is live.`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -15241,6 +15351,10 @@ export const MJConversationDetailSchema = z.object({
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
         * * Display Name: Test Run
+        * * SQL Data Type: nvarchar(255)`),
+    Branch: z.string().nullable().describe(`
+        * * Field Name: Branch
+        * * Display Name: Branch
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -31773,6 +31887,114 @@ export const MJSchemaInfoSchema = z.object({
 export type MJSchemaInfoEntityType = z.infer<typeof MJSchemaInfoSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Scoped Notification Configs
+ */
+export const MJScopedNotificationConfigSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    NotificationTypeID: z.string().describe(`
+        * * Field Name: NotificationTypeID
+        * * Display Name: Notification Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: User Notification Types (vwUserNotificationTypes.ID)
+        * * Description: The notification type this config is for.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Why the row exists, for the administrator who finds it.`),
+    PrimaryScopeEntityID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeEntityID
+        * * Display Name: Primary Scope Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: The entity of the primary scope record (Applications, Roles, Users, Companies, ...). NULL with PrimaryScopeRecordID NULL = a global row.`),
+    PrimaryScopeRecordID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeRecordID
+        * * Display Name: Primary Scope Record ID
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The record ID within the primary scope entity this config is scoped to. NULL = global. In scope when it is the caller's primary scope record, the recipient, or a role the recipient holds.`),
+    SecondaryScopes: z.string().nullable().describe(`
+        * * Field Name: SecondaryScopes
+        * * Display Name: Secondary Scopes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object of additional scope dimensions, e.g. {"origin":"System"}. Every dimension named must match the notice's scope for the row to apply. origin is Person, System (the Owner-type user) or Automation.`),
+    InApp: z.union([z.literal('Allow'), z.literal('Deny')]).nullable().describe(`
+        * * Field Name: InApp
+        * * Display Name: In-App Channel
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+        * * Description: The in-app channel: Allow, Deny, or NULL to leave it to the next row.`),
+    Email: z.union([z.literal('Allow'), z.literal('Deny')]).nullable().describe(`
+        * * Field Name: Email
+        * * Display Name: Email Channel
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+        * * Description: The email channel: Allow, Deny, or NULL to leave it to the next row.`),
+    SMS: z.union([z.literal('Allow'), z.literal('Deny')]).nullable().describe(`
+        * * Field Name: SMS
+        * * Display Name: SMS Channel
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+        * * Description: The SMS channel: Allow, Deny, or NULL to leave it to the next row.`),
+    IsLocked: z.boolean().describe(`
+        * * Field Name: IsLocked
+        * * Display Name: Is Locked
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When set, a Deny on this row is absorbing: no less specific row and no recipient preference may turn the channel on. The way a notification type's AllowUserPreference caps the recipient today.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Tie-break for resolution. Higher wins when two rows tie on scope specificity and neither denies. Default 0.`),
+    Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Provisional')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Archived
+    *   * Provisional
+        * * Description: Lifecycle: Active (live), Provisional (staged; eligible), Archived (excluded from resolution).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    NotificationType: z.string().describe(`
+        * * Field Name: NotificationType
+        * * Display Name: Notification Type Name
+        * * SQL Data Type: nvarchar(100)`),
+    PrimaryScopeEntity: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeEntity
+        * * Display Name: Primary Scope Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJScopedNotificationConfigEntityType = z.infer<typeof MJScopedNotificationConfigSchema>;
+
+/**
  * zod schema definition for the entity MJ: Scoped Prompt Configs
  */
 export const MJScopedPromptConfigSchema = z.object({
@@ -35624,6 +35846,16 @@ export const MJThemeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    LoginScreen: z.string().nullable().describe(`
+        * * Field Name: LoginScreen
+        * * Display Name: Login Screen
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The published sign-in page design as JSON (the LoginDesign shape from @memberjunction/theme-engine): layout, background, colors and the blocks in each login-screen region. The default Active theme's value is served unauthenticated to draw the Explorer login screen. NULL means the stock login screen.`),
+    LoginScreenDraft: z.string().nullable().describe(`
+        * * Field Name: LoginScreenDraft
+        * * Display Name: Login Screen Draft
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The sign-in page design being edited in Login Studio, as JSON in the same shape as LoginScreen. Never served publicly; publishing copies it to LoginScreen. NULL means no draft.`),
 });
 
 export type MJThemeEntityType = z.infer<typeof MJThemeSchema>;
@@ -36955,6 +37187,12 @@ export const MJUserSchema = z.object({
         * * Display Name: User Image Icon Class
         * * SQL Data Type: nvarchar(100)
         * * Description: Font Awesome icon class for user avatar (e.g., "fa-solid fa-user-astronaut"). Used as fallback when UserImageURL is not provided. Example classes: "fa-solid fa-user", "fa-regular fa-circle-user", "fa-solid fa-user-tie".`),
+    IsTemplate: z.boolean().describe(`
+        * * Field Name: IsTemplate
+        * * Display Name: Is Template
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this user is a template: its configuration (pinned apps, views, settings, dashboards, conversations) is copied to new users through the template clone preset or userHandling.newUserTemplate. Template users are for setting things up, not for everyday use; Explorer shows a banner while one is signed in.`),
     FirstLast: z.string().nullable().describe(`
         * * Field Name: FirstLast
         * * Display Name: First Last
@@ -39195,8 +39433,8 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
  *
  * Distinct from the channel's `ConfigSchema` column, which validates the *per-session*
  * `AIAgentSessionChannel.Config` state-of-record. This bag is the channel-definition's
- * own UI chrome, read in-memory by the host when rendering channel tabs. Extensible with
- * no DB change — add future chrome fields here.
+ * own UI chrome, read in-memory by the host when rendering channel tabs and placing the
+ * channel's surface. Extensible with no DB change — add future chrome fields here.
  */
 export interface MJAIAgentChannelEntity_IChannelUIConfig {
     /** Human label for the tab/chrome. Null → fall back to the channel's Name. */
@@ -39209,6 +39447,17 @@ export interface MJAIAgentChannelEntity_IChannelUIConfig {
     Icon?: string | null;
     /** Display order within a group/list. */
     SortOrder?: number | null;
+    /**
+     * Where the channel's surface shows when a call starts: "stage" fills the call, "pip" floats in a
+     * picture-in-picture box over it, "tab" sits on its tab in the side panel, "hidden" shows nowhere until
+     * the user moves it. Null → "tab". The user's own move wins over this, when AllowedPlacements allows it.
+     */
+    Placement?: 'stage' | 'pip' | 'tab' | 'hidden' | null;
+    /**
+     * Where the user may move the channel's surface. Null or empty → anywhere. A Placement missing from
+     * this list is replaced by the first placement listed here.
+     */
+    AllowedPlacements?: Array<'stage' | 'pip' | 'tab' | 'hidden'> | null;
 }
 
 /**
@@ -42822,6 +43071,17 @@ export interface MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride {
     /** Optional override for the persona's SpeakingStyle. */
     SpeakingStyle?: string;
 
+    /**
+     * Optional override for the persona's Visual: how the agent's video shows in the call. A member set here wins over
+     * the persona's.
+     */
+    Visual?: {
+        /** How much of the avatar the tile frames. */
+        Framing?: 'head' | 'shoulders' | 'waist';
+        /** The accent of the ring that frames the tile while the agent speaks: a design-token name, never a color value. */
+        AccentToken?: string;
+    };
+
     /** Open extension point for additional descriptor overrides. */
     [key: string]: unknown;
 }
@@ -44185,15 +44445,38 @@ export interface MJAIAgentRubricEntity_IRubricVersionChangeDetails {
     Changes: MJAIAgentRubricEntity_IRubricVersionChange[];
 }
 
-/** AIAgentRubric.EvaluatorConfig */
+/**
+ * AIAgentRubric.EvaluatorConfig — which evaluator scores the link, and with which prompts.
+ *
+ * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
+ * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
+ * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
+ * they name the decision prompt instead.
+ */
 export interface MJAIAgentRubricEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
+    /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
+    /** The same prompt by name, when no PromptID is set. For example `Rubric Judge - Sage`. */
+    PromptName?: string;
+    /** LLM: the parent evaluator prompt. Default `Rubric Evaluator`. Must return the same JSON. */
+    SystemPromptID?: string;
+    SystemPromptName?: string;
+    /** LLM and Decision: the prompt that renders one criterion. Default `Rubric Criterion`. */
+    CriterionPromptID?: string;
+    CriterionPromptName?: string;
+    /** LLM: which prompt's model bindings choose the model. System (default) or Judge. */
+    ModelSelection?: 'System' | 'Judge';
     AgentID?: string;
+    /** Pins the model. */
     ModelID?: string;
+    /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** Settings for a custom evaluator, keyed by its evaluator name. */
+    Extensions?: Record<string, MJAIAgentRubricEntity_JsonValue>;
 }
 
 /**
@@ -45231,7 +45514,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     * * Field Name: PayloadAtStart
     * * Display Name: Payload At Start
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON serialization of the Payload state at the start of this step
+    * * Description: JSON serialization of the Payload state at the start of this step. NULL when PayloadAtStartSourceStepID is set; the starting payload is then the PayloadAtEnd of that step.
     */
     get PayloadAtStart(): string | null {
         return this.Get('PayloadAtStart');
@@ -45407,6 +45690,20 @@ detailed information about what validation rules failed.
     }
 
     /**
+    * * Field Name: PayloadAtStartSourceStepID
+    * * Display Name: Payload At Start Source Step ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+    * * Description: When set, PayloadAtStart is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's starting payload.
+    */
+    get PayloadAtStartSourceStepID(): string | null {
+        return this.Get('PayloadAtStartSourceStepID');
+    }
+    set PayloadAtStartSourceStepID(value: string | null) {
+        this.Set('PayloadAtStartSourceStepID', value);
+    }
+
+    /**
     * * Field Name: AgentRun
     * * Display Name: Agent Run Context
     * * SQL Data Type: nvarchar(255)
@@ -45422,6 +45719,15 @@ detailed information about what validation rules failed.
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: PayloadAtStartSourceStep
+    * * Display Name: Payload At Start Source Step
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PayloadAtStartSourceStep(): string | null {
+        return this.Get('PayloadAtStartSourceStep');
     }
 
     /**
@@ -45792,7 +46098,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     * * Field Name: Result
     * * Display Name: Result
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Final result or output from the agent execution, stored as JSON or text
+    * * Description: Deprecated. No longer written by agent runs; use FinalPayload, which holds the same value. Kept for existing rows and external readers.
     */
     get Result(): string | null {
         return this.Get('Result');
@@ -54037,7 +54343,8 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelTypeEntity_LLMConfigurationSettings`, `MJAIModelTypeEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`, `MJAIModelTypeEntity_DecisionConfigurationSettings`) —
+ *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`, `MJAIModelTypeEntity_DecisionConfigurationSettings`,
+ *    `MJAIModelTypeEntity_PrivacyConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelTypeEntity_IAIModelConfiguration`, `MJAIModelTypeEntity_IAIPromptConfiguration`,
@@ -54063,12 +54370,13 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
  * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
  * type in ONE file is what makes a shared section possible at all; the cost is that each of the
- * five entities emits the full (prefixed) set, including outer types it does not use.
+ * six entities emits the full (prefixed) set, including outer types it does not use.
  *
  * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
  * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
- * compiles against. Keep the two in step when adding a section or property — the same pact
- * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ * compiles against (the track types mirror its `realtimeTracks.ts`). Keep the two in step when
+ * adding a section or property — the same pact `IAgentSettings` follows with
+ * `@memberjunction/ai-core-plus`. Core's `modelConfiguration.test.ts` fails when they differ.
  *
  * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
  * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
@@ -54137,6 +54445,13 @@ export interface MJAIModelTypeEntity_LLMConfigurationSettings {
     NativeToolResults?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -54151,46 +54466,175 @@ export interface MJAIModelTypeEntity_LLMConfigurationSettings {
 }
 
 /**
+ * MJ-normalized turn-detection mode, provider-neutral so a shared catalog is safe on every provider:
+ * - `'default'` — let the provider profile decide (today's behavior).
+ * - `'serverVad'` — classic silence-based server VAD.
+ * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+ * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+ *   to; the forward slot for full-duplex reasoning voice models.
+ */
+export type MJAIModelTypeEntity_RealtimeTurnDetectionMode = 'default' | 'serverVad' | 'semanticVad' | 'native';
+
+/**
+ * What a turn's input may include (distinct from detection, which decides when a turn ends):
+ * - `'audioActivityOnly'` — audio activity only; video frames are sent deliberately.
+ * - `'audioActivityAndAllVideo'` — audio activity plus every video frame (Gemini 3.8 Live's default).
+ */
+export type MJAIModelTypeEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVideo';
+
+/**
  * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
  * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
  * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
  * default — a wrong inherited value degrades safely, it never rejects a session.
  */
 export interface MJAIModelTypeEntity_RealtimeTurnDetectionSettings {
-    /**
-     * - `'default'` — let the provider profile decide (today's behavior).
-     * - `'serverVad'` — classic silence-based server VAD.
-     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
-     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
-     *   to; the forward slot for full-duplex reasoning voice models.
-     */
-    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** The normalized mode; absent = `'default'`. */
+    Mode?: MJAIModelTypeEntity_RealtimeTurnDetectionMode;
     /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
-    Eagerness?: 'low' | 'auto' | 'high' | null;
+    Eagerness?: 'low' | 'auto' | 'high';
     /** Server-VAD activation threshold (0–1); ignored without a mapping. */
-    Threshold?: number | null;
+    Threshold?: number;
     /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
-    SilenceDurationMs?: number | null;
+    SilenceDurationMs?: number;
+    /**
+     * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
+     * and consuming context) a decision rather than an inherited cost. Ignored without a mapping.
+     */
+    Coverage?: MJAIModelTypeEntity_RealtimeTurnCoverage;
+}
+
+/** Which plane handles reasoning: `'local'` (the application/agent loop, the default) or `'remote'`. */
+export type MJAIModelTypeEntity_RealtimeReasoningPlane = 'local' | 'remote';
+
+/** A reasoning effort in MJ's neutral vocabulary; each provider profile maps the values its model accepts. */
+export type MJAIModelTypeEntity_RealtimeReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+/** The remote reasoning target, used when `Plane` is `'remote'`. */
+export interface MJAIModelTypeEntity_RealtimeRemoteReasoning {
+    /** What the reference denotes: `'model'` (Live, Inworld) or `'hostedAgent'` (ElevenLabs). */
+    Kind?: 'model' | 'hostedAgent';
+    /** The target, e.g. `'gpt-5.6-terra'`, `'anthropic/claude-sonnet-4-6'`, `'MJ Realtime Co-Agent'`. */
+    Ref?: string;
+    /** The target's reasoning effort, for models that support one. */
+    Effort?: MJAIModelTypeEntity_RealtimeReasoningEffort;
+    /** The most output tokens for the remote reasoning pass. */
+    MaxOutputTokens?: number;
+}
+
+/** Reasoning-plane settings for realtime models — dual delegation configuration. */
+export interface MJAIModelTypeEntity_RealtimeReasoningSettings {
+    /** Absent = `'local'`. Fixed when the session is created. */
+    Plane?: MJAIModelTypeEntity_RealtimeReasoningPlane;
+    /** The remote target when `Plane` is `'remote'`. */
+    Remote?: MJAIModelTypeEntity_RealtimeRemoteReasoning;
+    /**
+     * How hard the model itself reasons (Gemini `thinkingConfig.thinkingLevel`). A profile that cannot
+     * honour the value logs a warning and uses its own default.
+     */
+    Level?: MJAIModelTypeEntity_RealtimeReasoningEffort;
+    /**
+     * Ask the model for human-readable summaries of its own reasoning (Gemini `includeThoughts`). They
+     * are progress narration, not assistant speech. Absent = off.
+     */
+    IncludeThoughtSummaries?: boolean;
+}
+
+/** Which way samples flow on a track, relative to the model. */
+export type MJAIModelTypeEntity_RealtimeTrackDirection = 'inbound' | 'outbound';
+
+/** The modalities MJ itself reasons about (cost, consent, transcripts). */
+export type MJAIModelTypeEntity_RealtimeWellKnownModality = 'audio' | 'video' | 'image' | 'text';
+
+/** A modality key: one of the well-known values, or any registered string. */
+export type MJAIModelTypeEntity_RealtimeModalityKey = MJAIModelTypeEntity_RealtimeWellKnownModality | (string & {});
+
+/** How a track's usage is metered. */
+export type MJAIModelTypeEntity_RealtimeTrackUsageBasis = 'tokens' | 'seconds' | 'frames' | 'bytes';
+
+/**
+ * One directional stream of one modality, as {@link MJAIModelTypeEntity_RealtimeConfigurationSettings.RequestedTracks}
+ * requests it. Mirrors the track descriptor in `@memberjunction/ai` (`realtimeTracks.ts`).
+ */
+export interface MJAIModelTypeEntity_RealtimeTrackDescriptor {
+    /** The modality this track carries. */
+    Modality: MJAIModelTypeEntity_RealtimeModalityKey;
+    /** Which way samples flow, relative to the model. */
+    Direction: MJAIModelTypeEntity_RealtimeTrackDirection;
+    /** Wire encoding, e.g. `'audio/pcm;rate=16000'` or `'image/jpeg'`; absent = the profile's default. */
+    Encoding?: string;
+    /** Sample or frame cadence: fps for video, Hz for audio. */
+    Rate?: number;
+    /** How this track is metered; absent = the session's own basis. */
+    UsageBasis?: readonly MJAIModelTypeEntity_RealtimeTrackUsageBasis[];
+    /** Whether establishing this track needs an explicit human grant (camera, screen, microphone). */
+    RequiresConsent?: boolean;
+    /** Whether the session needs this track (`true`) or treats it as best-effort (`false`). */
+    Required?: boolean;
+    /** Which source feeds this track, when several streams of one modality and direction can exist. */
+    SourceID?: string;
+    /** A human-readable name for that source ("Whiteboard", "Camera"). */
+    Label?: string;
 }
 
 /**
- * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
- * `'local'`.
+ * Which server signal means "the session has gone idle and deferred work may be flushed":
+ * `'turnComplete'` (the default) or `'interactionStatus'`, for models with asynchronous reasoning
+ * whose `turnComplete` arrives while they still reason and call tools.
  */
-export interface MJAIModelTypeEntity_RealtimeReasoningSettings {
+export type MJAIModelTypeEntity_RealtimeIdleSignal = 'turnComplete' | 'interactionStatus';
+
+/** Tool-execution semantics a model permits. Capability declarations, not requests. */
+export interface MJAIModelTypeEntity_RealtimeToolingSettings {
     /**
-     * Which plane handles reasoning:
-     * - `'local'` — application/agent loop (default).
-     * - `'remote'` — delegated to remote model or hosted agent.
+     * Whether synchronous blocking tool execution is legal. Absent = permitted. `false` on models that
+     * reject blocking mode outright (Gemini 3.8 Live Extended Thinking).
      */
-    Plane?: 'local' | 'remote' | null;
-    /** Remote reasoning target configuration. */
-    Remote?: {
-        Kind?: 'model' | 'hostedAgent' | null;
-        Ref?: string | null;
-        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
-        MaxOutputTokens?: number | null;
-    } | null;
+    SupportsBlockingExecution?: boolean;
+    /**
+     * Whether per-function scheduling hints are legal (Gemini `SILENT` / `WHEN_IDLE` / `INTERRUPTED`).
+     * Absent = not supported.
+     */
+    SupportsScheduling?: boolean;
+    /** Preferred function-calling behavior. */
+    Behavior?: 'BLOCKING' | 'NON_BLOCKING';
+}
+
+/**
+ * One price for a quantity a realtime session produces, in one currency. It applies only when all
+ * three fields are set; a partial price, or a unit or currency the reader does not handle, counts
+ * as no price.
+ */
+export interface MJAIModelTypeEntity_RealtimeUnitPrice {
+    /** The amount charged per {@link MJAIModelTypeEntity_RealtimeUnitPrice.Unit}. Never negative. */
+    Price?: number | null;
+    /**
+     * The billing unit, named as in `MJ: AI Model Price Unit Types`. `'Per Minute'`: one minute.
+     * `'Per 1M Tokens'`: one million tokens.
+     */
+    Unit?: 'Per Minute' | 'Per 1M Tokens' | null;
+    /** ISO 4217 currency code, uppercase (e.g. `USD`), as on `MJ: AI Model Costs`. */
+    Currency?: string | null;
+}
+
+/**
+ * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own; the cost rows stay the authority for token prices. A price belongs to the host that
+ * charges it, so set this on the model-vendor row: a price on the model or the model type would
+ * reach every vendor that serves the model.
+ */
+export interface MJAIModelTypeEntity_RealtimePricingSettings {
+    /**
+     * The price of avatar video output, charged on top of the session's token cost. `'Per Minute'`
+     * prices the seconds of avatar video the model generates; `'Per 1M Tokens'` prices the output
+     * tokens the provider counts as video. Set the price and its unit together: the cascade merges
+     * per key, so a layer that sets only one of them keeps the other from the layer below.
+     *
+     * Unverified until checked against Google's bill (#5312): Gemini 3.8 Live on Vertex AI is
+     * seeded at $0.37152 per minute, derived from Google's $1.00 per 1M avatar video output tokens
+     * at 6,192 tokens per second.
+     */
+    AvatarVideoOutput?: MJAIModelTypeEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -54206,7 +54650,36 @@ export interface MJAIModelTypeEntity_RealtimeConfigurationSettings {
     /**
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
-    Reasoning?: MJAIModelTypeEntity_RealtimeReasoningSettings | null;
+    Reasoning?: MJAIModelTypeEntity_RealtimeReasoningSettings;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
+
+    /** Tool-execution semantics this model permits. Absent = the profile's own defaults. */
+    Tooling?: MJAIModelTypeEntity_RealtimeToolingSettings;
+
+    /**
+     * Media tracks a session asks the model to establish beyond audio. Absent or empty establishes
+     * audio only, so a video track exists only because something asked for it and never arrives as an
+     * inherited cost. Requests are intersected with what the model supports.
+     */
+    RequestedTracks?: readonly MJAIModelTypeEntity_RealtimeTrackDescriptor[];
+
+    /** Which server signal means the session has gone idle. Absent = `'turnComplete'`. */
+    IdleSignal?: MJAIModelTypeEntity_RealtimeIdleSignal;
+
+    /**
+     * Prices for output the token cost rows do not cover, such as avatar video. Set it on the
+     * model-vendor row.
+     */
+    Pricing?: MJAIModelTypeEntity_RealtimePricingSettings | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -54217,6 +54690,23 @@ export interface MJAIModelTypeEntity_VisionConfigurationSettings {
 /** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
 export interface MJAIModelTypeEntity_AudioConfigurationSettings {
     [key: string]: unknown;
+}
+
+/**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface MJAIModelTypeEntity_PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
 }
 
 /**
@@ -54258,6 +54748,8 @@ export interface MJAIModelTypeEntity_IAIModelConfiguration {
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -54278,6 +54770,8 @@ export interface MJAIModelTypeEntity_IAIPromptConfiguration {
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -54295,6 +54789,8 @@ export interface MJAIModelTypeEntity_IAIPromptModelConfiguration {
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -54512,7 +55008,8 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelVendorEntity_LLMConfigurationSettings`, `MJAIModelVendorEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`, `MJAIModelVendorEntity_DecisionConfigurationSettings`) —
+ *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`, `MJAIModelVendorEntity_DecisionConfigurationSettings`,
+ *    `MJAIModelVendorEntity_PrivacyConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelVendorEntity_IAIModelConfiguration`, `MJAIModelVendorEntity_IAIPromptConfiguration`,
@@ -54538,12 +55035,13 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
  * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
  * type in ONE file is what makes a shared section possible at all; the cost is that each of the
- * five entities emits the full (prefixed) set, including outer types it does not use.
+ * six entities emits the full (prefixed) set, including outer types it does not use.
  *
  * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
  * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
- * compiles against. Keep the two in step when adding a section or property — the same pact
- * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ * compiles against (the track types mirror its `realtimeTracks.ts`). Keep the two in step when
+ * adding a section or property — the same pact `IAgentSettings` follows with
+ * `@memberjunction/ai-core-plus`. Core's `modelConfiguration.test.ts` fails when they differ.
  *
  * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
  * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
@@ -54612,6 +55110,13 @@ export interface MJAIModelVendorEntity_LLMConfigurationSettings {
     NativeToolResults?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -54626,46 +55131,175 @@ export interface MJAIModelVendorEntity_LLMConfigurationSettings {
 }
 
 /**
+ * MJ-normalized turn-detection mode, provider-neutral so a shared catalog is safe on every provider:
+ * - `'default'` — let the provider profile decide (today's behavior).
+ * - `'serverVad'` — classic silence-based server VAD.
+ * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+ * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+ *   to; the forward slot for full-duplex reasoning voice models.
+ */
+export type MJAIModelVendorEntity_RealtimeTurnDetectionMode = 'default' | 'serverVad' | 'semanticVad' | 'native';
+
+/**
+ * What a turn's input may include (distinct from detection, which decides when a turn ends):
+ * - `'audioActivityOnly'` — audio activity only; video frames are sent deliberately.
+ * - `'audioActivityAndAllVideo'` — audio activity plus every video frame (Gemini 3.8 Live's default).
+ */
+export type MJAIModelVendorEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVideo';
+
+/**
  * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
  * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
  * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
  * default — a wrong inherited value degrades safely, it never rejects a session.
  */
 export interface MJAIModelVendorEntity_RealtimeTurnDetectionSettings {
-    /**
-     * - `'default'` — let the provider profile decide (today's behavior).
-     * - `'serverVad'` — classic silence-based server VAD.
-     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
-     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
-     *   to; the forward slot for full-duplex reasoning voice models.
-     */
-    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** The normalized mode; absent = `'default'`. */
+    Mode?: MJAIModelVendorEntity_RealtimeTurnDetectionMode;
     /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
-    Eagerness?: 'low' | 'auto' | 'high' | null;
+    Eagerness?: 'low' | 'auto' | 'high';
     /** Server-VAD activation threshold (0–1); ignored without a mapping. */
-    Threshold?: number | null;
+    Threshold?: number;
     /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
-    SilenceDurationMs?: number | null;
+    SilenceDurationMs?: number;
+    /**
+     * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
+     * and consuming context) a decision rather than an inherited cost. Ignored without a mapping.
+     */
+    Coverage?: MJAIModelVendorEntity_RealtimeTurnCoverage;
+}
+
+/** Which plane handles reasoning: `'local'` (the application/agent loop, the default) or `'remote'`. */
+export type MJAIModelVendorEntity_RealtimeReasoningPlane = 'local' | 'remote';
+
+/** A reasoning effort in MJ's neutral vocabulary; each provider profile maps the values its model accepts. */
+export type MJAIModelVendorEntity_RealtimeReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+/** The remote reasoning target, used when `Plane` is `'remote'`. */
+export interface MJAIModelVendorEntity_RealtimeRemoteReasoning {
+    /** What the reference denotes: `'model'` (Live, Inworld) or `'hostedAgent'` (ElevenLabs). */
+    Kind?: 'model' | 'hostedAgent';
+    /** The target, e.g. `'gpt-5.6-terra'`, `'anthropic/claude-sonnet-4-6'`, `'MJ Realtime Co-Agent'`. */
+    Ref?: string;
+    /** The target's reasoning effort, for models that support one. */
+    Effort?: MJAIModelVendorEntity_RealtimeReasoningEffort;
+    /** The most output tokens for the remote reasoning pass. */
+    MaxOutputTokens?: number;
+}
+
+/** Reasoning-plane settings for realtime models — dual delegation configuration. */
+export interface MJAIModelVendorEntity_RealtimeReasoningSettings {
+    /** Absent = `'local'`. Fixed when the session is created. */
+    Plane?: MJAIModelVendorEntity_RealtimeReasoningPlane;
+    /** The remote target when `Plane` is `'remote'`. */
+    Remote?: MJAIModelVendorEntity_RealtimeRemoteReasoning;
+    /**
+     * How hard the model itself reasons (Gemini `thinkingConfig.thinkingLevel`). A profile that cannot
+     * honour the value logs a warning and uses its own default.
+     */
+    Level?: MJAIModelVendorEntity_RealtimeReasoningEffort;
+    /**
+     * Ask the model for human-readable summaries of its own reasoning (Gemini `includeThoughts`). They
+     * are progress narration, not assistant speech. Absent = off.
+     */
+    IncludeThoughtSummaries?: boolean;
+}
+
+/** Which way samples flow on a track, relative to the model. */
+export type MJAIModelVendorEntity_RealtimeTrackDirection = 'inbound' | 'outbound';
+
+/** The modalities MJ itself reasons about (cost, consent, transcripts). */
+export type MJAIModelVendorEntity_RealtimeWellKnownModality = 'audio' | 'video' | 'image' | 'text';
+
+/** A modality key: one of the well-known values, or any registered string. */
+export type MJAIModelVendorEntity_RealtimeModalityKey = MJAIModelVendorEntity_RealtimeWellKnownModality | (string & {});
+
+/** How a track's usage is metered. */
+export type MJAIModelVendorEntity_RealtimeTrackUsageBasis = 'tokens' | 'seconds' | 'frames' | 'bytes';
+
+/**
+ * One directional stream of one modality, as {@link MJAIModelVendorEntity_RealtimeConfigurationSettings.RequestedTracks}
+ * requests it. Mirrors the track descriptor in `@memberjunction/ai` (`realtimeTracks.ts`).
+ */
+export interface MJAIModelVendorEntity_RealtimeTrackDescriptor {
+    /** The modality this track carries. */
+    Modality: MJAIModelVendorEntity_RealtimeModalityKey;
+    /** Which way samples flow, relative to the model. */
+    Direction: MJAIModelVendorEntity_RealtimeTrackDirection;
+    /** Wire encoding, e.g. `'audio/pcm;rate=16000'` or `'image/jpeg'`; absent = the profile's default. */
+    Encoding?: string;
+    /** Sample or frame cadence: fps for video, Hz for audio. */
+    Rate?: number;
+    /** How this track is metered; absent = the session's own basis. */
+    UsageBasis?: readonly MJAIModelVendorEntity_RealtimeTrackUsageBasis[];
+    /** Whether establishing this track needs an explicit human grant (camera, screen, microphone). */
+    RequiresConsent?: boolean;
+    /** Whether the session needs this track (`true`) or treats it as best-effort (`false`). */
+    Required?: boolean;
+    /** Which source feeds this track, when several streams of one modality and direction can exist. */
+    SourceID?: string;
+    /** A human-readable name for that source ("Whiteboard", "Camera"). */
+    Label?: string;
 }
 
 /**
- * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
- * `'local'`.
+ * Which server signal means "the session has gone idle and deferred work may be flushed":
+ * `'turnComplete'` (the default) or `'interactionStatus'`, for models with asynchronous reasoning
+ * whose `turnComplete` arrives while they still reason and call tools.
  */
-export interface MJAIModelVendorEntity_RealtimeReasoningSettings {
+export type MJAIModelVendorEntity_RealtimeIdleSignal = 'turnComplete' | 'interactionStatus';
+
+/** Tool-execution semantics a model permits. Capability declarations, not requests. */
+export interface MJAIModelVendorEntity_RealtimeToolingSettings {
     /**
-     * Which plane handles reasoning:
-     * - `'local'` — application/agent loop (default).
-     * - `'remote'` — delegated to remote model or hosted agent.
+     * Whether synchronous blocking tool execution is legal. Absent = permitted. `false` on models that
+     * reject blocking mode outright (Gemini 3.8 Live Extended Thinking).
      */
-    Plane?: 'local' | 'remote' | null;
-    /** Remote reasoning target configuration. */
-    Remote?: {
-        Kind?: 'model' | 'hostedAgent' | null;
-        Ref?: string | null;
-        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
-        MaxOutputTokens?: number | null;
-    } | null;
+    SupportsBlockingExecution?: boolean;
+    /**
+     * Whether per-function scheduling hints are legal (Gemini `SILENT` / `WHEN_IDLE` / `INTERRUPTED`).
+     * Absent = not supported.
+     */
+    SupportsScheduling?: boolean;
+    /** Preferred function-calling behavior. */
+    Behavior?: 'BLOCKING' | 'NON_BLOCKING';
+}
+
+/**
+ * One price for a quantity a realtime session produces, in one currency. It applies only when all
+ * three fields are set; a partial price, or a unit or currency the reader does not handle, counts
+ * as no price.
+ */
+export interface MJAIModelVendorEntity_RealtimeUnitPrice {
+    /** The amount charged per {@link MJAIModelVendorEntity_RealtimeUnitPrice.Unit}. Never negative. */
+    Price?: number | null;
+    /**
+     * The billing unit, named as in `MJ: AI Model Price Unit Types`. `'Per Minute'`: one minute.
+     * `'Per 1M Tokens'`: one million tokens.
+     */
+    Unit?: 'Per Minute' | 'Per 1M Tokens' | null;
+    /** ISO 4217 currency code, uppercase (e.g. `USD`), as on `MJ: AI Model Costs`. */
+    Currency?: string | null;
+}
+
+/**
+ * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own; the cost rows stay the authority for token prices. A price belongs to the host that
+ * charges it, so set this on the model-vendor row: a price on the model or the model type would
+ * reach every vendor that serves the model.
+ */
+export interface MJAIModelVendorEntity_RealtimePricingSettings {
+    /**
+     * The price of avatar video output, charged on top of the session's token cost. `'Per Minute'`
+     * prices the seconds of avatar video the model generates; `'Per 1M Tokens'` prices the output
+     * tokens the provider counts as video. Set the price and its unit together: the cascade merges
+     * per key, so a layer that sets only one of them keeps the other from the layer below.
+     *
+     * Unverified until checked against Google's bill (#5312): Gemini 3.8 Live on Vertex AI is
+     * seeded at $0.37152 per minute, derived from Google's $1.00 per 1M avatar video output tokens
+     * at 6,192 tokens per second.
+     */
+    AvatarVideoOutput?: MJAIModelVendorEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -54681,7 +55315,36 @@ export interface MJAIModelVendorEntity_RealtimeConfigurationSettings {
     /**
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
-    Reasoning?: MJAIModelVendorEntity_RealtimeReasoningSettings | null;
+    Reasoning?: MJAIModelVendorEntity_RealtimeReasoningSettings;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
+
+    /** Tool-execution semantics this model permits. Absent = the profile's own defaults. */
+    Tooling?: MJAIModelVendorEntity_RealtimeToolingSettings;
+
+    /**
+     * Media tracks a session asks the model to establish beyond audio. Absent or empty establishes
+     * audio only, so a video track exists only because something asked for it and never arrives as an
+     * inherited cost. Requests are intersected with what the model supports.
+     */
+    RequestedTracks?: readonly MJAIModelVendorEntity_RealtimeTrackDescriptor[];
+
+    /** Which server signal means the session has gone idle. Absent = `'turnComplete'`. */
+    IdleSignal?: MJAIModelVendorEntity_RealtimeIdleSignal;
+
+    /**
+     * Prices for output the token cost rows do not cover, such as avatar video. Set it on the
+     * model-vendor row.
+     */
+    Pricing?: MJAIModelVendorEntity_RealtimePricingSettings | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -54692,6 +55355,23 @@ export interface MJAIModelVendorEntity_VisionConfigurationSettings {
 /** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
 export interface MJAIModelVendorEntity_AudioConfigurationSettings {
     [key: string]: unknown;
+}
+
+/**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface MJAIModelVendorEntity_PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
 }
 
 /**
@@ -54733,6 +55413,8 @@ export interface MJAIModelVendorEntity_IAIModelConfiguration {
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -54753,6 +55435,8 @@ export interface MJAIModelVendorEntity_IAIPromptConfiguration {
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -54770,6 +55454,8 @@ export interface MJAIModelVendorEntity_IAIPromptModelConfiguration {
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -55179,7 +55865,8 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelEntity_LLMConfigurationSettings`, `MJAIModelEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`, `MJAIModelEntity_DecisionConfigurationSettings`) —
+ *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`, `MJAIModelEntity_DecisionConfigurationSettings`,
+ *    `MJAIModelEntity_PrivacyConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelEntity_IAIModelConfiguration`, `MJAIModelEntity_IAIPromptConfiguration`,
@@ -55205,12 +55892,13 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
  * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
  * type in ONE file is what makes a shared section possible at all; the cost is that each of the
- * five entities emits the full (prefixed) set, including outer types it does not use.
+ * six entities emits the full (prefixed) set, including outer types it does not use.
  *
  * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
  * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
- * compiles against. Keep the two in step when adding a section or property — the same pact
- * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ * compiles against (the track types mirror its `realtimeTracks.ts`). Keep the two in step when
+ * adding a section or property — the same pact `IAgentSettings` follows with
+ * `@memberjunction/ai-core-plus`. Core's `modelConfiguration.test.ts` fails when they differ.
  *
  * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
  * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
@@ -55279,6 +55967,13 @@ export interface MJAIModelEntity_LLMConfigurationSettings {
     NativeToolResults?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -55293,46 +55988,175 @@ export interface MJAIModelEntity_LLMConfigurationSettings {
 }
 
 /**
+ * MJ-normalized turn-detection mode, provider-neutral so a shared catalog is safe on every provider:
+ * - `'default'` — let the provider profile decide (today's behavior).
+ * - `'serverVad'` — classic silence-based server VAD.
+ * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+ * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+ *   to; the forward slot for full-duplex reasoning voice models.
+ */
+export type MJAIModelEntity_RealtimeTurnDetectionMode = 'default' | 'serverVad' | 'semanticVad' | 'native';
+
+/**
+ * What a turn's input may include (distinct from detection, which decides when a turn ends):
+ * - `'audioActivityOnly'` — audio activity only; video frames are sent deliberately.
+ * - `'audioActivityAndAllVideo'` — audio activity plus every video frame (Gemini 3.8 Live's default).
+ */
+export type MJAIModelEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVideo';
+
+/**
  * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
  * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
  * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
  * default — a wrong inherited value degrades safely, it never rejects a session.
  */
 export interface MJAIModelEntity_RealtimeTurnDetectionSettings {
-    /**
-     * - `'default'` — let the provider profile decide (today's behavior).
-     * - `'serverVad'` — classic silence-based server VAD.
-     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
-     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
-     *   to; the forward slot for full-duplex reasoning voice models.
-     */
-    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** The normalized mode; absent = `'default'`. */
+    Mode?: MJAIModelEntity_RealtimeTurnDetectionMode;
     /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
-    Eagerness?: 'low' | 'auto' | 'high' | null;
+    Eagerness?: 'low' | 'auto' | 'high';
     /** Server-VAD activation threshold (0–1); ignored without a mapping. */
-    Threshold?: number | null;
+    Threshold?: number;
     /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
-    SilenceDurationMs?: number | null;
+    SilenceDurationMs?: number;
+    /**
+     * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
+     * and consuming context) a decision rather than an inherited cost. Ignored without a mapping.
+     */
+    Coverage?: MJAIModelEntity_RealtimeTurnCoverage;
+}
+
+/** Which plane handles reasoning: `'local'` (the application/agent loop, the default) or `'remote'`. */
+export type MJAIModelEntity_RealtimeReasoningPlane = 'local' | 'remote';
+
+/** A reasoning effort in MJ's neutral vocabulary; each provider profile maps the values its model accepts. */
+export type MJAIModelEntity_RealtimeReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+/** The remote reasoning target, used when `Plane` is `'remote'`. */
+export interface MJAIModelEntity_RealtimeRemoteReasoning {
+    /** What the reference denotes: `'model'` (Live, Inworld) or `'hostedAgent'` (ElevenLabs). */
+    Kind?: 'model' | 'hostedAgent';
+    /** The target, e.g. `'gpt-5.6-terra'`, `'anthropic/claude-sonnet-4-6'`, `'MJ Realtime Co-Agent'`. */
+    Ref?: string;
+    /** The target's reasoning effort, for models that support one. */
+    Effort?: MJAIModelEntity_RealtimeReasoningEffort;
+    /** The most output tokens for the remote reasoning pass. */
+    MaxOutputTokens?: number;
+}
+
+/** Reasoning-plane settings for realtime models — dual delegation configuration. */
+export interface MJAIModelEntity_RealtimeReasoningSettings {
+    /** Absent = `'local'`. Fixed when the session is created. */
+    Plane?: MJAIModelEntity_RealtimeReasoningPlane;
+    /** The remote target when `Plane` is `'remote'`. */
+    Remote?: MJAIModelEntity_RealtimeRemoteReasoning;
+    /**
+     * How hard the model itself reasons (Gemini `thinkingConfig.thinkingLevel`). A profile that cannot
+     * honour the value logs a warning and uses its own default.
+     */
+    Level?: MJAIModelEntity_RealtimeReasoningEffort;
+    /**
+     * Ask the model for human-readable summaries of its own reasoning (Gemini `includeThoughts`). They
+     * are progress narration, not assistant speech. Absent = off.
+     */
+    IncludeThoughtSummaries?: boolean;
+}
+
+/** Which way samples flow on a track, relative to the model. */
+export type MJAIModelEntity_RealtimeTrackDirection = 'inbound' | 'outbound';
+
+/** The modalities MJ itself reasons about (cost, consent, transcripts). */
+export type MJAIModelEntity_RealtimeWellKnownModality = 'audio' | 'video' | 'image' | 'text';
+
+/** A modality key: one of the well-known values, or any registered string. */
+export type MJAIModelEntity_RealtimeModalityKey = MJAIModelEntity_RealtimeWellKnownModality | (string & {});
+
+/** How a track's usage is metered. */
+export type MJAIModelEntity_RealtimeTrackUsageBasis = 'tokens' | 'seconds' | 'frames' | 'bytes';
+
+/**
+ * One directional stream of one modality, as {@link MJAIModelEntity_RealtimeConfigurationSettings.RequestedTracks}
+ * requests it. Mirrors the track descriptor in `@memberjunction/ai` (`realtimeTracks.ts`).
+ */
+export interface MJAIModelEntity_RealtimeTrackDescriptor {
+    /** The modality this track carries. */
+    Modality: MJAIModelEntity_RealtimeModalityKey;
+    /** Which way samples flow, relative to the model. */
+    Direction: MJAIModelEntity_RealtimeTrackDirection;
+    /** Wire encoding, e.g. `'audio/pcm;rate=16000'` or `'image/jpeg'`; absent = the profile's default. */
+    Encoding?: string;
+    /** Sample or frame cadence: fps for video, Hz for audio. */
+    Rate?: number;
+    /** How this track is metered; absent = the session's own basis. */
+    UsageBasis?: readonly MJAIModelEntity_RealtimeTrackUsageBasis[];
+    /** Whether establishing this track needs an explicit human grant (camera, screen, microphone). */
+    RequiresConsent?: boolean;
+    /** Whether the session needs this track (`true`) or treats it as best-effort (`false`). */
+    Required?: boolean;
+    /** Which source feeds this track, when several streams of one modality and direction can exist. */
+    SourceID?: string;
+    /** A human-readable name for that source ("Whiteboard", "Camera"). */
+    Label?: string;
 }
 
 /**
- * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
- * `'local'`.
+ * Which server signal means "the session has gone idle and deferred work may be flushed":
+ * `'turnComplete'` (the default) or `'interactionStatus'`, for models with asynchronous reasoning
+ * whose `turnComplete` arrives while they still reason and call tools.
  */
-export interface MJAIModelEntity_RealtimeReasoningSettings {
+export type MJAIModelEntity_RealtimeIdleSignal = 'turnComplete' | 'interactionStatus';
+
+/** Tool-execution semantics a model permits. Capability declarations, not requests. */
+export interface MJAIModelEntity_RealtimeToolingSettings {
     /**
-     * Which plane handles reasoning:
-     * - `'local'` — application/agent loop (default).
-     * - `'remote'` — delegated to remote model or hosted agent.
+     * Whether synchronous blocking tool execution is legal. Absent = permitted. `false` on models that
+     * reject blocking mode outright (Gemini 3.8 Live Extended Thinking).
      */
-    Plane?: 'local' | 'remote' | null;
-    /** Remote reasoning target configuration. */
-    Remote?: {
-        Kind?: 'model' | 'hostedAgent' | null;
-        Ref?: string | null;
-        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
-        MaxOutputTokens?: number | null;
-    } | null;
+    SupportsBlockingExecution?: boolean;
+    /**
+     * Whether per-function scheduling hints are legal (Gemini `SILENT` / `WHEN_IDLE` / `INTERRUPTED`).
+     * Absent = not supported.
+     */
+    SupportsScheduling?: boolean;
+    /** Preferred function-calling behavior. */
+    Behavior?: 'BLOCKING' | 'NON_BLOCKING';
+}
+
+/**
+ * One price for a quantity a realtime session produces, in one currency. It applies only when all
+ * three fields are set; a partial price, or a unit or currency the reader does not handle, counts
+ * as no price.
+ */
+export interface MJAIModelEntity_RealtimeUnitPrice {
+    /** The amount charged per {@link MJAIModelEntity_RealtimeUnitPrice.Unit}. Never negative. */
+    Price?: number | null;
+    /**
+     * The billing unit, named as in `MJ: AI Model Price Unit Types`. `'Per Minute'`: one minute.
+     * `'Per 1M Tokens'`: one million tokens.
+     */
+    Unit?: 'Per Minute' | 'Per 1M Tokens' | null;
+    /** ISO 4217 currency code, uppercase (e.g. `USD`), as on `MJ: AI Model Costs`. */
+    Currency?: string | null;
+}
+
+/**
+ * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own; the cost rows stay the authority for token prices. A price belongs to the host that
+ * charges it, so set this on the model-vendor row: a price on the model or the model type would
+ * reach every vendor that serves the model.
+ */
+export interface MJAIModelEntity_RealtimePricingSettings {
+    /**
+     * The price of avatar video output, charged on top of the session's token cost. `'Per Minute'`
+     * prices the seconds of avatar video the model generates; `'Per 1M Tokens'` prices the output
+     * tokens the provider counts as video. Set the price and its unit together: the cascade merges
+     * per key, so a layer that sets only one of them keeps the other from the layer below.
+     *
+     * Unverified until checked against Google's bill (#5312): Gemini 3.8 Live on Vertex AI is
+     * seeded at $0.37152 per minute, derived from Google's $1.00 per 1M avatar video output tokens
+     * at 6,192 tokens per second.
+     */
+    AvatarVideoOutput?: MJAIModelEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -55348,7 +56172,36 @@ export interface MJAIModelEntity_RealtimeConfigurationSettings {
     /**
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
-    Reasoning?: MJAIModelEntity_RealtimeReasoningSettings | null;
+    Reasoning?: MJAIModelEntity_RealtimeReasoningSettings;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
+
+    /** Tool-execution semantics this model permits. Absent = the profile's own defaults. */
+    Tooling?: MJAIModelEntity_RealtimeToolingSettings;
+
+    /**
+     * Media tracks a session asks the model to establish beyond audio. Absent or empty establishes
+     * audio only, so a video track exists only because something asked for it and never arrives as an
+     * inherited cost. Requests are intersected with what the model supports.
+     */
+    RequestedTracks?: readonly MJAIModelEntity_RealtimeTrackDescriptor[];
+
+    /** Which server signal means the session has gone idle. Absent = `'turnComplete'`. */
+    IdleSignal?: MJAIModelEntity_RealtimeIdleSignal;
+
+    /**
+     * Prices for output the token cost rows do not cover, such as avatar video. Set it on the
+     * model-vendor row.
+     */
+    Pricing?: MJAIModelEntity_RealtimePricingSettings | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -55359,6 +56212,23 @@ export interface MJAIModelEntity_VisionConfigurationSettings {
 /** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
 export interface MJAIModelEntity_AudioConfigurationSettings {
     [key: string]: unknown;
+}
+
+/**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface MJAIModelEntity_PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
 }
 
 /**
@@ -55400,6 +56270,8 @@ export interface MJAIModelEntity_IAIModelConfiguration {
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -55420,6 +56292,8 @@ export interface MJAIModelEntity_IAIPromptConfiguration {
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -55437,6 +56311,8 @@ export interface MJAIModelEntity_IAIPromptModelConfiguration {
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -55867,6 +56743,9 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
  *
  * Contains vendor-native voice/avatar tuning parameters (e.g., ElevenLabs voice settings)
  * moved out of generic base classes into their concrete vendor binding.
+ *
+ * A binding whose Modality is Video is the persona's avatar on that vendor: its `APIName` is the vendor's avatar id,
+ * and {@link MJAIPersonaVendorEntity_IAIPersonaVendorSettings.Avatar} tunes it.
  */
 
 export interface MJAIPersonaVendorEntity_IAIPersonaVendorSettings {
@@ -55877,6 +56756,24 @@ export interface MJAIPersonaVendorEntity_IAIPersonaVendorSettings {
     style?: number;
     useSpeakerBoost?: boolean;
     speed?: number;
+    /**
+     * The avatar's settings, on a binding whose Modality is Video. Vendor-neutral names: each realtime driver maps what
+     * its vendor supports and ignores the rest.
+     */
+    Avatar?: {
+        /**
+         * 'preset': the binding's APIName is an avatar from the vendor's catalog. 'custom': an avatar made from a
+         * reference image, which some vendors allow only to approved accounts. Custom likenesses stay behind a feature
+         * flag until who may create one, and with what consent, is decided.
+         */
+        Kind?: 'preset' | 'custom';
+        /** The MJ Storage file id of the reference image, when Kind is 'custom'. */
+        ReferenceImageFileID?: string;
+        /** The preferred video resolution; a driver uses the nearest its vendor offers. */
+        Resolution?: 'low' | 'standard' | 'high';
+        /** What shows behind the avatar, when the vendor can change it: a named treatment, or an image from MJ Storage. */
+        Background?: 'default' | 'transparent' | 'blur' | { ImageFileID: string };
+    };
     [key: string]: unknown;
 }
 
@@ -56101,6 +56998,16 @@ export interface MJAIPersonaEntity_IAIPersonaStyleDescriptors {
     interruptionPolicy?: string;
     /** Prose for GPT-Live's `Backchannel policy:` prompt block. */
     backchannelPolicy?: string;
+    /**
+     * How the agent's video shows in the call, whatever the vendor. The agent's own persona override wins over the
+     * persona's.
+     */
+    Visual?: {
+        /** How much of the avatar the tile frames. */
+        Framing?: 'head' | 'shoulders' | 'waist';
+        /** The accent of the ring that frames the tile while the agent speaks: a design-token name, never a color value. */
+        AccentToken?: string;
+    };
     /** Open extension point for additional fine-grained style descriptors. */
     [key: string]: unknown;
 }
@@ -56538,7 +57445,8 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIPromptModelEntity_LLMConfigurationSettings`, `MJAIPromptModelEntity_RealtimeConfigurationSettings`,
- *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`, `MJAIPromptModelEntity_DecisionConfigurationSettings`) —
+ *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`, `MJAIPromptModelEntity_DecisionConfigurationSettings`,
+ *    `MJAIPromptModelEntity_PrivacyConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptModelEntity_IAIModelConfiguration`, `MJAIPromptModelEntity_IAIPromptConfiguration`,
@@ -56564,12 +57472,13 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
  * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
  * type in ONE file is what makes a shared section possible at all; the cost is that each of the
- * five entities emits the full (prefixed) set, including outer types it does not use.
+ * six entities emits the full (prefixed) set, including outer types it does not use.
  *
  * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
  * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
- * compiles against. Keep the two in step when adding a section or property — the same pact
- * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ * compiles against (the track types mirror its `realtimeTracks.ts`). Keep the two in step when
+ * adding a section or property — the same pact `IAgentSettings` follows with
+ * `@memberjunction/ai-core-plus`. Core's `modelConfiguration.test.ts` fails when they differ.
  *
  * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
  * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
@@ -56638,6 +57547,13 @@ export interface MJAIPromptModelEntity_LLMConfigurationSettings {
     NativeToolResults?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -56652,46 +57568,175 @@ export interface MJAIPromptModelEntity_LLMConfigurationSettings {
 }
 
 /**
+ * MJ-normalized turn-detection mode, provider-neutral so a shared catalog is safe on every provider:
+ * - `'default'` — let the provider profile decide (today's behavior).
+ * - `'serverVad'` — classic silence-based server VAD.
+ * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+ * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+ *   to; the forward slot for full-duplex reasoning voice models.
+ */
+export type MJAIPromptModelEntity_RealtimeTurnDetectionMode = 'default' | 'serverVad' | 'semanticVad' | 'native';
+
+/**
+ * What a turn's input may include (distinct from detection, which decides when a turn ends):
+ * - `'audioActivityOnly'` — audio activity only; video frames are sent deliberately.
+ * - `'audioActivityAndAllVideo'` — audio activity plus every video frame (Gemini 3.8 Live's default).
+ */
+export type MJAIPromptModelEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVideo';
+
+/**
  * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
  * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
  * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
  * default — a wrong inherited value degrades safely, it never rejects a session.
  */
 export interface MJAIPromptModelEntity_RealtimeTurnDetectionSettings {
-    /**
-     * - `'default'` — let the provider profile decide (today's behavior).
-     * - `'serverVad'` — classic silence-based server VAD.
-     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
-     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
-     *   to; the forward slot for full-duplex reasoning voice models.
-     */
-    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** The normalized mode; absent = `'default'`. */
+    Mode?: MJAIPromptModelEntity_RealtimeTurnDetectionMode;
     /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
-    Eagerness?: 'low' | 'auto' | 'high' | null;
+    Eagerness?: 'low' | 'auto' | 'high';
     /** Server-VAD activation threshold (0–1); ignored without a mapping. */
-    Threshold?: number | null;
+    Threshold?: number;
     /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
-    SilenceDurationMs?: number | null;
+    SilenceDurationMs?: number;
+    /**
+     * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
+     * and consuming context) a decision rather than an inherited cost. Ignored without a mapping.
+     */
+    Coverage?: MJAIPromptModelEntity_RealtimeTurnCoverage;
+}
+
+/** Which plane handles reasoning: `'local'` (the application/agent loop, the default) or `'remote'`. */
+export type MJAIPromptModelEntity_RealtimeReasoningPlane = 'local' | 'remote';
+
+/** A reasoning effort in MJ's neutral vocabulary; each provider profile maps the values its model accepts. */
+export type MJAIPromptModelEntity_RealtimeReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+/** The remote reasoning target, used when `Plane` is `'remote'`. */
+export interface MJAIPromptModelEntity_RealtimeRemoteReasoning {
+    /** What the reference denotes: `'model'` (Live, Inworld) or `'hostedAgent'` (ElevenLabs). */
+    Kind?: 'model' | 'hostedAgent';
+    /** The target, e.g. `'gpt-5.6-terra'`, `'anthropic/claude-sonnet-4-6'`, `'MJ Realtime Co-Agent'`. */
+    Ref?: string;
+    /** The target's reasoning effort, for models that support one. */
+    Effort?: MJAIPromptModelEntity_RealtimeReasoningEffort;
+    /** The most output tokens for the remote reasoning pass. */
+    MaxOutputTokens?: number;
+}
+
+/** Reasoning-plane settings for realtime models — dual delegation configuration. */
+export interface MJAIPromptModelEntity_RealtimeReasoningSettings {
+    /** Absent = `'local'`. Fixed when the session is created. */
+    Plane?: MJAIPromptModelEntity_RealtimeReasoningPlane;
+    /** The remote target when `Plane` is `'remote'`. */
+    Remote?: MJAIPromptModelEntity_RealtimeRemoteReasoning;
+    /**
+     * How hard the model itself reasons (Gemini `thinkingConfig.thinkingLevel`). A profile that cannot
+     * honour the value logs a warning and uses its own default.
+     */
+    Level?: MJAIPromptModelEntity_RealtimeReasoningEffort;
+    /**
+     * Ask the model for human-readable summaries of its own reasoning (Gemini `includeThoughts`). They
+     * are progress narration, not assistant speech. Absent = off.
+     */
+    IncludeThoughtSummaries?: boolean;
+}
+
+/** Which way samples flow on a track, relative to the model. */
+export type MJAIPromptModelEntity_RealtimeTrackDirection = 'inbound' | 'outbound';
+
+/** The modalities MJ itself reasons about (cost, consent, transcripts). */
+export type MJAIPromptModelEntity_RealtimeWellKnownModality = 'audio' | 'video' | 'image' | 'text';
+
+/** A modality key: one of the well-known values, or any registered string. */
+export type MJAIPromptModelEntity_RealtimeModalityKey = MJAIPromptModelEntity_RealtimeWellKnownModality | (string & {});
+
+/** How a track's usage is metered. */
+export type MJAIPromptModelEntity_RealtimeTrackUsageBasis = 'tokens' | 'seconds' | 'frames' | 'bytes';
+
+/**
+ * One directional stream of one modality, as {@link MJAIPromptModelEntity_RealtimeConfigurationSettings.RequestedTracks}
+ * requests it. Mirrors the track descriptor in `@memberjunction/ai` (`realtimeTracks.ts`).
+ */
+export interface MJAIPromptModelEntity_RealtimeTrackDescriptor {
+    /** The modality this track carries. */
+    Modality: MJAIPromptModelEntity_RealtimeModalityKey;
+    /** Which way samples flow, relative to the model. */
+    Direction: MJAIPromptModelEntity_RealtimeTrackDirection;
+    /** Wire encoding, e.g. `'audio/pcm;rate=16000'` or `'image/jpeg'`; absent = the profile's default. */
+    Encoding?: string;
+    /** Sample or frame cadence: fps for video, Hz for audio. */
+    Rate?: number;
+    /** How this track is metered; absent = the session's own basis. */
+    UsageBasis?: readonly MJAIPromptModelEntity_RealtimeTrackUsageBasis[];
+    /** Whether establishing this track needs an explicit human grant (camera, screen, microphone). */
+    RequiresConsent?: boolean;
+    /** Whether the session needs this track (`true`) or treats it as best-effort (`false`). */
+    Required?: boolean;
+    /** Which source feeds this track, when several streams of one modality and direction can exist. */
+    SourceID?: string;
+    /** A human-readable name for that source ("Whiteboard", "Camera"). */
+    Label?: string;
 }
 
 /**
- * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
- * `'local'`.
+ * Which server signal means "the session has gone idle and deferred work may be flushed":
+ * `'turnComplete'` (the default) or `'interactionStatus'`, for models with asynchronous reasoning
+ * whose `turnComplete` arrives while they still reason and call tools.
  */
-export interface MJAIPromptModelEntity_RealtimeReasoningSettings {
+export type MJAIPromptModelEntity_RealtimeIdleSignal = 'turnComplete' | 'interactionStatus';
+
+/** Tool-execution semantics a model permits. Capability declarations, not requests. */
+export interface MJAIPromptModelEntity_RealtimeToolingSettings {
     /**
-     * Which plane handles reasoning:
-     * - `'local'` — application/agent loop (default).
-     * - `'remote'` — delegated to remote model or hosted agent.
+     * Whether synchronous blocking tool execution is legal. Absent = permitted. `false` on models that
+     * reject blocking mode outright (Gemini 3.8 Live Extended Thinking).
      */
-    Plane?: 'local' | 'remote' | null;
-    /** Remote reasoning target configuration. */
-    Remote?: {
-        Kind?: 'model' | 'hostedAgent' | null;
-        Ref?: string | null;
-        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
-        MaxOutputTokens?: number | null;
-    } | null;
+    SupportsBlockingExecution?: boolean;
+    /**
+     * Whether per-function scheduling hints are legal (Gemini `SILENT` / `WHEN_IDLE` / `INTERRUPTED`).
+     * Absent = not supported.
+     */
+    SupportsScheduling?: boolean;
+    /** Preferred function-calling behavior. */
+    Behavior?: 'BLOCKING' | 'NON_BLOCKING';
+}
+
+/**
+ * One price for a quantity a realtime session produces, in one currency. It applies only when all
+ * three fields are set; a partial price, or a unit or currency the reader does not handle, counts
+ * as no price.
+ */
+export interface MJAIPromptModelEntity_RealtimeUnitPrice {
+    /** The amount charged per {@link MJAIPromptModelEntity_RealtimeUnitPrice.Unit}. Never negative. */
+    Price?: number | null;
+    /**
+     * The billing unit, named as in `MJ: AI Model Price Unit Types`. `'Per Minute'`: one minute.
+     * `'Per 1M Tokens'`: one million tokens.
+     */
+    Unit?: 'Per Minute' | 'Per 1M Tokens' | null;
+    /** ISO 4217 currency code, uppercase (e.g. `USD`), as on `MJ: AI Model Costs`. */
+    Currency?: string | null;
+}
+
+/**
+ * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own; the cost rows stay the authority for token prices. A price belongs to the host that
+ * charges it, so set this on the model-vendor row: a price on the model or the model type would
+ * reach every vendor that serves the model.
+ */
+export interface MJAIPromptModelEntity_RealtimePricingSettings {
+    /**
+     * The price of avatar video output, charged on top of the session's token cost. `'Per Minute'`
+     * prices the seconds of avatar video the model generates; `'Per 1M Tokens'` prices the output
+     * tokens the provider counts as video. Set the price and its unit together: the cascade merges
+     * per key, so a layer that sets only one of them keeps the other from the layer below.
+     *
+     * Unverified until checked against Google's bill (#5312): Gemini 3.8 Live on Vertex AI is
+     * seeded at $0.37152 per minute, derived from Google's $1.00 per 1M avatar video output tokens
+     * at 6,192 tokens per second.
+     */
+    AvatarVideoOutput?: MJAIPromptModelEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -56707,7 +57752,36 @@ export interface MJAIPromptModelEntity_RealtimeConfigurationSettings {
     /**
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
-    Reasoning?: MJAIPromptModelEntity_RealtimeReasoningSettings | null;
+    Reasoning?: MJAIPromptModelEntity_RealtimeReasoningSettings;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
+
+    /** Tool-execution semantics this model permits. Absent = the profile's own defaults. */
+    Tooling?: MJAIPromptModelEntity_RealtimeToolingSettings;
+
+    /**
+     * Media tracks a session asks the model to establish beyond audio. Absent or empty establishes
+     * audio only, so a video track exists only because something asked for it and never arrives as an
+     * inherited cost. Requests are intersected with what the model supports.
+     */
+    RequestedTracks?: readonly MJAIPromptModelEntity_RealtimeTrackDescriptor[];
+
+    /** Which server signal means the session has gone idle. Absent = `'turnComplete'`. */
+    IdleSignal?: MJAIPromptModelEntity_RealtimeIdleSignal;
+
+    /**
+     * Prices for output the token cost rows do not cover, such as avatar video. Set it on the
+     * model-vendor row.
+     */
+    Pricing?: MJAIPromptModelEntity_RealtimePricingSettings | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -56718,6 +57792,23 @@ export interface MJAIPromptModelEntity_VisionConfigurationSettings {
 /** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
 export interface MJAIPromptModelEntity_AudioConfigurationSettings {
     [key: string]: unknown;
+}
+
+/**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface MJAIPromptModelEntity_PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
 }
 
 /**
@@ -56759,6 +57850,8 @@ export interface MJAIPromptModelEntity_IAIModelConfiguration {
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -56779,6 +57872,8 @@ export interface MJAIPromptModelEntity_IAIPromptConfiguration {
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -56796,6 +57891,8 @@ export interface MJAIPromptModelEntity_IAIPromptModelConfiguration {
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -59151,7 +60248,8 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIPromptEntity_LLMConfigurationSettings`, `MJAIPromptEntity_RealtimeConfigurationSettings`,
- *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`, `MJAIPromptEntity_DecisionConfigurationSettings`) —
+ *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`, `MJAIPromptEntity_DecisionConfigurationSettings`,
+ *    `MJAIPromptEntity_PrivacyConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptEntity_IAIModelConfiguration`, `MJAIPromptEntity_IAIPromptConfiguration`,
@@ -59177,12 +60275,13 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
  * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
  * type in ONE file is what makes a shared section possible at all; the cost is that each of the
- * five entities emits the full (prefixed) set, including outer types it does not use.
+ * six entities emits the full (prefixed) set, including outer types it does not use.
  *
  * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
  * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
- * compiles against. Keep the two in step when adding a section or property — the same pact
- * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ * compiles against (the track types mirror its `realtimeTracks.ts`). Keep the two in step when
+ * adding a section or property — the same pact `IAgentSettings` follows with
+ * `@memberjunction/ai-core-plus`. Core's `modelConfiguration.test.ts` fails when they differ.
  *
  * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
  * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
@@ -59251,6 +60350,13 @@ export interface MJAIPromptEntity_LLMConfigurationSettings {
     NativeToolResults?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -59265,46 +60371,175 @@ export interface MJAIPromptEntity_LLMConfigurationSettings {
 }
 
 /**
+ * MJ-normalized turn-detection mode, provider-neutral so a shared catalog is safe on every provider:
+ * - `'default'` — let the provider profile decide (today's behavior).
+ * - `'serverVad'` — classic silence-based server VAD.
+ * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+ * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+ *   to; the forward slot for full-duplex reasoning voice models.
+ */
+export type MJAIPromptEntity_RealtimeTurnDetectionMode = 'default' | 'serverVad' | 'semanticVad' | 'native';
+
+/**
+ * What a turn's input may include (distinct from detection, which decides when a turn ends):
+ * - `'audioActivityOnly'` — audio activity only; video frames are sent deliberately.
+ * - `'audioActivityAndAllVideo'` — audio activity plus every video frame (Gemini 3.8 Live's default).
+ */
+export type MJAIPromptEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVideo';
+
+/**
  * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
  * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
  * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
  * default — a wrong inherited value degrades safely, it never rejects a session.
  */
 export interface MJAIPromptEntity_RealtimeTurnDetectionSettings {
-    /**
-     * - `'default'` — let the provider profile decide (today's behavior).
-     * - `'serverVad'` — classic silence-based server VAD.
-     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
-     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
-     *   to; the forward slot for full-duplex reasoning voice models.
-     */
-    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** The normalized mode; absent = `'default'`. */
+    Mode?: MJAIPromptEntity_RealtimeTurnDetectionMode;
     /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
-    Eagerness?: 'low' | 'auto' | 'high' | null;
+    Eagerness?: 'low' | 'auto' | 'high';
     /** Server-VAD activation threshold (0–1); ignored without a mapping. */
-    Threshold?: number | null;
+    Threshold?: number;
     /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
-    SilenceDurationMs?: number | null;
+    SilenceDurationMs?: number;
+    /**
+     * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
+     * and consuming context) a decision rather than an inherited cost. Ignored without a mapping.
+     */
+    Coverage?: MJAIPromptEntity_RealtimeTurnCoverage;
+}
+
+/** Which plane handles reasoning: `'local'` (the application/agent loop, the default) or `'remote'`. */
+export type MJAIPromptEntity_RealtimeReasoningPlane = 'local' | 'remote';
+
+/** A reasoning effort in MJ's neutral vocabulary; each provider profile maps the values its model accepts. */
+export type MJAIPromptEntity_RealtimeReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+/** The remote reasoning target, used when `Plane` is `'remote'`. */
+export interface MJAIPromptEntity_RealtimeRemoteReasoning {
+    /** What the reference denotes: `'model'` (Live, Inworld) or `'hostedAgent'` (ElevenLabs). */
+    Kind?: 'model' | 'hostedAgent';
+    /** The target, e.g. `'gpt-5.6-terra'`, `'anthropic/claude-sonnet-4-6'`, `'MJ Realtime Co-Agent'`. */
+    Ref?: string;
+    /** The target's reasoning effort, for models that support one. */
+    Effort?: MJAIPromptEntity_RealtimeReasoningEffort;
+    /** The most output tokens for the remote reasoning pass. */
+    MaxOutputTokens?: number;
+}
+
+/** Reasoning-plane settings for realtime models — dual delegation configuration. */
+export interface MJAIPromptEntity_RealtimeReasoningSettings {
+    /** Absent = `'local'`. Fixed when the session is created. */
+    Plane?: MJAIPromptEntity_RealtimeReasoningPlane;
+    /** The remote target when `Plane` is `'remote'`. */
+    Remote?: MJAIPromptEntity_RealtimeRemoteReasoning;
+    /**
+     * How hard the model itself reasons (Gemini `thinkingConfig.thinkingLevel`). A profile that cannot
+     * honour the value logs a warning and uses its own default.
+     */
+    Level?: MJAIPromptEntity_RealtimeReasoningEffort;
+    /**
+     * Ask the model for human-readable summaries of its own reasoning (Gemini `includeThoughts`). They
+     * are progress narration, not assistant speech. Absent = off.
+     */
+    IncludeThoughtSummaries?: boolean;
+}
+
+/** Which way samples flow on a track, relative to the model. */
+export type MJAIPromptEntity_RealtimeTrackDirection = 'inbound' | 'outbound';
+
+/** The modalities MJ itself reasons about (cost, consent, transcripts). */
+export type MJAIPromptEntity_RealtimeWellKnownModality = 'audio' | 'video' | 'image' | 'text';
+
+/** A modality key: one of the well-known values, or any registered string. */
+export type MJAIPromptEntity_RealtimeModalityKey = MJAIPromptEntity_RealtimeWellKnownModality | (string & {});
+
+/** How a track's usage is metered. */
+export type MJAIPromptEntity_RealtimeTrackUsageBasis = 'tokens' | 'seconds' | 'frames' | 'bytes';
+
+/**
+ * One directional stream of one modality, as {@link MJAIPromptEntity_RealtimeConfigurationSettings.RequestedTracks}
+ * requests it. Mirrors the track descriptor in `@memberjunction/ai` (`realtimeTracks.ts`).
+ */
+export interface MJAIPromptEntity_RealtimeTrackDescriptor {
+    /** The modality this track carries. */
+    Modality: MJAIPromptEntity_RealtimeModalityKey;
+    /** Which way samples flow, relative to the model. */
+    Direction: MJAIPromptEntity_RealtimeTrackDirection;
+    /** Wire encoding, e.g. `'audio/pcm;rate=16000'` or `'image/jpeg'`; absent = the profile's default. */
+    Encoding?: string;
+    /** Sample or frame cadence: fps for video, Hz for audio. */
+    Rate?: number;
+    /** How this track is metered; absent = the session's own basis. */
+    UsageBasis?: readonly MJAIPromptEntity_RealtimeTrackUsageBasis[];
+    /** Whether establishing this track needs an explicit human grant (camera, screen, microphone). */
+    RequiresConsent?: boolean;
+    /** Whether the session needs this track (`true`) or treats it as best-effort (`false`). */
+    Required?: boolean;
+    /** Which source feeds this track, when several streams of one modality and direction can exist. */
+    SourceID?: string;
+    /** A human-readable name for that source ("Whiteboard", "Camera"). */
+    Label?: string;
 }
 
 /**
- * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
- * `'local'`.
+ * Which server signal means "the session has gone idle and deferred work may be flushed":
+ * `'turnComplete'` (the default) or `'interactionStatus'`, for models with asynchronous reasoning
+ * whose `turnComplete` arrives while they still reason and call tools.
  */
-export interface MJAIPromptEntity_RealtimeReasoningSettings {
+export type MJAIPromptEntity_RealtimeIdleSignal = 'turnComplete' | 'interactionStatus';
+
+/** Tool-execution semantics a model permits. Capability declarations, not requests. */
+export interface MJAIPromptEntity_RealtimeToolingSettings {
     /**
-     * Which plane handles reasoning:
-     * - `'local'` — application/agent loop (default).
-     * - `'remote'` — delegated to remote model or hosted agent.
+     * Whether synchronous blocking tool execution is legal. Absent = permitted. `false` on models that
+     * reject blocking mode outright (Gemini 3.8 Live Extended Thinking).
      */
-    Plane?: 'local' | 'remote' | null;
-    /** Remote reasoning target configuration. */
-    Remote?: {
-        Kind?: 'model' | 'hostedAgent' | null;
-        Ref?: string | null;
-        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
-        MaxOutputTokens?: number | null;
-    } | null;
+    SupportsBlockingExecution?: boolean;
+    /**
+     * Whether per-function scheduling hints are legal (Gemini `SILENT` / `WHEN_IDLE` / `INTERRUPTED`).
+     * Absent = not supported.
+     */
+    SupportsScheduling?: boolean;
+    /** Preferred function-calling behavior. */
+    Behavior?: 'BLOCKING' | 'NON_BLOCKING';
+}
+
+/**
+ * One price for a quantity a realtime session produces, in one currency. It applies only when all
+ * three fields are set; a partial price, or a unit or currency the reader does not handle, counts
+ * as no price.
+ */
+export interface MJAIPromptEntity_RealtimeUnitPrice {
+    /** The amount charged per {@link MJAIPromptEntity_RealtimeUnitPrice.Unit}. Never negative. */
+    Price?: number | null;
+    /**
+     * The billing unit, named as in `MJ: AI Model Price Unit Types`. `'Per Minute'`: one minute.
+     * `'Per 1M Tokens'`: one million tokens.
+     */
+    Unit?: 'Per Minute' | 'Per 1M Tokens' | null;
+    /** ISO 4217 currency code, uppercase (e.g. `USD`), as on `MJ: AI Model Costs`. */
+    Currency?: string | null;
+}
+
+/**
+ * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own; the cost rows stay the authority for token prices. A price belongs to the host that
+ * charges it, so set this on the model-vendor row: a price on the model or the model type would
+ * reach every vendor that serves the model.
+ */
+export interface MJAIPromptEntity_RealtimePricingSettings {
+    /**
+     * The price of avatar video output, charged on top of the session's token cost. `'Per Minute'`
+     * prices the seconds of avatar video the model generates; `'Per 1M Tokens'` prices the output
+     * tokens the provider counts as video. Set the price and its unit together: the cascade merges
+     * per key, so a layer that sets only one of them keeps the other from the layer below.
+     *
+     * Unverified until checked against Google's bill (#5312): Gemini 3.8 Live on Vertex AI is
+     * seeded at $0.37152 per minute, derived from Google's $1.00 per 1M avatar video output tokens
+     * at 6,192 tokens per second.
+     */
+    AvatarVideoOutput?: MJAIPromptEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -59320,7 +60555,36 @@ export interface MJAIPromptEntity_RealtimeConfigurationSettings {
     /**
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
-    Reasoning?: MJAIPromptEntity_RealtimeReasoningSettings | null;
+    Reasoning?: MJAIPromptEntity_RealtimeReasoningSettings;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
+
+    /** Tool-execution semantics this model permits. Absent = the profile's own defaults. */
+    Tooling?: MJAIPromptEntity_RealtimeToolingSettings;
+
+    /**
+     * Media tracks a session asks the model to establish beyond audio. Absent or empty establishes
+     * audio only, so a video track exists only because something asked for it and never arrives as an
+     * inherited cost. Requests are intersected with what the model supports.
+     */
+    RequestedTracks?: readonly MJAIPromptEntity_RealtimeTrackDescriptor[];
+
+    /** Which server signal means the session has gone idle. Absent = `'turnComplete'`. */
+    IdleSignal?: MJAIPromptEntity_RealtimeIdleSignal;
+
+    /**
+     * Prices for output the token cost rows do not cover, such as avatar video. Set it on the
+     * model-vendor row.
+     */
+    Pricing?: MJAIPromptEntity_RealtimePricingSettings | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -59331,6 +60595,23 @@ export interface MJAIPromptEntity_VisionConfigurationSettings {
 /** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
 export interface MJAIPromptEntity_AudioConfigurationSettings {
     [key: string]: unknown;
+}
+
+/**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface MJAIPromptEntity_PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
 }
 
 /**
@@ -59372,6 +60653,8 @@ export interface MJAIPromptEntity_IAIModelConfiguration {
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -59392,6 +60675,8 @@ export interface MJAIPromptEntity_IAIPromptConfiguration {
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -59409,6 +60694,8 @@ export interface MJAIPromptEntity_IAIPromptModelConfiguration {
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -60489,6 +61776,24 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     }
     set PromptConfigurationObject(value: MJAIPromptEntity_IAIPromptConfiguration | null) {
         this.SetJSONFieldObject<MJAIPromptEntity_IAIPromptConfiguration>('PromptConfiguration', value);
+    }
+
+    /**
+    * * Field Name: TemplateDataCapture
+    * * Display Name: Template Data Capture
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Full
+    *   * None
+    *   * Referenced
+    * * Description: Which template inputs (data, templateData) prompt runs store in Messages: None (shape only), Referenced (only keys the template uses) or Full. NULL uses the server default.
+    */
+    get TemplateDataCapture(): 'Full' | 'None' | 'Referenced' | null {
+        return this.Get('TemplateDataCapture');
+    }
+    set TemplateDataCapture(value: 'Full' | 'None' | 'Referenced' | null) {
+        this.Set('TemplateDataCapture', value);
     }
 
     /**
@@ -62330,7 +63635,8 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIVendorEntity_LLMConfigurationSettings`, `MJAIVendorEntity_RealtimeConfigurationSettings`,
- *    `MJAIVendorEntity_VisionConfigurationSettings`, `MJAIVendorEntity_AudioConfigurationSettings`, `MJAIVendorEntity_DecisionConfigurationSettings`) —
+ *    `MJAIVendorEntity_VisionConfigurationSettings`, `MJAIVendorEntity_AudioConfigurationSettings`, `MJAIVendorEntity_DecisionConfigurationSettings`,
+ *    `MJAIVendorEntity_PrivacyConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIVendorEntity_IAIModelConfiguration`, `MJAIVendorEntity_IAIPromptConfiguration`,
@@ -62356,12 +63662,13 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
  * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
  * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
  * type in ONE file is what makes a shared section possible at all; the cost is that each of the
- * five entities emits the full (prefixed) set, including outer types it does not use.
+ * six entities emits the full (prefixed) set, including outer types it does not use.
  *
  * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
  * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
- * compiles against. Keep the two in step when adding a section or property — the same pact
- * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ * compiles against (the track types mirror its `realtimeTracks.ts`). Keep the two in step when
+ * adding a section or property — the same pact `IAgentSettings` follows with
+ * `@memberjunction/ai-core-plus`. Core's `modelConfiguration.test.ts` fails when they differ.
  *
  * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
  * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
@@ -62430,6 +63737,13 @@ export interface MJAIVendorEntity_LLMConfigurationSettings {
     NativeToolResults?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -62444,46 +63758,175 @@ export interface MJAIVendorEntity_LLMConfigurationSettings {
 }
 
 /**
+ * MJ-normalized turn-detection mode, provider-neutral so a shared catalog is safe on every provider:
+ * - `'default'` — let the provider profile decide (today's behavior).
+ * - `'serverVad'` — classic silence-based server VAD.
+ * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+ * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+ *   to; the forward slot for full-duplex reasoning voice models.
+ */
+export type MJAIVendorEntity_RealtimeTurnDetectionMode = 'default' | 'serverVad' | 'semanticVad' | 'native';
+
+/**
+ * What a turn's input may include (distinct from detection, which decides when a turn ends):
+ * - `'audioActivityOnly'` — audio activity only; video frames are sent deliberately.
+ * - `'audioActivityAndAllVideo'` — audio activity plus every video frame (Gemini 3.8 Live's default).
+ */
+export type MJAIVendorEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVideo';
+
+/**
  * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
  * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
  * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
  * default — a wrong inherited value degrades safely, it never rejects a session.
  */
 export interface MJAIVendorEntity_RealtimeTurnDetectionSettings {
-    /**
-     * - `'default'` — let the provider profile decide (today's behavior).
-     * - `'serverVad'` — classic silence-based server VAD.
-     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
-     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
-     *   to; the forward slot for full-duplex reasoning voice models.
-     */
-    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** The normalized mode; absent = `'default'`. */
+    Mode?: MJAIVendorEntity_RealtimeTurnDetectionMode;
     /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
-    Eagerness?: 'low' | 'auto' | 'high' | null;
+    Eagerness?: 'low' | 'auto' | 'high';
     /** Server-VAD activation threshold (0–1); ignored without a mapping. */
-    Threshold?: number | null;
+    Threshold?: number;
     /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
-    SilenceDurationMs?: number | null;
+    SilenceDurationMs?: number;
+    /**
+     * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
+     * and consuming context) a decision rather than an inherited cost. Ignored without a mapping.
+     */
+    Coverage?: MJAIVendorEntity_RealtimeTurnCoverage;
+}
+
+/** Which plane handles reasoning: `'local'` (the application/agent loop, the default) or `'remote'`. */
+export type MJAIVendorEntity_RealtimeReasoningPlane = 'local' | 'remote';
+
+/** A reasoning effort in MJ's neutral vocabulary; each provider profile maps the values its model accepts. */
+export type MJAIVendorEntity_RealtimeReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+/** The remote reasoning target, used when `Plane` is `'remote'`. */
+export interface MJAIVendorEntity_RealtimeRemoteReasoning {
+    /** What the reference denotes: `'model'` (Live, Inworld) or `'hostedAgent'` (ElevenLabs). */
+    Kind?: 'model' | 'hostedAgent';
+    /** The target, e.g. `'gpt-5.6-terra'`, `'anthropic/claude-sonnet-4-6'`, `'MJ Realtime Co-Agent'`. */
+    Ref?: string;
+    /** The target's reasoning effort, for models that support one. */
+    Effort?: MJAIVendorEntity_RealtimeReasoningEffort;
+    /** The most output tokens for the remote reasoning pass. */
+    MaxOutputTokens?: number;
+}
+
+/** Reasoning-plane settings for realtime models — dual delegation configuration. */
+export interface MJAIVendorEntity_RealtimeReasoningSettings {
+    /** Absent = `'local'`. Fixed when the session is created. */
+    Plane?: MJAIVendorEntity_RealtimeReasoningPlane;
+    /** The remote target when `Plane` is `'remote'`. */
+    Remote?: MJAIVendorEntity_RealtimeRemoteReasoning;
+    /**
+     * How hard the model itself reasons (Gemini `thinkingConfig.thinkingLevel`). A profile that cannot
+     * honour the value logs a warning and uses its own default.
+     */
+    Level?: MJAIVendorEntity_RealtimeReasoningEffort;
+    /**
+     * Ask the model for human-readable summaries of its own reasoning (Gemini `includeThoughts`). They
+     * are progress narration, not assistant speech. Absent = off.
+     */
+    IncludeThoughtSummaries?: boolean;
+}
+
+/** Which way samples flow on a track, relative to the model. */
+export type MJAIVendorEntity_RealtimeTrackDirection = 'inbound' | 'outbound';
+
+/** The modalities MJ itself reasons about (cost, consent, transcripts). */
+export type MJAIVendorEntity_RealtimeWellKnownModality = 'audio' | 'video' | 'image' | 'text';
+
+/** A modality key: one of the well-known values, or any registered string. */
+export type MJAIVendorEntity_RealtimeModalityKey = MJAIVendorEntity_RealtimeWellKnownModality | (string & {});
+
+/** How a track's usage is metered. */
+export type MJAIVendorEntity_RealtimeTrackUsageBasis = 'tokens' | 'seconds' | 'frames' | 'bytes';
+
+/**
+ * One directional stream of one modality, as {@link MJAIVendorEntity_RealtimeConfigurationSettings.RequestedTracks}
+ * requests it. Mirrors the track descriptor in `@memberjunction/ai` (`realtimeTracks.ts`).
+ */
+export interface MJAIVendorEntity_RealtimeTrackDescriptor {
+    /** The modality this track carries. */
+    Modality: MJAIVendorEntity_RealtimeModalityKey;
+    /** Which way samples flow, relative to the model. */
+    Direction: MJAIVendorEntity_RealtimeTrackDirection;
+    /** Wire encoding, e.g. `'audio/pcm;rate=16000'` or `'image/jpeg'`; absent = the profile's default. */
+    Encoding?: string;
+    /** Sample or frame cadence: fps for video, Hz for audio. */
+    Rate?: number;
+    /** How this track is metered; absent = the session's own basis. */
+    UsageBasis?: readonly MJAIVendorEntity_RealtimeTrackUsageBasis[];
+    /** Whether establishing this track needs an explicit human grant (camera, screen, microphone). */
+    RequiresConsent?: boolean;
+    /** Whether the session needs this track (`true`) or treats it as best-effort (`false`). */
+    Required?: boolean;
+    /** Which source feeds this track, when several streams of one modality and direction can exist. */
+    SourceID?: string;
+    /** A human-readable name for that source ("Whiteboard", "Camera"). */
+    Label?: string;
 }
 
 /**
- * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
- * `'local'`.
+ * Which server signal means "the session has gone idle and deferred work may be flushed":
+ * `'turnComplete'` (the default) or `'interactionStatus'`, for models with asynchronous reasoning
+ * whose `turnComplete` arrives while they still reason and call tools.
  */
-export interface MJAIVendorEntity_RealtimeReasoningSettings {
+export type MJAIVendorEntity_RealtimeIdleSignal = 'turnComplete' | 'interactionStatus';
+
+/** Tool-execution semantics a model permits. Capability declarations, not requests. */
+export interface MJAIVendorEntity_RealtimeToolingSettings {
     /**
-     * Which plane handles reasoning:
-     * - `'local'` — application/agent loop (default).
-     * - `'remote'` — delegated to remote model or hosted agent.
+     * Whether synchronous blocking tool execution is legal. Absent = permitted. `false` on models that
+     * reject blocking mode outright (Gemini 3.8 Live Extended Thinking).
      */
-    Plane?: 'local' | 'remote' | null;
-    /** Remote reasoning target configuration. */
-    Remote?: {
-        Kind?: 'model' | 'hostedAgent' | null;
-        Ref?: string | null;
-        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
-        MaxOutputTokens?: number | null;
-    } | null;
+    SupportsBlockingExecution?: boolean;
+    /**
+     * Whether per-function scheduling hints are legal (Gemini `SILENT` / `WHEN_IDLE` / `INTERRUPTED`).
+     * Absent = not supported.
+     */
+    SupportsScheduling?: boolean;
+    /** Preferred function-calling behavior. */
+    Behavior?: 'BLOCKING' | 'NON_BLOCKING';
+}
+
+/**
+ * One price for a quantity a realtime session produces, in one currency. It applies only when all
+ * three fields are set; a partial price, or a unit or currency the reader does not handle, counts
+ * as no price.
+ */
+export interface MJAIVendorEntity_RealtimeUnitPrice {
+    /** The amount charged per {@link MJAIVendorEntity_RealtimeUnitPrice.Unit}. Never negative. */
+    Price?: number | null;
+    /**
+     * The billing unit, named as in `MJ: AI Model Price Unit Types`. `'Per Minute'`: one minute.
+     * `'Per 1M Tokens'`: one million tokens.
+     */
+    Unit?: 'Per Minute' | 'Per 1M Tokens' | null;
+    /** ISO 4217 currency code, uppercase (e.g. `USD`), as on `MJ: AI Model Costs`. */
+    Currency?: string | null;
+}
+
+/**
+ * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own; the cost rows stay the authority for token prices. A price belongs to the host that
+ * charges it, so set this on the model-vendor row: a price on the model or the model type would
+ * reach every vendor that serves the model.
+ */
+export interface MJAIVendorEntity_RealtimePricingSettings {
+    /**
+     * The price of avatar video output, charged on top of the session's token cost. `'Per Minute'`
+     * prices the seconds of avatar video the model generates; `'Per 1M Tokens'` prices the output
+     * tokens the provider counts as video. Set the price and its unit together: the cascade merges
+     * per key, so a layer that sets only one of them keeps the other from the layer below.
+     *
+     * Unverified until checked against Google's bill (#5312): Gemini 3.8 Live on Vertex AI is
+     * seeded at $0.37152 per minute, derived from Google's $1.00 per 1M avatar video output tokens
+     * at 6,192 tokens per second.
+     */
+    AvatarVideoOutput?: MJAIVendorEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -62499,7 +63942,36 @@ export interface MJAIVendorEntity_RealtimeConfigurationSettings {
     /**
      * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
      */
-    Reasoning?: MJAIVendorEntity_RealtimeReasoningSettings | null;
+    Reasoning?: MJAIVendorEntity_RealtimeReasoningSettings;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
+
+    /** Tool-execution semantics this model permits. Absent = the profile's own defaults. */
+    Tooling?: MJAIVendorEntity_RealtimeToolingSettings;
+
+    /**
+     * Media tracks a session asks the model to establish beyond audio. Absent or empty establishes
+     * audio only, so a video track exists only because something asked for it and never arrives as an
+     * inherited cost. Requests are intersected with what the model supports.
+     */
+    RequestedTracks?: readonly MJAIVendorEntity_RealtimeTrackDescriptor[];
+
+    /** Which server signal means the session has gone idle. Absent = `'turnComplete'`. */
+    IdleSignal?: MJAIVendorEntity_RealtimeIdleSignal;
+
+    /**
+     * Prices for output the token cost rows do not cover, such as avatar video. Set it on the
+     * model-vendor row.
+     */
+    Pricing?: MJAIVendorEntity_RealtimePricingSettings | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -62510,6 +63982,23 @@ export interface MJAIVendorEntity_VisionConfigurationSettings {
 /** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
 export interface MJAIVendorEntity_AudioConfigurationSettings {
     [key: string]: unknown;
+}
+
+/**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface MJAIVendorEntity_PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
 }
 
 /**
@@ -62551,6 +64040,8 @@ export interface MJAIVendorEntity_IAIModelConfiguration {
     Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -62571,6 +64062,8 @@ export interface MJAIVendorEntity_IAIPromptConfiguration {
     Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -62588,6 +64081,8 @@ export interface MJAIVendorEntity_IAIPromptModelConfiguration {
     Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -66929,8 +68424,14 @@ export interface MJApplicationEntity_IDefaultNavItem {
  * realtime persona/disclosure overrides). Every field is optional — an app opts into
  * exactly what it needs.
  *
- * Disclosure values ('silent' | 'mention' | 'hand-voice') mirror the AgentDisclosurePolicy
- * union declared in @memberjunction/ai-core-plus. Keep the two in lockstep.
+ * Disclosure values ('silent' | 'mention' | 'hand-voice') mirror the RealtimeDisclosurePolicy
+ * union declared in @memberjunction/ai-agents.
+ *
+ * **Lockstep contract**: this interface is mirrored, field for field, by `MJApplicationEntity_IAgentSettings` in
+ * `packages/AI/CorePlus/src/agent-settings.ts` (`@memberjunction/ai-core-plus`). Runtime code parses
+ * the column with that mirror (`ParseAgentSettings`) rather than the CodeGen-generated
+ * `AgentSettingsObject` accessor, so a field added here is usable at runtime before CodeGen next
+ * regenerates the inline copy. Edit both in the same commit.
  */
 export interface MJApplicationEntity_IAgentSettings {
     /** The app's default/lead agent (conversational default AND realtime lead identity). Agent ID. */
@@ -66978,6 +68479,31 @@ export interface MJApplicationEntity_IAgentSettings {
         } | null;
         /** Model preference override (AI Models Name or ID). */
         ModelPreference?: string | null;
+        /**
+         * Which interactive realtime channels (Whiteboard, Remote Browser, an Open App's own widget, …)
+         * this app's sessions get. Layers into the same per-channel scoping cascade as the agent's own
+         * `realtime.channels` configuration (see `@memberjunction/ai-core-plus` `ResolveRealtimeChannelScope`):
+         * a layer's `Include` turns a channel on (the only way to get an `opt-in` channel), its `Exclude`
+         * turns one off, and the MOST SPECIFIC layer to mention a channel wins; within one layer `Exclude`
+         * beats `Include`. A channel's registry row `IsActive = false` remains a master kill switch that
+         * nothing here can override. Channel keys match the channel's name, case-insensitively.
+         */
+        Channels?: {
+            /** Channel keys to turn ON (required for `opt-in` channels; a no-op for `all-sessions` ones). */
+            Include?: string[] | null;
+            /** Channel keys to turn OFF. Beats `Include` within the same layer. */
+            Exclude?: string[] | null;
+            /** Per-channel opaque configuration, keyed by channel key; delivered to the channel at session start. */
+            Config?: { [channelKey: string]: { [key: string]: unknown } } | null;
+            /** Per-channel display override, keyed by channel key. */
+            DisplayPolicy?: { [channelKey: string]: 'open-on-start' | 'on-demand' | 'headless' } | null;
+            /**
+             * Exposure levels that need a zero-data-retention model. When the session model's configuration
+             * does not declare `Privacy.ZeroDataRetention: true`, exposure is lowered to below the lowest level
+             * listed, and the agent is told why. Applies to every channel in the session.
+             */
+            RequireZeroDataRetentionFor?: Array<'state' | 'pixels'> | null;
+        } | null;
     } | null;
 }
 
@@ -75707,7 +77233,7 @@ export class MJContentFileTypeEntity extends BaseEntity<MJContentFileTypeEntityT
     * * Field Name: ByteSignature
     * * Display Name: Byte Signature
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: The magic bytes identifying this file type, as JSON: {"Magic":[37,80,68,70],"Offset":0,"Unambiguous":true}. Unambiguous means a match may override a declared type; a container format such as zip recognises without identifying, so it may not.
+    * * Description: How this file type is recognised from its own content, as JSON. Either magic bytes - {"Magic":[37,80,68,70],"Offset":0,"Unambiguous":true} - or, for a text format, the characters it opens with: {"TextPrefix":["<!doctype html","<html"]}, matched after a byte-order mark and leading whitespace are stripped and case is folded. Unambiguous means a match may override a declared type; a container format such as zip recognises without identifying, so it may not.
     */
     get ByteSignature(): string | null {
         return this.Get('ByteSignature');
@@ -77140,7 +78666,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: Date
-    * * Display Name: Date
+    * * Display Name: Content Date
     * * SQL Data Type: datetimeoffset
     * * Description: The date the content itself carries — published, issued or authored — as opposed to when this row was created.
     */
@@ -80175,6 +81701,233 @@ export class MJConversationArtifactEntity extends BaseEntity<MJConversationArtif
 
 
 /**
+ * MJ: Conversation Branches - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ConversationBranch
+ * * Base View: vwConversationBranches
+ * * @description A fork of a conversation: another path that starts at a message. Main (the trunk) is the messages with no branch. A fork's path is its own messages plus each ancestor's messages up to that ancestor's ForkFromSequence.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Conversation Branches')
+export class MJConversationBranchEntity extends BaseEntity<MJConversationBranchEntityType> {
+    /**
+    * Loads the MJ: Conversation Branches record from the database
+    * @param ID: string - primary key value to load the MJ: Conversation Branches record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJConversationBranchEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Conversation Branches - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJConversationBranchEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ConversationID
+    * * Display Name: Conversation
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * Description: The conversation this fork belongs to.
+    */
+    get ConversationID(): string {
+        return this.Get('ConversationID');
+    }
+    set ConversationID(value: string) {
+        this.Set('ConversationID', value);
+    }
+
+    /**
+    * * Field Name: ParentBranchID
+    * * Display Name: Parent Branch
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)
+    * * Description: The fork this one started from. NULL means it started from Main, or before the first message when ForkFromSequence is also NULL.
+    */
+    get ParentBranchID(): string | null {
+        return this.Get('ParentBranchID');
+    }
+    set ParentBranchID(value: string | null) {
+        this.Set('ParentBranchID', value);
+    }
+
+    /**
+    * * Field Name: ForkFromSequence
+    * * Display Name: Fork From Sequence
+    * * SQL Data Type: int
+    * * Description: Sequence of the last message shared with the parent path. NULL means the fork starts before the first message, in which case ParentBranchID is also NULL.
+    */
+    get ForkFromSequence(): number | null {
+        return this.Get('ForkFromSequence');
+    }
+    set ForkFromSequence(value: number | null) {
+        this.Set('ForkFromSequence', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional name of the fork. With no name, the UI shows a default label from Kind: a Fork is named from its first message.
+    */
+    get Name(): string | null {
+        return this.Get('Name');
+    }
+    set Name(value: string | null) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Kind
+    * * Display Name: Kind
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Fork
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Edit
+    *   * Fork
+    *   * Regenerate
+    * * Description: How the fork started: Fork (Fork from here), Edit (a sent message was edited) or Regenerate (an answer was regenerated).
+    */
+    get Kind(): 'Edit' | 'Fork' | 'Regenerate' {
+        return this.Get('Kind');
+    }
+    set Kind(value: 'Edit' | 'Fork' | 'Regenerate') {
+        this.Set('Kind', value);
+    }
+
+    /**
+    * * Field Name: SourceDetailID
+    * * Display Name: Source Detail
+    * * SQL Data Type: uniqueidentifier
+    * * Description: The edited message (Kind Edit) or the replaced answer (Kind Regenerate); NULL otherwise. Not a foreign key, to avoid a CodeGen cascade cycle with ConversationDetail.
+    */
+    get SourceDetailID(): string | null {
+        return this.Get('SourceDetailID');
+    }
+    set SourceDetailID(value: string | null) {
+        this.Set('SourceDetailID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The person who started the fork.
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Conversation
+    * * Display Name: Conversation Detail
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Conversation(): string | null {
+        return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: ParentBranch
+    * * Display Name: Parent Branch Detail
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ParentBranch(): string | null {
+        return this.Get('ParentBranch');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+}
+
+
+/**
  * MJ: Conversation Compaction Runs - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ConversationCompactionRun
@@ -81443,6 +83196,33 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     }
 
     /**
+    * * Field Name: BranchID
+    * * Display Name: Branch
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Branches (vwConversationBranches.ID)
+    * * Description: The fork this message belongs to. NULL means Main (the trunk). Every writer sets it explicitly.
+    */
+    get BranchID(): string | null {
+        return this.Get('BranchID');
+    }
+    set BranchID(value: string | null) {
+        this.Set('BranchID', value);
+    }
+
+    /**
+    * * Field Name: ReplacedAt
+    * * Display Name: Replaced At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When a rerun of this message's turn replaced it (Regenerate or Save and resend while forking is off). A replaced row is kept for audit, is hidden from the user and is never sent to an agent. NULL means the row is live.
+    */
+    get ReplacedAt(): Date | null {
+        return this.Get('ReplacedAt');
+    }
+    set ReplacedAt(value: Date | null) {
+        this.Set('ReplacedAt', value);
+    }
+
+    /**
     * * Field Name: Conversation
     * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
@@ -81503,6 +83283,15 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     */
     get TestRun(): string | null {
         return this.Get('TestRun');
+    }
+
+    /**
+    * * Field Name: Branch
+    * * Display Name: Branch
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Branch(): string | null {
+        return this.Get('Branch');
     }
 
     /**
@@ -87707,6 +89496,20 @@ export interface MJEntityEntity_IEntityFormConfiguration {
      * `inclusion: 'Primary'` is never capped by this number.
      */
     PrimaryRelatedBudget?: number;
+
+    /**
+     * Default empty-section behaviour for this form's related sections when a
+     * relationship does not set `UI.whenEmpty` itself.
+     * `'show'` | `'hide'` | `'more'` — see `IEntityRelationshipUIConfiguration.whenEmpty`.
+     * Omit to treat as `'show'`.
+     */
+    RelatedWhenEmpty?: 'show' | 'hide' | 'more';
+
+    /**
+     * Default for prefetching related-section row counts (badges) when a
+     * relationship does not set `UI.showCount` itself. Omit to treat as `true`.
+     */
+    ShowRelatedCounts?: boolean;
 }
 
 /**
@@ -87720,6 +89523,13 @@ export interface MJEntityEntity_IEntityCloneConfiguration {
     Enabled?: boolean;
     /** Hard refusal: this entity's rows are never created by the clone engine, as root or as child. Overrides every relationship policy. Use for audit, run, credential and metadata entities. */
     NotCloneable?: boolean;
+    /**
+     * Lets a NotCloneable entity's rows be copied after all, but only as children of a template copy: a
+     * clone run under a preset with `TemplateSourceField` whose source record has that flag set. Use for
+     * rows that are private to a person (conversations, dashboard preferences) and must never be copied
+     * from one user to another, yet belong in a template built to be copied.
+     */
+    CloneableFromTemplate?: boolean;
     /** Shown to users and returned in warnings when NotCloneable or Enabled=false. */
     NotCloneableReason?: string;
     /** Authorization name checked with ancestors. Default 'Clone Records'; resolved per §9.1. */
@@ -87881,6 +89691,14 @@ export interface MJEntityEntity_IClonePreset {
     Options?: Record<string, unknown>;
     /** Edge policy overrides, keyed by related entity name. */
     Relationships?: Record<string, { Policy: 'Deep' | 'Reference' | 'Skip' }>;
+    /**
+     * Makes this a template preset. Names a boolean field on the root entity; the preset is offered and
+     * applied only when the source record has it set (e.g. `IsTemplate` on `MJ: Users`), and the plan is
+     * blocked otherwise. A template preset may open edges the configuration Locks and copy children whose
+     * entity is `CloneableFromTemplate`: those protections keep a person's private records from being
+     * copied to someone else, which does not apply to a record built to be copied.
+     */
+    TemplateSourceField?: string;
 }
 
 /**
@@ -95200,6 +97018,27 @@ export interface MJEntityRelationshipEntity_IEntityRelationshipUIConfiguration {
      * after lead contributions such as Overview). Omit = 0.
      */
     sortKey?: number;
+
+    /**
+     * What the parent form does with this section when it has 0 rows.
+     * Counts are fetched in one batched round trip when the record loads.
+     *
+     * - `'show'` — always show (use when users create the first row here).
+     * - `'hide'` — hide while empty. The "show empty fields" toolbar toggle reveals it.
+     * - `'more'` — move into the More folder while empty; returns to its normal
+     *   placement once it has rows.
+     *
+     * Omit = inherit the parent entity's `UI.Form.RelatedWhenEmpty`, else `'show'`.
+     */
+    whenEmpty?: 'show' | 'hide' | 'more';
+
+    /**
+     * Prefetch this section's row count when the record loads and show it as a
+     * badge. Set `false` for known-expensive related entities.
+     *
+     * Omit = inherit the parent entity's `UI.Form.ShowRelatedCounts`, else `true`.
+     */
+    showCount?: boolean;
 }
 
 /**
@@ -102363,7 +104202,6 @@ export class MJInteractionOfferEntity extends BaseEntity<MJInteractionOfferEntit
     /**
     * Validate() method override for MJ: Interaction Offers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * Table-Level: The expiration date and time must be after the offered date and time to ensure the offer has a valid duration.
-    * * Table-Level: The response time must be on or after the time the interaction was offered.
     * @public
     * @method
     * @override
@@ -102371,7 +104209,6 @@ export class MJInteractionOfferEntity extends BaseEntity<MJInteractionOfferEntit
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateExpiresAtAfterOfferedAt(result);
-        this.ValidateRespondedAtOnOrAfterOfferedAt(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -102395,23 +104232,6 @@ export class MJInteractionOfferEntity extends BaseEntity<MJInteractionOfferEntit
     				ValidationErrorType.Failure
     			));
     		}
-    	}
-    }
-
-    /**
-    * The response time must be on or after the time the interaction was offered.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateRespondedAtOnOrAfterOfferedAt(result: ValidationResult) {
-    	if (this.RespondedAt != null && this.OfferedAt != null && this.RespondedAt < this.OfferedAt) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"RespondedAt",
-    			"The response time must be on or after the offered time.",
-    			this.RespondedAt,
-    			ValidationErrorType.Failure
-    		));
     	}
     }
 
@@ -102661,7 +104481,6 @@ export class MJInteractionEntity extends BaseEntity<MJInteractionEntityType> {
     * Validate() method override for MJ: Interactions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * CostEstimate: The cost estimate, if provided, must be greater than or equal to zero.
     * * Table-Level: The time a session is answered must be at or after the time the session started.
-    * * Table-Level: The end time must occur on or after the start time.
     * @public
     * @method
     * @override
@@ -102670,7 +104489,6 @@ export class MJInteractionEntity extends BaseEntity<MJInteractionEntityType> {
         const result = super.Validate();
         this.ValidateCostEstimateGreaterThanOrEqualToZero(result);
         this.ValidateAnsweredAtAfterStartedAt(result);
-        this.ValidateEndedAtGreaterThanOrEqualToStartedAt(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -102710,23 +104528,6 @@ export class MJInteractionEntity extends BaseEntity<MJInteractionEntityType> {
     				ValidationErrorType.Failure
     			));
     		}
-    	}
-    }
-
-    /**
-    * The end time must occur on or after the start time.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateEndedAtGreaterThanOrEqualToStartedAt(result: ValidationResult) {
-    	if (this.EndedAt != null && this.StartedAt != null && this.EndedAt < this.StartedAt) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"EndedAt",
-    			"End date and time must be on or after the start date and time.",
-    			this.EndedAt,
-    			ValidationErrorType.Failure
-    		));
     	}
     }
 
@@ -108993,8 +110794,6 @@ export class MJMeetingParticipantEntity extends BaseEntity<MJMeetingParticipantE
     * Validate() method override for MJ: Meeting Participants entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * ExternalPhone: If an external phone number is provided, it must be in international format starting with '+' followed by a non-zero digit, contain only numbers, and be between 5 and 16 characters in length.
     * * Table-Level: An agent identifier must be provided if and only if the role is set to 'Agent'.
-    * * Table-Level: Meeting departure time must be on or after the join time, and a join time must be recorded if a leave time is specified.
-    * * Table-Level: Each participant must be exactly one type: an internal user, an agent, or an external attendee with an email or phone number.
     * @public
     * @method
     * @override
@@ -109003,8 +110802,6 @@ export class MJMeetingParticipantEntity extends BaseEntity<MJMeetingParticipantE
         const result = super.Validate();
         this.ValidateExternalPhoneFormat(result);
         this.ValidateAgentIdAndRoleMatch(result);
-        this.ValidateLeftAtAfterJoinedAt(result);
-        this.ValidateSingleParticipantType(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -109055,45 +110852,6 @@ export class MJMeetingParticipantEntity extends BaseEntity<MJMeetingParticipantE
     			"AgentID",
     			"An Agent ID can only be assigned to users with the 'Agent' role.",
     			this.AgentID,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * Meeting departure time must be on or after the join time, and a join time must be recorded if a leave time is specified.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateLeftAtAfterJoinedAt(result: ValidationResult) {
-    	if (this.LeftAt != null && (this.JoinedAt == null || new Date(this.LeftAt) < new Date(this.JoinedAt))) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"LeftAt",
-    			"The leave time must be on or after the join time, and a join time must be specified.",
-    			this.LeftAt,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * Each participant must be exactly one type: an internal user, an agent, or an external attendee with an email or phone number.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateSingleParticipantType(result: ValidationResult) {
-    	const hasUser = this.UserID != null ? 1 : 0;
-    	const hasAgent = this.AgentID != null ? 1 : 0;
-    	const hasExternal = (this.ExternalEmail != null || this.ExternalPhone != null) ? 1 : 0;
-    	const count = hasUser + hasAgent + hasExternal;
-    
-    	if (count !== 1) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"UserID",
-    			"A participant must be exactly one identity: a registered User, an Agent, or an external attendee with contact information.",
-    			this.UserID,
     			ValidationErrorType.Failure
     		));
     	}
@@ -109342,8 +111100,6 @@ export class MJMeetingEntity extends BaseEntity<MJMeetingEntityType> {
     * Validate() method override for MJ: Meetings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * DialInCode: The dial-in code, if provided, must consist only of numeric digits and be between 6 and 20 characters in length.
     * * Table-Level: If phone dial-in is allowed, both a dial-in phone number and a dial-in code must be provided.
-    * * Table-Level: If an end time is provided, a start time must also be provided, and the end time must be on or after the start time.
-    * * Table-Level: If a scheduled end time is specified, a scheduled start time must also be provided, and the scheduled end time must be after the scheduled start time.
     * @public
     * @method
     * @override
@@ -109352,8 +111108,6 @@ export class MJMeetingEntity extends BaseEntity<MJMeetingEntityType> {
         const result = super.Validate();
         this.ValidateDialInCodeFormatAndLength(result);
         this.ValidateDialInInformationWhenPhoneDialInAllowed(result);
-        this.ValidateEndedAtComparedToStartedAt(result);
-        this.ValidateScheduledEndAtAfterScheduledStartAt(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -109395,44 +111149,6 @@ export class MJMeetingEntity extends BaseEntity<MJMeetingEntityType> {
     				"AllowPhoneDialIn",
     				"When phone dial-in is enabled, both a dial-in phone number and a dial-in code must be provided.",
     				this.AllowPhoneDialIn,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	}
-    }
-
-    /**
-    * If an end time is provided, a start time must also be provided, and the end time must be on or after the start time.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateEndedAtComparedToStartedAt(result: ValidationResult) {
-    	if (this.EndedAt != null) {
-    		if (this.StartedAt == null || this.EndedAt < this.StartedAt) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"EndedAt",
-    				"The end time must be on or after the start time, and a start time must be provided whenever an end time is set.",
-    				this.EndedAt,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	}
-    }
-
-    /**
-    * If a scheduled end time is specified, a scheduled start time must also be provided, and the scheduled end time must be after the scheduled start time.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateScheduledEndAtAfterScheduledStartAt(result: ValidationResult) {
-    	if (this.ScheduledEndAt != null) {
-    		if (this.ScheduledStartAt == null || new Date(this.ScheduledEndAt) <= new Date(this.ScheduledStartAt)) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"ScheduledEndAt",
-    				"Scheduled end time must be after the scheduled start time, and a start time must be provided when an end time is set.",
-    				this.ScheduledEndAt,
     				ValidationErrorType.Failure
     			));
     		}
@@ -121348,15 +123064,38 @@ export interface MJRubricCriterionEntity_IRubricVersionChangeDetails {
     Changes: MJRubricCriterionEntity_IRubricVersionChange[];
 }
 
-/** AIAgentRubric.EvaluatorConfig */
+/**
+ * AIAgentRubric.EvaluatorConfig — which evaluator scores the link, and with which prompts.
+ *
+ * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
+ * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
+ * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
+ * they name the decision prompt instead.
+ */
 export interface MJRubricCriterionEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
+    /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
+    /** The same prompt by name, when no PromptID is set. For example `Rubric Judge - Sage`. */
+    PromptName?: string;
+    /** LLM: the parent evaluator prompt. Default `Rubric Evaluator`. Must return the same JSON. */
+    SystemPromptID?: string;
+    SystemPromptName?: string;
+    /** LLM and Decision: the prompt that renders one criterion. Default `Rubric Criterion`. */
+    CriterionPromptID?: string;
+    CriterionPromptName?: string;
+    /** LLM: which prompt's model bindings choose the model. System (default) or Judge. */
+    ModelSelection?: 'System' | 'Judge';
     AgentID?: string;
+    /** Pins the model. */
     ModelID?: string;
+    /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** Settings for a custom evaluator, keyed by its evaluator name. */
+    Extensions?: Record<string, MJRubricCriterionEntity_JsonValue>;
 }
 
 /**
@@ -121394,9 +123133,6 @@ export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityT
     * * GateMinimumScore: The gate minimum score must be between 0 and 1 (inclusive) if it is specified.
     * * Weight: The weight value must be greater than or equal to zero. Negative weights are not permitted.
     * * Table-Level: An item cannot be marked as both an Advisory and a Gate at the same time.
-    * * Table-Level: Items designated as a gate must have a minimum score specified to define the passing threshold.
-    * * Table-Level: Rollup method can only be specified for 'Group' node types. Other node types cannot have a rollup method.
-    * * Table-Level: Criterion nodes must have an associated scale, while Group nodes cannot have a scale assigned.
     * @public
     * @method
     * @override
@@ -121406,9 +123142,6 @@ export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityT
         this.ValidateGateMinimumScoreRange(result);
         this.ValidateWeightGreaterThanOrEqualToZero(result);
         this.ValidateAdvisoryAndGateFlags(result);
-        this.ValidateGateMinimumScoreWhenIsGate(result);
-        this.ValidateRollupMethodNodeType(result);
-        this.ValidateScaleIDByNodeType(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -121460,71 +123193,6 @@ export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityT
     			"IsAdvisory",
     			"An item cannot be marked as both an Advisory and a Gate simultaneously.",
     			this.IsAdvisory,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * Items designated as a gate must have a minimum score specified to define the passing threshold.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    	public ValidateGateMinimumScoreWhenIsGate(result: ValidationResult) {
-    		if (this.IsGate && this.GateMinimumScore == null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"GateMinimumScore",
-    				"A gate minimum score must be provided when the item is marked as a gate.",
-    				this.GateMinimumScore,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	}
-
-    /**
-    * Rollup method can only be specified for 'Group' node types. Other node types cannot have a rollup method.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateRollupMethodNodeType(result: ValidationResult) {
-    	if (this.NodeType !== 'Group' && this.RollupMethod != null) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"RollupMethod",
-    			"A rollup method can only be specified when the node type is 'Group'.",
-    			this.RollupMethod,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * Criterion nodes must have an associated scale, while Group nodes cannot have a scale assigned.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateScaleIDByNodeType(result: ValidationResult) {
-    	if (this.NodeType === "Criterion" && this.ScaleID == null) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"ScaleID",
-    			"A scale must be provided when the node type is Criterion.",
-    			this.ScaleID,
-    			ValidationErrorType.Failure
-    		));
-    	} else if (this.NodeType === "Group" && this.ScaleID != null) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"ScaleID",
-    			"Group nodes cannot have a scale assigned.",
-    			this.ScaleID,
-    			ValidationErrorType.Failure
-    		));
-    	} else if (this.NodeType !== "Criterion" && this.NodeType !== "Group") {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"NodeType",
-    			"Node type must be either 'Criterion' or 'Group'.",
-    			this.NodeType,
     			ValidationErrorType.Failure
     		));
     	}
@@ -122188,15 +123856,38 @@ export interface MJRubricEvaluationScoreEntity_IRubricVersionChangeDetails {
     Changes: MJRubricEvaluationScoreEntity_IRubricVersionChange[];
 }
 
-/** AIAgentRubric.EvaluatorConfig */
+/**
+ * AIAgentRubric.EvaluatorConfig — which evaluator scores the link, and with which prompts.
+ *
+ * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
+ * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
+ * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
+ * they name the decision prompt instead.
+ */
 export interface MJRubricEvaluationScoreEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
+    /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
+    /** The same prompt by name, when no PromptID is set. For example `Rubric Judge - Sage`. */
+    PromptName?: string;
+    /** LLM: the parent evaluator prompt. Default `Rubric Evaluator`. Must return the same JSON. */
+    SystemPromptID?: string;
+    SystemPromptName?: string;
+    /** LLM and Decision: the prompt that renders one criterion. Default `Rubric Criterion`. */
+    CriterionPromptID?: string;
+    CriterionPromptName?: string;
+    /** LLM: which prompt's model bindings choose the model. System (default) or Judge. */
+    ModelSelection?: 'System' | 'Judge';
     AgentID?: string;
+    /** Pins the model. */
     ModelID?: string;
+    /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** Settings for a custom evaluator, keyed by its evaluator name. */
+    Extensions?: Record<string, MJRubricEvaluationScoreEntity_JsonValue>;
 }
 
 /**
@@ -122231,7 +123922,6 @@ export class MJRubricEvaluationScoreEntity extends BaseEntity<MJRubricEvaluation
 
     /**
     * Validate() method override for MJ: Rubric Evaluation Scores entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: Normalized score, effective weight, overall contribution, completeness, and confidence values must each be between 0.0 and 1.0 (inclusive) when specified.
     * * Table-Level: If a record is marked as Not Applicable, it must not have a Scale Level, Raw Value, or Normalized Score associated with it.
     * @public
     * @method
@@ -122239,64 +123929,10 @@ export class MJRubricEvaluationScoreEntity extends BaseEntity<MJRubricEvaluation
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateEvaluationMetricRanges(result);
         this.ValidateFieldsWhenNotApplicable(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
-    }
-
-    /**
-    * Normalized score, effective weight, overall contribution, completeness, and confidence values must each be between 0.0 and 1.0 (inclusive) when specified.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateEvaluationMetricRanges(result: ValidationResult) {
-    	if (this.NormalizedScore != null && (this.NormalizedScore < 0 || this.NormalizedScore > 1)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"NormalizedScore",
-    			"Normalized score must be between 0 and 1.",
-    			this.NormalizedScore,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    
-    	if (this.EffectiveWeight != null && (this.EffectiveWeight < 0 || this.EffectiveWeight > 1)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"EffectiveWeight",
-    			"Effective weight must be between 0 and 1.",
-    			this.EffectiveWeight,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    
-    	if (this.OverallContribution != null && (this.OverallContribution < 0 || this.OverallContribution > 1)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"OverallContribution",
-    			"Overall contribution must be between 0 and 1.",
-    			this.OverallContribution,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    
-    	if (this.Completeness != null && (this.Completeness < 0 || this.Completeness > 1)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"Completeness",
-    			"Completeness must be between 0 and 1.",
-    			this.Completeness,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    
-    	if (this.Confidence != null && (this.Confidence < 0 || this.Confidence > 1)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"Confidence",
-    			"Confidence must be between 0 and 1.",
-    			this.Confidence,
-    			ValidationErrorType.Failure
-    		));
-    	}
     }
 
     /**
@@ -122853,15 +124489,38 @@ export interface MJRubricEvaluationEntity_IRubricVersionChangeDetails {
     Changes: MJRubricEvaluationEntity_IRubricVersionChange[];
 }
 
-/** AIAgentRubric.EvaluatorConfig */
+/**
+ * AIAgentRubric.EvaluatorConfig — which evaluator scores the link, and with which prompts.
+ *
+ * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
+ * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
+ * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
+ * they name the decision prompt instead.
+ */
 export interface MJRubricEvaluationEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
+    /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
+    /** The same prompt by name, when no PromptID is set. For example `Rubric Judge - Sage`. */
+    PromptName?: string;
+    /** LLM: the parent evaluator prompt. Default `Rubric Evaluator`. Must return the same JSON. */
+    SystemPromptID?: string;
+    SystemPromptName?: string;
+    /** LLM and Decision: the prompt that renders one criterion. Default `Rubric Criterion`. */
+    CriterionPromptID?: string;
+    CriterionPromptName?: string;
+    /** LLM: which prompt's model bindings choose the model. System (default) or Judge. */
+    ModelSelection?: 'System' | 'Judge';
     AgentID?: string;
+    /** Pins the model. */
     ModelID?: string;
+    /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** Settings for a custom evaluator, keyed by its evaluator name. */
+    Extensions?: Record<string, MJRubricEvaluationEntity_JsonValue>;
 }
 
 /**
@@ -122932,9 +124591,6 @@ export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntit
     /**
     * Validate() method override for MJ: Rubric Evaluations entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * Table-Level: Context Entity ID and Context Record ID must either both be provided or both be left empty. This ensures that a context reference is never partially defined.
-    * * Table-Level: Normalized score, pass threshold applied, completeness, and confidence must each be between 0 and 1 when provided.
-    * * Table-Level: Human evaluators must have an associated evaluator user specified.
-    * * Table-Level: Evaluations with a status of Submitted, Superseded, or Withdrawn must have both a submission date and an outcome recorded.
     * @public
     * @method
     * @override
@@ -122942,9 +124598,6 @@ export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntit
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateContextEntityAndRecordCoexistence(result);
-        this.ValidateEvaluationMetricsRange(result);
-        this.ValidateEvaluatorUserIDForHumanEvaluator(result);
-        this.ValidateStatusRequiresSubmittedAtAndOutcome(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -122969,83 +124622,6 @@ export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntit
             ));
         }
     }
-
-    /**
-    * Normalized score, pass threshold applied, completeness, and confidence must each be between 0 and 1 when provided.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateEvaluationMetricsRange(result: ValidationResult) {
-    	if (this.NormalizedScore != null && (this.NormalizedScore < 0 || this.NormalizedScore > 1)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"NormalizedScore",
-    			"Normalized score must be between 0 and 1.",
-    			this.NormalizedScore,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    	if (this.PassThresholdApplied != null && (this.PassThresholdApplied < 0 || this.PassThresholdApplied > 1)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"PassThresholdApplied",
-    			"Pass threshold applied must be between 0 and 1.",
-    			this.PassThresholdApplied,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    	if (this.Completeness != null && (this.Completeness < 0 || this.Completeness > 1)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"Completeness",
-    			"Completeness must be between 0 and 1.",
-    			this.Completeness,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    	if (this.Confidence != null && (this.Confidence < 0 || this.Confidence > 1)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"Confidence",
-    			"Confidence must be between 0 and 1.",
-    			this.Confidence,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * Human evaluators must have an associated evaluator user specified.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateEvaluatorUserIDForHumanEvaluator(result: ValidationResult) {
-    	if (this.EvaluatorType === 'Human' && this.EvaluatorUserID == null) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"EvaluatorUserID",
-    			"An evaluator user must be specified when the evaluator type is Human.",
-    			this.EvaluatorUserID,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * Evaluations with a status of Submitted, Superseded, or Withdrawn must have both a submission date and an outcome recorded.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    	public ValidateStatusRequiresSubmittedAtAndOutcome(result: ValidationResult) {
-    		if (this.Status === "Withdrawn" || this.Status === "Superseded" || this.Status === "Submitted") {
-    			if (this.SubmittedAt == null || this.Outcome == null) {
-    				result.Errors.push(new ValidationErrorInfo(
-    					"Status",
-    					"Evaluations with a status of '" + this.Status + "' must have both a submission date and an outcome specified.",
-    					this.Status,
-    					ValidationErrorType.Failure
-    				));
-    			}
-    		}
-    	}
 
     /**
     * * Field Name: ID
@@ -124244,15 +125820,38 @@ export interface MJRubricVersionEntity_IRubricVersionChangeDetails {
     Changes: MJRubricVersionEntity_IRubricVersionChange[];
 }
 
-/** AIAgentRubric.EvaluatorConfig */
+/**
+ * AIAgentRubric.EvaluatorConfig — which evaluator scores the link, and with which prompts.
+ *
+ * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
+ * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
+ * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
+ * they name the decision prompt instead.
+ */
 export interface MJRubricVersionEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
+    /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
+    /** The same prompt by name, when no PromptID is set. For example `Rubric Judge - Sage`. */
+    PromptName?: string;
+    /** LLM: the parent evaluator prompt. Default `Rubric Evaluator`. Must return the same JSON. */
+    SystemPromptID?: string;
+    SystemPromptName?: string;
+    /** LLM and Decision: the prompt that renders one criterion. Default `Rubric Criterion`. */
+    CriterionPromptID?: string;
+    CriterionPromptName?: string;
+    /** LLM: which prompt's model bindings choose the model. System (default) or Judge. */
+    ModelSelection?: 'System' | 'Judge';
     AgentID?: string;
+    /** Pins the model. */
     ModelID?: string;
+    /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** Settings for a custom evaluator, keyed by its evaluator name. */
+    Extensions?: Record<string, MJRubricVersionEntity_JsonValue>;
 }
 
 /**
@@ -124290,8 +125889,6 @@ export class MJRubricVersionEntity extends BaseEntity<MJRubricVersionEntityType>
     * * MinimumCompleteness: Minimum completeness, if specified, must be a value between 0 and 1 (inclusive).
     * * PassThreshold: The pass threshold must be a value between 0 and 1 (inclusive) representing a percentage.
     * * Table-Level: If a rubric is not in 'Draft' status, it must have all versioning, hashing, publishing timestamp, and version bump details fully populated to ensure data integrity for published content.
-    * * Table-Level: The maximum display score must be greater than the minimum display score to ensure a valid score display range.
-    * * Table-Level: Major, minor, and patch version numbers cannot be negative if specified.
     * @public
     * @method
     * @override
@@ -124301,8 +125898,6 @@ export class MJRubricVersionEntity extends BaseEntity<MJRubricVersionEntityType>
         this.ValidateMinimumCompletenessRange(result);
         this.ValidatePassThresholdRange(result);
         this.ValidatePublishedMetadataForNonDraftStatus(result);
-        this.ValidateScoreDisplayMaxGreaterThanScoreDisplayMin(result);
-        this.ValidateVersionComponentsNonNegative(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -124367,56 +125962,6 @@ export class MJRubricVersionEntity extends BaseEntity<MJRubricVersionEntityType>
     				ValidationErrorType.Failure
     			));
     		}
-    	}
-    }
-
-    /**
-    * The maximum display score must be greater than the minimum display score to ensure a valid score display range.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateScoreDisplayMaxGreaterThanScoreDisplayMin(result: ValidationResult) {
-    	if (this.ScoreDisplayMax != null && this.ScoreDisplayMin != null && this.ScoreDisplayMax <= this.ScoreDisplayMin) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"ScoreDisplayMax",
-    			"The maximum display score must be greater than the minimum display score.",
-    			this.ScoreDisplayMax,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * Major, minor, and patch version numbers cannot be negative if specified.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateVersionComponentsNonNegative(result: ValidationResult) {
-    	if (this.MajorVersion != null && this.MajorVersion < 0) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"MajorVersion",
-    			"Major version must be greater than or equal to 0.",
-    			this.MajorVersion,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    	if (this.MinorVersion != null && this.MinorVersion < 0) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"MinorVersion",
-    			"Minor version must be greater than or equal to 0.",
-    			this.MinorVersion,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    	if (this.PatchVersion != null && this.PatchVersion < 0) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"PatchVersion",
-    			"Patch version must be greater than or equal to 0.",
-    			this.PatchVersion,
-    			ValidationErrorType.Failure
-    		));
     	}
     }
 
@@ -126217,6 +127762,254 @@ export class MJSchemaInfoEntity extends BaseEntity<MJSchemaInfoEntityType> {
     }
     set CanonicalSchemaName(value: string | null) {
         this.Set('CanonicalSchemaName', value);
+    }
+}
+
+
+/**
+ * MJ: Scoped Notification Configs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ScopedNotificationConfig
+ * * Base View: vwScopedNotificationConfigs
+ * * @description A notification config at one scope: the level between a notification type's defaults and a recipient's preference where an application, a role, a user or the notice's origin can allow or deny a channel. Scoped by the same primary record + secondary dimensions as Scoped Prompt Configs. Resolution: most specific in-scope row wins per channel; at equal specificity Deny beats Allow; a locked Deny caps every level below it, the recipient's preference included.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Scoped Notification Configs')
+export class MJScopedNotificationConfigEntity extends BaseEntity<MJScopedNotificationConfigEntityType> {
+    /**
+    * Loads the MJ: Scoped Notification Configs record from the database
+    * @param ID: string - primary key value to load the MJ: Scoped Notification Configs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJScopedNotificationConfigEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: NotificationTypeID
+    * * Display Name: Notification Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: User Notification Types (vwUserNotificationTypes.ID)
+    * * Description: The notification type this config is for.
+    */
+    get NotificationTypeID(): string {
+        return this.Get('NotificationTypeID');
+    }
+    set NotificationTypeID(value: string) {
+        this.Set('NotificationTypeID', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Why the row exists, for the administrator who finds it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeEntityID
+    * * Display Name: Primary Scope Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: The entity of the primary scope record (Applications, Roles, Users, Companies, ...). NULL with PrimaryScopeRecordID NULL = a global row.
+    */
+    get PrimaryScopeEntityID(): string | null {
+        return this.Get('PrimaryScopeEntityID');
+    }
+    set PrimaryScopeEntityID(value: string | null) {
+        this.Set('PrimaryScopeEntityID', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeRecordID
+    * * Display Name: Primary Scope Record ID
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The record ID within the primary scope entity this config is scoped to. NULL = global. In scope when it is the caller's primary scope record, the recipient, or a role the recipient holds.
+    */
+    get PrimaryScopeRecordID(): string | null {
+        return this.Get('PrimaryScopeRecordID');
+    }
+    set PrimaryScopeRecordID(value: string | null) {
+        this.Set('PrimaryScopeRecordID', value);
+    }
+
+    /**
+    * * Field Name: SecondaryScopes
+    * * Display Name: Secondary Scopes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object of additional scope dimensions, e.g. {"origin":"System"}. Every dimension named must match the notice's scope for the row to apply. origin is Person, System (the Owner-type user) or Automation.
+    */
+    get SecondaryScopes(): string | null {
+        return this.Get('SecondaryScopes');
+    }
+    set SecondaryScopes(value: string | null) {
+        this.Set('SecondaryScopes', value);
+    }
+
+    /**
+    * * Field Name: InApp
+    * * Display Name: In-App Channel
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    * * Description: The in-app channel: Allow, Deny, or NULL to leave it to the next row.
+    */
+    get InApp(): 'Allow' | 'Deny' | null {
+        return this.Get('InApp');
+    }
+    set InApp(value: 'Allow' | 'Deny' | null) {
+        this.Set('InApp', value);
+    }
+
+    /**
+    * * Field Name: Email
+    * * Display Name: Email Channel
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    * * Description: The email channel: Allow, Deny, or NULL to leave it to the next row.
+    */
+    get Email(): 'Allow' | 'Deny' | null {
+        return this.Get('Email');
+    }
+    set Email(value: 'Allow' | 'Deny' | null) {
+        this.Set('Email', value);
+    }
+
+    /**
+    * * Field Name: SMS
+    * * Display Name: SMS Channel
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    * * Description: The SMS channel: Allow, Deny, or NULL to leave it to the next row.
+    */
+    get SMS(): 'Allow' | 'Deny' | null {
+        return this.Get('SMS');
+    }
+    set SMS(value: 'Allow' | 'Deny' | null) {
+        this.Set('SMS', value);
+    }
+
+    /**
+    * * Field Name: IsLocked
+    * * Display Name: Is Locked
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When set, a Deny on this row is absorbing: no less specific row and no recipient preference may turn the channel on. The way a notification type's AllowUserPreference caps the recipient today.
+    */
+    get IsLocked(): boolean {
+        return this.Get('IsLocked');
+    }
+    set IsLocked(value: boolean) {
+        this.Set('IsLocked', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Tie-break for resolution. Higher wins when two rows tie on scope specificity and neither denies. Default 0.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Archived
+    *   * Provisional
+    * * Description: Lifecycle: Active (live), Provisional (staged; eligible), Archived (excluded from resolution).
+    */
+    get Status(): 'Active' | 'Archived' | 'Provisional' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Archived' | 'Provisional') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: NotificationType
+    * * Display Name: Notification Type Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get NotificationType(): string {
+        return this.Get('NotificationType');
+    }
+
+    /**
+    * * Field Name: PrimaryScopeEntity
+    * * Display Name: Primary Scope Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PrimaryScopeEntity(): string | null {
+        return this.Get('PrimaryScopeEntity');
     }
 }
 
@@ -136782,6 +138575,32 @@ export class MJThemeEntity extends BaseEntity<MJThemeEntityType> {
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: LoginScreen
+    * * Display Name: Login Screen
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The published sign-in page design as JSON (the LoginDesign shape from @memberjunction/theme-engine): layout, background, colors and the blocks in each login-screen region. The default Active theme's value is served unauthenticated to draw the Explorer login screen. NULL means the stock login screen.
+    */
+    get LoginScreen(): string | null {
+        return this.Get('LoginScreen');
+    }
+    set LoginScreen(value: string | null) {
+        this.Set('LoginScreen', value);
+    }
+
+    /**
+    * * Field Name: LoginScreenDraft
+    * * Display Name: Login Screen Draft
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The sign-in page design being edited in Login Studio, as JSON in the same shape as LoginScreen. Never served publicly; publishing copies it to LoginScreen. NULL means no draft.
+    */
+    get LoginScreenDraft(): string | null {
+        return this.Get('LoginScreenDraft');
+    }
+    set LoginScreenDraft(value: string | null) {
+        this.Set('LoginScreenDraft', value);
+    }
 }
 
 
@@ -140712,6 +142531,20 @@ export class MJUserEntity extends BaseEntity<MJUserEntityType> {
     }
 
     /**
+    * * Field Name: IsTemplate
+    * * Display Name: Is Template
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this user is a template: its configuration (pinned apps, views, settings, dashboards, conversations) is copied to new users through the template clone preset or userHandling.newUserTemplate. Template users are for setting things up, not for everyday use; Explorer shows a banner while one is signed in.
+    */
+    get IsTemplate(): boolean {
+        return this.Get('IsTemplate');
+    }
+    set IsTemplate(value: boolean) {
+        this.Set('IsTemplate', value);
+    }
+
+    /**
     * * Field Name: FirstLast
     * * Display Name: First Last
     * * SQL Data Type: nvarchar(101)
@@ -142480,6 +144313,30 @@ export class MJWorkQueueDeduplicationEntity extends BaseEntity<MJWorkQueueDedupl
     }
 
     /**
+    * MJ: Work Queue Deduplications - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueDeduplicationEntity
+    * @throws {Error} - Save is not allowed for MJ: Work Queue Deduplications, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Work Queue Deduplications, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Work Queue Deduplications - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueDeduplicationEntity
+    * @throws {Error} - Delete is not allowed for MJ: Work Queue Deduplications, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Work Queue Deduplications, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -142620,6 +144477,30 @@ export class MJWorkQueueDeliveryEntity extends BaseEntity<MJWorkQueueDeliveryEnt
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Work Queue Deliveries - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueDeliveryEntity
+    * @throws {Error} - Save is not allowed for MJ: Work Queue Deliveries, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Work Queue Deliveries, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Work Queue Deliveries - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueDeliveryEntity
+    * @throws {Error} - Delete is not allowed for MJ: Work Queue Deliveries, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Work Queue Deliveries, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -143006,6 +144887,30 @@ export class MJWorkQueueMessageEntity extends BaseEntity<MJWorkQueueMessageEntit
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Work Queue Messages - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueMessageEntity
+    * @throws {Error} - Save is not allowed for MJ: Work Queue Messages, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Work Queue Messages, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Work Queue Messages - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueMessageEntity
+    * @throws {Error} - Delete is not allowed for MJ: Work Queue Messages, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Work Queue Messages, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**

@@ -226,7 +226,7 @@ Milestones within the one PR. Each is independently reviewable and leaves the br
 | **12** | F11 | M7 — working record | Change detection (checksum), flat reset (`ContentPipelineResetService`), parent/child reconciliation by URL. |
 | **13** | F12 | M7 — stage logic | **Delete stage** — chunk purge as a callable stage operation, pending-delete skip in every stage, conditional commit. |
 | **14** | F13 | M7 — stage logic | Embed's metadata-only operation; vector-store provider update awaited, routed by namespace + index, batched. |
-| **15** ✅ | Review 2 | M7 + the vector providers | Delete/re-embed lifecycle routed per record (`VectorRecordRouter`), receipts hydrated, chunks superseded on re-segment and purged unless referenced, metadata-only updates through the providers' own `UpdateRecords`, Extract fetching through each source's own driver, sessions bound to their origin, the Tag prompt fed its template variables, and the `content-pipeline` integration bundle (IT107). |
+| **15** ✅ | Review 2 | M7 + the vector providers | Delete/re-embed lifecycle routed per record (`VectorRecordRouter`), receipts hydrated, chunks superseded on re-segment and purged unless referenced, metadata-only updates through the providers' own `UpdateRecords`, Extract fetching through each source's own driver, sessions bound to their origin, the Tag prompt fed its template variables, and the `content-pipeline` integration bundle (IT124). |
 
 Out of scope, stated explicitly in the PR body: merged-plan phases **M0–M6** (the record-cap fix, RSP's
 contract additions, the scope-provider registry, `ScopeType = 'Queue'`, `WorkQueueSource`,

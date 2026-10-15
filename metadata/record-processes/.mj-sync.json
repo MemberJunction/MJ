@@ -1,14 +1,4 @@
 {
   "entity": "MJ: Record Processes",
-  "filePattern": "**/.*.json",
-  "defaults": {},
-  "pull": {
-    "createNewFileIfNotFound": true,
-    "newFileName": ".content-pipeline.json",
-    "appendRecordsToExistingFile": true,
-    "updateExistingRecords": true,
-    "preserveFields": [],
-    "excludeFields": [],
-    "mergeStrategy": "merge"
-  }
+  "filePattern": "**/.*.json"
 }

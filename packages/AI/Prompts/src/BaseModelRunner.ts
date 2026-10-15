@@ -47,7 +47,9 @@ import {
   GetAIAPIKey,
   CredentialScopeAllows,
   AIPromptConfiguration,
-  ModelUsage
+  ModelUsage,
+  CreateCancellationError,
+  IsCancellationErrorInfo
 } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -280,12 +282,28 @@ export abstract class BaseModelRunner {
   }
 
   /**
+   * The Active model-vendor rows of a model on one vendor, Inference Provider rows first: the rows a
+   * `ModelVendor` credential binding can target. A vendor that both develops and serves a model has two
+   * rows for the pair, a Model Developer row and an Inference Provider row, and the engine holds them in
+   * no set order (the database returns them in key order), so taking the first match could read the
+   * Model Developer row and miss a binding on the row that serves the model.
+   */
+  private activeModelVendorRows(modelId: string, vendorId: string): MJAIModelVendorEntity[] {
+    const rows = (AIEngine.Instance.ModelVendorsByModelID.get(NormalizeUUID(modelId)) ?? [])
+      .filter(mv => UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active');
+    return [...rows.filter(mv => this.IsInferenceProvider(mv)), ...rows.filter(mv => !this.IsInferenceProvider(mv))];
+  }
+
+  /**
    * Fire-and-forget AIPromptRun persistence. Prompt-run logging never blocks the execution path on a
    * DB round-trip; the shared {@link BaseEntitySaveQueue} sequences saves for the SAME entity (the
    * initial 'Running' INSERT always completes before the finalize UPDATE, and the finalize mutation
    * runs INSIDE the post-INSERT task so a slow INSERT can never clobber the finalized row). Failures
    * stay in this runner's structured log stream via the queue's `onError` hook.
    */
+  /** Failover fields waiting to be re-applied after a prompt run's INSERT lands; see {@link recordFailoverFields}. */
+  private readonly _pendingFailoverFields = new WeakMap<MJAIPromptRunEntityExtended, (run: MJAIPromptRunEntityExtended) => void>();
+
   protected _promptRunQueue = new BaseEntitySaveQueue({
     onError: (message) => this.logError(message, { category: 'PromptRunSave' }),
   });
@@ -375,9 +393,7 @@ export abstract class BaseModelRunner {
 
     // Priority 3: ModelVendor bindings - with failover
     if (modelId && vendorId) {
-      const modelVendor = AIEngine.Instance.ModelVendorsByModelID.get(NormalizeUUID(modelId))
-        ?.find(mv => UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active');
-      if (modelVendor) {
+      for (const modelVendor of this.activeModelVendorRows(modelId, vendorId)) {
         const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('ModelVendor', modelVendor.ID);
         const result = await this.tryCredentialBindingsWithFailover(bindings, 'AICredentialBinding(ModelVendor)', params, verbose);
         if (result) return result;
@@ -612,9 +628,7 @@ export abstract class BaseModelRunner {
 
     // Priority 3: ModelVendor bindings
     if (modelId && vendorId) {
-      const modelVendor = AIEngine.Instance.ModelVendorsByModelID.get(NormalizeUUID(modelId))
-        ?.find(mv => UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active');
-      if (modelVendor && AIEngine.Instance.HasCredentialBindings('ModelVendor', modelVendor.ID)) {
+      if (this.activeModelVendorRows(modelId, vendorId).some(mv => AIEngine.Instance.HasCredentialBindings('ModelVendor', mv.ID))) {
         return true;
       }
     }
@@ -1625,23 +1639,16 @@ export abstract class BaseModelRunner {
     currentModel: MJAIModelEntityExtended,
     currentVendorId: string | null
   ): void {
-    promptRun.FailoverAttempts = failoverAttempts.length;
-    promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
-      model: a.modelId,
-      vendor: a.vendorId,
-      error: a.error.message,
-      errorType: a.errorType
-    })));
-    promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
-    promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
-
-    // Update ModelID if we ended up using a different model
-    if (!UUIDsEqual(currentModel.ID, promptRun.OriginalModelID)) {
-      promptRun.ModelID = currentModel.ID;
-    }
-    if (currentVendorId && !UUIDsEqual(currentVendorId, promptRun.VendorID)) {
-      promptRun.VendorID = currentVendorId;
-    }
+    this.recordFailoverFields(promptRun, run => {
+      this.applyFailoverAttempts(run, failoverAttempts);
+      // Update ModelID if we ended up using a different model
+      if (!UUIDsEqual(currentModel.ID, run.OriginalModelID)) {
+        run.ModelID = currentModel.ID;
+      }
+      if (currentVendorId && !UUIDsEqual(currentVendorId, run.VendorID)) {
+        run.VendorID = currentVendorId;
+      }
+    });
   }
 
   /**
@@ -1651,6 +1658,11 @@ export abstract class BaseModelRunner {
     promptRun: MJAIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[]
   ): void {
+    this.recordFailoverFields(promptRun, run => this.applyFailoverAttempts(run, failoverAttempts));
+  }
+
+  /** Writes the failover attempts onto a prompt run: their count, errors and durations. */
+  private applyFailoverAttempts(promptRun: MJAIPromptRunEntityExtended, failoverAttempts: FailoverAttempt[]): void {
     promptRun.FailoverAttempts = failoverAttempts.length;
     promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
       model: a.modelId,
@@ -1660,6 +1672,17 @@ export abstract class BaseModelRunner {
     })));
     promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
     promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+  }
+
+  /**
+   * Sets a prompt run's failover fields now, and again in {@link FinalizeRunRecord}'s queued update.
+   * The run's 'Running' INSERT is queued without being awaited, and when it lands the entity reloads
+   * from what was inserted — undoing any field set while it was in flight. Writing the fields inside
+   * the finalize task, which runs after that reload, is what makes them persist.
+   */
+  private recordFailoverFields(promptRun: MJAIPromptRunEntityExtended, apply: (run: MJAIPromptRunEntityExtended) => void): void {
+    apply(promptRun);
+    this._pendingFailoverFields.set(promptRun, apply);
   }
 
   /**
@@ -1718,6 +1741,11 @@ export abstract class BaseModelRunner {
       const candidate = allCandidates[i];
       const attemptStartTime = Date.now();
 
+      // A caller that has cancelled wants no further model calls — not this candidate, not the next.
+      if (params.cancellationToken?.aborted) {
+        return this.stopFailoverForCancellation(prompt, this.BuildCancellationError(), failoverAttempts, createErrorResult, promptRun);
+      }
+
       // Skip candidates with no credentials configured. `allCandidates` is intentionally the
       // FULL priority-ordered list (see the DECISION note in selectModelWithAPIKeyTracked),
       // so it can include vendors that have no API key in this environment. Firing a live
@@ -1736,6 +1764,18 @@ export abstract class BaseModelRunner {
 
         // Execute the model with this candidate
         const result = await executeOnCandidate(candidate);
+
+        // A failure caused by the caller cancelling is the caller's decision, not the model's, so it
+        // is neither failed over nor reported as a model failure. A result that already says it is
+        // not eligible for failover (a driver's or a runner's own cancelled result) is returned as it
+        // is; one that would fail over is replaced by a cancellation.
+        if (!result.success && (params.cancellationToken?.aborted || this.IsCallerCancellation(result.errorInfo))) {
+          if (result.errorInfo?.canFailover !== true) {
+            this.logFailoverCancellation(prompt, failoverAttempts, promptRun);
+            return result;
+          }
+          return this.stopFailoverForCancellation(prompt, this.BuildCancellationError(), failoverAttempts, createErrorResult, promptRun);
+        }
 
         // CRITICAL FIX: Check if result failed but is retriable (network errors, rate limits, etc.)
         // Provider drivers (GeminiLLM, OpenAILLM, etc.) catch errors internally and return ChatResult{success: false}
@@ -1794,6 +1834,11 @@ export abstract class BaseModelRunner {
         // Analyze error to get error info
         const errorInfo = ErrorAnalyzer.analyzeError(lastError);
 
+        if (params.cancellationToken?.aborted || this.IsCallerCancellation(errorInfo)) {
+          const cancellation = this.IsCallerCancellation(errorInfo) ? lastError : this.BuildCancellationError();
+          return this.stopFailoverForCancellation(prompt, cancellation, failoverAttempts, createErrorResult, promptRun);
+        }
+
         // Use shared failover error handling logic
         const decision = await this.processFailoverError(
           lastError,
@@ -1838,6 +1883,92 @@ export abstract class BaseModelRunner {
     }
 
     return createErrorResult(lastError, failoverAttempts);
+  }
+
+  /**
+   * Whether a failure was caused by the caller cancelling the request: its classification is
+   * `Cancelled`, or the older shape drivers built before that type existed.
+   */
+  protected IsCallerCancellation(errorInfo: AIErrorInfo | undefined): boolean {
+    return IsCancellationErrorInfo(errorInfo);
+  }
+
+  /**
+   * The error for a model call the caller cancelled. It is classified `Cancelled` — Fatal and not
+   * eligible for failover — so ErrorAnalyzer, the failover loop and the validation retries all stop
+   * on it rather than treating it as an unknown model error.
+   *
+   * @param message The message to keep, when a driver already reported the cancellation.
+   */
+  protected BuildCancellationError(message?: string): Error & { errorInfo: AIErrorInfo } {
+    return CreateCancellationError({ message: message || 'Chat completion was cancelled' });
+  }
+
+  /**
+   * Waits for a model call, or rejects as soon as its bound aborts: with the bound's
+   * {@link AIPromptTimeoutError} when the timeout fired, else with a cancellation error. The call the
+   * runner stops waiting for is torn down only if its driver was handed the bound's signal.
+   *
+   * For any runner whose driver call is not already bounded by the driver itself.
+   */
+  protected async RaceWithinBound<T>(call: Promise<T>, bound: ExecutionBound, prompt: MJAIPromptEntityExtended): Promise<T> {
+    const signal = bound.Signal;
+    if (!signal) {
+      return call;
+    }
+    let onAbort: (() => void) | undefined;
+    const aborted = new Promise<never>((_, reject) => {
+      onAbort = () => reject(bound.TimedOut()
+        ? (signal.reason instanceof AIPromptTimeoutError ? signal.reason : new AIPromptTimeoutError(prompt.Name, bound.TimeoutMS ?? 0))
+        : this.BuildCancellationError(`The ${this.RequiredModelType} call was cancelled`));
+      if (signal.aborted) {
+        onAbort();
+      } else {
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
+    try {
+      return await Promise.race([call, aborted]);
+    } finally {
+      if (onAbort) {
+        signal.removeEventListener('abort', onAbort);
+      }
+    }
+  }
+
+  /**
+   * Ends the failover loop for a caller cancellation: logs it once, at info level, records any real
+   * failures that came before it on the prompt run, and returns the error result without trying
+   * another candidate.
+   */
+  private stopFailoverForCancellation<TResult extends BaseResult>(
+    prompt: MJAIPromptEntityExtended,
+    cancellation: Error,
+    failoverAttempts: FailoverAttempt[],
+    createErrorResult: (lastError: Error | null, failoverAttempts: FailoverAttempt[]) => TResult,
+    promptRun?: MJAIPromptRunEntityExtended
+  ): TResult {
+    this.logFailoverCancellation(prompt, failoverAttempts, promptRun);
+    return createErrorResult(cancellation, failoverAttempts);
+  }
+
+  /**
+   * Logs a caller cancellation that ended the failover loop, once and at info level, and records any
+   * real failures that came before it on the prompt run.
+   */
+  private logFailoverCancellation(
+    prompt: MJAIPromptEntityExtended,
+    failoverAttempts: FailoverAttempt[],
+    promptRun?: MJAIPromptRunEntityExtended
+  ): void {
+    LogStatusEx({
+      message: `⏹️ Prompt "${prompt.Name}" was cancelled by the caller — not trying any further model candidates`,
+      category: 'AI',
+      additionalArgs: [{ promptId: prompt.ID, priorFailures: failoverAttempts.length }]
+    });
+    if (promptRun && failoverAttempts.length > 0) {
+      this.updatePromptRunWithFailoverFailure(promptRun, failoverAttempts);
+    }
   }
 
   /**
@@ -2266,10 +2397,12 @@ export abstract class BaseModelRunner {
         promptRun.Success = success;
         promptRun.Status = success ? 'Completed' : 'Failed';
 
-        applyResultFields(promptRun);
+        // The failover fields were set while the INSERT may still have been in flight, and its reload
+        // would have undone them: set them again here, after the reload.
+        this._pendingFailoverFields.get(promptRun)?.(promptRun);
+        this._pendingFailoverFields.delete(promptRun);
 
-        // Note: Failover tracking fields are now updated directly in executeModelWithFailover
-        // The promptRun entity already has the failover information set
+        applyResultFields(promptRun);
 
         // With template composition, we only execute once so rollup equals regular fields
         promptRun.TokensPromptRollup = promptRun.TokensPrompt;
