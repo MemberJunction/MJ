@@ -46,6 +46,19 @@
   overflow: visible;
 }
 
+/* Stepped (button) zoom only: the presets jump 11%, 25%, 33% between consecutive clicks, so the
+   transform eases for one step. The wheel/pinch and hold-to-zoom paths never carry this class —
+   a transition on a continuous gesture lags it. */
+.board-viewport--stepping {
+  transition: transform 180ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-viewport--stepping {
+    transition: none;
+  }
+}
+
 /* ---------- ink + connector svg layer ---------- */
 .ink-layer {
   position: absolute;

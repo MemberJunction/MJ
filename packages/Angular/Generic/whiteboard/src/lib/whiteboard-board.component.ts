@@ -167,6 +167,18 @@ const STARTER_MARKDOWN = '## New note\n\n- point one';
 
 /** Zoom presets stepped by the zoom cluster (25%–200%, matching the mockup's range). */
 const ZOOM_STEPS = [0.25, 0.5, 0.75, 0.9, 1, 1.25, 1.5, 2] as const;
+/**
+ * Wheel zoom reads the delta MAGNITUDE, capped per event: a mouse notch is ~100px, a trackpad
+ * pinch sample ~1–10px, so a pinch tracks finger travel instead of the hardware's sample rate.
+ */
+const WHEEL_ZOOM_DELTA_CAP_PX = 50;
+/** Tuned so one capped notch is exactly the familiar 10% step; a 5px trackpad sample is then ~1%. */
+const WHEEL_ZOOM_RATE = Math.log(1.1) / WHEEL_ZOOM_DELTA_CAP_PX;
+/** `deltaMode` → px: a line is ~16px (Firefox mouse wheel); a page is at least a full notch. */
+const WHEEL_LINE_PX = 16;
+const WHEEL_PAGE_PX = 800;
+/** How long the stepped (button) zoom's transform transition runs — wheel and hold-to-zoom never use it. */
+export const ZOOM_STEP_TRANSITION_MS = 180;
 const GRID_SIZE = 22;
 /** How long an agent-added item keeps its pop-in/flash class. */
 const POP_IN_MS = 3200;
@@ -275,6 +287,13 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   public PanX = 0;
   public PanY = 0;
   public Zoom = 0.9;
+  /**
+   * True for {@link ZOOM_STEP_TRANSITION_MS} after a stepped zoom (ZoomIn / ZoomOut), so the
+   * template can transition the transform for the BUTTON path only. The wheel and the
+   * hold-to-zoom tick path leave it false: a transition on a continuous gesture lags it.
+   */
+  public ViewportStepping = false;
+  private steppingTimer: ReturnType<typeof setTimeout> | null = null;
   public MinimapOpen = false;
 
   // transient interaction state
@@ -394,6 +413,10 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   }
 
   ngOnDestroy(): void {
+    if (this.steppingTimer) {
+      clearTimeout(this.steppingTimer);
+      this.steppingTimer = null;
+    }
     this.changedSub?.unsubscribe();
     for (const t of this.popInTimers) {
       clearTimeout(t);
@@ -1085,13 +1108,27 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   public OnWheel(event: WheelEvent): void {
     event.preventDefault();
-    if (event.ctrlKey || event.metaKey) {
-      const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+    // ctrlKey only: a trackpad pinch arrives as ctrl+wheel. metaKey used to zoom too, which made a
+    // Cmd+two-finger scroll zoom — and macOS momentum kept delivering events after the fingers
+    // lifted, so the zoom carried on by itself. Cmd-scroll now pans like a plain scroll.
+    if (event.ctrlKey) {
+      const px = this.wheelDeltaPx(event);
+      const clamped = Math.sign(px) * Math.min(Math.abs(px), WHEEL_ZOOM_DELTA_CAP_PX);
+      const factor = Math.exp(-clamped * WHEEL_ZOOM_RATE);
       this.zoomAt(this.clampZoom(this.Zoom * factor), event.clientX, event.clientY);
     }
     else {
       this.PanX -= event.deltaX;
       this.PanY -= event.deltaY;
+    }
+  }
+
+  /** `deltaY` in pixels whatever the event's `deltaMode` (0 px, 1 lines, 2 pages). */
+  private wheelDeltaPx(event: WheelEvent): number {
+    switch (event.deltaMode) {
+      case 1: return event.deltaY * WHEEL_LINE_PX;
+      case 2: return event.deltaY * WHEEL_PAGE_PX;
+      default: return event.deltaY;
     }
   }
 
@@ -1557,6 +1594,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   public ZoomIn(): void {
     const next = ZOOM_STEPS.find((z) => z > this.Zoom + 0.001);
+    this.flagSteppedZoom();
     this.zoomCentered(next ?? ZOOM_STEPS[ZOOM_STEPS.length - 1]);
   }
 
@@ -1574,7 +1612,21 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   public ZoomOut(): void {
     const lower = [...ZOOM_STEPS].reverse().find((z) => z < this.Zoom - 0.001);
+    this.flagSteppedZoom();
     this.zoomCentered(lower ?? ZOOM_STEPS[0]);
+  }
+
+  /** Arm the stepped-zoom transition; a second step within the window restarts the clock. */
+  private flagSteppedZoom(): void {
+    this.ViewportStepping = true;
+    if (this.steppingTimer) {
+      clearTimeout(this.steppingTimer);
+    }
+    this.steppingTimer = setTimeout(() => {
+      this.steppingTimer = null;
+      this.ViewportStepping = false;
+      this.cdr.markForCheck();
+    }, ZOOM_STEP_TRANSITION_MS);
   }
 
   /** Fit all content into the viewport (25%–200%, 60px padding). */
