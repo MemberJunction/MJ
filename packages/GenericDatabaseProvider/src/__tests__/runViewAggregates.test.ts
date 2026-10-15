@@ -19,7 +19,7 @@ vi.mock('@memberjunction/encryption', () => ({
     },
 }));
 
-import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
+import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
 import type { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '../saveTypes.js';
 import {
     CompositeKey,
@@ -64,7 +64,7 @@ const POSTGRES_BACKSLASH_STRING = "MAX(LENGTH('\\' || (SELECT 1) || '--'\n))";
  * `ExecuteSQL` records every statement and answers an aggregate query with `Agg_N = 100 + N` for
  * each `Agg_N` the statement selects, and every other query with no rows.
  */
-class AggregateTestProvider extends GenericDatabaseProviderTestBase {
+class AggregateTestProvider extends GenericDatabaseProvider {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
 
@@ -143,8 +143,8 @@ class AggregateTestProvider extends GenericDatabaseProviderTestBase {
     protected get Metadata(): IMetadataProvider { return this as unknown as IMetadataProvider; }
 }
 
-/** A readable entity with no row-level security, field-level security or external data source. */
-function widgetsEntity(deniedFields: string[] = []): EntityInfo {
+/** A readable entity with no row-level security or external data source. */
+function widgetsEntity(): EntityInfo {
     // `Database` is a real column whose name the keyword validator also treats as a keyword.
     const fields = ['ID', 'Name', 'Sequence', 'Database', 'BankAccount', 'Μισθός'].map((name) => ({ Name: name, CodeName: name }));
     const id = fields[0];
@@ -161,11 +161,9 @@ function widgetsEntity(deniedFields: string[] = []): EntityInfo {
         DatetimeFields: [],
         ExternalDataSourceID: null,
         UserViewMaxRows: 0,
-        EnableFieldLevelSecurity: deniedFields.length > 0,
-        GetDeniedReadFields: () => new Set(deniedFields.map((f) => f.toLowerCase())),
         HasBinaryFields: false,
         GetUserPermisions: () => ({ CanRead: true }),
-        GetEffectiveRowFilterWhereClause: () => '',
+        GetUserRowLevelSecurityWhereClause: () => '',
     } as unknown as EntityInfo;
 }
 
@@ -228,17 +226,18 @@ describe('GenericDatabaseProvider.RunViewCore — aggregate expressions', () => 
         ['BankAccount', 'Ban\u212AAccount'],
         // σ in place of the final ς.
         ['Μισθός', 'Μισθόσ'],
-    ])('an aggregate cannot read the field-security-denied column %s through a look-alike spelling of its name', async (column, lookAlike) => {
-        const provider = new AggregateTestProvider('sqlserver', [widgetsEntity([column])]);
+    ])('an aggregate never resolves a look-alike spelling of the column %s to that column', async (column, lookAlike) => {
+        const provider = new AggregateTestProvider('sqlserver', [widgetsEntity()]);
         const run = (expression: string) =>
             provider.RunViewsWithCacheCheck([{ params: { EntityName: ENTITY_NAME, BypassCache: true, Aggregates: [{ expression }] } }], user);
 
-        // Control: the exact spelling is refused by the field-security gate before any SQL runs.
+        // Control: the exact spelling resolves to the column.
         const plain = await run(`MAX([${column}])`);
-        expect(plain.results[0].status).toBe('error');
-        expect(provider.ExecutedSQL).toEqual([]);
+        expect(plain.results[0].aggregateResults?.[0].error).toBeUndefined();
+        expect(provider.ExecutedSQL.some((sql) => sql.includes(`MAX([${column}])`))).toBe(true);
 
-        // The gate does not see the look-alike spelling, so the rebuild must not resolve it to the column.
+        // The look-alike spelling is not a column name, so the rebuild must not resolve it to the column.
+        provider.ExecutedSQL.length = 0;
         const lookAlikeRun = await run(`MAX([${lookAlike}])`);
         expect(provider.ExecutedSQL.some((sql) => sql.includes(column))).toBe(false);
         expect(lookAlikeRun.results[0].aggregateResults?.[0].error).toMatch(/not a column/);

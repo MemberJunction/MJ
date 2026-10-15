@@ -15,6 +15,7 @@ export type { SchemaFieldType } from './sqlDialect.js';
 export { SQLServerDialect } from './sqlServerDialect.js';
 export { PostgreSQLDialect } from './postgresqlDialect.js';
 export { GetDialect } from './dialectFactory.js';
+export { IdentifierMatches } from './identifierReferences.js';
 export {
     IsBooleanSQLType,
     IsStringSQLType,

@@ -137,7 +137,8 @@ describe('ResolverBase RunView entry points — aggregate expressions', () => {
         expect(captured.params?.Aggregates).toEqual(aggregates);
     });
 
-    it('RunViews returns a failure result, and never reaches the provider, for a stacked aggregate', async () => {
+    // lts/5: a refused clause fails the whole RunViews batch (the resolver returns null) rather than one result.
+    it('RunViews fails the batch, and never reaches the provider, for a stacked aggregate', async () => {
         const captured: Captured = { params: null };
         const provider = fakeProvider(captured);
         const input = [{ EntityName: ENTITY_NAME, Aggregates: [{ expression: STACKED_AGGREGATE }] }] as Parameters<RunViewResolver['RunViews']>[0];
@@ -148,9 +149,7 @@ describe('ResolverBase RunView entry points — aggregate expressions', () => {
             undefined as unknown as PubSubEngine,
         );
 
-        expect(results).toHaveLength(1);
-        expect(results[0].Success).toBe(false);
-        expect(results[0].ErrorMessage).toMatch(/Invalid Aggregate: multiple statements/);
+        expect(results).toBeNull();
         expect(captured.params).toBeNull();
     });
 

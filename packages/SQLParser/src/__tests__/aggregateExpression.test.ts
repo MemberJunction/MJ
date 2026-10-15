@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { FindReferencedIdentifiers, PostgreSQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
+import { IdentifierMatches, PostgreSQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
 import { CheckAggregateExpression } from '../index.js';
 
 const ss = new SQLServerDialect();
@@ -227,9 +227,9 @@ function codeUnits(name: string): string {
     return Array.from(name, c => c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')).join(' ');
 }
 
-describe('CheckAggregateExpression — column names resolve by the field-security gate\'s rule', () => {
+describe('CheckAggregateExpression — column names resolve by IdentifierMatches', () => {
     it.each([
-        // U+212A KELVIN SIGN lower-cases to "k", but the field-security gate does not read it as "k".
+        // U+212A KELVIN SIGN lower-cases to "k", but IdentifierMatches does not read it as "k".
         ['BankAccount', 'Ban\u212AAccount'],
         // Full Unicode case mapping equates each of these with a letter of the column name.
         ['Μισθός', 'Μισθόσ'],
@@ -251,7 +251,7 @@ describe('CheckAggregateExpression — column names resolve by the field-securit
         expect(CheckAggregateExpression('SUM("name")', pg, ['Name', 'NAME']).Reason).toMatch(/more than one column/);
     });
 
-    it('never resolves a column that the field-security gate would not see in the expression', () => {
+    it('never resolves a column that IdentifierMatches does not match to the reference', () => {
         const unseen: string[] = [];
         for (const group of caseGroups()) {
             for (const written of group) {
@@ -259,7 +259,7 @@ describe('CheckAggregateExpression — column names resolve by the field-securit
                     for (const [reference, column] of [[`A${written}B`, `A${letter}B`], [`A${written}`, `A${letter}`]]) {
                         for (const [dialect, expression] of [[ss, `MAX([${reference}])`], [pg, `MAX("${reference}")`]] as const) {
                             const allowed = CheckAggregateExpression(expression, dialect, [column]).IsAllowed;
-                            if (allowed && FindReferencedIdentifiers(expression, [column]).length === 0) {
+                            if (allowed && !IdentifierMatches(reference, column)) {
                                 unseen.push(`${dialect.PlatformKey}: ${codeUnits(reference)} resolved to ${codeUnits(column)}`);
                             }
                         }

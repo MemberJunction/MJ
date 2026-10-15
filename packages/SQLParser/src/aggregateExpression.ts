@@ -108,7 +108,7 @@ type ASTNode = Record<string, unknown>;
  * @param expression The caller-supplied aggregate expression
  * @param dialect The dialect the expression runs under
  * @param columns The entity's column names (its base view's columns). A reference matches a column
- * by `IdentifierMatches` from `@memberjunction/sql-dialect`, the field-level security gate's rule.
+ * by `IdentifierMatches` from `@memberjunction/sql-dialect`.
  */
 export function CheckAggregateExpression(expression: string, dialect: SQLParserDialect, columns: Iterable<string>): AggregateExpressionCheck {
     if (typeof expression !== 'string' || expression.trim().length === 0) return refuse('it is empty');
@@ -380,9 +380,8 @@ class AggregateRenderer {
 
     /**
      * The entity column `name` refers to. Every column is compared with {@link IdentifierMatches},
-     * the rule the field-level security gate reports with, so a reference resolves only to a column
-     * the gate reports in the caller's text. An exact spelling only chooses between columns that
-     * both match.
+     * so a look-alike spelling never resolves to a column. An exact spelling only chooses between
+     * columns that both match.
      */
     private resolveColumn(name: string): string {
         const matches = this.columns.filter(column => IdentifierMatches(name, column));
