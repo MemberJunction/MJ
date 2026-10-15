@@ -8,7 +8,7 @@
  *   <mj-explorer-app></mj-explorer-app>
  */
 
-import { Component, OnInit, OnDestroy, Inject, Input, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector, ContentChildren, QueryList, TemplateRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, Input, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector, ContentChildren, QueryList, TemplateRef, viewChild } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
@@ -19,17 +19,20 @@ import {
   StandardUserInfo,
   AuthErrorType,
   AuthProviderCatalog,
+  LoginScreenLoader,
   MJ_AUTH_PROVIDER_RESOLUTION,
   type AuthProviderResolution
 } from '@memberjunction/ng-auth-services';
+import { LoginDesignTokens, LoginThemeTokens, type LoginBlock, type LoginDesign, type LoginRegion, type PublicLoginScreen, type ThemeLogos } from '@memberjunction/theme-engine';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
-import { SystemValidationService, ServerConnectivityService } from '@memberjunction/ng-explorer-core';
+import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent } from '@memberjunction/ng-explorer-core';
 import { NavigationService, AgentContextUpdate, RecordSourceContext } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService, RealtimeSessionService } from '@memberjunction/ng-conversations';
+import { EnableChannelFrameCapture } from '@memberjunction/ng-realtime-channels';
 import { ApplicationManager, WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { AppContextSnapshot, ClientToolMetadata } from '@memberjunction/ai-core-plus';
 import { InstanceConfigEngine } from '@memberjunction/core-entities';
@@ -38,6 +41,12 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJ_PRE_SHELL_GUARD, PreShellGuard } from './pre-shell-guard';
 import { MJLoginSlotDirective, type MJLoginSlotName } from './login-slot.directive';
 import type { MJLoginCard, MJLoginLayout } from './login-screen.types';
+/** Owner key of Explorer's always-available client tools in the realtime ContextTool registry. */
+const REALTIME_GLOBAL_TOOL_OWNER = 'explorer.global';
+
+/** Owner key of the active surface's client tools in the realtime ContextTool registry (replaced on every surface change, cleared on an app switch). */
+const REALTIME_SURFACE_TOOL_OWNER = 'explorer.surface';
+
 import { CarryAdditionalContext, SurfaceContextTracker } from './app-context-snapshot';
 
 /**
@@ -133,11 +142,10 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * Extra content for the login screen expressed as data rather than markup — a support route, a
    * trust mark, a policy link. Each card names the region it belongs to (see {@link MJLoginCard}).
    *
-   * This is the channel a *configured* deployment uses: nothing about the login screen can come
-   * from MJ metadata, because the screen renders before any authenticated call is possible (the
-   * only pre-auth server surface is the allow-listed public provider catalog). A host that keeps
-   * per-tenant branding somewhere resolves it itself — as Explorer already resolves the provider
-   * catalog before bootstrap — and binds it here.
+   * This is the channel a *configured* deployment uses from code. A host that keeps per-tenant
+   * branding somewhere resolves it itself — as Explorer already resolves the provider catalog before
+   * bootstrap — and binds it here. A design published in Login Studio is the data-driven route
+   * instead: see {@link PublishedLoginScreen}.
    *
    * A host that needs richer content than a card projects a template into the region's slot
    * instead, which takes over from the cards there.
@@ -158,6 +166,58 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    */
   public LoginSlotTemplate(name: MJLoginSlotName): TemplateRef<unknown> | null {
     return this.loginSlotChildren?.find((s) => s.SlotName === name)?.Template ?? null;
+  }
+
+  /**
+   * Draw the default theme's published sign-in page (Login Studio) and wear its brand colors before
+   * sign-in. A published design wins over {@link LoginLayout}, {@link LoginBannerAlignment} and
+   * {@link LoginHeading}, and over {@link LoginCards} in a region it fills; a host's `mjLoginSlot`
+   * templates still win over it, region by region. Set false to keep the login screen exactly as this host's inputs and CSS draw it.
+   * @since 6.2.0
+   */
+  @Input() UsePublishedLoginScreen = true;
+
+  /**
+   * The default theme's published sign-in page (`GET /auth/login-screen`), or `null` while it loads,
+   * when there is none, when the server predates the route, or when {@link UsePublishedLoginScreen} is off.
+   * @since 6.2.0
+   */
+  public PublishedLoginScreen: PublicLoginScreen | null = null;
+
+  /**
+   * The default theme's brand and the published design's `--mj-login-*` tokens, on the login wrapper
+   * only: it exists while signed out, so it cannot race the user's own theme applied after sign-in.
+   */
+  public LoginDesignStyle: Record<string, string> = {};
+
+  public get LoginDesign(): LoginDesign | null {
+    return this.PublishedLoginScreen?.Design ?? null;
+  }
+
+  /** A published region's blocks, or `null` when the design leaves that region to the stock content. */
+  public LoginDesignBlocks(region: LoginRegion): readonly LoginBlock[] | null {
+    const blocks = this.LoginDesign?.Regions[region];
+    return blocks?.length ? blocks : null;
+  }
+
+  public get LoginLogos(): ThemeLogos {
+    return this.PublishedLoginScreen?.Logos ?? {};
+  }
+
+  public get LoginBrandName(): string | null {
+    return this.PublishedLoginScreen?.ThemeName ?? null;
+  }
+
+  public get EffectiveLoginLayout(): MJLoginLayout {
+    return this.LoginDesign?.Layout ?? this.LoginLayout;
+  }
+
+  public get EffectiveLoginAlignment(): 'start' | 'center' {
+    return this.LoginDesign?.Alignment ?? this.LoginBannerAlignment;
+  }
+
+  public get EffectiveLoginHeading(): string | null {
+    return this.LoginDesign ? this.LoginDesign.Heading : this.LoginHeading;
   }
 
   /** Cards configured for the story panel. */
@@ -282,19 +342,24 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   /** Shell-header height in pixels — matches `.shell-header { height: 60px }`. */
   private static readonly SHELL_HEADER_PX = 60;
 
+  /** The offline banner above the shell header; absent until the shell renders. */
+  private readonly connectivityBanner = viewChild(ServerConnectivityBannerComponent);
+
   /**
    * Top boundary (in px) the chat overlay bubble cannot be dragged past. The
    * shell-header is 60px tall, but if the server-connectivity banner is showing
-   * it sits above the shell-header and pushes everything down. The banner
-   * component publishes its height to `--mj-connectivity-banner-height` on
-   * `<html>`, so we add it in. Re-evaluated on every change-detection pass —
-   * Angular's animation events fire CD when the banner show/hides finish.
+   * it sits above the shell-header and pushes everything down, so we add its
+   * height in.
+   *
+   * The height is read from the banner's `HeightPx` signal, never from the DOM.
+   * The banner publishes it from an animation-done listener that can fire while
+   * views are refreshing; a DOM read is invisible to change detection, so this
+   * binding went stale and dev mode reported NG0100 on every later pass
+   * (MJ #4377). A signal read registers this view as a consumer, so the write
+   * re-refreshes it.
    */
   public get ChatOverlayTopBoundaryPx(): number {
-    const bannerHeight = parseFloat(
-      getComputedStyle(document.documentElement).getPropertyValue('--mj-connectivity-banner-height')
-    ) || 0;
-    return MJExplorerAppComponent.SHELL_HEADER_PX + bannerHeight;
+    return MJExplorerAppComponent.SHELL_HEADER_PX + (this.connectivityBanner()?.HeightPx() ?? 0);
   }
 
   private destroy$ = new Subject<void>();
@@ -604,6 +669,11 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   ngOnInit() {
     SetProductionStatus(this.environment.production);
 
+    // Explorer opts in to letting a realtime agent SEE interactive components (a picture of the component, sent only while
+    // the user allows pixels and the model has a video track). Registered before any session is minted: whether the
+    // channel can source video is decided at mint. Hosts that do not call this keep state-only perception.
+    EnableChannelFrameCapture();
+
     // Check if this is the OAuth callback route - used for conditional rendering in template
     // Note: We still run setupAuth() to restore the user's session
     this.IsOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
@@ -641,7 +711,10 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     // Track active app changes for AI agent context awareness
     this.appManager.ActiveApp
       .pipe(takeUntil(this.destroy$))
-      .subscribe(() => this.updateAppContext());
+      .subscribe(() => {
+        this.clearStaleSurfaceTools();
+        void this.updateAppContext();
+      });
 
     // Track tab changes for active nav item context
     this.workspaceState.Configuration
@@ -655,6 +728,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
     // Apply saved or OS-preferred theme for the login page
     this.applyLoginTheme();
+
+    // The sign-in page published in Login Studio, and the default theme's brand under it
+    void this.loadPublishedLoginScreen();
 
     // Re-apply login theme when the user logs out (ThemeService.Reset() clears data-theme)
     this.AuthBase.isAuthenticated()
@@ -860,13 +936,19 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
 
       // Mirror the surface tools into the realtime session so the co-agent's ContextTool proxy can
-      // execute them client-side — MERGED with the always-available global tools (NavigateToApp,
-      // NavigateToRecord, …) so the co-agent can navigate AND drive the current surface. The voice
-      // model reads results as text, so their images (Media) are left out; the text chat keeps them.
-      this.realtimeSession.RegisterAppClientTools([
-        ...this.globalAgentTools,
-        ...update.AgentClientTools.map(t => ({ Name: t.Name, Handler: async (params: Record<string, unknown>) => WithoutMedia(await t.Handler(params)) })),
-      ]);
+      // execute them client-side. They are registered under THEIR OWN owner key, so this replaces only
+      // the surface's tools — the always-available globals (NavigateToApp, NavigateToRecord, …) live
+      // under another owner and stay put, with no merge to forget — and an empty set clears just the surface.
+      this.activeDashboardToolsAppId = this.appManager.GetActiveApp()?.ID ?? null;
+      this.realtimeSession.RegisterAppClientTools(
+        update.AgentClientTools.map(t => ({
+          Name: t.Name,
+          Handler: async (params: Record<string, unknown>) => WithoutMedia(await t.Handler(params)),
+          Description: t.Description,
+          InputSchema: t.ParameterSchema,
+        })),
+        REALTIME_SURFACE_TOOL_OWNER
+      );
 
       // PERSIST the active surface's capability manifest (names + schemas, no handlers) so EVERY
       // snapshot (re)build merges it on top of the globals — not just this immediate update. Without
@@ -916,6 +998,34 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   /** Names of currently registered dashboard-specific tools (for cleanup on switch) */
   private activeDashboardToolNames: string[] = [];
+
+  /** The app that was active when the current surface registered its tools — the key to telling a
+   *  surface's tools from a previous app's once the user switches apps. */
+  private activeDashboardToolsAppId: string | null = null;
+
+  /**
+   * Drops the previous app's surface tools when the user switches apps.
+   *
+   * A surface registers its tools when it loads and nothing unregistered them when the user left it, so
+   * after an app switch the co-agent was still offered (and could run) tools of a screen that is no
+   * longer there — until the new surface happened to register its own. They are cleared from the async
+   * agent client, the realtime ContextTool registry and the streamed capability manifest alike. A
+   * surface that already registered for the NEW app is left alone (its recorded app id matches).
+   */
+  private clearStaleSurfaceTools(): void {
+    const activeAppId = this.appManager.GetActiveApp()?.ID ?? null;
+    const hasSurfaceTools = this.activeDashboardToolNames.length > 0 || this.activeDashboardToolManifest.length > 0;
+    if (!hasSurfaceTools || this.activeDashboardToolsAppId === activeAppId) {
+      return;
+    }
+    for (const toolName of this.activeDashboardToolNames) {
+      this.agentClient.UnregisterTool(toolName);
+    }
+    this.activeDashboardToolNames = [];
+    this.activeDashboardToolManifest = [];
+    this.activeDashboardToolsAppId = null;
+    this.realtimeSession.UnregisterAppClientTools(REALTIME_SURFACE_TOOL_OWNER);
+  }
 
   /** Capability manifest (names + schemas) of the active surface's tools, persisted so it can be
    *  merged into every snapshot (re)build — see handleAgentContextUpdate for why. */
@@ -1177,9 +1287,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
     });
 
-    // Make the global tools available to the realtime co-agent's ContextTool from the start
-    // (handleAgentContextUpdate later merges in the active surface's tools).
-    this.realtimeSession.RegisterAppClientTools(this.globalAgentTools);
+    // Make the global tools available to the realtime co-agent's ContextTool from the start, under their
+    // own owner key (handleAgentContextUpdate registers the active surface's tools under another).
+    this.realtimeSession.RegisterAppClientTools(this.globalAgentTools, REALTIME_GLOBAL_TOOL_OWNER);
   }
 
   /**
@@ -1297,6 +1407,24 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     this.applyThemeToDOM();
   }
 
+  /** Loads the published sign-in page (usually already fetched by the app's bootstrap preload). */
+  private async loadPublishedLoginScreen(): Promise<void> {
+    if (!this.UsePublishedLoginScreen) return;
+    const screen = await LoginScreenLoader.Load(this.environment.GRAPHQL_URI);
+    if (!screen) return;
+    this.PublishedLoginScreen = screen;
+    this.refreshLoginStyle();
+    this.cdr.detectChanges();
+  }
+
+  /** The brand's stock mapping differs by color mode, so this follows the login screen's theme toggle. */
+  private refreshLoginStyle(): void {
+    const screen = this.PublishedLoginScreen;
+    this.LoginDesignStyle = screen
+      ? { ...LoginThemeTokens(screen.Seeds, this.IsDarkMode), ...LoginDesignTokens(screen.Design) }
+      : {};
+  }
+
   /**
    * Set or remove the data-theme attribute on the document root
    */
@@ -1306,6 +1434,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     } else {
       this.Document.documentElement.removeAttribute('data-theme');
     }
+    this.refreshLoginStyle();
   }
 
   /**

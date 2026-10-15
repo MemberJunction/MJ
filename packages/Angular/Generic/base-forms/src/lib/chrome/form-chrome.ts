@@ -130,6 +130,24 @@ export function SlotChromeGroup(slot: string | null | undefined): 'details' | nu
     return key === 'before-fields' || key === 'after-fields' ? 'details' : null;
 }
 
+/**
+ * The rail item a contribution falls into when it claims no section: the slot's group, unless
+ * the contribution declared an L1 `inclusion` of its own.
+ *
+ * The slot is a default — "nothing more specific says" — and a declared inclusion is more
+ * specific. `'Primary'` asks for a first-class rail item in the lead band before Details, `'More'`
+ * for the overflow folder, `'None'` for nothing at all; each is honoured downstream from the
+ * inclusion map. Filing such a contribution into Details here would pin it there, and a pin
+ * outranks the inclusion, so an Overview declared `Primary` at `before-fields` would vanish into
+ * the tab it was meant to lead.
+ */
+export function DefaultContributionChromeGroup(
+    slot: string | null | undefined,
+    declaresInclusion: boolean,
+): 'details' | null {
+    return declaresInclusion ? null : SlotChromeGroup(slot);
+}
+
 /** Enough of a rendered section to decide which rail item it belongs to. */
 export interface ChromeSectionShape {
     Variant?: string;

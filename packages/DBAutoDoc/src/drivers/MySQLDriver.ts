@@ -6,6 +6,7 @@
 import mysql from 'mysql2/promise';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAutoDocDriver } from './BaseAutoDocDriver.js';
+import { MYSQL_INDEX_QUERY, MySQLIndexRow, MapMySQLIndexRows } from './IndexCatalog.js';
 import {
   AutoDocSchema,
   AutoDocTable,
@@ -18,7 +19,8 @@ import {
   AutoDocSchemaFilter,
   AutoDocTableFilter,
   AutoDocColumnStatistics,
-  AutoDocExistingDescription
+  AutoDocExistingDescription,
+  AutoDocIndex
 } from '../types/driver.js';
 
 /**
@@ -46,12 +48,10 @@ export class MySQLDriver extends BaseAutoDocDriver {
       waitForConnections: true,
       queueLimit: 0,
       enableKeepAlive: true,
-      keepAliveInitialDelay: 0,
-      // MySQL 8+ requires explicit configuration
-      authPlugins: {
-        mysql_native_password: () => () => Buffer.from(''),
-        caching_sha2_password: () => () => Buffer.from('')
-      }
+      keepAliveInitialDelay: 0
+      // No authPlugins override: mysql2 implements mysql_native_password and caching_sha2_password
+      // itself. The previous override answered both with an empty buffer, so the password was never
+      // sent and every password-protected MySQL 8 login failed ("using password: NO").
     };
   }
 
@@ -272,6 +272,17 @@ export class MySQLDriver extends BaseAutoDocDriver {
       precision: row.precision != null ? row.precision : undefined,
       scale: row.scale != null ? row.scale : undefined
     }));
+  }
+
+  /**
+   * Get every existing index on the tables of one schema (primary-key indexes included).
+   */
+  public async GetIndexes(schemaName: string): Promise<AutoDocIndex[]> {
+    const result = await this.executeQuery<MySQLIndexRow>(MYSQL_INDEX_QUERY, 3, [schemaName]);
+    if (!result.success) {
+      throw new Error(`Failed to read indexes for schema ${schemaName}: ${result.errorMessage}`);
+    }
+    return MapMySQLIndexRows(result.data ?? []);
   }
 
   public async getExistingDescriptions(
@@ -918,3 +929,4 @@ export class MySQLDriver extends BaseAutoDocDriver {
     return [parts[0], parts[1]];
   }
 }
+

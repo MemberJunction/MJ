@@ -31,6 +31,7 @@ import { CreatePromptDialogComponent } from "./AIAgents/create-prompt-dialog.com
 import { CreateSubAgentDialogComponent } from "./AIAgents/create-sub-agent-dialog.component";
 import { AIAgentManagementService } from "./AIAgents/ai-agent-management.service";
 import { AgentsModule } from "@memberjunction/ng-agents";
+import { ArtifactsModule } from "@memberjunction/ng-artifacts";
 import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
 import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
 import { TestingModule } from "@memberjunction/ng-testing";
@@ -42,6 +43,7 @@ import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
 import { MJAIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
 import { ChatMessageViewerComponent } from "./AIPromptRuns/chat-message-viewer.component";
+import { PromptRunDataCaptureNoteComponent } from "./AIPromptRuns/prompt-run-data-capture-note.component";
 import { MJActionFormComponentExtended } from "./Actions/action-form.component";
 import { MJActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
 import { ActionsModule } from "@memberjunction/ng-actions";
@@ -135,6 +137,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         EntitySelectorDialogComponent,
         MJAIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
+        PromptRunDataCaptureNoteComponent,
         MJActionFormComponentExtended,
         MJActionExecutionLogFormComponentExtended,
         MJAIAgentRunFormComponentExtended,
@@ -190,6 +193,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         MLModelFormComponentExtended,
     ],
     imports: [
+    ArtifactsModule,
         CommonModule,
         RubricsModule,
         RubricAuthorPanel,
@@ -261,6 +265,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         MJAIAgentFormComponentExtended,
         MJAIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
+        PromptRunDataCaptureNoteComponent,
         MJActionFormComponentExtended,
         MJActionExecutionLogFormComponentExtended,
         MJAIAgentRunFormComponentExtended,

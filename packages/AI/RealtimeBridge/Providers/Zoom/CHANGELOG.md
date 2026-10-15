@@ -1,5 +1,50 @@
 # @memberjunction/ai-bridge-zoom
 
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- b73b878: The Zoom, Microsoft Teams, Google Meet, Cisco Webex, Discord and Slack rows in `MJ: AI Bridge Providers` no longer claim `VideoIn`, `VideoOut`, `ScreenIn` or `ScreenOut`. Their drivers carry audio only: no video or screen frames come in, and `video-out` and `screen-out` frames are dropped. Each driver's tests now read its row from `metadata/` and check that it claims exactly the media tracks the driver carries. The rows' descriptions no longer promise full AV, the file's status note and the Loopback description are current, and every row's `SupportedFeatures` is a JSON object instead of an escaped string, as `metadata/CLAUDE.md` asks; `mj sync push` stores it pretty-printed, with the same parsed value. Once the push applies the rows, Explorer's provider form and the realtime dashboard show those six bridges without video or screen. Minor because the rows are metadata.
+
+### Patch Changes
+
+- Updated dependencies [a709bb6]
+- Updated dependencies [432cb73]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [1da00cb]
+- Updated dependencies [acf0f5b]
+- Updated dependencies [b699a37]
+- Updated dependencies [49f26d9]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [7316ac3]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [69bf67c]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/ai-bridge-base@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes

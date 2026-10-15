@@ -2,41 +2,11 @@ import { GeminiLLM } from '@memberjunction/ai-gemini';
 import { GoogleGenAI } from '@google/genai';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLLM } from '@memberjunction/ai';
+import { ParseVertexAICredentials, VertexKeySourceOf, type VertexAICredentials, type VertexKeySource } from '../vertexCredentials';
+import { VertexGenAIOptions } from '../vertexAuthClient';
 
-/**
- * Credentials format for Vertex AI authentication
- *
- * This interface supports four authentication methods:
- * 1. Application Default Credentials (ADC) - Just provide project and location
- * 2. Service Account JSON String - Provide serviceAccountJson with full JSON as string
- * 3. Service Account JSON Inline - Provide full service account fields directly
- * 4. Key File Path - Provide path to service account JSON file
- */
-export interface VertexAICredentials {
-  /** GCP Project ID (required) */
-  project: string;
-
-  /** GCP Location/Region (default: 'us-central1') */
-  location?: string;
-
-  // Option 2: Service account JSON as string (from credential schema)
-  serviceAccountJson?: string;
-
-  // Option 3: Full service account JSON fields (inline)
-  type?: 'service_account';
-  project_id?: string;
-  private_key_id?: string;
-  private_key?: string;
-  client_email?: string;
-  client_id?: string;
-  auth_uri?: string;
-  token_uri?: string;
-  auth_provider_x509_cert_url?: string;
-  client_x509_cert_url?: string;
-
-  // Option 4: Key file path reference
-  keyFilePath?: string;
-}
+// The credential shapes moved to ../vertexCredentials (shared with the realtime driver); this module still exports the type.
+export type { VertexAICredentials } from '../vertexCredentials';
 
 /**
  * VertexLLM - Google Vertex AI implementation
@@ -84,7 +54,8 @@ export interface VertexAICredentials {
  * }));
  *
  * @example
- * // Option 4: Key file path reference
+ * // Option 4: Key file path reference. Honoured only when this JSON is the platform's environment key
+ * // (AI_VENDOR_API_KEY__VertexLLM); any other key that names a key file is refused when the client is created.
  * const llm = new VertexLLM(JSON.stringify({
  *   keyFilePath: '/path/to/service-account.json',
  *   project: 'my-project',
@@ -94,6 +65,8 @@ export interface VertexAICredentials {
 @RegisterClass(BaseLLM, "VertexLLM")
 export class VertexLLM extends GeminiLLM {
   private _credentials: VertexAICredentials;
+  /** Whether the key is the platform's environment key (`AI_VENDOR_API_KEY__VertexLLM`), the only key that may name a key file. */
+  private _keySource: VertexKeySource;
 
   /** Thought signatures minted by Vertex AI do not validate on Google AI Studio, and vice versa. */
   protected override get ThoughtSignatureEndpoint(): string {
@@ -105,58 +78,23 @@ export class VertexLLM extends GeminiLLM {
    *
    * @param credentialsJson - JSON string containing Vertex AI credentials.
    *   Must include at minimum: { project: 'id', location?: 'region' }
-   *   Can include full service account JSON or keyFilePath for authentication.
+   *   Can include full service account JSON or keyFilePath for authentication (keyFilePath only in the
+   *   environment key, AI_VENDOR_API_KEY__VertexLLM).
    *
    *   If neither service account fields nor keyFilePath are provided,
    *   will use Application Default Credentials (ADC).
    */
   constructor(credentialsJson: string) {
-    // Parse credentials
-    let credentials: VertexAICredentials;
-    try {
-      credentials = JSON.parse(credentialsJson);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Invalid Vertex AI credentials JSON: ${message}`);
-    }
-
-    // If serviceAccountJson is provided as a string, parse it and merge with credentials
-    if (credentials.serviceAccountJson) {
-      try {
-        const serviceAccount = JSON.parse(credentials.serviceAccountJson);
-        // Merge service account fields into credentials (serviceAccountJson fields take precedence)
-        credentials = {
-          ...credentials,
-          ...serviceAccount,
-          // Keep top-level project and location if they exist
-          project: credentials.project || serviceAccount.project_id,
-          location: credentials.location
-        };
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        throw new Error(`Invalid serviceAccountJson: ${message}`);
-      }
-    }
-
-    // Validate required fields
-    if (!credentials.project && !credentials.project_id) {
-      throw new Error('Vertex AI credentials must include "project" or "project_id"');
-    }
-
-    // Use project_id if provided, otherwise use project
-    const projectId = credentials.project_id || credentials.project;
-    const location = credentials.location || 'us-central1';
-
-    // Normalize credentials
-    credentials.project = projectId;
-    credentials.location = location;
+    // Parse and normalize the credentials (project and location always set); throws on a malformed key.
+    const credentials = ParseVertexAICredentials(credentialsJson);
 
     // Call parent constructor with project ID (BaseLLM stores this as apiKey)
-    super(projectId);
+    super(credentials.project);
 
     // Set credentials after super() call
     // Parent constructor doesn't initialize the client, so this is safe
     this._credentials = credentials;
+    this._keySource = VertexKeySourceOf('VertexLLM', credentialsJson);
   }
 
   /**
@@ -166,52 +104,9 @@ export class VertexLLM extends GeminiLLM {
    * The rest of the functionality (chat, streaming, etc.) remains identical.
    */
   protected async createClient(): Promise<GoogleGenAI> {
-    // Build Vertex AI config
-    const config: {
-      vertexai: boolean;
-      project: string;
-      location: string;
-      googleAuthOptions?: {
-        keyFile?: string;
-        credentials?: Record<string, string>;
-      };
-    } = {
-      vertexai: true,
-      project: this._credentials.project,
-      location: this._credentials.location
-    };
-
-    // If keyFilePath is provided, configure file-based auth
-    if (this._credentials.keyFilePath) {
-      config.googleAuthOptions = {
-        keyFile: this._credentials.keyFilePath
-      };
-    }
-    // If full service account JSON is provided, use inline credentials
-    else if (this._credentials.type === 'service_account' && this._credentials.private_key) {
-      config.googleAuthOptions = {
-        credentials: {
-          type: this._credentials.type,
-          project_id: this._credentials.project_id || this._credentials.project,
-          private_key_id: this._credentials.private_key_id || '',
-          private_key: this._credentials.private_key,
-          client_email: this._credentials.client_email || '',
-          client_id: this._credentials.client_id || '',
-          auth_uri: this._credentials.auth_uri || 'https://accounts.google.com/o/oauth2/auth',
-          token_uri: this._credentials.token_uri || 'https://oauth2.googleapis.com/token',
-          auth_provider_x509_cert_url: this._credentials.auth_provider_x509_cert_url || 'https://www.googleapis.com/oauth2/v1/certs',
-          client_x509_cert_url: this._credentials.client_x509_cert_url || ''
-        }
-      };
-    }
-    // Otherwise, use Application Default Credentials (ADC)
-    // This will look for:
-    // 1. GOOGLE_APPLICATION_CREDENTIALS environment variable pointing to key file
-    // 2. gcloud auth application-default login credentials
-    // 3. GCE/GKE/Cloud Run service account (when running in Google Cloud)
-
-    // Create Vertex AI client with the configured options
-    return new GoogleGenAI(config);
+    // An inline service account (a JWT client), a key file (only from the environment key), or Application Default
+    // Credentials. A key that names a key file and is not the environment key is refused here (VertexCredentialsError).
+    return new GoogleGenAI(await VertexGenAIOptions(this._credentials, this._keySource));
   }
 
   /**
