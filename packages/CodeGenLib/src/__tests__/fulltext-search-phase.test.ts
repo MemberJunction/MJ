@@ -16,7 +16,7 @@ import type { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
  */
 
 // ─── Metadata write-back capture ─────────────────────────────────────────
-// generateEntityFullTextSearchSQL persists the function name through
+// GenerateEntityFullTextSearchSQL persists the function name through
 // Metadata/UserCache. Both are replaced so the write-back is observable
 // without a database or a provider.
 const writeBack = vi.hoisted(() => {
@@ -146,7 +146,7 @@ class CodeGenProbe extends SQLCodeGenBase {
         functionName: 'fn_search_test_entity',
     };
 
-    public override async generateEntityFullTextSearchSQL(
+    public override async GenerateEntityFullTextSearchSQL(
         _pool: CodeGenConnection,
         _entity: EntityInfo
     ): Promise<{ sql: string; functionName: string }> {
@@ -344,13 +344,13 @@ describe('PostgreSQL full-text search phase', () => {
     });
 
     // ─── FTS-2: the recorded function name is the provider's ─────────────
-    describe('generateEntityFullTextSearchSQL function-name write-back', () => {
+    describe('GenerateEntityFullTextSearchSQL function-name write-back', () => {
         it('heals a name stamped with another platform\'s scheme', async () => {
             const codeGen = new SQLCodeGenBase();
             codeGen.DBProvider = provider;
             const entity = makeEntity({ FullTextSearchFunction: 'fnSearchTestEntity' });
 
-            const result = await codeGen.generateEntityFullTextSearchSQL(NO_POOL, entity);
+            const result = await codeGen.GenerateEntityFullTextSearchSQL(NO_POOL, entity);
 
             // The provider's name — fn_search_<snake(BaseTable)> — is what PG creates.
             expect(result.functionName).toBe('fn_search_test_entity');
@@ -363,7 +363,7 @@ describe('PostgreSQL full-text search phase', () => {
             const codeGen = new SQLCodeGenBase();
             codeGen.DBProvider = provider;
 
-            await codeGen.generateEntityFullTextSearchSQL(NO_POOL, makeEntity());
+            await codeGen.GenerateEntityFullTextSearchSQL(NO_POOL, makeEntity());
 
             expect(writeBack.record.saveCount).toBe(1);
             expect(writeBack.record.savedName).toBe('fn_search_test_entity');
@@ -374,7 +374,7 @@ describe('PostgreSQL full-text search phase', () => {
             codeGen.DBProvider = provider;
             const entity = makeEntity({ FullTextSearchFunction: 'fn_search_test_entity' });
 
-            await codeGen.generateEntityFullTextSearchSQL(NO_POOL, entity);
+            await codeGen.GenerateEntityFullTextSearchSQL(NO_POOL, entity);
 
             expect(writeBack.record.saveCount).toBe(0);
         });
@@ -386,7 +386,7 @@ describe('PostgreSQL full-text search phase', () => {
                 { RoleSQLName: 'mj_reader', CanRead: true },
             ]);
 
-            const result = await codeGen.generateEntityFullTextSearchSQL(NO_POOL, entity);
+            const result = await codeGen.GenerateEntityFullTextSearchSQL(NO_POOL, entity);
 
             expect(result.sql).toContain('CREATE OR REPLACE FUNCTION "__mj"."fn_search_test_entity"');
             expect(result.sql).toContain('GRANT EXECUTE ON FUNCTION "__mj"."fn_search_test_entity"');

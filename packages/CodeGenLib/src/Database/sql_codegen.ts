@@ -1012,7 +1012,7 @@ export class SQLCodeGenBase {
         let ftsSQL = '';
         if (entity.FullTextSearchEnabled && !entity.VirtualEntity) {
             try {
-                const ft = await this.generateEntityFullTextSearchSQL(pool, entity);
+                const ft = await this.GenerateEntityFullTextSearchSQL(pool, entity);
                 ftsSQL = ft.sql;
             } catch (e) {
                 return {
