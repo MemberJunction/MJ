@@ -272,41 +272,6 @@ describe('MJDataContextItemEntityServer — who may write SQL', () => {
         });
     });
 
-    describe('an existing item whose Type or SQL was not loaded', () => {
-        it('REJECTS a non-Owner moving an item whose Type and SQL were not loaded', async () => {
-            const item = await loadedItem(USER, { ID: ITEM_ID, DataContextID: DATA_CONTEXT_ID });
-            item.DataContextID = OTHER_DATA_CONTEXT_ID;
-
-            expect(item.GetFieldByName('Type')?.NotLoaded).toBe(true);
-            expect(sqlRefusals(item)).toHaveLength(1);
-        });
-
-        it('REJECTS a non-Owner changing an item whose SQL was not loaded, even when its Type was', async () => {
-            const item = await loadedItem(USER, { ID: ITEM_ID, DataContextID: DATA_CONTEXT_ID, Type: 'view' });
-            item.Description = 'Renamed';
-
-            expect(sqlRefusals(item)).toHaveLength(1);
-        });
-
-        it('REFUSES a non-Owner\'s ReplayOnly save of an item whose Type and SQL were not loaded', async () => {
-            const recorder = recordingProvider();
-            const item = await loadedItem(USER, { ID: ITEM_ID, DataContextID: DATA_CONTEXT_ID }, recorder.Provider);
-            item.DataContextID = OTHER_DATA_CONTEXT_ID;
-
-            const saved = await item.Save(replayOnly());
-
-            expect(saved).toBe(false);
-            expect(recorder.Saves).toEqual([]);
-        });
-
-        it('ALLOWS an Owner to change an item whose Type and SQL were not loaded', async () => {
-            const item = await loadedItem(ADMINISTRATOR, { ID: ITEM_ID, DataContextID: DATA_CONTEXT_ID });
-            item.DataContextID = OTHER_DATA_CONTEXT_ID;
-
-            expect(sqlRefusals(item)).toEqual([]);
-        });
-    });
-
     describe('ReplayOnly saves, which skip Validate()', () => {
         it('REFUSES a non-Owner\'s ReplayOnly save of a SQL item before it reaches the provider', async () => {
             const recorder = recordingProvider();

@@ -1,6 +1,6 @@
 import { BaseEntity, BaseEntityResult, EntitySaveOptions, UserInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { MJDataContextItemEntity, MJDataContextItemEntityType } from '@memberjunction/core-entities';
+import { MJDataContextItemEntity } from '@memberjunction/core-entities';
 
 /**
  * Server-side `MJ: Data Context Items` entity. The SQL of a `sql` item runs when its data context is
@@ -9,20 +9,13 @@ import { MJDataContextItemEntity, MJDataContextItemEntityType } from '@memberjun
  * stay writable as before.
  *
  * The rule reads the item's values, not which fields changed, because this entity does not track
- * record changes and a client's `OldValues___` can decide what looks changed. A non-Owner's save of an
- * existing item whose `Type` or `SQL` was not loaded is refused as well: those columns keep their
- * stored values on save, and the stored item may be a SQL item.
+ * record changes and a client's `OldValues___` can decide what looks changed. `ResolverBase.UpdateRecord`
+ * always loads the stored row for this entity, so `Type` and `SQL` hold their stored values.
  */
 @RegisterClass(BaseEntity, 'MJ: Data Context Items')
 export class MJDataContextItemEntityServer extends MJDataContextItemEntity {
     private static readonly SQL_WRITE_REFUSED =
         'Only an administrator (Owner-type user) may save a data context item that holds SQL, because that SQL runs against the database.';
-
-    private static readonly SQL_NOT_LOADED_REFUSED =
-        'Only an administrator (Owner-type user) may save a data context item whose Type and SQL were not loaded, because the stored item may hold SQL.';
-
-    /** The columns that decide whether an item holds SQL. */
-    private static readonly SQL_COLUMNS: ReadonlyArray<keyof MJDataContextItemEntityType> = ['Type', 'SQL'];
 
     public override Validate(): ValidationResult {
         const result = super.Validate();
@@ -48,15 +41,7 @@ export class MJDataContextItemEntityServer extends MJDataContextItemEntity {
         if (this.callerIsOwner()) {
             return null;
         }
-        if (this.sqlColumnsNotLoaded()) {
-            return MJDataContextItemEntityServer.SQL_NOT_LOADED_REFUSED;
-        }
         return this.holdsSQL() ? MJDataContextItemEntityServer.SQL_WRITE_REFUSED : null;
-    }
-
-    /** True when this is an existing item whose `Type` or `SQL` was not loaded. */
-    private sqlColumnsNotLoaded(): boolean {
-        return this.IsSaved && MJDataContextItemEntityServer.SQL_COLUMNS.some((name) => this.GetFieldByName(name)?.NotLoaded === true);
     }
 
     /** True when the item, as loaded and changed, is a SQL item or holds SQL text. */

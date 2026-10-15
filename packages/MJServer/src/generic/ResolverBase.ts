@@ -40,6 +40,17 @@ import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
 
+/**
+ * Entities whose update is always hydrated from the stored row, never from the client's `OldValues___`, though they
+ * do not track record changes: their server-side write rules compare against the prior state, which a client could
+ * otherwise supply itself (lower-case names).
+ *
+ * `MJ: Data Context Items`: its server class lets only an administrator save an item that holds SQL, and decides
+ * that from the item's `Type` and `SQL`. Hydrated from OldValues, a client could leave both out, and the stored
+ * procedure would keep the stored SQL item while the rule saw none.
+ */
+const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set(['mj: data context items']);
+
 export class ResolverBase {
   private static _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
   private static _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
@@ -1555,8 +1566,9 @@ export class ResolverBase {
         }
       });
 
-      if (entityInfo.TrackRecordChanges || !input.OldValues___) {
-        // We get here because EITHER the entity tracks record changes OR the client did not provide OldValues, so we need to load the old values from the DB
+      if (entityInfo.TrackRecordChanges || !input.OldValues___ || ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW.has(entityInfo.Name.trim().toLowerCase())) {
+        // We get here because the entity tracks record changes, the client did not provide OldValues, or the entity's
+        // write rules need the stored row (ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW), so we load the old values from the DB
         const cKey = new CompositeKey(
           entityInfo.PrimaryKeys.map((pk) => {
             return {

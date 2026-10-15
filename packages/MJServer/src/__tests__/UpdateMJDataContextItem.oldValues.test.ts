@@ -104,9 +104,14 @@ interface RecordedSave {
     DataJSON: string | null;
 }
 
-/** A database provider whose load returns `stored`, and which records each save it receives. */
-function recordingDatabase(stored: StoredRow): { Saves: RecordedSave[]; Provider: DatabaseProviderBase } {
+/**
+ * A database provider whose load returns `stored`, and which records each save it receives.
+ * `RefusalMessage` reads the last entity's `LatestResult.CompleteMessage`: on lts/5 `UpdateRecord` reports
+ * `LatestResult.Message`, which a validation refusal leaves unset ('Unknown error').
+ */
+function recordingDatabase(stored: StoredRow): { Saves: RecordedSave[]; Provider: DatabaseProviderBase; RefusalMessage: () => string } {
     const saves: RecordedSave[] = [];
+    const created: MJDataContextItemEntityServer[] = [];
     const entityData = {
         async Load(): Promise<Record<string, unknown>> {
             return { ...stored };
@@ -121,10 +126,12 @@ function recordingDatabase(stored: StoredRow): { Saves: RecordedSave[]; Provider
         async GetEntityObject(_entityName: string, user: UserInfo): Promise<MJDataContextItemEntityServer> {
             const item = new MJDataContextItemEntityServer(ITEM_ENTITY, entityData);
             item.ContextCurrentUser = user;
+            created.push(item);
             return item;
         },
     } as unknown as DatabaseProviderBase;
-    return { Saves: saves, Provider: database };
+    const refusalMessage = (): string => created[created.length - 1]?.LatestResult?.CompleteMessage ?? '';
+    return { Saves: saves, Provider: database, RefusalMessage: refusalMessage };
 }
 
 /** Builds an `OldValues___` array from a plain object. */
@@ -154,7 +161,8 @@ describe('UpdateMJDataContextItem — a non-Owner may not change a SQL item', ()
         const outcome = await harness.Update({ ...STORED_SQL_ITEM, SQL: NEW_SQL }, db.Provider);
 
         expect(db.Saves).toEqual([]);
-        expect(outcome).toMatch(/Owner-type/);
+        expect(outcome).not.toBe('saved');
+        expect(db.RefusalMessage()).toMatch(/Owner-type/);
     });
 
     it('refuses new SQL when OldValues___ repeats the new SQL, so the field does not look changed', async () => {
@@ -169,7 +177,8 @@ describe('UpdateMJDataContextItem — a non-Owner may not change a SQL item', ()
         const outcome = await harness.Update(input, db.Provider);
 
         expect(db.Saves).toEqual([]);
-        expect(outcome).toMatch(/Owner-type/);
+        expect(outcome).not.toBe('saved');
+        expect(db.RefusalMessage()).toMatch(/Owner-type/);
     });
 
     it('refuses moving a SQL item to another data context when Type and SQL are left out of the input and OldValues___', async () => {
@@ -183,7 +192,8 @@ describe('UpdateMJDataContextItem — a non-Owner may not change a SQL item', ()
         const outcome = await harness.Update(input, db.Provider);
 
         expect(db.Saves).toEqual([]);
-        expect(outcome).toMatch(/Owner-type/);
+        expect(outcome).not.toBe('saved');
+        expect(db.RefusalMessage()).toMatch(/Owner-type/);
     });
 
     it('refuses changing the cached DataJSON of a SQL item when Type and SQL are left out of the input and OldValues___', async () => {
@@ -197,7 +207,8 @@ describe('UpdateMJDataContextItem — a non-Owner may not change a SQL item', ()
         const outcome = await harness.Update(input, db.Provider);
 
         expect(db.Saves).toEqual([]);
-        expect(outcome).toMatch(/Owner-type/);
+        expect(outcome).not.toBe('saved');
+        expect(db.RefusalMessage()).toMatch(/Owner-type/);
     });
 
     it('still saves a non-Owner\'s change to an item of another type that sends OldValues___', async () => {
