@@ -234,7 +234,7 @@ describe('the guard re-reads the configuration rather than trusting the one it e
  * THE STAMP IS TAKEN WHETHER OR NOT THE SHELL IS READY, which is the other half of the fix.
  *
  * `lastNavigationAt` is seeded at construction and updated on every `NavigationEnd` THIS COMPONENT
- * SEES. That update sits OUTSIDE the `if (this.Initialized)` guard on purpose: a navigation can land
+ * SEES. That update sits OUTSIDE the `if (this.initialized)` guard on purpose: a navigation can land
  * between the subscription being created and `Initialized` turning true, and moving the stamp inside
  * would leave it at its previous value for that one — so a later sync would compare against a time
  * older than the activation it is reacting to, yield, and stop syncing the workspace to the url.
@@ -272,8 +272,8 @@ describe('the navigation stamp is recorded before the readiness guard', () => {
         return SOURCE.slice(at, at + 400);
     })();
 
-    it('assigns the stamp before testing Initialized', () => {
-        const guard = block.indexOf('this.Initialized');
+    it('assigns the stamp before testing initialized', () => {
+        const guard = block.indexOf('this.initialized');
         expect(guard, 'the readiness guard must follow the stamp in the same callback').toBeGreaterThan(0);
     });
 
