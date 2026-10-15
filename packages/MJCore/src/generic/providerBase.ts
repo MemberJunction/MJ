@@ -2141,7 +2141,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             resolvable: true,
             // No user (client-side / trusted single-user context) ⇒ nothing to authorize against;
             // the gate only consults `authorized` when a contextUser is present.
-            authorized: !user || qInfo.UserCanRun(user),
+            // This provider's permissions, not the global provider's: a client connection that is not
+            // the global one may have no global provider at all, or one holding another server's.
+            authorized: !user || qInfo.UserCanRun(user, this),
             categoryPath: qInfo.CategoryPath,
             queryName: qInfo.Name
         };
