@@ -266,6 +266,11 @@ const itemByURL = async (ctx: IntegrationCheckContext, url: string) => {
     return found[0];
 };
 
+/** AssertEqual compares by identity, so lists are compared by their contents. */
+function AssertSameList(actual: readonly string[], expected: readonly string[], message: string): void {
+    AssertEqual(JSON.stringify(actual), JSON.stringify(expected), message);
+}
+
 async function save(entity: BaseEntity, what: string): Promise<void> {
     Assert(await entity.Save(), `${what} save: ${entity.LatestResult?.CompleteMessage}`);
 }
@@ -348,7 +353,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
             await run(ctx, ['Discover'], [S.SourceID]);
 
             const found = await items(ctx);
-            AssertEqual(found.map((i) => i.URL), [URL_A, URL_B], 'one item per document');
+            AssertSameList(found.map((i) => i.URL ?? ''), [URL_A, URL_B], 'one item per document');
             S.ItemIDs = found.map((i) => i.ID);
             Assert(found.every((i) => i.ExtractionStatus === 'Pending'), 'discovered items wait for Extract');
             Assert(found.every((i) => i.Checksum === 'v1'), 'each item carries the listing checksum');
@@ -383,6 +388,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
             if (guardSkip('CP3')) return;
             resetStore();
             const all = (await Promise.all(S.ItemIDs.map((id) => liveChunks(ctx, id)))).flat();
+            Assert(all.length > 0, 'precondition: there are chunks to embed');
             await run(ctx, ['Embed'], all.map((c) => c.ID));
 
             AssertEqual(Store.Upserts.length, all.length, 'one vector per chunk');
@@ -431,7 +437,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
             const pending = all.filter((c) => c.DeleteStatus === 'Pending');
             Assert(live.length > 0 && live.length < S.FirstChunkIDs.length, `fewer chunks after the edit (${live.length} < ${S.FirstChunkIDs.length})`);
             Assert(live.every((c) => !S.FirstChunkIDs.includes(c.ID)), 'the new chunks are new rows, not old ones overwritten');
-            AssertEqual(pending.map((c) => c.ID).sort(), [...S.FirstChunkIDs].sort(), 'EVERY previous chunk is marked for deletion');
+            AssertSameList(pending.map((c) => c.ID).sort(), [...S.FirstChunkIDs].sort(), 'EVERY previous chunk is marked for deletion');
 
             await run(ctx, ['Discover'], [S.SourceID]);
             AssertEqual((await itemByURL(ctx, URL_A)).ExtractionStatus, 'Complete', 'the walk after a change is a no-op again');
@@ -444,10 +450,11 @@ export const ContentPipelineChecks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             if (guardSkip('CP6')) return;
+            Assert(S.FirstChunkIDs.length > 0, 'precondition: there are superseded chunks to delete');
             resetStore();
             await run(ctx, ['Delete'], S.FirstChunkIDs);
 
-            AssertEqual(Store.Deletes.map((d) => d.id).sort(), [...S.FirstChunkIDs].sort(), 'exactly the superseded vectors were deleted');
+            AssertSameList(Store.Deletes.map((d) => d.id).sort(), [...S.FirstChunkIDs].sort(), 'exactly the superseded vectors were deleted');
             Assert(Store.Deletes.every((d) => UUIDsEqual(d.namespace ?? '', S.SourceID)), 'each delete was routed to the namespace the write used');
             const a = await itemByURL(ctx, URL_A);
             const left = await chunksOf(ctx, a.ID);
@@ -470,6 +477,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
             S.Created.push({ entity: 'MJ: Content Item Tags', id: tag.ID });
 
             const chunks = await liveChunks(ctx, b.ID);
+            Assert(chunks.length > 0, 'precondition: item B has embedded chunks to refresh');
             for (const c of chunks) {
                 c.EmbeddingStatus = 'MetadataOnly';
                 await save(c, 'chunk');
@@ -495,6 +503,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
             if (guardSkip('CP8')) return;
             const b = await itemByURL(ctx, URL_B);
             const chunkIDs = (await liveChunks(ctx, b.ID)).map((c) => c.ID);
+            Assert(chunkIDs.length > 0, "precondition: item B has chunks whose vectors must be removed");
             b.DeleteStatus = 'Pending';
             await save(b, 'item');
 
@@ -504,7 +513,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
 
             resetStore();
             await run(ctx, ['Delete'], chunkIDs);
-            AssertEqual(Store.Deletes.map((d) => d.id).sort(), [...chunkIDs].sort(), "every one of the item's vectors was removed");
+            AssertSameList(Store.Deletes.map((d) => d.id).sort(), [...chunkIDs].sort(), "every one of the item's vectors was removed");
             Assert(Store.Deletes.every((d) => UUIDsEqual(d.namespace ?? '', S.SourceID)), 'each delete was routed to its namespace');
             const item = (await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ID='${b.ID}'`))[0];
             AssertEqual(item.DeleteStatus, 'Deleted', 'the item is kept as a tombstone');
