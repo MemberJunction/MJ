@@ -104,7 +104,7 @@ class LoadedView extends BaseEntity {
     get CustomWhereClause(): boolean { return this.stored.CustomWhereClause ?? false; }
 }
 
-/** Runs the real `RunViewCore` and `GetRunViewsDatabaseStatus` over the fixtures, recording `ExecuteSQL`. */
+/** Runs the real `RunViewCore` and `RunViewsWithCacheCheck` over the fixtures, recording `ExecuteSQL`. */
 class ClauseScreenTestProvider extends GenericDatabaseProviderTestBase {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
@@ -327,10 +327,13 @@ describe('RunViewCore — caller clause slots reject statement separators for ev
     it('refuses a stacked ExtraFilter in the cache-status probe', async () => {
         const provider = new ClauseScreenTestProvider();
 
-        const statuses = await provider.GetRunViewsDatabaseStatus([{ EntityName: 'Accounts', ExtraFilter: BRACKET_STACKED }], USER);
+        const response = await provider.RunViewsWithCacheCheck(
+            [{ params: { EntityName: 'Accounts', ExtraFilter: BRACKET_STACKED }, cacheStatus: { maxUpdatedAt: '2026-01-01T00:00:00.000Z', rowCount: 1 } }],
+            USER,
+        );
 
         expect(provider.ExecutedSQL).toHaveLength(0);
-        expect(statuses[0].Success).toBe(false);
+        expect(response.results.find((r) => r.viewIndex === 0)?.status).toBe('error');
     });
 
     it('still runs ordinary clauses, including bracket identifiers and separators inside literals', async () => {

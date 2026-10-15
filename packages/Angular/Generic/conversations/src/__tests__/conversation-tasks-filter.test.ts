@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { EntityInfo, IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
-import { CreateFakeProvider } from '@memberjunction/ng-test-utils';
+import { createFakeProvider } from '@memberjunction/ng-test-utils';
 import { BuildConversationTasksFilter, OwnTasksFilter } from '../lib/services/conversation-tasks-filter';
 
 const USER = { ID: 'user-1' } as unknown as UserInfo;
@@ -16,7 +16,7 @@ const OWN_TASKS = "ParentID IS NULL AND UserID = 'user-1'";
 /** A provider with Tasks metadata that answers each RunView with the rows given for its entity. */
 function provider(rows: Record<string, object[]>): { source: IMetadataProvider; queries: RunViewParams[] } {
   const queries: RunViewParams[] = [];
-  const source = CreateFakeProvider<object>({
+  const source = createFakeProvider<object>({
     runViewResults: (params) => {
       queries.push(params);
       return rows[params.EntityName ?? ''] ?? [];
@@ -82,7 +82,7 @@ describe('BuildConversationTasksFilter', () => {
 
   it('falls back to the tasks the user owns without Tasks metadata', async () => {
     const queries: RunViewParams[] = [];
-    const source = CreateFakeProvider<object>({
+    const source = createFakeProvider<object>({
       runViewResults: (params) => {
         queries.push(params);
         return [];
