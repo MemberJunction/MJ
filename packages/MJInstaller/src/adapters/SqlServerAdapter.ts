@@ -6,8 +6,10 @@
  * a full SQL driver (`tedious`, `mssql`) is not needed just to verify
  * that a server is accepting connections.
  *
- * Future phases that need actual SQL queries (e.g., user creation) will
- * use `@memberjunction/sqlserver-dataprovider` instead.
+ * The database phase also needs real SQL: it signs in to check whether the
+ * database is already set up, and runs the generated setup script with an
+ * administrator login when it is not. Those use the `mssql` driver directly
+ * ({@link SqlServerAdapter.TryLogin}, {@link SqlServerAdapter.ExecuteBatches}).
  *
  * @module adapters/SqlServerAdapter
  * @see PreflightPhase — uses this adapter for the SQL connectivity check.
@@ -26,6 +28,7 @@
  */
 
 import net from 'node:net';
+import sql from 'mssql';
 
 /**
  * Result of a TCP connectivity check to a SQL Server instance.
@@ -39,6 +42,45 @@ export interface SqlConnectivityResult {
   ErrorMessage?: string;
   /** Round-trip time in milliseconds from connection attempt to result. */
   LatencyMs: number;
+}
+
+/** Where and as whom to sign in to SQL Server. */
+export interface SqlLoginTarget {
+  Host: string;
+  Port: number;
+  /** Database to open after signing in (`master` for server-level work). */
+  Database: string;
+  User: string;
+  Password: string;
+  /** Accept a self-signed server certificate (local and Docker instances). */
+  TrustServerCertificate: boolean;
+}
+
+/** Result of {@link SqlServerAdapter.TryLogin}. */
+export interface SqlLoginResult {
+  /** The login succeeded and the database opened. */
+  Ok: boolean;
+  /**
+   * SQL Server rejected the sign-in: the login does not exist, the password is
+   * wrong, or the login cannot open the database. This is what an install looks
+   * like before `mj-db-setup.sql` has run. `false` for every other failure
+   * (unreachable host, TLS, timeout), which setup cannot fix.
+   */
+  LoginRejected: boolean;
+  /** Driver message when `Ok` is `false`. */
+  ErrorMessage?: string;
+}
+
+/** Thrown by {@link SqlServerAdapter.ExecuteBatches} when one batch fails. */
+export class SqlBatchError extends Error {
+  /** 1-based position of the failing batch in the script. */
+  BatchNumber: number;
+
+  constructor(batchNumber: number, message: string) {
+    super(message);
+    this.name = 'SqlBatchError';
+    this.BatchNumber = batchNumber;
+  }
 }
 
 /**
@@ -117,6 +159,79 @@ export class SqlServerAdapter {
       socket.connect(port, host);
     });
   }
+
+  /**
+   * Sign in to SQL Server and open `target.Database`, then disconnect.
+   *
+   * @param target - Server, database, and credentials to try.
+   * @returns Whether the sign-in worked and, if not, whether SQL Server refused it.
+   */
+  async TryLogin(target: SqlLoginTarget): Promise<SqlLoginResult> {
+    const pool = new sql.ConnectionPool(buildPoolConfig(target));
+    try {
+      await pool.connect();
+      return { Ok: true, LoginRejected: false };
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      return {
+        Ok: false,
+        LoginRejected: code === 'ELOGIN',
+        // Drop the driver's closing period; callers embed this in their own sentences.
+        ErrorMessage: (err instanceof Error ? err.message : String(err)).replace(/\.\s*$/, ''),
+      };
+    } finally {
+      await pool.close().catch(() => undefined);
+    }
+  }
+
+  /**
+   * Run SQL batches in order on one connection, so `USE` in one batch carries
+   * into the next, exactly as SSMS or `sqlcmd` would run a script split on `GO`.
+   *
+   * @param target - Server and credentials; `Database` is where the session starts.
+   * @param batches - Batch texts with the `GO` separators already removed.
+   * @param onMessage - Receives each `PRINT` / informational message the server sends.
+   * @throws {SqlBatchError} For the first batch that fails; later batches do not run.
+   */
+  async ExecuteBatches(target: SqlLoginTarget, batches: string[], onMessage: (message: string) => void): Promise<void> {
+    const pool = new sql.ConnectionPool(buildPoolConfig(target));
+    try {
+      await pool.connect();
+      for (let i = 0; i < batches.length; i++) {
+        const request = pool.request();
+        request.on('info', (info: { message: string }) => onMessage(info.message));
+        try {
+          await request.batch(batches[i]);
+        } catch (err) {
+          throw new SqlBatchError(i + 1, err instanceof Error ? err.message : String(err));
+        }
+      }
+    } finally {
+      await pool.close().catch(() => undefined);
+    }
+  }
+}
+
+/**
+ * Pool settings for installer SQL work: a single connection (so session state
+ * such as `USE` survives between batches) and generous timeouts, because
+ * `CREATE DATABASE` can take a while on a slow disk.
+ */
+function buildPoolConfig(target: SqlLoginTarget): sql.config {
+  return {
+    server: target.Host,
+    port: target.Port,
+    database: target.Database,
+    user: target.User,
+    password: target.Password,
+    connectionTimeout: 15_000,
+    requestTimeout: 120_000,
+    pool: { max: 1, min: 0 },
+    options: {
+      encrypt: true,
+      trustServerCertificate: target.TrustServerCertificate,
+    },
+  };
 }
 
 /**

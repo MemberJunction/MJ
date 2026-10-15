@@ -113,6 +113,13 @@ describe('FullDuplexTurnGate — another agent holds the floor', () => {
         expect(coord.IsFloorHolder(ROOM, SAGE)).toBe(true);
     });
 
+    it('counts a chunk given by its duration (an avatar piece) the same way: overlay, then cut past the bound', () => {
+        expect(demo.OnOutputDuration(500)).toEqual({ Verdict: 'Forward', TookFloor: false });
+        expect(demo.OnOutputDuration(0).Verdict).toBe('Forward'); // a video-only piece follows its burst
+        expect(demo.OnOutputDuration(BACKCHANNEL_MAX_DURATION_MS).Verdict).toBe('Cut');
+        expect(demo.OnOutputDuration(0)).toEqual({ Verdict: 'Drop', TookFloor: false });
+    });
+
     it('cuts a burst whose very first chunk already exceeds the backchannel bound', () => {
         expect(demo.OnOutputAudio(pcm(BACKCHANNEL_MAX_DURATION_MS + 500))).toEqual({ Verdict: 'Cut', TookFloor: false });
         expect(demo.Phase).toBe('Muted');
@@ -143,6 +150,42 @@ describe('FullDuplexTurnGate — another agent holds the floor', () => {
         expect(scoutGate.OnOutputAudio(pcm(100)).TookFloor).toBe(false);
         expect(scoutGate.Phase).toBe('Overlay');
         expect(demo.OnOutputAudio(pcm(100))).toEqual({ Verdict: 'Forward', TookFloor: true });
+    });
+});
+
+/** An avatar streams its face between answers too: a chunk with no speech (0 ms) must never act as the agent talking. */
+describe('FullDuplexTurnGate — a chunk with no speech (an avatar between answers)', () => {
+    it('never starts a burst: the floor stays free, no agent turn is counted, and another agent may speak', () => {
+        expect(sage.OnOutputDuration(0)).toEqual({ Verdict: 'Forward', TookFloor: false });
+        expect(sage.Phase).toBe('Idle');
+        expect(coord.IsFloorHolder(ROOM, SAGE)).toBe(false);
+        expect(coord.GetRoomState(ROOM)!.ConsecutiveAgentTurns).toBe(0);
+        expect(demo.OnOutputAudio(pcm(100))).toEqual({ Verdict: 'Forward', TookFloor: true });
+    });
+
+    it('goes with a turn it lands in: forwarded while the agent holds the floor, without taking it again', () => {
+        sage.OnOutputAudio(pcm(100));
+        expect(sage.OnOutputDuration(0)).toEqual({ Verdict: 'Forward', TookFloor: false });
+        expect(sage.Phase).toBe('Floor');
+    });
+
+    it('never keeps a muted burst going: once the speech has paused past the gap, idle pieces play and the next answer takes the floor', () => {
+        sage.OnOutputAudio(pcm(100)); // SAGE holds the floor
+        expect(demo.OnOutputAudio(pcm(BACKCHANNEL_MAX_DURATION_MS + 500)).Verdict).toBe('Cut'); // DEMO talked over it
+        sage.EndTurn({ Text: 'A full answer that held the floor for a while' });
+
+        // DEMO's avatar streams its idle face every 200 ms; none of it is speech.
+        const verdicts: string[] = [];
+        for (let i = 0; i < 10; i++) {
+            now += 200;
+            verdicts.push(demo.OnOutputDuration(0).Verdict);
+        }
+        // Dropped with the muted burst until the speech has paused for longer than the gap, then played.
+        expect(verdicts).toEqual(['Drop', 'Drop', 'Drop', 'Drop', 'Drop', 'Drop', 'Forward', 'Forward', 'Forward', 'Forward']);
+
+        now += 200;
+        expect(demo.OnOutputDuration(400)).toEqual({ Verdict: 'Forward', TookFloor: true }); // its next answer
+        expect(coord.IsFloorHolder(ROOM, DEMO)).toBe(true);
     });
 });
 

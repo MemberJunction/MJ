@@ -1,0 +1,25 @@
+{
+  "primaryKey": {
+    "ID": "6FFACDAE-0781-48EB-823D-FF4454656299"
+  },
+  "fields": {
+    "Name": "Rubric Evaluator"
+  },
+  "relatedEntities": {
+    "MJ: Template Params": [
+      {
+        "primaryKey": {
+          "ID": "A3C4AC70-5BCE-4DEE-8B35-EA0261D19435"
+        },
+        "fields": {
+          "TemplateID": "@parent:ID",
+          "Name": "Criteria"
+        },
+        "sync": {
+          "lastModified": "2026-10-13T19:00:05.312Z",
+          "checksum": "e778969d47d0b380f81a7801940698c63773d6f02ce95b68cf3286ffa36732f0"
+        }
+      }
+    ]
+  }
+}

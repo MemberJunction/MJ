@@ -268,6 +268,22 @@ describe('ExecutePrompt — timeout enforcement on the single-model path', () =>
 });
 
 describe('ExecutePrompt — caller cancellation still honored when no timeout is set', () => {
+  it('leaves no abort listener on a caller token reused across prompts', async () => {
+    const controller = new AbortController();
+    const added = vi.spyOn(controller.signal, 'addEventListener');
+    const removed = vi.spyOn(controller.signal, 'removeEventListener');
+
+    for (let i = 0; i < 3; i++) {
+      const result = await runner.ExecutePrompt(makeParams(makePrompt(), { cancellationToken: controller.signal }) as never);
+      expect(result.success).toBe(true);
+    }
+
+    const abortAdds = added.mock.calls.filter(([type]) => type === 'abort').length;
+    const abortRemoves = removed.mock.calls.filter(([type]) => type === 'abort').length;
+    expect(abortAdds).toBeGreaterThan(0);
+    expect(abortRemoves).toBe(abortAdds);
+  });
+
   it('aborts a hung model call when the caller aborts mid-flight (legacy behavior preserved)', async () => {
     testLLM.SetDefaultOutcome({ kind: 'hang' });
     const controller = new AbortController();

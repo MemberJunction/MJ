@@ -45,6 +45,7 @@ const makeModel = (over: Record<string, unknown> = {}) =>
     Metrics: '{"AUC":0.9}',
     HoldoutMetrics: '{"AUC":0.86}',
     PipelineID: 'p1',
+    ArtifactFileID: 'f1',
     Status: 'Published',
     ...over,
   });
@@ -84,5 +85,13 @@ describe('PSProductionComponent (DOM)', () => {
   it('exposes the Operate button in the detail pane', () => {
     const fixture = render([makeModel()]);
     expect(query(fixture, '[data-testid="ps-production-operate"]')).not.toBeNull();
+  });
+
+  it('marks a published model with no trained artifact as Needs training and disables Operate', () => {
+    const fixture = render([makeModel({ ArtifactFileID: null })]);
+    expect(query(fixture, '[data-testid="ps-production-row"]')?.textContent).toContain('Needs training');
+    expect(query(fixture, '[data-testid="ps-production-needs-training"]')).not.toBeNull();
+    const operate = query(fixture, '[data-testid="ps-production-operate"]') as HTMLButtonElement | null;
+    expect(operate?.disabled).toBe(true);
   });
 });
