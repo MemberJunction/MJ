@@ -3,7 +3,7 @@ import { Component, EventEmitter, Input, Output, Pipe, PipeTransform } from '@an
 import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, queryAll, text, click, typeInto, capture, hasClass } from '@memberjunction/ng-test-utils';
-import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import { MjFormFieldComponent } from './form-field.component';
 import { FORM_SECTION_FIELD_HOST, type FormSectionFieldHost } from '../section-indicators/form-section-field-host';
@@ -61,7 +61,7 @@ class TestWidgetEntity extends BaseEntity {}
 
 const WIDGET_ID = '11111111-2222-3333-4444-555555555555';
 
-function makeWidgetEntityInfo(): EntityInfo {
+function makeWidgetEntityInfo(owner?: IMetadataProvider): EntityInfo {
   // Real EntityInfo from plain init data: the constructor builds real EntityFieldInfo
   // instances, so derived metadata the component reads (TSType, ReadOnly, MaxLength,
   // DisplayNameOrName, EntityFieldValues) comes from the genuine getters.
@@ -99,13 +99,34 @@ function makeWidgetEntityInfo(): EntityInfo {
       { ID: 'F11', Name: 'ThemeColor', Type: 'nvarchar', Length: 40, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'Color' },
       { ID: 'F12', Name: 'ConfigJSON', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'JSON' },
     ],
-  });
+  }, owner);
 }
 
 /** A real, "saved" BaseEntity — SetMany with replaceOldValues=true hydrates + marks saved. */
 function makeWidget(values: Record<string, unknown> = {}): BaseEntity {
   const entity = new TestWidgetEntity(makeWidgetEntityInfo());
   entity.SetMany({ ID: WIDGET_ID, Name: 'Gadget', ...values }, true, true);
+  return entity;
+}
+
+/**
+ * The same widget with its metadata OWNED by a provider, the way every real EntityInfo is built
+ * (`ProviderBase` constructs each one with `new EntityInfo(row, this)`). The blank-name rule asks the
+ * field's owning provider which field is the entity's name (`EntityFieldInfo.IsEntityNameField`, MJ
+ * #4683), which metadata built outside any provider cannot answer. The stub answers only EntityByID.
+ * `New: true` gives an unsaved record via NewRecord(); otherwise it is loaded (saved) with `values`.
+ */
+function makeOwnedWidget(values: Record<string, unknown> = {}, options: { New?: boolean } = {}): BaseEntity {
+  const owned: { Info?: EntityInfo } = {};
+  const owner = { EntityByID: (_id: string) => owned.Info } as unknown as IMetadataProvider;
+  owned.Info = makeWidgetEntityInfo(owner);
+  const entity = new TestWidgetEntity(owned.Info);
+  if (options.New) {
+    entity.NewRecord();
+    entity.SetMany({ SerialNumber: 'SN-1', ...values });
+  } else {
+    entity.SetMany({ ID: WIDGET_ID, Name: 'Gadget', SerialNumber: 'SN-1', ...values }, true, true);
+  }
   return entity;
 }
 
@@ -431,13 +452,27 @@ describe('MjFormFieldComponent (DOM)', () => {
       // The one case where '' IS missing: the field the record is identified by. `Name` is what
       // EntityInfo.NameField resolves to here, and BaseEntity.Validate() refuses a blank there, so
       // the form must agree — the same form/save alignment #4359 established, reached by both refusing.
-      const f = render({ Record: makeWidget({ Name: '' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
+      const record = makeOwnedWidget();
+      record.Set('Name', '');
+      const f = render({ Record: record, FieldName: 'Name', Type: 'textbox', EditMode: true });
       expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
     });
 
     it('flags a whitespace-only name — as unidentifiable as an empty one (#4683)', () => {
-      const f = render({ Record: makeWidget({ Name: '   ' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
+      const record = makeOwnedWidget();
+      record.Set('Name', '   ');
+      const f = render({ Record: record, FieldName: 'Name', Type: 'textbox', EditMode: true });
       expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
+    });
+
+    it('flags a blank name on a NEW record — the save refuses it there too (#4683)', () => {
+      const f = render({ Record: makeOwnedWidget({ Name: '' }, { New: true }), FieldName: 'Name', Type: 'textbox', EditMode: true });
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
+    });
+
+    it('does NOT flag a saved record whose name was ALREADY blank — the save still accepts it until the name is edited (#4683)', () => {
+      const f = render({ Record: makeOwnedWidget({ Name: '' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(false);
     });
 
     it('Image ExtendedType edit mode shows upload, hides the data URI from the URL box, and Clear empties the field', () => {

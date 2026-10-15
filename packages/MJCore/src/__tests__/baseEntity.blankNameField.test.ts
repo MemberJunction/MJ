@@ -15,14 +15,18 @@
  *      too — the column's own declaration is the authority (ruled by @rkihm-BC on #4644).
  *   3. Whitespace-only counts as blank: `'   '` is as unidentifiable as `''`.
  *   4. One mistake, one message — a blank name is not also reported by the field's other rules.
+ *   5. Only on a new record, or when the name itself is being changed. A saved record whose name is
+ *      ALREADY blank keeps saving when something else changes, so automated saves of old data do not
+ *      start failing.
  *
- * The rule is entity knowledge ("which field names this record"), so it lives in BaseEntity and every
- * case here goes through an entity. Written against the EXPECTED behaviour, not read off the
- * implementation.
+ * Rule 5 needs to know whether the RECORD is new, which only the entity knows, so the rule lives in
+ * BaseEntity and every case here goes through an entity. Which field is the name is shared metadata
+ * (`EntityFieldInfo.IsEntityNameField`), tested at the bottom. Written against the EXPECTED behaviour,
+ * not read off the implementation.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BaseEntity } from '../generic/baseEntity';
-import { EntityInfo } from '../generic/entityInfo';
+import { EntityFieldInfo, EntityInfo } from '../generic/entityInfo';
 import { EntitySaveOptions, ProviderConfigDataBase } from '../generic/interfaces';
 import { UserInfo, UserRoleInfo } from '../generic/securityInfo';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
@@ -199,7 +203,7 @@ describe('BaseEntity.Validate — refuses a blank value in the resolved name fie
         expect(result.Errors[0].Message).toContain('cannot be null');
     });
 
-    it('does not change EntityField.Validate() on its own — the rule needs the entity', () => {
+    it('does not change EntityField.Validate() on its own — the rule needs the entity (is the record new?)', () => {
         const { entity } = makeRecord(entityInfo);
         entity.Set('Name', '');
 
@@ -247,8 +251,10 @@ describe('BaseEntity.Validate — refuses a blank value in the resolved name fie
     });
 
     it('does not validate a name field the record was loaded without', () => {
-        // The save does not write a not-loaded field, so the stored name is untouched.
+        // The save does not write a not-loaded field, so the stored name is untouched. The record is
+        // treated as new so that the not-loaded exemption is the only thing standing between it and a refusal.
         const { entity } = makeRecord(entityInfo, { ...DEFAULT_DATA, Name: '' });
+        Object.defineProperty(entity, 'IsSaved', { get: () => false, configurable: true });
         entity.GetFieldByName('Name')!.MarkNotLoaded();
 
         expect(entity.Validate().Success).toBe(true);
@@ -264,5 +270,75 @@ describe('BaseEntity.Validate — refuses a blank value in the resolved name fie
         entity.Set('Code', 0);
 
         expect(entity.Validate().Success).toBe(true);
+    });
+
+    // ---- Rule 5: a new record, or a name being changed ----
+
+    it('still saves a record whose name was ALREADY blank when something else changes', async () => {
+        // An automated save (a status, a sync) must not start failing because of data it did not touch.
+        const { entity, saveSpy } = makeRecord(entityInfo, { ...DEFAULT_DATA, Name: '' });
+        entity.Set('SerialNumber', 'SN-2');
+
+        expect(await save(entity)).toBe(true);
+        expect(saveSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses changing an already-blank name to another blank value', () => {
+        const { entity } = makeRecord(entityInfo, { ...DEFAULT_DATA, Name: '' });
+        entity.Set('Name', '   ');
+
+        const result = entity.Validate();
+
+        expect(result.Success).toBe(false);
+        expect(result.Errors).toHaveLength(1);
+        expect(result.Errors[0].Message).toContain('cannot be blank');
+    });
+
+    it('refuses a blank name on a NEW record, although the field itself does not report a change', () => {
+        const entity = new TestEntity(entityInfo);
+        entity.NewRecord();
+        entity.SetMany({ Name: '', DisplayName: 'Widget N', SerialNumber: 'SN-N' });
+
+        // The first value set on a new record becomes the field's old value, so the field cannot tell
+        // this from a saved record that already had a blank name. Only the entity knows it is new.
+        expect(entity.IsSaved).toBe(false);
+        expect(entity.GetFieldByName('Name')!.Dirty).toBe(false);
+
+        const result = entity.Validate();
+
+        expect(result.Success).toBe(false);
+        expect(result.Errors).toHaveLength(1);
+        expect(result.Errors[0].Source).toBe('Name');
+        expect(result.Errors[0].Message).toContain('cannot be blank');
+    });
+
+    // ---- The shared definition: EntityFieldInfo.IsEntityNameField ----
+
+    it('IsEntityNameField marks only the field NameField resolves to', () => {
+        const marked = entityInfo.Fields.filter(f => f.IsEntityNameField).map(f => f.Name);
+
+        expect(marked).toEqual(['Name']); // not DisplayName, although it is flagged IsNameField too
+    });
+
+    it('IsEntityNameField reads the provider that built the field, not the global one', async () => {
+        // Two providers hold the same entity with different name fields: in B only DisplayName is flagged.
+        const infoA = await configure(defaultFields());
+        const infoB = await configure([
+            ID_FIELD,
+            stringField('f-w-2', 'Name', 2),
+            stringField('f-w-3', 'DisplayName', 3, { IsNameField: true }),
+        ]);
+        const byName = (info: EntityInfo, name: string) => info.Fields.find(f => f.Name === name)!;
+
+        expect(byName(infoA, 'Name').IsEntityNameField).toBe(true);
+        expect(byName(infoA, 'DisplayName').IsEntityNameField).toBe(false);
+        expect(byName(infoB, 'Name').IsEntityNameField).toBe(false);
+        expect(byName(infoB, 'DisplayName').IsEntityNameField).toBe(true);
+    });
+
+    it('IsEntityNameField is false for a field whose entity cannot be found', () => {
+        const orphan = new EntityFieldInfo({ ID: 'f-x', EntityID: 'entity-nowhere', Name: 'Name', IsNameField: true });
+
+        expect(orphan.IsEntityNameField).toBe(false);
     });
 });

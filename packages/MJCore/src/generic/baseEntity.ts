@@ -6260,12 +6260,19 @@ export abstract class BaseEntity<T = unknown> {
      * the row unidentifiable everywhere it is referenced from. SQL Server accepts `''` in a NOT NULL
      * column and `EntityField.Validate()` only refuses null, so nothing else catches it.
      *
-     * This lives here rather than in `EntityField.Validate()` because "which field names this record"
-     * is entity knowledge: a field has no back-pointer to its entity. Deliberately narrow:
-     *   - Only the field `EntityInfo.NameField` RESOLVES to. 45 entities flag several fields
-     *     `IsNameField` (e.g. `Name` + `DisplayName`), and blanking a `DisplayName` stays legal.
+     * This lives here rather than in `EntityField.Validate()` because the rule needs to know whether the
+     * RECORD is new, and only the entity knows that: a field stores the first value set on a new record
+     * as its old value, so a new record's blank name and a saved record's blank name look identical to
+     * the field. Deliberately narrow:
+     *   - Only the field `EntityInfo.NameField` RESOLVES to (`EntityFieldInfo.IsEntityNameField`). 45
+     *     entities flag several fields `IsNameField` (e.g. `Name` + `DisplayName`), and blanking a
+     *     `DisplayName` stays legal.
      *   - Only when that column is NOT NULL. A nullable name field permits null, so it permits `''`;
      *     the column's own declaration is the authority.
+     *   - Only on a new record, or when the name itself is being changed. A saved record that ALREADY
+     *     has a blank name (written before this rule, or by direct SQL) still saves when something else
+     *     changes — an automated save of its status must not start failing because of data it did not
+     *     touch. Giving that record a different blank name is refused.
      *   - Skipped under the same conditions as every other field rule: read-only, `SkipValidation`,
      *     not loaded (the save does not write it), or an IS-A parent mirror (the parent validates it).
      *   - One mistake, one message: it runs before the per-field rules, and the caller skips the
@@ -6283,6 +6290,9 @@ export abstract class BaseEntity<T = unknown> {
         const field = this.GetFieldByName(nameFieldInfo.Name);
         if (!field || !this.isBlankRequiredNameValue(nameFieldInfo, field)) {
             return null;
+        }
+        if (this.IsSaved && !field.Dirty) {
+            return null; // an existing blank name the caller is not changing — see the remarks above
         }
         result.Success = false;
         result.Errors.push(new ValidationErrorInfo(field.Name, `${nameFieldInfo.DisplayNameOrName} cannot be blank — it is the name this record is identified by`, field.Value));

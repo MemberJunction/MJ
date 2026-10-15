@@ -477,7 +477,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * save disagreed about the same value, and the section indicators inherited the disagreement.
    *
    * The one exception is the entity's resolved NAME field (MJ #4683): `BaseEntity.Validate()`
-   * refuses a blank or whitespace-only value there, so this getter flags it too.
+   * refuses a blank or whitespace-only value there on a new record, or when the name is being
+   * changed, so this getter flags it in exactly those cases. A saved record whose name was ALREADY
+   * blank still saves, so it is not flagged until someone edits the name.
    *
    * Requiring actual text anywhere else is a separate, deliberate constraint (an `IsRequired`-style
    * flag of the kind `ActionParam` / `TemplateParam` carry, or a CHECK constraint), not something to
@@ -493,18 +495,18 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     // The one case where a blank string IS missing: the entity's NAME field (MJ #4683). The save
     // refuses it there, so the form must flag it there — the same form/save agreement #4359
     // established, reached this time by both refusing rather than both accepting.
-    return this.IsResolvedNameField && typeof val === 'string' && val.trim().length === 0;
+    return typeof val === 'string' && val.trim().length === 0 && this.isBlankNameRefused();
   }
 
   /**
-   * Whether this field is the one `EntityInfo.NameField` resolves to — the single field the record is
-   * identified by. NOT the same as `IsNameField`: 45 entities flag several fields, and `NameField`
-   * applies the tie-break (prefer the field literally named `Name`). Mirrors the core rule in
-   * `BaseEntity.Validate()` so the form and the save agree about blank names.
+   * The save's blank-name condition, from the shared metadata definition
+   * (`EntityFieldInfo.IsEntityNameField`): this is the field the record is identified by, and the
+   * record is new or its name is being changed.
    */
-  get IsResolvedNameField(): boolean {
-    const nameField = this.Record?.EntityInfo?.NameField;
-    return !!nameField && nameField.Name === this.FieldName;
+  private isBlankNameRefused(): boolean {
+    if (!this.FieldInfo?.IsEntityNameField) return false;
+    if (!this.Record?.IsSaved) return true;
+    return this.Record.Fields?.find(f => f.Name === this.FieldName)?.Dirty ?? false;
   }
 
   // ---- INLINE VALIDATION ----
