@@ -570,6 +570,17 @@ export interface ILocalStorageProvider {
     readonly SupportsCrossProcessPersistence?: boolean;
 
     /**
+     * Whether other processes read and write the same storage — `true` for Redis, where every
+     * server in a fleet shares one keyspace; `false`/omitted for per-process or per-browser
+     * stores (in-memory, IndexedDB, localStorage, MMKV).
+     *
+     * `LocalCacheManager` treats a cached slot whose schema differs from this process's as a
+     * local miss on a shared store instead of deleting it, since a delete there reaches every
+     * process sharing the store.
+     */
+    readonly SharedAcrossProcesses?: boolean;
+
+    /**
      * Retrieves a value from storage. The implementation is responsible for any
      * deserialization required by the underlying medium:
      *  - **IndexedDB**: returns the value directly via structured clone (Date/Map/Set/typed arrays preserved, no parse needed)
