@@ -1,8 +1,8 @@
 # MemberJunction — Video Studio
 ### A core capability for code-rendered, agent-directed video: explainers, product films, and data stories on any topic, including an organization's own data
-**Status:** Implementation Spec — ready for build (RFC v1, decisions through 2026-10-05)
+**Status:** Implementation Spec — ready for build (RFC v1, decisions through 2026-10-15)
 **Audience:** MJ engineering team + the implementing agent
-**Date:** 2026-10-05
+**Date:** 2026-10-05 (revised 2026-10-15: generative footage via FLUX 3 as an asset source, §1.2 / §13.3; brand kits generalized to `MJ: Brand Kits`, §4; decisions D16–D20)
 **Inspired by:** "Motion Engineering: Build a Video Studio Around Opus 5.5" (rari, X, Oct 2026) — the five-layer studio model (Director → Reference → Timeline → Renderer → Critic), seekable frame functions, contact-sheet review, and gated long runs. Grounded in a codebase study of the agent framework, AgentSpec/ComponentSpec, artifacts, MJStorage, Plan Mode / HITL, Rubrics, and Predictive Studio.
 
 ---
@@ -35,7 +35,23 @@ Video Studio is that system, built into MJ:
 
 ### 1.1 What code-rendered video is (and isn't) good for
 
-Code-rendered motion is the right tool for product films, UI motion, data stories, typography, diagrams, explainers, and briefings. It is the wrong tool for photoreal scenes, people, and organic movement. **[D]** Video Studio is code-rendered first. Generated imagery (Generate Image) and generated footage enter only as **assets**, placed and timed by the composition. Generated assets are never allowed to stand in for real product screens or real data (§3.4 `NeverInvent`).
+Code-rendered motion is the right tool for product films, UI motion, data stories, typography, diagrams, explainers, and briefings. It is the wrong tool for photoreal scenes, people, and organic movement. **[D]** Video Studio is code-rendered first. Generated imagery (the `Generate Image` action) and generated footage (the new `Generate Video` action, §13.3) enter only as **assets**, placed and timed by the composition. Generated assets are never allowed to stand in for real product screens, real data, or real people (§3.4 `NeverInvent`).
+
+### 1.2 Generative footage: the other half **[D]**
+
+Code-rendered and generative video solve opposite problems, and the best films use both:
+
+| | Code-rendered (HyperFrames, this plan) | Generative (e.g. FLUX 3 Video) |
+|---|---|---|
+| Best at | Typography, charts, UI motion, explainers, data stories | Photoreal scenes, places, atmosphere, organic motion |
+| Truth | Exact: numbers bound to data, text rendered as written | Plausible pixels: cannot bind data; on-screen text not guaranteed |
+| Brand | Exact palette, fonts and logos from the brand kit | Approximate, steered by reference images |
+| Length / control | 15–180 s, deterministic re-render of one beat | 5–20 s per generation; re-roll, keyframes, continuation |
+| Cost | LLM tokens + own render compute; no per-render fees | Per second of output |
+
+**FLUX 3 (Black Forest Labs)** is the first target. It is one multimodal model for image, video and audio. Video covers text-to-video, image-to-video, keyframe control (up to 10 pinned stills), video continuation, and synchronized audio, in 5–20 s clips. Published API pricing is per second, from about $0.06/s (Draft HD) to $0.80/s (UHD). FLUX 3 Image adds multi-turn edits that leave other pixels untouched, bounding-box layout, and up to 10 reference images. MJ already ships a BFL provider (`packages/AI/Providers/BlackForestLabs`), but only for FLUX.2 / Kontext images. *These figures come from BFL's announcements as reported in October 2026; several are vendor claims. Re-verify every endpoint, parameter and price against `docs.bfl.ai` at build time (VS-GEN-3).*
+
+**How it fits:** generation is an **asset source**, not a second renderer. The Director and Art Director request generated assets in the spec (`Assets.Generate`, §3.1). Pre-Production generates each one **once**, stores it in MJStorage, and stages it like any other asset. The composition then places and times it, so the render stays deterministic (§7.4) and the Critic judges the generated footage with everything else. A standalone `Generate Video` action also serves callers that want a raw clip with no composition, for example a 10-second social ad variant from the Marketing app. Generation is vendor-neutral: FLUX 3 is the first driver behind a general contract (§13.3), not a hard-wired dependency.
 
 ---
 
@@ -48,7 +64,7 @@ Code-rendered motion is the right tool for product films, UI motion, data storie
 | **Director** | What is the film trying to say? | `Video Studio - Director` sub-agent → `spec.film`, `spec.assets`, `spec.dataBindings` (intent) | LLM (Loop) |
 | **Reference** | What should it feel and look like? | `Video Studio - Art Director` sub-agent → `spec.style`; reads brand kit, reference images, reference video | LLM (Loop, vision) |
 | **Timeline** | What changes at each beat? | `Video Studio - Storyboard` sub-agent → `spec.beats`, `spec.audio.script`, per-format layout notes | LLM (Loop) |
-| *(pre-production)* | Real data, real voice, real assets | `Video Studio - Pre-Production` sub-agent → data snapshot, narration TTS with timestamps, asset staging, beat-duration fit | **Deterministic code** |
+| *(pre-production)* | Real data, real voice, real assets | `Video Studio - Pre-Production` sub-agent → data snapshot, narration TTS with timestamps, generated assets (§13.3), asset staging, beat-duration fit | **Deterministic code** |
 | **Renderer** | How is every frame produced? | `Video Studio - Motion Engineer` sub-agent writes the HyperFrames composition(s); `Video Studio - Render` sub-agent lints, renders, captures contact sheets, and runs deterministic checks | LLM + **deterministic code** |
 | **Critic** | What failed, exactly where, and why? | `Video Studio - Critic` sub-agent: a vision judge over contact sheets, scored against the Video Production rubric; returns the top-3 defects with timestamp, evidence, and a local fix | LLM (Loop, vision) |
 
@@ -75,7 +91,7 @@ The **orchestrator** (`Video Studio`, root Loop agent, custom driver `VideoStudi
           Research Agent / Query Builder          ElevenLabs TTS          VideoRenderEngine port
           (relationships, optional)               Data snapshot           ├─ LocalWorker (default)
                                                   MJStorage staging       ├─ Remote (HTTP)
-                                                                          └─ Docker sandbox
+                                                  Generated assets §13.3  └─ Docker sandbox
                                                                                │
                                                      @memberjunction/video-studio-render-worker
                                                      (@hyperframes/producer + engine + lint, ffmpeg)
@@ -105,6 +121,9 @@ The **orchestrator** (`Video Studio`, root Loop agent, custom driver `VideoStudi
 | Recurrence | `AgentScheduledJobDriver` (`packages/Scheduling/engine/src/drivers/AgentScheduledJobDriver.ts`) | Refuses Flow agents, so the orchestrator must be Loop. Accepts but **ignores** `ConfigurationID` / `ConversationID` / `OverrideModelID`, and passes no `CompanyID`. §10.5. |
 | App + copilot UI | Predictive Studio application + `ps-studio-resource.component.ts` embedding `mj-conversation-chat-area` pinned to an agent | Exact pattern to mirror. §12. |
 | Renderer | **HyperFrames** (HeyGen, Apache-2.0, v0.8.x): `@hyperframes/producer` (`createRenderJob` / `executeRenderJob` with progress callback + `AbortSignal`; `startServer()` HTTP render service), `@hyperframes/engine` (`captureFrame` / `captureFrameToBuffer` at exact times), `@hyperframes/lint` (`lintProject`, `shouldBlockRender`), CLI `check --json` (layout, motion, contrast) | Fully local, no API key, no per-render fees. Requires **Node ≥ 22** (MJ is on 24) and **system ffmpeg**. Pre-1.0, so we pin exact versions. |
+| Generated footage | `BaseVideoGenerator` (`packages/AI/Core/src/generic/baseVideo.ts`); `AIVideoRunner` (`packages/AI/Prompts/src/video/`, a `BaseMediaRunner`); HeyGen driver; BFL provider (`FLUXImageGenerator`) | **Gap:** `BaseVideoGenerator` is avatar-only (`CreateAvatarVideo`, `GetAvatars`); there is no text-to-video, image-to-video or job-status contract. `AIVideoRunner` exposes only `RunAvatarVideo` and has no callers outside its package. The BFL provider is image-only (FLUX.2 / Kontext), reports no usage, and `ImageGenerationParams` carries no reference images. §13.3. |
+| Generation cost | `MJ: AI Model Costs` + `MJ: AI Model Price Unit Types`; per-run `Cost` on `MJ: AI Prompt Runs`; agent `MaxCostPerRun` | **Gap:** price units are Per Minute / Per Hour / per-tokens / Per Image. There is **no Per Second unit**, so generated video is unpriced (HeyGen runs already record no cost). §13.3. |
+| Brand | Marketing Open App `Brand` entity (logos, `VisualIdentityGuidelines`, do's/don'ts); Forms `FormStyle`; nothing in core | **Gap:** no core brand store. Generate Image, Forms theming, Marketing creative and Video Studio each need the same palette, logos and rules. §4 makes the brand kit a general core entity. |
 
 ### 2.4 Package layout **[D]**
 
@@ -112,13 +131,15 @@ Mirrors Predictive Studio (`Core` / `Engine` / `Sidecar`):
 
 | Package | Path | Contents | Runs in |
 |---|---|---|---|
-| `@memberjunction/video-studio-core` | `packages/AI/VideoStudio/Core` | `VideoGenerationSpec` and sub-types, pure validator, render-worker wire contract, brand-kit / archetype JSON types (JSONType targets), chart-kit data contracts. **Browser-safe; no server deps.** | Browser + server |
+| `@memberjunction/video-studio-core` | `packages/AI/VideoStudio/Core` | `VideoGenerationSpec` and sub-types, pure validator, render-worker wire contract, archetype JSON types (JSONType targets), chart-kit data contracts. Brand-kit JSON types are **not** here: they are general and generate into `@memberjunction/core-entities` (§4). **Browser-safe; no server deps.** | Browser + server |
 | `@memberjunction/video-studio` | `packages/AI/VideoStudio/Engine` | `VideoStudioAgent` + sub-agent driver classes, `VideoRenderEngine` port + driver registry, pre-production (data snapshot, narration), critic orchestration, storage + artifact packaging, actions, remote operations | MJAPI |
 | `@memberjunction/video-studio-render-worker` | `packages/AI/VideoStudio/RenderWorker` | Standalone Node ≥22 process wrapping `@hyperframes/producer` / `engine` / `lint`: render, still capture, contact-sheet composition, checks, reference-video keyframe extraction. **No MJ DB access, no credentials.** Ships a `Dockerfile`. | Separate process / container / remote host |
 | (Angular) | `packages/Angular/Explorer/dashboards/src/VideoStudio` | Application resources, lazy module | Browser |
 | (Angular) | `packages/Angular/Generic/artifacts/.../plugins/video-production-viewer.component.ts` | `VideoProductionViewerPlugin` | Browser |
 
-**[D] Why the spec lives in `video-studio-core`, not `ai-core-plus`:** `AgentSpec` / `WorkflowSpec` are framework contracts every agent may touch. `VideoGenerationSpec` is a domain contract with its own sub-types (brand kits, chart kit, render protocol) that the Angular viewer and the worker both need, without the rest of CorePlus. This follows the `interactive-component-types` / `predictive-studio-core` precedent.
+**[D] Why the spec lives in `video-studio-core`, not `ai-core-plus`:** `AgentSpec` / `WorkflowSpec` are framework contracts every agent may touch. `VideoGenerationSpec` is a domain contract with its own sub-types (archetypes, chart kit, render protocol) that the Angular viewer and the worker both need, without the rest of CorePlus. This follows the `interactive-component-types` / `predictive-studio-core` precedent.
+
+**[D] No new package for generation.** Generative footage extends existing packages (§13.3): the contract in AI Core (`baseVideo.ts`), the runner in AI Prompts (`AIVideoRunner`), the FLUX 3 driver in the existing `@memberjunction/ai-blackforestlabs` provider, and a `Generate Video` action next to `Generate Image` in Core Actions. Video Studio's Pre-Production calls the runner; it never links a vendor SDK.
 
 ---
 
@@ -134,7 +155,7 @@ export interface VideoGenerationSpec {
   Status: VideoProductionStatus;            // 'Briefing' | 'Styled' | 'Storyboarded' | 'Approved' | 'PreProduced'
                                             // | 'Composed' | 'RoughCut' | 'Reviewed' | 'Delivered' | 'Blocked'
   Archetype: { ArchetypeID?: string; Name: string };   // from MJ: Video Archetypes (defaults, pacing, beat template)
-  BrandKitID?: string;                      // MJ: Video Brand Kits (CompanyID-scoped or org-wide)
+  BrandKitID?: string;                      // MJ: Brand Kits: general, not video-only (CompanyID-scoped or org-wide), §4
   CompanyID?: string;                       // scope for brand kit / data / provenance
 
   Film: {
@@ -147,9 +168,14 @@ export interface VideoGenerationSpec {
   };
 
   Assets: {
-    Approved: VideoAsset[];                 // { Key, Kind, FileID | ArtifactVersionID, Source, Usage, MustUse }
+    Approved: VideoAsset[];                 // { Key, Kind, FileID | ArtifactVersionID, Source, Provenance, Usage, MustUse, Generation? }
+                                            //   Provenance: 'Supplied' | 'BrandKit' | 'Captured' | 'Generated'   (§3.4, §13.3)
+                                            //   Generation: { ModelID, PromptRunID, Prompt, Seed?, ReferenceKeys[], DurationSeconds?, Cost? }
     Required: VideoAssetRequirement[];      // what the brief needs; unmet + MustUse => Blocked, ask (never fake)
-    NeverInvent: string[];                  // e.g. ['product UI', 'logo', 'metrics', 'customer names']
+                                            //   AllowGenerated?: boolean (default false); only then may a Generated asset satisfy it
+    Generate?: VideoAssetGenerationRequest[]; // §13.3: { Key, Kind: 'Image' | 'Video', Prompt, Purpose, Format, DurationSeconds?,
+                                            //   ReferenceKeys[] (approved / brand-kit assets), Keyframes?, WantAudio? }
+    NeverInvent: string[];                  // e.g. ['product UI', 'logo', 'metrics', 'customer names', 'real people']
   };
 
   Style: {                                  // the style guide, written by the Art Director after inspecting references
@@ -207,6 +233,8 @@ export interface VideoGenerationSpec {
 - every `MustUse` requirement is satisfied by an approved asset, or the spec status is `Blocked`
 - every format in `Deliverables.Formats` has layout notes on every beat
 - narration lines map to existing beats; `Audio.Cues` fall inside the timeline
+- a `Generated` asset satisfies a requirement only when that requirement sets `AllowGenerated: true` (default false), so a fact is never filled by generation
+- every `Assets.Generate` request has a `Purpose`, a duration within the target model's limits, and `ReferenceKeys` that resolve to approved or brand-kit assets; once generated, its asset is recorded as `Provenance: 'Generated'` with its `Generation` block
 
 ### 3.3 Spec in prompts **[D]**
 
@@ -216,18 +244,30 @@ Prompts `{@include}` a generated markdown rendering of the TS types. This uses t
 
 - **Facts:** `Assets`, `DataBindings`, `DataSnapshot`, approved copy, `NeverInvent`, brand kit. The model **may not invent or alter** these. A missing required fact is a **blocker** that is asked about (§6), never filled.
 - **Choices:** camera, transitions, pacing within archetype bounds, motion curves, composition. The model owns these, and records its reasoning in the spec.
+- **Generated assets are choices, never facts [D].** A generated image or clip can set a scene, carry atmosphere, or illustrate an idea. It can never stand in for a fact: a real product screen, a logo, a number, a real place the organization claims, or a real person. In particular:
+  - **No synthetic people presented as real.** A generated person may never be presented as a member, constituent, beneficiary, customer, employee or speaker. The default brand-kit `GenerationPolicy` (§4.1) disallows generated people entirely; an organization can relax it for clearly illustrative use.
+  - **No likeness of a real person** (an executive, a member, a public figure) unless an approved asset documents consent; this is a `MustUse` fact, never generated.
+  - **Disclosure.** Generated assets keep `Provenance: 'Generated'` through to the artifact. The viewer marks them, `HumanReviewNotes` lists them, and C2PA content credentials returned by the provider are preserved in storage (§13.3).
+  - Generation requests are prompt-screened against `NeverInvent` and the brand kit's `GenerationPolicy` before any spend; the Critic's rubric re-checks the rendered result (§9).
 
 ---
 
 ## 4. Data model
 
-**[D] Three new entities, grouped alphabetically under "Video".** Tables `VideoArchetype`, `VideoBrandKit`, `VideoBrandKitAsset` in `${flyway:defaultSchema}` (`__mj`). Entity names: `MJ: Video Archetypes`, `MJ: Video Brand Kits`, `MJ: Video Brand Kit Assets`.
+**[D] Three new entities: one video-specific, two general (revised 2026-10-15, D16).** Tables `VideoArchetype`, `BrandKit`, `BrandKitAsset` in `${flyway:defaultSchema}` (`__mj`). Entity names: `MJ: Video Archetypes`, `MJ: Brand Kits`, `MJ: Brand Kit Assets`.
+
+**Why brand kits are not video-only.** A brand kit (palette, type, logos, voice, do's and don'ts, reference imagery) is what every generative surface needs, not just video:
+- `Generate Image` needs reference images and style guidance to stay on brand (FLUX 3 accepts up to 10 references).
+- Forms theming (`FormStyle`) and the AI Form Builder's planned image stage need the same palette and logos.
+- The Marketing Open App's ad, social and email creative already keep a separate `Brand` record.
+
+A video-only `MJ: Video Brand Kits` would become a third brand store that drifts from the others, and once its migration merges the name is permanent. So the kit is a general core entity that Video Studio is the **first** consumer of. Its JSON types (`IBrandStyle`, `IBrandVoice`, `IBrandGenerationPolicy`) are JSONType interfaces under `metadata/entities/JSONType-interfaces/`, so CodeGen emits them into `@memberjunction/core-entities` where any package can use them. Motion rules are an optional `Motion` section of `IBrandStyle`, so video-specific settings don't leak into the shape everyone else reads. **[O-9]** How Open Apps adopt it, for example Marketing's `Brand` gaining a nullable `BrandKitID`, is follow-on work in those repos, not this phase.
 
 **[D] Productions are artifacts, not a new entity.** A production is a `Video Production` artifact. Its versions are iterations, sharing and permissions come from the artifact system, and the gallery is a filtered artifact view. Render progress lives on the agent run (steps). **[O-1]** Revisit only if the gallery needs columns artifacts can't index (e.g. archetype, duration) efficiently. Extract rules (§11.2) may be enough.
 
 **[D] Company scoping.** `CompanyID UNIQUEIDENTIFIER NULL` FK → `__mj.Company`. **NULL means org-wide: available to all companies.** This is the convention `MJ: MCP Server Connections.CompanyID` states verbatim. `CompanyID` flows from `ExecuteAgentParams.companyId` (already propagated to sub-agents and recorded on `MJ: AI Agent Runs`).
 
-### 4.1 `MJ: Video Brand Kits`
+### 4.1 `MJ: Brand Kits`
 | Column | Type | Notes |
 |---|---|---|
 | `ID` | uniqueidentifier PK | default `NEWSEQUENTIALID()` |
@@ -236,15 +276,16 @@ Prompts `{@include}` a generated markdown rendering of the TS types. This uses t
 | `CompanyID` | uniqueidentifier NULL FK Company | NULL = org-wide |
 | `IsDefault` | bit NOT NULL default 0 | at most one default per `CompanyID` scope, enforced in a `ValidateAsync` override (`BASE_ENTITY_SERVER_PATTERNS`), not a trigger |
 | `Status` | nvarchar(20) NOT NULL default 'Active' | CHECK `Active`, `Inactive` |
-| `Style` | nvarchar(max) NULL | JSON, **JSONType** → `VideoBrandStyle` (palette tokens, typography, motion rules, keep/avoid) |
-| `Voice` | nvarchar(max) NULL | JSON, JSONType → `VideoBrandVoice` (TTS provider, voice id, settings, pronunciation notes) |
+| `Style` | nvarchar(max) NULL | JSON, **JSONType** → `IBrandStyle` (palette tokens, typography, keep/avoid, imagery style; optional `Motion` section for video) |
+| `Voice` | nvarchar(max) NULL | JSON, JSONType → `IBrandVoice` (TTS provider, voice id, settings, pronunciation notes) |
+| `GenerationPolicy` | nvarchar(max) NULL | JSON, JSONType → `IBrandGenerationPolicy`: whether generated imagery/footage is allowed at all, a style prompt, subjects to avoid, `AllowSyntheticPeople` (**default false**, §3.4), and an optional per-run generation spend cap. NULL = generation allowed with the defaults. |
 | `NeverInvent` | nvarchar(max) NULL | JSON array of strings: brand-level facts the model may never fabricate |
 
-### 4.2 `MJ: Video Brand Kit Assets`
+### 4.2 `MJ: Brand Kit Assets`
 | Column | Type | Notes |
 |---|---|---|
 | `ID` | uniqueidentifier PK | |
-| `BrandKitID` | uniqueidentifier NOT NULL FK VideoBrandKit | |
+| `BrandKitID` | uniqueidentifier NOT NULL FK BrandKit | |
 | `Name` | nvarchar(255) NOT NULL | |
 | `AssetType` | nvarchar(30) NOT NULL | CHECK `Logo`, `LogoMark`, `Font`, `Image`, `Screenshot`, `Video`, `Music`, `SoundEffect`, `Other` |
 | `FileID` | uniqueidentifier NOT NULL FK `MJ: Files` | binary in MJStorage |
@@ -252,6 +293,7 @@ Prompts `{@include}` a generated markdown rendering of the TS types. This uses t
 | `IsPrimary` | bit NOT NULL default 0 | e.g. primary logo |
 | `Sequence` | int NOT NULL default 0 | |
 | `LicenseNotes` | nvarchar(500) NULL | music/fonts: who may use it, where |
+| `IsGenerationReference` | bit NOT NULL default 0 | pass this asset to image/video generators as a style or subject reference (§13.3). Only `Image`, `Screenshot`, `Logo`, `LogoMark` or `Video` assets may set it (CHECK). |
 
 ### 4.3 `MJ: Video Archetypes`
 | Column | Type | Notes |
@@ -292,7 +334,7 @@ Prompts `{@include}` a generated markdown rendering of the TS types. This uses t
 | Director | Loop | `Film`, `Archetype`, `Assets.Required`, `Assets.NeverInvent`, `DataBindings` (intent), `Status` | `*` | Related agents: **Research Agent**, **Query Builder** (relationships, `SubAgentOutputMapping` → `research.*` / `dataSources.*`) for topic research and data sourcing |
 | Art Director | Loop (vision via custom driver) | `Style` | `Film`, `Assets`, `Archetype`, brand kit | Reference images and video injected as content blocks (§13.2) |
 | Storyboard | Loop | `Beats`, `StateList`, `Audio.Script`, `Audio.Cues`, layout notes | `Film`, `Style`, `DataBindings`, `Assets` | |
-| Pre-Production | **code** (`VideoStudioPreProductionAgent`, overrides `executeAgentInternal` like `AgentBuilderAgent`) | `DataSnapshot`, `Audio.Narration` timings, `Beats` timing fit, `Assets.Approved` staging | `*` | §8, §10 |
+| Pre-Production | **code** (`VideoStudioPreProductionAgent`, overrides `executeAgentInternal` like `AgentBuilderAgent`) | `DataSnapshot`, `Audio.Narration` timings, `Beats` timing fit, `Assets.Approved` staging (including generated assets) | `*` | §8, §10, §13.3 |
 | Motion Engineer | Loop | `Output.Source` (composition files per format) | `*` minus `Review.Rounds` older than current | lint-fix loop (like Form Builder's `Lint Fix`, max 3) |
 | Render | **code** (`VideoStudioRenderAgent`) | `Output.*`, `Review.Gates`, deterministic check results | `*` | calls `VideoRenderEngine` (§7) |
 | Critic | Loop (vision via custom driver) | `Review.Rounds`, `Review.Scores` | `*` + contact sheets | §9 |
@@ -303,12 +345,13 @@ Presets on the root (`MJ: AI Agent Configurations`), exactly like Research Agent
 
 | Preset | AI Configuration (ParentID) | Primary model (all LLM prompts) | Fallbacks | Params (`VideoStudio.*`) |
 |---|---|---|---|---|
-| Draft | `Video Studio Draft` (→ `Fast`) | Gemini 3.8 Flash, lower effort | Gemini 3.8 Flash (Vertex) | `MaxRepairRounds=0`, `RenderQuality=draft`, `Fps=24`, formats = first only |
-| Standard | `Video Studio Standard` (→ `Standard`) | **Gemini 3.8 Flash** | Gemini 3.8 Flash (Vertex), Claude Sonnet 5.5 | `MaxRepairRounds=2`, `RenderQuality=standard`, `Fps=30` |
-| High | `Video Studio High` (→ `High Power`) | **Claude Opus 5.5** | Claude Fable 5.1, Gemini 3.1 Pro | `MaxRepairRounds=3`, `RenderQuality=high`, `Fps=30`, all formats |
+| Draft | `Video Studio Draft` (→ `Fast`) | Gemini 3.8 Flash, lower effort | Gemini 3.8 Flash (Vertex) | `MaxRepairRounds=0`, `RenderQuality=draft`, `Fps=24`, formats = first only, `GenerationQuality=draft`, `MaxGeneratedVideoSeconds=20` |
+| Standard | `Video Studio Standard` (→ `Standard`) | **Gemini 3.8 Flash** | Gemini 3.8 Flash (Vertex), Claude Sonnet 5.5 | `MaxRepairRounds=2`, `RenderQuality=standard`, `Fps=30`, `GenerationQuality=standard`, `MaxGeneratedVideoSeconds=40` |
+| High | `Video Studio High` (→ `High Power`) | **Claude Opus 5.5** | Claude Fable 5.1, Gemini 3.1 Pro | `MaxRepairRounds=3`, `RenderQuality=high`, `Fps=30`, all formats, `GenerationQuality=high`, `MaxGeneratedVideoSeconds=60` |
 
 - Prompt-model rows bind per prompt × configuration (`MJ: AI Prompt Models`). The NULL-configuration rows also point at Gemini 3.8 Flash. This matters because when Video Studio runs as a **sub-agent** it inherits the caller's `configurationId`, and a caller config with no matching rows (e.g. "Sage Text") falls through to NULL rows (`BaseModelRunner.getPromptModelsForConfiguration`). So **the default is always Gemini 3.8 Flash**.
 - **Model choice per role:** the Art Director prefers a **video-input-capable** model when a reference video is supplied (Gemini 3.8 Flash at Standard). At High, Opus 5.5 gets keyframe sheets (§13.2).
+- **Generation tiers follow the power level [D] (D19).** `GenerationQuality` is vendor-neutral (`draft` / `standard` / `high`); each video-generation driver maps it to its own tiers. For FLUX 3 that is Draft HD at Draft, Full HD at Standard, and QHD/UHD at High. `MaxGeneratedVideoSeconds` caps the generated footage per production; the brand kit's `GenerationPolicy` spend cap and the agent's `MaxCostPerRun` still apply on top, because generation spend is recorded on the run's prompt runs once the Per Second price unit exists (§13.3). Draft is the right preset for exploring generated looks cheaply before committing to a High render.
 - **[D] Callers can choose a sub-agent's power level** (decided 2026-10-05; was O-2). This is a general framework capability, not specific to Video Studio. See §6.5.
   - **Precedence:** per-call preset (`AgentSubAgentRequest.presetName`) → relationship default preset (`AIAgentRelationship.ConfigurationPresetID`) → inherit the parent run's `configurationId` (today's behavior).
   - **Effect:** a Research Agent run on Standard can ask Video Studio for **High**. Video Studio's prompts then select Opus 5.5, and its pipeline params (repair rounds, quality, fps) come from the `Video Studio High` configuration.
@@ -599,7 +642,7 @@ Each format in `Film.Formats` is a separate composition sharing the same timelin
 
 ## 9. Review: deterministic checks → vision critic → bounded repair
 
-1. **Deterministic checks first (cheap):** lint, layout, contrast, safe area, minimum text size, data-literal scan, missing-asset references, audio present. Failures go straight back to the Motion Engineer, with no LLM critic call.
+1. **Deterministic checks first (cheap):** lint, layout, contrast, safe area, minimum text size, data-literal scan, missing-asset references, audio present, generated assets carry provenance and stay within `MaxGeneratedVideoSeconds`. Failures go straight back to the Motion Engineer, with no LLM critic call.
 2. **Vision critic:** `VideoStudioCriticAgent` builds its prompt with `image_url` content blocks (tiled contact sheets + a transition strip), plus the spec's beats, the narration timeline, and the **Video Production Quality rubric** criteria:
    - hook in the first 2 s
    - readability at phone size
@@ -609,6 +652,7 @@ Each format in `Film.Formats` is a separate composition sharing the same timelin
    - brand fidelity
    - **data fidelity** (shown values = snapshot values)
    - poster-quality final frame
+   - **generated-asset integrity** (no generated person presented as real, no garbled generated text or look-alike logos, generated footage disclosed; §3.4)
 
    Instructions follow the article: *judge only the rendered frames; identify the three largest defects; each with timestamp, beat, evidence, and a local fix.*
 3. **Repair:** the Motion Engineer patches **only** the affected sections. The Render agent re-captures the affected stills (and re-renders), and the critic re-judges, up to `MaxRepairRounds`. Remaining defects go into `HumanReviewNotes`.
@@ -676,6 +720,7 @@ They are injected into the render bundle as a script the composition imports. Ch
   - captions file
   - source bundle (composition HTML as text + asset refs)
   - render metadata (renderer version, seed, fps, durations)
+  - generation provenance and spend: per generated asset, model, prompt run, seconds, cost, and whether the provider supplied C2PA credentials
   - critic rounds
 - **Viewer:** plays the video first, with format switcher and poster. Tabs:
   - **Brief** (film + one sentence)
@@ -687,6 +732,7 @@ They are injected into the render bundle as a script the composition imports. Ch
 
   The video plays through `mj-media-player` with `/media/:fileId` Range streaming (or pre-auth URL). An inline preview component shows poster + play in the conversation card.
 - **Iteration:** "make the hook faster" produces a new artifact **version** of the same production (`ArtifactDirective: version-source`). Diffs are spec diffs.
+- **Generated-asset disclosure [D].** The viewer badges every `Generated` asset on its beat and shows a summary line such as "Contains AI-generated footage: 3 clips, 18 s", in the same way it shows the data as-of badge (§10.4).
 
 ### 11.2 Storage **[D]**
 - **MJStorage is the default.** The Render agent uploads outputs via `FileStorageEngine.UploadFile` to the agent's resolved storage account (runtime override → Agent → **Category** → Type → single active account) and returns **`FileOutputRef`s with `fileId`**. No base64 travels through the agent or SQL.
@@ -708,7 +754,7 @@ They are injected into the render bundle as a script the composition imports. Ch
 |---|---|---|
 | **Productions** (default) | `VideoStudioProductionsResource` | Gallery of Video Production artifacts the user can see: poster grid, filters (archetype, brand kit, company, date, status). Detail view: the production viewer + **Iterate** (opens the copilot on that artifact) + **Share** (artifact sharing). |
 | **Studio** | `VideoStudioStudioResource` | Start a production: pick archetype / brand kit / formats / power level, attach references and data, then the copilot. |
-| **Brand Kits** | `VideoStudioBrandKitsResource` | List + editor (generated form + custom asset-upload panel with previews of logos, fonts, music). |
+| **Brand Kits** | `VideoStudioBrandKitsResource` | List + editor (generated form + custom asset-upload panel with previews of logos, fonts, music, reference-image toggles, and the generation policy). Brand kits are general (§4), so the editor panel is an L2 component in `Angular/Generic` that other applications can host; this resource is only the first host. |
 | **Archetypes** | `VideoStudioArchetypesResource` | List + editor; shipped archetypes are read-only templates that can be cloned into a company archetype. |
 
 - **Copilot:** `mj-conversation-chat-area` pinned to the Video Studio agent, in the same pattern as `ps-studio-resource.component.ts`:
@@ -744,6 +790,37 @@ Rows must match driver `GetFileCapabilities` (Anthropic: jpeg/png/gif/webp/pdf, 
   Reference video works at every power level.
 - **Output:** a `ReferenceAnalysis` (palette, typography, composition, pacing, motion, texture, **DO NOT COPY** list), which becomes a style guide, never a collage.
 
+### 13.3 Generative images and footage (FLUX 3 first) **[D]**
+Generation is a general MJ capability that Video Studio consumes, not a Video Studio internal (D17, D18).
+
+- **Contract (AI Core, `baseVideo.ts`).** `BaseVideoGenerator` gains a general generation surface beside the avatar methods. The new methods are **not** abstract: their defaults throw "not supported", so the HeyGen driver keeps compiling, and `GetSupportedMethods` advertises what each driver implements.
+  ```ts
+  GenerateVideo(params: VideoGenerationParams): Promise<VideoGenerationJob>;                       // submit
+  GetVideoGenerationStatus(jobId: string, signal?: AbortSignal): Promise<VideoGenerationJob>;     // poll
+  // VideoGenerationParams: Prompt; Mode: 'TextToVideo' | 'ImageToVideo' | 'VideoToVideo' | 'Continuation';
+  //   DurationSeconds; AspectRatio; Quality: 'draft' | 'standard' | 'high'; Seed?; ReferenceImages?;
+  //   Keyframes?: { Seconds, Image }[]; SourceVideo?; WantAudio?; CancellationToken?
+  // VideoGenerationJob: JobID; Status: 'Pending' | 'Running' | 'Succeeded' | 'Failed' | 'Cancelled';
+  //   Video?: { Data | URL, MimeType, DurationSeconds, Width, Height }; Usage?: { OutputSeconds, Resolution };
+  //   Provenance?: { C2PA: boolean }; ErrorType? (ErrorAnalyzer classification, as VideoResult has today)
+  ```
+  `ImageGenerationParams` gains `ReferenceImages` (multi-reference generation and editing), and image drivers start reporting usage.
+- **Runner (AI Prompts).** `AIVideoRunner` gains `RunGenerateVideo` on the existing `BaseMediaRunner` path. It provides model selection, credential resolution, failover, cancellation, and polling capped by a `MAX_POLL_ATTEMPTS` constant whose limit is handled explicitly. It also writes an `MJ: AI Prompt Runs` row **with cost** and uploads the result to MJStorage, returning a `FileID` rather than inline bytes (§11.3).
+- **Driver.** FLUX 3 Video and FLUX 3 Image go into the existing `@memberjunction/ai-blackforestlabs` provider. Every endpoint, parameter, limit and price is re-verified against `docs.bfl.ai` at build time. The existing FLUX.2 / Kontext endpoint mappings get the same check, since they may predate the current API's naming.
+- **Pricing.** A **Per Second** row in `MJ: AI Model Price Unit Types`, plus `MJ: AI Model Costs` rows for each FLUX 3 tier, with the price source and date recorded. The runner computes cost from `Usage.OutputSeconds`, so generated video stops being unpriced, and agent `MaxCostPerRun` covers it.
+- **Model metadata.** `MJ: AI Models` rows for FLUX 3 Video (model type Video) and FLUX 3 Image (model type Image Generator), vendor rows under Black Forest Labs, and `MJ: AI Model Modalities` rows (Text + Image in; Video + Audio out for video). The Black Forest Labs vendor and its credential type already exist.
+- **Action.** A `Generate Video` core action, the counterpart of `Generate Image`, with params for prompt, mode, duration, aspect ratio, quality, references by `FileID`, and a model override. It returns a `FileID` and a media output, so any agent can promote the clip through `PromoteMediaOutputs` and the Video artifact type. This is the path for callers that want a raw clip and no composition.
+- **Pre-Production.** For each `Assets.Generate` request, Pre-Production does the following:
+  1. Screens the prompt against `NeverInvent` and the brand kit's `GenerationPolicy` before any spend. A violation sets the request `Blocked` and asks (§6), never fills.
+  2. Enforces the preset's `MaxGeneratedVideoSeconds`.
+  3. Passes brand-kit assets flagged `IsGenerationReference`, plus approved assets named in `ReferenceKeys`, as references.
+  4. Generates once, uploads, stages, and records `Provenance: 'Generated'` with the `Generation` block.
+
+  Repair rounds re-place and re-time generated assets. They re-generate only when the Critic flags the asset itself, bounded by a `MaxRegenerations` preset param (default 1).
+- **Audio.** Generated clips arrive with synchronized ambient audio. Video Studio mutes it unless the request sets `WantAudio`, because narration and music come from the single timeline in §8.
+- **Provenance.** The original generated file is stored unmodified, so provider C2PA credentials survive in MJStorage. The final MP4 is a new rendering that does not inherit them, so the artifact carries generated-asset provenance (§11.1) and the viewer discloses it. **[O-10]** asks whether to also sign the final output.
+- **Data boundary.** Prompts and reference images leave for the generation vendor. Only approved assets and brand-kit assets flagged `IsGenerationReference` are ever sent, and never a data snapshot. `GenerationPolicy` can switch generation off per company.
+
 ---
 
 ## 14. Risks & mitigations
@@ -759,19 +836,23 @@ Rows must match driver `GetFileCapabilities` (Anthropic: jpeg/png/gif/webp/pdf, 
 | Cost at High | Presets; Draft for exploration; deterministic checks before any vision call; bounded repair rounds |
 | Consult loops between agents | `MaxSubAgentConsultRounds`, then propagate to human |
 | Storage not configured | Inline fallback with warning; setup health card; guide |
+| Synthetic people or misleading generated imagery (reputational; acute for nonprofits, where audience trust is the asset) | `AllowGenerated` defaults false on requirements; `NeverInvent`; brand-kit `GenerationPolicy.AllowSyntheticPeople` defaults false; prompt screening before spend; critic integrity criterion; disclosure badge and provenance in the artifact (§3.4, §13.3) |
+| Generation spend runaway (video is priced per second) | Per Second price unit; `MaxGeneratedVideoSeconds` per preset; brand-kit spend cap; `MaxCostPerRun`; generate once and stage; Draft tier for exploration |
+| Generation vendor churn (FLUX 3 is new; benchmark claims are vendor-reported) | General contract and runner; FLUX is one driver behind it; failover through AI Configurations; endpoints and prices re-verified at build (VS-GEN-3) |
+| Prompts and reference images leave for a third party | Only approved and `IsGenerationReference` assets are sent, never data snapshots; `GenerationPolicy` can disable generation per company |
 
 ---
 
 ## 15. Work Breakdown Structure (the task list)
 
-**One phase, sub-phases VS0–VS11 (plus VS1A, Sage transfers).** VS1 (Consult + presets) and VS1A (Handoff) are framework work that can start immediately and in parallel with VS0/VS2/VS3; they have value independent of Video Studio and could ship in their own PR if the assigned developer prefers. Each task: **ID — title** · _deps_ · **AC** · packages. Treat this list as the backlog and check items off here.
+**One phase, sub-phases VS0–VS12 (plus VS1A, Sage transfers).** VS12 (generative assets) is mostly general AI work (contract, runner, driver, pricing, action) and can start immediately, in parallel with VS0–VS3. VS1 (Consult + presets) and VS1A (Handoff) are framework work that can start immediately and in parallel with VS0/VS2/VS3; they have value independent of Video Studio and could ship in their own PR if the assigned developer prefers. Each task: **ID — title** · _deps_ · **AC** · packages. Treat this list as the backlog and check items off here.
 
 ### VS0 — Foundations
 - **VS-FND-1 — Scaffold packages.** _deps: none._ `packages/AI/VideoStudio/{Core,Engine,RenderWorker}` with package.json (peer/dep rules per workspace), tsconfig, vitest (`scripts/scaffold-tests.mjs`), README per package. **AC:** all build; tests run; `npm run check:esm` / `check:standards` clean.
-- **VS-FND-2 — Migration: Video Studio entities.** _deps: VS-FND-1._ `migrations/v6/V<ts>__v6.2.x__Video_Studio.sql`: `VideoArchetype`, `VideoBrandKit`, `VideoBrandKitAsset` per §4 (CHECKs, FKs to Company / File, extended properties on every column). **AC:** clean apply on a fresh DB (`bootstrap-clean-db`); `check-migration-entityfield-sequence` passes.
-- **VS-FND-3 — JSONType definitions + CodeGen.** _deps: VS-FND-2, VS-SPEC-1._ JSONType metadata for `Style`, `Voice`, `BeatTemplate`, `Pacing` → core interfaces; `mj sync push` **before** `mj codegen`; commit CodeGen tail. **AC:** typed entity classes with typed JSON accessors; `check:codegen-tail` passes.
-- **VS-FND-4 — Seed metadata.** _deps: VS-FND-3._ `metadata/video-archetypes/` (8 archetypes, guidance via `@file:`), a sample org-wide brand kit ("MemberJunction"), entity permissions/roles, `Video Production` artifact type + extract rules. **AC:** `mj sync validate` clean; push succeeds on a clean DB.
-- **VS-FND-5 — Engine cache.** _deps: VS-FND-3._ `VideoStudioEngine extends BaseEngine` caching archetypes, brand kits, assets (Configs + `ObserveProperty`), `BaseSingleton`. **AC:** unit tests; reactive updates on save.
+- **VS-FND-2 — Migration: Video Studio entities.** _deps: VS-FND-1._ `migrations/v6/V<ts>__v6.2.x__Video_Studio.sql`: `VideoArchetype`, `BrandKit`, `BrandKitAsset` per §4 (CHECKs, FKs to Company / File, extended properties on every column). Brand kits are general core entities (`MJ: Brand Kits`, `MJ: Brand Kit Assets`, D16): their extended properties must describe them without reference to video. **AC:** clean apply on a fresh DB (`bootstrap-clean-db`); `check-migration-entityfield-sequence` passes.
+- **VS-FND-3 — JSONType definitions + CodeGen.** _deps: VS-FND-2, VS-SPEC-1._ JSONType metadata for `Style`, `Voice`, `GenerationPolicy` (brand kits: `IBrandStyle`, `IBrandVoice`, `IBrandGenerationPolicy` under `metadata/entities/JSONType-interfaces/`), `BeatTemplate`, `Pacing` → core interfaces; `mj sync push` **before** `mj codegen`; commit CodeGen tail. **AC:** typed entity classes with typed JSON accessors; `check:codegen-tail` passes.
+- **VS-FND-4 — Seed metadata.** _deps: VS-FND-3._ `metadata/video-archetypes/` (8 archetypes, guidance via `@file:`), a sample org-wide brand kit ("MemberJunction", with `GenerationPolicy` defaults and reference images flagged `IsGenerationReference`), entity permissions/roles, `Video Production` artifact type + extract rules. **AC:** `mj sync validate` clean; push succeeds on a clean DB.
+- **VS-FND-5 — Engine cache.** _deps: VS-FND-3._ A general `BrandKitEngine extends BaseEngine` (in `@memberjunction/core-entities`, next to `UserInfoEngine`) caching brand kits + assets, and `VideoStudioEngine extends BaseEngine` caching archetypes and reading kits from `BrandKitEngine` (Configs + `ObserveProperty`, `BaseSingleton`). **AC:** unit tests; reactive updates on save.
 
 ### VS1 — Consult channel (core framework, §6)
 - **VS-CON-1 — Migration.** _deps: none._ `V<ts>__v6.2.x__Agent_Consult_Chat_Handling.sql`: CHECK + `Consult` on `AIAgent.ChatHandlingOption`; new `AIAgentRelationship.ChatHandlingOption`; `AIAgent.MaxSubAgentConsultRounds`. CodeGen. **AC:** clean apply; generated unions include `'Consult'`.
@@ -835,7 +916,7 @@ Rows must match driver `GetFileCapabilities` (Anthropic: jpeg/png/gif/webp/pdf, 
 - **VS-MOD-1 — Modality rows.** _deps: none._ Gemini 3.8 Flash, Claude Opus 5.5, Fable 5.1, Sonnet 5.5. **AC:** `ModelSupportsModality` returns expected values (test).
 
 ### VS9 — Rubric (§9)
-- **VS-RUB-1 — Video Production Quality rubric.** _deps: none._ Rubric metadata (criteria, levels), `MJ: AI Agent Rubrics` link (Evaluation). **AC:** published rubric; critic prompt pulls criteria from it.
+- **VS-RUB-1 — Video Production Quality rubric.** _deps: none._ Rubric metadata (criteria, levels, including generated-asset integrity), `MJ: AI Agent Rubrics` link (Evaluation). **AC:** published rubric; critic prompt pulls criteria from it.
 
 ### VS10 — Invocation surfaces (§5.5, §10.5)
 - **VS-INV-1 — Sage → Video Studio transfer.** _deps: VS-AGT-1, VS-SAGE-3._ Description and metadata tuned so Sage (Find Candidate Agents) picks Video Studio for video requests. **AC:** "make a 60-second explainer about X" in a Sage conversation produces a top-level Video Studio run with the user's preset, and the follow-up "make the intro faster" stays with Video Studio.
@@ -847,9 +928,18 @@ Rows must match driver `GetFileCapabilities` (Anthropic: jpeg/png/gif/webp/pdf, 
 - **VS-UX-1 — Application + resources.** _deps: VS-FND-5, VS-ART-1._ Application metadata; Productions, Studio, Brand Kits, Archetypes resources; lazy module; manifests. **AC:** `check:ui` clean; Playwright walkthrough (create brand kit → produce → iterate → share).
 - **VS-UX-2 — Copilot.** _deps: VS-UX-1._ Pinned chat area with preset picker. **AC:** first send works in a new conversation; artifacts open in viewer.
 - **VS-UX-3 — Setup health card.** _deps: VS-RND-2._ Storage account resolved? Render driver healthy (ffmpeg, Chrome)? Models available? **AC:** each failure state renders an actionable message.
-- **VS-DOC-1 — Guide.** _deps: all._ `guides/VIDEO_STUDIO_GUIDE.md` (indexed in `guides/README.md`): architecture, spec, presets, render drivers + deployment (Docker image, ffmpeg), storage setup, data stories, consult channel, HyperFrames attribution. **AC:** `check:claude-md` links valid.
-- **VS-QA-1 — Tests.** _deps: all._ Unit tests per package; integration bundles in the deterministic tier with a **fake render driver** (no Chrome in CI) and stubbed models; one opt-in live smoke test (real worker + real models) documented. **AC:** `pnpm run test:integration` passes; counts reported.
+- **VS-DOC-1 — Guide.** _deps: all._ `guides/VIDEO_STUDIO_GUIDE.md` (indexed in `guides/README.md`): architecture, spec, presets, render drivers + deployment (Docker image, ffmpeg), storage setup, data stories, consult channel, brand kits and generation policy, generative assets (§13.3), HyperFrames attribution. **AC:** `check:claude-md` links valid.
+- **VS-QA-1 — Tests.** _deps: all._ Unit tests per package; integration bundles in the deterministic tier with a **fake render driver** (no Chrome in CI), a **fake video-generation driver** (no vendor calls or spend in CI) and stubbed models; one opt-in live smoke test (real worker + real models) documented. **AC:** `pnpm run test:integration` passes; counts reported.
 - **VS-QA-2 — Changesets.** _deps: all._ `minor` (migrations + metadata). **AC:** `check:changeset` clean.
+
+### VS12 — Generative assets (§13.3)
+- **VS-GEN-1 — Generation contract.** _deps: none._ `VideoGenerationParams` / `VideoGenerationJob`, non-abstract `GenerateVideo` / `GetVideoGenerationStatus` on `BaseVideoGenerator`; `ReferenceImages` on `ImageGenerationParams`. **AC:** HeyGen driver and its tests unchanged; types exported with TSDoc; AI Core tests pass.
+- **VS-GEN-2 — Runner.** _deps: VS-GEN-1, VS-GEN-4._ `AIVideoRunner.RunGenerateVideo`: selection, credentials, failover, cancellation, `MAX_POLL_ATTEMPTS` with explicit limit handling, prompt run with cost, upload to storage. **AC:** stubbed-driver tests cover success, failure, cancel, and poll-cap hit; the prompt-run row carries cost; no inline video bytes.
+- **VS-GEN-3 — FLUX 3 driver.** _deps: VS-GEN-1._ FLUX 3 Video and Image in `@memberjunction/ai-blackforestlabs`; usage reporting; C2PA flag; re-verify all BFL endpoints and parameters (including the existing FLUX.2 / Kontext mappings) against `docs.bfl.ai`. **AC:** mocked-HTTP tests per mode; opt-in live smoke test documented; verification date recorded in the README.
+- **VS-GEN-4 — Pricing + model metadata.** _deps: none._ Per Second price unit; FLUX 3 models, vendor rows, costs, modalities. **AC:** `mj sync validate` clean; a unit test computes cost from `OutputSeconds`.
+- **VS-GEN-5 — `Generate Video` action.** _deps: VS-GEN-2._ Metadata + action class beside `Generate Image`. **AC:** action returns a `FileID`; an agent test promotes it to a Video artifact.
+- **VS-GEN-6 — Pre-Production generation.** _deps: VS-GEN-2, VS-AGT-3, VS-FND-3._ `Assets.Generate` handling, policy screening, references from the brand kit, caps, provenance, `MaxRegenerations`. **AC:** a fixture spec with two requests yields staged `Generated` assets; a request that violates `NeverInvent` or `GenerationPolicy` is `Blocked` with zero spend; `MaxGeneratedVideoSeconds` is enforced; a `Generated` asset cannot satisfy a requirement without `AllowGenerated`.
+- **VS-GEN-7 — Disclosure.** _deps: VS-GEN-6, VS-ART-1, VS-RUB-1._ Viewer badges + summary line, `HumanReviewNotes` listing, rubric integrity criterion wired into the critic. **AC:** viewer test shows the badge for a production with generated assets and none without.
 
 ---
 
@@ -859,7 +949,7 @@ Rows must match driver `GetFileCapabilities` (Anthropic: jpeg/png/gif/webp/pdf, 
 | D1 | Core MJ capability, packages `video-studio-core` / `video-studio` / `video-studio-render-worker` | 2026-10-05 |
 | D2 | Code-rendered first; HyperFrames renderer behind a driver port | 2026-10-05 |
 | D3 | `VideoGenerationSpec` is the payload and the artifact content; typed + pure validator, no Zod | 2026-10-05 |
-| D4 | Entities `MJ: Video Archetypes`, `MJ: Video Brand Kits`, `MJ: Video Brand Kit Assets`; nullable `CompanyID` = org-wide | 2026-10-05 |
+| D4 | Entities `MJ: Video Archetypes`, `MJ: Video Brand Kits`, `MJ: Video Brand Kit Assets`; nullable `CompanyID` = org-wide (brand kits generalized by D16) | 2026-10-05 |
 | D5 | Productions are artifacts; iterations are versions | 2026-10-05 |
 | D6 | Power levels Draft/Standard/High via child AI Configurations; Standard = Gemini 3.8 Flash, High = Claude Opus 5.5 | 2026-10-05 |
 | D7 | New `ChatHandlingOption = 'Consult'` (agent + relationship) for agent-to-agent questions; bounded; human keeps final word | 2026-10-05 |
@@ -871,6 +961,11 @@ Rows must match driver `GetFileCapabilities` (Anthropic: jpeg/png/gif/webp/pdf, 
 | D13 | Callers choose sub-agent presets: per-call `presetName` → relationship `ConfigurationPresetID` → inherit | 2026-10-05 |
 | D14 | Sage gets a first-class **Transfer** (hand the conversation to another agent as a top-level run), fixed in this work | 2026-10-05 |
 | D15 | HyperFrames network hook: offered upstream; pnpm patch fallback; security never depends on it | 2026-10-05 |
+| D16 | Brand kits are general core entities, `MJ: Brand Kits` / `MJ: Brand Kit Assets`, with JSON types in core-entities and a `GenerationPolicy`; Video Studio is the first consumer | 2026-10-15 |
+| D17 | Generative footage is an asset source: generated once in Pre-Production, stored, staged, placed by the composition. Code-rendered stays the renderer | 2026-10-15 |
+| D18 | General video-generation contract in AI Core, runner in AI Prompts, `Generate Video` core action; FLUX 3 (image + video) is the first driver | 2026-10-15 |
+| D19 | Generation quality and footage caps follow the power level; new Per Second price unit so generated video is costed | 2026-10-15 |
+| D20 | Generated assets are never facts: no synthetic people presented as real, none by default; provenance kept and disclosed | 2026-10-15 |
 
 ## 17. Open questions
 - **O-1** Is a dedicated production entity needed for gallery performance, or do artifact extract rules suffice?
@@ -882,3 +977,6 @@ Rows must match driver `GetFileCapabilities` (Anthropic: jpeg/png/gif/webp/pdf, 
 - **O-6b** Fork `@hyperframes/engine` only if both upstream and the patch fail.
 - **O-7** Automatic music beat detection in v1?
 - **O-8** Broader audit of AI model modality rows beyond the models Video Studio binds.
+- **O-9** Open App adoption of `MJ: Brand Kits`: Marketing's `Brand` gaining a nullable `BrandKitID`, Forms `FormStyle` reading a kit. Follow-on PRs in those repos.
+- **O-10** Should the final MP4 be C2PA-signed by MJ, declaring its AI-generated ingredients, or is artifact provenance plus the viewer badge enough?
+- **O-11** A second video-generation driver (e.g. Veo, Kling) for failover: this phase or follow-on?
