@@ -18,8 +18,14 @@
  * Permission enforcement is identical to SearchKnowledge: each requested
  * scopeID is run through SearchScopePermissionResolver before the engine
  * is invoked. A denial publishes a single 'error' event and ends.
+ *
+ * 'provider' events are progress only — ProviderName, DurationMs and
+ * ResultCount. They arrive before the engine's permission pass, so they never
+ * carry a result: rows the caller's row filters would drop and unverified
+ * external-index hits must not reach the client. Results arrive in 'fused'
+ * and 'final'.
  */
-import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Float, ID, Subscription, Root, PubSub, PubSubEngine } from 'type-graphql';
+import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Float, Int, ID, Subscription, Root, PubSub, PubSubEngine } from 'type-graphql';
 import { v4 as uuidv4 } from 'uuid';
 import { GraphQLJSON } from 'graphql-type-json';
 import { AppContext } from '../types.js';
@@ -59,9 +65,16 @@ export class SearchStreamNotification {
     @Field(() => Float, { nullable: true })
     DurationMs?: number;
 
-    /** Set on `provider`, `fused`, `reranked`, `final` events. */
+    /**
+     * Set on `fused`, `reranked` and `final` events. Always empty on a `provider` event: a provider's
+     * hits arrive before the permission pass, so the stream reports only their count (`ResultCount`).
+     */
     @Field(() => [SearchKnowledgeResultItem], { nullable: true })
     Results?: SearchKnowledgeResultItem[];
+
+    /** Set on `provider` events: how many hits the provider returned, capped at `maxResults`. */
+    @Field(() => Int, { nullable: true })
+    ResultCount?: number;
 
     /** Set on `final` events. */
     @Field(() => SearchSourceCounts, { nullable: true })
@@ -253,12 +266,15 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
 
         switch (ev.phase) {
             case 'provider':
+                // Progress only. `ev.results` is never forwarded, whatever it holds: these hits have
+                // not been through the permission pass.
                 return {
                     StreamID: streamID,
                     Phase: 'provider',
                     ProviderName: ev.providerName,
                     DurationMs: ev.durationMs,
-                    Results: ev.results.map(mapItem),
+                    ResultCount: ev.resultCount,
+                    Results: [],
                 };
             case 'fused':
                 return {
