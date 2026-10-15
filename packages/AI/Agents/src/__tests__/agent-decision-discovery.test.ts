@@ -591,7 +591,7 @@ describe('decision discovery — off by default', () => {
         await agent.Execute(makeParams());
         const buildsOnFirstRun = agent.Builds;
         await agent.Execute(makeParams());
-        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionDiscovery: false } } }));
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionDiscovery: false } }, TrustReservedRunData: true }));
 
         // The first run fills the cache; after it, only gatherPromptTemplateData merges the override.
         expect(buildsOnFirstRun).toBeGreaterThan(0);
@@ -687,7 +687,7 @@ describe('decision discovery — the options', () => {
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
-        await agent.Execute(makeParams({ data: { __agentTypePromptParams: ON } }));
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: ON }, TrustReservedRunData: true }));
 
         expect(ask).toHaveBeenCalledTimes(1);
     });
@@ -697,7 +697,7 @@ describe('decision discovery — the options', () => {
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
-        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionsEnabled: true } } }));
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionsEnabled: true } }, TrustReservedRunData: true }));
 
         expect(ask).toHaveBeenCalledTimes(1);
     });
@@ -706,7 +706,7 @@ describe('decision discovery — the options', () => {
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
-        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionsEnabled: false } } }));
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionsEnabled: false } }, TrustReservedRunData: true }));
 
         expect(ask).not.toHaveBeenCalled();
         expect(discoverySteps()).toHaveLength(0);

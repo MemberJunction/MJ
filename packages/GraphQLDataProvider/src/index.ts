@@ -109,7 +109,8 @@ export type {
     SearchClientFilters,
     SearchClientProviderInfo,
     SearchSourceCounts,
-    SearchScoreBreakdown
+    SearchScoreBreakdown,
+    SearchStreamClientEvent
 } from './graphQLSearchClient';
 
 export { GraphQLIntegrationClient } from './graphQLIntegrationClient';
