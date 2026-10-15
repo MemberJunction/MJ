@@ -46,6 +46,8 @@ import {
     RunQueriesWithCacheCheckResponse,
     RunQueryWithCacheCheckResult,
     QueryCacheAuthorization,
+    QueryDefinitionSignature,
+    RunQueryCacheStatus,
     QueryCategoryInfo,
     AggregateResult,
     AggregateValue,
@@ -86,7 +88,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser, IsReadOnlyQuery, CheckAggregateExpression } from '@memberjunction/sql-parser';
+import { SQLParser, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
@@ -1898,6 +1900,46 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Throws unless a caller-supplied WHERE piece (ExtraFilter, OverrideExcludeFilter, a stored view
+     * WhereClause) stays inside the parentheses this provider puts around it, read with this
+     * provider's SQL dialect (see `IsBalancedSQLFragment`). The pieces are ANDed with row-level
+     * security, which also carries API-key row filters and guest scope; a piece that closes its
+     * parentheses early, such as `1=1) OR (1=1`, would leave those filters on one side of an OR the
+     * caller controls.
+     */
+    protected AssertClauseBalanced(clause: string, label: string, options?: BalancedFragmentOptions): void {
+        const check = IsBalancedSQLFragment(clause, this.Dialect, options);
+        if (!check.IsBalanced) {
+            throw new Error(`Invalid ${label}: ${check.Reason}`);
+        }
+    }
+
+    /**
+     * Applies {@link TransformExternalSQLClause} to a caller's ExtraFilter and checks the result with
+     * {@link AssertClauseBalanced}. When the transform changes the text and the filter is a chain of
+     * top-level AND terms, each term is transformed, checked and parenthesized on its own. A
+     * PreRunView hook that ANDs a server predicate (such as tenant scope) onto the caller's filter
+     * runs before this transform, so a rewrite that changes the caller's term cannot reach the
+     * hook's term.
+     */
+    protected PrepareExtraFilterSQL(extraFilter: string, entityInfo: EntityInfo): string {
+        if (!extraFilter) return '';
+        const transformed = this.TransformExternalSQLClause(extraFilter, entityInfo);
+        const terms = transformed === extraFilter ? null : SplitTopLevelAndTerms(extraFilter, this.Dialect);
+        if (!terms || terms.length < 2) {
+            this.AssertClauseBalanced(transformed, 'ExtraFilter');
+            return transformed;
+        }
+        return terms
+            .map((term) => {
+                const termSQL = this.TransformExternalSQLClause(term.trim(), entityInfo);
+                this.AssertClauseBalanced(termSQL, 'ExtraFilter');
+                return `(${termSQL})`;
+            })
+            .join(' AND ');
+    }
+
+    /**
      * Optionally wraps a view query with user view run logging.
      * SQL Server overrides to use spCreateUserViewRunWithDetail.
      * Default: returns null (no view run logging).
@@ -1993,7 +2035,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
 
             // ── Parameters (transform user-provided SQL clauses for platform compatibility) ──
-            const extraFilter: string = this.TransformExternalSQLClause((params.ExtraFilter as string) || '', entityInfo);
+            const extraFilter: string = this.PrepareExtraFilterSQL((params.ExtraFilter as string) || '', entityInfo);
             const userSearchString: string = params.UserSearchString ?? '';
             const excludeUserViewRunID: string = params.ExcludeUserViewRunID ?? '';
             const overrideExcludeFilter: string = params.OverrideExcludeFilter ?? '';
@@ -2075,6 +2117,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {
                     throw new Error(`Invalid view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}': contains one or more forbidden keywords`);
                 }
+                // CustomWhereClause views too: an unbalanced clause would take row-level security
+                // out of force for everyone who runs the view. Only their admin-written text may
+                // carry comments.
+                this.AssertClauseBalanced(renderedWhere, `view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}'`, {
+                    AllowComments: isCustomWhereClause,
+                });
                 whereSQL = `(${renderedWhere})`;
                 bHasWhere = true;
             }
@@ -2144,6 +2192,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (overrideExcludeFilter.length > 0) {
                     if (!this.ValidateUserProvidedSQLClause(overrideExcludeFilter))
                         throw new Error(`Invalid OverrideExcludeFilter: ${overrideExcludeFilter}, contains one more for forbidden keywords`);
+                    this.AssertClauseBalanced(overrideExcludeFilter, 'OverrideExcludeFilter');
                     sExcludeSQL += ' OR (' + overrideExcludeFilter + ')';
                 }
                 whereSQL = bHasWhere ? `${whereSQL} AND (${sExcludeSQL})` : `(${sExcludeSQL})`;
@@ -3350,7 +3399,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         let whereSQL = '';
         let bHasWhere = false;
 
-        const extraFilter = this.TransformExternalSQLClause((params.ExtraFilter as string) || '', entityInfo);
+        // PrepareExtraFilterSQL transforms and balance-checks the filter; the single-statement
+        // check then runs on the result, as on the main view path.
+        const extraFilter = this.PrepareExtraFilterSQL((params.ExtraFilter as string) || '', entityInfo);
         this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
         if (extraFilter.length > 0) {
             if (!this.ValidateUserProvidedSQLClause(extraFilter))
@@ -3868,6 +3919,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const itemsWithoutValidationSQL: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
             const firstFetchWithValidation: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
             const errorResults: RunQueryWithCacheCheckResult<T>[] = [];
+            const definitionHashes = new Map<number, string>();
 
             for (let i = 0; i < params.length; i++) {
                 const item = params[i];
@@ -3886,7 +3938,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     continue;
                 }
 
-                if (!item.cacheStatus) {
+                const definition = this.QueryDefinitionSignatureFor(query);
+                if (definition) {
+                    definitionHashes.set(i, definition.Hash);
+                }
+
+                if (!item.cacheStatus || this.clientSlotDefinitionDiffers(item.cacheStatus, definition)) {
+                    // No slot, or the client's slot holds rows of another definition of the query:
+                    // whatever CacheValidationSQL says about the data, those rows came from other SQL.
                     if (query.CacheValidationSQL) {
                         // First fetch for a validated query — run the validation status
                         // anyway so the fresh response is STAMPED with the validation
@@ -3947,7 +4006,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             ];
 
             const fullQueryResults = await Promise.all(fullQueryPromises);
-            const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
+            const allResults = [...errorResults, ...currentResults, ...fullQueryResults]
+                .map(result => result.status === 'error' || !definitionHashes.has(result.queryIndex)
+                    ? result
+                    : { ...result, definitionHash: definitionHashes.get(result.queryIndex) });
             allResults.sort((a, b) => a.queryIndex - b.queryIndex);
 
             return { success: true, results: allResults };
@@ -3980,12 +4042,40 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 resolvable: true,
                 authorized: !user || query.UserCanRun(user).canRun,
                 categoryPath: query.CategoryPath,
-                queryName: query.Name
+                queryName: query.Name,
+                queryId: query.ID,
+                definition: this.QueryDefinitionSignatureFor(query)
             };
         } catch (e) {
             LogStatusEx({ message: `ResolveQueryCacheAuthorization: resolution failed (${e instanceof Error ? e.message : String(e)}) — treating as unresolvable.`, verboseOnly: true });
             return { resolvable: false, authorized: false };
         }
+    }
+
+    /**
+     * The definition signature of `query` on this provider's platform: what a RunQuery cache slot
+     * of the query must have been written under to be served. Computed by `QueryEngine` from the
+     * same metadata this provider executes. Undefined when the engine cannot compute it, which
+     * disables the definition check for that read rather than failing it.
+     */
+    protected QueryDefinitionSignatureFor(query: MJQueryEntityExtended): QueryDefinitionSignature | undefined {
+        try {
+            return QueryEngine.Instance.GetDefinitionSignature(query.ID, this.PlatformKey as DatabasePlatform);
+        } catch (e) {
+            LogStatusEx({ message: `QueryDefinitionSignatureFor: could not compute the definition of query '${query.Name}' (${e instanceof Error ? e.message : String(e)}) — skipping the definition check.`, verboseOnly: true });
+            return undefined;
+        }
+    }
+
+    /**
+     * True when a client sent the definition hash its slot was written under and it is not this
+     * server's. A client that sends none (a release before the hash existed) gets no definition check.
+     */
+    private clientSlotDefinitionDiffers(cacheStatus: RunQueryCacheStatus, definition: QueryDefinitionSignature | undefined): boolean {
+        if (cacheStatus.definitionHash == null || !definition) {
+            return false;
+        }
+        return cacheStatus.definitionHash !== definition.Hash;
     }
 
     /**
@@ -4092,21 +4182,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const promises = items.map(async ({ index, query }) => {
             try {
                 const rows = await this.ExecuteSQL<Record<string, unknown>>(query.CacheValidationSQL!, undefined, undefined, contextUser);
-                if (rows && rows.length > 0) {
-                    const row = rows[0];
-                    results.set(index, {
-                        success: true,
-                        // Both spellings accepted. The shipped `CacheValidationSQL` field description tells authors
-                        // to return `TotalRows`, while this has only ever read `RowCount` — so a query written
-                        // from the documentation yields `Number(undefined)` = NaN, `NaN !== NaN` makes the slot
-                        // never validate, and NaN is then written back into the client's cache entry where `??`
-                        // cannot clear it. Silent, permanent degradation to always-refetch, with no error.
-                        rowCount: Number(row['RowCount'] ?? row['TotalRows']),
-                        maxUpdatedAt: row['MaxUpdatedAt'] ? new Date(String(row['MaxUpdatedAt'])).toISOString() : undefined,
-                    });
-                } else {
-                    results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
-                }
+                results.set(index, this.QueryCacheStatusFromRow(rows?.[0]));
             } catch (e) {
                 results.set(index, { success: false, errorMessage: e instanceof Error ? e.message : String(e) });
             }
@@ -4114,6 +4190,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         await Promise.all(promises);
         return results;
+    }
+
+    /**
+     * Reads the first row a query's CacheValidationSQL returned into a cache status. No row means
+     * an empty result: zero rows, no timestamp.
+     *
+     * Both spellings of the count are accepted. The shipped `CacheValidationSQL` field description
+     * tells authors to return `TotalRows`, while older queries return `RowCount`. Reading only one
+     * of them yields `Number(undefined)` = NaN for the other, `NaN !== NaN` makes the slot never
+     * validate, and NaN is then written back into the client's cache entry where `??` cannot clear
+     * it: a silent, permanent degradation to always-refetch, with no error. Platform providers that
+     * batch the validation SQL read their rows through this too.
+     */
+    protected QueryCacheStatusFromRow(row: Record<string, unknown> | undefined): { success: boolean; maxUpdatedAt?: string; rowCount?: number } {
+        if (!row) {
+            return { success: true, rowCount: 0, maxUpdatedAt: undefined };
+        }
+        const maxUpdatedAt = row['MaxUpdatedAt'];
+        return {
+            success: true,
+            rowCount: Number(row['RowCount'] ?? row['TotalRows']),
+            maxUpdatedAt: maxUpdatedAt
+                ? (maxUpdatedAt instanceof Date ? maxUpdatedAt : new Date(String(maxUpdatedAt))).toISOString()
+                : undefined,
+        };
     }
 
     /**
@@ -4883,6 +4984,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const cacheable = !params.SQL && ttlSeconds > 0 && LocalCacheManager.Instance.IsInitialized;
 
         let fingerprint: string | undefined;
+        let definition: QueryDefinitionSignature | undefined;
         if (cacheable) {
             // MaxRows/StartRow shape the result set, and the data source ID disambiguates slots.
             const fingerprintParams: Record<string, unknown> = {
@@ -4892,7 +4994,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 __eds: externalDataSourceID,
             };
             fingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(query.ID, query.Name, fingerprintParams, this.InstanceConnectionString, query.CategoryPath);
-            const cached = await LocalCacheManager.Instance.GetRunQueryResult(fingerprint); // TTL-enforced
+            definition = this.QueryDefinitionSignatureFor(query);
+            // TTL-enforced, and a miss when the slot was written under another definition of the query.
+            const cached = await LocalCacheManager.Instance.GetRunQueryResult(fingerprint, definition);
             if (cached) {
                 return {
                     QueryID: cached.queryId ?? query.ID,
@@ -4928,6 +5032,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // Fire-and-forget store with the data source's TTL (ms).
             LocalCacheManager.Instance.SetRunQueryResult(
                 fingerprint, query.Name, paginatedResult, '', totalRowCount, query.ID, ttlSeconds * 1000,
+                undefined, definition,
             ).catch(e => LogError(`External RunQuery cache write failed: ${e}`));
         }
         return { ...checked, Results: paginatedResult as RunQueryResult['Results'], RowCount: paginatedResult.length, TotalRowCount: totalRowCount };

@@ -49,8 +49,12 @@ name: Integration Tier
 # with the unused browser/Computer-Use regression wiring — this repo does not run that stack in CI.
 
 on:
+  # Line branches run this gate too (process doc 5.2 rule 4): lts/* is what a publish
+  # ships from and what customers pin to, so a break discovered after merge is worse
+  # here than on next. The trigger lives on next so every candidate cut inherits it;
+  # lts/5 got it from a line-only commit (6937c7c050) and lts/6.1 was cut without it.
   pull_request:
-    branches: [next]
+    branches: [next, 'lts/**']
     paths:
       - 'pnpm-lock.yaml'
       - 'packages/**'
@@ -72,7 +76,7 @@ on:
   # heuristic; migrations + runtime @RegisterClass wiring can couple files no filter foresees)
   # can never merge silently and red the next PR (R3, mirrors test.yml).
   push:
-    branches: [next]
+    branches: [next, 'lts/**']
   workflow_dispatch:
     inputs:
       run_live_model:
