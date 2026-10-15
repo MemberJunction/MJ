@@ -997,7 +997,7 @@ export class PushService {
     
     // Issue #4199: a push against an entity whose subclass is not loaded in this process
     // "succeeds" with a generic BaseEntity and silently skips the entity's custom logic. Say so.
-    const subclassWarning = describeMissingEntitySubclass(String(entityConfig.entity ?? ''), { dryRun: options.dryRun });
+    const subclassWarning = describeMissingEntitySubclass(String(entityConfig.entity ?? ''), { DryRun: options.dryRun });
     if (subclassWarning) {
       this.warnings.push(subclassWarning);
       callbacks?.onWarn?.(`⚠️  ${subclassWarning}`);
