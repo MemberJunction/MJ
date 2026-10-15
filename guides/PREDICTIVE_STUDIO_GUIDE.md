@@ -17,7 +17,7 @@ It is **core MJ, not an OpenApp**. It composes on substrates MJ already has — 
 | **What it is *not*** | SageMaker / Databricks. No GPU. No training embeddings from scratch (it *uses* pre-trained embeddings as features). Deliberately rigid about algorithms (a fixed 6-catalog), flexible about data. |
 | **Compute** | **CPU-bound, no GPU.** Gradient boosting / logistic / random forest / small MLP on tabular data train in seconds-to-minutes — matches MJ's API-runtime infra. |
 | **Invocation** | **6 typed Remote Operations** (`predictive:execute` scope) + **4 Actions**, both delegating to one shared engine layer. The browser, Skip, and the agent all call the same code. |
-| **Status** | **End-to-end shipped** — sidecar, FeatureAssembly, training, scoring, the experiment orchestrator, the 6 Remote Ops + 4 Actions, Feature Pipelines, the Model Development Agent + artifact + viewer, maintenance/retrain, multimodal vision-as-feature, the Studio UI, and a live integration test. The one explicitly-deferred item is **SP5 materialized prediction columns**, gated on PR #2770 (see [Roadmap](#17-roadmap--future-phases)). |
+| **Status** | **End-to-end shipped** — sidecar, FeatureAssembly, training, scoring, the experiment orchestrator, the 6 Remote Ops + 4 Actions, Feature Pipelines, the Model Development Agent + artifact + viewer, maintenance/retrain, multimodal vision-as-feature, the Studio UI, and a live integration test. Planned: prediction serving through Feature Values and a materialized entity, so a new model needs no schema change (see [Roadmap](#17-roadmap--future-phases)). |
 
 **Proof it works — real numbers from the live integration test** (`live-train-score.integration.test.ts`, real managed sidecar, 420-row synthetic dataset with a genuinely learnable signal, no DB):
 
@@ -97,7 +97,7 @@ flowchart TB
     end
     subgraph INFER["4 · Inference layer"]
         RSP["Record Set Processing<br/>MLModelInferenceProcessor ('ML Model' work type)"]
-        MAT["Materialization · #2770 (deferred)<br/>physical prediction columns"]
+        MAT["Materialized Results · #2770 (shipped in MJ)<br/>not yet used by Predictive Studio"]
     end
     DATA --> FEAT
     FP -->|persist features| E
@@ -105,7 +105,7 @@ flowchart TB
     TRAIN <-->|"/train · /predict"| SIDE
     TRAIN --> MM
     MM --> RSP
-    MM -.deferred.-> MAT
+    MM -.planned.-> MAT
     RSP -->|optional write-back| E
     AGENT["Model Development Agent<br/>Remote Ops + Actions"] -.drives.-> FEAT & MODEL & INFER
     style FEAT fill:#ecfeff,stroke:#0891b2
@@ -119,7 +119,7 @@ The differentiation is **data assembly + agentic search over MJ's entire data su
 | **1 · Data** (existing) | Entities, `MJ: Queries`, external entities (#2449), vectors, DBAutoDoc — all become feed-ins via `RunView`/`RunQuery` | — |
 | **2 · Feature** | `FeatureAssemblyExecutor` (the single correctness backbone) + Feature Pipelines (persisted derived features) | §4, §11 |
 | **3 · Model** | `MLSidecar` + `TrainingEngine` → immutable versioned `MJ: ML Models` | §2, §5 |
-| **4 · Inference** | `MLModelInferenceProcessor` (RSP work type); population-wide indexed columns are deferred to #2770 | §6, §17 |
+| **4 · Inference** | `MLModelInferenceProcessor` (RSP work type); population-wide querying of predictions is planned through Feature Values and a materialized entity (§6.5, §17) | §6, §17 |
 
 ---
 
@@ -414,20 +414,20 @@ The processor **warm-loads the model once** and shares it across the batch (an i
 
 ### 6.4 Single, batch, on-demand, scheduled
 
-The sidecar doesn't care about cardinality — single-record serves interactive/agent needs, batch serves bulk. **On-demand** = `RecordProcess.RunNow` + a runtime scope override (records/view/list/filter/single). **Scheduled** = the `Schedule` trigger, with an `MJ: ML Model Scoring Binding` (`upsertScoringBinding`) recording lineage (`LastScoredAt` / `LastRowCount`) for staleness detection and retraining (§14). **Materialized** prediction columns (population-wide, indexed) are the *deferred* later optimization gated on #2770 (§17); scoring + write-back ship with **zero dependency** on it.
+The sidecar doesn't care about cardinality — single-record serves interactive/agent needs, batch serves bulk. **On-demand** = `RecordProcess.RunNow` + a runtime scope override (records/view/list/filter/single). **Scheduled** = the `Schedule` trigger, with an `MJ: ML Model Scoring Binding` (`upsertScoringBinding`) recording lineage (`LastScoredAt` / `LastRowCount`) for staleness detection and retraining (§14). Population-wide querying of predictions through a materialized entity is planned (§17); scoring + write-back ship with **zero dependency** on it.
 
 ### 6.5 Where predictions go — the four storage paths
 
-These are **four distinct, orthogonal** things. The common confusion is to assume column write-back needs materialization (#2770), or that "Materialized Results" is an ML run-history store — **neither is true.** All "store a prediction" needs are met by paths A–C **today**; #2770 (D) is an optional future *auto-refresh* optimization, nothing more.
+These are **four distinct, orthogonal** things. Today predictions are stored through paths A–C. Paths A and C need a column or an entity in your schema for each model, so adding a model means a schema change. MJ's Materialized Results (#2770, path D) has shipped, but Predictive Studio does not use it yet. **Planned:** predictions become effective-dated Feature Values with model and run lineage, shown by one generic record panel and queryable through one materialized entity, with no schema change per model (§17).
 
 | | Path | What it is | Status | When to use |
 |---|---|---|---|---|
 | **A** | **Column write-back** — `OutputMapping.fields` | Writes the prediction into a real column on the **target entity**, **overwritten each run** (the *current* value). `fields` is a map, so one run can write several columns. | ✅ shipped | "Put each member's latest renewal probability on the member record." e.g. `{ "RenewalProbability": "$.score", "LastScoredAt": "$.scoredAt" }` |
 | **B** | **`MJ: Process Run Details`** | Automatic per-record **transactional history** — every scoring run writes one detail row per record carrying the full prediction `ResultPayload` (score/class/scoredAt/lineage), `RecordID`, `Status`, `CompletedAt`. No config. | ✅ shipped (automatic) | Audit / replay / "what did the model say for this member on each run" — for free, even with no `OutputMapping`. |
 | **C** | **`OutputMapping.childRecord`** — typed time-series | Creates a **child record per scored record per run** in an entity *you* define (e.g. `Member Renewal Scores` with `MemberID` + `Probability` + `ScoredAt`). A clean, queryable, append-only history of your own shape. | ✅ shipped | "Keep a typed history table / time-series of scores" (cleaner than the generic JSON in path B). |
-| **D** | **#2770 Materialized Results** | A **generic**, not-yet-built primitive for materializing *any query/entity result set* as a cached, auto-refreshed physical table. **Not ML-specific, not run history.** ML can later ride it for population-wide *indexed* prediction columns. | ⏳ deferred (design-doc; gated on PR #2770) | A *future* optimization for indexed, population-wide querying — **never required** to store predictions. |
+| **D** | **#2770 Materialized Results** | A **generic** MJ capability: a stored query (or an entity's base view) is materialized by CodeGen into a read-only virtual entity backed by a snapshot table, refreshed by the "Materialization Refresh" scheduled job and read with `DataSource: 'Materialized'`. **Not ML-specific, not run history.** | ✅ shipped in MJ · not yet used by Predictive Studio (the `'Materialized'` binding mode and `MaterializedResultID` are unused) | Planned: one population-wide entity holding the latest prediction per record and feature (§17). |
 
-> **#2770 is NOT "ML Model Run Results."** It's view/entity-materialization infrastructure that ML could *optionally* use later. Per-run prediction history already lives in path B (`MJ: Process Run Details`) and, if you want a typed table, path C (`childRecord`). Writing a prediction into an entity column (path A) is a plain MJ column write — it needs nothing from #2770.
+> **#2770 is NOT "ML Model Run Results."** It's generic view/entity-materialization infrastructure. Per-run prediction history already lives in path B (`MJ: Process Run Details`) and, if you want a typed table, path C (`childRecord`). Writing a prediction into an entity column (path A) is a plain MJ column write — it needs nothing from #2770.
 
 ### 6.x "Needs training" and opt-in auto-train
 
@@ -1219,11 +1219,11 @@ Both §16.3 and §16.4 read `MJ: ML Model Scoring Bindings` — so operationaliz
 
 ## 17. Roadmap / future phases
 
-Predictive Studio ships end-to-end. The one explicitly-deferred capability is honest here:
+Predictive Studio ships end-to-end. The planned change to how predictions are stored and served:
 
 | Item | Status | Detail |
 |---|---|---|
-| **SP5 — Materialized prediction columns** | **Deferred, gated on PR #2770** | The "population-wide, indexed prediction column" optimization runs ML batch-scoring inside the offline **materialization** refresh and writes predictions as **physical columns** on a materialized `VirtualEntity` (Skip/reports/views query them like any table). It depends on PR #2770 landing the `MJ: Materialized Results` table. **The forward-compat seam is already in place**: `MJ: ML Model Scoring Bindings.MaterializedResultID` is a **soft reference** (not a FK) to that table, and the `ScoringBindingMode = 'OnDemand' \| 'Scheduled' \| 'Materialized'` already names the `Materialized` mode. On-demand + scheduled scoring (§6) ship with **zero dependency** on #2770 — when the table lands, materialization is additive. |
+| **Prediction serving through Feature Values** | **Planned** | Every prediction becomes an effective-dated Feature Value (`Source = 'Model'`) carrying model, scoring-run and binding lineage. A scoring binding defines the prediction feature, who may see it, how long history is kept and an optional copy into an existing column. One generic record panel shows a record's predictions and their history, and one materialized entity of the latest values (built on Materialized Results, #2770, which has shipped) makes them queryable across the population, with no schema change or CodeGen run per model. The `'Materialized'` binding mode and `MaterializedResultID` are unused placeholders that this change removes. Until it ships, use paths A–C (§6.5). |
 
 Other open questions carried forward (none block the shipped feature): model serialization native-vs-ONNX for cross-platform portability; reserving algorithm slots (k-NN / Naive Bayes); the precise drift-detection method behind the `IDriftDetector` seam; sidecar multi-tenancy / per-session resource limits for long agentic searches; and detached fire-and-forget Remote-Op progress (poll-via-status today, full background execution later).
 
@@ -1330,7 +1330,7 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | Studio dashboard UI (6 panels, engine, embedded copilot, lazy-load) | ✅ built |
 | **Business-user experience** (§16) — agent offers + schedules monthly · generic `'*'` risk-card panel · Models-in-Production section · de-mocked Studio + ops wired · scoring-binding lineage · WorkType value-list + Enrichment-over-GraphQL | ✅ built |
 | Live integration test (`PS_INTEGRATION=1`) | ✅ built |
-| Materialized prediction columns (#2770) | ⏳ **deferred — gated on PR #2770** (§17) |
+| Prediction serving through Feature Values + a materialized entity (#2770 itself has shipped) | ⏳ **planned** (§17) |
 
 **Related guides**: [Record Set Processing](RECORD_SET_PROCESSING_GUIDE.md) (the scoring + wave + feature-pipeline substrate) · [Remote Operations](REMOTE_OPERATIONS_GUIDE.md) & [Transport-Layer Architecture](TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md) (the invocation surface) · [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) & [Lazy Loading](LAZY_LOADING_GUIDE.md) (the Studio UI) · [Conversations UX Stack](CONVERSATIONS_UX_STACK_GUIDE.md) (the embedded copilot) · [Agent Memory](AGENT_MEMORY_GUIDE.md) (the Model Dev Agent's notes).
 
