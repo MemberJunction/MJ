@@ -357,13 +357,16 @@ export class ResolverBase {
    * @param dataObject - The data object containing field values
    * @param encryptionEngine - Optional encryption engine for re-encryption (lazy loaded if needed)
    * @param contextUser - User context for encryption operations
+   * @param fieldKey - What the object's keys are: field CodeNames (GraphQL transport rows, the
+   *   default) or field Names (raw provider rows, such as dataset item results)
    * @returns The filtered data object
    */
   protected async FilterEncryptedFieldsForAPI(
     entityName: string,
     dataObject: Record<string, unknown>,
     contextUser: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    fieldKey: 'CodeName' | 'Name' = 'CodeName'
   ): Promise<Record<string, unknown>> {
     if (!dataObject) return dataObject;
 
@@ -377,7 +380,7 @@ export class ResolverBase {
 
     // Process each encrypted field
     for (const field of encryptedFields) {
-      const fieldName = field.CodeName;
+      const fieldName = fieldKey === 'Name' ? field.Name : field.CodeName;
       const value = dataObject[fieldName];
 
       // Skip null/undefined values
@@ -418,13 +421,15 @@ export class ResolverBase {
   }
 
   /**
-   * Filters encrypted fields for an array of data objects
+   * Filters encrypted fields for an array of data objects. `fieldKey` is as for
+   * {@link FilterEncryptedFieldsForAPI}.
    */
   protected async ArrayFilterEncryptedFieldsForAPI(
     entityName: string,
     dataObjectArray: Record<string, unknown>[],
     contextUser: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    fieldKey: 'CodeName' | 'Name' = 'CodeName'
   ): Promise<Record<string, unknown>[]> {
     if (!dataObjectArray || dataObjectArray.length === 0) return dataObjectArray;
 
@@ -438,7 +443,7 @@ export class ResolverBase {
 
     // Process each element
     for (const element of dataObjectArray) {
-      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider);
+      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider, fieldKey);
     }
 
     return dataObjectArray;
