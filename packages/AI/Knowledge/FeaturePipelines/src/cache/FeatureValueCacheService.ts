@@ -32,7 +32,6 @@ export interface FeatureValueCacheScope {
     constraintHash: string;
     /** The pin's primary AI model (null when the prompt has no Active model). */
     aiModelID: string | null;
-    /** The pin's parameters hash. */
     parametersHash: string;
     contextUser: UserInfo;
     provider?: IMetadataProvider;
@@ -93,7 +92,6 @@ export interface RecordFeatureValuesParams {
     parametersHash: string | null;
     /** SHA-256 of the record's normalised inputs (the cache key hash); null when there is none. */
     inputHash: string | null;
-    /** Who produced the values. */
     source: FeatureValueSource;
     /** The rows are history (a decision an escalation superseded), never made the feature's latest value again. */
     historyOnly?: boolean;
@@ -122,7 +120,6 @@ export interface LatestFeatureValueParams extends FeatureValueRecordRef {
 export interface RecordHumanValueParams extends FeatureValueRecordRef {
     /** The field's current value. `unknown` on purpose: a field value of any entity, the type `BaseEntity.Get` returns. */
     Value: unknown;
-    /** The run that observed the value; null when there is none. */
     ProcessRunID?: string | null;
 }
 
@@ -131,9 +128,7 @@ export type TypedFeatureValue = Pick<MJFeatureValueEntity, 'ValueText' | 'ValueN
 
 /** What {@link FeatureValueCacheService.RecordFeatureValues} did with each output. */
 export interface RecordFeatureValuesOutcome {
-    /** Outputs inserted or updated. */
     Upserted: number;
-    /** Outputs whose key already held the same value, reasoning and confidence. */
     Unchanged: number;
     /**
      * Each output's latest `Source='Pipeline'` value for the record before this call, on any key, by feature name; null
@@ -481,7 +476,6 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         return latest;
     }
 
-    /** The keyed rows of a pipeline, by ValueKeyHash. */
     protected async LoadByKeyHashes(params: RecordFeatureValuesParams, provider: IMetadataProvider, keyHashes: string[]): Promise<Map<string, MJFeatureValueEntity>> {
         const map = new Map<string, MJFeatureValueEntity>();
         if (keyHashes.length === 0) {
@@ -539,12 +533,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         });
     }
 
-    /**
-     * Deletes the record's Human Feature Values of a feature through the entity layer (Record Changes keeps the
-     * history), sequentially: the deletes share the caller's transaction.
-     * @returns how many rows were deleted
-     * @throws Error when the rows cannot be read or one cannot be deleted
-     */
+    /** Deletes the record's Human Feature Values of a feature (sequentially, in the caller's transaction); returns how many. */
     public async RetireHumanValue(p: FeatureValueRecordRef): Promise<number> {
         const res = await RunView.FromMetadataProvider(p.Provider).RunView<MJFeatureValueEntity>({
             EntityName: 'MJ: Feature Values',
@@ -605,10 +594,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         return v.ValueJSON !== null ? JSON.parse(v.ValueJSON) : null;
     }
 
-    /**
-     * A value in the typed column its JavaScript type maps to.
-     * @param val an output's value: whatever the pipeline's payload holds at the output's Ref (`unknown` at that boundary)
-     */
+    /** A value in the typed column its JavaScript type maps to. */
     public static ToTypedValue(val: FeatureValueOutputItem['value']): TypedFeatureValue {
         return {
             ValueText: typeof val === 'string' ? val : null,
@@ -649,10 +635,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             + ` AND ConstraintHash = '${EscapeSQLString(p.constraintHash)}' AND ${model} AND ParametersHash = '${EscapeSQLString(p.parametersHash)}'`;
     }
 
-    /**
-     * Reads a field by name, matching the name case-insensitively when there is no exact match.
-     * @returns the field's value: record data is untyped at this boundary, so `unknown`; undefined when absent
-     */
+    /** Reads a field by name, matching the name case-insensitively when there is no exact match. */
     protected static ReadFieldCaseInsensitive(data: Record<string, unknown>, field: string): unknown {
         if (field in data) {
             return data[field];
@@ -662,10 +645,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         return actual === undefined ? undefined : data[actual];
     }
 
-    /**
-     * A key input as hashed: text normalised by {@link FeatureValueKey.NormalizeValue}, anything else as it is.
-     * @param value a record field's value — untyped record data at this boundary, so `unknown`
-     */
+    /** A key input as hashed: text normalised by {@link FeatureValueKey.NormalizeValue}, anything else as it is. */
     protected static NormalizeKeyInput(value: unknown): unknown {
         return typeof value === 'string' ? FeatureValueKey.NormalizeValue(value) : value;
     }

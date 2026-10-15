@@ -14,13 +14,10 @@ import type { HumanValueGuard, HumanValueQuestion } from '../writeBack';
 export interface FeaturePipelineHumanValueGuardOptions {
     /** The pipeline (`MJ: Record Processes` ID) whose Feature Values are read and written. */
     RecordProcessID: string;
-    /** The processed record's entity. */
     EntityID: string;
-    /** The processed record. */
     Record: RecordRef;
     /** The run's context: its user and process run. Reads and writes use the write-back unit's provider instead. */
     Context: RecordProcessorContext;
-    /** The pipeline's spec: which output writes which field. */
     Spec: DataFeatureSpec;
     /** Each feature's latest Pipeline value from before this run's write (`InferProcessor.PreviousFeatureValues`), read when asked. */
     PreviousValues: () => Readonly<Record<string, TypedFeatureValue | null>> | undefined;
@@ -51,10 +48,7 @@ export class FeaturePipelineHumanValueGuard implements HumanValueGuard {
         return !question.Equals(question.CurrentValue, lastWritten);
     }
 
-    /**
-     * Records the preserved value as the record's Human Feature Value for the output that writes the field.
-     * @param currentValue - the field's value; `unknown` for the reason `HumanValueQuestion` gives
-     */
+    /** Records the preserved value as the record's Human Feature Value for the output that writes the field. */
     public async RecordPreserved(fieldName: string, currentValue: unknown, provider: IMetadataProvider): Promise<void> {
         const output = this.OutputFor(fieldName);
         // A dry run persists nothing
@@ -76,7 +70,6 @@ export class FeaturePipelineHumanValueGuard implements HumanValueGuard {
         return (await FeatureValueCacheService.Instance.RetireHumanValue(this.RefOf(output, provider))) > 0;
     }
 
-    /** The spec output that writes this field (see {@link OutputWritingField}). */
     protected OutputFor(fieldName: string): DataFeatureOutput | undefined {
         return FeaturePipelineHumanValueGuard.OutputWritingField(this.Options.Spec.Outputs, fieldName);
     }

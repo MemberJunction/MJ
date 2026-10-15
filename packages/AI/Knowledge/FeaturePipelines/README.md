@@ -111,13 +111,11 @@ driver's own (a Decision driver produces one per output). Otherwise it is the nu
 `ValidateSpec` refuses a `ConfidenceRef` that does not name a property of the result. An output whose value the
 constraint check replaced (`null` or `coerce-to-other`) gets no confidence.
 
-An output can set a confidence floor: `MinConfidence` (0 < floor <= 1) with `OnLowConfidence` (`'null'` or
-`'fail'`). `ValidateSpec` requires both together, a `ConfidenceRef` on an LLM pipeline, and refuses a floor on a
+An output can set a confidence floor: `MinConfidence` (0 < floor <= 1) with `OnLowConfidence: 'null'`. `ValidateSpec` requires both together, a `ConfidenceRef` on an LLM pipeline, and refuses a floor on a
 whole-answer (`$`) output when the spec has other outputs. `ConfidenceFloor.IsBelow`
 treats a missing confidence as below the floor; `ConfidenceFloor.FindBelow` lists an answer's below-floor outputs. The
-runner withholds a `'null'` output (its Feature Value records the abstention with no value; write-back clears a
-target value the pipeline wrote and keeps a person's) and fails the record on a `'fail'` one
-(`FailureKind: 'BelowConfidence'`). The floor is part of the outputs, so changing it changes the spec hash.
+runner withholds a below-floor output (its Feature Value records the abstention with no value; write-back clears a
+target value the pipeline wrote and keeps a person's). The floor is part of the outputs, so changing it changes the spec hash.
 
 An LLM pipeline can opt in to `Context.RecordAsUserMessage: true` (with `Context.Fields`): the record's context fields are
 then sent as one JSON object in the prompt's user message, with the template as the system message. `ValidateSpec`

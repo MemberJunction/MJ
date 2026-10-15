@@ -313,15 +313,14 @@ export class FeaturePipelineGoldenSetDriver extends BaseTestDriver {
 
     /**
      * Fails when any case has no answer and no rejection of its answer: its result is missing, skipped, or failed for a
-     * reason other than `RejectedInvalid` (a constraint) or `BelowConfidence` (a `fail` confidence floor). Both are the
-     * model's answer, so they are scored.
+     * reason other than `RejectedInvalid` (a constraint), which is the model's answer and is scored.
      * @param costUSD what the batch cost, carried on the error so the test run still reports it
      * @throws GoldenSetEvaluationError naming how many cases failed and the first case's error
      */
     protected static AssertAnswered(cases: GoldenCase[], results: Map<string, RecordResult>, costUSD: number): void {
         const failed = cases.filter((c) => {
             const r = results.get(`golden-${c.ID}`);
-            return !r || (r.Status !== 'Succeeded' && r.FailureKind !== 'RejectedInvalid' && r.FailureKind !== 'BelowConfidence');
+            return !r || (r.Status !== 'Succeeded' && r.FailureKind !== 'RejectedInvalid');
         });
         if (failed.length > 0) {
             const first = results.get(`golden-${failed[0].ID}`);

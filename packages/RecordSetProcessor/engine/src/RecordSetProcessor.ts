@@ -88,7 +88,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         const handle = await tracker.BeginRun(meta, contextUser, provider);
         const counts: RunCounts = { Processed: 0, Success: 0, Error: 0, Skipped: 0 };
         const tally: RunTally = {
-            WatermarkSkipped: 0, Upserted: 0, Unchanged: 0, Previewed: 0, RejectedInvalid: 0, BelowConfidence: 0, BelowConfidenceRejected: 0, HumanValuesPreserved: 0, Pin: null, ParameterFidelity: null,
+            WatermarkSkipped: 0, Upserted: 0, Unchanged: 0, Previewed: 0, RejectedInvalid: 0, BelowConfidence: 0, HumanValuesPreserved: 0, Pin: null, ParameterFidelity: null,
         };
         let cursor = shouldResume ? await tracker.LoadResumeCursor(handle, contextUser, provider) : undefined;
         let total: number | null = null;
@@ -131,7 +131,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         if (options.FeaturePipeline && status === 'Completed' && counts.Error > 0) {
             // a Feature Pipeline run is Completed only when every attempted record was written; succeeded records keep theirs
             status = 'Failed';
-            errorMessage = `${counts.Error} of ${attempted} attempted records failed (${tally.RejectedInvalid} rejected by output constraints, ${tally.BelowConfidenceRejected} below a confidence floor)`;
+            errorMessage = `${counts.Error} of ${attempted} attempted records failed (${tally.RejectedInvalid} rejected by output constraints)`;
         }
         const featurePipeline = options.recordProcessID && options.FeaturePipeline
             ? this.featurePipelineResult(options.recordProcessID, counts, tally, status, processor, options.dryRun === true)
@@ -421,11 +421,8 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             }
         } else if (result.Status === 'Failed' && result.FailureKind === 'RejectedInvalid') {
             tally.RejectedInvalid++;
-        } else if (result.Status === 'Failed' && result.FailureKind === 'BelowConfidence') {
-            tally.BelowConfidenceRejected++;
         }
-        // Withheld outputs (a succeeded record) and a floor rejection (a failed one) both count as the floor acting
-        if (result.FailureKind === 'BelowConfidence' || (result.Status === 'Succeeded' && (result.BelowConfidenceOutputs?.length || 0) > 0)) {
+        if (result.Status === 'Succeeded' && (result.BelowConfidenceOutputs?.length || 0) > 0) {
             tally.BelowConfidence++;
         }
         tally.HumanValuesPreserved += result.HumanValuesPreserved || 0;
@@ -448,7 +445,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             RecordProcessID: recordProcessID, Pin: tally.Pin || processor.CurrentRunPin?.() || null, ParameterFidelity: tally.ParameterFidelity,
             Attempted: this.attemptedOf(counts, tally), Upserted: tally.Upserted, Unchanged: tally.Unchanged, Previewed: tally.Previewed,
             RejectedInvalid: tally.RejectedInvalid, BelowConfidence: tally.BelowConfidence,
-            Failed: counts.Error - tally.RejectedInvalid - tally.BelowConfidenceRejected, Skipped: counts.Skipped,
+            Failed: counts.Error - tally.RejectedInvalid, Skipped: counts.Skipped,
             HumanValuesPreserved: tally.HumanValuesPreserved, Status: status === 'Completed' ? 'completed' : 'failed',
         };
     }
@@ -523,10 +520,8 @@ interface RunTally {
     Unchanged: number;
     Previewed: number;
     RejectedInvalid: number;
-    /** Records the confidence floor acted on (withheld outputs or a floor rejection): FeaturePipelineRunResult.BelowConfidence. */
+    /** Records with outputs withheld below their confidence floor. */
     BelowConfidence: number;
-    /** Records failed by a confidence floor (`FailureKind` `BelowConfidence`), so `Failed` can leave them out. */
-    BelowConfidenceRejected: number;
     HumanValuesPreserved: number;
     Pin: FeaturePipelineRunPin | null;
     ParameterFidelity: ParameterFidelity | null;

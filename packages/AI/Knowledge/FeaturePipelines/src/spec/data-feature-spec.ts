@@ -136,7 +136,7 @@ export interface DataFeatureOutput {
   ConfidenceRef?: string;
   /** The confidence floor (0 < floor <= 1), set with {@link OnLowConfidence}; an LLM pipeline also needs ConfidenceRef. */
   MinConfidence?: number;
-  /** What a below-floor answer does: `null` leaves this output unwritten, `fail` fails the record (see {@link LowConfidencePolicy}). */
+  /** What a below-floor answer does: `null` leaves this output unwritten ({@link LowConfidencePolicy}). */
   OnLowConfidence?: LowConfidencePolicy;
 }
 

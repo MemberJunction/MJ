@@ -27,9 +27,7 @@ import { EscalationTargetUnresolvableError, FeaturePipelineUnresolvableError } f
 
 /** What, besides the record and feature, keys a computed Feature Value: the pin it was computed under and its input hash. */
 export interface FeatureValueKeyParts {
-    /** The pipeline's pin: prompt version hash, primary model, parameters hash and spec hash. */
     Pin: FeaturePipelinePinData;
-    /** SHA-256 of the record's normalised inputs (the pipeline's cache key hash). */
     InputHash: string | null;
 }
 
@@ -51,10 +49,7 @@ export interface EscalationTargetProcessor {
     WritesHistory: boolean;
     /** The target's run-level checks, as when it runs on its own. */
     Preflight(context: RecordProcessorContext): Promise<void>;
-    /**
-     * The target's pin (prompt, model, parameters, spec) as it stands; a Decision pipeline's version covers it.
-     * @throws Error when the target's prompt or driver cannot be resolved
-     */
+    /** The target's pin as it stands (a Decision pipeline's version covers it); throws when it cannot be resolved. */
     ResolveRunPin(context: RecordProcessorContext): Promise<FeaturePipelinePinData>;
     /** The target's normal batch path: validation and violation policy apply exactly as when it runs on its own. */
     ProcessBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>>;
@@ -97,9 +92,8 @@ export interface EscalatedAnswer {
     ConstraintHash: string;
     /** The target's own Dedup Cache entry for the answer, when the target caches. */
     FeatureValueCacheID?: string;
-    /** The target's pin the answer was computed under (its prompt version, primary model and parameters key the answer's Feature Values). */
+    /** The target's pin the answer was computed under (it keys the answer's Feature Values). */
     Pin: FeaturePipelinePinData;
-    /** The target's input hash for the record (its cache key hash). */
     InputHash: string | null;
     /** For the history row's reasoning: that the record escalated, to which pipeline, and from what confidence. */
     Note: string;
@@ -131,7 +125,6 @@ interface ResolvedEscalationTarget {
     Processor: EscalationTargetProcessor;
     ID: string;
     Name: string;
-    /** `Escalation pipeline '<name>' (<id>)`, for messages. */
     Label: string;
 }
 
@@ -253,7 +246,6 @@ export class FeaturePipelineEscalator {
         return this.targetBuild;
     }
 
-    /** The built target, then its {@link EscalationTargetProcessor.Preflight}. */
     private async loadTarget(context: RecordProcessorContext, entityID: string): Promise<ResolvedEscalationTarget> {
         const target = await this.buildTargetOnce(context, entityID);
         await this.preflightTarget(target.Processor, this.targetContext(context, target.ID), target.Label);
@@ -273,8 +265,7 @@ export class FeaturePipelineEscalator {
         if (specProblem) {
             throw new EscalationTargetUnresolvableError(`${label} ${specProblem}.`);
         }
-        // The Decision pipeline records each escalated record's final answer, so the target records none (set before
-        // its Preflight, so it registers no versions of its own)
+        // The Decision pipeline records each escalated record's final answer, so the target records none
         processor.WritesHistory = false;
         return { Processor: processor, ID: row.ID, Name: row.Name, Label: label };
     }

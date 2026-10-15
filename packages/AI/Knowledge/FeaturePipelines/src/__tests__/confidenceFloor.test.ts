@@ -31,7 +31,7 @@ describe('ConfidenceFloor — spec validation', () => {
     it('accepts a floor with its policy and a ConfidenceRef', () => {
         const spec = specWith({ ConfidenceRef: '$.SConf', MinConfidence: 0.5, OnLowConfidence: 'null' });
         expect(ValidateSpec(spec).filter((i) => i.Severity === 'error')).toEqual([]);
-        expect(ValidateSpec(specWith({ ConfidenceRef: '$.SConf', MinConfidence: 1, OnLowConfidence: 'fail' })).filter((i) => i.Severity === 'error')).toEqual([]);
+        expect(ValidateSpec(specWith({ ConfidenceRef: '$.SConf', MinConfidence: 1, OnLowConfidence: 'null' })).filter((i) => i.Severity === 'error')).toEqual([]);
     });
 
     it('requires a ConfidenceRef on an LLM pipeline output with a floor', () => {
@@ -46,8 +46,8 @@ describe('ConfidenceFloor — spec validation', () => {
         expect(errorsAt(specWith({ ConfidenceRef: '$.SConf', MinConfidence: floor, OnLowConfidence: 'null' }), 'Outputs[0].MinConfidence')).toHaveLength(1);
     });
 
-    it('rejects an OnLowConfidence that is not null or fail', () => {
-        expect(errorsAt(specWith({ ConfidenceRef: '$.SConf', MinConfidence: 0.5, OnLowConfidence: 'skip' }), 'Outputs[0].OnLowConfidence')).toHaveLength(1);
+    it.each(['fail', 'skip'])('rejects an OnLowConfidence of %s (only null)', (policy) => {
+        expect(errorsAt(specWith({ ConfidenceRef: '$.SConf', MinConfidence: 0.5, OnLowConfidence: policy }), 'Outputs[0].OnLowConfidence')).toHaveLength(1);
     });
 
     it('requires OnLowConfidence with a floor, and a floor with OnLowConfidence', () => {
@@ -83,24 +83,19 @@ describe('ConfidenceFloor — evaluation', () => {
     });
 
     it('lists the outputs below their floor, with the confidence, floor and policy', () => {
-        const fail: DataFeatureOutput = { ...floored, Name: 'G', OnLowConfidence: 'fail', MinConfidence: 0.8 };
-        const below = ConfidenceFloor.FindBelow([floored, unfloored, fail], { S: 0.2, G: 0.9 });
-        expect(below).toEqual([{ OutputName: 'S', Confidence: 0.2, MinConfidence: 0.5, Policy: 'null' }]);
-        expect(ConfidenceFloor.FindBelow([floored, fail], undefined)).toEqual([
-            { OutputName: 'S', Confidence: null, MinConfidence: 0.5, Policy: 'null' },
-            { OutputName: 'G', Confidence: null, MinConfidence: 0.8, Policy: 'fail' },
-        ]);
+        const high: DataFeatureOutput = { ...floored, Name: 'G', MinConfidence: 0.8 };
+        expect(ConfidenceFloor.FindBelow([floored, unfloored, high], { S: 0.2, G: 0.9 })).toEqual([{ OutputName: 'S', Confidence: 0.2, MinConfidence: 0.5, Policy: 'null' }]);
+        expect(ConfidenceFloor.FindBelow([high], undefined)).toEqual([{ OutputName: 'G', Confidence: null, MinConfidence: 0.8, Policy: 'null' }]);
     });
 });
 
 describe('ConfidenceFloor — spec hash', () => {
-    it('changes the spec hash when an output\'s floor or its policy changes', async () => {
+    it('changes the spec hash when an output\'s floor changes', async () => {
         const base = specWith({ ConfidenceRef: '$.SConf' });
         const floorA = specWith({ ConfidenceRef: '$.SConf', MinConfidence: 0.5, OnLowConfidence: 'null' });
         const floorB = specWith({ ConfidenceRef: '$.SConf', MinConfidence: 0.6, OnLowConfidence: 'null' });
-        const failA = specWith({ ConfidenceRef: '$.SConf', MinConfidence: 0.5, OnLowConfidence: 'fail' });
-        const hashes = await Promise.all([base, floorA, floorB, failA].map((s) => FeaturePipelinePin.ComputeSpecHash(s, null, null)));
-        expect(new Set(hashes).size).toBe(4);
+        const hashes = await Promise.all([base, floorA, floorB].map((s) => FeaturePipelinePin.ComputeSpecHash(s, null, null)));
+        expect(new Set(hashes).size).toBe(3);
     });
 });
 

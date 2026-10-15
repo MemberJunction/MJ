@@ -232,7 +232,7 @@ interface ForeignKeyTarget {
 }
 
 /** One child row's values the real write stores: every value of an inserted row, the differing ones of an updated row. */
-interface PlannedChildWrite {
+export interface PlannedChildWrite {
     /** The proposal the row comes from. */
     Item: ChildToWrite;
     /** The values written. */
@@ -387,7 +387,7 @@ export class OutputMappingWriter {
 
     /**
      * The mapped fields whose value differs from the record's ({@link ValuesEqual}) and holds no value a person entered,
-     * for the real write and the dry-run check ({@link PreviewFieldProblems}).
+     * for the real write and the dry-run preview ({@link PreviewFields}).
      * @param recordPreserved - record each preserved human value (the real write); false for the preview
      */
     protected async FieldChanges(entity: EntityInfo, obj: BaseEntity, fields: Record<string, unknown>,
@@ -836,35 +836,37 @@ export class OutputMappingWriter {
     }
 
     /**
-     * What the real child writes would fail on, found without writing: a reconcile key proposed twice, and stored values
-     * with no row in their related entity ({@link PlanChildren}, {@link MissingForeignKeys}).
+     * The child values the real write stores ({@link PlanChildren}) and what it would fail on: a reconcile key proposed
+     * twice, or a stored value with no row in its related entity ({@link MissingForeignKeys}). Writes nothing.
      */
-    public async PreviewChildProblems(answers: ChildMappingAnswer[]): Promise<string[]> {
+    public async PreviewChildren(answers: ChildMappingAnswer[]): Promise<{ Writes: PlannedChildWrite[]; Problems: string[] }> {
         const problems = this.DuplicateKeyProblems(answers);
-        const targets = this.CollectForeignKeyRefs(await this.PlanChildren(answers), problems);
+        const writes = await this.PlanChildren(answers);
+        const targets = this.CollectForeignKeyRefs(writes, problems);
         problems.push(...(await this.MissingForeignKeyProblems(targets)));
-        return problems;
+        return { Writes: writes, Problems: problems };
     }
 
     /**
-     * What the real write of the record's own fields would fail on: a changed UUID value with no row in its related
-     * entity, or a record that does not exist.
+     * The record's fields the real write changes ({@link FieldChanges}) and what it would fail on: a changed UUID value
+     * with no row in its related entity, or a record that does not exist. Writes nothing.
      */
-    public async PreviewFieldProblems(entity: EntityInfo, fields: Record<string, unknown>): Promise<string[]> {
+    public async PreviewFields(entity: EntityInfo, fields: Record<string, unknown>): Promise<{ Changes: Record<string, unknown>; Problems: string[] }> {
         const obj = await this.LoadRecord(entity);
         if (!obj) {
-            return [`record '${this.Options.Record.RecordID}' of '${entity.Name}' not found (the real write fails loading it)`];
+            return { Changes: {}, Problems: [`record '${this.Options.Record.RecordID}' of '${entity.Name}' not found (the real write fails loading it)`] };
         }
         const problems: string[] = [];
         const targets = new Map<string, ForeignKeyTarget>();
-        for (const [field, value] of await this.FieldChanges(entity, obj, fields, false)) {
+        const changes = await this.FieldChanges(entity, obj, fields, false);
+        for (const [field, value] of changes) {
             const fieldInfo = this.FieldInfoOf(entity, field);
             if (typeof value === 'string' && UUID_PATTERN.test(value.trim()) && this.IsConstrainedForeignKey(fieldInfo)) {
                 this.AddForeignKeyRef(targets, problems, fieldInfo, { Entity: entity.Name, Field: field, Value: value });
             }
         }
         problems.push(...(await this.MissingForeignKeyProblems(targets)));
-        return problems;
+        return { Changes: Object.fromEntries(changes), Problems: problems };
     }
 
     /** Reconcile keys a mapping's answer proposes more than once: the real write refuses them (unique key). */
@@ -985,7 +987,7 @@ export class OutputMappingWriter {
         const ids = [...new Set(keyed.map((ref) => String(ref.Value).trim()))];
         const result = await RunView.FromMetadataProvider(this.Options.LookupProvider).RunView<Record<string, string>>({
             EntityName: related,
-            ExtraFilter: `[${target.Column}] IN (${ids.map((id) => `'${id}'`).join(',')})`,
+            ExtraFilter: `${target.Column} IN (${ids.map((id) => `'${id}'`).join(',')})`,
             Fields: [target.Column],
             ResultType: 'simple',
         }, this.Options.ContextUser);
@@ -1129,9 +1131,10 @@ export async function ApplyOutputMapping(opts: {
             resolved[field] = await writer.ResolveFieldValue(entity, field, val);
         }
         if (dryRun) {
-            // Compute-only: surface what an apply WOULD write, and what it would fail on; persist nothing.
-            out.previewFields = resolved;
-            previewErrors.push(...(await writer.PreviewFieldProblems(entity, resolved)));
+            // Compute-only: surface the fields an apply WOULD change, and what it would fail on; persist nothing.
+            const preview = await writer.PreviewFields(entity, resolved);
+            out.previewFields = preview.Changes;
+            previewErrors.push(...preview.Problems);
         } else {
             fieldEntity = entity;
             fieldsToWrite = resolved;
@@ -1190,16 +1193,17 @@ export async function ApplyOutputMapping(opts: {
             childAnswers.push({ Config: childConfig, Rows: rows });
         }
 
-        const childRows = childAnswers.flatMap((a) => a.Rows);
-        if (dryRun && childRows.length > 0) {
-            out.previewChildren = childRows.map((c) => c.Data);
-            const singleChild = childRows.find((c) => c.IsLegacySingle);
-            if (singleChild) {
-                out.previewChild = singleChild.Data;
-            }
-        }
         if (dryRun) {
-            previewErrors.push(...(await writer.PreviewChildProblems(childAnswers)));
+            // Only the child values the real write stores: an identical or human-kept row previews nothing
+            const preview = await writer.PreviewChildren(childAnswers);
+            previewErrors.push(...preview.Problems);
+            if (preview.Writes.length > 0) {
+                out.previewChildren = preview.Writes.map((w) => w.Values);
+                const singleChild = preview.Writes.find((w) => w.Item.IsLegacySingle);
+                if (singleChild) {
+                    out.previewChild = singleChild.Values;
+                }
+            }
         }
     }
 

@@ -6,11 +6,10 @@ import type { AIPromptParams, AIPromptRunResult, MJAIPromptEntityExtended } from
 import { ChatResult } from '@memberjunction/ai';
 import type { IRecordProcessor, RecordProcessorContext, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import {
-    FeaturePipelineVersionService, FeatureValueCacheService, LookupConstraintValues, MetadataProviderCapabilities, RenderConstraintBlock, type DataFeatureSpec,
+    FeaturePipelineVersionService, FeatureValueCacheService, LookupConstraintValues, MetadataProviderCapabilities, type DataFeatureSpec,
 } from '@memberjunction/feature-pipelines';
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
-import { createHash } from 'node:crypto';
 import { InferProcessor } from '../processors/InferProcessor';
 import { WriteBackProcessor } from '../processors/WriteBackProcessor';
 import { ApplyOutputMapping, OutputMappingWriter, type WithheldWriteBackTargets } from '../writeBack';
@@ -27,13 +26,13 @@ const PEOPLE = new EntityInfo({ ID: 'ENT-P', Name: 'People', Fields: [{ Name: 'S
 const provider = new EntitiesOnlyProvider([PEOPLE]);
 const context: RecordProcessorContext = { contextUser: USER, recordProcessID: 'rp-1', entityID: 'ENT-P', processRunID: 'run-1', provider };
 
-/** The job-title spec with a floor on SeniorityLevel (`policy`) and none on JobFunctions. */
-function flooredSpec(policy: 'null' | 'fail'): DataFeatureSpec {
+/** The job-title spec with a null floor on SeniorityLevel and none on JobFunctions. */
+function flooredSpec(): DataFeatureSpec {
     return {
         Name: 'JT', Description: 'jt', PromptID: 'PROMPT-1', Context: { Fields: ['CurrentJobTitle'] },
         Caching: { Cacheable: true, KeyFields: ['CurrentJobTitle'], Scope: 'pipeline' },
         Outputs: [
-            { Name: 'SeniorityLevel', Ref: '$.SeniorityLevel', ConfidenceRef: '$.SeniorityConfidence', MinConfidence: 0.5, OnLowConfidence: policy,
+            { Name: 'SeniorityLevel', Ref: '$.SeniorityLevel', ConfidenceRef: '$.SeniorityConfidence', MinConfidence: 0.5, OnLowConfidence: 'null',
               Constraint: { Type: 'lookup', Entity: 'Seniority Levels', MatchField: 'Name', OnViolation: 'fail' },
               Target: { Mode: 'field', EntityFieldName: 'SeniorityLevelID', LookupMatchField: 'Name' } },
             { Name: 'JobFunctions', Ref: '$.Functions', Constraint: { Type: 'lookup', Entity: 'Job Functions', MatchField: 'ID', ItemRef: '$.JobFunctionID', OnViolation: 'fail' },
@@ -68,7 +67,7 @@ describe('a null confidence floor withholds the output', () => {
         modelAnswer = { SeniorityLevel: 'C-Level', SeniorityConfidence: 0.2, Functions: [{ JobFunctionID: OPS_ID, Sequence: 1 }] };
         vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'c1' }));
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
-        const r = await new InferProcessor('PROMPT-1', undefined, flooredSpec('null'), null).ProcessRecord(record, context);
+        const r = await new InferProcessor('PROMPT-1', undefined, flooredSpec(), null).ProcessRecord(record, context);
         expect(r.Status).toBe('Succeeded');
         expect(r.BelowConfidenceOutputs).toEqual(['SeniorityLevel']);
         expect(r.ResultPayload).toMatchObject({ SeniorityLevel: null, _belowConfidence: [{ OutputName: 'SeniorityLevel', Confidence: 0.2, MinConfidence: 0.5, Policy: 'null' }] });
@@ -83,7 +82,7 @@ describe('a null confidence floor withholds the output', () => {
         modelAnswer = { Label: 'x', c: 0.1 };
         vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'c1' }));
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
-        const whole: DataFeatureSpec = { ...flooredSpec('null'), Outputs: [{ Name: 'Whole', Ref: '$', ConfidenceRef: '$.c', MinConfidence: 0.5, OnLowConfidence: 'null', Target: { Mode: 'field', EntityFieldName: 'Note' } }] };
+        const whole: DataFeatureSpec = { ...flooredSpec(), Outputs: [{ Name: 'Whole', Ref: '$', ConfidenceRef: '$.c', MinConfidence: 0.5, OnLowConfidence: 'null', Target: { Mode: 'field', EntityFieldName: 'Note' } }] };
         const r = await new InferProcessor('PROMPT-1', undefined, whole, null).ProcessRecord(record, context);
         expect(r.BelowConfidenceOutputs).toEqual(['Whole']);
         expect(history.mock.calls[0][0].outputs.map((o) => [o.featureName, o.value])).toEqual([['Whole', null]]);
@@ -93,7 +92,7 @@ describe('a null confidence floor withholds the output', () => {
         modelAnswer = { SeniorityLevel: 'Vice President', SeniorityConfidence: 0.5, Functions: [{ JobFunctionID: OPS_ID, Sequence: 1 }] };
         vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'c1' }));
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
-        const r = await new InferProcessor('PROMPT-1', undefined, flooredSpec('null'), null).ProcessRecord(record, context);
+        const r = await new InferProcessor('PROMPT-1', undefined, flooredSpec(), null).ProcessRecord(record, context);
         expect(r.BelowConfidenceOutputs).toBeUndefined();
         expect(history.mock.calls[0][0].outputs.map((o) => o.featureName)).toEqual(['SeniorityLevel', 'JobFunctions']);
     });
@@ -103,7 +102,7 @@ describe('a null confidence floor withholds the output', () => {
             _belowConfidence: [{ OutputName: 'SeniorityLevel', Confidence: 0, MinConfidence: 0.5, Policy: 'null' }] };
         vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'c1' }));
         vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
-        const r = await new InferProcessor('PROMPT-1', undefined, flooredSpec('null'), null).ProcessRecord(record, context);
+        const r = await new InferProcessor('PROMPT-1', undefined, flooredSpec(), null).ProcessRecord(record, context);
         expect(r.BelowConfidenceOutputs).toBeUndefined();
         expect(r.ResultPayload).toMatchObject({ SeniorityLevel: 'Vice President' });
     });
@@ -112,36 +111,22 @@ describe('a null confidence floor withholds the output', () => {
         modelAnswer = { SeniorityLevel: 'C-Level', SeniorityConfidence: 0.1, Functions: [{ JobFunctionID: OPS_ID, Sequence: 1 }] };
         const store = vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'c1' }));
         vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
-        await new InferProcessor('PROMPT-1', undefined, flooredSpec('null'), null).ProcessRecord(record, context);
+        await new InferProcessor('PROMPT-1', undefined, flooredSpec(), null).ProcessRecord(record, context);
         const entry = CacheEntry({ ID: 'c1', OutputsJSON: store.mock.calls[0][0].outputsJSON });
         vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockImplementation(async (p) => new Map(p.keyHashes.map((k) => [k, entry])));
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
-        const results = await new InferProcessor('PROMPT-1', undefined, flooredSpec('null'), null).ProcessBatch([record], context);
+        const results = await new InferProcessor('PROMPT-1', undefined, flooredSpec(), null).ProcessBatch([record], context);
         expect(results.get('p-1')?.BelowConfidenceOutputs).toEqual(['SeniorityLevel']);
         expect(history.mock.calls[0][0].outputs.map((o) => [o.featureName, o.value === null])).toEqual([['SeniorityLevel', true], ['JobFunctions', false]]);
     });
 
     it('withholds the field and the child entity of the withheld outputs from write-back', () => {
-        const p = new InferProcessor('PROMPT-1', undefined, flooredSpec('null'), null);
+        const p = new InferProcessor('PROMPT-1', undefined, flooredSpec(), null);
         const both: RecordResult = { Status: 'Succeeded', BelowConfidenceOutputs: ['SeniorityLevel', 'JobFunctions'] };
         expect(p.WithheldWriteBackTargets(both)).toEqual({ Fields: ['SeniorityLevelID'], ChildEntities: ['Person Job Functions'] });
         expect(p.WithheldWriteBackTargets({ Status: 'Succeeded' })).toBeUndefined();
         expect(p.WithheldWriteBackTargets({ Status: 'Failed', BelowConfidenceOutputs: ['SeniorityLevel'] })).toBeUndefined();
     });
-});
-
-describe('a fail confidence floor rejects the record', () => {
-    it('fails the record as BelowConfidence, caching and recording nothing', async () => {
-        modelAnswer = { SeniorityLevel: 'C-Level', SeniorityConfidence: 0.2, Functions: [{ JobFunctionID: OPS_ID, Sequence: 1 }] };
-        const store = vi.spyOn(FeatureValueCacheService.Instance, 'Store');
-        const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues');
-        const r = await new InferProcessor('PROMPT-1', undefined, flooredSpec('fail'), null).ProcessRecord(record, context);
-        expect(r).toMatchObject({ Status: 'Failed', FailureKind: 'BelowConfidence', BelowConfidenceOutputs: ['SeniorityLevel'] });
-        expect(r.ErrorMessage).toBe("Answer below its confidence floor: 'SeniorityLevel' confidence 0.2 < 0.5");
-        expect(store).not.toHaveBeenCalled();
-        expect(history).not.toHaveBeenCalled();
-    });
-
 });
 
 describe('write-back maps a withheld field to null (the human-value guard decides) and skips a withheld child mapping', () => {
@@ -159,10 +144,10 @@ describe('write-back maps a withheld field to null (the human-value guard decide
         vi.spyOn(provider, 'GetEntityObject').mockResolvedValue(row as unknown as BaseEntity);
     };
 
-    it('a dry run previews the withheld field as null and marks it, and skips the withheld child entity', async () => {
+    it('a dry run marks the withheld field (kept without a guard, so not a change) and skips the withheld child entity', async () => {
         stored();
         const out = await ApplyOutputMapping({ outputMapping: mapping, result: payload, record, contextUser: USER, provider, dryRun: true, withheld });
-        expect(out.previewFields).toEqual({ SeniorityLevelID: null, Note: 'n' });
+        expect(out.previewFields).toEqual({ Note: 'n' });
         expect(out.withheldFields).toEqual(['SeniorityLevelID']);
         expect(out.withheldChildEntities).toEqual(['Person Job Functions']);
         expect(out.previewChildren).toBeUndefined();
@@ -186,20 +171,20 @@ describe('write-back maps a withheld field to null (the human-value guard decide
         };
         stored();
         const r = await new WriteBackProcessor(inner, { fields: mapping.fields }, true).ProcessRecord(record, context);
-        expect(r.ResultPayload).toMatchObject({ writeBack: { previewFields: { SeniorityLevelID: null, Note: 'n' }, withheldFields: ['SeniorityLevelID'] } });
+        expect(r.ResultPayload).toMatchObject({ writeBack: { previewFields: { Note: 'n' }, withheldFields: ['SeniorityLevelID'] } });
         expect(r.BelowConfidenceOutputs).toEqual(['SeniorityLevel']);
     });
 });
 
 describe('the LLM driver sends the record\'s context fields as the user turn when the spec opts in', () => {
     /** The floored spec with the user-turn option on. */
-    const optedIn = (): DataFeatureSpec => ({ ...flooredSpec('null'), Context: { Fields: ['CurrentJobTitle'], RecordAsUserMessage: true } });
+    const optedIn = (): DataFeatureSpec => ({ ...flooredSpec(), Context: { Fields: ['CurrentJobTitle'], RecordAsUserMessage: true } });
 
     it('leaves a pipeline that does not opt in with the prompt messages it had before the option (no extra turn, default role)', async () => {
         modelAnswer = { SeniorityLevel: 'Vice President', SeniorityConfidence: 0.9, Functions: [{ JobFunctionID: OPS_ID, Sequence: 1 }] };
         vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'c1' }));
         vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
-        await new InferProcessor('PROMPT-1', undefined, flooredSpec('null'), null).ProcessRecord(record, context);
+        await new InferProcessor('PROMPT-1', undefined, flooredSpec(), null).ProcessRecord(record, context);
         expect(lastParams?.conversationMessages).toBeUndefined();
         expect(lastParams?.templateMessageRole).toBeUndefined();
     });
@@ -227,8 +212,8 @@ describe('the LLM driver sends the record\'s context fields as the user turn whe
     });
 
     it('gives an opted-in pipeline another prompt version hash (its cached answers were read without the user turn); off keeps it', async () => {
-        const off = await new InferProcessor('PROMPT-1', undefined, flooredSpec('null'), null).ResolveRunPin(context);
-        const offAgain = await new InferProcessor('PROMPT-1', undefined, { ...flooredSpec('null'), Context: { Fields: ['CurrentJobTitle'], RecordAsUserMessage: false } }, null).ResolveRunPin(context);
+        const off = await new InferProcessor('PROMPT-1', undefined, flooredSpec(), null).ResolveRunPin(context);
+        const offAgain = await new InferProcessor('PROMPT-1', undefined, { ...flooredSpec(), Context: { Fields: ['CurrentJobTitle'], RecordAsUserMessage: false } }, null).ResolveRunPin(context);
         const on = await new InferProcessor('PROMPT-1', undefined, optedIn(), null).ResolveRunPin(context);
         expect(offAgain.PromptVersionHash).toBe(off.PromptVersionHash);
         expect(on.PromptVersionHash).not.toBe(off.PromptVersionHash);

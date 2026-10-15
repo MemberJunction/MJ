@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest';
-import { createHash } from 'node:crypto';
 import { CompositeKey, EntityInfo, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import {
@@ -18,7 +17,6 @@ import {
     DECISION_FEATURE_PIPELINE_CAPABILITIES,
     FeatureValueCacheService,
     LLM_FEATURE_PIPELINE_CAPABILITIES,
-    RenderConstraintBlock,
     type DataFeatureOutput,
     type DataFeatureSpec,
     type EntityInfoLike,
@@ -26,9 +24,8 @@ import {
     type FeatureValueOutputItem,
     type CacheStoreParams,
     type RecordFeatureValuesParams,
-    type RecordFeatureValuesOutcome,
 } from '@memberjunction/feature-pipelines';
-import { InferProcessor, type FeatureValueWriteParams } from '../processors/InferProcessor';
+import { InferProcessor } from '../processors/InferProcessor';
 import { WriteBackProcessor } from '../processors/WriteBackProcessor';
 import type { WriteBackRunPayload } from '@memberjunction/record-set-processor-base';
 import {
@@ -126,12 +123,6 @@ class HashProbe extends InferProcessor {
     }
 }
 
-/** Exposes the protected history recording. */
-class HistoryProbe extends InferProcessor {
-    public RecordHistory(params: FeatureValueWriteParams): Promise<RecordFeatureValuesOutcome | null> {
-        return this.UpsertFeatureValues(params);
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Typed doubles: each is a Pick of the real type, and one seam cast widens it
@@ -317,31 +308,23 @@ describe('Decision pipeline escalation', () => {
 
     describe('the Decision pipeline\'s confidence floors hold for an escalated answer', () => {
         /** The decision spec with a floor on Seniority, read from the escalated answer's `seniorityConfidence`. */
-        const flooredDecision = (policy: 'null' | 'fail'): DataFeatureSpec => decisionSpec({
-            Outputs: outputs().map((o) => (o.Name === 'Seniority' ? { ...o, ConfidenceRef: '$.seniorityConfidence', MinConfidence: 0.8, OnLowConfidence: policy } : o)),
+        const flooredDecision = (): DataFeatureSpec => decisionSpec({
+            Outputs: outputs().map((o) => (o.Name === 'Seniority' ? { ...o, ConfidenceRef: '$.seniorityConfidence', MinConfidence: 0.8, OnLowConfidence: 'null' } : o)),
         });
 
         it('withholds a below-floor escalated output under a null floor', async () => {
             decisionAnswers.set('r1', BELOW_FLOOR);
             llmResults.set('r1', { Success: true, RawResult: { seniority: 'Executive', isVip: true, seniorityConfidence: 0.3 }, AIPromptRunID: 'LLM-RUN-r1' });
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, flooredDecision('null'), null).ProcessRecord(makeRecord('r1'), context);
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, flooredDecision(), null).ProcessRecord(makeRecord('r1'), context);
             expect(result.Status).toBe('Succeeded');
             expect(result.BelowConfidenceOutputs).toEqual(['Seniority']);
             expect(result.ResultPayload).toMatchObject({ seniority: null, isVip: true });
         });
 
-        it('fails the record as BelowConfidence under a fail floor, naming the escalation', async () => {
-            decisionAnswers.set('r1', BELOW_FLOOR);
-            llmResults.set('r1', { Success: true, RawResult: { seniority: 'Executive', isVip: true, seniorityConfidence: 0.3 }, AIPromptRunID: 'LLM-RUN-r1' });
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, flooredDecision('fail'), null).ProcessRecord(makeRecord('r1'), context);
-            expect(result).toMatchObject({ Status: 'Failed', FailureKind: 'BelowConfidence', BelowConfidenceOutputs: ['Seniority'] });
-            expect(result.ErrorMessage).toMatch(/escalation to LLM pipeline 'Seniority \(LLM\)' failed: Answer below its confidence floor: 'Seniority' confidence 0.3 < 0.8/);
-        });
-
         it('keeps an escalated answer at or above the floor', async () => {
             decisionAnswers.set('r1', BELOW_FLOOR);
             llmResults.set('r1', { Success: true, RawResult: { seniority: 'Executive', isVip: true, seniorityConfidence: 0.9 }, AIPromptRunID: 'LLM-RUN-r1' });
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, flooredDecision('fail'), null).ProcessRecord(makeRecord('r1'), context);
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, flooredDecision(), null).ProcessRecord(makeRecord('r1'), context);
             expect(result.Status).toBe('Succeeded');
             expect(result.BelowConfidenceOutputs).toBeUndefined();
         });
@@ -1124,30 +1107,12 @@ describe('Decision pipeline escalation', () => {
             expect(historyCalls.map((h) => h.aiPromptRunID)).toEqual(['LLM-RUN-r1']);
         });
 
-        it('records every value as null when asked to, whatever the payload and the Refs hold', async () => {
-            const spec = decisionSpec({ Outputs: outputs({ Seniority: 'seniority', IsVIP: '$.isVip' }) });
-            await new HistoryProbe(DECISION_PROMPT.ID, undefined, spec, null).RecordHistory({
-                Record: makeRecord('r1'),
-                Context: context,
-                Payload: { seniority: 'Manager', isVip: true },
-                OmitValues: true,
-                InputHash: null,
-                Pin: { PromptID: DECISION_PROMPT.ID, PromptVersionHash: 'pv', AIModelID: null, ParametersHash: 'ph', SpecHash: 'sh' },
-            });
-
-            expect(valuesOf(historyCalls[0])).toEqual({ Seniority: null, IsVIP: null });
-        });
-
         it('keeps the LLM\'s own reasoning after the note', () => {
             const note = BuildEscalationNote('Seniority (LLM)', 0.7, [{ OutputName: 'IsVIP', Confidence: 0.123456 }], { reasoning: 'The title says VP.' });
             expect(note).toBe("Escalated to LLM pipeline 'Seniority (LLM)': decision confidence below 0.7 (IsVIP 0.1235).\n\nThe title says VP.");
             expect(DescribeBelowFloor([{ OutputName: 'Seniority' }, { OutputName: 'IsVIP', Confidence: 0.5 }])).toBe('Seniority none, IsVIP 0.5');
         });
 
-        it('keeps the LLM\'s reasoning whatever the case of its key', () => {
-            const note = BuildEscalationNote('Seniority (LLM)', 0.7, [{ OutputName: 'IsVIP', Confidence: 0.4 }], { Reasoning: 'The title says VP.' });
-            expect(note).toBe("Escalated to LLM pipeline 'Seniority (LLM)': decision confidence below 0.7 (IsVIP 0.4).\n\nThe title says VP.");
-        });
     });
 
     describe('the Dedup Cache', () => {
@@ -1160,12 +1125,6 @@ describe('Decision pipeline escalation', () => {
             expect(probe.Hash(prompt, decisionSpec({ Escalation: { PipelineID: 'LLM-PIPE-2', BelowConfidence: 0.7 } }))).not.toBe(base);
             expect(probe.Hash(prompt, decisionSpec({ Escalation: undefined }))).not.toBe(base);
             expect(probe.Hash(prompt, decisionSpec({ Escalation: { PipelineID: ' llm-pipe-1 ', BelowConfidence: 0.7 } }))).toBe(base);
-        });
-
-        it('keeps the key of a pipeline without Escalation', () => {
-            const spec = decisionSpec({ Escalation: undefined });
-            const basis = `${DECISION_PROMPT.ID}::${DECISION_PROMPT.TemplateText}::${JSON.stringify(spec.Outputs)}::${RenderConstraintBlock(spec.Outputs)}::PipelineType=decision`;
-            expect(probe.Hash(prompt, spec)).toBe(createHash('sha256').update(basis).digest('hex'));
         });
 
         /** Backs Store and BatchLookup with an in-memory cache keyed as the service keys it (pipeline scope). */

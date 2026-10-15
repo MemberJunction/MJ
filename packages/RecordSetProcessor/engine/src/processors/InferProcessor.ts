@@ -573,16 +573,11 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         }
 
         // The payload carries the driver's own confidences, so the Dedup Cache stores them and a hit replays them
-        const floored = this.ApplyConfidenceFloors(InferProcessor.WithDriverConfidence(
+        // An output below its floor is withheld: the payload holds null for it and names it, so a cache hit replays that
+        const payload = this.ApplyConfidenceFloors(InferProcessor.WithDriverConfidence(
             validationOutcome.payload,
             this.confidenceOfKeptValues(computed.Confidence, validationOutcome.replacedOutputs)
         ));
-        if ('Rejected' in floored) {
-            // Like a constraint rejection: nothing is cached or recorded, and the run counts it apart from failures
-            return InferProcessor.BelowConfidenceFailure(floored.Rejected, aiPromptRunID, computed.ParameterFidelity);
-        }
-        // An output below a 'null' floor is withheld: the payload holds null for it and names it, so a cache hit replays that
-        const payload = floored.Payload;
         const annotations = this.RecordedAnnotations(payload);
         let featureValueCacheID: string | undefined;
 
@@ -1085,12 +1080,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             return { Result: { Status: 'Failed', FailureKind: 'RejectedInvalid', ErrorMessage: message, AIPromptRunID: outcome.AIPromptRunID || decisionRunID, ParameterFidelity: outcome.ParameterFidelity } };
         }
         // The escalated answer is recorded under this pipeline's outputs, so it is held to their confidence floors too
-        const floored = this.ApplyConfidenceFloors(checked.payload);
-        if ('Rejected' in floored) {
-            const failure = InferProcessor.BelowConfidenceFailure(floored.Rejected, outcome.AIPromptRunID || decisionRunID, outcome.ParameterFidelity);
-            return { Result: { ...failure, ErrorMessage: DescribeEscalationFailure(outcome.EscalationReason, outcome.PipelineName, failure.ErrorMessage || '') } };
-        }
-        const payload = floored.Payload;
+        const payload = this.ApplyConfidenceFloors(checked.payload);
         try {
             await this.recordSupersededDecision(sample, decision, outcome, context, run);
         } catch (e) {
@@ -1623,19 +1613,14 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     public static readonly BELOW_CONFIDENCE_KEY = '_belowConfidence';
 
     /**
-     * Applies each output's confidence floor to a validated payload, using the confidences its Feature Values carry
-     * ({@link RecordedAnnotations}). A below-floor `fail` output rejects the answer; a below-floor `null` output is
-     * withheld: nulled in the payload and named under {@link BELOW_CONFIDENCE_KEY}.
+     * Withholds each output below its confidence floor (by the confidences its Feature Values carry): nulled in the
+     * payload and named under {@link BELOW_CONFIDENCE_KEY}.
      * @param payload - the validated payload; `unknown` on purpose, a model's answer of any shape
      */
-    protected ApplyConfidenceFloors(payload: unknown): { Payload: unknown } | { Rejected: BelowConfidenceOutput[] } {
+    protected ApplyConfidenceFloors(payload: unknown): unknown {
         const below = ConfidenceFloor.FindBelow(this.spec?.Outputs || [], this.RecordedAnnotations(payload).OutputConfidence);
         if (below.length === 0) {
-            return { Payload: payload };
-        }
-        const rejecting = below.filter((b) => b.Policy === 'fail');
-        if (rejecting.length > 0) {
-            return { Rejected: rejecting };
+            return payload;
         }
         let withheld: Record<string, unknown> = isPlainRecord(payload) ? structuredClone(payload) : {};
         for (const b of below) {
@@ -1646,17 +1631,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                 SetNestedValue(withheld, ref.substring(2), null);
             }
         }
-        return { Payload: { ...withheld, [InferProcessor.BELOW_CONFIDENCE_KEY]: below } };
-    }
-
-    /** The failed result (`FailureKind` `BelowConfidence`) of an answer rejected by a `fail` confidence floor. */
-    protected static BelowConfidenceFailure(rejected: BelowConfidenceOutput[], aiPromptRunID: string | undefined,
-        parameterFidelity: RecordResult['ParameterFidelity']): RecordResult {
-        const detail = rejected.map((b) => `'${b.OutputName}' confidence ${b.Confidence === null ? 'missing' : b.Confidence} < ${b.MinConfidence}`);
-        return {
-            Status: 'Failed', FailureKind: 'BelowConfidence', BelowConfidenceOutputs: rejected.map((b) => b.OutputName),
-            ErrorMessage: `Answer below its confidence floor: ${detail.join('; ')}`, AIPromptRunID: aiPromptRunID, ParameterFidelity: parameterFidelity,
-        };
+        return { ...withheld, [InferProcessor.BELOW_CONFIDENCE_KEY]: below };
     }
 
     /** The outputs a payload withheld below their confidence floor ({@link BELOW_CONFIDENCE_KEY}); empty when none. */
@@ -1666,7 +1641,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             return [];
         }
         return stored.flatMap((v: unknown): BelowConfidenceOutput[] => {
-            if (!isPlainRecord(v) || typeof v.OutputName !== 'string' || typeof v.MinConfidence !== 'number' || (v.Policy !== 'null' && v.Policy !== 'fail')) {
+            if (!isPlainRecord(v) || typeof v.OutputName !== 'string' || typeof v.MinConfidence !== 'number' || v.Policy !== 'null') {
                 return [];
             }
             return [{ OutputName: v.OutputName, Confidence: typeof v.Confidence === 'number' ? v.Confidence : null, MinConfidence: v.MinConfidence, Policy: v.Policy }];

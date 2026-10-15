@@ -24,10 +24,7 @@ export interface GoldenCase {
     /**
      * Outputs whose correct answer is an abstention: the output was withheld below its confidence floor, or answered
      * nothing (null, an empty list), or answered one of its `Expected` labels. A record that failed for another reason is
-     * not an abstention. An output listed here is scored even when its `Expected` list is empty. Under an
-     * `OnLowConfidence: 'fail'` floor the whole record fails; only the outputs it failed on count as withheld, so a case
-     * expecting other outputs to abstain too scores them wrong: such a pipeline should expect the abstention only on its
-     * floored outputs.
+     * not an abstention. An output listed here is scored even when its `Expected` list is empty.
      */
     ExpectAbstain?: string[];
     /**
@@ -49,7 +46,7 @@ export interface GoldenAnswer {
     CaseID: string;
     /** Per output, the comparable answer (null when that output had none); null when the record failed. */
     Values: Record<string, string | null> | null;
-    /** Outputs the pipeline withheld (or failed the record on) below their confidence floor; absent when none. */
+    /** Outputs the pipeline withheld below their confidence floor; absent when none. */
     Withheld?: string[];
 }
 /** One output's score: correct answers of N, the metric value and its Wilson interval (accuracy only). */

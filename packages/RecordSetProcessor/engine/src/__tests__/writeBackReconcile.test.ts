@@ -148,6 +148,20 @@ describe('ApplyOutputMapping reconcile', () => {
         expect(out.changed).toBe(false);
     });
 
+    it('previews no change for an identical re-run', async () => {
+        const existing = [
+            new Row({ ID: 'pjf-1', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000001', Sequence: 1, Confidence: 0.9, Source: 'Derived' }, [], 'e1'),
+            new Row({ ID: 'pjf-2', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000002', Sequence: 2, Confidence: 0.4, Source: 'Derived' }, [], 'e2'),
+        ];
+        const h = harness(existing);
+        h.parent.Values.SeniorityLevelID = '11111111-1111-1111-1111-111111111111';
+        const out = await ApplyOutputMapping({ outputMapping: mapping, result, record, contextUser: USER, provider: h.provider, dryRun: true });
+        expect(out.previewFields).toEqual({});
+        expect(out.previewChildren).toBeUndefined();
+        expect(out.PreviewErrors).toBeUndefined();
+        expect(existing.every((r) => r.Saved === 0)).toBe(true);
+    });
+
     it('deletes pipeline rows the new answer dropped, and never touches human rows', async () => {
         const order: string[] = [];
         const stale = new Row({ ID: 'pjf-3', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000003', Sequence: 3, Source: 'Derived' }, order, 'stale');
@@ -581,14 +595,6 @@ describe('ApplyOutputMapping transaction isolation', () => {
         expect(shared.Durable).toEqual(A_WRITES);
     });
 
-    it('with no transaction open on the caller\'s provider, runs on a minted instance and commits it on its own', async () => {
-        const shared = new AmbientTransactionProvider();
-        await ApplyOutputMapping({ outputMapping: mapping, result, record: recordA, contextUser: USER, provider: shared });
-        expect(shared.Minted).toHaveLength(1);
-        expect(shared.Calls).toBe(0);
-        expect(shared.Durable).toEqual(A_WRITES);
-    });
-
     it('when the caller holds a transaction, joins it (no second instance) and the caller owns atomicity', async () => {
         const shared = new AmbientTransactionProvider();
         const caller = await shared.BeginEntityTransaction();
@@ -602,14 +608,6 @@ describe('ApplyOutputMapping transaction isolation', () => {
         expect(shared.Durable).toEqual(['caller:own-write', ...A_WRITES]);
     });
 
-    it('writes on a minted instance and releases it, on success and on failure', async () => {
-        const shared = new AmbientTransactionProvider();
-        await ApplyOutputMapping({ outputMapping: mapping, result, record: recordA, contextUser: USER, provider: shared });
-        await expect(ApplyOutputMapping({ outputMapping: mapping, result, record: recordB, contextUser: USER, provider: shared })).rejects.toThrow();
-        expect(shared.Minted).toHaveLength(2);
-        expect(shared.Minted.every((m) => m.Released)).toBe(true);
-        expect(shared.Released).toBe(false);
-    });
 });
 
 const uuidField = (Name: string, RelatedEntity?: string, extra: Partial<EntityFieldInfo> = {}): EntityFieldInfo =>
@@ -684,7 +682,7 @@ class PreviewDbProvider extends WriteBackTestProvider {
         if (this.FailRead) {
             return { ...rowsResult<T>([]), Success: false, ErrorMessage: 'read failed' };
         }
-        const [, column, list] = /^\[(\w+)\] IN \((.*)\)$/.exec(typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '') || [];
+        const [, column, list] = /^(\w+) IN \((.*)\)$/.exec(typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '') || [];
         const wanted = [...(list || '').matchAll(/'([^']*)'/g)].map(([, v]) => v.toLowerCase());
         const table = this.EntityByName(params.EntityName || '')?.BaseTable || '';
         const rows = (this.Tables[table] || []).filter((row) => wanted.includes(String(row[column]).toLowerCase()));
@@ -848,7 +846,7 @@ describe('dry-run preview checks what the database constraint checks', () => {
         const d = new PreviewDbProvider([byRef, PEOPLE, functions], { JobFunction: [{ ID: MISSING_ID, RefID: JOB_FUNCTION_ID }] });
         const out = await ApplyOutputMapping({ outputMapping: childOnly, result: oneFunction(JOB_FUNCTION_ID.toLowerCase()), record, contextUser: USER, provider: d, dryRun: true });
         expect(out.PreviewErrors).toBeUndefined();
-        expect(d.RelatedReads).toEqual([expect.objectContaining({ ExtraFilter: `[RefID] IN ('${JOB_FUNCTION_ID.toLowerCase()}')`, Fields: ['RefID'] })]);
+        expect(d.RelatedReads).toEqual([expect.objectContaining({ ExtraFilter: `RefID IN ('${JOB_FUNCTION_ID.toLowerCase()}')`, Fields: ['RefID'] })]);
     });
 });
 

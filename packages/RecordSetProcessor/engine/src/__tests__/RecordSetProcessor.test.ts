@@ -349,27 +349,26 @@ describe('RecordSetProcessor.Process', () => {
             const result = await engine.Process({ source: new ArraySource(recs(10), 'E'), processor, tracker, contextUser: USER,
                 provider: PROVIDER, batchSize: 10, FeaturePipeline: true, recordProcessID: 'RP-1' });
             expect(result.Status).toBe('Failed');
-            expect(result.ErrorMessage).toBe('1 of 10 attempted records failed (1 rejected by output constraints, 0 below a confidence floor)');
+            expect(result.ErrorMessage).toBe('1 of 10 attempted records failed (1 rejected by output constraints)');
             expect(tracker.completed?.FeaturePipeline).toEqual({
                 RecordProcessID: 'RP-1', Pin: PIN, ParameterFidelity: null, Attempted: 10, Upserted: 8, Unchanged: 1, Previewed: 0,
                 RejectedInvalid: 1, BelowConfidence: 0, Failed: 0, Skipped: 0, HumanValuesPreserved: 1, Status: 'failed',
             });
         });
 
-        it('tallies the records a confidence floor acted on, and leaves its rejections out of Failed', async () => {
+        it('tallies the records whose outputs a confidence floor withheld', async () => {
             const tracker = new SpyTracker();
             const processor = new FunctionRecordProcessor((r): RecordResult => {
-                if (r.RecordID === 'r0') return { Status: 'Failed', ErrorMessage: 'below floor', FailureKind: 'BelowConfidence', BelowConfidenceOutputs: ['S'] };
-                if (r.RecordID === 'r1') return { Status: 'Succeeded', Outcome: 'Upserted', BelowConfidenceOutputs: ['S'] };
+                if (r.RecordID === 'r0' || r.RecordID === 'r1') return { Status: 'Succeeded', Outcome: 'Upserted', BelowConfidenceOutputs: ['S'] };
                 if (r.RecordID === 'r2') return { Status: 'Failed', ErrorMessage: 'deadlock' };
                 return { Status: 'Succeeded', Outcome: 'Upserted', PipelinePin: PIN };
             });
             const result = await engine.Process({ source: new ArraySource(recs(10), 'E'), processor, tracker, contextUser: USER,
                 provider: PROVIDER, batchSize: 10, FeaturePipeline: true, recordProcessID: 'RP-1' });
             expect(result.Status).toBe('Failed');
-            expect(result.ErrorMessage).toBe('2 of 10 attempted records failed (0 rejected by output constraints, 1 below a confidence floor)');
+            expect(result.ErrorMessage).toBe('1 of 10 attempted records failed (0 rejected by output constraints)');
             expect(tracker.completed?.FeaturePipeline).toMatchObject({
-                Attempted: 10, Upserted: 8, RejectedInvalid: 0, BelowConfidence: 2, Failed: 1, Status: 'failed',
+                Attempted: 10, Upserted: 9, RejectedInvalid: 0, BelowConfidence: 2, Failed: 1, Status: 'failed',
             });
         });
 
@@ -442,7 +441,7 @@ describe('RecordSetProcessor.Process', () => {
             const result = await engine.Process({ source: new ArraySource(recs(12), 'E'), processor, tracker, contextUser: USER, provider: PROVIDER,
                 batchSize: 12, FeaturePipeline: true, recordProcessID: 'RP-1' });
             expect(result.Status).toBe('Failed');
-            expect(result.ErrorMessage).toBe('2 of 12 attempted records failed (1 rejected by output constraints, 0 below a confidence floor)');
+            expect(result.ErrorMessage).toBe('2 of 12 attempted records failed (1 rejected by output constraints)');
             expect(tracker.completed?.FeaturePipeline).toMatchObject({
                 Pin: PIN, Attempted: 12, Upserted: 9, Unchanged: 1, RejectedInvalid: 1, Failed: 1, HumanValuesPreserved: 20, Status: 'failed',
             });

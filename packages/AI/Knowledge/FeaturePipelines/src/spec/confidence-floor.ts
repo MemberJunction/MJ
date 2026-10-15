@@ -1,29 +1,19 @@
 /**
  * @fileoverview Per-output confidence floors of a DataFeatureSpec: an output whose confidence is below its
- * `MinConfidence` is not written (`OnLowConfidence: 'null'`) or fails its record (`'fail'`). Pure: no database access.
+ * `MinConfidence` is withheld (`OnLowConfidence: 'null'`). Pure: no database access.
  * @module @memberjunction/feature-pipelines
  */
 
 import type { DataFeatureOutput, SpecValidationIssue } from './data-feature-spec.js';
 
-/**
- * What a run does with an output below its floor: `null` withholds it (write-back clears a value the pipeline wrote and
- * keeps a person's) while the other outputs are written; `fail` fails the whole record.
- */
-export type LowConfidencePolicy = 'null' | 'fail';
-
-/** Every {@link LowConfidencePolicy}; typed by the union, so adding a policy without listing it is a compile error. */
-const LOW_CONFIDENCE_POLICIES: ReadonlyArray<LowConfidencePolicy> = ['null', 'fail'];
+/** What a run does with an output below its floor: `null` withholds it (write-back clears a value the pipeline wrote). */
+export type LowConfidencePolicy = 'null';
 
 /** One output a record's answer gave below its floor. */
 export interface BelowConfidenceOutput {
-    /** The output's `Name`. */
     OutputName: string;
-    /** The confidence the answer gave the output; null when it gave none (or none in [0, 1]). */
     Confidence: number | null;
-    /** The output's `MinConfidence`. */
     MinConfidence: number;
-    /** The output's `OnLowConfidence`. */
     Policy: LowConfidencePolicy;
 }
 
@@ -90,11 +80,11 @@ export class ConfidenceFloor {
         }
         if (policy === undefined) {
             issues.push(ConfidenceFloor.issue(`${basePath}.OnLowConfidence`, `Output '${output.Name}' sets MinConfidence without OnLowConfidence.`,
-                "Set OnLowConfidence to 'null' (leave the output unwritten) or 'fail' (fail the record)."));
-        } else if (!LOW_CONFIDENCE_POLICIES.some((p) => p === policy)) {
+                "Set OnLowConfidence to 'null' (leave the output unwritten)."));
+        } else if (policy !== 'null') {
             issues.push(ConfidenceFloor.issue(`${basePath}.OnLowConfidence`,
-                `Output '${output.Name}' has OnLowConfidence ${JSON.stringify(policy)}; expected one of: ${LOW_CONFIDENCE_POLICIES.join(', ')}.`,
-                "Use 'null' (leave the output unwritten) or 'fail' (fail the record)."));
+                `Output '${output.Name}' has OnLowConfidence ${JSON.stringify(policy)}; expected 'null'.`,
+                "Use 'null' (leave the output unwritten)."));
         }
         return issues;
     }

@@ -56,8 +56,8 @@ export type SourceTypeValue = 'View' | 'List' | 'Filter' | 'Array' | 'Keyset' | 
 /** Whether a Feature Pipeline record changed anything (mirrors `FeatureValueWriteResult` in `@memberjunction/feature-pipelines`). */
 export type RecordWriteOutcome = 'Upserted' | 'Unchanged';
 
-/** Why a record failed, when the run counts it apart: an output broke its constraint, or a `fail` confidence floor. */
-export type RecordFailureKind = 'RejectedInvalid' | 'BelowConfidence';
+/** Why a record failed, when the run counts it apart: an output broke its value constraint. */
+export type RecordFailureKind = 'RejectedInvalid';
 
 /** The outcome of processing a single record, returned by an {@link IRecordProcessor}. */
 export interface RecordResult {
@@ -69,7 +69,7 @@ export interface RecordResult {
     ErrorMessage?: string;
     /** Set when the answer was rejected (see {@link RecordFailureKind}): the run counts it apart from other failures. */
     FailureKind?: RecordFailureKind;
-    /** Feature Pipelines: the outputs answered below their confidence floor (withheld, or why the record failed). */
+    /** Feature Pipelines: the outputs answered below their confidence floor and withheld. */
     BelowConfidenceOutputs?: string[];
     /** Non-fatal problems with this record's processing (e.g. its cache entry could not be stored). */
     Warnings?: string[];
@@ -99,9 +99,7 @@ export interface RecordResult {
     Outcome?: RecordWriteOutcome;
     /** Feature Pipelines: true when a dry run computed the record (nothing written, no `Outcome`). */
     DryRun?: boolean;
-    /** Feature Pipelines: the pipeline version (MJ: Feature Pipeline Versions.Version) that computed the result. */
     PipelineVersion?: number | null;
-    /** Feature Pipelines: how many human-entered values this record's write-back left in place. */
     HumanValuesPreserved?: number;
     /** Feature Pipelines: the pin the record was computed under; the run result reports it. */
     PipelinePin?: FeaturePipelineRunPin;
@@ -111,19 +109,14 @@ export interface RecordResult {
 
 /** The pin a Feature Pipeline run computed under: its pipeline version and the Feature Value key hashes. */
 export interface FeaturePipelineRunPin {
-    /** `MJ: Feature Pipeline Versions.Version` the run computed under; null when no version was resolved. */
     PipelineVersion: number | null;
-    /** Hash of the prompt version (template text with its rendered constraints) the values were computed with. */
     PromptVersionHash: string | null;
-    /** The primary `MJ: AI Models` ID the prompt ran on; null when the prompt has no primary model. */
     AIModelID: string | null;
-    /** Hash of the prompt's inference parameters (temperature, seed, ...). */
     ParametersHash: string | null;
 }
 
 /** Result of one Feature Pipeline run; persisted as `MJ: Process Runs.ResultSummary`. */
 export interface FeaturePipelineRunResult {
-    /** The `MJ: Record Processes` ID of the pipeline that ran. */
     RecordProcessID: string;
     /** The run's pin: the first record's, else the processor's run-level pin (a run whose records were all skipped). */
     Pin: FeaturePipelineRunPin | null;
@@ -131,21 +124,16 @@ export interface FeaturePipelineRunResult {
     ParameterFidelity: ParameterFidelity | null;
     /** Records the run handed to the processor: every processed record except those skipped on their watermark. */
     Attempted: number;
-    /** Records whose Feature Values or write-back changed something. */
     Upserted: number;
-    /** Records whose Feature Values all held their values and whose write-back changed nothing. */
     Unchanged: number;
     /** Records a dry run computed: it writes nothing, so they are neither Upserted nor Unchanged. */
     Previewed: number;
     /** Records whose output failed its constraints (counted apart from {@link Failed}). */
     RejectedInvalid: number;
-    /** Records the confidence floor acted on: outputs withheld, or the record failed (counted apart from {@link Failed}). */
+    /** Records with outputs withheld below their confidence floor (also counted as Upserted, Unchanged or Previewed). */
     BelowConfidence: number;
-    /** Records that failed for any other reason. */
     Failed: number;
-    /** Records skipped, on their watermark or by the processor. */
     Skipped: number;
-    /** Human-entered values the run's write-backs left in place. */
     HumanValuesPreserved: number;
     /** `completed` only when the run completed with no failed record; else `failed`. */
     Status: 'completed' | 'failed';
@@ -217,33 +205,27 @@ export interface WriteBackResult {
     createdChildID?: string;
     /** IDs of created child records when childRecords (or fan-out) was applied (absent on a dry-run). */
     createdChildIDs?: string[];
-    /** IDs of reconciled child rows that were updated. */
     updatedChildIDs?: string[];
-    /** IDs of reconciled child rows that were deleted (stale pipeline rows). */
     deletedChildIDs?: string[];
-    /** IDs of reconciled child rows that already held the proposed values. */
     unchangedChildIDs?: string[];
     /** IDs of human-owned child rows the result also proposed and that were left untouched. */
     preservedHumanChildIDs?: string[];
-    /** Fields whose human-entered value write-back left in place. */
     preservedHumanFields?: string[];
     /** Fields whose Human value a run that overwrites human values retired (the field is the pipeline's again). */
     retiredHumanFields?: string[];
     /** Mapped fields whose answer was withheld below its confidence floor: cleared where the pipeline wrote the value. */
     withheldFields?: string[];
-    /** Withheld fields kept as they are because their column does not allow null. */
     withheldKeptFields?: string[];
-    /** Child entities whose mappings were skipped because the answer withheld them. */
     withheldChildEntities?: string[];
     /** IDs of created tagged item records (absent on a dry-run). */
     createdTaggedItemIDs?: string[];
     /** True when this was a dry-run: values were computed (and field names validated) but NOTHING was saved. */
     dryRun?: boolean;
-    /** On a dry-run, the resolved field values that WOULD be written to the processed record — the write-back preview. */
+    /** On a dry-run, the fields the real write WOULD change on the processed record, with their new values. */
     previewFields?: Record<string, unknown>;
-    /** On a dry-run with a single child mapping, the resolved child values that WOULD be created. */
+    /** On a dry-run with a single child mapping, the child values the real write WOULD store. */
     previewChild?: Record<string, unknown>;
-    /** On a dry-run with childRecords (or fan-out), the array of resolved child records that WOULD be created. */
+    /** On a dry-run with child mappings, the child values the real write WOULD store (an insert's, or an update's differing ones). */
     previewChildren?: Array<Record<string, unknown>>;
     /** On a dry-run with tag mappings, the resolved tag previews. */
     previewTags?: TagWriteBackPreview[];
