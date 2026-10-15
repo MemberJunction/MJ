@@ -2494,6 +2494,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     const ref = createComponent(RecordOriginCrumbComponent, {
       environmentInjector: this.environmentInjector
     });
+    ref.setInput('TabId', tab.id);
     ref.setInput('Origin', origin);
     this.appRef.attachView(ref.hostView);
     const el = (ref.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];

@@ -20,9 +20,11 @@ try {
  * there is no origin.
  */
 
-function render(origin: Record<string, unknown> | null) {
+function render(origin: Record<string, unknown> | null, previousTab?: { id: string; title: string }) {
   const nav = {
     ReturnToRecordSource: vi.fn().mockResolvedValue(undefined),
+    ReturnToPreviousTab: vi.fn().mockResolvedValue(undefined),
+    GetPreviousTab: vi.fn().mockReturnValue(previousTab),
     SwitchToAppHome: vi.fn().mockResolvedValue(undefined)
   };
   const fixture = renderComponentFixture(RecordOriginCrumbComponent, {
@@ -30,6 +32,7 @@ function render(origin: Record<string, unknown> | null) {
     providers: [{ provide: NavigationService, useValue: nav }],
     autoDetect: true
   });
+  fixture.componentRef.setInput('TabId', 'tab-rec');
   fixture.componentRef.setInput('Origin', origin);
   fixture.detectChanges();
   return { fixture, nav };
@@ -60,7 +63,7 @@ describe('RecordOriginCrumbComponent (DOM)', () => {
     expect(nav.SwitchToAppHome).toHaveBeenCalledWith('app-1');
   });
 
-  it('Back is a labeled button, split from the trail by a divider, that restores the origin page', () => {
+  it('Back is a labeled button, split from the trail by a divider, that goes to the previous tab', () => {
     const origin = {
       sourceAppId: 'app-1', sourceAppName: 'Data Explorer',
       sourceNavLabel: 'Entities', sourceTabId: 't-1'
@@ -76,20 +79,32 @@ describe('RecordOriginCrumbComponent (DOM)', () => {
     expect(divider?.getAttribute('aria-hidden')).toBe('true');
     expect(divider?.nextElementSibling?.textContent?.trim()).toBe('Data Explorer');
     back?.click();
-    expect(nav.ReturnToRecordSource).toHaveBeenCalledWith(origin);
+    // One step back through tab history, excluding this record's own tab; the
+    // service falls back to the origin restore when no other tab is open.
+    expect(nav.ReturnToPreviousTab).toHaveBeenCalledWith(origin, 'tab-rec');
+    expect(nav.ReturnToRecordSource).not.toHaveBeenCalled();
     expect(nav.SwitchToAppHome).not.toHaveBeenCalled();
   });
 
-  it('Back names the single-label destination in its tooltip and restores it', () => {
+  it("Back's tooltip names the previous tab when there is one", () => {
+    const { fixture, nav } = render(
+      { sourceAppId: 'app-1', sourceAppName: 'Data Explorer', sourceNavLabel: 'Entities', sourceTabId: 't-1' },
+      { id: 'tab-dash', title: 'Dashboards' }
+    );
+    expect(query(fixture, 'button.crumb-back')?.getAttribute('title')).toBe('Back to Dashboards');
+    expect(nav.GetPreviousTab).toHaveBeenCalledWith('tab-rec');
+  });
+
+  it('with no other tab open, Back names the single-label origin it will fall back to', () => {
     const origin = { sourceAppId: 'app-chat', sourceAppName: 'Chat', sourceLabel: 'Conversation', sourceTabId: 't-9' };
     const { fixture, nav } = render(origin);
     const back = query(fixture, 'button.crumb-back') as HTMLButtonElement;
     expect(back.getAttribute('title')).toBe('Back to Conversation');
     back.click();
-    expect(nav.ReturnToRecordSource).toHaveBeenCalledWith(origin);
+    expect(nav.ReturnToPreviousTab).toHaveBeenCalledWith(origin, 'tab-rec');
   });
 
-  it('Back falls back to the app name when the origin has no page label', () => {
+  it('with no other tab open and no page label, Back names the origin app', () => {
     const { fixture } = render({ sourceAppId: 'app-1', sourceAppName: 'Data Explorer', sourceTabId: 't-1' });
     expect(query(fixture, 'button.crumb-back')?.getAttribute('title')).toBe('Back to Data Explorer');
   });

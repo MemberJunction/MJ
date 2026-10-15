@@ -30,8 +30,11 @@ import { CompositeKey, Metadata } from '@memberjunction/core';
       @if (Clickable) {
         <!-- Back is its own labeled control, split from the trail by a divider, so
              it never reads as the lead-in to the first segment (Matt's mockup on
-             #5221). Same full restore as the page segment. -->
-        <button type="button" class="crumb-back" (click)="OnPageClick()" [title]="BackTitle">
+             #5221). It goes to the LAST PLACE the user was (the previous tab);
+             the segments keep the "page as it was" restore. Hover/focus re-render
+             so the tooltip names the current previous tab (Explorer is zoneless). -->
+        <button type="button" class="crumb-back" (click)="OnBackClick()" [title]="BackTitle"
+                (mouseenter)="OnBackHover()" (focus)="OnBackHover()">
           <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back
         </button>
         <span class="crumb-divider" aria-hidden="true"></span>
@@ -157,6 +160,9 @@ export class RecordOriginCrumbComponent {
     return this._origin;
   }
 
+  /** The workspace tab this crumb's pane belongs to — Back never "goes back" to it */
+  @Input() TabId?: string;
+
   private navigationService = inject(NavigationService);
   private cdr = inject(ChangeDetectorRef);
 
@@ -164,9 +170,13 @@ export class RecordOriginCrumbComponent {
     return RecordSourceHasReturnTarget(this.Origin);
   }
 
-  /** Back's tooltip names the page it restores (the same target as the page segment) */
+  /**
+   * Back's tooltip names where it goes: the previous tab when there is one,
+   * else the origin it falls back to (the same target as the page segment).
+   */
   get BackTitle(): string {
-    const destination = this.DisplayLabel || this.Origin?.sourceNavLabel || this.Origin?.sourceAppName;
+    const previous = this.navigationService.GetPreviousTab(this.TabId);
+    const destination = previous?.title || this.DisplayLabel || this.Origin?.sourceNavLabel || this.Origin?.sourceAppName;
     return destination ? `Back to ${destination}` : 'Back to where you opened this record';
   }
 
@@ -213,6 +223,16 @@ export class RecordOriginCrumbComponent {
         });
       }
     }
+  }
+
+  /** Back: one step back through tab history; origin restore when no other tab is open */
+  async OnBackClick(): Promise<void> {
+    await this.navigationService.ReturnToPreviousTab(this.Origin, this.TabId);
+  }
+
+  /** The previous tab changes as the user moves around — refresh the tooltip before it shows */
+  OnBackHover(): void {
+    this.cdr.markForCheck();
   }
 
   /** Page segment: full restore — the captured page, section state included */
