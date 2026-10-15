@@ -870,6 +870,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
                     rowCount: item.cacheStatus.rowCount,
+                    // Only sent when the slot has one (or '' for a slot without): the server skips
+                    // the definition check when the field is absent.
+                    ...(item.cacheStatus.definitionHash != null ? { definitionHash: item.cacheStatus.definitionHash } : {}),
                 } : null,
             }));
 
@@ -886,6 +889,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             maxUpdatedAt
                             rowCount
                             errorMessage
+                            definitionHash
                         }
                     }
                 }
@@ -903,6 +907,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     maxUpdatedAt?: string;
                     rowCount?: number;
                     errorMessage?: string;
+                    definitionHash?: string | null;
                 }>;
             };
 
@@ -928,6 +933,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         maxUpdatedAt: result.maxUpdatedAt,
                         rowCount: result.rowCount,
                         errorMessage: result.errorMessage,
+                        definitionHash: result.definitionHash ?? undefined,
                     };
                 }
 
@@ -938,6 +944,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     maxUpdatedAt: result.maxUpdatedAt,
                     rowCount: result.rowCount,
                     errorMessage: result.errorMessage,
+                    definitionHash: result.definitionHash ?? undefined,
                 };
             });
 

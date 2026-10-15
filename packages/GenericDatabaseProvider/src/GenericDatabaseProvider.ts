@@ -46,6 +46,8 @@ import {
     RunQueriesWithCacheCheckResponse,
     RunQueryWithCacheCheckResult,
     QueryCacheAuthorization,
+    QueryDefinitionSignature,
+    RunQueryCacheStatus,
     QueryCategoryInfo,
     AggregateResult,
     AggregateValue,
@@ -3803,6 +3805,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const itemsWithoutValidationSQL: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
             const firstFetchWithValidation: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
             const errorResults: RunQueryWithCacheCheckResult<T>[] = [];
+            const definitionHashes = new Map<number, string>();
 
             for (let i = 0; i < params.length; i++) {
                 const item = params[i];
@@ -3821,7 +3824,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     continue;
                 }
 
-                if (!item.cacheStatus) {
+                const definition = this.QueryDefinitionSignatureFor(query);
+                if (definition) {
+                    definitionHashes.set(i, definition.Hash);
+                }
+
+                if (!item.cacheStatus || this.clientSlotDefinitionDiffers(item.cacheStatus, definition)) {
+                    // No slot, or the client's slot holds rows of another definition of the query:
+                    // whatever CacheValidationSQL says about the data, those rows came from other SQL.
                     if (query.CacheValidationSQL) {
                         // First fetch for a validated query — run the validation status
                         // anyway so the fresh response is STAMPED with the validation
@@ -3882,7 +3892,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             ];
 
             const fullQueryResults = await Promise.all(fullQueryPromises);
-            const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
+            const allResults = [...errorResults, ...currentResults, ...fullQueryResults]
+                .map(result => result.status === 'error' || !definitionHashes.has(result.queryIndex)
+                    ? result
+                    : { ...result, definitionHash: definitionHashes.get(result.queryIndex) });
             allResults.sort((a, b) => a.queryIndex - b.queryIndex);
 
             return { success: true, results: allResults };
@@ -3915,12 +3928,40 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 resolvable: true,
                 authorized: !user || query.UserCanRun(user).canRun,
                 categoryPath: query.CategoryPath,
-                queryName: query.Name
+                queryName: query.Name,
+                queryId: query.ID,
+                definition: this.QueryDefinitionSignatureFor(query)
             };
         } catch (e) {
             LogStatusEx({ message: `ResolveQueryCacheAuthorization: resolution failed (${e instanceof Error ? e.message : String(e)}) — treating as unresolvable.`, verboseOnly: true });
             return { resolvable: false, authorized: false };
         }
+    }
+
+    /**
+     * The definition signature of `query` on this provider's platform: what a RunQuery cache slot
+     * of the query must have been written under to be served. Computed by `QueryEngine` from the
+     * same metadata this provider executes. Undefined when the engine cannot compute it, which
+     * disables the definition check for that read rather than failing it.
+     */
+    protected QueryDefinitionSignatureFor(query: MJQueryEntityExtended): QueryDefinitionSignature | undefined {
+        try {
+            return QueryEngine.Instance.GetDefinitionSignature(query.ID, this.PlatformKey as DatabasePlatform);
+        } catch (e) {
+            LogStatusEx({ message: `QueryDefinitionSignatureFor: could not compute the definition of query '${query.Name}' (${e instanceof Error ? e.message : String(e)}) — skipping the definition check.`, verboseOnly: true });
+            return undefined;
+        }
+    }
+
+    /**
+     * True when a client sent the definition hash its slot was written under and it is not this
+     * server's. A client that sends none (a release before the hash existed) gets no definition check.
+     */
+    private clientSlotDefinitionDiffers(cacheStatus: RunQueryCacheStatus, definition: QueryDefinitionSignature | undefined): boolean {
+        if (cacheStatus.definitionHash == null || !definition) {
+            return false;
+        }
+        return cacheStatus.definitionHash !== definition.Hash;
     }
 
     /**
@@ -4829,6 +4870,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const cacheable = !params.SQL && ttlSeconds > 0 && LocalCacheManager.Instance.IsInitialized;
 
         let fingerprint: string | undefined;
+        let definition: QueryDefinitionSignature | undefined;
         if (cacheable) {
             // MaxRows/StartRow shape the result set, and the data source ID disambiguates slots.
             const fingerprintParams: Record<string, unknown> = {
@@ -4838,7 +4880,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 __eds: externalDataSourceID,
             };
             fingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(query.ID, query.Name, fingerprintParams, this.InstanceConnectionString, query.CategoryPath);
-            const cached = await LocalCacheManager.Instance.GetRunQueryResult(fingerprint); // TTL-enforced
+            definition = this.QueryDefinitionSignatureFor(query);
+            // TTL-enforced, and a miss when the slot was written under another definition of the query.
+            const cached = await LocalCacheManager.Instance.GetRunQueryResult(fingerprint, definition);
             if (cached) {
                 return {
                     QueryID: cached.queryId ?? query.ID,
@@ -4874,6 +4918,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // Fire-and-forget store with the data source's TTL (ms).
             LocalCacheManager.Instance.SetRunQueryResult(
                 fingerprint, query.Name, paginatedResult, '', totalRowCount, query.ID, ttlSeconds * 1000,
+                undefined, definition,
             ).catch(e => LogError(`External RunQuery cache write failed: ${e}`));
         }
         return { ...checked, Results: paginatedResult as RunQueryResult['Results'], RowCount: paginatedResult.length, TotalRowCount: totalRowCount };

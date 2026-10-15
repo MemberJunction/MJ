@@ -100,7 +100,7 @@ describe('ProviderBase.ResolveQueryCacheAuthorization (B45/B46 cache-serve seam)
 
     it('resolves by QueryID and reports the canonical category path', () => {
         const r = provider.auth({ QueryID: FINANCE_ID } as RunQueryParams, user);
-        expect(r).toEqual({ resolvable: true, authorized: true, categoryPath: '/Finance/', queryName: 'Revenue Summary' });
+        expect(r).toEqual({ resolvable: true, authorized: true, categoryPath: '/Finance/', queryName: 'Revenue Summary', queryId: FINANCE_ID });
     });
 
     it('resolves by name case- and whitespace-insensitively', () => {
