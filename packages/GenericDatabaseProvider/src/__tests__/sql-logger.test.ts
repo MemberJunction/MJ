@@ -357,3 +357,43 @@ describe('SqlLoggingSessionImpl — concurrent callers', () => {
     }
   });
 });
+
+describe('SqlLoggingSessionImpl — a rotation that fails', () => {
+  // If the next part cannot be opened (disk full, too many open files), the capture is incomplete
+  // from that point. Every later statement must fail with that cause, not with a bare EBADF from
+  // the closed handle, and never by being skipped, which would let a push succeed with a migration
+  // that is missing statements (PR #3369 review).
+
+  it('fails the statement that triggered it and every later one with the same clear error', async () => {
+    const filePath = makeTmpFile();
+    const realOpen = fs.promises.open.bind(fs.promises);
+    const open = vi.spyOn(fs.promises, 'open').mockImplementation(async (target, flags) => {
+      if (String(target).endsWith('.part002.sql')) {
+        throw Object.assign(new Error('EMFILE: too many open files'), { code: 'EMFILE' });
+      }
+      return realOpen(target, flags);
+    });
+    try {
+      const session = new SqlLoggingSessionImpl('rotation-fails', filePath, { maxFileSize: 2000 });
+      await session.Initialize();
+
+      let firstError: unknown;
+      for (let i = 0; i < 40 && firstError === undefined; i++) {
+        await session.LogSqlStatement(stmt(i), undefined, undefined, true).catch((error: unknown) => {
+          firstError = error;
+        });
+      }
+      expect(firstError).toBeInstanceOf(Error);
+      expect((firstError as Error).message).toMatch(/SQL log rotation failed .*part002\.sql.*EMFILE/);
+
+      // Later statements get the same error: not EBADF, and not silently dropped.
+      await expect(session.LogSqlStatement(stmt(99), undefined, undefined, true)).rejects.toBe(firstError);
+      await expect(session.LogSqlStatement(stmt(100), undefined, undefined, true)).rejects.toBe(firstError);
+
+      // Dispose does not throw again: the failure has already been reported to the caller.
+      await expect(session.Dispose()).resolves.toBeUndefined();
+    } finally {
+      open.mockRestore();
+    }
+  });
+});

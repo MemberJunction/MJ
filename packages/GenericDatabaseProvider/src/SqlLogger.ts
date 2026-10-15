@@ -63,6 +63,11 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * twice or write past the size limit. Never rejects: each caller gets its own result.
    */
   private _queueTail: Promise<void> = Promise.resolve();
+  /**
+   * Set when a rotation fails part-way (e.g. the next part cannot be opened). The capture is incomplete
+   * from that point, so every later statement fails with this error instead of being skipped.
+   */
+  private _rotationError: Error | null = null;
 
   /**
    * @param dialect - The SQL dialect to use for platform-specific SQL emission
@@ -149,8 +154,34 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * Called only from `LogSqlStatement` (inside its queued write), only when splitting is enabled and the current part
    * already holds at least one statement — so rotation always happens on a statement boundary
    * and never produces an empty leading part.
+   *
+   * If any step fails, the session records the failure in `_rotationError` and rethrows it: the
+   * capture is incomplete from here, so every later statement fails with the same error.
    */
   private async _rotateToNextPart(): Promise<void> {
+    if (!this._fileHandle) {
+      return;
+    }
+    const nextIndex = this._partIndex + 1;
+    try {
+      await this._closePartAndOpenNext();
+    } catch (error) {
+      const cause = error instanceof Error ? error.message : String(error);
+      this._rotationError = new Error(
+        `SQL log rotation failed while starting part ${nextIndex} (${this._partFilePath(nextIndex)}): ${cause}. ` +
+        `The SQL log is incomplete from this point, so later statements are rejected.`,
+        { cause: error }
+      );
+      const handle = this._fileHandle;
+      this._fileHandle = null;
+      // The handle may already be closed (the failure came after close); this only stops a leak.
+      await handle?.close().catch(() => undefined);
+      throw this._rotationError;
+    }
+  }
+
+  /** The steps of {@link _rotateToNextPart}. */
+  private async _closePartAndOpenNext(): Promise<void> {
     if (!this._fileHandle) {
       return;
     }
@@ -218,6 +249,10 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       console.log(`Query (first 100 chars): ${query.substring(0, 100)}...`);
       console.log(`isMutation: ${isMutation}, description: ${description || 'none'}`);
       console.log(`Options:`, this.Options);
+    }
+
+    if (this._rotationError && !this._disposed) {
+      throw this._rotationError;
     }
 
     if (this._disposed || !this._fileHandle) {
