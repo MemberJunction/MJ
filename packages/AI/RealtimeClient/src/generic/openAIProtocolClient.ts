@@ -952,6 +952,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
      * `'listening'` only after all of that (obligation #7).
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
+        this.AssertTransportSupported(config);
         this.sessionObject = this.resolveSessionObject(config);
         this.micStream = micStream;
         this.closedByConsumer = false;
@@ -1048,6 +1049,16 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         this.attachOutputAudioMeter(this.playback?.CreateMeter?.() ?? null);
         this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
         this.setState('listening');
+    }
+
+    /** Rebinds the PCM capture and the input meter to the stream's current track (obligation #10); the socket stays open. */
+    public async ReplaceMicrophone(micStream: MediaStream): Promise<void> {
+        if (!this.micCapture) {
+            return;
+        }
+        this.micCapture.Rebind(micStream);
+        this.micStream = micStream;
+        this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
     }
 
     /**

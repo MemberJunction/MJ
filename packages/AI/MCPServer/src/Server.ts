@@ -14,7 +14,7 @@
  */
 
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { CountByUUID, IndexByUUID, UUIDsEqual } from "@memberjunction/global";
 import { setupSQLServerClient, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -28,7 +28,7 @@ import { InitConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInf
 import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
 import { LoadAgentManagementTools } from './tools/agentManagementTools.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, ResolvePayloadAtStart } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
@@ -1514,6 +1514,7 @@ async function loadActionTools(
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     const actions = await discoverActions(props.pattern as string || '*', props.category as string | undefined, sessionUser);
+                    const paramCounts = CountByUUID(actionEngine.ActionParams, (p: MJActionParamEntity) => p.ActionID);
                     return JSON.stringify(actions.map(action => ({
                         id: action.ID,
                         name: action.Name,
@@ -1522,7 +1523,7 @@ async function loadActionTools(
                         categoryId: action.CategoryID,
                         type: action.Type,
                         status: action.Status,
-                        paramCount: actionEngine.ActionParams.filter((p: MJActionParamEntity) => UUIDsEqual(p.ActionID, action.ID)).length
+                        paramCount: paramCounts.Get(action.ID) ?? 0
                     })));
                 }
             });
@@ -2260,7 +2261,9 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             }
 
             const step = steps[stepNumber - 1];
-            const stepData = step.GetAll();
+            // A step can store its start payload as a pointer to an earlier step's end; export the resolved payload.
+            const stepsById = IndexByUUID(steps);
+            const stepData: Record<string, unknown> = { ...step.GetAll(), PayloadAtStart: ResolvePayloadAtStart(step, stepsById) };
 
             // Determine output file path
             const runIdShort = (props.runId as string).substring(0, 8);

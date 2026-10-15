@@ -84,6 +84,17 @@ describe('ClientClauseScreen.AssertClauseUsesEntityBaseViews', () => {
         expect(screen('[Name] DESC, ID', 'OrderBy')).not.toThrow();
         expect(screen('(SELECT TOP 1 Password FROM __mj.Credential)', 'OrderBy')).toThrow(/entity base view/);
     });
+
+    it('with LeaveUnparseableToProvider, leaves only unreadable text to the caller and still refuses the rest', () => {
+        const leave = (clause: string) =>
+            () => ClientClauseScreen.AssertClauseUsesEntityBaseViews(clause, 'Aggregate', ENTITIES, MSSQL, USER, { LeaveUnparseableToProvider: true });
+
+        expect(screen('COUNT_BIG(*)', 'Aggregate')).toThrow(/refusing under uncertainty/);
+        expect(leave('COUNT_BIG(*)')).not.toThrow();
+        expect(leave('COUNT(*)')).not.toThrow();
+        expect(leave("COUNT(*) AS [a'] ; SELECT 1 AS [b'], COUNT(*)")).toThrow(/multiple statements/);
+        expect(leave('COUNT(*) + (SELECT COUNT(*) FROM __mj.[User])')).toThrow(/entity base view/);
+    });
 });
 
 describe('ClientClauseScreen — PostgreSQL bracket identifiers', () => {

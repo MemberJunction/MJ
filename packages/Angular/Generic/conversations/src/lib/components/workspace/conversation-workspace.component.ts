@@ -28,10 +28,11 @@ import {
   OnDestroy,
   DoCheck,
   ChangeDetectorRef,
-  HostListener
+  HostListener,
+  ViewChild
 } from '@angular/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJConversationEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, MJUserSettingEntity, UserInfoEngine, ConversationEngine, type ConversationScope } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ArtifactStateService } from '../../services/artifact-state.service';
@@ -45,6 +46,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
 import { BuildConversationTasksFilter, OwnTasksFilter } from '../../services/conversation-tasks-filter';
+import { ConversationChatAreaComponent } from '../conversation/conversation-chat-area.component';
 import { Subject, takeUntil } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
@@ -232,6 +234,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   @Output() NavigationChanged = new EventEmitter<{
     tab: 'conversations' | 'collections' | 'tasks';
     conversationId?: string;
+    /** The branch of an opened message search hit; null is the trunk. */
+    branchId?: string | null;
+    /** The sequence of an opened message search hit. */
+    sequence?: number;
     collectionId?: string;
     versionId?: string;
     taskId?: string;
@@ -563,16 +569,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public set selectedConversation(value: MJConversationEntity | null) {
     this.SelectedConversation = value;
   }
-  public SelectedThreadId: string | null = null;
-
-  /** @deprecated Use {@link SelectedThreadId}. */
-  public get selectedThreadId(): string | null {
-    return this.SelectedThreadId;
-  }
-  /** @deprecated Use {@link SelectedThreadId}. */
-  public set selectedThreadId(value: string | null) {
-    this.SelectedThreadId = value;
-  }
   public IsNewUnsavedConversation: boolean = false;
 
   /** @deprecated Use {@link IsNewUnsavedConversation}. */
@@ -648,6 +644,23 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   private engine = ConversationEngine.Instance;
+  /** The chat area this workspace shows; absent while the collections or tasks tab is shown. */
+  @ViewChild(ConversationChatAreaComponent) private chatArea?: ConversationChatAreaComponent;
+
+  /**
+   * The scope the artifact viewer reads: the chat area's (the view the person has open) for the
+   * selected conversation; Main when no chat area is rendered or it shows another conversation;
+   * null with no selected conversation.
+   */
+  public get ArtifactViewerScope(): ConversationScope | null {
+    const conversationId = this.SelectedConversationId;
+    if (!conversationId) {
+      return null;
+    }
+    const scope = this.chatArea?.ArtifactViewerScope ?? null;
+    return scope && UUIDsEqual(scope.ConversationID, conversationId) ? scope : ConversationEngine.TrunkScope(conversationId);
+  }
+
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
   private mentionAutocompleteService = MentionAutocompleteService.Instance;
 
@@ -743,31 +756,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   /**
-   * Opens a thread panel for a specific message
-   * @param messageId The parent message ID
-   */
-  OpenThread(messageId: string): void {
-    this.SelectedThreadId = messageId;
-  }
-
-  /** @deprecated Use {@link OpenThread}. */
-  openThread(messageId: string): void {
-    return this.OpenThread(messageId);
-  }
-
-  /**
-   * Closes the currently open thread panel
-   */
-  CloseThread(): void {
-    this.SelectedThreadId = null;
-  }
-
-  /** @deprecated Use {@link CloseThread}. */
-  closeThread(): void {
-    return this.CloseThread();
-  }
-
-  /**
    * Handler for conversation selection from sidebar/list
    */
   OnConversationSelected(conversationId: string): void {
@@ -859,30 +847,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.PendingMessageConversationId = this.SelectedConversationId;
   }
 
-  /**
-   * Handler for thread opened from chat area
-   */
-  OnThreadOpened(threadId: string): void {
-    this.SelectedThreadId = threadId;
-  }
-
-  /** @deprecated Use {@link OnThreadOpened}. */
-  onThreadOpened(threadId: string): void {
-    return this.OnThreadOpened(threadId);
-  }
-
-  /**
-   * Handler for thread closed from chat area
-   */
-  OnThreadClosed(): void {
-    this.SelectedThreadId = null;
-  }
-
-  /** @deprecated Use {@link OnThreadClosed}. */
-  onThreadClosed(): void {
-    return this.OnThreadClosed();
-  }
-
   async ngOnInit() {
     // Bind provider-aware services to this component's provider so multi-server
     // browser apps don't silently fall back to the global Metadata.Provider.
@@ -950,7 +914,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         ArtifactMetadataEngine.Instance.Config(false)
       ]);
 
-      console.log('✅ AI Engine initialized with', AIEngineBase.Instance.Agents?.length || 0, 'agents');
+      console.log('✅ AI Engine initialized with', AIEngineBase.Instance.ReadableAgents.length, 'agents');
       console.log('✅ Artifact Metadata Engine initialized with',
         ArtifactMetadataEngine.Instance.ArtifactTypes?.length || 0, 'artifact types');
 
@@ -1399,7 +1363,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       // Refresh the mention autocomplete service to pick up new agents
       await this.mentionAutocompleteService.refresh(this.CurrentUser);
 
-      const agentCount = AIEngineBase.Instance.Agents?.length || 0;
+      const agentCount = AIEngineBase.Instance.ReadableAgents.length;
       this.notificationService.CreateSimpleNotification(`Agent cache refreshed (${agentCount} agents)`, 'success', 3000);
       this.cdr.detectChanges();
     } catch (error) {
@@ -1428,15 +1392,20 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         break;
 
       case 'message':
-        // Switch to conversations tab, open conversation, and scroll to message (future enhancement)
+        // Switch to conversations tab, open the conversation, then open the message on its branch
         this.ActiveTab = 'conversations';
         if (result.conversationId) {
           this.SetActiveConversation(result.conversationId);
           this.NavigationChanged.emit({
             tab: 'conversations',
-            conversationId: result.conversationId
-            // TODO: Add messageId for scroll-to support in future
+            conversationId: result.conversationId,
+            branchId: result.branchId ?? null,
+            sequence: result.sequence
           });
+          if (result.sequence != null) {
+            this.openMessageInChatArea(result.conversationId, result.branchId ?? null, result.sequence)
+              .catch((error: unknown) => console.error('Failed to open the message from search:', error));
+          }
         }
         break;
 
@@ -1485,6 +1454,15 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   /** @deprecated Use {@link HandleSearchResult}. */
   handleSearchResult(result: SearchResult): void {
     return this.HandleSearchResult(result);
+  }
+
+  /**
+   * Renders the active conversation into the chat area, then has the chat area switch to the
+   * message's branch and scroll to it.
+   */
+  private async openMessageInChatArea(conversationId: string, branchId: string | null, sequence: number): Promise<void> {
+    this.cdr.detectChanges();
+    await this.chatArea?.OpenMessage(conversationId, branchId, sequence);
   }
 
   /**

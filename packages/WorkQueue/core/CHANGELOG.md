@@ -1,5 +1,7 @@
 # @memberjunction/work-queue-core
 
+## 6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Minor Changes

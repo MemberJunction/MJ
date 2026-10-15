@@ -30,6 +30,15 @@ export interface ClientClauseScreeningProvider {
     ScreenClientClause(clause: string | null | undefined, label: string, contextUser?: UserInfo, entityInfo?: EntityInfo): void;
 }
 
+/** Options for {@link ClientClauseScreen.AssertClauseUsesEntityBaseViews}. */
+export interface ClientClauseScreenOptions {
+    /**
+     * Leaves text the parser cannot read to the caller instead of refusing it. For a clause the
+     * provider checks again per item (an aggregate expression), that per-item check refuses it.
+     */
+    LeaveUnparseableToProvider?: boolean;
+}
+
 /** True when `provider` can screen client SQL clauses. */
 export function IsClientClauseScreeningProvider(provider: object | null | undefined): provider is ClientClauseScreeningProvider {
     return !!provider && 'ScreenClientClause' in provider && typeof provider.ScreenClientClause === 'function';
@@ -151,6 +160,9 @@ export class ClientClauseScreen {
      * and no CTE reference is exempt. A name reserved for the parser
      * ({@link AssertNoIdentifierAliasNames}) and a call to a function the dialect forbids
      * ({@link AssertNoForbiddenFunctionCalls}) are refused first.
+     *
+     * With `LeaveUnparseableToProvider`, text the parser cannot read returns without a refusal;
+     * the caller's own per-item check must refuse it instead.
      */
     public static AssertClauseUsesEntityBaseViews(
         clause: string | null | undefined,
@@ -158,6 +170,7 @@ export class ClientClauseScreen {
         entities: readonly EntityInfo[],
         dialect: SQLParserDialect,
         user?: UserInfo,
+        options?: ClientClauseScreenOptions,
     ): void {
         if (!clause?.trim()) return;
         if (SQLParser.HasStackedStatements(clause, dialect)) {
@@ -172,6 +185,7 @@ export class ClientClauseScreen {
                 ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${fragment}`
                 : `SELECT 1 FROM __mj_clause_screen WHERE (${fragment})`;
         const parser = new SQLParser(wrapped, dialect);
+        if (!parser.IsValid && options?.LeaveUnparseableToProvider) return;
         if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
             throw new Error(`Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`);
         }
