@@ -236,7 +236,7 @@ describe('ErrorAnalyzer', () => {
             ['socket closed mid-response', fetchFailure('terminated', 'UND_ERR_SOCKET', 'SocketError')],
             ['connect timeout', fetchFailure('fetch failed', 'UND_ERR_CONNECT_TIMEOUT', 'ConnectTimeoutError')],
         ])('classifies %s as a retriable NetworkError that fails over', (_label, error) => {
-            const info = ErrorAnalyzer.AnalyzeError(error, 'Gemini');
+            const info = ErrorAnalyzer.analyzeError(error, 'Gemini');
 
             expect(info.errorType).toBe('NetworkError');
             expect(info.severity).toBe('Retriable');
@@ -246,27 +246,27 @@ describe('ErrorAnalyzer', () => {
         it('reads the code through an SDK wrapper two levels down', () => {
             const wrapped = new Error('exception TypeError: fetch failed sending request', { cause: fetchFailure('fetch failed', 'ECONNRESET') });
 
-            expect(ErrorAnalyzer.AnalyzeError(wrapped).errorType).toBe('NetworkError');
+            expect(ErrorAnalyzer.analyzeError(wrapped).errorType).toBe('NetworkError');
         });
 
         it('classifies a bare "fetch failed" with no cause as NetworkError', () => {
-            expect(ErrorAnalyzer.AnalyzeError(new TypeError('fetch failed')).errorType).toBe('NetworkError');
+            expect(ErrorAnalyzer.analyzeError(new TypeError('fetch failed')).errorType).toBe('NetworkError');
         });
 
         it('classifies an AbortSignal.timeout() TimeoutError as NetworkError, by its message', () => {
             const error = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError', code: 23 });
 
-            expect(ErrorAnalyzer.AnalyzeError(error).errorType).toBe('NetworkError');
+            expect(ErrorAnalyzer.analyzeError(error).errorType).toBe('NetworkError');
         });
 
         it('does not treat a plain AbortError as a network failure, since a caller cancellation looks the same', () => {
             const error = Object.assign(new Error('This operation was aborted'), { name: 'AbortError', code: 20 });
 
-            expect(ErrorAnalyzer.AnalyzeError(error).errorType).toBe('Unknown');
+            expect(ErrorAnalyzer.analyzeError(error).errorType).toBe('Unknown');
         });
 
         it('does not treat an unrelated TypeError as a network failure', () => {
-            expect(ErrorAnalyzer.AnalyzeError(new TypeError("Cannot read properties of undefined (reading 'text')")).errorType).toBe('Unknown');
+            expect(ErrorAnalyzer.analyzeError(new TypeError("Cannot read properties of undefined (reading 'text')")).errorType).toBe('Unknown');
         });
 
         it('stops at a cause cycle', () => {
@@ -274,16 +274,16 @@ describe('ErrorAnalyzer', () => {
             const b = new Error('second', { cause: a });
             (a as Error & { cause?: Error }).cause = b;
 
-            expect(ErrorAnalyzer.AnalyzeError(a).errorType).toBe('Unknown');
+            expect(ErrorAnalyzer.analyzeError(a).errorType).toBe('Unknown');
         });
 
         it('reports no HTTP status for a system error code or a DOMException code', () => {
-            expect(ErrorAnalyzer.AnalyzeError(fetchFailure('fetch failed', 'ECONNRESET').cause).httpStatusCode).toBeUndefined();
-            expect(ErrorAnalyzer.AnalyzeError(Object.assign(new Error('aborted'), { name: 'AbortError', code: 20 })).httpStatusCode).toBeUndefined();
+            expect(ErrorAnalyzer.analyzeError(fetchFailure('fetch failed', 'ECONNRESET').cause).httpStatusCode).toBeUndefined();
+            expect(ErrorAnalyzer.analyzeError(Object.assign(new Error('aborted'), { name: 'AbortError', code: 20 })).httpStatusCode).toBeUndefined();
         });
 
         it('still reads a numeric HTTP status from code', () => {
-            expect(ErrorAnalyzer.AnalyzeError({ message: '', code: 503 }).httpStatusCode).toBe(503);
+            expect(ErrorAnalyzer.analyzeError({ message: '', code: 503 }).httpStatusCode).toBe(503);
         });
     });
 
