@@ -1,0 +1,3 @@
+# @memberjunction/video-studio-render-worker
+
+`@memberjunction/video-studio-render-worker` is an isolated Node >= 22 render worker process that wraps `@heygen/hyperframes`, headless Chromium, and FFmpeg to lint compositions, capture stills, build contact sheets, and render deterministic MP4 deliverables. For security isolation, it operates exclusively on self-contained project bundles received over its HTTP/Unix-socket wire contract and must never depend on `@memberjunction/core`, access the MemberJunction database, or hold cloud storage or AI provider credentials. See [plans/video-studio.md](../../../../plans/video-studio.md) for the full specification.

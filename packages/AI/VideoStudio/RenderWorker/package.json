@@ -1,0 +1,33 @@
+{
+  "name": "@memberjunction/video-studio-render-worker",
+  "version": "6.2.0-edge.4",
+  "description": "Isolated HyperFrames and headless Chromium render worker for MemberJunction Video Studio",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "tsc-alias": "^1.8.10",
+    "vitest": "^4.0.18"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}
