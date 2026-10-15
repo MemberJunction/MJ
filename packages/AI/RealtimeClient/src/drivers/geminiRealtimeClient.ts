@@ -329,16 +329,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.negotiateTracks(requestedTracks, supportedTracks);
 
         this.playback = this.createPlayback();
-        const connectArgs: GeminiClientConnectArgs = {
-            Model: model,
-            Config: liveConfig,
-            EphemeralToken: config.EphemeralToken,
-            OnMessage: (message) => this.handleServerMessage(message),
-            OnError: (event) => this.handleTransportError(event),
-            OnClose: (event) => this.handleTransportClose(event),
-        };
-        this.lastConnectArgs = connectArgs;
-        this.session = await this.connectLiveSession(connectArgs);
+        // The agent voice plays through Web Audio only; publish it so a host recorder can mix
+        // it in (issue #5153). Null for playbacks with no output stream (fakes, no WebAudio).
+        this.publishRemoteMediaStream(this.playback.GetOutputStream?.() ?? null);
+        const opened = await this.openLiveSession({ Model: model, Config: liveConfig, EphemeralToken: config.EphemeralToken });
+        this.lastConnectArgs = opened.Args;
+        this.session = opened.Session;
         this.setState('connected');
         this.micCapture = await this.createMicCapture(micStream, (base64Pcm16) => this.sendMicChunk(base64Pcm16));
 
@@ -377,6 +373,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.micCapture = null;
         this.playback?.Close();
         this.playback = null;
+        this.clearRemoteMediaStream();
         this.resumptionHandle = null;
         this.firstVideoSendTimestamp = 0;
         this.lastVideoSendTimestamp = 0;
@@ -581,6 +578,31 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         return this.playback?.IsPlaying ?? false;
     }
 
+    /**
+     * Opens one Gemini Live session through {@link connectLiveSession}. Its close and error callbacks
+     * act only while THAT session is still opening or is the current one: {@link resumeSession} swaps
+     * in a successor and then closes the old socket, and that socket's (clean) close describes a
+     * connection we discarded, not the call — handled, it would end a healthy resumed call.
+     */
+    private async openLiveSession(
+        base: Pick<GeminiClientConnectArgs, 'Model' | 'Config' | 'EphemeralToken'>
+    ): Promise<{ Session: GeminiLiveClientSession; Args: GeminiClientConnectArgs }> {
+        let opened: GeminiLiveClientSession | null = null;
+        const isCurrent = (): boolean => opened === null || opened === this.session;
+        const args: GeminiClientConnectArgs = {
+            ...base,
+            OnMessage: (message) => this.handleServerMessage(message),
+            OnError: (event) => {
+                if (isCurrent()) this.handleTransportError(event);
+            },
+            OnClose: (event) => {
+                if (isCurrent()) this.handleTransportClose(event);
+            },
+        };
+        opened = await this.connectLiveSession(args);
+        return { Session: opened, Args: args };
+    }
+
     // ── Overridable creation seams (tests inject fakes — no network / audio) ──
 
     /**
@@ -767,17 +789,16 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             return;
         }
         try {
-            const reconnectArgs: GeminiClientConnectArgs = {
-                ...this.lastConnectArgs,
-                Config: {
-                    ...this.lastConnectArgs.Config,
-                    sessionResumption: { handle },
-                },
-            };
             const oldSession = this.session;
-            const newSession = await this.connectLiveSession(reconnectArgs);
-            this.session = newSession;
-            this.lastConnectArgs = reconnectArgs;
+            const opened = await this.openLiveSession({
+                Model: this.lastConnectArgs.Model,
+                Config: { ...this.lastConnectArgs.Config, sessionResumption: { handle } },
+                EphemeralToken: this.lastConnectArgs.EphemeralToken,
+            });
+            // Swap BEFORE closing: from here the old session is no longer current, so its close
+            // event (fired by the close below) is ignored instead of ending the resumed call.
+            this.session = opened.Session;
+            this.lastConnectArgs = opened.Args;
             try {
                 oldSession?.close();
             } catch {
