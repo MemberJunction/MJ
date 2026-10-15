@@ -305,10 +305,14 @@ describe('C1 re-audit: realtime.session propagates through the effective-config 
     it('carries a validated session tuning block end-to-end (was always dropped before the fix)', () => {
         const effective = ResolveEffectiveRealtimeConfig(
             null,
-            layer({ realtime: { session: { effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1' } } }),
+            layer({
+                realtime: { session: { effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1', transcriptionLanguages: ['en-US', 7] } },
+            }),
             null
         );
-        expect(effective.realtime?.session).toEqual({ effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1' });
+        expect(effective.realtime?.session).toEqual({
+            effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1', transcriptionLanguages: ['en-US'],
+        });
         // And GetSessionTuningSettings now returns a real bag (was always null before the fix):
         expect(GetSessionTuningSettings(effective)).toMatchObject({ effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1' });
     });

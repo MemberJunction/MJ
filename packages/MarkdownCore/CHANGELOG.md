@@ -1,5 +1,19 @@
 # @memberjunction/markdown-core
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- ae0a662: Markdown now renders math: TeX the way language models write it (`$…$` and `\(…\)` inline, `$$…$$` and `\[…\]` for display) and MathML markup, including the prefixed `<mml:math>` that JATS article XML uses.
+  - **markdown-core:** a new `CreateMathExtension` recognizes the math and emits a `code.mj-math` placeholder holding the TeX (a `math` / `mathBlock` token on the AST path). It is tokenized first, so `_` and `*` inside a formula no longer become emphasis, and smartypants leaves its quotes and dashes alone. Single dollars follow Pandoc's rule, so prices stay prices ("$5 and $10", "$5-$10"), and `\[…\]`/`\(…\)` count only around something that reads as TeX, so escaped brackets like "\[1\]" stay brackets. MathML elements (`<math>` or `<mml:math>`) are matched whole, emitted with their prefixes removed, and kept away from markdown, so pretty-printed formulas don't turn into code blocks or emphasis. On by default; `enableMath: false` turns it off.
+  - **ng-markdown:** `MarkdownService.RenderMath(container)` typesets the placeholders with KaTeX as MathML, which browsers lay out natively, so hosts need no KaTeX stylesheet or fonts. KaTeX is loaded on first use, like Mermaid, so documents without math never download it. `<mj-markdown>` calls it after render (new `EnableMath` input). TeX that KaTeX can't parse, or that defines macros, stays visible as source; user sizes are capped. The sanitizer now allows MathML (DOMPurify's MathML profile, plus `columnalign`/`columnspacing`, which its list misspells or lacks). Chrome ignores MathML's `mathvariant` and `columnalign`, so styled letters are spelled with Unicode math characters (\mathbf{E} as 𝐄, \mathbb{R} as ℝ) and the stylesheet aligns `aligned`/`cases` columns.
+  - **ng-chat:** typesets math in its messages (`RenderMath` after `parse()`).
+  - **mobile-app:** shows math as its source, without delimiters, until mobile has a typesetter.
+
+## 6.2.0-edge.3
+
+## 6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes

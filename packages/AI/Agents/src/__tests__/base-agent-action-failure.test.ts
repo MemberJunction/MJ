@@ -42,6 +42,7 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 vi.mock('@memberjunction/actions', () => ({
+    BaseAction: class BaseAction {},
     ActionEngineServer: {
         get Instance() {
             return harness.actionEngineInstance;
@@ -159,6 +160,7 @@ class FailureHarness {
             Agents: [],
             AgentRelationships: [],
             AgentCategories: [],
+            ResolveAgentStorageAccountID: () => null,
             ScopedPromptParts: [],
             ScopedPromptConfigs: [],
             AgentTypes: [

@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.server.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "lib": ["es2022", "esnext.asynciterable"],
+    "types": []
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "src/__tests__", "vitest.config.ts"]
+}

@@ -1,5 +1,150 @@
 # @memberjunction/react-test-harness
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [432cb73]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [49f26d9]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [64b6fa5]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [af6f892]
+- Updated dependencies [7316ac3]
+- Updated dependencies [0c68021]
+- Updated dependencies [6d5c6ad]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [20650af]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [aee2d53]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [25f7b82]
+- Updated dependencies [02bb563]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [e1942c7]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/ai-core-plus@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/aiengine@6.2.0-edge.4
+  - @memberjunction/core-entities-server@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/sql-dialect@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/sql-parser@6.2.0-edge.4
+  - @memberjunction/react-linter@6.2.0-edge.4
+  - @memberjunction/react-runtime@6.2.0-edge.4
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.4
+  - @memberjunction/interactive-component-types@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [b545842]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [801036d]
+- Updated dependencies [bea2386]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [3204a32]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [28df136]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/aiengine@6.2.0-edge.3
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/core-entities-server@6.2.0-edge.3
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+  - @memberjunction/interactive-component-types@6.2.0-edge.3
+  - @memberjunction/sql-dialect@6.2.0-edge.3
+  - @memberjunction/sql-parser@6.2.0-edge.3
+  - @memberjunction/react-linter@6.2.0-edge.3
+  - @memberjunction/react-runtime@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- 0da5fd4: fix(react-test-harness): bound what the browser boundary carries
+
+  Three places where the harness handed unbounded, client-shaped data across a boundary that charges for every node, guarded — where guarded at all — only after the allocation the guard existed to prevent.
+  - **Entity metadata is projected to what the page reads, not deep-cloned whole.** `exposeMJUtilities` cloned the full `EntityInfo` array with `JSON.parse(JSON.stringify(...))` and passed it to `page.evaluate`. Playwright does not JSON-encode an evaluate argument; it walks the graph building a tagged protocol representation, so cost scales with **node count** rather than byte size — and field objects dominate that count, one entity with 1,043 fields at ~77 own properties contributing ~80,000 property slots by itself. Against a client with 363 entities and 32,209 fields the injection blocked the event loop for ~18s and allocated ~2.6GB (a 2s sampling timer fired at +5.6s and +16.6s while heap passed 3.3GB), after which the caller's memory watchdog closed the harness, the in-flight evaluate failed as `Target page, context or browser has been closed`, and the run reported `renderCount: 0` — which callers read as a browser crash. `projectEntitiesForBrowser` keeps the field properties the in-page React runtime actually reads, derived from its bundle, plus a few cheap scalars component code plausibly touches; the ~54 omitted are server-side concerns (search predicates, generated form layout, schema auto-update). Entity-level properties are untouched and the input is never mutated. With the caller also narrowing to the entities a component declares, the injection went from 1,059ms to 321ms and total component-test time roughly halved.
+  - **The clone it replaces was redundant, and silently lossy on cycles.** Stripping functions is already what Playwright does by taking only own enumerable properties. `JSON.stringify`, meanwhile, throws on a circular graph, and the surrounding `catch` then yields an **empty** entity list with no indication anything was lost.
+  - **Console collection is bounded.** `consoleLogs` had no ceiling on message count or per-message size, so a component in a render or error loop could grow it without limit inside a process the harness shares with its host. Now capped at 5,000 messages and 32KB per message, with the overflow recorded once so a truncated run is never mistaken for a quiet one — a passing test measured ~1,800 messages and 0.7MB, so normal runs sit far below both. Warning de-duplication moves from `warnings.includes` (a linear scan per message, quadratic overall) to a `Set`; `warnings` remains an array for callers that index it.
+  - **HTML capture is sliced in the page.** The 25MB ceiling was enforced only after `page.content()` had materialised the entire document as a Node string, and beyond Node's ~536MB string limit the transfer throws before any check can run. The slice now happens in the page, so this side stays bounded by the cap regardless of document size; the true length still crosses, so an oversized render remains just as visible in the reported error.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [0adaf76]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [7408dbb]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [7e57b48]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/core-entities-server@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.2
+  - @memberjunction/interactive-component-types@6.2.0-edge.2
+  - @memberjunction/react-linter@6.2.0-edge.2
+  - @memberjunction/react-runtime@6.2.0-edge.2
+  - @memberjunction/sql-dialect@6.2.0-edge.2
+  - @memberjunction/sql-parser@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes

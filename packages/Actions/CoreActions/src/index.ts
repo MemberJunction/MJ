@@ -112,6 +112,7 @@ export * from './custom/workflow/loop.action';
 export * from './custom/workflow/parallel-execute.action';
 export * from './custom/workflow/retry.action';
 export * from './custom/workflow/delay.action';
+export * from './custom/workflow/workflow-run-scope';
 
 // AI Actions
 export * from './custom/ai/execute-ai-prompt.action';

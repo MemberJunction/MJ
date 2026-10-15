@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
-import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, ConversationScope, MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { Metadata, UserInfo, BaseEntity, RunView, IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDMap, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Global singleton cache for conversation-related entities.
@@ -182,13 +182,19 @@ export class DataCacheService {
   }
 
   /**
-   * Load all ConversationDetail entities for a conversation and cache them
-   * Used when loading a conversation's message history
+   * Load the ConversationDetail entities of one scope of a conversation (Main, or one fork's
+   * path) that no rerun replaced, and cache them
    * @param conversationId The conversation ID
    * @param currentUser User context
+   * @param scope The rows to read; Main when omitted
    * @returns Array of MJConversationDetailEntity objects
+   * @throws when the scope belongs to another conversation
    */
-  async LoadConversationDetails(conversationId: string, currentUser: UserInfo): Promise<MJConversationDetailEntity[]> {
+  async LoadConversationDetails(conversationId: string, currentUser: UserInfo, scope?: ConversationScope): Promise<MJConversationDetailEntity[]> {
+    if (scope && !UUIDsEqual(scope.ConversationID, conversationId)) {
+      throw new Error(`Conversation ${conversationId} cannot be read with the scope of conversation ${scope.ConversationID}`);
+    }
+    const resolved = scope ?? ConversationEngine.TrunkScope(conversationId);
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] 💾 DataCacheService.loadConversationDetails - Loading messages for conversation ${conversationId}`);
 
@@ -198,7 +204,7 @@ export class DataCacheService {
     const result = await rv.RunView<MJConversationDetailEntity>(
       {
         EntityName: 'MJ: Conversation Details',
-        ExtraFilter: `ConversationID='${conversationId}'`,
+        ExtraFilter: ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(resolved)),
         OrderBy: '__mj_CreatedAt ASC',
         ResultType: 'entity_object'
       },
@@ -209,18 +215,7 @@ export class DataCacheService {
       const details = result.Results || [];
       console.log(`[${timestamp}] 💾 DataCacheService - Loaded ${details.length} message(s) for conversation ${conversationId}`);
 
-      // Add all to cache (avoid duplicates by checking ID)
-      for (const detail of details) {
-        const existingIndex = this.conversationDetails.findIndex(d => UUIDsEqual(d.ID, detail.ID));
-        if (existingIndex >= 0) {
-          // Replace existing (ensures we keep the same object reference)
-          this.conversationDetails[existingIndex] = detail;
-        } else {
-          // Add new
-          this.conversationDetails.push(detail);
-        }
-      }
-
+      this.upsertCachedDetails(details);
       return details;
     }
 
@@ -228,9 +223,32 @@ export class DataCacheService {
     return [];
   }
 
+  /**
+   * Adds loaded details to the cache, replacing any cached detail with the same ID in place.
+   * Positions are indexed once up front: the cache spans every loaded conversation, so searching
+   * it for each loaded detail grew with both.
+   */
+  private upsertCachedDetails(details: MJConversationDetailEntity[]): void {
+    const positionByID = new UUIDMap<number>();
+    this.conversationDetails.forEach((d, i) => {
+      if (!positionByID.Has(d.ID)) positionByID.Set(d.ID, i);
+    });
+    for (const detail of details) {
+      const existingIndex = positionByID.Get(detail.ID);
+      if (existingIndex !== undefined) {
+        // Replace existing (ensures we keep the same object reference)
+        this.conversationDetails[existingIndex] = detail;
+      } else {
+        // Add new
+        positionByID.Set(detail.ID, this.conversationDetails.length);
+        this.conversationDetails.push(detail);
+      }
+    }
+  }
+
   /** @deprecated Use {@link LoadConversationDetails}. */
-  async loadConversationDetails(conversationId: string, currentUser: UserInfo): Promise<MJConversationDetailEntity[]> {
-    return this.LoadConversationDetails(conversationId, currentUser);
+  async loadConversationDetails(conversationId: string, currentUser: UserInfo, scope?: ConversationScope): Promise<MJConversationDetailEntity[]> {
+    return this.LoadConversationDetails(conversationId, currentUser, scope);
   }
 
   /**

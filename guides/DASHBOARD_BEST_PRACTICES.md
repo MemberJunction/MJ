@@ -1,5 +1,7 @@
 # MemberJunction Dashboard Development Best Practices
 
+> **Part of the UI guide set.** Dashboards are L3 Explorer surfaces; this guide covers how to build them well. For the big picture (the layers, choosing where UI lives, and why), start with [Building UI on MemberJunction](BUILDING_UI_ON_MJ.md) ([illustrated edition](https://docs.memberjunction.org/v6/building-ui/)).
+
 This guide covers patterns and best practices for building dashboards in MemberJunction Angular applications. These patterns have been refined through production use and are designed to work well with MJ's metadata-driven architecture.
 
 ## Table of Contents

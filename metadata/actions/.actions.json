@@ -3900,7 +3900,7 @@
     "fields": {
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment",
       "Name": "Apollo Enrichment - Contacts",
-      "Description": "Enriches contact records with verified email addresses, employment history, and education details using Apollo.io API. Matches contacts by name and email combinations and provides comprehensive contact enrichment.",
+      "Description": "Enriches contact records with verified email addresses, employment history, and education details using the Apollo.io people/bulk_match API (one credit per matched person; misses are free). Every record sent is stamped with EnrichedAtField, matched or not, so a filter on that stamp never re-sends the same miss.",
       "Type": "Custom",
       "CodeApprovalStatus": "Pending",
       "CodeLocked": false,
@@ -4007,15 +4007,15 @@
             "Type": "Input",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "JSON mapping for education history fields including EntityName, ContactIDFieldName, InstitutionFieldName, DegreeFieldName (optional)",
+            "Description": "JSON mapping for the education history entity: EntityName, ContactIDFieldName, InstitutionFieldName, DegreeFieldName (all required for education rows to be written), plus optional GradeLevelFieldName, StartDateFieldName, EndDateFieldName. Only named columns are written.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "37290D24-A8D1-415A-A4AE-48207ECFFDA3"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:50.276Z",
-            "checksum": "76ad0a27bccab20feac11176c02de8f5d969e85b40a5e5ea4d887179c5940da4"
+            "lastModified": "2026-10-13T19:00:03.328Z",
+            "checksum": "1e0e601c353e4287d383e04ae060b310a3207a473a654dbcb7645ad262a20de6"
           }
         },
         {
@@ -4061,15 +4061,15 @@
             "Type": "Input",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "JSON mapping for employment history fields including EntityName, ContactIDFieldName, OrganizationFieldName, TitleFieldName (optional)",
+            "Description": "JSON mapping for the employment history entity: EntityName, ContactIDFieldName, OrganizationFieldName, TitleFieldName (all required for employment rows to be written), plus optional StartDateFieldName, EndDateFieldName, IsCurrentFieldName. Only named columns are written.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "75B1D375-30BD-4297-88D2-AD89351AF27B"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:50.424Z",
-            "checksum": "a2187003e6628a0f175784f8158408c03b041de17b9d0167ea1606fda5cc7940"
+            "lastModified": "2026-10-13T19:00:03.339Z",
+            "checksum": "67d451159d40345c9794e96d86ac2f281a6aaa0c337129a791073be4d49df7d5"
           }
         },
         {
@@ -4178,6 +4178,24 @@
           "sync": {
             "lastModified": "2025-12-30T23:06:50.434Z",
             "checksum": "c7c77b342709757c38a3c37ecd459f2b878e2bc65650d0c097b555054e65a6f6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional — falls back to the APOLLO_API_KEY environment key.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DD76FC35-6BAF-4BBC-8E0C-5C549B274FD8"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.369Z",
+            "checksum": "a14fd485b54dffc0951f480c29e8ab36f86b563280f56f73df899e41ffa09198"
           }
         }
       ],
@@ -4331,6 +4349,36 @@
             "lastModified": "2025-12-30T23:06:50.566Z",
             "checksum": "4af3db035cd20bbf874e17bae31f0dc96a545e930f3fa37e5a29cc423830f553"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A required parameter is missing or malformed"
+          },
+          "primaryKey": {
+            "ID": "AF817C76-BC44-4147-8680-A9B611723163"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.390Z",
+            "checksum": "ecc09f7305824d890c722ebd46f50572526a2e9505fac6f65c3d5b2232704bf0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONFIGURATION_ERROR",
+            "IsSuccess": false,
+            "Description": "No Apollo.io API key was found (no company credential and no APOLLO_API_KEY), or the key was rejected"
+          },
+          "primaryKey": {
+            "ID": "C04EAA6C-8A27-4B78-9837-3223C494EF96"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.404Z",
+            "checksum": "06105f4fcbed387b4637b2936f13b0fed92cf85aa81f835e4d0b09eaf2986d58"
+          }
         }
       ]
     },
@@ -4338,15 +4386,15 @@
       "ID": "BE9B9B7F-791B-4E97-AC17-7E93B52B237C"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.613Z",
-      "checksum": "6be95de38efd013077a3cf1c0ec2d31deff1401677c7d01e377eb2bb9c7005b2"
+      "lastModified": "2026-10-13T19:00:03.272Z",
+      "checksum": "0a63595e1613caee9ab0f630443740d96582c9a172c5d5c3582887dd06d65ffb"
     }
   },
   {
     "fields": {
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment",
       "Name": "Apollo Enrichment - Accounts",
-      "Description": "Enriches account/organization records with company information, technologies used, and associated contacts using Apollo.io API. Processes accounts by domain name and automatically discovers contacts within each organization.",
+      "Description": "Enriches account/organization records with company information, technologies used, and associated contacts using Apollo.io API. Processes accounts by domain name and discovers contacts within each organization: a free prospecting search for the people at the domain, then a paid people/bulk_match by id (one Apollo credit per matched person, up to 500 per organization).",
       "Type": "Custom",
       "CodeApprovalStatus": "Pending",
       "CodeLocked": false,
@@ -4445,6 +4493,24 @@
             "lastModified": "2025-12-30T23:06:50.686Z",
             "checksum": "9460d0fb168382d7cf8bb74e99f27c42af40c8c75df683be8a4c4e2fe19eb1d8"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional — falls back to the APOLLO_API_KEY environment key.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "95EE62B8-8F28-4BAB-838F-A3EEF1ED9F85"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.422Z",
+            "checksum": "a14fd485b54dffc0951f480c29e8ab36f86b563280f56f73df899e41ffa09198"
+          }
         }
       ],
       "MJ: Action Result Codes": [
@@ -4537,6 +4603,36 @@
             "lastModified": "2025-12-30T23:06:50.695Z",
             "checksum": "7671a35381deb8bfd1eee45f3e38fef6389bd677d98023ea66db0c0ecab836c8"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A required parameter is missing or malformed"
+          },
+          "primaryKey": {
+            "ID": "DD3D2BE4-02E0-4745-9623-DCBBE999AF6C"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.436Z",
+            "checksum": "ecc09f7305824d890c722ebd46f50572526a2e9505fac6f65c3d5b2232704bf0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONFIGURATION_ERROR",
+            "IsSuccess": false,
+            "Description": "No Apollo.io API key was found (no company credential and no APOLLO_API_KEY), or the key was rejected"
+          },
+          "primaryKey": {
+            "ID": "B9FD85EE-16BE-4035-8A08-43BFECB485CF"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.449Z",
+            "checksum": "06105f4fcbed387b4637b2936f13b0fed92cf85aa81f835e4d0b09eaf2986d58"
+          }
         }
       ]
     },
@@ -4544,8 +4640,8 @@
       "ID": "E57641A1-B7C2-4EAB-BB17-8C9631E89095"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.614Z",
-      "checksum": "fa9b93a3efaca316c5d4a7b058a47b2dc22de919922c7626980cc14366a5bc8f"
+      "lastModified": "2026-10-13T19:00:03.287Z",
+      "checksum": "52365fb7b52b7dfbce9bb6d1b3f6ba5d1984fdbfddaaf53b880041fc24278a37"
     }
   }
 ]

@@ -11,12 +11,13 @@ import { QueryParameterProcessor, type QueryTemplateInput } from '@memberjunctio
 // and the SS code path silently fails.
 import './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, currentWorkingDirectory, DbPlatform, GetSettingValue, MjCoreSchema, OutputDir } from '../Config/config';
-import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExternalDataSourceReadRouter, ExternalSchemaObject, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, RunQuerySQLFilterManager, SeverityType, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, type EntityConfigurableAtCreationAttribute, ExternalDataSourceReadRouter, ExternalSchemaObject, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, RunQuerySQLFilterManager, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity, MJEntityFieldSchema, MJQueryParameterEntity } from "@memberjunction/core-entities";
 import { logError, LogMessage, logStatus, LogWarning, StartSpinner, UpdateSpinner, SucceedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { ApplyIncludeSchemaScope } from "./schema-scope";
 import { BuildHealSchemaRoutineParams, GetAuthoredExcludeSchemas, SnapshotAuthoredExcludeSchemas } from "./heal-schema-params";
+import { JSON_VALIDATOR_CATEGORY_NAME, JSONCheckStore, JSONCheckTranslator, JSONFieldRow, JSONValidatorResult, ResolveJSONCheckValidators } from "./json-check-validators";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult, IsPlausibleEntityName } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
 import {
@@ -32,7 +33,7 @@ import {
 } from "./search-guardrails";
 import { MapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
 import { SQLParser } from "@memberjunction/sql-parser";
-import { createDisplayName, EscapeSQLString, generatePluralName, MJGlobal, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
+import { createDisplayName, EscapeSQLString, generatePluralName, IndexByUUID, MJGlobal, NormalizeUUID, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 
 import * as fs from 'fs';
@@ -754,6 +755,23 @@ export class ManageMetadataBase {
       }
    }
    private static _generatedValidators: ValidatorResult[] = [];
+   private static _generatedJSONValidators: JSONValidatorResult[] = [];
+   /**
+    * Globally scoped translations of the SQL `@CHECK` rules of opted-in JSONTypes, loaded from
+    * `__mj.GeneratedCode` (and extended by generation). Consumed when entity subclasses are emitted.
+    */
+   public static get GeneratedJSONValidators(): JSONValidatorResult[] {
+      return this._generatedJSONValidators;
+   }
+   private static _entitiesWithNewJSONValidators: string[] = [];
+   /**
+    * Entities bound to a JSONType whose SQL `@CHECK` translation was newly generated this run. Their
+    * generated files must be rebuilt even though no column changed, or a full run pays for the
+    * translation and then skips emitting it (dirty-schema scoped emit only sees schema changes).
+    */
+   public static get EntitiesWithNewJSONValidators(): string[] {
+      return this._entitiesWithNewJSONValidators;
+   }
    /**
     * Globally scoped list of validators that have been generated during the metadata management process.
     */
@@ -1514,7 +1532,7 @@ export class ManageMetadataBase {
     * Processes Entity attribute configurations from the additionalSchemaInfo config.
     * For each entry in the top-level "Entities" array, looks up the entity by
     * BaseTable + SchemaName and applies any declared attribute updates to the Entity table.
-    * Reserved keys (BaseTable, SchemaName) are excluded from the UPDATE statement.
+    * Reserved keys (BaseTable, SchemaName, AutoAddPermissions) are excluded from the UPDATE statement.
     * Must run AFTER entities are created.
     */
    protected async processEntityConfigs(pool: CodeGenConnection): Promise<{ success: boolean; updatedCount: number }> {
@@ -1526,7 +1544,8 @@ export class ManageMetadataBase {
 
       let updatedCount = 0;
       const schema = MjCoreSchema();
-      const reservedKeys = new Set(['BaseTable', 'SchemaName']);
+      // AutoAddPermissions is a creation-time option, not an Entity column (see resolveCreationTimeAutoAddPermissions).
+      const reservedKeys = new Set(['BaseTable', 'SchemaName', 'AutoAddPermissions']);
 
       for (const ec of entityConfigs) {
          try {
@@ -4110,16 +4129,13 @@ export class ManageMetadataBase {
          // individually caused a ping-pong bug where multi-FK pairs swapped JoinFields
          // on every CodeGen run.
          const entityPairGroups = this.groupFieldsByEntityPair(entityFields);
+         const relationshipsForPair = ManageMetadataBase.relationshipsByEntityPair(allRelationships);
 
          let batchSQL = '';
          let batchCount = 0;
          for (const [_pairKey, fkFields] of entityPairGroups) {
             const firstField = fkFields[0];
-            const relationships = allRelationships.filter(
-               (r: { EntityID: string; RelatedEntityID: string }) =>
-                  UUIDsEqual(r.EntityID, firstField.RelatedEntityID as string) &&
-                  UUIDsEqual(r.RelatedEntityID, firstField.EntityID as string)
-            );
+            const relationships = relationshipsForPair(firstField.RelatedEntityID as string, firstField.EntityID as string);
 
             if (relationships.length === 0) {
                // No relationships exist for this pair — create one per FK field
@@ -4303,6 +4319,25 @@ export class ManageMetadataBase {
          }
       }
       return groups;
+   }
+
+   /**
+    * Indexes relationship rows by their (EntityID, RelatedEntityID) pair, so each FK pair finds its
+    * relationships without scanning every relationship in the database. IDs match in any case, and
+    * each pair's rows keep their original order — exactly what a `filter` over the full list returns.
+    */
+   protected static relationshipsByEntityPair<T extends { EntityID: string; RelatedEntityID: string }>(
+      relationships: T[]
+   ): (entityID: string, relatedEntityID: string) => T[] {
+      const pairKey = (entityID: string, relatedEntityID: string) => `${NormalizeUUID(entityID)}|${NormalizeUUID(relatedEntityID)}`;
+      const byPair = new Map<string, T[]>();
+      for (const r of relationships) {
+         const key = pairKey(r.EntityID, r.RelatedEntityID);
+         const group = byPair.get(key);
+         if (group) group.push(r);
+         else byPair.set(key, [r]);
+      }
+      return (entityID, relatedEntityID) => byPair.get(pairKey(entityID, relatedEntityID)) ?? [];
    }
 
    /**
@@ -6104,14 +6139,14 @@ export class ManageMetadataBase {
 
          const columnLevelResults = result.filter((r: any) => r.EntityFieldID); // get the column level constraints
          const tableLevelResults = result.filter((r: any) => !r.EntityFieldID); // get the table level constraints
+         const entityFieldsByID = IndexByUUID(allEntityFields as { ID: string; Type?: string; IsPrimaryKey?: boolean; }[]);
          for (const r of columnLevelResults) {
             // now, for each of the constraints we get back here, loop through and evaluate if they're simple and if they're simple, parse and sync with entity field values for that field
             if (r.ConstraintDefinition && r.ConstraintDefinition.length > 0) {
                // parse first, then decide whether THIS field should carry the list (bit, PK singleton guards).
-               // UUIDsEqual, not ===: PG returns lowercase UUIDs and SQL Server uppercase, and a missed
-               // lookup here fails OPEN (the exclusions stop applying), so a case mismatch would be silent.
-               const field = allEntityFields.find((f: { ID: string; Type?: string; IsPrimaryKey?: boolean; }) =>
-                  UUIDsEqual(f.ID, r.EntityFieldID));
+               // Case-insensitive (the index normalizes IDs), not ===: PG returns lowercase UUIDs and SQL Server
+               // uppercase, and a missed lookup here fails OPEN (the exclusions stop applying), so a case mismatch would be silent.
+               const field = entityFieldsByID.Get(r.EntityFieldID);
                const parsedValues = ManageMetadataBase.valueListForField(
                   field,
                   this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName, r.EntityName));
@@ -6168,12 +6203,85 @@ export class ManageMetadataBase {
 
          // await the completion of all generation promises here
          await Promise.all(generationPromises);
+
+         // SQL @CHECK rules on opted-in JSONTypes: same load-always / generate-when-allowed contract
+         await this.manageJSONCheckValidators(pool, allEntityFields, currentUser, !skipDBUpdate);
          return true;
       }
       catch (e) {
          logError(e as string);
          return false;
       }
+   }
+
+   /**
+    * Loads (always) and generates (only when `generateNewCode` and the `ParseCheckConstraints`
+    * feature allow) the TypeScript translations of SQL `@CHECK` rules written on opted-in JSONTypes,
+    * then publishes them on {@link GeneratedJSONValidators} for the entity emitter.
+    *
+    * Failures are logged and never fail the run: a missing translation only means that one rule is
+    * not emitted, which the emitter reports.
+    */
+   protected async manageJSONCheckValidators(pool: CodeGenConnection, allEntityFields: ReadonlyArray<JSONFieldRow>, currentUser: UserInfo, generateNewCode: boolean): Promise<void> {
+      try {
+         const store = this.buildJSONCheckStore(pool);
+         const resolved = await ResolveJSONCheckValidators({
+            Fields: allEntityFields,
+            GenerateNew: generateNewCode,
+            Store: store,
+            Translator: this.createJSONCheckTranslator(),
+            CurrentUser: currentUser,
+            ReportError: (message) => logError(message),
+            ReportWarning: (message) => LogWarning(message),
+         });
+         const newTypes = new Set(resolved.filter((r) => r.WasGenerated).map((r) => r.JSONTypeName));
+         const newEntities = allEntityFields.filter((f) => f.JSONType && newTypes.has(f.JSONType.trim())).map((f) => f.Entity);
+         ManageMetadataBase._entitiesWithNewJSONValidators = [...new Set([...ManageMetadataBase._entitiesWithNewJSONValidators, ...newEntities])];
+         const resolvedKeys = new Set(resolved.map((r) => r.Key));
+         ManageMetadataBase._generatedJSONValidators = [
+            ...ManageMetadataBase._generatedJSONValidators.filter((r) => !resolvedKeys.has(r.Key)),
+            ...resolved,
+         ];
+      }
+      catch (e) {
+         logError(`Error resolving JSON @CHECK validators: ${e instanceof Error ? e.message : String(e)}`);
+      }
+   }
+
+   /** The model-backed translator for SQL `@CHECK` rules; a seam so tests can supply a stub. */
+   protected createJSONCheckTranslator(): JSONCheckTranslator {
+      return new AdvancedGeneration();
+   }
+
+   /** `__mj.GeneratedCode` access for the JSON-validators category. */
+   private buildJSONCheckStore(pool: CodeGenConnection): JSONCheckStore {
+      const lit = (v: string) => this.dialect.QuoteStringLiteral(v);
+      const codes = this.qs(MjCoreSchema(), 'GeneratedCode');
+      const categories = this.qs(MjCoreSchema(), 'vwGeneratedCodeCategories');
+      const categoryLookup = `(SELECT ${this.qi('ID')} FROM ${categories} WHERE ${this.qi('Name')}=${lit(JSON_VALIDATOR_CATEGORY_NAME)})`;
+      return {
+         LoadCached: async () => {
+            const sql = `SELECT ${this.qi('ID')}, ${this.qi('Source')}, ${this.qi('Name')}, ${this.qi('Code')}, ${this.qi('Description')} FROM ${codes} WHERE ${this.qi('CategoryID')} = ${categoryLookup} AND ${this.qi('Status')}=${lit('Approved')}`;
+            const result = await this.runQuery(pool, sql);
+            return result.recordset.map((r) => ({
+               ID: String(r.ID), Source: String(r.Source), Name: String(r.Name), Code: String(r.Code), Description: r.Description == null ? null : String(r.Description),
+            }));
+         },
+         Persist: async (entry) => {
+            const categoryRows = (await this.runQuery(pool, `SELECT ${this.qi('ID')} FROM ${categories} WHERE ${this.qi('Name')}=${lit(JSON_VALIDATOR_CATEGORY_NAME)}`)).recordset;
+            if (categoryRows.length === 0) {
+               LogWarning(`GeneratedCode category '${JSON_VALIDATOR_CATEGORY_NAME}' does not exist in this database (run 'mj sync push' for metadata/generated-code-categories); the validator generated for '${entry.Key}' is used for this run only and will be regenerated next time`);
+               return;
+            }
+            entry.GeneratedCodeID = uuidv4();
+            // Scoped to Approved exactly like LoadCached: otherwise a non-Approved row with this key makes
+            // every run regenerate (LoadCached misses it) and then skip the insert (this check hits it).
+            const checkQuery = `SELECT 1 FROM ${codes} WHERE ${this.qi('CategoryID')} = ${categoryLookup} AND ${this.qi('Source')} = ${lit(entry.Key)} AND ${this.qi('Status')}=${lit('Approved')}`;
+            const insertSQL = `INSERT INTO ${codes} (${['ID', 'CategoryID', 'GeneratedByModelID', 'GeneratedAt', 'Language', 'Status', 'Source', 'Code', 'Description', 'Name'].map((c) => this.qi(c)).join(', ')})
+VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)}, ${this.utcNow()}, ${lit('TypeScript')}, ${lit('Approved')}, ${lit(entry.Key)}, ${lit(entry.FunctionText)}, ${lit(entry.FunctionDescription)}, ${lit(entry.FunctionName)})`;
+            await this.logSQLAndExecute(pool, `${this.dbProvider.conditionalInsertSQL(checkQuery, insertSQL)};`, `Generated JSON @CHECK validator ${entry.Key}`);
+         },
+      };
    }
 
    /**
@@ -6348,7 +6456,7 @@ export class ManageMetadataBase {
     * back quoted — `([Status]='Active' OR [Status]='Inactive')` — but numeric and `bit` literals come back
     * **unquoted and parenthesized**: `([Level]=(3) OR [Level]=(2) OR [Level]=(1))`. Matching only the quoted
     * form left a numeric IN-list with no value list at all, and so no dropdown in Explorer either (#3978).
-    * PostgreSQL's `= ANY (ARRAY[...])` rendering is handled separately, by parsePgArrayConstraint.
+    * PostgreSQL's renderings are handled separately, by parsePostgreSQLConstraint.
     *
     * A single-value list is captured too: `CHECK (Status='Active')` — which is also how SQL Server renders
     * `IN ('Active')` — permits exactly one value, which is a one-item list.
@@ -6361,12 +6469,12 @@ export class ManageMetadataBase {
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
       const processedConstraint = constraintDefinition.replace(/(^|[=(\s])N'([^']*)'/g, "$1'$2'");
 
-      // PostgreSQL ANY (ARRAY[...]) pattern:
-      // CHECK ((("FieldName")::text = ANY ((ARRAY['Val1'::character varying, 'Val2'::character varying])::text[])))
-      // Also handles simpler forms: ("FieldName" = ANY (ARRAY['Val1', 'Val2']))
-      const pgArrayValues = this.parsePgArrayConstraint(processedConstraint);
-      if (pgArrayValues) {
-         return pgArrayValues;
+      // PostgreSQL writes every one of these shapes differently from SQL Server, so it gets its own
+      // anchored parse (#4713). It runs first because a PG definition cannot match the SQL Server
+      // patterns below, and returning null here must NOT fall through to them.
+      const pgValues = this.parsePostgreSQLConstraint(processedConstraint, fieldName);
+      if (pgValues) {
+         return pgValues;
       }
 
       // Build a regex fragment that matches the field name in any quoting style:
@@ -6433,7 +6541,10 @@ export class ManageMetadataBase {
       if (!parsedValues || !field) {
          return parsedValues;
       }
-      if (field.Type?.trim().toLowerCase() === 'bit') {
+      // `bit` on SQL Server, `boolean`/`bool` on PostgreSQL — the same column, the same reasoning.
+      // The PG parser cannot currently produce a boolean list anyway (true/false are neither quoted
+      // nor numeric literals), so that half is a second line of defence rather than load-bearing.
+      if (['bit', 'boolean', 'bool'].includes(field.Type?.trim().toLowerCase() ?? '')) {
          return null;
       }
       if (field.IsPrimaryKey && parsedValues.length === 1) {
@@ -6473,32 +6584,218 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Parses PostgreSQL ANY (ARRAY[...]) CHECK constraint syntax.
-    * PG's pg_get_constraintdef() returns constraints like:
-    *   CHECK ((("Status")::text = ANY ((ARRAY['Confirmed'::character varying, 'Cancelled'::character varying])::text[])))
-    * This method extracts the string values from the ARRAY literal.
+    * A PostgreSQL `::type` cast as `pg_get_constraintdef()` writes it — `::text`, `::bigint`,
+    * `::character varying`, `::double precision`, `::text[]`.
+    *
+    * Spelled as explicit space-separated words rather than the obvious `[A-Za-z0-9 ]*`, because that
+    * form lets two quantifiers consume the same run of spaces (`[A-Za-z0-9 ]*` then `\\s*`), which is
+    * polynomial backtracking on input like `::A` followed by many spaces. CodeQL flags it as
+    * js/polynomial-redos, and it is right to: a constraint definition is input this library does not
+    * control. Requiring a letter after every space removes the ambiguity — a run of spaces can be
+    * split exactly one way.
     */
-   private parsePgArrayConstraint(constraintDefinition: string): string[] | null {
-      // Match the ARRAY[...] portion, handling optional type casts
-      const arrayMatch = constraintDefinition.match(/\bARRAY\s*\[([^\]]+)\]/i);
-      if (!arrayMatch) {
+   private static readonly PG_CAST = `::[A-Za-z][A-Za-z0-9]*(?: [A-Za-z][A-Za-z0-9]*)*(?:\\[\\])?`;
+
+   /**
+    * Parses PostgreSQL's renderings of a value-list CHECK into the values it permits, or null when the
+    * constraint is not a plain value list (#4713 — the other dialect of #3978).
+    *
+    * `pg_get_constraintdef()` writes these shapes, all captured from a live PostgreSQL 16:
+    *
+    *   (((s)::text = ANY ((ARRAY['Active'::character varying, ...])::text[])))   multi, varchar
+    *   ((level = ANY (ARRAY[1, 2, 3])))                                          multi, numeric
+    *   ((bi = ANY (ARRAY['100000000000'::bigint, (2)::bigint])))                 multi, mixed quoting
+    *   (((x IS NULL) OR (x = ANY (ARRAY[1, 2]))))                                nullable
+    *   ((one = 7))   /   (((s)::text = 'OnlyOne'::text))                         single value
+    *
+    * ANCHORED ON PURPOSE, and that is the whole design. The previous version searched for `ARRAY[...]`
+    * anywhere in the definition and read only QUOTED elements, which was safe only by accident: both
+    * `(x <> ALL (ARRAY[1, 2]))` (NOT IN) and `((x = ANY (ARRAY[1, 2])) OR (x > 100))` contain an ARRAY
+    * whose elements are NOT the field's legal values — the first inverts the meaning, the second is a
+    * subset. Reading numeric elements without anchoring the whole constraint would have turned both
+    * into wrong value lists, and a wrong list makes `Validate()` refuse what the database accepts.
+    *
+    * Booleans are excluded by construction: `true`/`false` are neither quoted nor numeric, so an
+    * `ARRAY[true, false]` yields no elements. That matches the `bit` exclusion on SQL Server — the
+    * constraint is vacuous, and a checkbox is not a dropdown.
+    */
+   private parsePostgreSQLConstraint(constraintDefinition: string, fieldName: string): string[] | null {
+      // Strip the `CHECK (...)` wrapper pg_get_constraintdef() adds, then any balanced outer parens.
+      const checkMatch = /^\s*CHECK\s*\((.*)\)\s*$/is.exec(constraintDefinition);
+      let body = ManageMetadataBase.stripOuterParens(checkMatch ? checkMatch[1] : constraintDefinition);
+      if (body.length === 0) {
          return null;
       }
 
-      // Extract individual values from the array content
-      // Each element looks like: 'Value'::character varying  or just  'Value'
-      const arrayContent = arrayMatch[1];
-      const valueRegex = /'([^']+)'(?:::[^,\]]*)?/g;
-      const possibleValues: string[] = [];
-      let match;
+      const field = ManageMetadataBase.escapeForRegex(fieldName);
+      // The left-hand side: the bare column, optionally double-quoted, optionally parenthesized and
+      // cast (`(status)::text`) — which is how PG compares a varchar.
+      const lhs = `\\(?"?${field}"?\\)?(?:${ManageMetadataBase.PG_CAST})?`;
 
-      while ((match = valueRegex.exec(arrayContent)) !== null) {
-         if (match[1]) {
-            possibleValues.push(match[1]);
-         }
+      // `(x IS NULL) OR <rest>` — the nullable form. Unwrap it and judge <rest> on its own.
+      const nullable = new RegExp(`^\\(?\\s*${lhs}\\s+IS\\s+NULL\\s*\\)?\\s+OR\\s+(.*)$`, 'is').exec(body);
+      if (nullable) {
+         body = ManageMetadataBase.stripOuterParens(nullable[1]);
       }
 
-      return possibleValues.length > 0 ? possibleValues : null;
+      // Anything still carrying a second condition or a non-equality operator is not a value list.
+      // `<> ALL` is NOT IN; ` OR `/` AND ` means the list is not the whole story. Tested with the
+      // string literals blanked first, so a constraint whose VALUES contain an operator —
+      // `CHECK (op = ANY (ARRAY['<'::text, '>'::text]))` — is judged on its structure, not its data.
+      const structure = body.replace(/'(?:[^']|'')*'/g, "''");
+      if (/\s(OR|AND)\s/i.test(structure) || /<>|!=|>|</.test(structure) || /\bALL\s*\(/i.test(structure)) {
+         return null;
+      }
+
+      // Multi-value: <lhs> = ANY (ARRAY[ ... ])   (the ARRAY may itself be parenthesized and cast).
+      // The closing bracket is found by matching, not by regex: the varchar form ends `])::text[]`,
+      // so a greedy `.*\]` swallows the cast and a lazy one would break on a value containing `]`.
+      const anyMatch = new RegExp(`^${lhs}\\s*=\\s*ANY\\s*\\(\\s*\\(?\\s*ARRAY\\s*\\[`, 'is').exec(body);
+      if (anyMatch) {
+         const elements = ManageMetadataBase.readToMatchingBracket(body, anyMatch[0].length);
+         return elements === null ? null : ManageMetadataBase.pgArrayElements(elements);
+      }
+
+      // Single value: <lhs> = <literal>. PG renders `IN (x)` this way, and it permits exactly x.
+      const singleMatch = new RegExp(`^${lhs}\\s*=\\s*(.+)$`, 'is').exec(body);
+      if (singleMatch) {
+         const value = ManageMetadataBase.pgLiteralValue(singleMatch[1]);
+         return value === null ? null : [value];
+      }
+
+      return null;
+   }
+
+   /**
+    * Returns the text between an already-consumed `[` and its matching `]`, ignoring brackets that sit
+    * inside quoted literals, or null when the bracket never closes.
+    */
+   private static readToMatchingBracket(text: string, startIndex: number): string | null {
+      let depth = 1, inQuote = false;
+      for (let i = startIndex; i < text.length; i++) {
+         const ch = text[i];
+         if (inQuote) {
+            if (ch === "'") {
+               if (text[i + 1] === "'") i++;
+               else inQuote = false;
+            }
+            continue;
+         }
+         if (ch === "'") inQuote = true;
+         else if (ch === '[') depth++;
+         else if (ch === ']') {
+            depth--;
+            if (depth === 0) {
+               return text.slice(startIndex, i);
+            }
+         }
+      }
+      return null;
+   }
+
+   /**
+    * Splits an ARRAY[...] body into its elements and reads each one's literal value, or returns null
+    * when any element is not a literal this can read (a boolean, a function call, a column reference).
+    * All-or-nothing on purpose: a PARTIAL list is worse than none, because the values it drops are
+    * legal ones that `Validate()` would then refuse. That is the bug this replaces — PG writes
+    * `ARRAY['100000000000'::bigint, (2)::bigint]`, and reading only quoted elements captured the first
+    * value and silently dropped the second.
+    */
+   private static pgArrayElements(arrayBody: string): string[] | null {
+      const values: string[] = [];
+      for (const element of ManageMetadataBase.splitTopLevel(arrayBody)) {
+         const value = ManageMetadataBase.pgLiteralValue(element);
+         if (value === null) {
+            return null;
+         }
+         values.push(value);
+      }
+      return values.length > 0 ? values : null;
+   }
+
+   /**
+    * Reads one PostgreSQL literal, unwrapping the parentheses and `::type` casts it may be dressed in —
+    * `'Active'::character varying`, `(2)::bigint`, `('1e30'::numeric)::double precision`, `2.25`.
+    * Returns null for anything that is not a quoted or numeric literal, which is what keeps booleans,
+    * function calls and column references out of a value list.
+    */
+   private static pgLiteralValue(element: string): string | null {
+      let text = element.trim();
+      // Peel casts and wrapping parens until neither is left: ('x'::numeric)::double precision
+      for (let i = 0; i < 10; i++) {
+         const castAtEnd = new RegExp(`${ManageMetadataBase.PG_CAST}$`);
+         const stripped = ManageMetadataBase.stripOuterParens(text.replace(castAtEnd, '').trim());
+         if (stripped === text) {
+            break;
+         }
+         text = stripped;
+      }
+      const quoted = /^'((?:[^']|'')*)'$/s.exec(text);
+      if (quoted) {
+         return quoted[1].replace(/''/g, "'");
+      }
+      return /^-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?$/.test(text) ? text : null;
+   }
+
+   /** Splits on commas that sit outside quotes, parentheses and brackets. */
+   private static splitTopLevel(text: string): string[] {
+      const parts: string[] = [];
+      let depth = 0, inQuote = false, current = '';
+      for (let i = 0; i < text.length; i++) {
+         const ch = text[i];
+         if (inQuote) {
+            inQuote = ch !== "'" || text[i + 1] === "'";
+            if (ch === "'" && text[i + 1] === "'") {
+               current += ch;
+               i++;
+            }
+         }
+         else if (ch === "'") {
+            inQuote = true;
+         }
+         else if (ch === '(' || ch === '[') {
+            depth++;
+         }
+         else if (ch === ')' || ch === ']') {
+            depth--;
+         }
+         else if (ch === ',' && depth === 0) {
+            parts.push(current);
+            current = '';
+            continue;
+         }
+         current += text[i];
+      }
+      if (current.trim().length > 0) {
+         parts.push(current);
+      }
+      return parts;
+   }
+
+   /** Removes balanced parentheses that wrap the whole expression, however many layers deep. */
+   private static stripOuterParens(text: string): string {
+      let result = text.trim();
+      while (result.startsWith('(') && result.endsWith(')')) {
+         let depth = 0, wrapsWhole = true;
+         for (let i = 0; i < result.length; i++) {
+            if (result[i] === '(') depth++;
+            else if (result[i] === ')') depth--;
+            if (depth === 0 && i < result.length - 1) {
+               wrapsWhole = false;
+               break;
+            }
+         }
+         if (!wrapsWhole) {
+            break;
+         }
+         result = result.slice(1, -1).trim();
+      }
+      return result;
+   }
+
+   /** Escapes regex metacharacters so an identifier can be embedded in a pattern. */
+   private static escapeForRegex(value: string): string {
+      return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
    }
 
 
@@ -6899,7 +7196,11 @@ export class ManageMetadataBase {
             }
 
             // next up, we need to check if we're configured to add permissions for new entities, and if so, add them
-            if (configInfo.newEntityDefaults.PermissionDefaults && configInfo.newEntityDefaults.PermissionDefaults.AutoAddPermissionsForNewEntities) {
+            // A per-table `Entities` entry can opt a table out of the default grants (AutoAddPermissions: false),
+            // e.g. a table only server code may touch. Applied here because grants made now would otherwise
+            // have to be removed by a later migration.
+            if (configInfo.newEntityDefaults.PermissionDefaults && configInfo.newEntityDefaults.PermissionDefaults.AutoAddPermissionsForNewEntities
+                && this.resolveCreationTimeAutoAddPermissions(newEntity.SchemaName, newEntity.TableName)) {
                // we are asked to add permissions for new entities, so do that by looping through the permissions and adding them
                const permissions = configInfo.newEntityDefaults.PermissionDefaults.Permissions;
                for (const p of permissions) {
@@ -7613,11 +7914,84 @@ export class ManageMetadataBase {
       )`;
    }
 
+   /**
+    * Returns the creation-time attribute overrides declared for one table in the additionalSchemaInfo
+    * `Entities` array (matched case-insensitively on SchemaName + BaseTable).
+    *
+    * Applying these at creation — not only in the later {@link processEntityConfigs} pass — matters
+    * for flags CodeGen acts on in the same run. The clearest case is `TrackRecordChanges`:
+    * `ensureCreatedAtUpdatedAtFieldsExist` runs before `processEntityConfigs`, so a table declared
+    * `TrackRecordChanges: false` used to receive `__mj_CreatedAt` / `__mj_UpdatedAt` columns on its
+    * first CodeGen run anyway.
+    *
+    * Only the attributes in {@link EntityInfo.ConfigurableAtCreationAttributes} are returned, and only with a value of the right type
+    * (boolean, or number for `UserViewMaxRows`); anything else is left to `processEntityConfigs`.
+    */
+   protected resolveCreationTimeEntityConfig(schemaName: string, tableName: string): Partial<Record<EntityConfigurableAtCreationAttribute, boolean | number>> {
+      const config = ManageMetadataBase.getSoftPKFKConfig();
+      if (!config) return {};
+      const match = this.extractEntitiesFromConfig(config).find(ec =>
+         ec.SchemaName.trim().toLowerCase() === schemaName.trim().toLowerCase() &&
+         ec.BaseTable.trim().toLowerCase() === tableName.trim().toLowerCase());
+      if (!match) return {};
+
+      const overrides: Partial<Record<EntityConfigurableAtCreationAttribute, boolean | number>> = {};
+      for (const attr of EntityInfo.ConfigurableAtCreationAttributes) {
+         const value = match[attr];
+         if (attr === 'UserViewMaxRows' ? typeof value === 'number' : typeof value === 'boolean') {
+            overrides[attr] = value as boolean | number;
+         }
+      }
+      return overrides;
+   }
+
+   /**
+    * Whether CodeGen should grant the default role permissions (`newEntityDefaults.PermissionDefaults`)
+    * when it creates the entity for this table. A per-table `Entities` entry may set
+    * `"AutoAddPermissions": false` for a table that only server code may touch; the entity is then
+    * created with no role permissions at all. Anything other than the boolean `false` keeps the default.
+    */
+   protected resolveCreationTimeAutoAddPermissions(schemaName: string, tableName: string): boolean {
+      const config = ManageMetadataBase.getSoftPKFKConfig();
+      if (!config) return true;
+      const match = this.extractEntitiesFromConfig(config).find(ec =>
+         ec.SchemaName.trim().toLowerCase() === schemaName.trim().toLowerCase() &&
+         ec.BaseTable.trim().toLowerCase() === tableName.trim().toLowerCase());
+      return match?.AutoAddPermissions !== false;
+   }
+
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {
       const newEntityDefaults = configInfo.newEntityDefaults;
+      const overrides = this.resolveCreationTimeEntityConfig(newEntity.SchemaName, newEntity.TableName);
       const newEntityDescriptionEscaped = newEntity.EntityDescription ? `'${newEntity.EntityDescription.replace(/'/g, "''")}'` : null;
-      const allowCaching = this.resolveAllowCachingForSchema(newEntity.SchemaName);
       const q = (name: string) => this.qi(name);
+
+      // Effective value for each optional flag: per-table config first, then the global default.
+      // `undefined` leaves the column out of the INSERT so the table default applies.
+      const flag = (attr: EntityConfigurableAtCreationAttribute, globalDefault: boolean | number | undefined): boolean | number | undefined =>
+         overrides[attr] !== undefined ? overrides[attr] : globalDefault;
+      const literal = (value: boolean | number): string => typeof value === 'boolean' ? this.boolLit(value) : String(value);
+
+      const columns: Array<[string, string]> = [
+         ['IncludeInAPI', literal(flag('IncludeInAPI', true) as boolean)],
+         ['AllowUserSearchAPI', literal(flag('AllowUserSearchAPI', newEntityDefaults.AllowUserSearchAPI ?? true) as boolean)],
+         ['AllowCaching', literal(flag('AllowCaching', this.resolveAllowCachingForSchema(newEntity.SchemaName)) as boolean)],
+      ];
+      const optional: Array<[EntityConfigurableAtCreationAttribute, boolean | number | undefined]> = [
+         ['TrackRecordChanges', newEntityDefaults.TrackRecordChanges],
+         ['AuditRecordAccess', newEntityDefaults.AuditRecordAccess],
+         ['AuditViewRuns', newEntityDefaults.AuditViewRuns],
+         ['AllowAllRowsAPI', newEntityDefaults.AllowAllRowsAPI],
+         ['AllowCreateAPI', newEntityDefaults.AllowCreateAPI],
+         ['AllowUpdateAPI', newEntityDefaults.AllowUpdateAPI],
+         ['AllowDeleteAPI', newEntityDefaults.AllowDeleteAPI],
+         ['UserViewMaxRows', newEntityDefaults.UserViewMaxRows],
+      ];
+      for (const [attr, globalDefault] of optional) {
+         const value = flag(attr, globalDefault);
+         if (value !== undefined) columns.push([attr, literal(value)]);
+      }
+
       const sSQLInsert = `
       INSERT INTO ${this.qs(MjCoreSchema(), 'Entity')} (
          ${q('ID')},
@@ -7628,17 +8002,7 @@ export class ManageMetadataBase {
          ${q('BaseTable')},
          ${q('BaseView')},
          ${q('SchemaName')},
-         ${q('IncludeInAPI')},
-         ${q('AllowUserSearchAPI')},
-         ${q('AllowCaching')}
-         ${newEntityDefaults.TrackRecordChanges === undefined ? '' : ', ' + q('TrackRecordChanges')}
-         ${newEntityDefaults.AuditRecordAccess === undefined ? '' : ', ' + q('AuditRecordAccess')}
-         ${newEntityDefaults.AuditViewRuns === undefined ? '' : ', ' + q('AuditViewRuns')}
-         ${newEntityDefaults.AllowAllRowsAPI === undefined ? '' : ', ' + q('AllowAllRowsAPI')}
-         ${newEntityDefaults.AllowCreateAPI === undefined ? '' : ', ' + q('AllowCreateAPI')}
-         ${newEntityDefaults.AllowUpdateAPI === undefined ? '' : ', ' + q('AllowUpdateAPI')}
-         ${newEntityDefaults.AllowDeleteAPI === undefined ? '' : ', ' + q('AllowDeleteAPI')}
-         ${newEntityDefaults.UserViewMaxRows === undefined ? '' : ', ' + q('UserViewMaxRows')}
+         ${columns.map(([col]) => q(col)).join(',\n         ')}
          , ${q('__mj_CreatedAt')}
          , ${q('__mj_UpdatedAt')}
       )
@@ -7651,17 +8015,7 @@ export class ManageMetadataBase {
          '${newEntity.TableName}',
          'vw${generatePluralName(newEntity.TableName, {capitalizeFirstLetterOnly: true}) + (newEntitySuffix && newEntitySuffix.length > 0 ? newEntitySuffix : '')}',
          '${newEntity.SchemaName}',
-         ${this.boolLit(true)},
-         ${newEntityDefaults.AllowUserSearchAPI === undefined ? this.boolLit(true) : this.boolLit(newEntityDefaults.AllowUserSearchAPI)},
-         ${this.boolLit(allowCaching)}
-         ${newEntityDefaults.TrackRecordChanges === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.TrackRecordChanges)}
-         ${newEntityDefaults.AuditRecordAccess === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AuditRecordAccess)}
-         ${newEntityDefaults.AuditViewRuns === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AuditViewRuns)}
-         ${newEntityDefaults.AllowAllRowsAPI === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AllowAllRowsAPI)}
-         ${newEntityDefaults.AllowCreateAPI === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AllowCreateAPI)}
-         ${newEntityDefaults.AllowUpdateAPI === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AllowUpdateAPI)}
-         ${newEntityDefaults.AllowDeleteAPI === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AllowDeleteAPI)}
-         ${newEntityDefaults.UserViewMaxRows === undefined ? '' : ', ' + (newEntityDefaults.UserViewMaxRows)}
+         ${columns.map(([, value]) => value).join(',\n         ')}
          , ${this.utcNow()}
          , ${this.utcNow()}
       )

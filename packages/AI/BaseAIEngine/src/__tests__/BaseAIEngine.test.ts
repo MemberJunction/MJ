@@ -193,6 +193,21 @@ describe('AIEngineBase', () => {
             expect(channelConfig!.CacheLocal).toBe(true);
         });
 
+        it('fetches the binary embedding column for agent notes and examples on database providers only', async () => {
+            const engine = AIEngineBase.Instance;
+            const loadSpy = vi.spyOn(
+                engine as unknown as { Load: (params: Array<{ PropertyName: string; IncludeBinaryFields?: string }>) => Promise<void> },
+                'Load',
+            );
+            await engine.Config(false);
+            const params = loadSpy.mock.calls[0][0];
+            for (const property of ['_agentNotes', '_agentExamples']) {
+                const config = params.find(p => p.PropertyName === property);
+                expect(config, property).toBeDefined();
+                expect(config!.IncludeBinaryFields, property).toBe('DatabaseProviderOnly');
+            }
+        });
+
         it('skips a registry dataset whose entity is missing (clean-install CodeGen bootstrap)', async () => {
             const coreModule = await import('@memberjunction/core');
             const metadataClass = coreModule.Metadata as unknown as { Provider: { EntityByName: (name: string) => unknown } };

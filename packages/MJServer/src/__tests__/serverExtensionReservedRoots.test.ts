@@ -68,6 +68,7 @@ describe('coreReservedServerExtensionRoots', () => {
         // Explicit allowlist of known non-path middleware mounts (e.g. app.use(mw), app.use(cors()), app.use(compression(...)))
         const knownNonPathTokens = [
             'cors',
+            'CreateGlobalCorsMiddleware',
             'express.',
             'compression',
             'cookieParser',
@@ -90,6 +91,8 @@ describe('coreReservedServerExtensionRoots', () => {
 
         const knownConstants: Record<string, string> = {
             REALTIME_SDP_EXCHANGE_PATH: '/realtime',
+            // Public verify-link routes for realtime identity verification; under the reserved '/realtime' root.
+            REALTIME_VERIFY_MOUNT_PATH: '/realtime/verify',
             MAGIC_LINK_MOUNT_PATH: '/magic-link',
             WIDGET_MOUNT_PATH: '/widget',
             AUTH_CATALOG_MOUNT_PATH: '/auth',
