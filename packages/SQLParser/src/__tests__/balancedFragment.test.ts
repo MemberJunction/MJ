@@ -122,14 +122,13 @@ describe('IsBalancedSQLFragment', () => {
     });
 
     describe('PostgreSQL: what the lexer cannot read the way PostgreSQL does is refused', () => {
-        // PostgreSQL reads every character outside ASCII as part of a name: Unicode spaces too, and
-        // inside dollar-quote tags. The lexer treats Unicode spaces as whitespace and allows only
-        // ASCII tags, so such text is refused outside string literals and quoted identifiers.
+        // PostgreSQL reads every character outside ASCII as part of a name, Unicode spaces too. The
+        // lexer treats Unicode spaces as whitespace, so such text is refused outside string
+        // literals and quoted identifiers.
         it.each([
             ['Café = 1', 'a name'],
             ['Name = 1', 'a no-break space between tokens'],
             ['Name = 1　', 'an ideographic space'],
-            ['Name = $é$x$é$', 'a dollar-quote tag'],
         ])('refuses %j (%s)', (fragment) => {
             expect(reasonFor(fragment, pg)).toMatch(/outside ASCII/);
         });
@@ -137,6 +136,7 @@ describe('IsBalancedSQLFragment', () => {
         it.each([
             ['Name = $$x$$', 'a dollar-quoted string'],
             ['Name = $tag$x$tag$', 'a tagged dollar-quoted string'],
+            ['Name = $é$x$é$', 'a dollar-quoted string whose tag has a non-ASCII letter'],
             ['Name = $1', 'a positional parameter'],
         ])('refuses a dollar sign outside a name (%#: %s)', (fragment) => {
             expect(reasonFor(fragment, pg)).toMatch(/dollar/);

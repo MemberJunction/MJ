@@ -41,8 +41,8 @@ const NON_ASCII = /[^\x00-\x7F]/;
  * - contains a statement separator (`;`);
  * - on PostgreSQL (a dialect with escape or dollar-quoted strings):
  *   - has a character outside ASCII anywhere but inside a string literal, quoted identifier or
- *     comment. PostgreSQL reads every such character as part of a name, including Unicode spaces and
- *     characters in a dollar-quote tag; the lexer does not;
+ *     comment. PostgreSQL reads every such character as part of a name, Unicode spaces included;
+ *     the lexer does not;
  *   - has a dollar-quoted string, or a `$` anywhere but inside a name;
  *   - follows an escape string (`E'…'`) with another string literal. PostgreSQL joins literals that
  *     a line break separates and reads the second in escape mode; the lexer reads it as plain;
