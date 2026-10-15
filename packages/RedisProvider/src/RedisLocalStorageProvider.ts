@@ -200,6 +200,12 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      */
     public readonly SupportsCrossProcessPersistence = true;
 
+    /**
+     * Every server in a fleet shares one Redis keyspace.
+     * See {@link ILocalStorageProvider.SharedAcrossProcesses}.
+     */
+    public readonly SharedAcrossProcesses = true;
+
     private _client: Redis;
     private _keyPrefix: string;
     private _defaultTTLSeconds: number | undefined;

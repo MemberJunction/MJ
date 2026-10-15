@@ -3703,21 +3703,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const promises = items.map(async ({ index, query }) => {
             try {
                 const rows = await this.ExecuteSQL<Record<string, unknown>>(query.CacheValidationSQL!, undefined, undefined, contextUser);
-                if (rows && rows.length > 0) {
-                    const row = rows[0];
-                    results.set(index, {
-                        success: true,
-                        // Both spellings accepted. The shipped `CacheValidationSQL` field description tells authors
-                        // to return `TotalRows`, while this has only ever read `RowCount` — so a query written
-                        // from the documentation yields `Number(undefined)` = NaN, `NaN !== NaN` makes the slot
-                        // never validate, and NaN is then written back into the client's cache entry where `??`
-                        // cannot clear it. Silent, permanent degradation to always-refetch, with no error.
-                        rowCount: Number(row['RowCount'] ?? row['TotalRows']),
-                        maxUpdatedAt: row['MaxUpdatedAt'] ? new Date(String(row['MaxUpdatedAt'])).toISOString() : undefined,
-                    });
-                } else {
-                    results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
-                }
+                results.set(index, this.QueryCacheStatusFromRow(rows?.[0]));
             } catch (e) {
                 results.set(index, { success: false, errorMessage: e instanceof Error ? e.message : String(e) });
             }
@@ -3725,6 +3711,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         await Promise.all(promises);
         return results;
+    }
+
+    /**
+     * Reads the first row a query's CacheValidationSQL returned into a cache status. No row means
+     * an empty result: zero rows, no timestamp.
+     *
+     * Both spellings of the count are accepted. The shipped `CacheValidationSQL` field description
+     * tells authors to return `TotalRows`, while older queries return `RowCount`. Reading only one
+     * of them yields `Number(undefined)` = NaN for the other, `NaN !== NaN` makes the slot never
+     * validate, and NaN is then written back into the client's cache entry where `??` cannot clear
+     * it: a silent, permanent degradation to always-refetch, with no error. Platform providers that
+     * batch the validation SQL read their rows through this too.
+     */
+    protected QueryCacheStatusFromRow(row: Record<string, unknown> | undefined): { success: boolean; maxUpdatedAt?: string; rowCount?: number } {
+        if (!row) {
+            return { success: true, rowCount: 0, maxUpdatedAt: undefined };
+        }
+        const maxUpdatedAt = row['MaxUpdatedAt'];
+        return {
+            success: true,
+            rowCount: Number(row['RowCount'] ?? row['TotalRows']),
+            maxUpdatedAt: maxUpdatedAt
+                ? (maxUpdatedAt instanceof Date ? maxUpdatedAt : new Date(String(maxUpdatedAt))).toISOString()
+                : undefined,
+        };
     }
 
     /**
