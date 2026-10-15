@@ -149,8 +149,8 @@ function formatTypeString(mapped: MappedType, length?: number, precision?: numbe
  * PostgreSQL functions caller-supplied SQL may not call: the XML exporters that run SQL given as a
  * string (`query_to_xml`, `cursor_to_xml`, `table_to_xml`, `schema_to_xml`, `database_to_xml` and
  * their schema variants), the text-search functions that do the same (`ts_stat`, `ts_rewrite`),
- * `dblink`, the server-file readers, large objects, and the administrative
- * functions a read-only transaction does not stop.
+ * `dblink`, the server-file readers, large objects, the administrative functions a read-only
+ * transaction does not stop, and the sleep functions.
  */
 const POSTGRESQL_CALLER_SQL_FORBIDDEN_FUNCTIONS: readonly string[] = [
     'query_to_xml*', 'cursor_to_xml*', 'table_to_xml*', 'schema_to_xml*', 'database_to_xml*',
@@ -159,7 +159,8 @@ const POSTGRESQL_CALLER_SQL_FORBIDDEN_FUNCTIONS: readonly string[] = [
     'pg_read_file', 'pg_read_binary_file', 'pg_ls_*', 'pg_stat_file', 'pg_file_*',
     'lo_*',
     'pg_terminate_backend', 'pg_cancel_backend', 'pg_reload_conf', 'pg_rotate_logfile', 'pg_promote',
-    'pg_switch_wal', 'pg_create_restore_point', 'pg_log_backend_memory_contexts'
+    'pg_switch_wal', 'pg_create_restore_point', 'pg_log_backend_memory_contexts',
+    'pg_sleep*'
 ];
 
 /**

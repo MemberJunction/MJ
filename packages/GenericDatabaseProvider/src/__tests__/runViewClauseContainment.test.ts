@@ -26,7 +26,7 @@ import {
     ClearAllDataHooks,
     CompositeKey,
     UserInfo,
-    type BaseEntity,
+    BaseEntity,
     type DatasetResultType,
     type DatasetStatusResultType,
     type DeleteSQLResult,
@@ -141,17 +141,31 @@ function rlsProtectedEntity(): EntityInfo {
 }
 
 /** A saved view over the fixture entity, carrying the given stored WhereClause. */
+/**
+ * A saved view loaded through the entity system: a real BaseEntity instance. The provider trusts a
+ * view's CustomWhereClause flag only on a loaded entity, so a plain object here would be screened
+ * as a client clause instead.
+ */
+class LoadedSavedView extends BaseEntity {
+    constructor(
+        private readonly entity: EntityInfo,
+        private readonly whereClause: string,
+        private readonly customWhereClause: boolean,
+    ) {
+        super({ Name: 'MJ: User Views', Fields: [] } as unknown as EntityInfo);
+    }
+    get ID(): string { return 'VIEW-1'; }
+    get Name(): string { return 'My View'; }
+    get EntityID(): string { return this.entity.ID; }
+    get WhereClause(): string { return this.whereClause; }
+    get CustomWhereClause(): boolean { return this.customWhereClause; }
+    get OrderByClause(): string { return ''; }
+    get Columns(): Array<{ hidden?: boolean; Name?: string }> { return []; }
+    get ViewEntityInfo(): EntityInfo { return this.entity; }
+}
+
 function savedView(entity: EntityInfo, whereClause: string, customWhereClause: boolean): BaseEntity {
-    return {
-        ID: 'VIEW-1',
-        Name: 'My View',
-        EntityID: entity.ID,
-        WhereClause: whereClause,
-        CustomWhereClause: customWhereClause,
-        OrderByClause: '',
-        Columns: [],
-        ViewEntityInfo: entity,
-    } as unknown as BaseEntity;
+    return new LoadedSavedView(entity, whereClause, customWhereClause);
 }
 
 const user = () => new UserInfo(null as unknown as IMetadataProvider, { ID: 'U1', Email: 'u1@example.com' });
