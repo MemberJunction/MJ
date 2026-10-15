@@ -27,10 +27,16 @@ import { ConversationAgentService } from '../../services/conversation-agent.serv
 import {
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
+  BeforeStopClickedEventArgs,
 } from '../../events/chat-events';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { ExcludeByUUIDs, UUIDsEqual } from '@memberjunction/global';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
+import { EMPTY_FORK_CHIPS, ForkChipAriaLabel, ForkChipIcon, ForkChipOpenRequestOf, type ForkChipOpenRequest, type MessageForkChip } from '../../utils/conversation-forks';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+
+/** How a saved edit of a message is applied: as a new fork, in place with a rerun of its turn, or in place only. */
+export type MessageEditMode = 'Fork' | 'Resend' | 'Save';
 
 /**
  * Represents an attachment on a message for display
@@ -48,6 +54,13 @@ export type MessageLivenessState = 'live' | 'checking' | 'stalled';
  * Silence after which an in-flight run is no longer presented as healthy. Three missed heartbeats
  * (`AgentRunWatchdogConfig.heartbeatIntervalMs` is 30s), so ordinary jitter never trips it.
  */
+/**
+ * How long the Stop control stays in its "Stopping…" state before it is offered again. The
+ * server's cancellation poll runs every few seconds, so a stop that has not landed by now
+ * most likely did not take.
+ */
+export const STOP_RETRY_AFTER_MS = 15_000;
+
 export const LIVENESS_CHECKING_MS = 90_000;
 
 /**
@@ -154,8 +167,134 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public get allMessages(): MJConversationDetailEntity[] {
     return this.AllMessages;
   }
+
+  /**
+   * The chips under this message: the forks placed under it and, on a fork's first own message, the
+   * fork's alternatives (an original chip and the other forks of the replaced message). Set by the message list.
+   */
+  @Input() public ForkChips: readonly MessageForkChip[] = EMPTY_FORK_CHIPS;
+
+  /** A chip was clicked: the host opens that fork, or for an original chip, its view at the replaced message. */
+  @Output() public ForkOpenRequested = new EventEmitter<ForkChipOpenRequest>();
+
+  /** The rail a fork view draws this row on: 'Inherited' (faded, dashed) or 'Own' (solid); null in Main. Set by the message list. */
+  @Input() public ForkRail: 'Inherited' | 'Own' | null = null;
+
+  /** The fork marker shown under this row (the last inherited row of a fork view); null for none. Set by the message list. */
+  @Input() public ForkMarkerText: string | null = null;
+
+  /** True when the person may start forks; false hides "Fork from here", and Edit and Regenerate then work in place ({@link EditMode}, {@link InPlaceRole}). Set by the message list. */
+  @Input() public CanFork = true;
+
+  /** The row's role in the latest turn when forking is off: its user message ('User') or its answer ('Answer'); null otherwise. Set by the message list. */
+  @Input() public InPlaceRole: 'User' | 'Answer' | null = null;
+
+  /** Asks the host to rerun this user message's turn in place, after "Save and resend" saved the new text. */
+  @Output() public ResendInPlaceRequested = new EventEmitter<MJConversationDetailEntity>();
+
+  /** True for the latest user message and the last message of the view; their actions show labels. Set by the message list. */
+  @Input() public IsLatestTurn = false;
+
+  /** True while another message of the view is being edited; this row's footer then hides. Set by the message list. */
+  @Input() public EditOpenElsewhere = false;
+
+  /** True for the answer that "Save and resend" will replace while that edit is open; the row dims. Set by the message list. */
+  @Input() public PendingReplace = false;
+
+  /** Emits true when this row's inline editor opens and false when it closes. */
+  @Output() public EditingChanged = new EventEmitter<boolean>();
+
+  /**
+   * How a saved edit is applied: 'Fork' while the person may fork; with forking off, 'Resend' on the
+   * latest user message and 'Save' on an earlier one; null on an inherited row of a fork view (the row
+   * belongs to the parent path, so Fork from here is offered there instead).
+   */
+  public get EditMode(): MessageEditMode | null {
+    if (this.ForkRail === 'Inherited') {
+      return null;
+    }
+    if (this.CanFork !== false) {
+      return 'Fork';
+    }
+    return (this.InPlaceRole ?? null) === 'User' ? 'Resend' : 'Save';
+  }
+
+  /** The label of the edit's save button. */
+  public get EditSaveLabel(): string {
+    switch (this.EditMode) {
+      case 'Resend':
+        return 'Save and resend';
+      case 'Save':
+        return 'Save';
+      default:
+        return 'Save as fork';
+    }
+  }
+
+  /** The icon of the edit's save button. */
+  public get EditSaveIcon(): string {
+    switch (this.EditMode) {
+      case 'Resend':
+        return 'fa-solid fa-rotate-left';
+      case 'Save':
+        return 'fa-solid fa-check';
+      default:
+        return 'fa-solid fa-code-branch';
+    }
+  }
+
+  /** The keyboard hint under the editor. */
+  public get EditHint(): string {
+    switch (this.EditMode) {
+      case 'Resend':
+        return 'Enter saves and resends, Shift+Enter for a new line, Escape cancels';
+      case 'Save':
+        return 'Enter saves, Shift+Enter for a new line, Escape cancels';
+      default:
+        return 'Enter saves as a fork, Shift+Enter for a new line, Escape cancels';
+    }
+  }
+
+  /** The note on the editor's button row: what the save does to the conversation; null for a plain Save. */
+  public get EditNote(): string | null {
+    switch (this.EditMode) {
+      case 'Resend':
+        return 'The current answer will be replaced.';
+      case 'Save':
+        return null;
+      default:
+        return 'The original message stays here.';
+    }
+  }
+
+  /** The tooltip of the Regenerate button. */
+  public get RegenerateTitle(): string {
+    return this.CanFork !== false ? 'Regenerate as a fork' : 'Regenerate';
+  }
+
+  /** The icon of a chip (see {@link ForkChipIcon}). */
+  public ChipIcon(chip: MessageForkChip): string {
+    return ForkChipIcon(chip);
+  }
+
+  /** The aria-label of a chip (see {@link ForkChipAriaLabel}). */
+  public ChipAriaLabel(chip: MessageForkChip): string {
+    return ForkChipAriaLabel(chip);
+  }
+
+  /** Opens the chip's fork, or the original chip's view at the replaced message; the click does not reach the message bubble. */
+  public OnForkChipClick(chip: MessageForkChip, event: Event): void {
+    event.stopPropagation();
+    this.ForkOpenRequested.emit(ForkChipOpenRequestOf(chip));
+  }
+
   @Input() public IsProcessing: boolean = false;
 
+  /**
+   * Set by the list while this in-progress bubble shows streamed reply text rather than a status
+   * line. Rendered as the `streaming` class, which the stylesheet uses to lift the status cap.
+   */
+  @Input() public IsStreaming: boolean = false;
   /** @deprecated Use {@link IsProcessing}. */
   @Input() public set isProcessing(value: boolean) {
     this.IsProcessing = value;
@@ -352,6 +491,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
   /** Hides the response form and actionable commands on this message. */
   @Input() public ReadOnly = false;
+
+  /**
+   * Whether the Stop control is offered on an in-progress agent reply. A host can turn stopping
+   * off for a surface without making the conversation read-only. Default true.
+   */
+  @Input() public AllowStopRun = true;
+
+  /**
+   * How many agent replies are in flight in the open view. The per-reply Stop control is offered
+   * only above one: with a single run the composer's send slot is the stop control, so a pill here
+   * would be a second control for the same thing. With several runs the pill is the only way to
+   * say which one, and the composer stops them all.
+   */
+  @Input() public InFlightCount = 0;
   /** Host override for the AI message display name (white-label persona). Null = the agent record's name. */
   @Input() public AssistantDisplayName: string | null = null;
 
@@ -431,10 +584,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public deleteClicked = this.DeleteClicked;
-  @Output() public RetryClicked = new EventEmitter<MJConversationDetailEntity>();
+  /** Emits this AI reply when the user asks for a new one; the host regenerates it on a new branch. */
+  @Output() public RegenerateRequested = new EventEmitter<MJConversationDetailEntity>();
 
   /**
-   * @deprecated Use {@link RetryClicked}.
+   * @deprecated Use {@link RegenerateRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (RetryClicked) keeps working. Must stay AFTER RegenerateRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public RetryClicked = this.RegenerateRequested;
+
+  /**
+   * @deprecated Use {@link RegenerateRequested}.
    *
    * The same emitter under the old binding name, so a template still binding
    * (retryClicked) keeps working. Must stay AFTER RetryClicked: class fields
@@ -573,6 +736,34 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
+  /** Emits the edited text of this message; the host saves it as a new fork. */
+  @Output() public EditResendRequested = new EventEmitter<{ Message: MJConversationDetailEntity; NewText: string }>();
+  /** "Fork from here" was clicked. */
+  @Output() public ForkRequested = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * Fired BEFORE a stop is requested, when the person clicks Stop on this in-progress agent
+   * reply. Listeners may set `event.Cancel = true` to keep the run going; the control then
+   * stays available and nothing else happens. Carries the reply's detail id and the run id
+   * when the chat has seen the run row.
+   */
+  @Output() public BeforeStopClicked = new EventEmitter<BeforeStopClickedEventArgs>();
+
+  /**
+   * Fired when a stop was requested and no `BeforeStopClicked` listener canceled it. Carries
+   * the reply's conversation detail; the host resolves the run behind it, stops it, and fires
+   * its `AfterStopClicked` with the outcome.
+   */
+  @Output() public StopRequested = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * True from the moment Stop was clicked until the message leaves In-Progress, so the button
+   * reads "Stopping…" and cannot be clicked twice while the server catches up. Falls back to
+   * false after {@link STOP_RETRY_AFTER_MS} if the run is still going, so a stop that did not
+   * take (the row write was refused, the owning process is gone) can be tried again.
+   */
+  public IsStopping = false;
+  private _stopRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -662,7 +853,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   // Memoization for mention parsing to prevent repeated parsing on change detection
   private _cachedDisplayMessage: string = '';
-  private _cachedMessageText: string = '';
+  /** The raw Message the cached display text was computed from. */
+  private _cachedRawText: string = '';
 
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
   private mentionAutocomplete = MentionAutocompleteService.Instance;
@@ -724,6 +916,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Update previous status for next check
     this._previousMessageStatus = currentStatus;
+
+    // Once the run has ended (stopped or otherwise) the Stop control is gone; clear the
+    // "stopping" state so a later in-progress message on this item starts clean.
+    if (currentStatus !== 'In-Progress' && this.IsStopping) {
+      this.IsStopping = false;
+      this.clearStopRetryTimer();
+    }
 
     // Rebuild cached values so they're stable during Angular's check/verify cycle.
     // ngDoCheck runs once per CD pass but NOT during the dev-mode verify pass, so
@@ -875,6 +1074,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   ngOnDestroy() {
     this.stopElapsedTimeUpdater();
+    this.clearStopRetryTimer();
   }
 
   /**
@@ -1065,8 +1265,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const agentID = this.message.AgentID;
 
     // Look up agent from AIEngineBase cache
-    if (agentID && AIEngineBase.Instance?.Agents) {
-      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentID));
+    if (agentID) {
+      const agent = AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentID));
       if (agent) {
         return {
           name: agent.Name || 'AI Assistant',
@@ -1187,7 +1387,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * ngDoCheck to snapshot the value; templates read _stableDisplayMessage.
    */
   private computeDisplayMessage(): string {
-    let text = this.message.Message || '';
+    const raw = this.message.Message || '';
+
+    // ngDoCheck calls this every pass; an unchanged Message is the same string object, so this
+    // compare is a pointer check and nothing below runs until the text changes.
+    if (raw === this._cachedRawText && this._cachedDisplayMessage) {
+      return this._cachedDisplayMessage;
+    }
+
+    let text = raw;
 
     // For Sage, only show the delegation line (starts with emoji)
     if (this.IsConversationManager && text) {
@@ -1197,16 +1405,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       }
     }
 
-    // Use cached result if message text hasn't changed (avoids re-parsing mentions)
-    if (this._cachedMessageText === text && this._cachedDisplayMessage) {
-      return this._cachedDisplayMessage;
-    }
-
     // Transform @mentions to HTML pills
     const transformed = this.transformMentionsToHTML(text);
 
-    // Cache the result
-    this._cachedMessageText = text;
+    this._cachedRawText = raw;
     this._cachedDisplayMessage = transformed;
 
     return transformed;
@@ -1424,6 +1626,45 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   public get IsInProgressAIMessage(): boolean {
     return this._stableIsInProgressAIMessage;
+  }
+
+  /**
+   * Whether this message offers a Stop control: an AI reply still in progress, in a conversation
+   * the viewer may write to, while more than one reply is in flight (see {@link InFlightCount}).
+   * The server's permission check is the real gate; this only decides whether the control is shown.
+   */
+  public get CanStopRun(): boolean {
+    return this.IsInProgressAIMessage && !this.ReadOnly && this.AllowStopRun && this.InFlightCount > 1;
+  }
+
+  /** Stop button handler: marks the message as stopping and hands the request to the host. */
+  public OnStopClick(): void {
+    if (!this.CanStopRun || this.IsStopping) {
+      return;
+    }
+    // Listeners see the request first and may veto it. Cancel propagates synchronously through
+    // the message-list and chat-area re-emit bindings, so by the time emit() returns,
+    // event.Cancel reflects every subscriber's answer (same contract as the response-form pair).
+    const beforeEvent = new BeforeStopClickedEventArgs(this.message.ID, this.AgentRun?.ID ?? null);
+    this.BeforeStopClicked.emit(beforeEvent);
+    if (beforeEvent.Cancel) {
+      return;
+    }
+    this.IsStopping = true;
+    this.clearStopRetryTimer();
+    this._stopRetryTimer = setTimeout(() => {
+      this._stopRetryTimer = null;
+      this.IsStopping = false;
+      this.cdRef?.markForCheck?.();
+    }, STOP_RETRY_AFTER_MS);
+    this.StopRequested.emit(this.message);
+  }
+
+  private clearStopRetryTimer(): void {
+    if (this._stopRetryTimer) {
+      clearTimeout(this._stopRetryTimer);
+      this._stopRetryTimer = null;
+    }
   }
 
   /** @deprecated Use {@link IsInProgressAIMessage}. */
@@ -1645,12 +1886,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // conversation query, one off a loaded entity — and SQL Server returns upper-case UUIDs where
     // PostgreSQL returns lower-case. A case-sensitive match left a placeholder sitting above the
     // very card it was waiting for. See guides/UUID_COMPARISON_GUIDE.md.
-    // Normalize into a Set rather than a nested `.some(UUIDsEqual(...))`: UUIDsEqual's `===` fast
-    // path misses whenever the two IDs differ, so each miss allocated two lowercased strings, and
-    // the nested scan paid that n*m times. This getter is re-read on every change-detection pass of
-    // a CheckAlways component, once per message.
-    const loadedIds = new Set(this.DisplayArtifacts.map(a => NormalizeUUID(a.artifact.ID)));
-    return this.PendingArtifacts.filter(p => !loadedIds.has(NormalizeUUID(p.artifactId)));
+    // A set-based exclude, not a nested `.some(UUIDsEqual(...))`: this getter is re-read on every
+    // change-detection pass of a CheckAlways component, once per message.
+    const loadedIds = this.DisplayArtifacts.map(a => a.artifact.ID);
+    return ExcludeByUUIDs(this.PendingArtifacts, loadedIds, p => p.artifactId);
   }
 
   /** @deprecated Use {@link PendingArtifactPlaceholders}. */
@@ -1682,6 +1921,45 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.calculateTimePillText();
   }
 
+  // ── A stopped reply ──────────────────────────────────────────────────────────────────────
+  /** The message the Continue control sends; the next turn then resumes the stopped run. */
+  public static readonly ContinueMessage = 'Continue where you left off';
+
+  /** True when the reply's run was cancelled, by the user or otherwise. */
+  public get IsStoppedRun(): boolean {
+    return this.AgentRun?.Status === MJAIAgentRunEntityExtended.CancelledStatus;
+  }
+
+  /** True when the user stopped the reply's run (the stopped reply, as against a timeout). */
+  public get WasStoppedByUser(): boolean {
+    return MJAIAgentRunEntityExtended.IsUserStopped(this.AgentRun?.Status, this.AgentRun?.CancellationReason);
+  }
+
+  /** The "N steps kept" line under a stopped reply; null when the run kept nothing or was not stopped. */
+  public get StoppedLineText(): string | null {
+    if (!this.IsStoppedRun) {
+      return null;
+    }
+    const steps = this.AgentRunStepCount;
+    return steps > 0 ? `${steps} ${steps === 1 ? 'step' : 'steps'} kept` : null;
+  }
+
+  /**
+   * Whether the Continue control is offered: the last message in the conversation is a reply the
+   * user stopped, and the viewer may write. Any message resumes the run; this one says so.
+   */
+  public get CanContinueStoppedRun(): boolean {
+    return this.WasStoppedByUser && this.IsLastMessageInConversation && !this.ReadOnly;
+  }
+
+  /** The Continue control: sends {@link ContinueMessage} the way a suggested response is sent. */
+  public OnContinueClick(): void {
+    if (!this.CanContinueStoppedRun) {
+      return;
+    }
+    this.SuggestedResponseSelected.emit({ text: MessageItemComponent.ContinueMessage });
+  }
+
   /** @deprecated Use {@link TimePillText}. */
   public get timePillText(): string | null {
     return this.TimePillText;
@@ -1690,6 +1968,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private calculateTimePillText(): string | null {
     if (this.IsUserMessage) {
       return null;
+    }
+
+    // A stopped run: neutral, named as such, with the time it ran before the stop.
+    if (this.IsStoppedRun) {
+      const duration = this.AgentRunDuration ?? this.FormattedGenerationTime;
+      return duration ? `Stopped · ${duration}` : 'Stopped';
     }
 
     // For temporary messages (in-progress), show live elapsed time
@@ -1780,6 +2064,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       classes.push('ai-message');
       if (this.IsInProgressAIMessage) {
         classes.push('in-progress');
+        if (this.IsStreaming) {
+          classes.push('streaming');
+        }
       }
     } else if (this.IsUserMessage) {
       classes.push('user-message');
@@ -1789,6 +2076,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
     if (this.IsEditing) {
       classes.push('editing');
+    }
+    if (this.PendingReplace) {
+      classes.push('pending-replace');
+    }
+    if (this.ForkRail === 'Inherited') {
+      classes.push('fork-rail-inherited');
+    } else if (this.ForkRail === 'Own') {
+      classes.push('fork-rail-own');
     }
     return classes.join(' ');
   }
@@ -1822,6 +2117,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this.originalText = this.message.Message || '';
     this.EditedText = this.originalText;
     this.IsEditing = true;
+    this.EditingChanged.emit(true);
 
     // Focus textarea after Angular renders it
     Promise.resolve().then(() => {
@@ -1840,10 +2136,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public CancelEditing(): void {
-    this.IsEditing = false;
-    this.EditedText = '';
-    this.originalText = '';
-    this.cdRef.detectChanges();
+    this.closeEditor();
   }
 
   /** @deprecated Use {@link CancelEditing}. */
@@ -1851,34 +2144,48 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.CancelEditing();
   }
 
+  /**
+   * Saves the edit. With forking on, hands the text to the host, which saves it as a new fork; this row is
+   * not changed. With forking off, saves the text on this row (the server marks it edited) and, for the
+   * latest user message, then asks the host to rerun its turn. A failed save keeps the editor open.
+   */
   public async SaveEdit(): Promise<void> {
-    if (!this.EditedText.trim() || this.EditedText === this.originalText) {
+    const text = this.EditedText.trim();
+    const mode = this.EditMode;
+    if (!text || this.EditedText === this.originalText || mode == null) {
       this.CancelEditing();
       return;
     }
-
-    try {
-      // Update the message entity
-      this.message.Message = this.EditedText;
-      const saveResult = await this.message.Save();
-
-      if (saveResult) {
-        this.IsEditing = false;
-        this.EditedText = '';
-        this.originalText = '';
-        // Invalidate display message cache since message changed
-        this._cachedMessageText = '';
-        this._cachedDisplayMessage = '';
-        this.MessageEdited.emit(this.message);
-        this.cdRef.detectChanges();
-      } else {
-        console.error('Failed to save message edit');
-        alert('Failed to save message. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error saving message edit:', error);
-      alert('Error saving message. Please try again.');
+    if (mode === 'Fork') {
+      this.EditResendRequested.emit({ Message: this.message, NewText: text });
+      this.closeEditor();
+      return;
     }
+    const previous = this.message.Message;
+    this.message.Message = text;
+    if (!(await this.message.Save())) {
+      this.message.Message = previous;
+      MJNotificationService.Instance.CreateSimpleNotification('Could not save the message', 'error', 3000);
+      this.cdRef.detectChanges();
+      return;
+    }
+    this.closeEditor();
+    this.MessageEdited.emit(this.message);
+    if (mode === 'Resend') {
+      this.ResendInPlaceRequested.emit(this.message);
+    }
+  }
+
+  /** Closes the inline editor, tells the list, and renders. */
+  private closeEditor(): void {
+    const wasEditing = this.IsEditing;
+    this.IsEditing = false;
+    this.EditedText = '';
+    this.originalText = '';
+    if (wasEditing) {
+      this.EditingChanged.emit(false);
+    }
+    this.cdRef.detectChanges();
   }
 
   /** @deprecated Use {@link SaveEdit}. */
@@ -1889,10 +2196,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public OnEditKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       this.CancelEditing();
     } else if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      this.SaveEdit();
+      void this.SaveEdit();
     }
   }
 
@@ -1943,15 +2251,84 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.OnTestFeedbackClick();
   }
 
-  public OnRetryClick(): void {
-    if (!this.IsProcessing && this.MessageStatus === 'Error') {
-      this.RetryClicked.emit(this.message);
+  /**
+   * True for an AI reply that is finished and not being edited, for a person who may write, so a new
+   * reply can be asked for: as a fork while the person may fork, else in place on the latest answer only.
+   */
+  public get CanRegenerate(): boolean {
+    const offered = this.CanFork !== false || (this.InPlaceRole ?? null) === 'Answer';
+    return offered && this.IsAIMessage && !this.ReadOnly && !this.IsProcessing && !this.IsEditing && this.MessageStatus !== 'In-Progress';
+  }
+
+  /**
+   * Fork from here (a new fork that replaces this message): only on a finished user message the current
+   * person wrote (the author rule of Edit), when the person may write and may fork, not while processing
+   * or editing. Not on agent answers; Regenerate covers those.
+   */
+  public get CanStartFork(): boolean {
+    return this.CanFork !== false && !this.ReadOnly && !this.IsProcessing && !this.IsEditing && !!this.message?.ID
+      && this.MessageStatus === 'Complete' && this.IsUserMessage && this.isOwnMessage();
+  }
+
+  /** True when the current person wrote this message. */
+  private isOwnMessage(): boolean {
+    return !!this.message.UserID && UUIDsEqual(this.message.UserID, this.CurrentUser?.ID);
+  }
+
+  /** Edit: only the author of a finished user message who may write, when the host allows edits and {@link EditMode} is not null. */
+  public get CanEdit(): boolean {
+    return this.EditMode != null && this.AllowMessageEdit && this.IsUserMessage && !this.ReadOnly && !this.IsEditing
+      && this.MessageStatus === 'Complete' && this.isOwnMessage();
+  }
+
+  /**
+   * True when the row shows its action group (Edit and Fork from here on a user message, Regenerate on an
+   * older answer): a finished row, not being edited, while nothing is processing, for a person who may write.
+   */
+  public get ShowsActionGroup(): boolean {
+    return !this.IsEditing && !this.IsProcessing && this.MessageStatus === 'Complete' && !this.ReadOnly
+      && (this.CanEdit || this.CanStartFork || this.ShowsHeaderRegenerate);
+  }
+
+  /** Regenerate in the header's action group: an answer that is not the last message (the last one carries it in its footer). */
+  public get ShowsHeaderRegenerate(): boolean {
+    return this.CanRegenerate && !this.IsLastMessage;
+  }
+
+  /** Regenerate in the footer of the last message. */
+  public get ShowsFooterRegenerate(): boolean {
+    return this.CanRegenerate && this.IsLastMessage;
+  }
+
+  /** True when the last message shows its footer: not while this row or another row of the view is being edited. */
+  public get ShowsFooter(): boolean {
+    return !this.IsEditing && !this.EditOpenElsewhere && this.IsLastMessage
+      && (this.IsConversationOwner || (this.IsAIMessage && this.MessageStatus === 'Complete'));
+  }
+
+  /** Asks the host to fork the conversation at this message; the click does not reach the message bubble. */
+  public OnForkClick(event: Event): void {
+    event.stopPropagation();
+    if (this.CanStartFork) {
+      this.ForkRequested.emit(this.message);
     }
   }
 
-  /** @deprecated Use {@link OnRetryClick}. */
+  /** Asks the host for a new reply in place of this one, when {@link CanRegenerate} allows it. */
+  public OnRegenerateClick(): void {
+    if (this.CanRegenerate) {
+      this.RegenerateRequested.emit(this.message);
+    }
+  }
+
+  /** @deprecated Use {@link OnRegenerateClick}. */
+  public OnRetryClick(): void {
+    this.OnRegenerateClick();
+  }
+
+  /** @deprecated Use {@link OnRegenerateClick}. */
   public onRetryClick(): void {
-    return this.OnRetryClick();
+    this.OnRegenerateClick();
   }
 
   public OnArtifactClick(): void {

@@ -1,0 +1,66 @@
+{
+  "ManifestVersion": 1,
+  "GeneratedAt": "2026-09-16T12:00:00.000Z",
+  "Transport": { "Name": "AWS-prod", "DriverClass": "AWS", "Configuration": { "Region": "us-east-1" } },
+  "Topics": [
+    {
+      "Name": "email.events",
+      "IsFifo": false,
+      "MaxPayloadBytes": 262144,
+      "Subscriptions": [
+        {
+          "Name": "email.archive",
+          "Filter": null,
+          "Policy": { "SubscriptionName": "email.archive", "TopicName": "email.events", "PartitionMode": "None", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
+          "HostType": "External",
+          "Status": "Active",
+          "ExternalRef": null,
+          "DriverArtifacts": { "SnsFilterPolicy": null }
+        },
+        {
+          "Name": "email.dashboard",
+          "Filter": { "logic": "and", "filters": [{ "logic": "or", "filters": [{ "field": "eventType", "operator": "eq", "value": "click" }, { "field": "eventType", "operator": "eq", "value": "open" }] }] },
+          "Policy": { "SubscriptionName": "email.dashboard", "TopicName": "email.events", "PartitionMode": "None", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
+          "HostType": "MJWorker",
+          "Status": "Active",
+          "ExternalRef": null,
+          "DriverArtifacts": { "SnsFilterPolicy": "{\"eventType\":[\"click\",\"open\"]}" }
+        },
+        {
+          "Name": "email.unsubscribe",
+          "Filter": { "logic": "and", "filters": [{ "field": "eventType", "operator": "eq", "value": "unsubscribe" }] },
+          "Policy": { "SubscriptionName": "email.unsubscribe", "TopicName": "email.events", "PartitionMode": "None", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
+          "HostType": "External",
+          "Status": "Active",
+          "ExternalRef": "arn:aws:lambda:us-east-1:123456789012:function:suppression",
+          "DriverArtifacts": { "SnsFilterPolicy": "{\"eventType\":[\"unsubscribe\"]}" }
+        }
+      ]
+    },
+    {
+      "Name": "email.subscriber",
+      "IsFifo": true,
+      "MaxPayloadBytes": 262144,
+      "Subscriptions": [
+        {
+          "Name": "email.subscriber-update",
+          "Filter": null,
+          "Policy": { "SubscriptionName": "email.subscriber-update", "TopicName": "email.subscriber", "PartitionMode": "Exclusive", "MaxAttempts": 3, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
+          "HostType": "External",
+          "Status": "Paused",
+          "ExternalRef": null,
+          "DriverArtifacts": { "SnsFilterPolicy": null }
+        },
+        {
+          "Name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "Filter": null,
+          "Policy": { "SubscriptionName": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "TopicName": "email.subscriber", "PartitionMode": "Exclusive", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
+          "HostType": "MJWorker",
+          "Status": "Active",
+          "ExternalRef": null,
+          "DriverArtifacts": { "SnsFilterPolicy": null }
+        }
+      ]
+    }
+  ]
+}

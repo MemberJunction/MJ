@@ -154,7 +154,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 | Path | Scope |
 |---|---|
 | [`migrations/CLAUDE.md`](migrations/CLAUDE.md) | Migration authoring — naming, hardcoded UUIDs, system columns CodeGen owns, CHECK constraints, CodeGen handoff |
-| [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata authoring — `@lookup`/`@file`/`@parent` refs, `uuidgen` primary keys, no per-PR sync migrations, seeding lookup tables, application metadata |
+| [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata authoring — `@lookup`/`@file`/`@parent` refs, `uuidgen` primary keys, metadata ships only as release migrations (no install-time metadata phase), seeding lookup tables, application metadata |
 | [`metadata/components/CLAUDE.md`](metadata/components/CLAUDE.md) | Interactive component authoring — component architecture rules, the `ProductRevenueMatrix` reference implementation |
 | [`docker/CLAUDE.md`](docker/CLAUDE.md) | Docker workbench + MJAPI container configurations |
 | [`stats/CLAUDE.md`](stats/CLAUDE.md) | Repo LOC stats — generated files, do not hand-edit |

@@ -42,6 +42,8 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /** Fallback tab accent when an app has no color (matches pre-existing usage) */
 const DEFAULT_APP_COLOR = '#757575';
+/** A single-field key in URL-segment form ('Field|value'); group 1 is the value. */
+const SINGLE_FIELD_URL_SEGMENT = /^[^|]+\|([^|]+)$/;
 /**
  * Container for Golden Layout tabs with app-colored styling.
  *
@@ -507,6 +509,56 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    */
   public IsRecordTabEditing(tabId: string): boolean {
     return this.componentRefs.get(tabId)?.instance.IsEditing() === true;
+  }
+
+  /**
+   * Promote (pin) a records-region preview tab because its form just entered
+   * edit mode — VS Code's promote-on-modify. A pinned tab is neither
+   * replaceable by the next plain open nor rendered italic, which is the
+   * permanent form of the protection the pool predicate's IsEditing() read
+   * gives only transiently (#4345: that read ends the moment the user saves,
+   * so the just-saved record was replaced by the next row click).
+   *
+   * Region-scoped on purpose: a record DOCKED to the workspace and every tab
+   * under the classic style keep user-owned pin state — pinning a main-layout
+   * tab also flips the shell out of single-resource mode, which is not this
+   * feature's call to make.
+   */
+  public PromoteRecordTabOnEdit(tabId: string): void {
+    const tab = this.workspaceManager.GetTab(tabId);
+    if (!tab || tab.isPinned || !this.isRecordTab(tab)) {
+      return;
+    }
+    this.workspaceManager.PinTab(tabId);
+  }
+
+  /**
+   * Wire a resource's edit-mode callback to promotion. Resolves the tab id at
+   * event time through the instance (not a closure) because cached components
+   * are re-homed under a different tab id by RebindTabId when reattached.
+   * Only the `true` edge acts: promotion is sticky, so the `false` that
+   * SaveRecord / Cancel emit must never unpin.
+   */
+  private wireEditModePromotion(instance: Pick<BaseResourceComponent, 'getTabId' | 'ResourceEditModeChangedEvent'>): void {
+    instance.ResourceEditModeChangedEvent = (editing: boolean) => {
+      if (editing) {
+        this.PromoteRecordTabOnEdit(instance.getTabId());
+      }
+    };
+  }
+
+  /**
+   * The reattach seam. A component detached into the cache mid-edit keeps its
+   * EditMode, and reattaching it never re-runs StartEditMode, so no
+   * EditModeChanged fires — the only signal left is the synchronous IsEditing()
+   * read. Without this, an edited record closed and re-opened lands in a
+   * fresh temp tab that is editing, unpinned and italic: the exact
+   * inconsistency #4345 set out to remove.
+   */
+  private promoteIfReattachedEditing(instance: Pick<BaseResourceComponent, 'IsEditing'>, tabId: string): void {
+    if (instance.IsEditing()) {
+      this.PromoteRecordTabOnEdit(tabId);
+    }
   }
 
   /**
@@ -1429,7 +1481,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
       // Re-home the component's tab binding (see loadTabContent's cached
       // branch — same cross-tab reattach hazard).
-      (cached.componentRef.instance as BaseResourceComponent).RebindTabId(activeTab.id);
+      const cachedInstance = cached.componentRef.instance as BaseResourceComponent;
+      cachedInstance.RebindTabId(activeTab.id);
+      this.promoteIfReattachedEditing(cachedInstance, activeTab.id);
 
       // Reattach the cached wrapper element to single-resource container
       // (sizing via the pane-layout CSS: crumb fixed, content flex-fills)
@@ -1540,6 +1594,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     instance.ResourceCloseRequestedEvent = () => {
       this.handleResourceCloseRequested(activeTab.id, instance);
     };
+
+    // Promote-on-edit: pin the records preview tab when its form starts editing.
+    this.wireEditModePromotion(instance);
 
     // Record panes lead with their origin crumb
     this.ensureRecordOriginCrumb(activeTab, container);
@@ -1982,7 +2039,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         // DIFFERENT tab id — without the rebind its query-param
         // subscription listens to the dead tab forever and deliveries to
         // this tab are lost.
-        (cached.componentRef.instance as BaseResourceComponent).RebindTabId(tabId);
+        const cachedInstance = cached.componentRef.instance as BaseResourceComponent;
+        cachedInstance.RebindTabId(tabId);
+        this.promoteIfReattachedEditing(cachedInstance, tabId);
 
         // Keep legacy componentRefs map updated
         this.componentRefs.set(tabId, cached.componentRef);
@@ -2045,6 +2104,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       instance.ResourceCloseRequestedEvent = () => {
         this.handleResourceCloseRequested(tabId, instance);
       };
+
+      // Promote-on-edit: pin the records preview tab when its form starts editing.
+      this.wireEditModePromotion(instance);
 
       // Wire up display name change notifications (routed to whichever
       // Golden Layout hosts this tab)
@@ -2301,6 +2363,19 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     return normalize(a) === normalize(b);
   }
 
+  /**
+   * Whether two resource record ids name the same record. A component's ResourceRecordSaved
+   * stores a single-field key in the URL-segment form ('ID|<uuid>'), while its tab may keep the
+   * bare value ('<uuid>'). The field name is dropped only when the other id is a bare value, so
+   * two ids that both contain '|' are compared as they are.
+   */
+  public static IsSameRecordId(a: string | null | undefined, b: string | null | undefined): boolean {
+    const left = (a ?? '').trim();
+    const right = (b ?? '').trim();
+    const bareValue = (id: string): string => SINGLE_FIELD_URL_SEGMENT.exec(id)?.[1] ?? id;
+    return left === right || bareValue(left) === right || left === bareValue(right);
+  }
+
   private async getResourceTypeId(resourceType: string): Promise<string> {
     const rt = await this.getResourceTypeEntity(resourceType);
     if (rt) {
@@ -2532,9 +2607,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           const existingEntity = existingResourceData?.Configuration?.Entity as string | undefined;
           const newEntity = tab.configuration['Entity'] as string | undefined;
 
+          // The record id comparison accepts the URL-segment form ResourceRecordSaved writes into
+          // the component's Data ('ID|<uuid>' for a tab that keeps '<uuid>'). An exact comparison
+          // reloads the same cached component on every configuration emission, and each reload
+          // emits a new configuration.
           const needsReload = !TabContainerComponent.IsSameResourceType(existingResourceData?.ResourceType, tab.configuration['resourceType'] as string | undefined) ||
                              existingResourceData?.Configuration?.applicationId !== tab.applicationId ||
-                             existingRecordId !== newRecordId ||
+                             !TabContainerComponent.IsSameRecordId(existingRecordId, newRecordId) ||
                              existingEntity !== newEntity ||
                              (tab.configuration['resourceType'] === 'Custom' && existingDriverClass !== newDriverClass);
 
