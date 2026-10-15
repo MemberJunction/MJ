@@ -45,6 +45,15 @@ import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
 
+/**
+ * Entities whose update is always hydrated from the stored row, never from the client's `OldValues___`, though they
+ * do not track record changes: their server-side write rules compare against the prior state, which a client could
+ * otherwise supply itself (lower-case names). See `ResolverBase.MustLoadTruthFromDatabase`.
+ */
+const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
+  'mj: data context items',
+]);
+
 export class ResolverBase {
   private static _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
   private static _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
@@ -1864,6 +1873,11 @@ export class ResolverBase {
    *
    * Ordered so the boolean flag is evaluated last: the extra load lands only on entities that have
    * the feature switched on, which is almost none of them.
+   *
+   * `MJ: Data Context Items` always loads from the database: its server class lets only an
+   * administrator save an item that holds SQL, and decides that from the item's `Type` and `SQL`.
+   * Hydrated from OldValues, a client could leave both out, and the stored procedure would keep the
+   * stored SQL item while the rule saw none. See {@link ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW}.
    */
   protected MustLoadTruthFromDatabase(
     entityInfo: EntityInfo,
@@ -1873,6 +1887,7 @@ export class ResolverBase {
   ): boolean {
     return (
       entityInfo.TrackRecordChanges ||
+      ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW.has(entityInfo.Name.trim().toLowerCase()) ||
       !input.OldValues___ ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
