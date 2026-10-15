@@ -37,7 +37,7 @@ import { Metadata } from '../generic/metadata';
 import { ProviderBase } from '../generic/providerBase';
 import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
 import { GetGlobalObjectStore } from '@memberjunction/global';
-import { LogStatusEx } from '../generic/logging';
+import { LogWarning } from '../generic/logging';
 
 // Suppress verbose logging in tests (and let the decline message be inspected)
 vi.mock('../generic/logging', () => ({
@@ -45,6 +45,7 @@ vi.mock('../generic/logging', () => ({
     LogStatus: vi.fn(),
     LogStatusEx: vi.fn(),
     LogStatusVerbose: vi.fn(),
+    LogWarning: vi.fn(),
 }));
 
 function resetLocalCacheManager(): void {
@@ -114,7 +115,7 @@ describe('LocalCacheManager per-entry ceiling', () => {
     let restoreMetadata: () => void = () => {};
 
     beforeEach(() => {
-        vi.mocked(LogStatusEx).mockClear();
+        vi.mocked(LogWarning).mockClear();
         mockStorage = new MockCacheStorageProvider();
         restoreMetadata = setMetadataProvider([BIG_ENTITY, OTHER_ENTITY]);
     });
@@ -177,7 +178,7 @@ describe('LocalCacheManager per-entry ceiling', () => {
                 '2026-01-01T00:00:00Z'
             );
 
-            const messages = vi.mocked(LogStatusEx).mock.calls.map(c => String((c[0] as { message: string }).message));
+            const messages = vi.mocked(LogWarning).mock.calls.map(c => String(c[0]));
             const decline = messages.find(m => m.includes('CACHE-WRITE-GATE'));
             expect(decline).toBeDefined();
             expect(decline).toContain('maxMemoryMB');
