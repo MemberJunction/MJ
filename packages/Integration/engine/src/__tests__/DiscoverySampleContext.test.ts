@@ -103,3 +103,65 @@ describe('discovery intent reaches the connector through FetchContext', () => {
         expect(c.seen[0].DeadlineMs).toBeUndefined();
     });
 });
+
+/**
+ * A RUNTIME-DISCOVERED object is one the catalog has never seen. Sampling is what decides what its
+ * IntegrationObject row will CONTAIN, so it necessarily runs BEFORE that row exists — and
+ * `GetCachedObject` throws when the row is not there.
+ *
+ * That throw was the FIRST statement of the REST override, so it fired before the connector was
+ * consulted at all. The exception unwound into `DiscoverFieldsViaFetch`'s catch, which fell back to
+ * the catalog's own description. Net effect: the entire sampling chain ran with ZERO records for
+ * exactly the objects discovery exists to learn — no statistical primary key, no observed column
+ * widths — while reporting a discovery that had happened.
+ *
+ * A missing row genuinely disqualifies the record-constrained sampler (it reads `obj.APIPath` and
+ * `obj.ID`). It does NOT disqualify the generic FetchChanges loop, which needs neither and hands
+ * routing to the connector — the component that owns first contact with an unknown object.
+ */
+class UnpersistedObjectConnector extends CapturingConnector {
+    /** Exactly what the engine cache does for an object with no row yet. */
+    protected override GetCachedObject(): MJIntegrationObjectEntity {
+        throw new Error('IntegrationObject not found: "Widgets" for integration int1');
+    }
+}
+
+describe('an object with no persisted row is still sampled', () => {
+    beforeEach(() => {
+        vi.spyOn(IntegrationEngineBase, 'Instance', 'get').mockReturnValue({
+            // The engine cache does not know this object — which is the whole premise.
+            GetIntegrationObjectByID: () => undefined,
+            GetIntegrationObject: () => undefined,
+            GetIntegrationObjectFields: () => [],
+            GetActiveIntegrationObjects: () => [],
+        } as unknown as IntegrationEngineBase);
+    });
+
+    it('reaches the connector instead of aborting the sample', async () => {
+        const c = new UnpersistedObjectConnector();
+        const onFallback = vi.fn();
+
+        const fields = await c.DiscoverFieldsViaFetch(CI, 'Widgets', USER, {
+            MaxRecords: 50, TimeBudgetMs: 60_000, OnFallback: onFallback,
+        });
+
+        // THE regression: the connector was never asked, because the lookup threw first.
+        expect(c.seen.length).toBeGreaterThan(0);
+        // And the sample really produced observed fields, rather than the catalog's guesses.
+        expect(fields.map((x) => x.Name)).toContain('id');
+        // A sample that worked is not a fallback.
+        expect(onFallback).not.toHaveBeenCalled();
+    });
+
+    it('still carries the discovery markers on the fallback route', async () => {
+        const c = new UnpersistedObjectConnector();
+        await c.DiscoverFieldsViaFetch(CI, 'Widgets', USER, { MaxRecords: 25, TimeBudgetMs: 30_000 });
+
+        const ctx = c.seen[0];
+        // The missing row must not cost the object its bounds — an unbounded sample on a
+        // fanning-out connector is the incident this whole context exists to prevent.
+        expect(ctx.IsDiscoverySample).toBe(true);
+        expect(ctx.SampleTargetRecords).toBe(25);
+        expect(ctx.DeadlineMs).toBeTypeOf('number');
+    });
+});
