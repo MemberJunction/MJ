@@ -69,7 +69,7 @@ const FIXTURE_TAG = '(mj-integration-test — safe to delete)';
 /** ≤50 chars — MJ: Queues.Name / MJ: Queue Types.Name are nvarchar(50). */
 const QUEUE_NAME = 'mj-it-queue-fixture (mj-it)';
 const INACTIVE_TYPE_NAME = 'mj-it-inactive-type (mj-it)';
-/** Statuses the QueueTask CHECK constraint accepts AND nchar(10) can hold (see header ⚠️). */
+/** Initial statuses for fixture rows: they persist on any schema, including one from before MJ #3985 (see header ⚠️). */
 type PersistableTaskStatus = 'Completed' | 'Failed';
 
 interface QueueFixture {
@@ -119,9 +119,10 @@ async function loadQueueRecord(ctx: IntegrationCheckContext): Promise<MJQueueEnt
 }
 
 /**
- * Creates a persisted MJ: Queue Tasks row with an EXPLICIT persistable initial status (see
- * header ⚠️ for why 'Pending' is impossible), registered for teardown before the assert so a
- * failed save can never orphan a row.
+ * Creates a persisted MJ: Queue Tasks row with an EXPLICIT initial status, registered for
+ * teardown before the assert so a failed save can never orphan a row. 'Pending' persists since
+ * MJ #3985 (QU8), but these fixtures keep 'Completed'/'Failed' so the bundle also runs against
+ * a database from before that fix (see header ⚠️).
  */
 async function createTaskRow(ctx: IntegrationCheckContext, initialStatus: PersistableTaskStatus,
     data: Record<string, unknown>): Promise<MJQueueTaskEntity> {
