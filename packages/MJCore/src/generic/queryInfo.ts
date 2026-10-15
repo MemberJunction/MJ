@@ -4,6 +4,7 @@ import { Metadata } from "./metadata";
 import { DatabasePlatform } from "./platformSQL";
 import { PlatformVariantsJSON, ParsePlatformVariants, ResolvePlatformVariant } from "./platformVariants";
 import { UserInfo } from "./securityInfo";
+import type { IMetadataProvider } from "./interfaces";
 import { QueryCacheConfig } from "./QueryCacheConfig";
 import { UUIDsEqual } from "@memberjunction/global";
 import {
@@ -317,7 +318,18 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @returns {QueryPermissionInfo[]} Array of permission settings for the query
      */
     public get Permissions(): QueryPermissionInfo[] {
-        return Metadata.Provider.QueryPermissions.filter(p => UUIDsEqual(p.QueryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
+        return this.PermissionsIn(Metadata.Provider);  // global-provider-ok: stateless info class — proxies to global metadata
+    }
+
+    /**
+     * The permissions that control access to this query, read from `provider`'s metadata rather
+     * than the global provider's. Use it wherever the provider that owns this query is known: a
+     * process connected to several servers, or a client connection that is not the global one,
+     * may have no global provider at all, or one holding another server's permissions.
+     * @param provider - The metadata provider this query was loaded from
+     */
+    public PermissionsIn(provider: IMetadataProvider): QueryPermissionInfo[] {
+        return provider.QueryPermissions.filter(p => UUIDsEqual(p.QueryID, this.ID));
     }
 
     private _parameters: QueryParameterInfo[] = null;
@@ -396,10 +408,12 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * 2. The user has at least one role that is granted permission
      * 
      * @param user The user to check permissions for
+     * @param provider The metadata provider this query was loaded from. Omitted, the global
+     *   provider's permissions are used (see {@link PermissionsIn}).
      * @returns true if the user has permission to run the query
      */
-    public UserHasRunPermissions(user: UserInfo): boolean {
-        const permissions = this.Permissions;
+    public UserHasRunPermissions(user: UserInfo, provider?: IMetadataProvider): boolean {
+        const permissions = provider ? this.PermissionsIn(provider) : this.Permissions;
         
         // If no permissions are defined, the query is open to all
         if (!permissions || permissions.length === 0) {
@@ -424,10 +438,11 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * to enable testing before formal approval.
      *
      * @param user The user to check
+     * @param provider The metadata provider this query was loaded from; see {@link UserHasRunPermissions}
      * @returns true if the user has permission to run the query
      */
-    public UserCanRun(user: UserInfo): boolean {
-        return this.UserHasRunPermissions(user);
+    public UserCanRun(user: UserInfo, provider?: IMetadataProvider): boolean {
+        return this.UserHasRunPermissions(user, provider);
     }
 
     /**
