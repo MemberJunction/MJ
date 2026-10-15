@@ -228,7 +228,6 @@ const DECORATOR = 'RefuseScopeLimitedPrincipals';
 
 /** Resolver classes that refuse scope-limited principals on every field, by file. */
 const CLASS_GUARDED: Record<string, string[]> = {
-    'ActionResolver.ts': ['ActionResolver'],
     'APIKeyResolver.ts': ['APIKeyResolver'],
     'AutotagPipelineResolver.ts': ['AutotagPipelineResolver'],
     'EntityCommunicationsResolver.ts': ['ReportResolver'],
@@ -253,6 +252,10 @@ const CLASS_GUARDED: Record<string, string[]> = {
 
 /** Individual root fields that refuse scope-limited principals, by file and class. */
 const METHOD_GUARDED: Record<string, Record<string, string[]>> = {
+    // RunAction is refused inline by ActionResolver.getRunActionPrincipal (see
+    // ActionResolver.authorization.test.ts, "RunAction: scope-limited sessions"); only
+    // RunEntityAction takes the decorator, so RunAction has exactly one guard.
+    'ActionResolver.ts': { ActionResolver: ['RunEntityAction'] },
     'RunAIAgentResolver.ts': { RunAIAgentResolver: ['RunAIAgent', 'RespondToAgentRequest', 'ReassignAgentRequest'] },
 };
 
@@ -297,6 +300,17 @@ describe('MJServer execution resolvers refuse scope-limited principals', () => {
             }
         }
     }
+
+    it('ActionResolver.RunAction keeps one guard: the inline refusal, not the decorator', () => {
+        const cls = findClass(parse('ActionResolver.ts'), 'ActionResolver');
+        expect(cls).toBeDefined();
+        expect(hasGuardDecorator(cls!)).toBe(false);
+        const runAction = cls!.members.find(
+            (m): m is ts.MethodDeclaration => ts.isMethodDeclaration(m) && ts.isIdentifier(m.name) && m.name.text === 'RunAction',
+        );
+        expect(runAction).toBeDefined();
+        expect(hasGuardDecorator(runAction!)).toBe(false);
+    });
 
     it('Serve() applies the guards after resolvers load and before the schema is built', () => {
         const src = readFileSync(resolve(__dirname, '../index.ts'), 'utf8');

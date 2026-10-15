@@ -7,7 +7,7 @@ Execution entry points now refuse scope-limited sessions: anonymous magic-link g
 
 - **New `@RefuseScopeLimitedPrincipals()` decorator** (`@memberjunction/server`). Put it on a resolver class to guard all of its root fields, or on a single `@Query`/`@Mutation`/`@Subscription`. `Serve()` attaches the guard just before it builds the schema. Marking a resolver at import time does not touch type-graphql, so tests that mock type-graphql are unaffected. The guard throws an `AuthorizationError`; the system user always passes.
 - **Now refused for these sessions:**
-  - actions and entity actions;
+  - entity actions (`RunEntityAction`; `RunAction` already refuses these sessions inline);
   - AI prompts, simple prompts and embeddings;
   - `RunAIAgent`, `RespondToAgentRequest`, `ReassignAgentRequest`;
   - templates;

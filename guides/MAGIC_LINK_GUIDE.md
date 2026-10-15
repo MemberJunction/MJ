@@ -364,8 +364,10 @@ No new mechanism — it's reads over existing data:
   resource-scoped session is confined by RLS tokens, which exist only on paths that go
   through entity permissions. Entry points that run server work instead — actions,
   AI prompts and agents, templates, stored and ad-hoc queries, MCP tools, integrations,
-  entity communications, API-key creation — refuse these sessions
-  (`@RefuseScopeLimitedPrincipals()` in `MJServer/src/auth/scopeLimitedAccess.ts`). Two
+  entity communications, API-key creation — refuse these sessions, mostly through
+  `@RefuseScopeLimitedPrincipals()` in `MJServer/src/auth/scopeLimitedAccess.ts`
+  (`RunAction`, `ExecuteAdhocQuery` and `RunDecision` refuse inline with
+  `IsScopeLimitedPrincipal`). Two
   paths serve guests on purpose: the public web widget's agent dispatch (the agent is
   pinned by the widget instance and runs under a server principal) and Remote Operations
   that set `AllowScopeLimitedPrincipals` and check the scope in `Authorize`

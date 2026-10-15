@@ -175,7 +175,6 @@ export class ActionResultOutput {
  * Resolver for action-related GraphQL operations
  * Handles running actions and entity actions through GraphQL
  */
-@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class ActionResolver extends ResolverBase {
   /**
@@ -397,6 +396,7 @@ export class ActionResolver extends ResolverBase {
    * @param ctx The GraphQL context containing user authentication information
    * @returns The result of running the entity action
    */
+  @RefuseScopeLimitedPrincipals()
   @Mutation(() => ActionResultOutput)
   async RunEntityAction(
     @Arg("input") input: EntityActionInput,
