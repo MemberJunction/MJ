@@ -8,8 +8,8 @@ import { DatabaseDocumentation, TableDefinition, ForeignKeyReference } from '../
  * lookup every detail table references, a bridge table between the hubs, an isolated table and a
  * two-table chain with no hub.
  */
-function table(name: string, rowCount: number, refs: string[], extraColumns: string[] = []): TableDefinition {
-  const dependsOn: ForeignKeyReference[] = refs.map(r => ({ schema: 'dbo', table: r, column: `${r}ID`, referencedColumn: 'ID' }));
+function table(name: string, rowCount: number, refs: string[], extraColumns: string[] = [], schema = 'dbo'): TableDefinition {
+  const dependsOn: ForeignKeyReference[] = refs.map(r => ({ schema, table: r, column: `${r}ID`, referencedColumn: 'ID' }));
   return {
     name, rowCount, dependsOn, dependents: [], descriptionIterations: [], description: `${name} description`,
     columns: [
@@ -48,13 +48,13 @@ describe('ErdClusterer', () => {
     const plan = new ErdClusterer().Plan(state(), { hubMinInbound: 5 });
     expect(plan.Clusters.map(c => c.HubName).sort()).toEqual(['Customer', 'Horse']);
     const customer = plan.Clusters.find(c => c.HubName === 'Customer')!;
-    expect(customer.Tables[0]).toBe('customer');
-    expect(customer.Tables).toContain('invoice');
-    expect(customer.Tables).not.toContain('horsename');
+    expect(customer.Tables[0]).toBe('dbo.Customer');
+    expect(customer.Tables).toContain('dbo.Invoice');
+    expect(customer.Tables).not.toContain('dbo.HorseName');
     const horse = plan.Clusters.find(c => c.HubName === 'Horse')!;
-    expect(horse.Tables).toContain('registration');
+    expect(horse.Tables).toContain('dbo.Registration');
     // the bridge table lands in exactly one cluster
-    const owners = plan.Clusters.filter(c => c.Tables.includes('customerhorse'));
+    const owners = plan.Clusters.filter(c => c.Tables.includes('dbo.CustomerHorse'));
     expect(owners).toHaveLength(1);
   });
 
@@ -63,7 +63,7 @@ describe('ErdClusterer', () => {
     expect(plan.ReferenceTables.map(r => r.Table)).toEqual(['Status']);
     expect(plan.ReferenceTables[0].ReferencedBy).toBe(16);
     for (const cluster of plan.Clusters) {
-      expect(cluster.Tables).not.toContain('status');
+      expect(cluster.Tables).not.toContain('dbo.Status');
       expect(cluster.ReferenceTables.map(r => r.Table)).toEqual(['Status']);
     }
     expect(plan.IsolatedTables).toEqual(['Orphan']);
@@ -75,7 +75,7 @@ describe('ErdClusterer', () => {
     const customer = plan.Clusters.find(c => c.HubName === 'Customer')!;
     expect(customer.Pages.length).toBeGreaterThan(1);
     for (const page of customer.Pages) {
-      expect(page.Tables[0]).toBe('customer');
+      expect(page.Tables[0]).toBe('dbo.Customer');
       expect(page.Tables.length).toBeLessThanOrEqual(5);
     }
     const everyMember = new Set(customer.Pages.flatMap(p => p.Tables));
@@ -85,8 +85,8 @@ describe('ErdClusterer', () => {
   it('honours forced hubs, forced lookups and exclusions', () => {
     const plan = new ErdClusterer().Plan(state(), { hubMinInbound: 5, hubs: ['Invoice'], excludeTables: ['Suspension'], lookupTables: ['Note'], minClusterSize: 1 });
     expect(plan.Clusters.some(c => c.HubName === 'Invoice')).toBe(true);
-    expect(plan.ExcludedTables).toEqual(['suspension']);
-    expect(plan.Clusters.every(c => !c.Tables.includes('suspension'))).toBe(true);
+    expect(plan.ExcludedTables).toEqual(['Suspension']);
+    expect(plan.Clusters.every(c => !c.Tables.includes('dbo.Suspension'))).toBe(true);
     expect(plan.ReferenceTables.map(r => r.Table).sort()).toEqual(['Note', 'Status']);
   });
 
@@ -94,6 +94,39 @@ describe('ErdClusterer', () => {
     const plan = new ErdClusterer().Plan(state(), { hubMinInbound: 5, hubs: ['Invoice'], minClusterSize: 3 });
     // Invoice is forced, so it stays; CustomerHorse-style singletons do not appear as their own area
     expect(plan.Clusters.every(c => c.Tables.length >= 3 || c.HubName === 'Invoice')).toBe(true);
+  });
+
+  it('keeps same-named tables in different schemas apart and resolves dotted table names', () => {
+    const s = state();
+    s.schemas.push({ name: 'crm', descriptionIterations: [], tables: [
+      table('Customer', 5000, [], ['Name'], 'crm'),
+      ...['Lead', 'Campaign', 'Contact', 'Ticket', 'Account', 'Call'].map(n => table(n, 100000, ['Customer'], [], 'crm')),
+    ] });
+    s.schemas[0].tables.push(table('Customer.bak', 100000, []));
+    s.schemas[0].tables.push(table('BackupAudit', 100000, ['Customer.bak']));
+    const plan = new ErdClusterer().Plan(s, { hubMinInbound: 5 });
+    // only the ambiguous name is schema-qualified
+    expect(plan.Clusters.map(c => c.HubName).sort()).toEqual(['Horse', 'crm.Customer', 'dbo.Customer']);
+    const dbo = plan.Clusters.find(c => c.HubName === 'dbo.Customer')!;
+    const crm = plan.Clusters.find(c => c.HubName === 'crm.Customer')!;
+    expect(dbo.Tables).toContain('dbo.Invoice');
+    expect(crm.Tables).toContain('crm.Lead');
+    expect(dbo.Tables).not.toContain('crm.Lead');
+    expect(plan.TotalEdges).toBe(16 * 2 + 2 + 1 + 6 + 1);
+    expect(plan.NameOf('dbo.Customer.bak')).toBe('Customer.bak');
+    // the dotted name resolved as an FK target: the pair is a hub-less chain, not two isolated tables
+    expect(plan.UnassignedTables).toEqual(expect.arrayContaining(['BackupAudit', 'Customer.bak']));
+    expect(plan.IsolatedTables).not.toContain('Customer.bak');
+    expect(plan.Warnings).toEqual([]);
+  });
+
+  it('warns about configured names it cannot use', () => {
+    const plan = new ErdClusterer().Plan(state(), { hubMinInbound: 5, hubs: ['Orphan', 'NoSuchTable'], excludeTables: ['Missing'] });
+    expect(plan.Warnings).toEqual([
+      "excludeTables: no table named 'Missing'",
+      "hubs: no table named 'NoSuchTable'",
+      "hubs: 'Orphan' has no foreign-key relationships to other drawn tables and cannot anchor a subject area",
+    ]);
   });
 
   it('counts edges that cross between subject areas', () => {

@@ -162,6 +162,37 @@ This will:
 - Perform sanity checks
 - Save state to `db-doc-state.json`
 
+#### Large databases
+
+```bash
+# Skip the table data sampling pass (row counts, distinct counts, sample values)
+db-auto-doc analyze --skip-sampling          # or "analysis": { "skipSampling": true }
+
+# An interrupted sampling pass resumes where it stopped: state is saved every 25 tables and a
+# resume samples only the tables that have no statistics yet
+db-auto-doc analyze --resume ./output/run-3/state.json
+```
+
+Sampling is what the enum/value-list verdicts and the organic-key cardinality gate are based on, so with
+`--skip-sampling` those verdicts fall back to the LLM's judgement and organic-key detection is skipped
+with a warning.
+
+#### Seed context from files
+
+Long-form context (a data dictionary, an engineering assessment) can live in files instead of inline
+`customInstructions`; their contents are appended to it:
+
+```json
+"seedContext": {
+  "overallPurpose": "Association management system",
+  "file": "./context/data-dictionary.md",
+  "files": ["./context/assessment.md", "./context/glossary.md"]
+}
+```
+
+Paths are relative to `config.json`. The text is sent with every table prompt, so keep it to what the
+model needs for descriptions rather than a full specification.
+
 ### 3. Generate Sample Queries (Optional)
 
 Generate reference SQL queries for AI agent training:

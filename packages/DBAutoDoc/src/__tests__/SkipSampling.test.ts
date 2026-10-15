@@ -112,6 +112,37 @@ function createTestConfig(overrides?: Partial<DBAutoDocConfig>): DBAutoDocConfig
   };
 }
 
+describe('Resumed sampling in AnalysisOrchestrator', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('samples only the tables that carry no statistics yet when resuming', async () => {
+    const progressMessages: string[] = [];
+    const sampled = { name: 'Users', rowCount: 100, dependsOn: [], dependents: [], descriptionIterations: [],
+      columns: [{ name: 'Id', dataType: 'int', isNullable: false, isPrimaryKey: true, isForeignKey: false, descriptionIterations: [], statistics: { totalRows: 100, distinctCount: 100, uniquenessRatio: 1, nullCount: 0, nullPercentage: 0, sampleValues: [] } }] };
+    const unsampled = { name: 'Orders', rowCount: 500, dependsOn: [], dependents: [], descriptionIterations: [],
+      columns: [{ name: 'Id', dataType: 'int', isNullable: false, isPrimaryKey: true, isForeignKey: false, descriptionIterations: [] }] };
+    const resumedState = { version: '1.0.0', database: { name: 'TestDB', server: 'localhost' }, summary: {}, phases: { descriptionGeneration: [] },
+      schemas: [{ name: 'dbo', tables: [sampled, unsampled], descriptionIterations: [] }] };
+    vi.spyOn(AnalysisOrchestrator.prototype as unknown as { loadAndMergeState: () => Promise<unknown> }, 'loadAndMergeState')
+      .mockResolvedValue(resumedState);
+
+    const orchestrator = new AnalysisOrchestrator({
+      config: createTestConfig(),
+      resumeFromState: './output/run-1/state.json',
+      maxIterations: 0,
+      onProgress: (msg) => progressMessages.push(msg)
+    });
+    const result = await orchestrator.Execute();
+    expect(result.success).toBe(true);
+    expect(progressMessages).toContain('Resuming table data sampling: 1 of 2 tables have no statistics yet');
+    expect(progressMessages).toContain('Sampling table data [1/1]: dbo.Orders');
+    expect(mockAnalyzeTable).toHaveBeenCalledTimes(1);
+    expect(mockAnalyzeTable).toHaveBeenCalledWith('dbo', 'Orders', unsampled.columns);
+  });
+});
+
 describe('SkipSampling in AnalysisOrchestrator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -135,22 +166,35 @@ describe('SkipSampling in AnalysisOrchestrator', () => {
     expect(mockAnalyzeTable).not.toHaveBeenCalled();
   });
 
-  it('skips sampling when config.analysis.includeStatistics is false', async () => {
+  it('still samples when config.analysis.includeStatistics is false (the flag is not a sampling switch)', async () => {
     const progressMessages: string[] = [];
     const config = createTestConfig();
     config.analysis.includeStatistics = false;
-
     const orchestrator = new AnalysisOrchestrator({
       config,
       maxIterations: 0,
       onProgress: (msg) => progressMessages.push(msg)
     });
-
     const result = await orchestrator.Execute();
     expect(result.success).toBe(true);
-    expect(progressMessages).toContain('Table data sampling skipped');
-    expect(progressMessages).not.toContain('Analyzing table data');
-    expect(mockAnalyzeTable).not.toHaveBeenCalled();
+    expect(progressMessages).toContain('Analyzing table data');
+    expect(mockAnalyzeTable).toHaveBeenCalled();
+  });
+
+  it('skips organic-key detection with a warning when sampling is skipped', async () => {
+    const progressMessages: string[] = [];
+    const config = createTestConfig();
+    config.analysis.organicKeyDetection = { enabled: true } as NonNullable<DBAutoDocConfig['analysis']['organicKeyDetection']>;
+    const orchestrator = new AnalysisOrchestrator({
+      config,
+      skipSampling: true,
+      maxIterations: 0,
+      onProgress: (msg) => progressMessages.push(msg)
+    });
+    const result = await orchestrator.Execute();
+    expect(result.success).toBe(true);
+    expect(progressMessages.some(m => m.startsWith('Organic-key detection skipped'))).toBe(true);
+    expect(progressMessages).not.toContain('Running organic-key detection');
   });
 
   it('skips sampling when config.analysis.skipSampling is true', async () => {

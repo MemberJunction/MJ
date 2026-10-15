@@ -770,7 +770,7 @@ export class HTMLGenerator {
       const pages = cluster.Pages.length > 1
         ? cluster.Pages.map(p => `<a href="${this.escapeHtml(base)}-${p.Number}.html">page ${p.Number}</a>`).join(', ')
         : `<a href="${this.escapeHtml(base)}.html">diagram</a>`;
-      lines.push(`<tr><td><a href="#table-${this.toAnchor(cluster.HubName)}">${this.escapeHtml(cluster.HubName)}</a></td><td>${cluster.Tables.length}</td><td>${pages}</td><td>${this.escapeHtml((hub.description ?? '').slice(0, 200))}</td></tr>`);
+      lines.push(`<tr><td><a href="#table-${this.toAnchor(hub.name)}">${this.escapeHtml(cluster.HubName)}</a></td><td>${cluster.Tables.length}</td><td>${pages}</td><td>${this.escapeHtml((hub.description ?? '').slice(0, 200))}</td></tr>`);
     }
     lines.push('</tbody>');
     lines.push('</table>');

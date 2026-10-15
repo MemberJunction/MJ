@@ -174,9 +174,14 @@ export default class Export extends Command {
 
       // ERD options: export flags override config.output.erd, which overrides the defaults.
       const erd = this.resolveErdConfig(config?.output?.erd, flags);
-      const clusterPlan: ErdClusterPlan | undefined = generateMermaid && erd.mode !== 'full'
+      // The plan is built whenever an output needs it: the HTML's Subject Areas section links to the
+      // cluster pages, so requesting --html in clusters mode also writes them.
+      const clusterPlan: ErdClusterPlan | undefined = (generateMermaid || generateHTML) && erd.mode !== 'full'
         ? new ErdClusterer().Plan(state, erd)
         : undefined;
+      for (const warning of clusterPlan?.Warnings ?? []) {
+        this.warn(`ERD ${warning}`);
+      }
 
       // Generate HTML
       if (generateHTML) {
@@ -221,21 +226,21 @@ export default class Export extends Command {
 
           spinner.succeed(`Mermaid diagram saved to ${mermaidPath} and ${mermaidHtmlPath}`);
         }
-        if (clusterPlan) {
-          spinner.start('Generating subject-area diagrams');
-          const clusterGen = new ErdClusterGenerator();
-          const output = clusterGen.Generate(state, clusterPlan, { columns: erd.columns ?? 'keys' });
-          const clusterDir = path.join(outputDir, ERD_CLUSTER_DIR);
-          await fs.mkdir(clusterDir, { recursive: true });
-          for (const file of output.Files) {
-            await fs.writeFile(path.join(clusterDir, `${file.BaseName}.mmd`), file.Mermaid, 'utf-8');
-            await fs.writeFile(path.join(clusterDir, `${file.BaseName}.html`), file.Html, 'utf-8');
-          }
-          await fs.writeFile(path.join(clusterDir, 'index.html'), output.IndexHtml, 'utf-8');
-          await fs.writeFile(path.join(clusterDir, 'index.md'), output.IndexMarkdown, 'utf-8');
-          const largest = output.Files.reduce((n, f) => Math.max(n, f.Mermaid.length), 0);
-          spinner.succeed(`${clusterPlan.Clusters.length} subject areas (${output.Files.length} diagram pages, largest ${largest.toLocaleString()} chars) saved to ${clusterDir}`);
+      }
+      if (clusterPlan) {
+        spinner.start('Generating subject-area diagrams');
+        const clusterGen = new ErdClusterGenerator();
+        const output = clusterGen.Generate(state, clusterPlan, { columns: erd.columns ?? 'keys' });
+        const clusterDir = path.join(outputDir, ERD_CLUSTER_DIR);
+        await fs.mkdir(clusterDir, { recursive: true });
+        for (const file of output.Files) {
+          await fs.writeFile(path.join(clusterDir, `${file.BaseName}.mmd`), file.Mermaid, 'utf-8');
+          await fs.writeFile(path.join(clusterDir, `${file.BaseName}.html`), file.Html, 'utf-8');
         }
+        await fs.writeFile(path.join(clusterDir, 'index.html'), output.IndexHtml, 'utf-8');
+        await fs.writeFile(path.join(clusterDir, 'index.md'), output.IndexMarkdown, 'utf-8');
+        const largest = output.Files.reduce((n, f) => Math.max(n, f.Mermaid.length), 0);
+        spinner.succeed(`${clusterPlan.Clusters.length} subject areas (${output.Files.length} diagram pages, largest ${largest.toLocaleString()} chars) saved to ${clusterDir}`);
       }
 
       // Generate Report

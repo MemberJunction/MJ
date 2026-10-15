@@ -214,8 +214,12 @@ export class ConfigLoader {
       const resolvedPath = path.isAbsolute(relOrAbsPath)
         ? relOrAbsPath
         : path.resolve(baseDir, relOrAbsPath);
-      const content = await fs.readFile(resolvedPath, 'utf-8');
-      contents.push(content);
+      try {
+        contents.push(await fs.readFile(resolvedPath, 'utf-8'));
+      } catch (error) {
+        const setting = config.seedContext.file === relOrAbsPath ? 'seedContext.file' : 'seedContext.files';
+        throw new Error(`Could not read ${setting} entry '${relOrAbsPath}' (resolved to ${resolvedPath}): ${(error as Error).message}`);
+      }
     }
 
     const loadedText = contents.join('\n\n---\n\n');

@@ -840,6 +840,7 @@ db-auto-doc analyze [OPTIONS]
 |------|-------|-------------|---------|
 | `--resume` | `-r` | Resume from state file | - |
 | `--config` | `-c` | Path to config file | `./config.json` |
+| `--skip-sampling` | - | Skip the table data sampling pass (same as `analysis.skipSampling`); organic-key detection is then skipped too | false |
 
 **Examples:**
 
@@ -1279,6 +1280,11 @@ Confidence = (
   }
 }
 ```
+
+`seedContext.file` (one path) and `seedContext.files` (several) read context documents and append their
+contents to `customInstructions`, separated by `---`. Paths are relative to the config file. A file that
+cannot be read fails configuration loading with the setting name and resolved path in the error.
+
 
 ### Iteration Tracking
 
@@ -2115,6 +2121,11 @@ Detailed analysis metrics:
    ```
 
 ### Resume from Checkpoint
+
+A resumed run also finishes an interrupted data-sampling pass: state is saved every 25 tables during
+sampling, and on resume only the tables whose columns have no statistics yet are sampled (the log reports
+how many).
+
 
 **Problem:** Previous analysis was interrupted
 

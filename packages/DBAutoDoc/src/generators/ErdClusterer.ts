@@ -28,7 +28,7 @@ export interface ErdClustererOptions {
   lookupTables?: string[];
 }
 
-/** One foreign key edge: `From.FromColumn` references `To.ToColumn`. Keys are lower-cased table names. */
+/** One foreign key edge: `From.FromColumn` references `To.ToColumn`. Keys are `schema.table`, case preserved. */
 export interface ErdEdge {
   From: string;
   To: string;
@@ -39,16 +39,16 @@ export interface ErdEdge {
 export interface ErdClusterPage {
   /** 1-based page number within the cluster. */
   Number: number;
-  /** Lower-cased table keys on this page; the hub is always first. */
+  /** `schema.table` keys on this page; the hub is always first. */
   Tables: string[];
 }
 
 export interface ErdCluster {
-  /** Lower-cased key of the hub table. */
+  /** `schema.table` key of the hub table. */
   Hub: string;
   /** Display name of the hub table. */
   HubName: string;
-  /** Lower-cased keys of every table in the cluster, hub first. */
+  /** `schema.table` keys of every table in the cluster, hub first. */
   Tables: string[];
   Pages: ErdClusterPage[];
   /** FK edges with both ends inside the cluster. */
@@ -63,6 +63,8 @@ export interface ErdCluster {
 
 export interface ErdClusterPlan {
   Clusters: ErdCluster[];
+  /** Settings that named tables the plan could not use (an unknown or edge-less hub, an unknown exclusion). */
+  Warnings: string[];
   /** Reference tables set aside before clustering, with how many tables reference each. */
   ReferenceTables: Array<{ Table: string; ReferencedBy: number }>;
   /** Tables with no foreign keys in either direction. */
@@ -74,9 +76,9 @@ export interface ErdClusterPlan {
   TotalTables: number;
   TotalEdges: number;
   Options: Required<Pick<ErdClustererOptions, 'hubMinInbound' | 'lookupMaxRows' | 'pageSize' | 'minClusterSize'>>;
-  /** Display name for a lower-cased table key. */
+  /** Display name for a table key: the bare table name, or `schema.table` when another schema has a table of that name. */
   NameOf(key: string): string;
-  /** The table definition for a lower-cased key. */
+  /** The table definition for a key. */
   TableOf(key: string): TableDefinition;
 }
 
@@ -90,26 +92,65 @@ export class ErdClusterer {
       pageSize: options.pageSize ?? DEFAULTS.pageSize,
       minClusterSize: options.minClusterSize ?? DEFAULTS.minClusterSize,
     };
-    const lower = (name: string) => name.toLowerCase();
-    const excluded = new Set((options.excludeTables ?? []).map(lower));
-    const forcedHubs = new Set((options.hubs ?? []).map(lower));
-    const forcedLookups = new Set((options.lookupTables ?? []).map(lower));
+    const warnings: string[] = [];
 
+    // Tables are keyed `schema.table` with case preserved: same-named tables in different schemas
+    // are different tables, and so are `Customer` and `customer` on PostgreSQL.
     const tables = new Map<string, TableDefinition>();
+    const schemaOf = new Map<string, string>();
     for (const schema of state.schemas) {
       for (const table of schema.tables) {
-        if (!excluded.has(lower(table.name))) {
-          tables.set(lower(table.name), table);
-        }
+        tables.set(`${schema.name}.${table.name}`, table);
+        schemaOf.set(`${schema.name}.${table.name}`, schema.name);
       }
     }
+    // A table is shown with its schema only when another schema has a table of the same name.
+    const nameCounts = new Map<string, number>();
+    for (const t of tables.values()) nameCounts.set(t.name, (nameCounts.get(t.name) ?? 0) + 1);
+    const nameOf = (key: string): string => {
+      const table = tables.get(key);
+      if (!table) return key;
+      return (nameCounts.get(table.name) ?? 0) > 1 ? `${schemaOf.get(key)}.${table.name}` : table.name;
+    };
+
+    // A configured table name may be given as `schema.table` or as a bare name (any schema, case-insensitive).
+    const resolveNamed = (names: string[] | undefined, setting: string): Set<string> => {
+      const keys = new Set<string>();
+      for (const name of names ?? []) {
+        const exact = tables.has(name) ? [name] : [];
+        const matches = exact.length > 0 ? exact
+          : [...tables.keys()].filter(k => k.toLowerCase() === name.toLowerCase() || tables.get(k)!.name.toLowerCase() === name.toLowerCase());
+        if (matches.length === 0) warnings.push(`${setting}: no table named '${name}'`);
+        for (const k of matches) keys.add(k);
+      }
+      return keys;
+    };
+    const excluded = resolveNamed(options.excludeTables, 'excludeTables');
+    const excludedNames = [...excluded].map(nameOf).sort();
+    for (const k of excluded) tables.delete(k);
+    const forcedHubs = resolveNamed(options.hubs, 'hubs');
+    const forcedLookups = resolveNamed(options.lookupTables, 'lookupTables');
+
+    // Resolve an FK target to a key. `dep.table` is usually the bare name in `dep.schema`; the LLM
+    // sometimes writes `schema.table`, and a table name may itself contain a dot (`Customer.bak`).
+    const resolveTarget = (schema: string, name: string): string | undefined => {
+      const direct = `${schema}.${name}`;
+      if (tables.has(direct)) return direct;
+      if (tables.has(name)) return name;
+      const dot = name.indexOf('.');
+      if (dot > 0) {
+        const qualified = `${name.slice(0, dot)}.${name.slice(dot + 1)}`;
+        if (tables.has(qualified)) return qualified;
+      }
+      return undefined;
+    };
 
     // Distinct FK edges between known tables (a table may reference another through several columns).
     const edges = new Map<string, ErdEdge>();
     for (const [from, table] of tables) {
       for (const dep of table.dependsOn ?? []) {
-        const to = lower((dep.table ?? '').split('.').pop() ?? '');
-        if (!tables.has(to) || to === from) continue;
+        const to = resolveTarget(dep.schema ?? schemaOf.get(from)!, dep.table ?? '');
+        if (!to || to === from) continue;
         const id = `${from}->${to}`;
         if (!edges.has(id)) {
           edges.set(id, { From: from, To: to, FromColumn: dep.column, ToColumn: dep.referencedColumn });
@@ -151,6 +192,12 @@ export class ErdClusterer {
     const connected = [...tables.keys()].filter(k => !references.has(k) && neighbours(k).size > 0);
     const isolated = [...tables.keys()].filter(k => !references.has(k) && neighbours(k).size === 0);
 
+    for (const hub of forcedHubs) {
+      if (!connected.includes(hub)) {
+        warnings.push(`hubs: '${nameOf(hub)}' has no foreign-key relationships to other drawn tables and cannot anchor a subject area`);
+      }
+    }
+
     let hubs = connected
       .filter(k => forcedHubs.has(k) || inboundFromNonReference(k) >= opts.hubMinInbound)
       .sort((a, b) => inboundFromNonReference(b) - inboundFromNonReference(a));
@@ -189,7 +236,6 @@ export class ErdClusterer {
       members.get(hub)!.push(table);
     }
 
-    const nameOf = (key: string): string => tables.get(key)?.name ?? key;
     const clusters: ErdCluster[] = [];
     for (const [hub, list] of members) {
       const rest = list
@@ -227,7 +273,8 @@ export class ErdClusterer {
       ReferenceTables: [...references].map(k => ({ Table: nameOf(k), ReferencedBy: inbound.get(k) ?? 0 })).sort((a, b) => b.ReferencedBy - a.ReferencedBy || a.Table.localeCompare(b.Table)),
       IsolatedTables: isolated.map(nameOf).sort(),
       UnassignedTables: unassigned.map(nameOf).sort(),
-      ExcludedTables: [...excluded].sort(),
+      ExcludedTables: excludedNames,
+      Warnings: warnings,
       TotalTables: tables.size,
       TotalEdges: edges.size,
       Options: opts,

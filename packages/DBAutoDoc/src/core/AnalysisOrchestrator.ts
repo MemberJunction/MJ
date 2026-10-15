@@ -158,49 +158,61 @@ export class AnalysisOrchestrator {
         stateManager.updateSummary(state);
         await stateManager.save(state);
 
-        // Analyze data
-        const shouldSample = !this.skipSampling &&
-          this.config.analysis.includeStatistics !== false &&
-          !this.config.analysis.skipSampling;
+      }
 
-        if (shouldSample) {
+      // Analyze data. On a fresh run every table is sampled; on a resume only the tables whose
+      // columns carry no statistics yet, so an interrupted sampling pass picks up from its last
+      // 25-table checkpoint instead of being skipped along with introspection.
+      const samplingSkipped = this.skipSampling === true || this.config.analysis.skipSampling === true;
+      if (samplingSkipped) {
+        this.onProgress('Table data sampling skipped');
+      } else {
+        const driver = db.getDriver();
+        const pending = state.schemas
+          .flatMap(schema => schema.tables.map(table => ({ schema, table })))
+          .filter(({ table }) => !this.resumeFromState || !this.tableHasStatistics(table));
+        const totalTables = state.schemas.reduce((sum, s) => sum + s.tables.length, 0);
+
+        if (pending.length === 0) {
+          this.onProgress('Table data already sampled', { tables: totalTables });
+        } else {
+          if (this.resumeFromState && pending.length < totalTables) {
+            this.onProgress(`Resuming table data sampling: ${pending.length} of ${totalTables} tables have no statistics yet`, {
+              pending: pending.length, total: totalTables
+            });
+          }
           this.onProgress('Analyzing table data');
           const sampler = new DataSampler(driver, this.config.analysis);
           let samplingErrors = 0;
-          const totalTables = schemas.reduce((sum, s) => sum + s.tables.length, 0);
           let tableIndex = 0;
 
-          for (const schema of schemas) {
-            for (const table of schema.tables) {
-              tableIndex++;
-              this.onProgress(`Sampling table data [${tableIndex}/${totalTables}]: ${schema.name}.${table.name}`);
-              try {
-                await sampler.analyzeTable(schema.name, table.name, table.columns);
-              } catch (error) {
-                samplingErrors++;
-                const errorMsg = `Warning: Failed to analyze data for ${schema.name}.${table.name}: ${(error as Error).message}`;
-                console.error(errorMsg);
-                this.onProgress(errorMsg, { schema: schema.name, table: table.name, error: (error as Error).message });
-                // Continue with next table - partial data better than no data
-              }
+          for (const { schema, table } of pending) {
+            tableIndex++;
+            this.onProgress(`Sampling table data [${tableIndex}/${pending.length}]: ${schema.name}.${table.name}`);
+            try {
+              await sampler.analyzeTable(schema.name, table.name, table.columns);
+            } catch (error) {
+              samplingErrors++;
+              const errorMsg = `Warning: Failed to analyze data for ${schema.name}.${table.name}: ${(error as Error).message}`;
+              console.error(errorMsg);
+              this.onProgress(errorMsg, { schema: schema.name, table: table.name, error: (error as Error).message });
+              // Continue with next table - partial data better than no data
+            }
 
-              // Periodic save every 25 tables to prevent losing progress on large databases
-              if (tableIndex % 25 === 0) {
-                stateManager.updateSummary(state);
-                await stateManager.save(state);
-              }
+            // Periodic save every 25 tables so an interrupted run resumes from here
+            if (tableIndex % 25 === 0) {
+              stateManager.updateSummary(state);
+              await stateManager.save(state);
             }
           }
           this.onProgress('Data analysis complete', {
-            tablesAnalyzed: totalTables - samplingErrors,
+            tablesAnalyzed: pending.length - samplingErrors,
             errors: samplingErrors
           });
 
           // Save state after sampling
           stateManager.updateSummary(state);
           await stateManager.save(state);
-        } else {
-          this.onProgress('Table data sampling skipped');
         }
       }
 
@@ -428,7 +440,13 @@ export class AnalysisOrchestrator {
       // fed to the additionalSchemaInfo generator so CodeGen writes the
       // EntityOrganicKey / EntityOrganicKeyRelatedEntity metadata.
       let organicKeyOutput: DetectedOrganicKeysOutput | undefined;
-      if (this.config.analysis.organicKeyDetection?.enabled) {
+      if (this.config.analysis.organicKeyDetection?.enabled && samplingSkipped) {
+        // The semantic prefilter's cardinality gate only applies to columns that carry statistics;
+        // without sampling every column would become a candidate and the normalizer fan-out is unbounded.
+        const warning = 'Organic-key detection skipped: it needs column statistics and table data sampling was skipped';
+        console.warn(warning);
+        this.onProgress(warning);
+      } else if (this.config.analysis.organicKeyDetection?.enabled) {
         this.onProgress('Running organic-key detection');
         try {
           const detector = new OrganicKeyDetector(
@@ -524,6 +542,11 @@ export class AnalysisOrchestrator {
     existingState.resumedFromFile = resumePath;
 
     return existingState;
+  }
+
+  /** A table counts as sampled once any of its columns carries statistics. */
+  private tableHasStatistics(table: { columns: Array<{ statistics?: unknown }> }): boolean {
+    return table.columns.some(column => column.statistics !== undefined);
   }
 
   /**
