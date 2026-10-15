@@ -46,8 +46,6 @@ type RunDetailPayload = Partial<FieldRulesResultPayload> & WriteBackRunPayload;
 /** A per-record row of the preview table. */
 interface RecordDiffRow {
     RecordID: string;
-    /** The record's display name, as the engine's dry run read it; absent when it read none (the ID is shown). */
-    RecordName?: string;
     Status: string;
     Changes: PreviewChange[];
     /** What the real write would fail on, or the run's own error for the record. */
@@ -133,17 +131,17 @@ interface RawDetail {
                             <div class="rp-diff" role="table">
                                 @for (row of DiffRows; track row.RecordID) {
                                     <div class="rp-diff-record" role="row">
-                                        <div class="rp-diff-key" [class.rp-diff-key--named]="!!row.RecordName" [title]="row.RecordID">{{ row.RecordName || row.RecordID }}</div>
+                                        <div class="rp-diff-key" [title]="row.RecordID">{{ row.RecordID }}</div>
                                         <div class="rp-diff-changes">
                                             @for (c of row.Changes; track $index) {
                                                 <div class="rp-change">
                                                     <span class="rp-field">{{ c.Field }}</span>
                                                     @if (c.IsAddition) {
-                                                        <span class="rp-new" [attr.title]="c.NewValueName ? Display(c.NewValue) : null">{{ c.NewValueName || Display(c.NewValue) }}</span>
+                                                        <span class="rp-new">{{ Display(c.NewValue) }}</span>
                                                     } @else {
-                                                        <span class="rp-old" [attr.title]="c.OldValueName ? Display(c.OldValue) : null">{{ c.OldValueName || Display(c.OldValue) }}</span>
+                                                        <span class="rp-old">{{ Display(c.OldValue) }}</span>
                                                         <i class="fa-solid fa-arrow-right-long rp-arrow"></i>
-                                                        <span class="rp-new" [attr.title]="c.NewValueName ? Display(c.NewValue) : null">{{ c.NewValueName || Display(c.NewValue) }}</span>
+                                                        <span class="rp-new">{{ Display(c.NewValue) }}</span>
                                                     }
                                                 </div>
                                             }
@@ -207,7 +205,6 @@ interface RawDetail {
         .rp-diff-record { display: grid; grid-template-columns: 180px 1fr; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--mj-border-subtle); }
         .rp-diff-record:last-child { border-bottom: none; }
         .rp-diff-key { font-family: var(--mj-font-mono, monospace); font-size: 12px; color: var(--mj-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .rp-diff-key--named { font-family: inherit; font-size: 13px; font-weight: 600; color: var(--mj-text-primary); }
         .rp-change { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 2px 0; font-size: 13px; }
         .rp-change--error { color: var(--mj-status-error-text); }
         .rp-change--withheld { color: var(--mj-text-muted); }
@@ -332,11 +329,10 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
 
     /**
      * Reads `MJ: Process Run Details` for the dry-run and builds the per-record diff rows. A FieldRules run's detail
-     * carries its own `Changes`; a write-back run's carries the `writeBack` preview, which holds the real write's
-     * own decision (see {@link WriteBackPreviewModel}), so nothing is compared here.
+     * carries its own `Changes`; a write-back run's carries the `writeBack` preview ({@link WriteBackPreviewModel}).
      */
     private async loadDiff(processRunID: string): Promise<void> {
-        const rv = await RunView.FromMetadataProvider(this.Context?.Provider || Metadata.Provider).RunView<RawDetail>({
+        const rv = await RunView.FromMetadataProvider(this.Context?.Provider ?? Metadata.Provider).RunView<RawDetail>({
             EntityName: 'MJ: Process Run Details',
             ExtraFilter: `ProcessRunID='${processRunID}'`,
             Fields: ['RecordID', 'Status', 'ResultPayload', 'ErrorMessage'],
@@ -364,14 +360,14 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
         this.DiffRows = rows;
         this.ChangedRecordCount = changedRecords;
         this.TotalChangeCount = totalChanges;
-        this.Truncated = (this.PreviewResult?.Processed || 0) > RecordProcessRunnerUXComponent.MAX_PREVIEW_ROWS;
+        this.Truncated = (this.PreviewResult?.Processed ?? 0) > RecordProcessRunnerUXComponent.MAX_PREVIEW_ROWS;
     }
 
     /** A FieldRules run's row: the changes the engine computed that it would apply. */
     private fieldRulesRow(detail: RawDetail, payload: RunDetailPayload | undefined): RecordDiffRow {
         const changes: PreviewChange[] = (payload?.Changes || []).filter((c) => c.Applied && c.Changed && !c.Error);
         return {
-            RecordID: detail.RecordID, RecordName: payload?.RecordName, Status: detail.Status, Changes: changes,
+            RecordID: detail.RecordID, Status: detail.Status, Changes: changes,
             Errors: detail.ErrorMessage ? [detail.ErrorMessage] : [], Withheld: [],
         };
     }
@@ -381,16 +377,9 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
      * (which repeats it) is shown only when the preview names nothing.
      */
     private writeBackRow(detail: RawDetail, writeBack: WriteBackResult): RecordDiffRow {
-        const preview = WriteBackPreviewModel.Build(detail.RecordID, writeBack, (entity, field) => this.fieldLabel(entity, field));
+        const preview = WriteBackPreviewModel.Build(detail.RecordID, writeBack);
         const errors = preview.Errors.length > 0 ? preview.Errors : detail.ErrorMessage ? [detail.ErrorMessage] : [];
-        return { RecordID: detail.RecordID, RecordName: writeBack.RecordName, Status: detail.Status, Changes: preview.Changes, Errors: errors, Withheld: preview.Withheld };
-    }
-
-    /** A field's display name from metadata (in memory, no read); the field name when metadata does not know it. */
-    private fieldLabel(entityName: string, field: string): string {
-        const info = (this.Context?.Provider || Metadata.Provider).EntityByName(entityName);
-        const fieldInfo = info?.Fields.find((f) => f.Name.trim().toLowerCase() === field.trim().toLowerCase());
-        return fieldInfo?.DisplayNameOrName || field;
+        return { RecordID: detail.RecordID, Status: detail.Status, Changes: preview.Changes, Errors: errors, Withheld: preview.Withheld };
     }
 
     /** Builds the engine scope from the host-supplied context (delegates to the pure helper). */

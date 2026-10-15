@@ -27,7 +27,7 @@ describe('RecordProcess.RunNow: the human-value switch', () => {
     });
 });
 
-describe('RecordProcess.RunNow: a dry run that a real run would be refused (F16)', () => {
+describe('RecordProcess.RunNow: a dry run that a real run would be refused', () => {
     it('returns why the real run would be refused, from the run\'s Feature Pipeline result', async () => {
         const refusal = 'Feature Pipeline version v6 is not activated';
         const dry: ProcessRunResult = {

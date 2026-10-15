@@ -46,7 +46,6 @@ vi.mock('@memberjunction/core', () => {
 
 vi.mock('@memberjunction/global', () => ({
     RegisterClass: () => (target: unknown) => target,
-    EscapeSQLString: (value: string) => value.replace(/'/g, "''"),
     UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) => {
         if (a == null || b == null) return a === b;
         return a.toLowerCase() === b.toLowerCase();
@@ -69,11 +68,7 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJTagSynonymEntity: class {},
 }));
 
-import type { UserInfo } from '@memberjunction/core';
 import { TagEngineBase, TagTreeNode } from '../TagEngineBase';
-
-/** A partial test double: these tests never read the user, they only pass it through. */
-const testUser = {} as unknown as UserInfo;
 
 // ============================================================================
 // Helpers — build fake tag and tagged-item entities
@@ -262,7 +257,7 @@ describe('TagEngineBase', () => {
     describe('CreateTag', () => {
         it('should create a new tag and add it to the cache', async () => {
             const beforeCount = engine.Tags.length;
-            const newTag = await engine.CreateTag('Robotics', 'Robotics', 'aaa', 'Science of robots', testUser);
+            const newTag = await engine.CreateTag('Robotics', 'Robotics', 'aaa', 'Science of robots', {} as never);
             expect(newTag).toBeDefined();
             expect(engine.Tags.length).toBe(beforeCount + 1);
         });
@@ -271,37 +266,8 @@ describe('TagEngineBase', () => {
     describe('CreateTaggedItem', () => {
         it('should create a new tagged item when none exists', async () => {
             injectTags(engine, [...tags]);
-            const item = await engine.CreateTaggedItem('aaa', 'ent-1', 'rec-1', 0.85, testUser);
+            const item = await engine.CreateTaggedItem('aaa', 'ent-1', 'rec-1', 0.85, {} as never);
             expect(item).toBeDefined();
-        });
-    });
-
-    describe('FindTaggedItems', () => {
-        /** The run-view provider double the engine reads through. */
-        const runView = () => (engine as unknown as { RunViewProviderToUse: { RunView: ReturnType<typeof vi.fn> } }).RunViewProviderToUse.RunView;
-
-        it('reads the links of all the tags in one query, quoting every value', async () => {
-            runView().mockClear();
-            runView().mockResolvedValueOnce({ Success: true, Results: [{ ID: 'ti-1' }] });
-
-            const lookup = await engine.FindTaggedItems('ent-1', "rec'1", ['t1', 't2'], testUser);
-
-            expect(runView()).toHaveBeenCalledTimes(1);
-            expect(runView().mock.calls[0][0].ExtraFilter).toBe("TagID IN ('t1','t2') AND EntityID='ent-1' AND RecordID='rec''1'");
-            expect(lookup).toEqual({ Success: true, ErrorMessage: undefined, Items: [{ ID: 'ti-1' }] });
-        });
-
-        it('reports a failed read as a failure, not as no links', async () => {
-            runView().mockResolvedValueOnce({ Success: false, ErrorMessage: 'boom', Results: [] });
-
-            expect(await engine.FindTaggedItems('ent-1', 'rec-1', ['t1'], testUser)).toEqual({ Success: false, ErrorMessage: 'boom', Items: [] });
-        });
-
-        it('reads nothing for no tags', async () => {
-            runView().mockClear();
-
-            expect(await engine.FindTaggedItems('ent-1', 'rec-1', [], testUser)).toEqual({ Success: true, Items: [] });
-            expect(runView()).not.toHaveBeenCalled();
         });
     });
 });

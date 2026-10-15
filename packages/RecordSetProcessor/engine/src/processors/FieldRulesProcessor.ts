@@ -21,12 +21,10 @@ import type { EntityDocumentResolver } from '@memberjunction/global';
 import {
     type FieldRulesResultPayload,
     type IRecordProcessor,
-    type RecordBatchOutcome,
     type RecordProcessorContext,
     type RecordRef,
     type RecordResult,
 } from '@memberjunction/record-set-processor-base';
-import { PreviewRecordNames, type FieldRulesPreviewItem } from '../previewRecordNames';
 
 /** Options for a {@link FieldRulesProcessor}. */
 export interface FieldRulesProcessorOptions {
@@ -48,12 +46,6 @@ export class FieldRulesProcessor implements IRecordProcessor {
         RegisterFieldRulesTransforms();
     }
 
-    /**
-     * The records of the current dry run as they were loaded, by record ID, until {@link CompleteDryRunBatch} names
-     * their diffs from them. Keyed by record so concurrently processed records never share an entry.
-     */
-    private readonly loadedForPreview = new Map<string, BaseEntity>();
-
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
         const started = Date.now();
         try {
@@ -64,44 +56,15 @@ export class FieldRulesProcessor implements IRecordProcessor {
             const rules = new EntityFieldRules(context.contextUser, this.buildPromptResolver(context), this.buildEntityDocumentResolver(context));
             // A dry-run context previews too, whatever this processor was built with
             const result = await rules.ApplyToEntity(obj, this.options.RuleSet, { DryRun: this.options.DryRun === true || context.DryRun === true });
-            // Kept only for a dry-run loop: CompleteDryRunBatch runs (and drains this map) only then, so a processor built
-            // with DryRun inside a real loop must not hold its records
-            if (result.DryRun && context.DryRun === true) {
-                this.loadedForPreview.set(record.RecordID, obj);
-            }
             return this.toRecordResult(result, started);
         } catch (err) {
             return { Status: 'Failed', ErrorMessage: err instanceof Error ? err.message : String(err), DurationMs: Date.now() - started };
         }
     }
 
-    /**
-     * Names a dry-run batch's diffs all at once ({@link PreviewRecordNames.NameFieldRulesBatch}): each processed record
-     * from its loaded fields, one read per related entity for the foreign-key values, so the preview dialog reads no
-     * records itself. The record loop calls it once per dry-run batch, before it records the results; a real run's
-     * records are recorded as each finishes, as before.
-     */
-    public async CompleteDryRunBatch(outcomes: RecordBatchOutcome[], context: RecordProcessorContext): Promise<void> {
-        const items: FieldRulesPreviewItem[] = [];
-        for (const { Record, Result } of outcomes) {
-            const loaded = this.loadedForPreview.get(Record.RecordID);
-            this.loadedForPreview.delete(Record.RecordID);
-            if (loaded && FieldRulesProcessor.IsDryRunPayload(Result.ResultPayload)) {
-                items.push({ Record, Loaded: loaded, Payload: Result.ResultPayload });
-            }
-        }
-        await PreviewRecordNames.NameFieldRulesBatch(items, context.provider, context.contextUser);
-    }
-
-    /** Whether a result payload is a dry run's diff (the payload this processor builds). */
-    protected static IsDryRunPayload(payload: unknown): payload is FieldRulesResultPayload {
-        return payload !== null && typeof payload === 'object' && 'DryRun' in payload && payload.DryRun === true && 'Changes' in payload;
-    }
-
-    /** Maps the entity-level apply result onto the record-level outcome, with the per-record diff as its payload. */
+    /** Maps the entity-level apply result onto the record-level outcome. */
     private toRecordResult(result: EntityFieldRulesResult, started: number): RecordResult {
-        // copies of the changes: a dry run's names are added to them in place, never to the rules' own result
-        const ResultPayload: FieldRulesResultPayload = { DryRun: result.DryRun, Changes: result.Changes.map((c) => ({ ...c })), ChangedFields: result.AppliedFields };
+        const ResultPayload: FieldRulesResultPayload = { DryRun: result.DryRun, Changes: result.Changes, ChangedFields: result.AppliedFields };
         const DurationMs = Date.now() - started;
         if (result.Errors.length > 0) {
             return { Status: 'Failed', ResultPayload, ErrorMessage: result.Errors.join('; '), DurationMs };
@@ -182,8 +145,8 @@ export class FieldRulesProcessor implements IRecordProcessor {
     }
 
     /**
-     * Renders an Entity Document's template against a record. The text feeds a prompt source's `Data`, so it is plain
-     * text for a model and renders without HTML escaping (`Affineur & Owner`, not `Affineur &amp; Owner`).
+     * Renders an Entity Document's template against a record. The text feeds a prompt source's `Data`, so it renders
+     * without HTML escaping (`Affineur & Owner`, not `Affineur &amp; Owner`).
      * @param templateText the document's template text
      * @param record the record the template reads
      */

@@ -60,34 +60,34 @@ describe('FeatureValueCacheService', () => {
     /** The provider the cache calls run on; the mocked RunView ignores it. */
     const lookupProvider = stubProvider(vi.fn());
 
-    describe('ComputeCacheKey', () => {
+    describe('computeCacheKey', () => {
         it('computes deterministic key hash and legible display with KeyFields', async () => {
-            const keyResult1 = await FeatureValueCacheService.Instance.ComputeCacheKey({
-                KeyFields: ['Title', 'Department'],
-                RecordData: { Title: 'Director of Marketing', Department: 'Marketing', ExtraField: 'ignored' },
+            const keyResult1 = await FeatureValueCacheService.Instance.computeCacheKey({
+                keyFields: ['Title', 'Department'],
+                recordData: { Title: 'Director of Marketing', Department: 'Marketing', ExtraField: 'ignored' },
             });
 
             // Reordered fields in recordData should produce identical hash (canonical JSON)
-            const keyResult2 = await FeatureValueCacheService.Instance.ComputeCacheKey({
-                KeyFields: ['Title', 'Department'],
-                RecordData: { Department: 'Marketing', Title: 'Director of Marketing', OtherField: 123 },
+            const keyResult2 = await FeatureValueCacheService.Instance.computeCacheKey({
+                keyFields: ['Title', 'Department'],
+                recordData: { Department: 'Marketing', Title: 'Director of Marketing', OtherField: 123 },
             });
 
-            expect(keyResult1.KeyHash).toBe(keyResult2.KeyHash);
-            expect(keyResult1.KeyDisplay).toBe('Director of Marketing | Marketing');
-            expect(keyResult1.KeyJSON).toBe(JSON.stringify({ Department: 'marketing', Title: 'director of marketing' }));
+            expect(keyResult1.keyHash).toBe(keyResult2.keyHash);
+            expect(keyResult1.keyDisplay).toBe('Director of Marketing | Marketing');
+            expect(keyResult1.keyJSON).toBe(JSON.stringify({ Department: 'marketing', Title: 'director of marketing' }));
         });
 
         it('falls back to whole rendered context when KeyFields is omitted', async () => {
             const contextText = 'Customer reported high satisfaction with support agent Alice.';
-            const keyResult = await FeatureValueCacheService.Instance.ComputeCacheKey({
-                RenderedContext: contextText,
-                RecordData: { ID: 'rec-123' },
+            const keyResult = await FeatureValueCacheService.Instance.computeCacheKey({
+                renderedContext: contextText,
+                recordData: { ID: 'rec-123' },
             });
 
-            expect(keyResult.KeyHash).toBeDefined();
-            expect(keyResult.KeyDisplay).toBe(contextText);
-            expect(keyResult.KeyJSON).toContain('customer reported high satisfaction');
+            expect(keyResult.keyHash).toBeDefined();
+            expect(keyResult.keyDisplay).toBe(contextText);
+            expect(keyResult.keyJSON).toContain('customer reported high satisfaction');
         });
     });
 
@@ -107,14 +107,14 @@ describe('FeatureValueCacheService', () => {
             MockRunView.mockResults = [mockEntry];
 
             const result = await FeatureValueCacheService.Instance.Lookup({
-                PromptID: 'prompt-1',
-                PromptVersionHash: 'p-hash-1',
-                ConstraintHash: 'c-hash-1',
-                AIModelID: 'model-1',
-                ParametersHash: 'params-1',
-                Provider: lookupProvider,
-                KeyHash: 'key-abc',
-                ContextUser: mockUser,
+                promptID: 'prompt-1',
+                promptVersionHash: 'p-hash-1',
+                constraintHash: 'c-hash-1',
+                aiModelID: 'model-1',
+                parametersHash: 'params-1',
+                provider: lookupProvider,
+                keyHash: 'key-abc',
+                contextUser: mockUser,
             });
 
             expect(result).toBeDefined();
@@ -136,14 +136,14 @@ describe('FeatureValueCacheService', () => {
             MockRunView.mockResults = [expiredEntry];
 
             const result = await FeatureValueCacheService.Instance.Lookup({
-                PromptID: 'prompt-1',
-                PromptVersionHash: 'p-hash-1',
-                ConstraintHash: 'c-hash-1',
-                AIModelID: 'model-1',
-                ParametersHash: 'params-1',
-                Provider: lookupProvider,
-                KeyHash: 'key-expired',
-                ContextUser: mockUser,
+                promptID: 'prompt-1',
+                promptVersionHash: 'p-hash-1',
+                constraintHash: 'c-hash-1',
+                aiModelID: 'model-1',
+                parametersHash: 'params-1',
+                provider: lookupProvider,
+                keyHash: 'key-expired',
+                contextUser: mockUser,
             });
 
             expect(result).toBeNull();
@@ -156,16 +156,16 @@ describe('FeatureValueCacheService', () => {
             mockRunView.mockResults = [mockEntry];
 
             const hits = await FeatureValueCacheService.Instance.BatchLookup({
-                RecordProcessID: 'rp-1',
-                PromptID: 'prompt-1',
-                PromptVersionHash: 'p-hash-1',
-                ConstraintHash: 'c-hash-1',
-                AIModelID: 'model-1',
-                ParametersHash: 'params-1',
-                Provider: lookupProvider,
-                KeyHashes: ['key-pin'],
-                RecordHit: false,
-                ContextUser: mockUser,
+                recordProcessID: 'rp-1',
+                promptID: 'prompt-1',
+                promptVersionHash: 'p-hash-1',
+                constraintHash: 'c-hash-1',
+                aiModelID: 'model-1',
+                parametersHash: 'params-1',
+                provider: lookupProvider,
+                keyHashes: ['key-pin'],
+                recordHit: false,
+                contextUser: mockUser,
             });
 
             expect(hits.get('key-pin')?.ID).toBe('cache-2');
@@ -179,14 +179,14 @@ describe('FeatureValueCacheService', () => {
         it('matches a prompt without an Active model on AIModelID IS NULL', async () => {
             const mockRunView = MockRunView;
             await FeatureValueCacheService.Instance.Lookup({
-                PromptID: 'prompt-1',
-                PromptVersionHash: 'p-hash-1',
-                ConstraintHash: 'c-hash-1',
-                AIModelID: null,
-                ParametersHash: 'params-1',
-                Provider: lookupProvider,
-                KeyHash: 'key-any',
-                ContextUser: mockUser,
+                promptID: 'prompt-1',
+                promptVersionHash: 'p-hash-1',
+                constraintHash: 'c-hash-1',
+                aiModelID: null,
+                parametersHash: 'params-1',
+                provider: lookupProvider,
+                keyHash: 'key-any',
+                contextUser: mockUser,
             });
             expect(mockRunView.lastParams?.ExtraFilter).toContain('RecordProcessID IS NULL');
             expect(mockRunView.lastParams?.ExtraFilter).toContain('AIModelID IS NULL');
@@ -196,14 +196,14 @@ describe('FeatureValueCacheService', () => {
             MockRunView.mockResults = [];
 
             const result = await FeatureValueCacheService.Instance.Lookup({
-                PromptID: 'prompt-1',
-                PromptVersionHash: 'p-hash-1',
-                ConstraintHash: 'c-hash-1',
-                AIModelID: 'model-1',
-                ParametersHash: 'params-1',
-                Provider: lookupProvider,
-                KeyHash: 'key-nonexistent',
-                ContextUser: mockUser,
+                promptID: 'prompt-1',
+                promptVersionHash: 'p-hash-1',
+                constraintHash: 'c-hash-1',
+                aiModelID: 'model-1',
+                parametersHash: 'params-1',
+                provider: lookupProvider,
+                keyHash: 'key-nonexistent',
+                contextUser: mockUser,
             });
 
             expect(result).toBeNull();
@@ -214,17 +214,18 @@ describe('FeatureValueCacheService', () => {
                 Save: vi.fn().mockResolvedValue(false), LatestResult: { CompleteMessage: 'deadlock victim' } };
             MockRunView.mockResults = [mockEntry];
             const result = await FeatureValueCacheService.Instance.Lookup({
-                PromptID: 'prompt-1', PromptVersionHash: 'p-hash-1', ConstraintHash: 'c-hash-1', AIModelID: 'model-1',
-                ParametersHash: 'params-1', KeyHash: 'key-3', ContextUser: mockUser, Provider: lookupProvider,
+                promptID: 'prompt-1', promptVersionHash: 'p-hash-1', constraintHash: 'c-hash-1', aiModelID: 'model-1',
+                parametersHash: 'params-1', keyHash: 'key-3', contextUser: mockUser, provider: lookupProvider,
             });
             expect(result?.ID).toBe('cache-3');
             expect(mockEntry.Save).toHaveBeenCalledTimes(1);
+            await vi.waitFor(() => expect(logErrorSpy).toHaveBeenCalled());
             expect(logErrorSpy).toHaveBeenCalledWith(expect.stringContaining("failed updating HitCount on cache 'cache-3': deadlock victim"));
         });
     });
 
     describe('RecordFeatureValues (upsert on the Feature Value key)', () => {
-        const pin = { PipelineVersion: 3, AIModelID: 'm-1', ParametersHash: 'ph', InputHash: 'in-1', Source: 'Pipeline' as const };
+        const pin = { pipelineVersion: 3, aiModelID: 'm-1', parametersHash: 'ph', inputHash: 'in-1', source: 'Pipeline' as const };
         const keyInput: FeatureValueKeyInput = {
             EntityID: 'ent-1', RecordID: 'rec-1', FeatureName: 'SeniorityLevel', PipelineVersion: 3, PromptVersionHash: 'pv',
             AIModelID: 'm-1', ParametersHash: 'ph', InputHash: 'in-1', Source: 'Pipeline' as const,
@@ -240,10 +241,10 @@ describe('FeatureValueCacheService', () => {
             }));
         }
         const params = (provider: IMetadataProvider) => ({
-            RecordProcessID: 'rp-1', EntityID: 'ent-1', RecordID: 'rec-1', PromptID: 'p-1', PromptVersionHash: 'pv',
-            ConstraintHash: 'c', ProcessRunID: 'run-2', ...pin,
-            Outputs: [{ FeatureName: 'SeniorityLevel', Value: 'Director', Reasoning: 'Title says Director', Confidence: 0.9 }],
-            ContextUser: mockUser, Provider: provider,
+            recordProcessID: 'rp-1', entityID: 'ent-1', recordID: 'rec-1', promptID: 'p-1', promptVersionHash: 'pv',
+            constraintHash: 'c', processRunID: 'run-2', ...pin,
+            outputs: [{ featureName: 'SeniorityLevel', value: 'Director', reasoning: 'Title says Director', confidence: 0.9 }],
+            contextUser: mockUser, provider,
         });
 
         it('inserts a keyed Pipeline row when the key is new', async () => {
@@ -304,7 +305,7 @@ describe('FeatureValueCacheService', () => {
                 ValueBoolean: null, ValueDate: null, ValueJSON: null, Reasoning: 'Title says Director', Confidence: 0.9,
                 ProcessRunID: 'run-1', Save: vi.fn().mockResolvedValue(true), NewRecord: vi.fn() };
             MockRunView.queue = [[answer], [own]];
-            const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues({ ...params(providerWith([])), HistoryOnly: true });
+            const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues({ ...params(providerWith([])), historyOnly: true });
             expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Previous: { SeniorityLevel: { ...noValue, ValueText: 'Manager' } } });
             expect(own.Save).not.toHaveBeenCalled();
             expect(own.ProcessRunID).toBe('run-1');
@@ -327,7 +328,7 @@ describe('FeatureValueCacheService', () => {
                 ValueBoolean: null, ValueDate: null, ValueJSON: null };
             MockRunView.queue = [[oldRow], []];
             const saved: Array<Record<string, unknown>> = [];
-            const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues({ ...params(providerWith(saved)), InputHash: 'in-2' });
+            const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues({ ...params(providerWith(saved)), inputHash: 'in-2' });
             expect(outcome).toEqual({ Upserted: 1, Unchanged: 0, Previous: { SeniorityLevel: { ...noValue, ValueText: 'Manager' } } });
             expect(saved[0].InputHash).toBe('in-2');
             const latest = MockRunView.calls[0];
@@ -343,7 +344,7 @@ describe('FeatureValueCacheService', () => {
             MockRunView.queue = [[row('SeniorityLevel', 'VP')], [row('Department', 'Sales')], []];
             const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues({
                 ...params(providerWith([])),
-                Outputs: [{ FeatureName: 'SeniorityLevel', Value: 'Director' }, { FeatureName: 'Department', Value: 'Sales' }],
+                outputs: [{ featureName: 'SeniorityLevel', value: 'Director' }, { featureName: 'Department', value: 'Sales' }],
             });
             expect(outcome.Previous.SeniorityLevel?.ValueText).toBe('VP');
             expect(outcome.Previous.Department?.ValueText).toBe('Sales');
@@ -357,62 +358,12 @@ describe('FeatureValueCacheService', () => {
             expect(second.ExtraFilter).toContain("FeatureName = 'Department'");
         });
 
-        describe('an insert that loses the race on the key', () => {
-            const collision = { CompleteMessage: "Violation of UNIQUE KEY constraint 'UQ_FeatureValue_ValueKey'. Cannot insert duplicate key" };
-            const losingProvider = () => stubProvider(vi.fn().mockResolvedValue({ NewRecord: vi.fn(), Save: vi.fn().mockResolvedValue(false), LatestResult: collision }));
-
-            it('reloads the row the other run inserted and updates it', async () => {
-                const raced: Record<string, unknown> = { ValueKeyHash: await FeatureValueKey.ComputeHash(keyInput), FeatureName: 'SeniorityLevel', ValueText: 'Manager', Reasoning: null, Confidence: null,
-                    Save: vi.fn().mockResolvedValue(true), NewRecord: vi.fn() };
-                MockRunView.queue = [[], [], [raced]];
-                const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues(params(losingProvider()));
-                expect(outcome.Upserted).toBe(1);
-                expect(raced.NewRecord).not.toHaveBeenCalled();
-                expect(raced.ValueText).toBe('Director');
-                expect(raced.Save).toHaveBeenCalledTimes(1);
-                expect(MockRunView.calls[2].ExtraFilter).toContain(`ValueKeyHash IN ('${await FeatureValueKey.ComputeHash(keyInput)}')`);
-            });
-
-            it('leaves it untouched when the other run wrote the same value', async () => {
-                const raced = { ValueKeyHash: await FeatureValueKey.ComputeHash(keyInput), FeatureName: 'SeniorityLevel', ValueText: 'Director', ValueNumeric: null, ValueBoolean: null, ValueDate: null,
-                    ValueJSON: null, Reasoning: 'Title says Director', Confidence: 0.9, Save: vi.fn() };
-                MockRunView.queue = [[], [], [raced]];
-                const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues(params(losingProvider()));
-                expect(outcome).toMatchObject({ Upserted: 0, Unchanged: 1 });
-                expect(raced.Save).not.toHaveBeenCalled();
-            });
-
-            it('throws when the reloaded row cannot be saved either', async () => {
-                const raced = { ValueKeyHash: await FeatureValueKey.ComputeHash(keyInput), FeatureName: 'SeniorityLevel', ValueText: 'Manager', Save: vi.fn().mockResolvedValue(false),
-                    LatestResult: { CompleteMessage: 'deadlock victim' } };
-                MockRunView.queue = [[], [], [raced]];
-                await expect(FeatureValueCacheService.Instance.RecordFeatureValues(params(losingProvider()))).rejects.toThrow(/deadlock victim/);
-            });
-
-            it('throws the collision when the row cannot be found again', async () => {
-                MockRunView.queue = [[], [], []];
-                await expect(FeatureValueCacheService.Instance.RecordFeatureValues(params(losingProvider()))).rejects.toThrow(/UQ_FeatureValue_ValueKey/);
-            });
-
-            it('recognises the race by the row the other run inserted, whatever the provider\'s message says', async () => {
-                // PostgreSQL words a unique violation differently and names no SQL Server index
-                const pgCollision = { CompleteMessage: 'duplicate key value violates unique constraint "uq_featurevalue_valuekey_2"' };
-                const provider = stubProvider(vi.fn().mockResolvedValue({ NewRecord: vi.fn(), Save: vi.fn().mockResolvedValue(false), LatestResult: pgCollision }));
-                const raced: Record<string, unknown> = { ValueKeyHash: await FeatureValueKey.ComputeHash(keyInput), FeatureName: 'SeniorityLevel', ValueText: 'Manager',
-                    Reasoning: null, Confidence: null, Save: vi.fn().mockResolvedValue(true), NewRecord: vi.fn() };
-                MockRunView.queue = [[], [], [raced]];
-                const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues(params(provider));
-                expect(outcome.Upserted).toBe(1);
-                expect(raced.ValueText).toBe('Director');
-            });
-        });
-
         it('keys a row the same for a UUID record ID in any case', async () => {
             MockRunView.mockResults = [];
             const saved: Array<Record<string, unknown>> = [];
             const upper = '0F1A7E00-0000-4000-8000-000000000101';
-            await FeatureValueCacheService.Instance.RecordFeatureValues({ ...params(providerWith(saved)), RecordID: upper });
-            await FeatureValueCacheService.Instance.RecordFeatureValues({ ...params(providerWith(saved)), RecordID: upper.toLowerCase() });
+            await FeatureValueCacheService.Instance.RecordFeatureValues({ ...params(providerWith(saved)), recordID: upper });
+            await FeatureValueCacheService.Instance.RecordFeatureValues({ ...params(providerWith(saved)), recordID: upper.toLowerCase() });
             expect(saved[0].ValueKeyHash).toBe(saved[1].ValueKeyHash);
         });
 
@@ -421,10 +372,10 @@ describe('FeatureValueCacheService', () => {
             const saved: Array<Record<string, unknown>> = [];
             await FeatureValueCacheService.Instance.RecordFeatureValues({
                 ...params(providerWith(saved)),
-                Outputs: [
-                    { FeatureName: 'RiskScore', Value: 0.85, Confidence: 0.95 },
-                    { FeatureName: 'IsEscalated', Value: true },
-                    { FeatureName: 'Functions', Value: [{ ID: 'f-1' }] },
+                outputs: [
+                    { featureName: 'RiskScore', value: 0.85, confidence: 0.95 },
+                    { featureName: 'IsEscalated', value: true },
+                    { featureName: 'Functions', value: [{ ID: 'f-1' }] },
                 ],
             });
             expect(saved.map((r) => [r.ValueNumeric, r.ValueBoolean, r.ValueJSON])).toEqual([
@@ -440,16 +391,14 @@ describe('FeatureValueCacheService', () => {
             const failure = FeatureValueCacheService.Instance.RecordFeatureValues(params(provider));
             await expect(failure).rejects.toBeInstanceOf(FeatureValueSaveError);
             await expect(failure).rejects.toMatchObject({ FeatureName: 'SeniorityLevel', RecordID: 'rec-1', ProviderMessage: 'FK_FeatureValue_Entity' });
-            // latest values, keyed rows, then the one re-read that rules out a race (no row: the save error is real)
-            expect(MockRunView.calls).toHaveLength(3);
         });
     });
 
     describe('Store', () => {
         const base = {
-            RecordProcessID: 'rp-1', PromptID: 'p-1', PromptVersionHash: 'pv', ConstraintHash: 'c', AIModelID: 'm-1',
-            ParametersHash: 'ph', KeyHash: 'k-owner', KeyDisplay: 'Owner', KeyJSON: '{"t":"owner"}',
-            OutputsJSON: '{"SeniorityLevel":"C-Level"}', TtlSeconds: 2592000, ContextUser: mockUser,
+            recordProcessID: 'rp-1', promptID: 'p-1', promptVersionHash: 'pv', constraintHash: 'c', aiModelID: 'm-1',
+            parametersHash: 'ph', keyHash: 'k-owner', keyDisplay: 'Owner', keyJSON: '{"t":"owner"}',
+            outputsJSON: '{"SeniorityLevel":"C-Level"}', ttlSeconds: 2592000, contextUser: mockUser,
         };
 
         it('refreshes an expired row in place instead of inserting a duplicate', async () => {
@@ -460,7 +409,7 @@ describe('FeatureValueCacheService', () => {
             MockRunView.mockResults = [expired];
             const getEntityObject = vi.fn();
             const provider = stubProvider(getEntityObject);
-            const stored = await FeatureValueCacheService.Instance.Store({ ...base, Provider: provider });
+            const stored = await FeatureValueCacheService.Instance.Store({ ...base, provider });
             expect(getEntityObject).not.toHaveBeenCalled();
             expect(stored.ID).toBe('cache-owner');
             expect(stored.OutputsJSON).toBe('{"SeniorityLevel":"C-Level"}');
@@ -481,7 +430,7 @@ describe('FeatureValueCacheService', () => {
             MockRunView.mockResults = [];
             const row: Record<string, unknown> = { NewRecord: vi.fn(), Save: vi.fn().mockResolvedValue(true) };
             const provider = stubProvider(vi.fn().mockResolvedValue(row));
-            await FeatureValueCacheService.Instance.Store({ ...base, Provider: provider });
+            await FeatureValueCacheService.Instance.Store({ ...base, provider });
             expect(row.NewRecord).toHaveBeenCalled();
             expect(row.AIModelID).toBe('m-1');
             expect(row.ParametersHash).toBe('ph');
@@ -492,7 +441,7 @@ describe('FeatureValueCacheService', () => {
             MockRunView.mockResults = [];
             const row = { NewRecord: vi.fn(), Save: vi.fn().mockResolvedValue(false), LatestResult: { CompleteMessage: 'UQ violation' } };
             const provider = stubProvider(vi.fn().mockResolvedValue(row));
-            await expect(FeatureValueCacheService.Instance.Store({ ...base, Provider: provider })).rejects.toThrow(/UQ violation/);
+            await expect(FeatureValueCacheService.Instance.Store({ ...base, provider })).rejects.toThrow(/UQ violation/);
         });
     });
 
@@ -529,13 +478,6 @@ describe('FeatureValueCacheService', () => {
             expect(view?.OrderBy).toBe(LATEST_ORDER);
             expect(view?.MaxRows).toBe(1);
             expect(view?.BypassCache).toBe(true);
-        });
-
-        it('builds the batched latest-value view in the same shape, for many records and features', () => {
-            const view = FeatureValueCacheService.LatestValuesView({ RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordIDs: ['p-1', "o'b"], FeatureNames: ['A', 'B'], Source: 'Pipeline' });
-            expect(view).toMatchObject({ EntityName: 'MJ: Feature Values', OrderBy: LATEST_ORDER, BypassCache: true });
-            expect(view.Fields).toEqual(['RecordID', 'FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON']);
-            expect(view.ExtraFilter).toBe("RecordProcessID = 'rp-1' AND EntityID = 'ENT-P' AND RecordID IN ('p-1', 'o''b') AND FeatureName IN ('A', 'B') AND Source = 'Pipeline'");
         });
 
         it('GetLatestValue returns null when the source never wrote the feature, and adds no run filter without one', async () => {

@@ -11,13 +11,12 @@ import {
     IProcessRunTracker,
     ProcessCursor,
     ProcessRunSummary,
-    RecordBatchOutcome,
     RecordProcessorContext,
     RecordRef,
     RecordResult,
     RunHandle,
 } from '@memberjunction/record-set-processor-base';
-import { FeaturePipelineRunAttributionError, FunctionRecordProcessor, NoOpTracker, RecordSetProcessor } from '../index';
+import { FunctionRecordProcessor, NoOpTracker, RecordSetProcessor } from '../index';
 import { WatermarkService, type WatermarkDecision } from '../watermark/WatermarkService';
 
 const USER = {} as UserInfo;
@@ -302,87 +301,6 @@ describe('RecordSetProcessor.Process', () => {
         expect(tracker.details.map((d) => d.record.RecordID)).toEqual(['r3', 'r4']);
     });
 
-    describe('finishing a dry-run batch (CompleteDryRunBatch)', () => {
-        afterEach(() => vi.restoreAllMocks());
-
-        /** A processor that records the order of its calls, and on CompleteDryRunBatch marks every result's payload. */
-        function finishingProcessor(events: string[], fail = false) {
-            return {
-                ProcessRecord: async (r: RecordRef): Promise<RecordResult> => {
-                    events.push(`process ${r.RecordID}`);
-                    return { Status: 'Succeeded', ResultPayload: { named: false } };
-                },
-                CompleteDryRunBatch: vi.fn(async (outcomes: RecordBatchOutcome[]): Promise<void> => {
-                    events.push(`complete ${outcomes.map((o) => o.Record.RecordID).join(',')}`);
-                    if (fail) {
-                        throw new Error('names unavailable');
-                    }
-                    for (const o of outcomes) {
-                        o.Result.ResultPayload = { named: true };
-                    }
-                }),
-            };
-        }
-
-        /** A tracker that also logs each recorded result into `events`. */
-        function orderedTracker(events: string[]): SpyTracker {
-            const tracker = new SpyTracker();
-            const record = tracker.RecordResult.bind(tracker);
-            tracker.RecordResult = async (h, r, result) => { events.push(`record ${r.RecordID}`); await record(h, r, result); };
-            return tracker;
-        }
-
-        it('finishes each dry-run batch once, before its results are recorded, in batch order', async () => {
-            const events: string[] = [];
-            const tracker = orderedTracker(events);
-            const processor = finishingProcessor(events);
-
-            await engine.Process({ source: new ArraySource(recs(3), 'E'), processor, tracker, contextUser: USER, provider: PROVIDER, batchSize: 2, dryRun: true, maxConcurrency: 2 });
-
-            expect(processor.CompleteDryRunBatch).toHaveBeenCalledTimes(2);
-            expect(events.filter((e) => !e.startsWith('process'))).toEqual(['complete r0,r1', 'record r0', 'record r1', 'complete r2', 'record r2']);
-            expect(tracker.details.map((d) => d.result.ResultPayload)).toEqual([{ named: true }, { named: true }, { named: true }]);
-        });
-
-        it('records a real run\'s records as each finishes, and never calls it', async () => {
-            const events: string[] = [];
-            const processor = finishingProcessor(events);
-
-            await engine.Process({ source: new ArraySource(recs(2), 'E'), processor, tracker: orderedTracker(events), contextUser: USER, provider: PROVIDER, batchSize: 2 });
-
-            expect(processor.CompleteDryRunBatch).not.toHaveBeenCalled();
-            expect(events).toEqual(['process r0', 'record r0', 'process r1', 'record r1']);
-        });
-
-        it('records the results as they are, logging once, when finishing the batch fails', async () => {
-            const events: string[] = [];
-            const tracker = orderedTracker(events);
-            const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-
-            const result = await engine.Process({ source: new ArraySource(recs(2), 'E'), processor: finishingProcessor(events, true), tracker,
-                contextUser: USER, provider: PROVIDER, batchSize: 2, dryRun: true });
-
-            expect(result.Status).toBe('Completed');
-            expect(tracker.details).toHaveLength(2);
-            expect(tracker.details.map((d) => d.result.Status)).toEqual(['Succeeded', 'Succeeded']);
-            expect(logged.mock.calls.filter((c) => String(c[0]).includes('finishing the dry-run batch failed'))).toHaveLength(1);
-        });
-
-        it('finishes a batch-path processor\'s dry-run batch before recording it too', async () => {
-            const events: string[] = [];
-            const tracker = orderedTracker(events);
-            const processor = {
-                ...finishingProcessor(events),
-                ProcessBatch: async (rs: RecordRef[]): Promise<Map<string, RecordResult>> => new Map(rs.map((r) => [r.RecordID, { Status: 'Succeeded', ResultPayload: { named: false } }])),
-            };
-
-            await engine.Process({ source: new ArraySource(recs(2), 'E'), processor, tracker, contextUser: USER, provider: PROVIDER, batchSize: 2, dryRun: true });
-
-            expect(events).toEqual(['complete r0,r1', 'record r0', 'record r1']);
-            expect(tracker.details.map((d) => d.result.ResultPayload)).toEqual([{ named: true }, { named: true }]);
-        });
-    });
-
     describe('the breaker over attempted records', () => {
         afterEach(() => vi.restoreAllMocks());
         /** The engine skips records r0..r(n-1) on their watermark, without handing them to the processor. */
@@ -475,7 +393,7 @@ describe('RecordSetProcessor.Process', () => {
 
         it('refuses a Feature Pipeline run without a recordProcessID', async () => {
             await expect(engine.Process({ source: new ArraySource(recs(1), 'E'), processor: new FunctionRecordProcessor(() => ok()), tracker: new NoOpTracker(),
-                contextUser: USER, provider: PROVIDER, FeaturePipeline: true })).rejects.toThrow(FeaturePipelineRunAttributionError);
+                contextUser: USER, provider: PROVIDER, FeaturePipeline: true })).rejects.toThrow(/needs recordProcessID/);
             await expect(engine.Process({ source: new ArraySource(recs(1), 'E'), processor: new FunctionRecordProcessor(() => ok()), tracker: new NoOpTracker(),
                 contextUser: USER, provider: PROVIDER, FeaturePipeline: true })).rejects.toThrow('A Feature Pipeline run (FeaturePipeline: true) needs recordProcessID.');
         });
@@ -489,7 +407,7 @@ describe('RecordSetProcessor.Process', () => {
             expect(tracker.completed?.FeaturePipeline).toMatchObject({ Attempted: 3, Previewed: 3, Upserted: 0, Unchanged: 0, Status: 'completed' });
         });
 
-        it('carries why the real run would be refused on a dry run\'s result (F16)', async () => {
+        it('carries why the real run would be refused on a dry run\'s result', async () => {
             const tracker = new SpyTracker();
             const refusal = 'Feature Pipeline version v6 is not activated';
             const processor = { ProcessRecord: async (): Promise<RecordResult> => ({ Status: 'Succeeded', DryRun: true, PipelinePin: PIN }), CurrentRunRefusal: () => refusal };

@@ -1,7 +1,6 @@
 /**
  * @fileoverview DataFeatureSpec artifact definition and pure validation/rendering functions.
- * Pure types + pure validators — zero imports from @memberjunction/core or database providers (the one entity import is
- * type-only).
+ * Pure types + pure validators — zero imports from @memberjunction/core or database providers.
  * @module @memberjunction/feature-pipelines
  */
 
@@ -27,10 +26,8 @@ export interface DataFeatureSpec {
     /** Optional value remap layered on whatever the above produced. */
     InputMapping?: Record<string, string>;
     /**
-     * Opt-in (default off), LLM pipelines only, needs `Fields`: send the record's `Fields` values as one JSON object in
-     * the prompt's user message, with the template as the system message, instead of the runner's default user message.
-     * JSON-encoding fences each value, so a value holding an instruction or a closing tag stays data. Part of the spec
-     * hash, so turning it on or off is a new pipeline version.
+     * Opt-in, LLM pipelines with `Fields` only: send the `Fields` values as one JSON user message, the template as the
+     * system message, so a value holding an instruction stays data.
      */
     RecordAsUserMessage?: boolean;
   };
@@ -53,7 +50,7 @@ export interface DataFeatureSpec {
     Scope?: 'pipeline' | 'prompt';
   };
 
-  /** Skip rows whose watermark says nothing they depend on has changed. */
+  /** Skip rows whose watermark says nothing they depend on has changed (P1-7). */
   Watermark?: {
     Enabled: boolean;
     Strategy: 'Checksum' | 'UpdatedAt' | 'None';
@@ -62,7 +59,7 @@ export interface DataFeatureSpec {
   /** Capture the model's rationale into the history row's Reasoning column (D20). */
   CaptureReasoning?: boolean;
 
-  /** Optional subclass hook registration. */
+  /** Optional subclass hook registration (P1-6). */
   ProcessorExtensionKey?: string;
 
   /** The name of an `MJ: Feature Pipeline Types` row. Absent means `LLM`. */
@@ -137,11 +134,7 @@ export interface DataFeatureOutput {
   Description?: string;
   /** Result path of this output's confidence (0..1), e.g. "$.SeniorityConfidence"; for drivers that return none. */
   ConfidenceRef?: string;
-  /**
-   * The confidence floor (0 < floor <= 1): an answer whose confidence for this output is below it, or that gives none,
-   * is handled by {@link OnLowConfidence}. Set together with OnLowConfidence; an LLM pipeline also needs ConfidenceRef.
-   * Part of the spec hash, so changing it is a new pipeline version.
-   */
+  /** The confidence floor (0 < floor <= 1), set with {@link OnLowConfidence}; an LLM pipeline also needs ConfidenceRef. */
   MinConfidence?: number;
   /** What a below-floor answer does: `null` leaves this output unwritten, `fail` fails the record (see {@link LowConfidencePolicy}). */
   OnLowConfidence?: LowConfidencePolicy;
@@ -598,11 +591,7 @@ function validateEscalation(spec: DataFeatureSpec): SpecValidationIssue[] {
   return issues;
 }
 
-/**
- * `Context.RecordAsUserMessage` is optional; when present it must be a boolean, and `true` needs an LLM pipeline (only
- * its driver builds the prompt's messages) and `Context.Fields` (the values the message carries). The spec is parsed from
- * JSON, so the value is read as `unknown`.
- */
+/** `Context.RecordAsUserMessage`, when present, is a boolean; `true` needs an LLM pipeline and `Context.Fields`. */
 function validateRecordAsUserMessage(spec: DataFeatureSpec): SpecValidationIssue[] {
   const flag: unknown = spec.Context?.RecordAsUserMessage;
   if (flag === undefined) {
@@ -626,10 +615,7 @@ function validateRecordAsUserMessage(spec: DataFeatureSpec): SpecValidationIssue
   return issues;
 }
 
-/**
- * Activation is optional. When a spec names one, it must name its golden-set test, a known metric and a threshold in
- * (0, 1]. The spec is parsed from JSON, so a JSON `null` Activation is reported, not skipped.
- */
+/** An Activation names its golden-set test, a known metric and a threshold in (0, 1] (a JSON `null` is reported). */
 function validateActivation(spec: DataFeatureSpec): SpecValidationIssue[] {
   const a = spec.Activation;
   if (a === undefined) {
@@ -648,10 +634,7 @@ function validateActivation(spec: DataFeatureSpec): SpecValidationIssue[] {
   return issues;
 }
 
-/**
- * Unattended is optional, and so is each of its fields; a field that is present must be a boolean. The spec is parsed
- * from JSON, so a JSON `null` Unattended (or field) is reported, not skipped.
- */
+/** Unattended, when present, is an object whose fields are booleans. */
 function validateUnattended(spec: DataFeatureSpec): SpecValidationIssue[] {
   const u = spec.Unattended;
   if (u === undefined) {
@@ -857,9 +840,7 @@ export function resolveConstraint(
 
 /**
  * Pure function to render the exact constraint block text injected into prompts and shown in UI previews.
- * `resolvedConstraints` (by output name) supplies what only a run can resolve: a field's value list, and a lookup's
- * allowed rows (see `LookupConstraintValues`), which are listed with their display text. An output missing from it is
- * resolved from its spec alone, so a lookup without loaded rows renders the "Must match an existing …" line.
+ * `resolvedConstraints` (by output name) supplies a field's value list and a lookup's loaded rows.
  */
 export function RenderConstraintBlock(
   outputs: DataFeatureOutput[],
@@ -971,11 +952,8 @@ export class ConstraintBlockMissingError extends Error {
 }
 
 /**
- * Prompt-template checks of a Feature Pipeline spec. The constraint block ({@link RenderConstraintBlock}) is the only
- * place an LLM pipeline's model sees its outputs' allowed values; a template that does not render it lets the model
- * answer blind, and every answer outside the constraints is then rejected or coerced after the spend. The
- * run refuses such a pipeline before its first record (`InferProcessor.Preflight`), and the server refuses to save it
- * (`MJRecordProcessEntityExtended.ValidateAsync`); both use these checks, so the two refusals cannot drift apart.
+ * Prompt-template checks of a Feature Pipeline spec: the constraint block is the only place an LLM pipeline's model
+ * sees the allowed values. Used by `InferProcessor.Preflight` and the server save check.
  */
 export class ConstraintPromptTemplate {
   /** Whether a prompt template renders the constraint block InferProcessor passes as `ConstraintBlock` / `constraints`. */

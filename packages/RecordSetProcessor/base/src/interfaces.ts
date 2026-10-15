@@ -65,24 +65,12 @@ export interface RecordProcessorContext {
     entityID?: string;
     /** When true, write-back overwrites values a person entered and retires their Human values (default false). */
     overwriteHumanValues?: boolean;
-    /**
-     * Compute-only run. The engine sets it on every record's context and on `Preflight`. Infer, FieldRules and the
-     * write-back wrapper persist nothing on it (each also honours the dry flag it was built with). An Action or Agent
-     * processor runs as it would for real: its own side effects are its own, and only its write-back is previewed.
-     */
+    /** Compute-only run: Infer, FieldRules and write-back persist nothing; Action and Agent work runs for real. */
     DryRun?: boolean;
     /** What triggered the run (the version gate treats scheduled and on-demand runs differently). */
     TriggeredBy?: TriggeredByValue;
     /** Skip Dedup Cache lookups (golden-set and consistency evaluations measure the model, not the cache). */
     BypassCache?: boolean;
-}
-
-/** One record of a batch with its result ({@link IRecordProcessor.CompleteDryRunBatch}). */
-export interface RecordBatchOutcome {
-    /** The record. */
-    Record: RecordRef;
-    /** Its result. */
-    Result: RecordResult;
 }
 
 /**
@@ -100,7 +88,7 @@ export interface IRecordProcessor {
     ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult>;
 
     /**
-     * Optional batch execution seam. Enables two-phase distinct-key execution:
+     * Optional batch execution seam (P1-7c). Enables two-phase distinct-key execution:
      * deduplicating across the batch before execution, executing once per distinct key,
      * and fanning results back to all matching records.
      *
@@ -124,49 +112,11 @@ export interface IRecordProcessor {
      */
     Preflight?(context: RecordProcessorContext): Promise<void>;
 
-    /**
-     * Optional: the pin a Feature Pipeline processor computes this run under, once it has resolved one (after
-     * `Preflight` or the first record), else null. A run result takes its pin from its records first and from here when
-     * no record carried one, so a run whose records were all skipped still reports the pin it ran under.
-     */
+    /** Optional: the pin a Feature Pipeline processor runs under once resolved, else null (a run of skipped records reports it). */
     CurrentRunPin?(): FeaturePipelineRunPin | null;
 
-    /**
-     * Optional, Feature Pipelines: on a dry run, why a real run of the same pipeline would be refused (e.g. its
-     * version is not activated), once the run-level check (`Preflight`) has decided it; else null. The run result
-     * reports it as `WouldRefuse`, so a preview can say that applying it would be refused, even when every record
-     * was skipped.
-     */
+    /** Optional, Feature Pipelines: on a dry run, why a real run would be refused (e.g. its version is not activated), else null. */
     CurrentRunRefusal?(): string | null;
-
-    /**
-     * Optional: on a dry run, called ONCE per batch with every record's result, before the results are recorded, so the
-     * processor can finish the batch's previews together (e.g. name the records they show with one read per related
-     * entity instead of reads per record). It may add to the results' payloads in place and must not change their
-     * status. A throw is logged and the results are recorded as they are. Not called on a real run, whose results are
-     * recorded as each record finishes.
-     * @param outcomes - the batch's records with their results, in batch order
-     * @param context - the run's per-record execution context
-     */
-    CompleteDryRunBatch?(outcomes: RecordBatchOutcome[], context: RecordProcessorContext): Promise<void>;
-
-    /**
-     * Optional: which of the given records still hold what this processor writes. The watermark gate of a run that
-     * skips unchanged records calls it ONCE per batch, with the records whose watermark says "unchanged"; a record
-     * missing from the answer is processed anyway (its outputs were deleted or cleared since it was processed) and its
-     * watermark is refreshed after. Throw when the outputs cannot be read: the gate then processes those records rather
-     * than skip them.
-     *
-     * The default is "not checked": a processor that omits it, or answers every record, is skipped on its watermark
-     * alone. Only a processor that can tell an output deleted since from one it answered empty should check (Infer,
-     * which records every answer as a Feature Value); for one that cannot, re-running to find out is paid and may have
-     * side effects (an Action or Agent).
-     *
-     * @param records - The batch's records whose watermark matched.
-     * @param context - The run's per-record execution context.
-     * @returns The `RecordID`s, as given, of the records whose outputs exist.
-     */
-    RecordsWithOutputs?(records: RecordRef[], context: RecordProcessorContext): Promise<Set<string>>;
 }
 
 /** Opaque handle returned by a tracker's `BeginRun`, threaded back through the other tracker calls. */
@@ -276,25 +226,17 @@ export interface RecordSetProcessOptions {
     configuration?: unknown;
     /** True when this is a dry-run (compute-only) pass — recorded on the run header so history can distinguish previews from real applies. */
     dryRun?: boolean;
-    /**
-     * Whether to skip unchanged records (default false). An unchanged record is still processed when the run overwrites
-     * human values, or when its processor reports its outputs gone (see {@link IRecordProcessor.RecordsWithOutputs}).
-     */
+    /** Whether to skip unchanged records (default false). */
     skipUnchanged?: boolean;
     /** How unchanged records are detected: Checksum, UpdatedAt, or None (default 'Checksum'). */
     watermarkStrategy?: WatermarkStrategyValue;
     /** Timestamp of the last run, used for 'UpdatedAt' strategy. */
     lastRunAt?: Date | null;
-    /**
-     * When true, write-back overwrites values a person entered and retires their Human values (default false). Handed to
-     * every record's context. Such a run skips no record on its watermark: an unchanged record still holds the human
-     * values it must overwrite.
-     */
+    /** Overwrite values a person entered (default false); such a run skips no record on its watermark. */
     overwriteHumanValues?: boolean;
     /**
-     * A Feature Pipeline (Infer) run: the run ends `Failed` when any record failed, even below the error-rate breaker
-     * (records that succeeded are still written), and the summary carries a `FeaturePipelineRunResult`. Requires
-     * `recordProcessID`, which the result is attributed to.
+     * A Feature Pipeline (Infer) run: it ends `Failed` when any record failed, and the summary carries a
+     * `FeaturePipelineRunResult`. Requires `recordProcessID`.
      */
     FeaturePipeline?: boolean;
 }

@@ -372,14 +372,6 @@ describe('a withheld (below-confidence-floor) field through the pipeline guard',
         expect(out.withheldFields).toEqual(['SeniorityLevelID']);
     });
 
-    it('a dry run resolves the withheld field to null, and with no guard decides no change, as the real write keeps the value', async () => {
-        const { provider } = parentProvider({ SeniorityLevelID: 'director-id' });
-        const out = await ApplyOutputMapping({ outputMapping: { fields: { SeniorityLevelID: '$.SeniorityLevel' } }, result: { SeniorityLevel: 'x' }, record, contextUser: USER,
-            provider, dryRun: true, withheld: { Fields: ['SeniorityLevelID'], ChildEntities: [] } });
-        expect(out.previewFields).toEqual({ SeniorityLevelID: null });
-        expect(out.previewFieldChanges).toEqual([]);
-        expect(out.withheldFields).toEqual(['SeniorityLevelID']);
-    });
 });
 
 describe('WriteBackProcessor human values', () => {
@@ -622,20 +614,20 @@ Object.setPrototypeOf(MemoryProvider.prototype, DatabaseProviderBase.prototype);
 
 /** Backs the Feature Value service with the store, through the provider each call is given (as the real service does). */
 function backServiceWith(store: MemoryStore): void {
-    const unitOf = (p: IMetadataProvider): MemoryProvider => {
+    const unitOf = (p: IMetadataProvider | undefined): MemoryProvider => {
         if (!(p instanceof MemoryProvider)) throw new Error('expected a MemoryProvider');
         return p;
     };
     vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockImplementation(async (p: RecordFeatureValuesParams): Promise<RecordFeatureValuesOutcome> => {
-        const tx = unitOf(p.Provider);
-        if (tx.TransactionDepth > 0) await store.Lock(p.RecordID, tx);
+        const tx = unitOf(p.provider);
+        if (tx.TransactionDepth > 0) await store.Lock(p.recordID, tx);
         await Promise.resolve();
         const outcome: RecordFeatureValuesOutcome = { Upserted: 0, Unchanged: 0, Previous: {} };
-        for (const out of p.Outputs) {
-            const latest = store.Latest(p.RecordID, out.FeatureName, 'Pipeline');
-            outcome.Previous[out.FeatureName] = latest ? fv(latest.Value || '') : null;
-            const value = typeof out.Value === 'string' ? out.Value : null;
-            tx.Write(() => store.FeatureValues.push({ RecordID: p.RecordID, FeatureName: out.FeatureName, Source: 'Pipeline', Value: value, Run: p.ProcessRunID || null }));
+        for (const out of p.outputs) {
+            const latest = store.Latest(p.recordID, out.featureName, 'Pipeline');
+            outcome.Previous[out.featureName] = latest ? fv(latest.Value || '') : null;
+            const value = typeof out.value === 'string' ? out.value : null;
+            tx.Write(() => store.FeatureValues.push({ RecordID: p.recordID, FeatureName: out.featureName, Source: 'Pipeline', Value: value, Run: p.processRunID || null }));
             outcome.Upserted++;
         }
         return outcome;

@@ -1,7 +1,6 @@
 /**
- * @fileoverview The Feature Value key (FeatureValueKey minus EffectiveAsOf) and the pipeline pin (prompt
- * version, primary AI model, parameters, spec): their data shapes, and the normalisation and hashes that identify a
- * value, as static methods on {@link FeatureValueKey} and {@link FeaturePipelinePin}. No database access.
+ * @fileoverview The Feature Value key and the pipeline pin (prompt version, primary AI model, parameters, spec): their
+ * data shapes, normalisation and hashes. No database access.
  * @module @memberjunction/feature-pipelines
  */
 
@@ -13,10 +12,7 @@ import type { DataFeatureSpec } from './data-feature-spec.js';
 /** Who produced a Feature Value: the generated `MJ: Feature Values.Source` union. */
 export type FeatureValueSource = MJFeatureValueEntity['Source'];
 
-/**
- * The prompt settings that change what the model answers: the prompt's inference parameters, and the primary prompt
- * model's `ModelParameters` (its `EffortLevel`, when set, replaces the prompt's).
- */
+/** The prompt settings that change what the model answers: inference parameters and the primary model's `ModelParameters`. */
 export type FeaturePipelinePromptParameters =
     Pick<MJAIPromptEntity, 'Temperature' | 'TopP' | 'TopK' | 'MinP' | 'FrequencyPenalty' | 'PresencePenalty' | 'Seed' | 'ResponseFormat' | 'EffortLevel'>
     & Pick<MJAIPromptModelEntity, 'ModelParameters'>;
@@ -26,46 +22,29 @@ export type FeaturePipelinePromptModelRow = Pick<MJAIPromptModelEntity, 'ModelID
 
 /** What makes two runs of a pipeline compute the same value: the FeatureVersionPin without the version number. */
 export interface FeaturePipelinePinData {
-    /** The `MJ: AI Prompts` ID the pipeline runs. */
     PromptID: string;
-    /** The prompt version hash: template text, outputs, constraint block, pipeline type and escalation settings. */
     PromptVersionHash: string;
-    /** The primary `MJ: AI Models` ID (highest-priority Active prompt model); null when the prompt has none. */
     AIModelID: string | null;
-    /** SHA-256 of the prompt's inference parameters ({@link FeaturePipelinePin.ComputeParametersHash}). */
     ParametersHash: string;
-    /** SHA-256 of the spec parts that change what is computed or written ({@link FeaturePipelinePin.ComputeSpecHash}). */
     SpecHash: string;
 }
 
 /** The Feature Value key (FeatureValueKey minus EffectiveAsOf): what identifies one stored value. */
 export interface FeatureValueKeyInput {
-    /** The `MJ: Entities` ID of the record's entity. */
     EntityID: string;
-    /** The record's primary key: a UUID (normalised by case when hashed) or another key string, kept as given. */
     RecordID: string;
-    /** The output (feature) name; hashed case-insensitively. */
     FeatureName: string;
-    /** The `MJ: Feature Pipeline Versions.Version` that computed the value; null when unversioned. */
     PipelineVersion: number | null;
-    /** The pin's prompt version hash; null for a value no prompt computed (a human value). */
     PromptVersionHash: string | null;
-    /** The pin's primary AI model; null when the prompt has no Active model, or for a human value. */
     AIModelID: string | null;
-    /** The pin's parameters hash; null for a human value. */
     ParametersHash: string | null;
-    /** SHA-256 of the record's normalised inputs (the pipeline's cache key hash); null when there is none. */
     InputHash: string | null;
-    /** Who produced the value. */
     Source: FeatureValueSource;
 }
 
 /** The pipeline pin's selection and hashes. Every method is static and takes plain data (pins are built as literals). */
 export class FeaturePipelinePin {
-    /**
-     * The highest-priority Active prompt model, or null when the prompt has none. Ties are broken by the model ID,
-     * compared normalised (lower-cased) and ordinally, so the choice depends neither on ID case nor on the runtime locale.
-     */
+    /** The highest-priority Active prompt model (ties broken by normalised model ID), or null when the prompt has none. */
     public static SelectPrimaryModel<T extends FeaturePipelinePromptModelRow>(models: ReadonlyArray<T>): T | null {
         const active = models.filter((m) => m.Status === 'Active');
         if (active.length === 0) {
@@ -74,10 +53,7 @@ export class FeaturePipelinePin {
         return [...active].sort((a, b) => b.Priority - a.Priority || OrdinalCompare(NormalizeUUID(a.ModelID), NormalizeUUID(b.ModelID)))[0];
     }
 
-    /**
-     * SHA-256 of the prompt parameters. `null` and `0` hash differently. The fields are copied one by one, so an entity
-     * object (whose fields are accessors, not own properties) hashes the same as a plain object with the same values.
-     */
+    /** SHA-256 of the prompt parameters (copied field by field, so an entity object hashes like a plain one). */
     public static async ComputeParametersHash(p: FeaturePipelinePromptParameters): Promise<string> {
         return ComputeContentHashAsync({
             Temperature: p.Temperature, TopP: p.TopP, TopK: p.TopK, MinP: p.MinP,
@@ -87,12 +63,9 @@ export class FeaturePipelinePin {
     }
 
     /**
-     * SHA-256 of the spec parts that change what is computed or written, plus the OutputMapping text, plus, for a
-     * Decision pipeline that escalates, its escalation target's pin hash: the target computes the escalated records'
-     * answers, so a change to the target's prompt, model, parameters or spec is a new version of the Decision pipeline.
-     * (The spec hash is in neither the Dedup Cache key nor the Feature Value key, so this changes neither.)
-     * @param escalationTargetPinHash - the escalation target's {@link ComputeHash}; null for a pipeline that does not
-     * escalate, or whose target cannot be resolved (every record that would escalate then fails).
+     * SHA-256 of the spec parts that change what is computed or written, the OutputMapping text, and an escalating
+     * Decision pipeline's target pin hash (the target computes the escalated answers).
+     * @param escalationTargetPinHash - the target's {@link ComputeHash}; null when the pipeline does not escalate
      */
     public static async ComputeSpecHash(spec: DataFeatureSpec, outputMapping: string | null, escalationTargetPinHash: string | null): Promise<string> {
         // `??` keeps a spec part that is present but falsy (an empty Outputs list, a 0) distinct from an absent one
@@ -123,10 +96,7 @@ export class FeaturePipelinePin {
 
 /** The Feature Value key's normalisation and hash. Every method is static and takes plain data. */
 export class FeatureValueKey {
-    /**
-     * Normalises a text key input so the same value written differently maps to one key: Unicode NFC, trimmed, internal
-     * whitespace collapsed to one space, lower-cased. Callers branch on the value's type; only text is normalised.
-     */
+    /** Normalises a text key input: Unicode NFC, trimmed, internal whitespace collapsed, lower-cased. */
     public static NormalizeValue(value: string): string {
         return value.normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase();
     }

@@ -356,11 +356,6 @@ export class PostgreSQLDialect extends SQLDialect {
         return `CAST(${expr} AS UUID)`;
     }
 
-    /** PostgreSQL has no conversion that yields NULL on failure (a failing CAST aborts the statement). */
-    TryConvert(_expr: string, _sqlType: string): string {
-        throw new Error('PostgreSQLDialect does not support TryConvert');
-    }
-
     /**
      * PostgreSQL strict typing requires an explicit `::UUID` cast when
      * comparing the empty-GUID sentinel against a UUID-typed column.

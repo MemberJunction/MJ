@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { UserInfo, type RunViewResult } from '@memberjunction/core';
 import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
-import { OutputValidator } from '../validation/constraint-validator';
+import { ValidateOutputItems, ValidateOutputValue } from '../validation/constraint-validator';
 import { LookupConstraintValues } from '../validation/lookup-values';
 import { RenderConstraintBlock, ResolveConstraint, type DataFeatureOutput } from '../spec/data-feature-spec';
 import type { ResolvedConstraint, ValueConstraint } from '../spec/value-constraint';
@@ -35,30 +35,30 @@ const resolvedFunctions = LookupConstraintValues.Apply(resolvedOf(functions), [
 
 describe('lookup constraints check existence', () => {
     it('rejects a value that is not a row', () => {
-        const r = OutputValidator.ValidateOutputValue('Grand Poobah', constraintOf(seniority), { resolved: resolvedSeniority });
+        const r = ValidateOutputValue('Grand Poobah', constraintOf(seniority), { resolved: resolvedSeniority });
         expect(r.valid).toBe(false);
         expect(r.violationMessage).toContain('Grand Poobah');
     });
     it('accepts a row value in any case and returns its canonical form', () => {
-        const r = OutputValidator.ValidateOutputValue('director', constraintOf(seniority), { resolved: resolvedSeniority });
+        const r = ValidateOutputValue('director', constraintOf(seniority), { resolved: resolvedSeniority });
         expect(r).toMatchObject({ valid: true, value: 'Director' });
     });
     it('checks every item of an array output by its ItemRef', () => {
-        const bad = OutputValidator.ValidateOutputItems([{ JobFunctionID: '7e010001-a101-4b01-8c01-000000000007' }, { JobFunctionID: '00000000-0000-0000-0000-00000000C0DE' }],
+        const bad = ValidateOutputItems([{ JobFunctionID: '7e010001-a101-4b01-8c01-000000000007' }, { JobFunctionID: '00000000-0000-0000-0000-00000000C0DE' }],
             constraintOf(functions), { resolved: resolvedFunctions });
         expect(bad.valid).toBe(false);
         expect(bad.violationMessage).toContain('00000000-0000-0000-0000-00000000C0DE');
-        const good = OutputValidator.ValidateOutputItems([{ JobFunctionID: '7e010001-a101-4b01-8c01-000000000007' }], constraintOf(functions), { resolved: resolvedFunctions });
+        const good = ValidateOutputItems([{ JobFunctionID: '7e010001-a101-4b01-8c01-000000000007' }], constraintOf(functions), { resolved: resolvedFunctions });
         expect(good.valid).toBe(true);
         expect(good.value).toEqual([{ JobFunctionID: '7E010001-A101-4B01-8C01-000000000007' }]);
     });
     it('reports no coercion when every item already holds its canonical value', () => {
-        const same = OutputValidator.ValidateOutputItems([{ JobFunctionID: '7E010001-A101-4B01-8C01-000000000007' }], constraintOf(functions), { resolved: resolvedFunctions });
+        const same = ValidateOutputItems([{ JobFunctionID: '7E010001-A101-4B01-8C01-000000000007' }], constraintOf(functions), { resolved: resolvedFunctions });
         expect(same).toMatchObject({ valid: true, coerced: false });
     });
     it('drops the items a coerce-to-other lookup cannot place, as null does, and keeps the rest', () => {
         const coerce: ValueConstraint = { ...constraintOf(functions), OnViolation: 'coerce-to-other' };
-        const r = OutputValidator.ValidateOutputItems([{ JobFunctionID: '7e010001-a101-4b01-8c01-000000000007' }, { JobFunctionID: 'not-a-row' }],
+        const r = ValidateOutputItems([{ JobFunctionID: '7e010001-a101-4b01-8c01-000000000007' }, { JobFunctionID: 'not-a-row' }],
             coerce, { resolved: { ...resolvedFunctions, OnViolation: 'coerce-to-other' } });
         expect(r).toMatchObject({ valid: true, violationPolicyApplied: 'coerce-to-other', coerced: true });
         expect(r.value).toEqual([{ JobFunctionID: '7E010001-A101-4B01-8C01-000000000007' }]);

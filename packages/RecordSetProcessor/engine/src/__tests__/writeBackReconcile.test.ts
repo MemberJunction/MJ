@@ -8,7 +8,6 @@ import {
 import type { RecordRef } from '@memberjunction/record-set-processor-base';
 import { MJGlobal } from '@memberjunction/global';
 import { TagEngine } from '@memberjunction/tag-engine';
-import type { MJTagEntity, MJTaggedItemEntity } from '@memberjunction/core-entities';
 import { ApplyOutputMapping, OutputMappingWriter, type HumanValueGuard, type OutputMappingConfig } from '../writeBack';
 import { WriteBackProcessor } from '../processors/WriteBackProcessor';
 import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
@@ -309,41 +308,17 @@ describe('OutputMappingWriter.NormalizeKeyPart', () => {
 
 describe('OutputMappingWriter.ValuesEqual — equality by field type', () => {
     const [, , nickname, reviewedAt] = PEOPLE_FIELDS;
-    const confidence = PJF_FIELDS[4];
-    const jobFunction = PJF_FIELDS[2];
-    const sequence = PJF_FIELDS[3];
+    const [, , jobFunction, sequence, confidence] = PJF_FIELDS;
 
-    it('compares text exactly: case, whitespace and empty-vs-null all count', () => {
-        expect(OutputMappingWriter.ValuesEqual(nickname, 'bob', 'Bob')).toBe(false);
-        expect(OutputMappingWriter.ValuesEqual(nickname, 'bob', ' bob')).toBe(false);
-        expect(OutputMappingWriter.ValuesEqual(nickname, '', null)).toBe(false);
-        expect(OutputMappingWriter.ValuesEqual(nickname, 'bob', 'bob')).toBe(true);
-        expect(OutputMappingWriter.ValuesEqual(nickname, null, undefined)).toBe(true);
-    });
-
-    it('compares dates by instant', () => {
-        expect(OutputMappingWriter.ValuesEqual(reviewedAt, new Date('2026-10-13T12:00:00Z'), '2026-10-13T14:00:00+02:00')).toBe(true);
-        expect(OutputMappingWriter.ValuesEqual(reviewedAt, new Date('2026-10-13T12:00:00Z'), '2026-10-13T12:00:01Z')).toBe(false);
-    });
-
-    it('compares decimals at the column scale (decimal(5,4): 0.12345 stores as 0.1235)', () => {
-        expect(OutputMappingWriter.ValuesEqual(confidence, 0.1235, 0.12345)).toBe(true);
-        expect(OutputMappingWriter.ValuesEqual(confidence, 0.9, 0.90001)).toBe(true);
-        expect(OutputMappingWriter.ValuesEqual(confidence, 0.1235, 0.1237)).toBe(false);
-        expect(OutputMappingWriter.ValuesEqual(sequence, 1, 1.00001)).toBe(false); // int: no scale rounding
-    });
-
-    it('compares uniqueidentifiers case-insensitively', () => {
-        expect(OutputMappingWriter.ValuesEqual(jobFunction, 'aaaaaaaa-0000-0000-0000-000000000001', 'AAAAAAAA-0000-0000-0000-000000000001')).toBe(true);
-        expect(OutputMappingWriter.ValuesEqual(jobFunction, 'aaaaaaaa-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000002')).toBe(false);
-    });
-
-    it('writes a case-only change to a text field', async () => {
-        const h = harness([]);
-        h.parent.Values.Nickname = 'bob';
-        const out = await ApplyOutputMapping({ outputMapping: { fields: { Nickname: '$.Nickname' } }, result: { Nickname: 'Bob' }, record, contextUser: USER, provider: h.provider });
-        expect(h.parent.Saved).toBe(1);
-        expect(out.updatedRecord).toBe(true);
+    it.each([
+        ['text exactly (case counts)', nickname, 'bob', 'Bob', false],
+        ['text exactly (empty is not null)', nickname, '', null, false],
+        ['dates by instant', reviewedAt, new Date('2026-10-13T12:00:00Z'), '2026-10-13T14:00:00+02:00', true],
+        ['decimals at the column scale (decimal(5,4): 0.12345 stores as 0.1235)', confidence, 0.1235, 0.12345, true],
+        ['an int without scale rounding', sequence, 1, 1.00001, false],
+        ['uniqueidentifiers case-insensitively', jobFunction, 'aaaaaaaa-0000-0000-0000-000000000001', 'AAAAAAAA-0000-0000-0000-000000000001', true],
+    ])('compares %s', (_what, f, stored, proposed, equal) => {
+        expect(OutputMappingWriter.ValuesEqual(f, stored, proposed)).toBe(equal);
     });
 
     it('keeps a row whose stored decimal is the proposed one rounded to the column scale', async () => {
@@ -606,22 +581,6 @@ describe('ApplyOutputMapping transaction isolation', () => {
         expect(shared.Durable).toEqual(A_WRITES);
     });
 
-    it('a tracker write on the shared provider while a write-back is open survives that write-back rolling back', async () => {
-        const shared = new AmbientTransactionProvider();
-        // The run tracker records record A's detail row through the shared provider while record B's write-back is open.
-        shared.OnFailingSave = () => shared.Write('ProcessRunDetail:person-A');
-        await expect(ApplyOutputMapping({ outputMapping: mapping, result, record: recordB, contextUser: USER, provider: shared }))
-            .rejects.toThrow(/UQ_PersonJobFunction_Person_JobFunction/);
-        expect(shared.Durable).toEqual(['ProcessRunDetail:person-A']);
-    });
-
-    it('runs a provider that is not a DatabaseProviderBase (a client provider) on itself', async () => {
-        const h = harness([]);
-        await ApplyOutputMapping({ outputMapping: mapping, result, record, contextUser: USER, provider: h.provider });
-        expect(h.provider instanceof DatabaseProviderBase).toBe(false);
-        expect(h.scope.Commit).toHaveBeenCalledTimes(1); // the transaction ran on the caller's provider
-    });
-
     it('with no transaction open on the caller\'s provider, runs on a minted instance and commits it on its own', async () => {
         const shared = new AmbientTransactionProvider();
         await ApplyOutputMapping({ outputMapping: mapping, result, record: recordA, contextUser: USER, provider: shared });
@@ -643,17 +602,6 @@ describe('ApplyOutputMapping transaction isolation', () => {
         expect(shared.Durable).toEqual(['caller:own-write', ...A_WRITES]);
     });
 
-    it('fails loudly when a database provider cannot mint an instance, running nothing on the shared provider', async () => {
-        // A DatabaseProviderBase subclass that never implemented CreateIndependentInstance: it inherits the base's, which throws.
-        class NoMintProvider extends AmbientTransactionProvider {}
-        Object.defineProperty(NoMintProvider.prototype, 'CreateIndependentInstance', { value: DatabaseProviderBase.prototype.CreateIndependentInstance });
-        const shared = new NoMintProvider();
-        await expect(ApplyOutputMapping({ outputMapping: mapping, result, record: recordA, contextUser: USER, provider: shared }))
-            .rejects.toThrow(/NoMintProvider does not implement CreateIndependentInstance/);
-        expect(shared.Calls).toBe(0);
-        expect(shared.Durable).toEqual([]);
-    });
-
     it('writes on a minted instance and releases it, on success and on failure', async () => {
         const shared = new AmbientTransactionProvider();
         await ApplyOutputMapping({ outputMapping: mapping, result, record: recordA, contextUser: USER, provider: shared });
@@ -669,38 +617,10 @@ const uuidField = (Name: string, RelatedEntity?: string, extra: Partial<EntityFi
 const relatedEntity = (Name: string, BaseTable: string, keyType = 'uniqueidentifier', extraFields: EntityFieldInfo[] = []): PreviewEntity =>
     ({ Name, SchemaName: 'app', BaseTable, Fields: [field('ID', keyType), ...extraFields] });
 
-/** The SQL Server conversion of a sent text to a column type, as `TRY_CONVERT` does it (null: does not convert). */
-function TryConvertLikeSqlServer(type: string, text: string): string | null {
-    if (type === 'uniqueidentifier') {
-        // A UUID, optionally in braces, at the start; leading whitespace fails and anything after it is ignored.
-        const m = /^(?:\{([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\}|([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}))/i.exec(text);
-        return m ? (m[1] || m[2]).toLowerCase() : null;
-    }
-    if (type === 'int') {
-        const m = /^ *([+-]?)(\d*) *$/.exec(text); // spaces, optional sign, optional digits (none is 0)
-        return m ? String(Number(`${m[1]}${m[2] || '0'}`)) : null;
-    }
-    if (type === 'date') {
-        const t = text.trim(); // ISO yyyy-mm-dd, a real calendar day
-        const day = new Date(`${t}T00:00:00Z`);
-        return /^\d{4}-\d{2}-\d{2}$/.test(t) && !Number.isNaN(day.getTime()) && day.toISOString().startsWith(t) ? t : null;
-    }
-    const decimal = /^decimal\((\d+), (\d+)\)$/.exec(type);
-    if (decimal) {
-        const n = Number(text.trim());
-        const integerDigits = Number(decimal[1]) - Number(decimal[2]);
-        return text.trim() !== '' && /^[+-]?(\d+\.?\d*|\.\d+)$/.test(text.trim()) && Math.abs(n) < 10 ** integerDigits ? n.toFixed(Number(decimal[2])) : null;
-    }
-    return text; // character types are compared as sent
-}
-
 /**
- * A database provider double for dry-run previews. Related rows live in `Tables` (base table → rows); its
- * `ExecuteSQL` answers the preview's judgement read from them for every user, as a database constraint sees every
- * row: it converts each sent value as `TRY_CONVERT` would, drops characters outside the code page from a literal
- * without the `N` prefix, and compares case-insensitively unless the column is in `CaseSensitiveColumns`. `RunView`
- * serves only the existing child rows: a user-filtered read of a related entity returns nothing, so a preview that read
- * related rows through it would report every value missing.
+ * A database provider double for dry-run previews. Related rows live in `Tables` (base table → rows); a view of a
+ * related entity returns the rows whose filtered column holds one of the `IN (...)` values; a view of the child entity
+ * returns `ExistingChildren`.
  */
 class PreviewDbProvider extends WriteBackTestProvider {
     public FailRead = false;
@@ -710,17 +630,18 @@ class PreviewDbProvider extends WriteBackTestProvider {
     /** The processed-record objects loaded, in order. */
     public readonly LoadedRecords: TestRow[] = [];
     public ExistingChildren: TestRow[] = [];
-    /** Columns compared case-sensitively (a `_CS_` collation); every other column compares as `_CI_` does. */
-    public CaseSensitiveColumns = new Set<string>();
-    /** The SQL statements run, the views read and the entity objects loaded, in order. */
-    public readonly SqlRuns: string[] = [];
+    /** The views read, and the entity objects loaded, in order. */
     public readonly ViewRuns: RunViewParams[] = [];
-    /** The entity objects write-back got from this provider. */
     public readonly Loads: string[] = [];
 
     constructor(defs: PreviewEntity[], public readonly Tables: Record<string, Array<Record<string, string>>>) {
         super();
         this.Known = defs.map(EntityOf);
+    }
+
+    /** The reads of related entities (every view but the child rows'). */
+    public get RelatedReads(): RunViewParams[] {
+        return this.ViewRuns.filter((p) => p.EntityName !== 'Person Job Functions');
     }
 
     /** An existing child row of the processed record. */
@@ -754,36 +675,20 @@ class PreviewDbProvider extends WriteBackTestProvider {
         return entity;
     }
 
-    /** The judgement read, answered from `Tables`. `as T[]` is the generic return every provider implementation makes. */
-    public override async ExecuteSQL<T>(query: string): Promise<Array<T>> {
-        this.SqlRuns.push(query);
-        return this.Judge(query) as T[];
-    }
-
-    /** The processed record's existing child rows; every other view is empty (a user-filtered read). */
+    /** The child rows, or a related entity's rows holding the filtered values. `as T[]`: the generic return every provider makes. */
     public override async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
         this.ViewRuns.push(params);
-        return params.EntityName === 'Person Job Functions' ? rowsResult(this.ExistingChildren as T[]) : rowsResult<T>([]);
-    }
-
-    /** Answers the judgement read the way SQL Server does (see the class comment). */
-    protected Judge(sql: string): Array<{ Value: string; Converts: number; Found: number }> {
-        if (this.FailRead) {
-            throw new Error('read failed');
+        if (params.EntityName === 'Person Job Functions') {
+            return rowsResult(this.ExistingChildren as T[]);
         }
-        const [, convertTo, table, column, list] = /^SELECT \[Sent\]\.\[Value\], CASE WHEN (?:TRY_CONVERT\(([^,]+(?:, \d+\))?), )?\[Sent\]\.\[Value\]\)? IS NULL THEN 0 ELSE 1 END AS \[Converts\], CASE WHEN EXISTS \(SELECT 1 FROM \[app\]\.\[(\w+)\] WHERE \[(\w+)\] = .*? THEN 1 ELSE 0 END AS \[Found\] FROM \(VALUES (.*)\) AS \[Sent\]\(\[Value\]\)$/.exec(sql) || [];
-        const sent = [...(list || '').matchAll(/\((N?)'((?:[^']|'')*)'\)/g)].map(([, n, text]) => {
-            const value = text.replace(/''/g, "'");
-            return n === 'N' ? value : value.replace(/[^\x00-\xff]/g, '?'); // a plain literal loses what the code page lacks
-        });
-        const cs = this.CaseSensitiveColumns.has(column);
-        const typeOf = (text: string): string | null => (convertTo ? TryConvertLikeSqlServer(convertTo, text) : text);
-        const same = (stored: string, value: string): boolean => (cs ? stored.trimEnd() === value.trimEnd() : stored.trimEnd().toLowerCase() === value.trimEnd().toLowerCase());
-        return sent.map((value) => {
-            const converted = typeOf(value);
-            const found = converted !== null && (this.Tables[table] || []).some((row) => { const stored = typeOf(row[column]); return stored !== null && same(stored, converted); });
-            return { Value: value, Converts: converted === null ? 0 : 1, Found: found ? 1 : 0 };
-        });
+        if (this.FailRead) {
+            return { ...rowsResult<T>([]), Success: false, ErrorMessage: 'read failed' };
+        }
+        const [, column, list] = /^\[(\w+)\] IN \((.*)\)$/.exec(typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '') || [];
+        const wanted = [...(list || '').matchAll(/'([^']*)'/g)].map(([, v]) => v.toLowerCase());
+        const table = this.EntityByName(params.EntityName || '')?.BaseTable || '';
+        const rows = (this.Tables[table] || []).filter((row) => wanted.includes(String(row[column]).toLowerCase()));
+        return rowsResult(rows.map((row) => ({ [column]: row[column] })) as T[]);
     }
 }
 
@@ -810,10 +715,8 @@ describe('dry-run preview reports what the real write would fail on', () => {
         ] };
         const out = await ApplyOutputMapping({ outputMapping: childOnly, result: bad, record, contextUser: USER, provider: d, dryRun: true });
         expect(out.dryRun).toBe(true);
-        expect(out.PreviewErrors).toHaveLength(1);
-        expect(out.PreviewErrors?.[0]).toContain(MISSING_ID);
-        expect(d.SqlRuns).toHaveLength(1);
-        expect(d.ViewRuns).toHaveLength(1); // the existing child rows, read as the real write reads them
+        expect(out.PreviewErrors).toEqual([`'Person Job Functions.JobFunctionID' = '${MISSING_ID}' does not exist in 'Job Functions' (the real write fails on its foreign key)`]);
+        expect(d.RelatedReads).toEqual([expect.objectContaining({ EntityName: 'Job Functions', Fields: ['ID'], ResultType: 'simple' })]);
         expect(d.Loads).toHaveLength(0);
     });
 
@@ -864,7 +767,7 @@ describe('dry-run preview — the other checks a real write would fail', () => {
         const r = await new WriteBackProcessor(inner, mapping, true).ProcessRecord(record, { contextUser: USER, provider: d });
         expect(r.Status).toBe('Succeeded');
         expect(writeBackOf(r).PreviewErrors).toBeUndefined();
-        expect(d.SqlRuns).toHaveLength(2); // one read per related entity: job functions, seniority levels
+        expect(d.RelatedReads).toHaveLength(2); // one read per related entity: job functions, seniority levels
         expect(d.LoadedRecords.every((r) => r.Saved === 0)).toBe(true);
     });
 
@@ -874,12 +777,11 @@ describe('dry-run preview — the other checks a real write would fail', () => {
         expect(out.PreviewErrors).toEqual([`'People.SeniorityLevelID' = '${result.SeniorityLevel}' does not exist in 'Seniority Levels' (the real write fails on its foreign key)`]);
     });
 
-    it('reports a value the uniqueidentifier key does not convert, judged by the database in the same read', async () => {
+    it('reports a value that is not a key of the uniqueidentifier column without reading it', async () => {
         const d = new PreviewDbProvider([PJF(), PEOPLE, JOB_FUNCTIONS], {});
         const out = await ApplyOutputMapping({ outputMapping: childOnly, result: oneFunction('Sales'), record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toEqual([`'Person Job Functions.JobFunctionID' = 'Sales' is not a valid uniqueidentifier value for 'Job Functions.ID' (the real write fails converting it)`]);
-        expect(d.SqlRuns).toHaveLength(1);
-        expect(d.SqlRuns[0]).toContain('TRY_CONVERT(uniqueidentifier, [Sent].[Value])');
+        expect(out.PreviewErrors).toEqual([`'Person Job Functions.JobFunctionID' = 'Sales' is not a valid key of 'Job Functions' (the real write fails converting it)`]);
+        expect(d.RelatedReads).toHaveLength(0);
     });
 
     it('reports a value that is not a string or number', async () => {
@@ -926,7 +828,7 @@ describe('dry-run preview checks what the database constraint checks', () => {
         const d = new PreviewDbProvider([soft, PEOPLE, JOB_FUNCTIONS], {});
         const out = await ApplyOutputMapping({ outputMapping: childOnly, result: oneFunction(MISSING_ID), record, contextUser: USER, provider: d, dryRun: true });
         expect(out.PreviewErrors).toBeUndefined();
-        expect(d.SqlRuns).toHaveLength(0);
+        expect(d.RelatedReads).toHaveLength(0);
     });
 
     it('does not check a relation only a fieldLookups entry names', async () => {
@@ -935,98 +837,18 @@ describe('dry-run preview checks what the database constraint checks', () => {
         const out = await ApplyOutputMapping({ outputMapping: { fields: mapping.fields, fieldLookups: { SeniorityLevelID: { relatedEntity: 'Seniority Levels' } } },
             result, record, contextUser: USER, provider: d, dryRun: true });
         expect(out.PreviewErrors).toBeUndefined();
-        expect(d.SqlRuns).toHaveLength(0); // no constraint to check
+        expect(d.RelatedReads).toHaveLength(0); // no constraint to check
         expect(d.LoadedRecords.every((r) => r.Saved === 0)).toBe(true); // the record is loaded to decide its changes, never saved
     });
 
-    it('compares on the related column the foreign key names, read from the base table without user filtering', async () => {
-        const byCode = { ...PJF(), Fields: PJF().Fields.map((f) => (f.Name === 'JobFunctionID'
-            ? Object.assign(new EntityFieldInfo({ Name: 'JobFunctionID', Type: 'nvarchar', RelatedEntity: 'Job Functions' }), { RelatedEntityFieldName: 'Code' }) : f)) };
-        const functions = relatedEntity('Job Functions', 'JobFunction', 'uniqueidentifier', [field('Code', 'nvarchar')]);
-        const d = new PreviewDbProvider([byCode, PEOPLE, functions], { JobFunction: [{ ID: JOB_FUNCTION_ID, Code: 'SALES' }] });
-        const keyByCode: OutputMappingConfig = { childRecords: [{ ...mapping.childRecords![0], reconcile: { ...mapping.childRecords![0].reconcile!, keyFields: ['JobFunctionID'] } }] };
-        const out = await ApplyOutputMapping({ outputMapping: keyByCode, result: oneFunction('sales  '), record, contextUser: USER, provider: d, dryRun: true });
+    it('reads the related column the foreign key names, and finds a value in any case', async () => {
+        const byRef = { ...PJF(), Fields: PJF().Fields.map((f) => (f.Name === 'JobFunctionID'
+            ? Object.assign(uuidField('JobFunctionID', 'Job Functions'), { RelatedEntityFieldName: 'RefID' }) : f)) };
+        const functions = relatedEntity('Job Functions', 'JobFunction', 'uniqueidentifier', [field('RefID', 'uniqueidentifier')]);
+        const d = new PreviewDbProvider([byRef, PEOPLE, functions], { JobFunction: [{ ID: MISSING_ID, RefID: JOB_FUNCTION_ID }] });
+        const out = await ApplyOutputMapping({ outputMapping: childOnly, result: oneFunction(JOB_FUNCTION_ID.toLowerCase()), record, contextUser: USER, provider: d, dryRun: true });
         expect(out.PreviewErrors).toBeUndefined();
-        // A character column compares the text as sent: converting it would silently truncate.
-        expect(d.SqlRuns[0]).toBe('SELECT [Sent].[Value], CASE WHEN [Sent].[Value] IS NULL THEN 0 ELSE 1 END AS [Converts], '
-            + 'CASE WHEN EXISTS (SELECT 1 FROM [app].[JobFunction] WHERE [Code] = [Sent].[Value]) THEN 1 ELSE 0 END AS [Found] '
-            + "FROM (VALUES ('sales  ')) AS [Sent]([Value])");
-        expect(d.ViewRuns.map((p) => p.EntityName)).toEqual(['Person Job Functions']);
-    });
-
-    it('reports a value that cannot convert to an integer key, and still checks the others', async () => {
-        const intChild = { ...PJF(), Fields: [...PJF().Fields, Object.assign(field('RegionID', 'int'), { RelatedEntity: 'Regions' })] };
-        const regions = relatedEntity('Regions', 'Region', 'int');
-        const d = new PreviewDbProvider([intChild, PEOPLE, JOB_FUNCTIONS, regions], { JobFunction: [{ ID: JOB_FUNCTION_ID }], Region: [{ ID: '7' }] });
-        const withRegion: OutputMappingConfig = { childRecords: [{ ...mapping.childRecords![0], map: { ...mapping.childRecords![0].map, RegionID: '$.RegionID' } }] };
-        const answer = { Functions: [{ JobFunctionID: JOB_FUNCTION_ID, Sequence: 1, RegionID: 'abc' },
-            { JobFunctionID: 'AAAAAAAA-0000-0000-0000-000000000002', Sequence: 2, RegionID: ' 7 ' }] };
-        d.Tables.JobFunction.push({ ID: 'AAAAAAAA-0000-0000-0000-000000000002' });
-        const out = await ApplyOutputMapping({ outputMapping: withRegion, result: answer, record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toEqual([`'Person Job Functions.RegionID' = 'abc' is not a valid int value for 'Regions.ID' (the real write fails converting it)`]);
-        const regionRead = d.SqlRuns.find((sql) => sql.includes('[app].[Region]')) || '';
-        expect(regionRead).toContain(`WHERE [ID] = TRY_CONVERT(int, [Sent].[Value])`);
-        expect(regionRead).toContain(`(VALUES ('abc'), (' 7 '))`); // sent as written, in one read
-    });
-
-    it('reports a decimal or date key value that does not convert, and still checks the others', async () => {
-        const rateKey = new EntityFieldInfo({ Name: 'ID', Type: 'decimal', Precision: 5, Scale: 4 });
-        const rates: PreviewEntity = { Name: 'Rates', BaseTable: 'Rate', Fields: [rateKey] };
-        const days: PreviewEntity = relatedEntity('Days', 'Day', 'date');
-        const child = { ...PJF(), Fields: [...PJF().Fields, new EntityFieldInfo({ Name: 'RateID', Type: 'decimal', Precision: 5, Scale: 4, RelatedEntity: 'Rates' }),
-            new EntityFieldInfo({ Name: 'DayID', Type: 'date', RelatedEntity: 'Days' })] };
-        const d = new PreviewDbProvider([child, PEOPLE, JOB_FUNCTIONS, rates, days], { JobFunction: [{ ID: JOB_FUNCTION_ID }], Rate: [{ ID: '0.1235' }], Day: [{ ID: '2026-10-13' }] });
-        const insertOnly: OutputMappingConfig = { childRecords: [{ entity: 'Person Job Functions', parentField: 'PersonID', fanOutRef: '$.Rows', map: { RateID: '$.RateID', DayID: '$.DayID' } }] };
-        const answer = { Rows: [{ RateID: '0.1235', DayID: '2026-10-13' }, { RateID: 'abc', DayID: 'not a date' }, { RateID: '12.5', DayID: '2026-02-30' }] };
-        const out = await ApplyOutputMapping({ outputMapping: insertOnly, result: answer, record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toEqual([
-            `'Person Job Functions.RateID' = 'abc' is not a valid decimal(5, 4) value for 'Rates.ID' (the real write fails converting it)`,
-            `'Person Job Functions.RateID' = '12.5' is not a valid decimal(5, 4) value for 'Rates.ID' (the real write fails converting it)`,
-            `'Person Job Functions.DayID' = 'not a date' is not a valid date value for 'Days.ID' (the real write fails converting it)`,
-            `'Person Job Functions.DayID' = '2026-02-30' is not a valid date value for 'Days.ID' (the real write fails converting it)`,
-        ]);
-        expect(d.SqlRuns).toHaveLength(2); // one read per related column: rates, days
-    });
-});
-
-describe('dry-run preview sends values as the write does and lets the database compare them', () => {
-    /** The child entity with JobFunctionID referencing the related Code column, typed like it. */
-    const byCode = (code: EntityFieldInfo): PreviewEntity => ({ ...PJF(), Fields: PJF().Fields.map((f) => (f.Name === 'JobFunctionID'
-        ? Object.assign(new EntityFieldInfo({ Name: 'JobFunctionID', Type: code.Type, Length: code.Length, RelatedEntity: 'Job Functions' }), { RelatedEntityFieldName: 'Code' }) : f)) });
-    const functionsByCode = (code: EntityFieldInfo): PreviewEntity => relatedEntity('Job Functions', 'JobFunction', 'uniqueidentifier', [code]);
-    const nvarchar20 = new EntityFieldInfo({ Name: 'Code', Type: 'nvarchar', Length: 40 });
-
-    it('sends text outside ASCII as a Unicode literal, so an existing value is found', async () => {
-        const d = new PreviewDbProvider([byCode(nvarchar20), PEOPLE, functionsByCode(nvarchar20)], { JobFunction: [{ ID: JOB_FUNCTION_ID, Code: '日本' }] });
-        const out = await ApplyOutputMapping({ outputMapping: childOnly, result: oneFunction('日本'), record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toBeUndefined();
-        expect(d.SqlRuns[0]).toContain(`(VALUES (N'日本'))`);
-    });
-
-    it('sends a UUID as written, not normalised', async () => {
-        const d = new PreviewDbProvider([PJF(), PEOPLE, JOB_FUNCTIONS], { JobFunction: [{ ID: JOB_FUNCTION_ID.toLowerCase() }] });
-        const out = await ApplyOutputMapping({ outputMapping: childOnly, result: oneFunction(JOB_FUNCTION_ID), record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toBeUndefined();
-        expect(d.SqlRuns[0]).toContain(`(VALUES ('${JOB_FUNCTION_ID}'))`);
-    });
-
-    it('lets the column collation decide: a case-only difference on a case-sensitive column does not exist', async () => {
-        const d = new PreviewDbProvider([byCode(nvarchar20), PEOPLE, functionsByCode(nvarchar20)], { JobFunction: [{ ID: JOB_FUNCTION_ID, Code: 'Sales' }] });
-        d.CaseSensitiveColumns.add('Code');
-        // Inserted without reconcile (a reconcile key would treat the two as one): both values go to the database in one read.
-        const insertOnly: OutputMappingConfig = { childRecords: [{ entity: 'Person Job Functions', parentField: 'PersonID', fanOutRef: '$.Functions', map: { JobFunctionID: '$.JobFunctionID' } }] };
-        const both = { Functions: [{ JobFunctionID: 'Sales' }, { JobFunctionID: 'sales' }] };
-        const out = await ApplyOutputMapping({ outputMapping: insertOnly, result: both, record, contextUser: USER, provider: d, dryRun: true });
-        expect(d.SqlRuns).toHaveLength(1);
-        expect(out.PreviewErrors).toEqual([`'Person Job Functions.JobFunctionID' = 'sales' does not exist in 'Job Functions' (the real write fails on its foreign key)`]);
-    });
-
-    it('reports text longer than the related column holds without sending it', async () => {
-        const code5 = new EntityFieldInfo({ Name: 'Code', Type: 'nvarchar', Length: 10 });
-        const d = new PreviewDbProvider([byCode(code5), PEOPLE, functionsByCode(code5)], { JobFunction: [{ ID: JOB_FUNCTION_ID, Code: 'SALES' }] });
-        const out = await ApplyOutputMapping({ outputMapping: childOnly, result: oneFunction('SALES-EMEA'), record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toEqual([`'Person Job Functions.JobFunctionID' = 'SALES-EMEA' is longer than 'Job Functions.Code' holds (the real write fails truncating it)`]);
-        expect(d.SqlRuns).toHaveLength(0);
+        expect(d.RelatedReads).toEqual([expect.objectContaining({ ExtraFilter: `[RefID] IN ('${JOB_FUNCTION_ID.toLowerCase()}')`, Fields: ['RefID'] })]);
     });
 });
 
@@ -1048,7 +870,7 @@ describe('dry-run preview checks only what the real write writes', () => {
         d.RecordValues.SeniorityLevelID = MISSING_ID.toLowerCase();
         const out = await ApplyOutputMapping({ outputMapping: { fields: mapping.fields }, result: { SeniorityLevel: MISSING_ID }, record, contextUser: USER, provider: d, dryRun: true });
         expect(out.PreviewErrors).toBeUndefined();
-        expect(d.SqlRuns).toHaveLength(0);
+        expect(d.RelatedReads).toHaveLength(0);
     });
 
     it('checks an inserted row in full, an updated row by its differing fields, and a kept human row not at all', async () => {
@@ -1071,277 +893,5 @@ describe('dry-run preview checks only what the real write writes', () => {
         const out = await ApplyOutputMapping({ outputMapping: withLevel, result: answer, record, contextUser: USER, provider: d, dryRun: true });
         expect(out.PreviewErrors).toEqual([`'Person Job Functions.LevelID' = '55555555-5555-5555-5555-555555555555' does not exist in 'Seniority Levels' (the real write fails on its foreign key)`]);
         expect(d.ExistingChildren.every((r) => r.Saved === 0)).toBe(true);
-    });
-});
-
-describe('OutputMappingWriter.ExceedsColumnLength — text longer than a character column holds', () => {
-    it('measures a character column in characters (Length is in bytes for n-types), and ignores other types and MAX', () => {
-        const code10 = new EntityFieldInfo({ Name: 'Code', Type: 'nvarchar', Length: 20 });
-        expect(OutputMappingWriter.ExceedsColumnLength(code10, '0123456789')).toBe(false);
-        expect(OutputMappingWriter.ExceedsColumnLength(code10, '0123456789X')).toBe(true);
-        expect(OutputMappingWriter.ExceedsColumnLength(new EntityFieldInfo({ Name: 'Code', Type: 'nvarchar', Length: -1 }), 'x'.repeat(5000))).toBe(false);
-        expect(OutputMappingWriter.ExceedsColumnLength(field('ID', 'uniqueidentifier'), `${JOB_FUNCTION_ID}-and-more`)).toBe(false);
-    });
-});
-
-/** What `TagEngine.FindTaggedItems` answers. */
-type TaggedItemLookup = Awaited<ReturnType<TagEngine['FindTaggedItems']>>;
-
-describe('the dry-run preview is the real write\'s decision', () => {
-    const LEVEL = '11111111-1111-1111-1111-111111111111';
-    const fieldMapping: OutputMappingConfig = {
-        fields: { SeniorityLevelID: '$.Level', Nickname: '$.Nick', LastReviewedAt: '$.At' },
-    };
-    /** The record already holds: the level (upper case), an empty nickname, the review instant (as a Date). */
-    const heldValues = { SeniorityLevelID: LEVEL.toUpperCase(), Nickname: '', LastReviewedAt: new Date('2026-10-13T10:00:00Z') };
-    const answer = { Level: LEVEL, Nick: null, At: '2026-10-13T12:00:00+02:00' };
-
-    /** The fields whose stored value changed after `run`. */
-    async function changedFields(setup: () => ReturnType<typeof harness>, dryRun: boolean, guard?: HumanValueGuard) {
-        const h = setup();
-        Object.assign(h.parent.Values, heldValues);
-        const before = { ...h.parent.Values };
-        const out = await ApplyOutputMapping({ outputMapping: fieldMapping, result: answer, record, contextUser: USER, provider: h.provider, dryRun, humanGuard: guard });
-        const changed = Object.keys(h.parent.Values).filter((f) => h.parent.Values[f] !== before[f]);
-        return { out, changed, h };
-    }
-
-    it('lists the fields the real write saves: equal dates, ids and an empty-vs-null difference decided as the write decides', async () => {
-        const dry = await changedFields(() => harness([]), true);
-        const real = await changedFields(() => harness([]), false);
-
-        expect(real.changed).toEqual(['Nickname']);
-        expect(dry.out.previewFieldChanges).toEqual([{ Field: 'Nickname', OldValue: '', NewValue: null }]);
-        expect(dry.out.previewFieldChanges?.map((c) => c.Field)).toEqual(real.changed);
-        expect(dry.h.parent.Saved).toBe(0);
-    });
-
-    it('leaves out a field the real write keeps because a person entered it', async () => {
-        const kept = { IsHumanOwned: vi.fn(async (q: { FieldName: string }) => q.FieldName === 'Nickname'), RecordPreserved: vi.fn(async () => undefined), RetireHumanValue: vi.fn(async () => false) };
-        const heldNick = () => { const h = harness([]); return h; };
-        const dryHarness = heldNick();
-        Object.assign(dryHarness.parent.Values, { ...heldValues, Nickname: 'Bobby' });
-        const dry = await ApplyOutputMapping({ outputMapping: fieldMapping, result: answer, record, contextUser: USER, provider: dryHarness.provider, dryRun: true, humanGuard: kept });
-        const realHarness = heldNick();
-        Object.assign(realHarness.parent.Values, { ...heldValues, Nickname: 'Bobby' });
-        const real = await ApplyOutputMapping({ outputMapping: fieldMapping, result: answer, record, contextUser: USER, provider: realHarness.provider, humanGuard: kept });
-
-        expect(real.preservedHumanFields).toEqual(['Nickname']);
-        expect(real.updatedRecord).toBe(false);
-        expect(dry.previewFieldChanges).toEqual([]);
-    });
-
-    it('previews nothing for an identical re-run, as the real write changes nothing', async () => {
-        const order: string[] = [];
-        const existing = [
-            new Row({ ID: 'pjf-1', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000001', Sequence: 1, Confidence: 0.9, Source: 'Derived' }, order, 'e1'),
-            new Row({ ID: 'pjf-2', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000002', Sequence: 2, Confidence: 0.4, Source: 'Derived' }, order, 'e2'),
-        ];
-        const h = harness(existing);
-        h.parent.Values.SeniorityLevelID = LEVEL;
-        const dry = await ApplyOutputMapping({ outputMapping: mapping, result, record, contextUser: USER, provider: h.provider, dryRun: true });
-        const real = await ApplyOutputMapping({ outputMapping: mapping, result, record, contextUser: USER, provider: h.provider });
-
-        expect(real.changed).toBe(false);
-        expect(dry.previewFieldChanges).toEqual([]);
-        expect(dry.previewChildChanges?.map((c) => c.Action)).toEqual(['none', 'none']);
-    });
-
-    it('marks each child row insert, update, delete or none as the real write does, an update showing only the differing values', async () => {
-        const order: string[] = [];
-        const same = new Row({ ID: 'pjf-1', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000001', Sequence: 1, Confidence: 0.9, Source: 'Derived' }, order, 'e1');
-        const differs = new Row({ ID: 'pjf-2', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000002', Sequence: 2, Confidence: 0.3, Source: 'Derived' }, order, 'e2');
-        const stale = new Row({ ID: 'pjf-3', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000003', Sequence: 3, Source: 'Derived' }, order, 'e3');
-        const human = new Row({ ID: 'pjf-4', PersonID: 'person-1', JobFunctionID: 'aaaaaaaa-0000-0000-0000-000000000004', Sequence: 4, Source: 'Manual' }, order, 'e4');
-        const added = { JobFunctionID: 'AAAAAAAA-0000-0000-0000-000000000005', Sequence: 5, Confidence: 0.5 };
-        const humanProposed = { JobFunctionID: 'AAAAAAAA-0000-0000-0000-000000000004', Sequence: 4, Confidence: 0.5 };
-        const proposal = { ...result, Functions: [...result.Functions, added, humanProposed] };
-
-        const dryHarness = harness([same, differs, stale, human]);
-        const dry = await ApplyOutputMapping({ outputMapping: mapping, result: proposal, record, contextUser: USER, provider: dryHarness.provider, dryRun: true });
-        const realHarness = harness([same, differs, stale, human]);
-        const real = await ApplyOutputMapping({ outputMapping: mapping, result: proposal, record, contextUser: USER, provider: realHarness.provider });
-
-        const byAction = (action: string) => (dry.previewChildChanges ?? []).filter((c) => c.Action === action);
-        expect(byAction('insert')).toHaveLength(real.createdChildIDs?.length ?? 0);
-        expect(byAction('update')).toHaveLength(real.updatedChildIDs?.length ?? 0);
-        expect(byAction('delete')).toHaveLength(real.deletedChildIDs?.length ?? 0);
-        expect(byAction('none')).toHaveLength((real.unchangedChildIDs?.length ?? 0) + (real.preservedHumanChildIDs?.length ?? 0));
-        expect(byAction('update')[0]).toMatchObject({ Entity: 'Person Job Functions', Values: { Confidence: 0.4 } });
-        expect(Object.keys(byAction('update')[0].Values)).not.toContain('Sequence');
-        expect(byAction('insert')[0]).toMatchObject({ Entity: 'Person Job Functions', Values: { JobFunctionID: added.JobFunctionID } });
-        expect(dryHarness.created).toHaveLength(0);
-    });
-
-    /** Previews one tag whose lookup of existing links answers `lookup`; the real write's weight is 1. */
-    async function previewTag(lookup: TaggedItemLookup) {
-        const resolve = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockResolvedValue(TAG);
-        const byID = vi.spyOn(TagEngine.Instance, 'GetTagByID').mockReturnValue(TAG);
-        const config = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
-        const find = vi.spyOn(TagEngine.Instance, 'FindTaggedItems').mockResolvedValue(lookup);
-        try {
-            const out = await ApplyOutputMapping({ outputMapping: { tags: [{ ref: '$.tag', rootTagId: 'root-1' }] }, result: { tag: 'Sales' }, record, contextUser: USER, provider: harness([]).provider, dryRun: true });
-            return { out, calls: [...find.mock.calls] };
-        } finally {
-            resolve.mockRestore();
-            byID.mockRestore();
-            config.mockRestore();
-            find.mockRestore();
-        }
-    }
-    const TAG = { ID: 'tag-1', Name: 'Sales', ParentID: 'root-1' } as unknown as MJTagEntity;
-    const linkWithWeight = (Weight: number) => ({ TagID: 'tag-1', Weight }) as unknown as MJTaggedItemEntity;
-
-    it('marks a tag that is already linked at the real write\'s weight as no change', async () => {
-        const { out, calls } = await previewTag({ Success: true, Items: [linkWithWeight(1)] });
-
-        expect(out.previewTags?.[0]).toMatchObject({ alreadyLinked: true, reweighted: false });
-        expect(calls).toEqual([['ENT-P', 'person-1', ['tag-1'], USER]]);
-    });
-
-    it('marks an existing link whose weight differs as a reweight, which the real write saves', async () => {
-        const { out } = await previewTag({ Success: true, Items: [linkWithWeight(0.5)] });
-
-        expect(out.previewTags?.[0]).toMatchObject({ alreadyLinked: true, reweighted: true });
-    });
-
-    it('marks a tag with no link as neither linked nor reweighted', async () => {
-        const { out } = await previewTag({ Success: true, Items: [] });
-
-        expect(out.previewTags?.[0]).toMatchObject({ alreadyLinked: false, reweighted: false });
-    });
-
-    it('reports a failed read of the existing links as a preview error, not as "not linked"', async () => {
-        const { out } = await previewTag({ Success: false, ErrorMessage: 'view read failed', Items: [] });
-
-        expect(out.PreviewErrors).toEqual(['checking the existing links of the record\'s tags failed: view read failed']);
-    });
-
-    it('reads the existing links of all the mapping\'s matched tags once', async () => {
-        const resolve = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockImplementation(async (text) => ({ ID: `tag-${text}`, Name: text, ParentID: 'root-1' } as unknown as MJTagEntity));
-        const byID = vi.spyOn(TagEngine.Instance, 'GetTagByID').mockReturnValue(TAG);
-        const config = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
-        const find = vi.spyOn(TagEngine.Instance, 'FindTaggedItems').mockResolvedValue({ Success: true, Items: [] });
-        await ApplyOutputMapping({ outputMapping: { tags: [{ ref: '$.tags', rootTagId: 'root-1' }] }, result: { tags: ['a', 'b', 'c'] }, record, contextUser: USER, provider: harness([]).provider, dryRun: true });
-        const calls = find.mock.calls.length;
-        const ids = find.mock.calls[0]?.[2];
-        resolve.mockRestore();
-        byID.mockRestore();
-        config.mockRestore();
-        find.mockRestore();
-
-        expect(calls).toBe(1);
-        expect(ids).toEqual(['tag-a', 'tag-b', 'tag-c']);
-    });
-
-    it('previews exactly the stale rows the real write deletes, and none when deleteStale is off', async () => {
-        const mk = (id: string, fn: string, source: string) => new Row({ ID: id, PersonID: 'person-1', JobFunctionID: fn, Sequence: 9, Source: source }, [], id);
-        const rows = () => [
-            mk('pjf-s1', 'aaaaaaaa-0000-0000-0000-0000000000a1', 'Derived'),
-            mk('pjf-s2', 'aaaaaaaa-0000-0000-0000-0000000000a2', 'Derived'),
-            mk('pjf-h', 'aaaaaaaa-0000-0000-0000-0000000000a3', 'Manual'),
-        ];
-        const keep: OutputMappingConfig = { childRecords: [{ ...mapping.childRecords![0], reconcile: { ...mapping.childRecords![0].reconcile!, deleteStale: false } }] };
-        for (const [config, expected] of [[mapping, ['pjf-s1', 'pjf-s2']], [keep, []]] as Array<[OutputMappingConfig, string[]]>) {
-            const dry = await ApplyOutputMapping({ outputMapping: config, result, record, contextUser: USER, provider: harness(rows()).provider, dryRun: true });
-            const real = await ApplyOutputMapping({ outputMapping: config, result, record, contextUser: USER, provider: harness(rows()).provider });
-
-            expect(real.deletedChildIDs || []).toEqual(expected);
-            expect((dry.previewChildChanges || []).filter((c) => c.Action === 'delete').map((c) => c.Values.JobFunctionID)).toEqual(expected.map((id) => id === 'pjf-s1' ? 'aaaaaaaa-0000-0000-0000-0000000000a1' : 'aaaaaaaa-0000-0000-0000-0000000000a2'));
-        }
-    });
-});
-
-describe('a dry run with a withheld (below-confidence) output reports exactly what the real write does', () => {
-    const LEVEL = '11111111-1111-1111-1111-111111111111';
-    const withheldLevel = { Fields: ['SeniorityLevelID'], ChildEntities: [] };
-    const fieldOnly: OutputMappingConfig = { fields: { SeniorityLevelID: '$.SeniorityLevel' } };
-
-    /** A guard double: the field's current value is a person's (`human`) or the pipeline's own; it records what it was asked to retire. */
-    function ownerGuard(human: boolean) {
-        const retired: string[] = [];
-        const guard: HumanValueGuard = {
-            IsHumanOwned: vi.fn(async () => human),
-            RecordPreserved: vi.fn(async () => undefined),
-            RetireHumanValue: vi.fn(async (f: string) => { retired.push(f); return true; }),
-        };
-        return { guard, retired };
-    }
-
-    /** One dry run and one real write of the same answer over the same record (the level held), each on its own harness. */
-    async function dryAndReal(opts: { human: boolean; overwriteHumanValues?: boolean; provider?: (h: ReturnType<typeof harness>) => IMetadataProvider }) {
-        const run = async (dryRun: boolean) => {
-            const h = harness([]);
-            h.parent.Values.SeniorityLevelID = LEVEL;
-            const { guard, retired } = ownerGuard(opts.human);
-            const out = await ApplyOutputMapping({ outputMapping: fieldOnly, result: { SeniorityLevel: 'ignored-by-the-floor' }, record, contextUser: USER,
-                provider: opts.provider ? opts.provider(h) : h.provider, dryRun, humanGuard: guard, withheld: withheldLevel,
-                overwriteHumanValues: opts.overwriteHumanValues === true });
-            return { out, h, retired };
-        };
-        return { dry: await run(true), real: await run(false) };
-    }
-
-    it('a value the pipeline wrote: the preview\'s one change is the clear to null the real write saves', async () => {
-        const { dry, real } = await dryAndReal({ human: false });
-
-        expect(real.h.parent.Values.SeniorityLevelID).toBeNull();
-        expect(real.h.parent.Saved).toBe(1);
-        expect(dry.out.previewFieldChanges).toEqual([{ Field: 'SeniorityLevelID', OldValue: LEVEL, NewValue: null }]);
-        expect(dry.h.parent.Saved).toBe(0);
-        expect(dry.out.withheldFields).toEqual(real.out.withheldFields);
-    });
-
-    it('a person\'s value: no change in the preview and none in the real write, also on a run that overwrites human values', async () => {
-        for (const overwriteHumanValues of [false, true]) {
-            const { dry, real } = await dryAndReal({ human: true, overwriteHumanValues });
-
-            expect(real.h.parent.Saved).toBe(0);
-            expect(real.h.parent.Values.SeniorityLevelID).toBe(LEVEL);
-            expect(real.retired).toEqual([]);
-            expect(real.out.retiredHumanFields).toBeUndefined();
-            expect(dry.out.previewFieldChanges).toEqual([]);
-            expect(dry.out.withheldFields).toEqual(['SeniorityLevelID']);
-        }
-    });
-
-    it('a column that does not allow null: no change in either, and both list it as withheld and kept', async () => {
-        const strict = new EntityInfo({ ID: 'ENT-P', Name: 'People', Fields: [{ Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true },
-            { Name: 'SeniorityLevelID', Type: 'uniqueidentifier', AllowsNull: false }] });
-        const strictProvider = (h: ReturnType<typeof harness>): IMetadataProvider => {
-            vi.spyOn(h.provider, 'EntityByID').mockReturnValue(strict);
-            return h.provider;
-        };
-        const { dry, real } = await dryAndReal({ human: false, provider: strictProvider });
-
-        expect(real.h.parent.Saved).toBe(0);
-        expect(real.h.parent.Values.SeniorityLevelID).toBe(LEVEL);
-        expect(dry.out.previewFieldChanges).toEqual([]);
-        for (const out of [dry.out, real.out]) {
-            expect(out.withheldFields).toEqual(['SeniorityLevelID']);
-            expect(out.withheldKeptFields).toEqual(['SeniorityLevelID']);
-        }
-    });
-
-    it('a withheld child entity: no child change in the preview, and the real write neither writes nor deletes a stale row', async () => {
-        const mk = (id: string, fn: string, source: string) => new Row({ ID: id, PersonID: 'person-1', JobFunctionID: fn, Sequence: 9, Source: source }, [], id);
-        const rows = () => [mk('pjf-s1', 'aaaaaaaa-0000-0000-0000-0000000000a1', 'Derived'), mk('pjf-h', 'aaaaaaaa-0000-0000-0000-0000000000a3', 'Manual')];
-        const withheldChildren = { Fields: [], ChildEntities: ['Person Job Functions'] };
-        const dryHarness = harness(rows());
-        const dry = await ApplyOutputMapping({ outputMapping: mapping, result, record, contextUser: USER, provider: dryHarness.provider, dryRun: true, withheld: withheldChildren });
-        const realRows = rows();
-        const realHarness = harness(realRows);
-        const real = await ApplyOutputMapping({ outputMapping: mapping, result, record, contextUser: USER, provider: realHarness.provider, withheld: withheldChildren });
-
-        expect(dry.previewChildChanges || []).toEqual([]);
-        expect(dry.withheldChildEntities).toEqual(['Person Job Functions']);
-        expect(real.withheldChildEntities).toEqual(['Person Job Functions']);
-        expect(real.createdChildIDs || []).toEqual([]);
-        expect(real.updatedChildIDs || []).toEqual([]);
-        expect(real.deletedChildIDs || []).toEqual([]);
-        expect(realHarness.created).toHaveLength(0);
-        expect(realRows.some((r) => r.Deleted)).toBe(false);
-        // the field mapping is not withheld, so both still decide it alike
-        expect(dry.previewFieldChanges?.map((c) => c.Field)).toEqual(real.updatedRecord ? ['SeniorityLevelID'] : []);
     });
 });

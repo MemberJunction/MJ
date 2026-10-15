@@ -1,133 +1,113 @@
 /**
  * @fileoverview FeatureValueCacheService — manages the dedup cache (MJ: Feature Value Caches) and the keyed Feature
- * Value upserts (MJ: Feature Values, one row per Feature Value key) for Feature Pipelines.
+ * Value upserts (MJ: Feature Values, one row per Feature Value key) for Feature Pipelines (P1-7c).
  * @module @memberjunction/feature-pipelines
  */
 
-import { BaseSingleton, Canonicalize, ComputeContentHashAsync, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
-import { IMetadataProvider, LogError, RunView, type RunViewParams, UserInfo } from '@memberjunction/core';
+import { BaseSingleton, Canonicalize, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
+import { IMetadataProvider, LogError, Metadata, RunView, type RunViewParams, UserInfo } from '@memberjunction/core';
 import { FeatureValueKey, type FeatureValueSource } from '../spec/feature-value-key.js';
 import type { MJFeatureValueCacheEntity, MJFeatureValueEntity } from '@memberjunction/core-entities';
 
 /** Compute cache key params. */
 export interface ComputeCacheKeyParams {
-    KeyFields?: string[];
-    RecordData: Record<string, unknown>;
-    RenderedContext?: string;
+    keyFields?: string[];
+    recordData: Record<string, unknown>;
+    renderedContext?: string;
 }
 
 /** Result of computing a cache key. */
 export interface CacheKeyResult {
-    KeyHash: string;
-    KeyJSON: string;
-    KeyDisplay: string;
+    keyHash: string;
+    keyJSON: string;
+    keyDisplay: string;
 }
 
-/** The cache scope and pin every cache call is made in: which rows of `MJ: Feature Value Caches` it may read or write. */
+/** The cache scope and pin a cache call reads or writes. */
 export interface FeatureValueCacheScope {
-    /** The pipeline (`MJ: Record Processes` ID); ignored when `Scope` is `prompt`. */
-    RecordProcessID?: string | null;
-    /** `pipeline` (default): rows of this pipeline; `prompt`: rows shared by every pipeline running the prompt. */
-    Scope?: 'pipeline' | 'prompt';
-    /** The `MJ: AI Prompts` ID. */
-    PromptID: string;
-    /** The pin's prompt version hash. */
-    PromptVersionHash: string;
-    /** The hash of the pipeline's output constraints. */
-    ConstraintHash: string;
+    recordProcessID?: string | null;
+    scope?: 'pipeline' | 'prompt';
+    promptID: string;
+    promptVersionHash: string;
+    constraintHash: string;
     /** The pin's primary AI model (null when the prompt has no Active model). */
-    AIModelID: string | null;
+    aiModelID: string | null;
     /** The pin's parameters hash. */
-    ParametersHash: string;
-    /** The user the reads and writes run as. */
-    ContextUser: UserInfo;
-    /** The provider the reads and writes run on — the caller's, never the process-wide default. */
-    Provider: IMetadataProvider;
+    parametersHash: string;
+    contextUser: UserInfo;
+    provider?: IMetadataProvider;
 }
 
 /** Cache lookup parameters. */
 export interface CacheLookupParams extends FeatureValueCacheScope {
-    KeyHash: string;
-    /** Whether a hit increments the entry's HitCount and LastHitAt (default true). */
-    RecordHit?: boolean;
+    keyHash: string;
+    /** Whether a hit increments the entry's HitCount and LastHitAt (default true; false on a dry run). */
+    recordHit?: boolean;
 }
 
 /** Batch cache lookup parameters. */
 export interface BatchCacheLookupParams extends FeatureValueCacheScope {
-    KeyHashes: string[];
-    /** Whether a hit increments the entry's HitCount and LastHitAt (default true). */
-    RecordHit?: boolean;
+    keyHashes: string[];
+    /** Whether a hit increments the entry's HitCount and LastHitAt (default true; false on a dry run). */
+    recordHit?: boolean;
 }
 
 /** Parameters for storing a newly computed value into the cache. */
 export interface CacheStoreParams extends FeatureValueCacheScope {
-    KeyHash: string;
-    KeyDisplay: string;
-    KeyJSON: string;
-    OutputsJSON: string;
-    Reasoning?: string | null;
-    AIPromptRunID?: string | null;
-    TtlSeconds?: number;
+    keyHash: string;
+    keyDisplay: string;
+    keyJSON: string;
+    outputsJSON: string;
+    reasoning?: string | null;
+    aiPromptRunID?: string | null;
+    ttlSeconds?: number;
 }
 
-/** One output's value for `MJ: Feature Values`. */
+/** Feature output item for MJ: Feature Values. */
 export interface FeatureValueOutputItem {
-    FeatureName: string;
-    Value: unknown;
-    Reasoning?: string | null;
-    Confidence?: number | null;
+    featureName: string;
+    value: unknown;
+    reasoning?: string | null;
+    confidence?: number | null;
 }
 
-/**
- * Parameters for upserting a record's Feature Values (`MJ: Feature Values`), one row per Feature Value key. Every key
- * component is required, so a caller that drops one fails to compile instead of writing a different (null) key.
- */
+/** Parameters for upserting a record's Feature Values, one row per Feature Value key; every key part is required. */
 export interface RecordFeatureValuesParams {
-    RecordProcessID: string;
-    EntityID: string;
-    RecordID: string;
-    Outputs: FeatureValueOutputItem[];
-    PromptID?: string | null;
-    /** The pin's prompt version hash; part of the key. Null for a value no prompt computed. */
-    PromptVersionHash: string | null;
-    ConstraintHash?: string | null;
-    ProcessRunID?: string | null;
-    ProcessRunDetailID?: string | null;
-    AIPromptRunID?: string | null;
-    FeatureValueCacheID?: string | null;
-    /** The pipeline version (`MJ: Feature Pipeline Versions.Version`) that computed the values; null when unversioned. */
-    PipelineVersion: number | null;
+    recordProcessID: string;
+    entityID: string;
+    recordID: string;
+    outputs: FeatureValueOutputItem[];
+    promptID?: string | null;
+    /** The pin's prompt version hash; null for a value no prompt computed. */
+    promptVersionHash: string | null;
+    constraintHash?: string | null;
+    processRunID?: string | null;
+    processRunDetailID?: string | null;
+    aiPromptRunID?: string | null;
+    featureValueCacheID?: string | null;
+    /** The pipeline version that computed the values; null when unversioned. */
+    pipelineVersion: number | null;
     /** The pin's primary AI model; null when the prompt has no Active model, or for a human value. */
-    AIModelID: string | null;
-    /** The pin's parameters hash; null for a human value (no pin). */
-    ParametersHash: string | null;
+    aiModelID: string | null;
+    /** The pin's parameters hash; null for a human value. */
+    parametersHash: string | null;
     /** SHA-256 of the record's normalised inputs (the cache key hash); null when there is none. */
-    InputHash: string | null;
+    inputHash: string | null;
     /** Who produced the values. */
-    Source: FeatureValueSource;
-    /**
-     * The rows are history, never the feature's current value: a decision an escalation superseded (written with no
-     * values, before the escalated answer's row). An unchanged history row is left untouched even when another key holds
-     * the latest value, so an unchanged re-run of an escalated record saves nothing (default false).
-     */
-    HistoryOnly?: boolean;
-    ContextUser: UserInfo;
-    /** The provider the reads and writes run on — the caller's, never the process-wide default. */
-    Provider: IMetadataProvider;
+    source: FeatureValueSource;
+    /** The rows are history (a decision an escalation superseded), never made the feature's latest value again. */
+    historyOnly?: boolean;
+    contextUser: UserInfo;
+    provider?: IMetadataProvider;
 }
 
-/**
- * One record's Feature Values of one feature in one pipeline, and the user and provider to read or write them with.
- * PascalCase members, like the `MJ: Feature Values` columns they filter on (the module's older param interfaces
- * predate the casing standard).
- */
+/** One record's Feature Values of one feature in one pipeline, and the user and provider to read or write them with. */
 export interface FeatureValueRecordRef {
     RecordProcessID: string;
     EntityID: string;
     RecordID: string;
     FeatureName: string;
     ContextUser: UserInfo;
-    /** The provider the reads and writes run on — the caller's, never the process-wide default. */
     Provider: IMetadataProvider;
 }
 
@@ -137,23 +117,6 @@ export interface LatestFeatureValueParams extends FeatureValueRecordRef {
     /** Ignore values this run wrote: they are not "what the pipeline last wrote". */
     ExcludeProcessRunID?: string | null;
 }
-
-/** Which latest Feature Values a batched read covers: some features of many records, from one source. */
-export interface LatestFeatureValuesBatch {
-    /** The pipeline. */
-    RecordProcessID: string;
-    /** The records' entity. */
-    EntityID: string;
-    /** The records, as their runs wrote them. */
-    RecordIDs: string[];
-    /** The features. */
-    FeatureNames: string[];
-    /** The source the values came from. */
-    Source: FeatureValueSource;
-}
-
-/** One row of a batched latest-value read ({@link FeatureValueCacheService.LatestValuesView}). */
-export type LatestFeatureValueRecordRow = TypedFeatureValue & Pick<MJFeatureValueEntity, 'FeatureName' | 'RecordID'>;
 
 /** Parameters for recording a value a person entered on a pipeline's target. */
 export interface RecordHumanValueParams extends FeatureValueRecordRef {
@@ -173,9 +136,8 @@ export interface RecordFeatureValuesOutcome {
     /** Outputs whose key already held the same value, reasoning and confidence. */
     Unchanged: number;
     /**
-     * Each output's latest `Source='Pipeline'` value for the record and feature before this call — on any key (another
-     * pipeline version, model, parameters or input) — by feature name; null when the pipeline never wrote the feature.
-     * Captured before anything is saved, so it is what an earlier run wrote even when this call updates that row in place.
+     * Each output's latest `Source='Pipeline'` value for the record before this call, on any key, by feature name; null
+     * when the pipeline never wrote the feature.
      */
     Previous: Record<string, TypedFeatureValue | null>;
 }
@@ -183,10 +145,7 @@ export interface RecordFeatureValuesOutcome {
 /** What one output's write did. `RecordWriteOutcome` in `@memberjunction/record-set-processor-base` mirrors it. */
 export type FeatureValueWriteResult = Exclude<keyof RecordFeatureValuesOutcome, 'Previous'>;
 
-/**
- * A Feature Value that could not be saved (after the one race retry, when there was a race). Carries the feature, the
- * record and the provider's message as fields, so a caller can classify it with `instanceof` instead of reading text.
- */
+/** A Feature Value that could not be saved, with the feature, the record and the provider's message as fields. */
 export class FeatureValueSaveError extends Error {
     constructor(
         public readonly FeatureName: string,
@@ -197,9 +156,6 @@ export class FeatureValueSaveError extends Error {
         this.name = 'FeatureValueSaveError';
     }
 }
-
-/** One write attempt: what it did, or the provider's message when the save failed. */
-type FeatureValueWriteAttempt = { Result: FeatureValueWriteResult } | { Message: string };
 
 /** The columns {@link FeatureValueCacheService.LoadLatestPipelineValues} and {@link FeatureValueCacheService.GetLatestValue} read. */
 type LatestFeatureValueRow = TypedFeatureValue & Pick<MJFeatureValueEntity, 'FeatureName'>;
@@ -226,34 +182,42 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
 
     /**
      * Computes the deterministic SHA-256 key hash, canonical JSON, and display string.
-     * Uses KeyFields when provided, or falls back to the full rendered context / record data.
+     * Uses KeyFields when provided, or falls back to the full rendered context / record data. Field names match
+     * case-insensitively and text inputs are normalised ({@link FeatureValueKey.NormalizeValue}).
      */
     public async ComputeCacheKey(params: ComputeCacheKeyParams): Promise<CacheKeyResult> {
-        if (params.KeyFields && params.KeyFields.length > 0) {
+        if (params.keyFields && params.keyFields.length > 0) {
             const keyObj: Record<string, unknown> = {};
             const displayParts: string[] = [];
-            for (const field of params.KeyFields) {
-                const val = FeatureValueCacheService.ReadFieldCaseInsensitive(params.RecordData, field);
-                keyObj[field] = val === undefined ? null : FeatureValueCacheService.NormalizeKeyInput(val);
+
+            for (const field of params.keyFields) {
+                const val = FeatureValueCacheService.ReadFieldCaseInsensitive(params.recordData, field);
+                keyObj[field] = val !== undefined ? FeatureValueCacheService.NormalizeKeyInput(val) : null;
                 if (val !== null && val !== undefined && String(val).trim().length > 0) {
                     displayParts.push(String(val).trim());
                 }
             }
+
             const keyJSON = Canonicalize(keyObj);
             const keyHash = await ComputeContentHashAsync(keyObj);
             const keyDisplay = displayParts.join(' | ') || keyHash.substring(0, 16);
-            return { KeyHash: keyHash, KeyJSON: keyJSON, KeyDisplay: keyDisplay };
+
+            return { keyHash, keyJSON, keyDisplay };
         }
 
-        const basis: Record<string, unknown> = params.RenderedContext
-            ? { context: FeatureValueKey.NormalizeValue(params.RenderedContext) }
-            : FeatureValueCacheService.NormalizeRecord(params.RecordData);
+        // Whole rendered context (or whole record data)
+        const basis: Record<string, unknown> = params.renderedContext
+            ? { context: FeatureValueKey.NormalizeValue(params.renderedContext) }
+            : FeatureValueCacheService.NormalizeRecord(params.recordData);
         const keyJSON = Canonicalize(basis);
         const keyHash = await ComputeContentHashAsync(basis);
-        const keyDisplay = params.RenderedContext
-            ? params.RenderedContext.length > 80 ? `${params.RenderedContext.substring(0, 77)}...` : params.RenderedContext
+        const keyDisplay = params.renderedContext
+            ? params.renderedContext.length > 80
+                ? `${params.renderedContext.substring(0, 77)}...`
+                : params.renderedContext
             : keyHash.substring(0, 16);
-        return { KeyHash: keyHash, KeyJSON: keyJSON, KeyDisplay: keyDisplay };
+
+        return { keyHash, keyJSON, keyDisplay };
     }
 
     /** @deprecated Use {@link ComputeCacheKey}. */
@@ -263,36 +227,37 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
 
     /**
      * Looks up an existing cache entry. Returns null on miss or when expired.
-     * Increments HitCount and updates LastHitAt on a hit, unless `RecordHit` is false (a dry run reads without counting).
+     * Automatically increments HitCount and updates LastHitAt on hit, unless `recordHit` is false.
      */
     public async Lookup(params: CacheLookupParams): Promise<MJFeatureValueCacheEntity | null> {
         const batchMap = await this.BatchLookup({
             ...params,
-            KeyHashes: [params.KeyHash],
+            keyHashes: [params.keyHash],
         });
-        return batchMap.get(params.KeyHash) || null;
+        return batchMap.get(params.keyHash) ?? null;
     }
 
     /**
      * Performs a single batch lookup for multiple key hashes.
-     * Filters out expired entries and, unless `RecordHit` is false, records a hit on each valid entry before returning.
+     * Filters out expired entries and increments HitCount on valid hits, unless `recordHit` is false.
      */
     public async BatchLookup(params: BatchCacheLookupParams): Promise<Map<string, MJFeatureValueCacheEntity>> {
         const results = new Map<string, MJFeatureValueCacheEntity>();
-        if (params.KeyHashes.length === 0) {
+        if (params.keyHashes.length === 0) {
             return results;
         }
 
-        const quotedKeys = params.KeyHashes.map((k) => `'${EscapeSQLString(k)}'`).join(', ');
+        const quotedKeys = params.keyHashes.map((k) => `'${EscapeSQLString(k)}'`).join(', ');
         const filter = `${FeatureValueCacheService.CacheScopeFilter(params)} AND KeyHash IN (${quotedKeys})`;
 
-        const res = await RunView.FromMetadataProvider(params.Provider).RunView<MJFeatureValueCacheEntity>(
+        const rv = RunView.FromMetadataProvider(params.provider ?? Metadata.Provider);
+        const res = await rv.RunView<MJFeatureValueCacheEntity>(
             {
                 EntityName: 'MJ: Feature Value Caches',
                 ExtraFilter: filter,
                 ResultType: 'entity_object',
             },
-            params.ContextUser
+            params.contextUser
         );
 
         if (!res.Success) {
@@ -300,83 +265,81 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             return results;
         }
 
+        if (!res.Results) {
+            return results;
+        }
+
         const now = Date.now();
-        for (const entry of res.Results ?? []) {
+        for (const entry of res.Results) {
+            // Check expiration
             if (entry.ExpiresAt != null && new Date(entry.ExpiresAt).getTime() <= now) {
                 continue;
             }
+
+            if (params.recordHit !== false) {
+                entry.HitCount = (entry.HitCount ?? 0) + 1;
+                entry.LastHitAt = new Date();
+                void entry.Save().then((saved) => {
+                    if (!saved) {
+                        LogError(`FeatureValueCacheService: failed updating HitCount on cache '${entry.ID}': ${entry.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                    }
+                }).catch((err) => {
+                    LogError(`FeatureValueCacheService: failed updating HitCount on cache '${entry.ID}': ${err instanceof Error ? err.message : String(err)}`);
+                });
+            }
+
             results.set(entry.KeyHash, entry);
         }
-        if (params.RecordHit !== false) {
-            await this.RecordHits([...results.values()]);
-        }
+
         return results;
     }
 
     /**
-     * Records a hit on each entry (HitCount + 1, LastHitAt now), all saves at once, and logs each save that fails. A
-     * failed hit count does not fail the lookup: the entry is still a valid answer, only its statistics are behind.
-     */
-    protected async RecordHits(entries: MJFeatureValueCacheEntity[]): Promise<void> {
-        await Promise.all(entries.map(async (entry) => {
-            // `??` because 0 is a valid HitCount
-            entry.HitCount = (entry.HitCount ?? 0) + 1;
-            entry.LastHitAt = new Date();
-            try {
-                if (!(await entry.Save())) {
-                    LogError(`FeatureValueCacheService: failed updating HitCount on cache '${entry.ID}': ${entry.LatestResult?.CompleteMessage || 'unknown error'}`);
-                }
-            } catch (err) {
-                LogError(`FeatureValueCacheService: failed updating HitCount on cache '${entry.ID}': ${err instanceof Error ? err.message : String(err)}`);
-            }
-        }));
-    }
-
-    /**
-     * Stores a computed result on its cache key. An existing row for the key — expired or not — is updated in place
-     * (its expiry pushed forward, its hit count reset), so an expired entry is refreshed rather than duplicated.
+     * Stores a computed result on its cache key. An existing row for the key — expired or not — is updated in place,
+     * so an expired entry is refreshed rather than duplicated.
      * @throws Error naming the key and the provider's message when the save fails.
      */
     public async Store(params: CacheStoreParams): Promise<MJFeatureValueCacheEntity> {
-        const existing = await this.FindByKey(params);
-        const entry = existing || (await params.Provider.GetEntityObject<MJFeatureValueCacheEntity>('MJ: Feature Value Caches', params.ContextUser));
+        const provider = params.provider ?? Metadata.Provider;
+        const existing = await this.FindByKey(params, provider);
+        const entry = existing || (await provider.GetEntityObject<MJFeatureValueCacheEntity>('MJ: Feature Value Caches', params.contextUser));
         if (!existing) {
             entry.NewRecord();
-            entry.RecordProcessID = params.Scope === 'prompt' ? null : (params.RecordProcessID || null);
-            entry.PromptID = params.PromptID;
-            entry.PromptVersionHash = params.PromptVersionHash;
-            entry.ConstraintHash = params.ConstraintHash;
-            entry.AIModelID = params.AIModelID;
-            entry.ParametersHash = params.ParametersHash;
-            entry.KeyHash = params.KeyHash;
+            entry.RecordProcessID = params.scope === 'prompt' ? null : (params.recordProcessID ?? null);
+            entry.PromptID = params.promptID;
+            entry.PromptVersionHash = params.promptVersionHash;
+            entry.ConstraintHash = params.constraintHash;
+            entry.AIModelID = params.aiModelID;
+            entry.ParametersHash = params.parametersHash;
+            entry.KeyHash = params.keyHash;
         }
-        entry.KeyDisplay = params.KeyDisplay;
-        entry.KeyJSON = params.KeyJSON;
-        entry.OutputsJSON = params.OutputsJSON;
-        entry.Reasoning = params.Reasoning || null;
-        entry.AIPromptRunID = params.AIPromptRunID || null;
+        entry.KeyDisplay = params.keyDisplay;
+        entry.KeyJSON = params.keyJSON;
+        entry.OutputsJSON = params.outputsJSON;
+        entry.Reasoning = params.reasoning ?? null;
+        entry.AIPromptRunID = params.aiPromptRunID ?? null;
         entry.HitCount = 0;
         entry.ComputedAt = new Date();
-        entry.ExpiresAt = params.TtlSeconds && params.TtlSeconds > 0 ? new Date(Date.now() + params.TtlSeconds * 1000) : null;
+        entry.ExpiresAt = params.ttlSeconds && params.ttlSeconds > 0 ? new Date(Date.now() + params.ttlSeconds * 1000) : null;
 
         const saved = await entry.Save();
         if (!saved) {
-            throw new Error(`FeatureValueCacheService: failed to save cache entry for keyHash '${params.KeyHash}': ${entry.LatestResult?.CompleteMessage || 'unknown error'}`);
+            throw new Error(`FeatureValueCacheService: failed to save cache entry for keyHash '${params.keyHash}': ${entry.LatestResult?.CompleteMessage || 'unknown error'}`);
         }
         return entry;
     }
 
     /** The row on a store's key, expired or not; null when there is none. */
-    protected async FindByKey(params: CacheStoreParams): Promise<MJFeatureValueCacheEntity | null> {
-        const res = await RunView.FromMetadataProvider(params.Provider).RunView<MJFeatureValueCacheEntity>({
+    protected async FindByKey(params: CacheStoreParams, provider: IMetadataProvider): Promise<MJFeatureValueCacheEntity | null> {
+        const res = await RunView.FromMetadataProvider(provider).RunView<MJFeatureValueCacheEntity>({
             EntityName: 'MJ: Feature Value Caches',
-            ExtraFilter: `${FeatureValueCacheService.CacheScopeFilter(params)} AND KeyHash = '${EscapeSQLString(params.KeyHash)}'`,
+            ExtraFilter: `${FeatureValueCacheService.CacheScopeFilter(params)} AND KeyHash = '${EscapeSQLString(params.keyHash)}'`,
             ResultType: 'entity_object',
             MaxRows: 1,
             BypassCache: true,
-        }, params.ContextUser);
+        }, params.contextUser);
         if (!res.Success) {
-            throw new Error(`FeatureValueCacheService: looking up cache key '${params.KeyHash}' failed: ${res.ErrorMessage}`);
+            throw new Error(`FeatureValueCacheService: looking up cache key '${params.keyHash}' failed: ${res.ErrorMessage}`);
         }
         return res.Results?.[0] || null;
     }
@@ -385,125 +348,90 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
      * Upserts one Feature Value per output on its key (record, feature, pipeline version, prompt version hash, primary
      * model, parameters hash, input hash, source). A key that already holds the same value, reasoning and confidence is
      * left untouched while it is the feature's latest Pipeline value; when another key holds the latest one (a version
-     * that becomes Active again re-derives a record a newer version wrote last), its `ComputedAt` and run links are
-     * refreshed so it is the latest again (counted Unchanged: the value did not change); a history row
-     * (`HistoryOnly`, a superseded decision) is never refreshed. A changed one is updated in
-     * place; a new one is inserted. The outputs are distinct keys, so they
-     * are written in parallel. An insert that loses a race on the key's unique index (another run inserted it first)
-     * reloads the row and applies the same rule to it, once.
+     * that becomes Active again), its `ComputedAt` and run links are refreshed so it is the latest again (counted
+     * Unchanged). A `historyOnly` row is never refreshed. A changed row is updated in place; a new one is inserted.
      * @returns How many outputs were upserted or unchanged, and each feature's latest pipeline value before the call.
-     * @throws Error when a row cannot be read or saved (the record must then fail; nothing is swallowed).
+     * @throws FeatureValueSaveError when a row cannot be saved; Error when the rows cannot be read.
      */
     public async RecordFeatureValues(params: RecordFeatureValuesParams): Promise<RecordFeatureValuesOutcome> {
-        const keyed = await Promise.all(params.Outputs.map(async (out) => ({
+        const provider = params.provider ?? Metadata.Provider;
+        const keyed = await Promise.all(params.outputs.map(async (out) => ({
             out,
             keyHash: await FeatureValueKey.ComputeHash({
-                EntityID: params.EntityID, RecordID: params.RecordID, FeatureName: out.FeatureName,
-                PipelineVersion: params.PipelineVersion, PromptVersionHash: params.PromptVersionHash,
-                AIModelID: params.AIModelID, ParametersHash: params.ParametersHash,
-                InputHash: params.InputHash, Source: params.Source,
+                EntityID: params.entityID, RecordID: params.recordID, FeatureName: out.featureName,
+                PipelineVersion: params.pipelineVersion, PromptVersionHash: params.promptVersionHash,
+                AIModelID: params.aiModelID, ParametersHash: params.parametersHash,
+                InputHash: params.inputHash, Source: params.source,
             }),
         })));
-        const previous = await this.LoadLatestPipelineValues(params);
-        const existing = await this.LoadByKeyHashes(params, keyed.map((k) => k.keyHash));
+        const previous = await this.LoadLatestPipelineValues(params, provider);
+        const existing = await this.LoadByKeyHashes(params, provider, keyed.map((k) => k.keyHash));
         const results = await Promise.all(keyed.map(({ out, keyHash }) => {
-            const latest = previous.get(out.FeatureName.toLowerCase());
-            // another key holds the latest value: an unchanged row on this key must become the latest again, unless the
-            // row is history (a superseded decision), which is never meant to be the latest
-            const supersededByAnotherKey = params.HistoryOnly !== true && !!latest && latest.ValueKeyHash !== keyHash;
-            return this.UpsertOne(params, out, keyHash, existing.get(keyHash), supersededByAnotherKey);
+            const latest = previous.get(out.featureName.toLowerCase());
+            const supersededByAnotherKey = params.historyOnly !== true && !!latest && latest.ValueKeyHash !== keyHash;
+            return this.WriteOne(params, provider, out, keyHash, existing.get(keyHash), supersededByAnotherKey);
         }));
 
         const outcome: RecordFeatureValuesOutcome = { Upserted: 0, Unchanged: 0, Previous: {} };
         keyed.forEach(({ out }, i) => {
-            outcome.Previous[out.FeatureName] = previous.get(out.FeatureName.toLowerCase())?.Value || null;
+            outcome.Previous[out.featureName] = previous.get(out.featureName.toLowerCase())?.Value || null;
             outcome[results[i]]++;
         });
         return outcome;
     }
 
     /**
-     * Writes one output on its key: unchanged, updated in place, or inserted. A failed insert re-reads the key: when a
-     * row now exists, another run inserted it first (the race on the key's unique index), and the output is applied to
-     * that row. The race is recognised by the row, never by the provider's error text, which differs by platform.
-     * @throws Error with the provider's message when the write (or its one retry) fails.
+     * Writes one output on its key: unchanged, updated in place, or inserted. An unchanged row is saved only when
+     * another key holds the feature's latest value (`supersededByAnotherKey`), to make it the latest again.
+     * @throws FeatureValueSaveError when the save fails.
      */
-    protected async UpsertOne(
+    protected async WriteOne(
         params: RecordFeatureValuesParams,
+        provider: IMetadataProvider,
         out: FeatureValueOutputItem,
         keyHash: string,
         row: MJFeatureValueEntity | undefined,
         supersededByAnotherKey: boolean
     ): Promise<FeatureValueWriteResult> {
-        const attempt = await this.WriteOne(params, out, keyHash, row, supersededByAnotherKey);
-        if ('Result' in attempt) {
-            return attempt.Result;
-        }
-        if (!row) {
-            const raced = (await this.LoadByKeyHashes(params, [keyHash])).get(keyHash);
-            if (raced) {
-                const retry = await this.WriteOne(params, out, keyHash, raced, supersededByAnotherKey);
-                if ('Result' in retry) {
-                    return retry.Result;
-                }
-                throw this.SaveError(out, params, retry.Message);
-            }
-        }
-        throw this.SaveError(out, params, attempt.Message);
-    }
-
-    /**
-     * One write of an output onto `row` (or a new row when absent); returns the provider's message instead of throwing
-     * when the save fails, so {@link UpsertOne} can check for a race. An unchanged row is saved only when another key
-     * holds the feature's latest value (`supersededByAnotherKey`), to make it the latest again.
-     */
-    protected async WriteOne(
-        params: RecordFeatureValuesParams,
-        out: FeatureValueOutputItem,
-        keyHash: string,
-        row: MJFeatureValueEntity | undefined,
-        supersededByAnotherKey: boolean
-    ): Promise<FeatureValueWriteAttempt> {
-        const typed = FeatureValueCacheService.ToTypedValue(out.Value);
+        const typed = FeatureValueCacheService.ToTypedValue(out.value);
         const unchanged = !!row && this.IsUnchanged(row, typed, out);
         if (unchanged && !supersededByAnotherKey) {
-            return { Result: 'Unchanged' };
+            return 'Unchanged';
         }
-        const fv = row || (await params.Provider.GetEntityObject<MJFeatureValueEntity>('MJ: Feature Values', params.ContextUser));
+        const fv = row || (await provider.GetEntityObject<MJFeatureValueEntity>('MJ: Feature Values', params.contextUser));
         if (!row) {
             fv.NewRecord();
             this.AssignKeyColumns(fv, params, out, keyHash);
         }
         this.AssignValueColumns(fv, params, out, typed);
-        if (await fv.Save()) {
-            return { Result: unchanged ? 'Unchanged' : 'Upserted' };
+        if (!(await fv.Save())) {
+            throw new FeatureValueSaveError(out.featureName, params.recordID, fv.LatestResult?.CompleteMessage || 'unknown error');
         }
-        return { Message: fv.LatestResult?.CompleteMessage || 'unknown error' };
+        return unchanged ? 'Unchanged' : 'Upserted';
     }
 
     /** Whether `row` already holds this output: the same typed value, reasoning and confidence. */
     protected IsUnchanged(row: MJFeatureValueEntity, typed: TypedFeatureValue, out: FeatureValueOutputItem): boolean {
-        // `??` because 0 is a valid Confidence; Reasoning '' and null are both "no reasoning"
         return FeatureValueCacheService.SameTypedValue(row, typed)
-            && (row.Reasoning || null) === (out.Reasoning || null)
-            && (row.Confidence ?? null) === (out.Confidence ?? null);
+            && (row.Reasoning || null) === (out.reasoning || null)
+            && (row.Confidence ?? null) === (out.confidence ?? null);
     }
 
     /** Sets a new row's key columns (record, feature, pin, input, source) and its key hash. */
     protected AssignKeyColumns(fv: MJFeatureValueEntity, params: RecordFeatureValuesParams, out: FeatureValueOutputItem, keyHash: string): void {
-        fv.RecordProcessID = params.RecordProcessID;
-        fv.EntityID = params.EntityID;
-        fv.RecordID = params.RecordID;
-        fv.FeatureName = out.FeatureName;
-        fv.PipelineVersion = params.PipelineVersion;
-        fv.PromptID = params.PromptID || null;
-        fv.PromptVersionHash = params.PromptVersionHash;
-        fv.ConstraintHash = params.ConstraintHash || null;
-        fv.AIModelID = params.AIModelID;
-        fv.ParametersHash = params.ParametersHash;
-        fv.InputHash = params.InputHash;
+        fv.RecordProcessID = params.recordProcessID;
+        fv.EntityID = params.entityID;
+        fv.RecordID = params.recordID;
+        fv.FeatureName = out.featureName;
+        fv.PipelineVersion = params.pipelineVersion;
+        fv.PromptID = params.promptID ?? null;
+        fv.PromptVersionHash = params.promptVersionHash;
+        fv.ConstraintHash = params.constraintHash ?? null;
+        fv.AIModelID = params.aiModelID;
+        fv.ParametersHash = params.parametersHash;
+        fv.InputHash = params.inputHash;
         fv.ValueKeyHash = keyHash;
-        fv.Source = params.Source;
+        fv.Source = params.source;
     }
 
     /** Sets a row's value, reasoning, confidence, run links and ComputedAt. */
@@ -513,44 +441,37 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         fv.ValueBoolean = typed.ValueBoolean;
         fv.ValueDate = typed.ValueDate;
         fv.ValueJSON = typed.ValueJSON;
-        fv.Reasoning = out.Reasoning || null;
-        // `??` because 0 is a valid confidence
-        fv.Confidence = out.Confidence ?? null;
-        fv.ProcessRunID = params.ProcessRunID || null;
-        fv.ProcessRunDetailID = params.ProcessRunDetailID || null;
-        fv.AIPromptRunID = params.AIPromptRunID || null;
-        fv.FeatureValueCacheID = params.FeatureValueCacheID || null;
+        fv.Reasoning = out.reasoning ?? null;
+        fv.Confidence = out.confidence ?? null;
+        fv.ProcessRunID = params.processRunID ?? null;
+        fv.ProcessRunDetailID = params.processRunDetailID ?? null;
+        fv.AIPromptRunID = params.aiPromptRunID ?? null;
+        fv.FeatureValueCacheID = params.featureValueCacheID ?? null;
         fv.ComputedAt = new Date();
-    }
-
-    /** The error a failed Feature Value save throws. */
-    protected SaveError(out: FeatureValueOutputItem, params: RecordFeatureValuesParams, message: string): FeatureValueSaveError {
-        return new FeatureValueSaveError(out.FeatureName, params.RecordID, message);
     }
 
     /**
      * Each output feature's latest `Source='Pipeline'` value for the record, on any key, by lower-cased feature name,
-     * with the key of the row holding it. One batched round trip with one view per feature, each reading only its
-     * newest row and only the value and key columns.
+     * with the key of the row holding it. One batched round trip, one view per feature.
      */
-    protected async LoadLatestPipelineValues(params: RecordFeatureValuesParams): Promise<Map<string, LatestPipelineValue>> {
+    protected async LoadLatestPipelineValues(params: RecordFeatureValuesParams, provider: IMetadataProvider): Promise<Map<string, LatestPipelineValue>> {
         const latest = new Map<string, LatestPipelineValue>();
-        const names = [...new Set(params.Outputs.map((o) => o.FeatureName))];
+        const names = [...new Set(params.outputs.map((o) => o.featureName))];
         if (names.length === 0) {
             return latest;
         }
-        const recordFilter = `RecordProcessID = '${EscapeSQLString(params.RecordProcessID)}' AND EntityID = '${EscapeSQLString(params.EntityID)}'`
-            + ` AND RecordID = '${EscapeSQLString(params.RecordID)}'${FeatureValueCacheService.SourceFilter('Pipeline')}`;
+        const recordFilter = `RecordProcessID = '${EscapeSQLString(params.recordProcessID)}' AND EntityID = '${EscapeSQLString(params.entityID)}'`
+            + ` AND RecordID = '${EscapeSQLString(params.recordID)}'${FeatureValueCacheService.SourceFilter('Pipeline')}`;
         const shape = FeatureValueCacheService.LatestValueViewShape();
-        const results = await RunView.FromMetadataProvider(params.Provider).RunViews<LatestFeatureValueRow & Pick<MJFeatureValueEntity, 'ValueKeyHash'>>(names.map((name) => ({
+        const results = await RunView.FromMetadataProvider(provider).RunViews<LatestFeatureValueRow & Pick<MJFeatureValueEntity, 'ValueKeyHash'>>(names.map((name) => ({
             ...shape,
             Fields: [...(shape.Fields || []), 'ValueKeyHash'],
             ExtraFilter: `${recordFilter} AND FeatureName = '${EscapeSQLString(name)}'`,
             MaxRows: 1,
-        })), params.ContextUser);
+        })), params.contextUser);
         results.forEach((res, i) => {
             if (!res.Success) {
-                throw new Error(`FeatureValueCacheService: reading the latest Feature Value '${names[i]}' of record '${params.RecordID}' failed: ${res.ErrorMessage}`);
+                throw new Error(`FeatureValueCacheService: reading the latest Feature Value '${names[i]}' of record '${params.recordID}' failed: ${res.ErrorMessage}`);
             }
             const row = res.Results?.[0];
             if (row) {
@@ -561,17 +482,17 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
     }
 
     /** The keyed rows of a pipeline, by ValueKeyHash. */
-    protected async LoadByKeyHashes(params: RecordFeatureValuesParams, keyHashes: string[]): Promise<Map<string, MJFeatureValueEntity>> {
+    protected async LoadByKeyHashes(params: RecordFeatureValuesParams, provider: IMetadataProvider, keyHashes: string[]): Promise<Map<string, MJFeatureValueEntity>> {
         const map = new Map<string, MJFeatureValueEntity>();
         if (keyHashes.length === 0) {
             return map;
         }
-        const res = await RunView.FromMetadataProvider(params.Provider).RunView<MJFeatureValueEntity>({
+        const res = await RunView.FromMetadataProvider(provider).RunView<MJFeatureValueEntity>({
             EntityName: 'MJ: Feature Values',
-            ExtraFilter: `RecordProcessID = '${EscapeSQLString(params.RecordProcessID)}' AND ValueKeyHash IN (${keyHashes.map((k) => `'${EscapeSQLString(k)}'`).join(', ')})`,
+            ExtraFilter: `RecordProcessID = '${EscapeSQLString(params.recordProcessID)}' AND ValueKeyHash IN (${keyHashes.map((k) => `'${EscapeSQLString(k)}'`).join(', ')})`,
             ResultType: 'entity_object',
             BypassCache: true,
-        }, params.ContextUser);
+        }, params.contextUser);
         if (!res.Success) {
             throw new Error(`FeatureValueCacheService: reading Feature Values failed: ${res.ErrorMessage}`);
         }
@@ -585,7 +506,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
 
     /**
      * The most recent Feature Value of a record and feature from one source, as its typed columns; null when there is
-     * none. Read fresh (`BypassCache`): the human-value guard decides from it whether a field may be overwritten.
+     * none. Read fresh: the human-value guard decides from it whether a field may be overwritten.
      * @throws Error when the read fails (a guard that cannot read must not guess "pipeline-owned").
      */
     public async GetLatestValue(p: LatestFeatureValueParams): Promise<TypedFeatureValue | null> {
@@ -605,32 +526,30 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
     }
 
     /**
-     * Upserts the record's Human Feature Value for a feature. One per record and feature: the key carries no pin
-     * (pipeline version, prompt version, model, parameters and input are all null), so a later observation of
-     * the same feature updates the row in place.
+     * Upserts the record's Human Feature Value for a feature: one per record and feature (the key carries no pin), so a
+     * later observation updates the row in place.
      * @throws FeatureValueSaveError when the row cannot be saved.
      */
     public async RecordHumanValue(p: RecordHumanValueParams): Promise<void> {
         await this.RecordFeatureValues({
-            RecordProcessID: p.RecordProcessID, EntityID: p.EntityID, RecordID: p.RecordID,
-            Outputs: [{ FeatureName: p.FeatureName, Value: p.Value }], ProcessRunID: p.ProcessRunID || null,
-            PromptVersionHash: null, PipelineVersion: null, AIModelID: null, ParametersHash: null, InputHash: null, Source: 'Human',
-            ContextUser: p.ContextUser, Provider: p.Provider,
+            recordProcessID: p.RecordProcessID, entityID: p.EntityID, recordID: p.RecordID,
+            outputs: [{ featureName: p.FeatureName, value: p.Value }], processRunID: p.ProcessRunID || null,
+            promptVersionHash: null, pipelineVersion: null, aiModelID: null, parametersHash: null, inputHash: null, source: 'Human',
+            contextUser: p.ContextUser, provider: p.Provider,
         });
     }
 
     /**
-     * Deletes the record's Human Feature Values of a feature, through the entity layer (Record Changes keeps the
-     * history): a run that overwrote the person's value made the field the pipeline's again. Sequential: the deletes
-     * share the caller's transaction when it holds one.
-     * @returns how many rows were deleted (0 when there was none)
+     * Deletes the record's Human Feature Values of a feature through the entity layer (Record Changes keeps the
+     * history), sequentially: the deletes share the caller's transaction.
+     * @returns how many rows were deleted
      * @throws Error when the rows cannot be read or one cannot be deleted
      */
     public async RetireHumanValue(p: FeatureValueRecordRef): Promise<number> {
         const res = await RunView.FromMetadataProvider(p.Provider).RunView<MJFeatureValueEntity>({
             EntityName: 'MJ: Feature Values',
             ExtraFilter: `${FeatureValueCacheService.RecordFeatureFilter(p)} AND Source = 'Human'`,
-            ResultType: 'entity_object', // the rows are deleted
+            ResultType: 'entity_object',
             BypassCache: true,
         }, p.ContextUser);
         if (!res.Success) {
@@ -646,53 +565,15 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
     }
 
     /**
-     * The batched form of {@link GetLatestValue}: one view reading some features of many records from one source, newest
-     * first. Pass its rows to {@link LatestValuesOf} for each record's latest value per feature. A caller adds the view to
-     * its own `RunViews` call, so the read shares that round trip.
-     * @param p - the pipeline, entity, records, features and source
-     */
-    public static LatestValuesView(p: LatestFeatureValuesBatch): RunViewParams {
-        const list = (values: string[]): string => values.map((v) => `'${EscapeSQLString(v)}'`).join(', ');
-        const shape = FeatureValueCacheService.LatestValueViewShape();
-        return {
-            ...shape,
-            Fields: ['RecordID', ...(shape.Fields || [])],
-            ExtraFilter: `RecordProcessID = '${EscapeSQLString(p.RecordProcessID)}' AND EntityID = '${EscapeSQLString(p.EntityID)}'`
-                + ` AND RecordID IN (${list(p.RecordIDs)}) AND FeatureName IN (${list(p.FeatureNames)})${FeatureValueCacheService.SourceFilter(p.Source)}`,
-        };
-    }
-
-    /**
-     * Each record's latest value per feature from the rows of a {@link LatestValuesView} (newest first): keyed by the
-     * normalised record ID, then the lower-cased feature name.
-     * @param rows - the view's rows, in the view's order
-     */
-    public static LatestValuesOf(rows: LatestFeatureValueRecordRow[]): Map<string, Map<string, TypedFeatureValue>> {
-        const latest = new Map<string, Map<string, TypedFeatureValue>>();
-        for (const row of rows) {
-            const recordKey = NormalizeUUID(row.RecordID);
-            const features = latest.get(recordKey) || new Map<string, TypedFeatureValue>();
-            const feature = row.FeatureName.toLowerCase();
-            if (!features.has(feature)) {
-                features.set(feature, FeatureValueCacheService.TypedValueOf(row)); // the first row is the newest
-            }
-            latest.set(recordKey, features);
-        }
-        return latest;
-    }
-
-    /**
-     * The entity, order, columns and freshness every latest-value read shares: the guard's single read
-     * ({@link GetLatestValue}), the batched read ({@link LatestValuesView}) and {@link LoadLatestPipelineValues}. "Latest"
-     * is the newest `ComputedAt`; rows with equal `ComputedAt` are ordered by creation time, then by ID, so every read
-     * picks the same row on a tie.
+     * The entity, order, columns and freshness every latest-value read shares. "Latest" is the newest `ComputedAt`, ties
+     * broken by creation time, then ID, so every read picks the same row.
      */
     protected static LatestValueViewShape(): Pick<RunViewParams, 'EntityName' | 'OrderBy' | 'Fields' | 'BypassCache'> {
         return {
             EntityName: 'MJ: Feature Values',
             OrderBy: 'ComputedAt DESC, __mj_CreatedAt DESC, ID DESC',
             Fields: ['FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON'],
-            BypassCache: true, // decisions are made from it: a value written moments ago must be seen
+            BypassCache: true,
         };
     }
 
@@ -707,11 +588,8 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             + ` AND RecordID = '${EscapeSQLString(p.RecordID)}' AND FeatureName = '${EscapeSQLString(p.FeatureName)}'`;
     }
 
-    /**
-     * A typed Feature Value as the native value write-back compares: the text, number, boolean, date or parsed JSON
-     * column that holds it; null when every column is empty. Checks `=== null` (not falsiness): 0, false and '' are values.
-     */
-    public static NativeValueOf(v: TypedFeatureValue): FeatureValueOutputItem['Value'] {
+    /** A typed Feature Value as a native value: the column that holds it (JSON parsed); null when every column is empty. */
+    public static NativeValueOf(v: TypedFeatureValue): FeatureValueOutputItem['value'] {
         if (v.ValueText !== null) {
             return v.ValueText;
         }
@@ -731,7 +609,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
      * A value in the typed column its JavaScript type maps to.
      * @param val an output's value: whatever the pipeline's payload holds at the output's Ref (`unknown` at that boundary)
      */
-    public static ToTypedValue(val: FeatureValueOutputItem['Value']): TypedFeatureValue {
+    public static ToTypedValue(val: FeatureValueOutputItem['value']): TypedFeatureValue {
         return {
             ValueText: typeof val === 'string' ? val : null,
             ValueNumeric: typeof val === 'number' ? val : null,
@@ -743,7 +621,6 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
 
     /** A copy of a row's typed value columns. */
     public static TypedValueOf(row: TypedFeatureValue): TypedFeatureValue {
-        // `??` on the numeric and boolean columns because 0 and false are values; '' text is kept as written
         return {
             ValueText: row.ValueText ?? null,
             ValueNumeric: row.ValueNumeric ?? null,
@@ -764,12 +641,12 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
 
     /** The SQL filter selecting a cache scope and pin; `KeyHash` conditions are appended by the caller. */
     protected static CacheScopeFilter(p: FeatureValueCacheScope): string {
-        const scope = p.Scope === 'prompt' || !p.RecordProcessID
+        const scope = p.scope === 'prompt' || !p.recordProcessID
             ? 'RecordProcessID IS NULL'
-            : `RecordProcessID = '${EscapeSQLString(p.RecordProcessID)}'`;
-        const model = p.AIModelID ? `AIModelID = '${EscapeSQLString(p.AIModelID)}'` : 'AIModelID IS NULL';
-        return `${scope} AND PromptID = '${EscapeSQLString(p.PromptID)}' AND PromptVersionHash = '${EscapeSQLString(p.PromptVersionHash)}'`
-            + ` AND ConstraintHash = '${EscapeSQLString(p.ConstraintHash)}' AND ${model} AND ParametersHash = '${EscapeSQLString(p.ParametersHash)}'`;
+            : `RecordProcessID = '${EscapeSQLString(p.recordProcessID)}'`;
+        const model = p.aiModelID ? `AIModelID = '${EscapeSQLString(p.aiModelID)}'` : 'AIModelID IS NULL';
+        return `${scope} AND PromptID = '${EscapeSQLString(p.promptID)}' AND PromptVersionHash = '${EscapeSQLString(p.promptVersionHash)}'`
+            + ` AND ConstraintHash = '${EscapeSQLString(p.constraintHash)}' AND ${model} AND ParametersHash = '${EscapeSQLString(p.parametersHash)}'`;
     }
 
     /**

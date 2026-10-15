@@ -539,8 +539,8 @@ describe('Feature Pipeline driver seam', () => {
             expect(result.Status).toBe('Succeeded');
             expect(result.Confidence).toEqual({ Seniority: 0.87 });
             expect(processor.HistoryParams[0].OutputConfidence).toEqual({ Seniority: 0.87 });
-            const outputs = recordFeatureValues.mock.calls[0][0].Outputs;
-            expect(outputs).toEqual([expect.objectContaining({ FeatureName: 'Seniority', Confidence: 0.87 })]);
+            const outputs = recordFeatureValues.mock.calls[0][0].outputs;
+            expect(outputs).toEqual([expect.objectContaining({ featureName: 'Seniority', confidence: 0.87 })]);
         });
 
         it('prefers the driver\'s confidence over the one its answer states at the ConfidenceRef', async () => {
@@ -550,8 +550,8 @@ describe('Feature Pipeline driver seam', () => {
             const processor = new HistoryCapturingProcessor(PROMPT_ID, undefined, spec, null);
             await processor.ProcessRecord(makeRecord(), context);
 
-            const outputs = recordFeatureValues.mock.calls[0][0].Outputs;
-            expect(outputs).toEqual([expect.objectContaining({ FeatureName: 'Seniority', Confidence: 0.87 })]);
+            const outputs = recordFeatureValues.mock.calls[0][0].outputs;
+            expect(outputs).toEqual([expect.objectContaining({ featureName: 'Seniority', confidence: 0.87 })]);
         });
 
         it('replays the driver\'s confidence on a cache hit, so a cached re-run of a Decision pipeline is Unchanged', async () => {
@@ -566,15 +566,15 @@ describe('Feature Pipeline driver seam', () => {
 
             const stored = store.mock.calls[0][0];
             const entry = CacheEntry({
-                ID: 'CACHE-1', OutputsJSON: stored.OutputsJSON, Reasoning: stored.Reasoning || null, AIPromptRunID: null,
+                ID: 'CACHE-1', OutputsJSON: stored.outputsJSON, Reasoning: stored.reasoning || null, AIPromptRunID: null,
             });
-            vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map([[stored.KeyHash, entry]]));
+            vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map([[stored.keyHash, entry]]));
             recordFeatureValues.mockClear();
             const hit = await new InferProcessor(PROMPT_ID, undefined, spec, null).ProcessRecord(makeRecord(), context);
 
             expect(hit).toMatchObject({ Status: 'Succeeded', FeatureValueCacheID: 'CACHE-1', Outcome: 'Unchanged' });
-            const outputs = recordFeatureValues.mock.calls[0][0].Outputs;
-            expect(outputs).toEqual([expect.objectContaining({ FeatureName: 'Seniority', Confidence: 0.87 })]);
+            const outputs = recordFeatureValues.mock.calls[0][0].outputs;
+            expect(outputs).toEqual([expect.objectContaining({ featureName: 'Seniority', confidence: 0.87 })]);
         });
 
         it('passes no confidence to history for the LLM driver', async () => {
@@ -583,8 +583,8 @@ describe('Feature Pipeline driver seam', () => {
 
             expect(result.Status).toBe('Succeeded');
             expect('OutputConfidence' in processor.HistoryParams[0]).toBe(false);
-            const outputs = recordFeatureValues.mock.calls[0][0].Outputs;
-            expect(outputs[0].Confidence).toBeUndefined();
+            const outputs = recordFeatureValues.mock.calls[0][0].outputs;
+            expect(outputs[0].confidence).toBeUndefined();
         });
     });
 

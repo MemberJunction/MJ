@@ -1,7 +1,6 @@
 /**
- * @fileoverview The human-value guard of a Feature Pipeline's write-back: decides whether a target field's current
- * value was entered by a person, records it as a `Source='Human'` Feature Value, and retires that record when a run
- * that overwrites human values writes the field.
+ * @fileoverview The human-value guard of a Feature Pipeline's write-back: decides whether a target field's current value
+ * was entered by a person, records it as a `Source='Human'` Feature Value, and retires it on an overwriting run.
  * @module @memberjunction/record-set-processor
  */
 import type { IMetadataProvider } from '@memberjunction/core';
@@ -23,24 +22,14 @@ export interface FeaturePipelineHumanValueGuardOptions {
     Context: RecordProcessorContext;
     /** The pipeline's spec: which output writes which field. */
     Spec: DataFeatureSpec;
-    /**
-     * Each feature's latest Pipeline value from before this run's Feature Value write (`InferProcessor.PreviousFeatureValues`,
-     * null for a feature the pipeline never wrote); undefined when this run wrote no Feature Value for the record. Read
-     * when a question is asked: the write runs inside the write-back unit, after the guard is created.
-     */
+    /** Each feature's latest Pipeline value from before this run's write (`InferProcessor.PreviousFeatureValues`), read when asked. */
     PreviousValues: () => Readonly<Record<string, TypedFeatureValue | null>> | undefined;
 }
 
 /**
  * A target field's current value is human-owned when a Human Feature Value exists for it, when it differs from what
- * this pipeline last wrote, or when the pipeline never wrote it. A preserved value is recorded as the record's Human
- * Feature Value; a run that overwrites human values retires it.
- *
- * "What the pipeline last wrote" is the value this run's own Feature Value write replaced. That write runs inside the
- * write-back unit, so the Feature Values it reads are those of committed write-backs: a write-back that failed left
- * no Feature Value behind, and a concurrent run's uncommitted one is waited for (the read blocks on its row locks).
- * Feature Values are updated in place on their key, so once this run rewrote a key the earlier value is no longer in
- * the table; only when this run wrote nothing for the record is the table read, without this run's rows.
+ * this pipeline last wrote (the value this run's own write replaced, else the table without this run's rows), or when
+ * the pipeline never wrote it. A preserved value is recorded as a Human Feature Value; an overwriting run retires it.
  */
 export class FeaturePipelineHumanValueGuard implements HumanValueGuard {
     constructor(protected readonly Options: FeaturePipelineHumanValueGuardOptions) {}
@@ -92,11 +81,7 @@ export class FeaturePipelineHumanValueGuard implements HumanValueGuard {
         return FeaturePipelineHumanValueGuard.OutputWritingField(this.Options.Spec.Outputs, fieldName);
     }
 
-    /**
-     * The output that writes a field of the processed record: field targets only, names compared case-insensitively.
-     * @param outputs - the pipeline spec's outputs
-     * @param fieldName - the mapped (config-named) field
-     */
+    /** The output that writes a field of the processed record (field targets, names compared case-insensitively). */
     public static OutputWritingField(outputs: DataFeatureOutput[], fieldName: string): DataFeatureOutput | undefined {
         const wanted = fieldName.toLowerCase();
         return outputs.find((o) => o.Target.Mode === 'field' && o.Target.EntityFieldName.toLowerCase() === wanted);

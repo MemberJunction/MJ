@@ -125,15 +125,9 @@ export class MJRecordProcessEntityExtended extends MJRecordProcessEntity {
 type CheckedPromptRow = Pick<MJAIPromptEntity, 'ID' | 'Name' | 'TemplateID'>;
 
 /**
- * The server-side save check that a Record Process row's prompt template renders its output constraints
- * ({@link ConstraintPromptTemplate.DescribeMissingBlock}, the same check `InferProcessor.Preflight` runs).
- *
- * The prompt, and the text its template renders, are read through the record's own provider, not the AI or template
- * engine caches. A save inside a transaction then sees rows written earlier in that transaction: `mj sync push` saves a
- * prompt's edited template and then the pipeline that depends on it in one transaction, and the engines reload only
- * after it commits. A prompt or template that cannot be read refuses the save, naming what is missing.
- *
- * Server only: a browser save is checked again by the server, where the read is on the server's connection.
+ * The server-side save check that a Record Process row's prompt template renders its output constraints (the check
+ * `InferProcessor.Preflight` runs). The prompt and template are read through the record's provider, not the engine
+ * caches, so a save inside a transaction (`mj sync push`) sees the template written earlier in it.
  */
 export class RecordProcessPromptTemplateCheck {
   /** Why the row's prompt template cannot run with its spec; null when it can or there is nothing to check. */
@@ -184,8 +178,7 @@ export class RecordProcessPromptTemplateCheck {
     try {
       return await LinkedTemplateText.ReadRenderedText(record, templateID);
     } catch (e) {
-      // a non-Error throw carries no message worth showing; `String(e)` would print "undefined"
-      return e instanceof Error ? e : new Error('the read failed without an error');
+      return e instanceof Error ? e : new Error(String(e));
     }
   }
 }

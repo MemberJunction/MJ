@@ -7,9 +7,8 @@
 import type { DataFeatureOutput, SpecValidationIssue } from './data-feature-spec.js';
 
 /**
- * What a run does with an output whose confidence is below its floor: `null` withholds the output (its Feature Value
- * records the abstention; write-back clears a target value the pipeline wrote and keeps one a person entered) while the
- * record's other outputs are written; `fail` fails the whole record, which writes nothing.
+ * What a run does with an output below its floor: `null` withholds it (write-back clears a value the pipeline wrote and
+ * keeps a person's) while the other outputs are written; `fail` fails the whole record.
  */
 export type LowConfidencePolicy = 'null' | 'fail';
 
@@ -30,11 +29,7 @@ export interface BelowConfidenceOutput {
 
 /** The confidence-floor rules of a spec's outputs. Every method is static and takes plain data. */
 export class ConfidenceFloor {
-    /**
-     * Whether an answer's confidence for an output is below the output's floor. An output without a floor never is. A
-     * missing or non-finite confidence is below the floor: a floor that a missing confidence passed would let exactly
-     * the answers the model gave no confidence for through.
-     */
+    /** Whether an answer's confidence for an output is below its floor; a missing confidence is below any floor. */
     public static IsBelow(output: Pick<DataFeatureOutput, 'MinConfidence'>, confidence: number | undefined): boolean {
         if (typeof output.MinConfidence !== 'number') {
             return false;
@@ -64,12 +59,8 @@ export class ConfidenceFloor {
     }
 
     /**
-     * The floor problems of one output. A floor is a number with 0 < floor <= 1 and comes with its policy (`null` or
-     * `fail`), and neither is set without the other: an implicit policy would decide silently whether a low answer fails
-     * its record. On an LLM pipeline the output needs a `ConfidenceRef`, since only the answer states its confidence;
-     * another pipeline type's driver supplies its own. The spec is parsed from JSON, so each value is read as `unknown`.
-     * A floor on an output whose Ref is the whole answer (`$`) is refused when the spec has other outputs: withholding it
-     * empties the answer, which would drop the other outputs' values too.
+     * The floor problems of one output: a floor in (0, 1] set together with its policy; on an LLM pipeline a
+     * `ConfidenceRef`; and no floor on a whole-answer (`$`) output when the spec has other outputs.
      * @param isLLMPipeline - whether the spec's pipeline type is LLM (`IsLLMPipelineType`)
      * @param outputCount - how many outputs the spec has
      */

@@ -31,7 +31,7 @@ class MockInferHookSubclass extends InferProcessor {
 // Register with ClassFactory under a unique key
 RegisterClass(InferProcessor, 'MockInferHookSubclass')(MockInferHookSubclass);
 
-describe('InferProcessor Lifecycle Hooks', () => {
+describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
     it('allows subclasses to override beforeWriteBack and invokes it in WriteBackProcessor', async () => {
         const processor = new MockInferHookSubclass('prompt-123', undefined, undefined, null);
         const mockInner: IRecordProcessor = {
@@ -69,7 +69,7 @@ describe('InferProcessor Lifecycle Hooks', () => {
         const result = await writeBackProc.ProcessRecord(record, context);
         expect(processor.beforeWriteBackCalled).toBe(true);
         expect(result.Status).toBe('Succeeded');
-        expect(result.ResultPayload).toEqual({ output: { foo: 'bar' }, writeBack: { updatedRecord: false, changed: false, dryRun: true, previewFields: { TargetField: 'bar' }, previewFieldChanges: [{ Field: 'TargetField', OldValue: undefined, NewValue: 'bar' }] } });
+        expect(result.ResultPayload).toEqual({ output: { foo: 'bar' }, writeBack: { updatedRecord: false, changed: false, dryRun: true, previewFields: { TargetField: 'bar' } } });
     });
 
     it('resolves custom subclass via ClassFactory using DataFeatureSpec.ProcessorExtensionKey', () => {

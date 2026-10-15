@@ -9,14 +9,10 @@ import {
   IsDecisionPipelineType,
   ConstraintPromptTemplate,
 } from '../spec/data-feature-spec.js';
-import { OutputValidator } from '../validation/constraint-validator.js';
-import type { DataFeatureOutput } from '../spec/data-feature-spec.js';
+import { ValidateOutputValue } from '../validation/constraint-validator.js';
 import { SafeJSONParse } from '@memberjunction/global';
 
-/**
- * A spec as a pipeline row's Configuration JSON yields it. ValidateSpec checks that untrusted text at run time, so a
- * test of a malformed shape goes through the same parse instead of claiming the shape is a valid spec.
- */
+/** A spec as a pipeline row's Configuration JSON yields it (malformed shapes go through the same parse as at run time). */
 function parsedSpec(configuration: object): DataFeatureSpec {
   const spec = SafeJSONParse<DataFeatureSpec>(JSON.stringify(configuration));
   if (!spec) {
@@ -53,7 +49,7 @@ const sampleEntity: EntityMetadataStub = {
   ],
 };
 
-describe('DataFeatureSpec — pure validator', () => {
+describe('DataFeatureSpec — pure validator (P1-1)', () => {
   it('rejects a spec with empty outputs', () => {
     const spec: DataFeatureSpec = {
       Name: 'Empty Pipeline',
@@ -242,7 +238,7 @@ describe('DataFeatureSpec — pure validator', () => {
   });
 });
 
-describe('resolveConstraint & renderConstraintBlock', () => {
+describe('resolveConstraint & renderConstraintBlock (P1-1)', () => {
   const sampleField = {
     Name: 'SeniorityLevel',
     TSType: 'string',
@@ -273,7 +269,7 @@ describe('resolveConstraint & renderConstraintBlock', () => {
   });
 
   it('renders allowed values into the prompt constraint block automatically', () => {
-    const outputs: DataFeatureOutput[] = [
+    const outputs = [
       {
         Ref: '$.seniority',
         Name: 'SeniorityLevel',
@@ -298,14 +294,14 @@ describe('resolveConstraint & renderConstraintBlock', () => {
   });
 });
 
-describe('OutputValidator.ValidateOutputValue — runtime enforcement', () => {
+describe('validateOutputValue — runtime enforcement (P1-2)', () => {
   it('handles enum match case-insensitively and returns canonical casing', () => {
     const constraint = {
       Type: 'enum' as const,
       Values: ['IC', 'Manager', 'Director', 'VP', 'C-Level'],
       OnViolation: 'fail' as const,
     };
-    const res = OutputValidator.ValidateOutputValue('director', constraint);
+    const res = ValidateOutputValue('director', constraint);
     expect(res.valid).toBe(true);
     expect(res.value).toBe('Director');
     expect(res.coerced).toBe(true);
@@ -315,20 +311,20 @@ describe('OutputValidator.ValidateOutputValue — runtime enforcement', () => {
     const allowed = ['IC', 'Manager', 'Director'];
 
     // 1. fail
-    const failRes = OutputValidator.ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'fail' });
+    const failRes = ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'fail' });
     expect(failRes.valid).toBe(false);
     expect(failRes.violationPolicyApplied).toBe('fail');
     expect(failRes.violationMessage).toContain("Value 'Astronaut' is not in the allowed vocabulary");
 
     // 2. null
-    const nullRes = OutputValidator.ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'null' });
+    const nullRes = ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'null' });
     expect(nullRes.valid).toBe(true);
     expect(nullRes.value).toBeNull();
     expect(nullRes.coerced).toBe(true);
     expect(nullRes.violationPolicyApplied).toBe('null');
 
     // 3. coerce-to-other
-    const otherRes = OutputValidator.ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'coerce-to-other' });
+    const otherRes = ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'coerce-to-other' });
     expect(otherRes.valid).toBe(true);
     expect(otherRes.value).toBe('Other');
     expect(otherRes.coerced).toBe(true);
@@ -339,12 +335,12 @@ describe('OutputValidator.ValidateOutputValue — runtime enforcement', () => {
     const numConstraint = { Type: 'numeric' as const, Min: 0, Max: 100, OnViolation: 'fail' as const };
 
     // Strict reject when column is not typed numeric
-    const strictRes = OutputValidator.ValidateOutputValue('42', numConstraint, { targetFieldTSType: 'string' });
+    const strictRes = ValidateOutputValue('42', numConstraint, { targetFieldTSType: 'string' });
     expect(strictRes.valid).toBe(false);
     expect(strictRes.violationMessage).toContain('rejected quoted string value');
 
     // Coerces when column is typed numeric
-    const coerceRes = OutputValidator.ValidateOutputValue('42', numConstraint, { targetFieldTSType: 'number' });
+    const coerceRes = ValidateOutputValue('42', numConstraint, { targetFieldTSType: 'number' });
     expect(coerceRes.valid).toBe(true);
     expect(coerceRes.value).toBe(42);
     expect(coerceRes.coerced).toBe(true);
@@ -353,24 +349,24 @@ describe('OutputValidator.ValidateOutputValue — runtime enforcement', () => {
   it('enforces numeric bounds and integer constraint', () => {
     const intConstraint = { Type: 'numeric' as const, Min: 1, Max: 10, Integer: true, OnViolation: 'fail' as const };
 
-    expect(OutputValidator.ValidateOutputValue(1, intConstraint).valid).toBe(true);
-    expect(OutputValidator.ValidateOutputValue(5, intConstraint).valid).toBe(true);
-    expect(OutputValidator.ValidateOutputValue(10, intConstraint).valid).toBe(true);
-    expect(OutputValidator.ValidateOutputValue(5.5, intConstraint).valid).toBe(false);
-    expect(OutputValidator.ValidateOutputValue(0, intConstraint).valid).toBe(false);
-    expect(OutputValidator.ValidateOutputValue(11, intConstraint).valid).toBe(false);
+    expect(ValidateOutputValue(1, intConstraint).valid).toBe(true);
+    expect(ValidateOutputValue(5, intConstraint).valid).toBe(true);
+    expect(ValidateOutputValue(10, intConstraint).valid).toBe(true);
+    expect(ValidateOutputValue(5.5, intConstraint).valid).toBe(false);
+    expect(ValidateOutputValue(0, intConstraint).valid).toBe(false);
+    expect(ValidateOutputValue(11, intConstraint).valid).toBe(false);
   });
 
   it('handles enum constraint with empty allowed values gracefully', () => {
     const emptyEnum = { Type: 'enum' as const, Values: [], OnViolation: 'fail' as const };
-    const res = OutputValidator.ValidateOutputValue('IC', emptyEnum);
+    const res = ValidateOutputValue('IC', emptyEnum);
     expect(res.valid).toBe(false);
     expect(res.violationMessage).toContain('no allowed values configured');
   });
 
   it('degrades coerce-to-other to null on non-enum constraint violations', () => {
     const numConstraint = { Type: 'numeric' as const, Min: 0, Max: 100, OnViolation: 'coerce-to-other' as const };
-    const res = OutputValidator.ValidateOutputValue(150, numConstraint);
+    const res = ValidateOutputValue(150, numConstraint);
     expect(res.valid).toBe(true);
     expect(res.value).toBeNull();
     expect(res.coerced).toBe(true);
@@ -378,7 +374,7 @@ describe('OutputValidator.ValidateOutputValue — runtime enforcement', () => {
   });
 
   it('rejects coerce-to-other on non-enum constraints during spec validation', () => {
-    const spec = specOf({
+    const spec: DataFeatureSpec = {
       Name: 'Invalid Coerce Spec',
       PromptID: 'prompt-1',
       Outputs: [
@@ -389,12 +385,12 @@ describe('OutputValidator.ValidateOutputValue — runtime enforcement', () => {
           Constraint: { Type: 'numeric', Min: 0, Max: 100, OnViolation: 'coerce-to-other' },
         },
       ],
-    });
+    };
     const issues = ValidateSpec(spec, sampleEntity);
     expect(issues.some(i => i.Path?.includes('Constraint.OnViolation') && i.Severity === 'error')).toBe(true);
   });
 
-  it('rejects prototype pollution property names in output Ref', () => {
+  it('rejects prototype pollution property names in output Ref (R15)', () => {
     const maliciousPaths = [
       '$.__proto__.polluted',
       '$.constructor.prototype.isAdmin',
@@ -403,7 +399,7 @@ describe('OutputValidator.ValidateOutputValue — runtime enforcement', () => {
     ];
 
     for (const ref of maliciousPaths) {
-      const spec = specOf({
+      const spec: DataFeatureSpec = {
         Name: 'Malicious Ref Spec',
         PromptID: 'prompt-1',
         Outputs: [
@@ -413,7 +409,7 @@ describe('OutputValidator.ValidateOutputValue — runtime enforcement', () => {
             Target: { Mode: 'field', EntityFieldName: 'SentimentScore' },
           },
         ],
-      });
+      };
       const issues = ValidateSpec(spec, sampleEntity);
       const pollutionIssue = issues.find(i => i.Path === 'Outputs[0].Ref');
       expect(pollutionIssue).toBeDefined();
@@ -422,7 +418,7 @@ describe('OutputValidator.ValidateOutputValue — runtime enforcement', () => {
     }
 
     // Valid paths should not be flagged for prototype pollution
-    const validSpec = specOf({
+    const validSpec: DataFeatureSpec = {
       Name: 'Valid Spec',
       PromptID: 'prompt-1',
       Outputs: [
@@ -432,12 +428,12 @@ describe('OutputValidator.ValidateOutputValue — runtime enforcement', () => {
           Target: { Mode: 'field', EntityFieldName: 'SentimentScore' },
         },
       ],
-    });
+    };
     const validIssues = ValidateSpec(validSpec, sampleEntity);
     expect(validIssues.some(i => i.Message.includes('prototype pollution'))).toBe(false);
   });
 
-  it('rejects an output whose target has an invalid or missing Mode', () => {
+  it('rejects an output whose target has an invalid or missing Mode (Round 29 finding)', () => {
     interface MalformedTarget {
       TargetType: string;
       Field: string;
@@ -467,7 +463,7 @@ describe('OutputValidator.ValidateOutputValue — runtime enforcement', () => {
       ],
     };
 
-    const issues = ValidateSpec(parsedSpec(malformedSpec), sampleEntity);
+    const issues = ValidateSpec(malformedSpec as DataFeatureSpec, sampleEntity);
     const modeIssue = issues.find(i => i.Path === 'Outputs[0].Target.Mode');
     expect(modeIssue).toBeDefined();
     expect(modeIssue?.Severity).toBe('error');
@@ -476,7 +472,7 @@ describe('OutputValidator.ValidateOutputValue — runtime enforcement', () => {
   });
 
   it('rejects child target missing required Map, ParentField, or EntityName', () => {
-    const spec = specOf({
+    const spec: DataFeatureSpec = {
       Name: 'Incomplete Child Spec',
       PromptID: 'prompt-1',
       Outputs: [
@@ -491,7 +487,7 @@ describe('OutputValidator.ValidateOutputValue — runtime enforcement', () => {
           },
         },
       ],
-    });
+    };
 
     const issues = ValidateSpec(spec, sampleEntity);
     expect(issues.some(i => i.Path === 'Outputs[0].Target.EntityName' && i.Severity === 'error')).toBe(true);
@@ -572,8 +568,8 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
     });
 
     it('rejects unrecognized FeatureKind', () => {
-      const base = baseSpec();
-      const spec = parsedSpec({ ...base, Outputs: [{ ...base.Outputs[0], FeatureKind: 'invalid-kind' }, ...base.Outputs.slice(1)] });
+      const spec = baseSpec();
+      spec.Outputs[0].FeatureKind = 'invalid-kind' as unknown as FeatureKind;
       const issues = ValidateSpec(spec, sampleEntity);
       expect(issues.some(i => i.Path === 'Outputs[0].FeatureKind' && i.Severity === 'error')).toBe(true);
     });
@@ -621,14 +617,13 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
             },
           },
         ],
-        Caching: { Cacheable: false },
       };
       const issues = ValidateSpec(spec, sampleEntity);
       expect(issues.filter(i => i.Path.includes('Levels'))).toHaveLength(0);
     });
 
     it('rejects fewer than 2 or more than 10 levels, or non-string/empty levels', () => {
-      const makeSpec = (levels: unknown): DataFeatureSpec => parsedSpec({
+      const makeSpec = (levels: unknown) => ({
         Name: 'ScorePipeline',
         Description: 'Scores items',
         Context: { Fields: ['CurrentJobTitle'] },
@@ -639,9 +634,9 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
             Name: 'SentimentScore',
             Target: { Mode: 'field', EntityFieldName: 'SentimentScore' },
             Constraint: {
-              Type: 'numeric',
-              Levels: levels,
-              OnViolation: 'fail',
+              Type: 'numeric' as const,
+              Levels: levels as string[],
+              OnViolation: 'fail' as const,
             },
           },
         ],
@@ -677,14 +672,13 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
             },
           },
         ],
-        Caching: { Cacheable: false },
       };
       const issues = ValidateSpec(spec, sampleEntity);
       expect(issues.filter(i => i.Path.includes('ValueDescriptions'))).toHaveLength(0);
     });
 
     it('rejects non-object ValueDescriptions', () => {
-      const spec = parsedSpec({
+      const spec: DataFeatureSpec = {
         Name: 'EnumPipeline',
         Description: 'Categorizes seniority',
         Context: { Fields: ['CurrentJobTitle'] },
@@ -697,13 +691,12 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
             Constraint: {
               Type: 'enum',
               Values: ['IC'],
-              ValueDescriptions: 'not-an-object',
+              ValueDescriptions: 'not-an-object' as unknown as Record<string, string>,
               OnViolation: 'fail',
             },
           },
         ],
-        Caching: { Cacheable: false },
-      });
+      };
       const issues = ValidateSpec(spec, sampleEntity);
       expect(issues.some(i => i.Path.includes('ValueDescriptions'))).toBe(true);
     });

@@ -11,10 +11,8 @@
  * NOTE ON CONFIDENCE & CACHING:
  * Direct computations by this driver produce per-output confidence scores returned in
  * {@link FeaturePipelineComputeSuccess.Confidence} and persisted to `MJ: Feature Values` history.
- * `InferProcessor` stores them with the outputs in the Dedup Cache's payload, under the reserved key
- * `InferProcessor.DRIVER_CONFIDENCE_KEY` (`_confidence`), because the cache table has no confidence column. A cache
- * hit replays them, so a cached re-run records the confidences the computation recorded (Unchanged). Cache rows
- * stored before that key existed carry none: their first cached re-run records no confidence.
+ * `InferProcessor` stores them in the Dedup Cache's payload under `InferProcessor.DRIVER_CONFIDENCE_KEY`, since the
+ * cache table has no confidence column, so a cache hit replays them.
  *
  * @module @memberjunction/record-set-processor
  */

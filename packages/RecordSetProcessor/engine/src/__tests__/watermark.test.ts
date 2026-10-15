@@ -288,35 +288,24 @@ describe('WatermarkService', () => {
     });
 });
 
-describe('WatermarkService: what an unchanged watermark cannot vouch for', () => {
+describe('WatermarkService: a run that overwrites human values', () => {
     const user = new UserInfo();
     const recordProcessID = 'rp-out';
     const entityID = 'entity-out';
     const kept: RecordRef = { EntityID: entityID, RecordID: 'rec-kept', Record: { Title: 'Nurse' } };
-    const cleared: RecordRef = { EntityID: entityID, RecordID: 'rec-cleared', Record: { Title: 'Surgeon' } };
-    const edited: RecordRef = { EntityID: entityID, RecordID: 'rec-edited', Record: { Title: 'Porter' } };
-    /** The stored watermark of each record: the kept and cleared records match their hash, the edited one does not. */
+    const other: RecordRef = { EntityID: entityID, RecordID: 'rec-other', Record: { Title: 'Surgeon' } };
+    /** The stored watermarks: both records match their hash. */
     const watermarks = (): Array<{ RecordID: string; Hash: string; Save: () => Promise<boolean> }> => [
         { RecordID: 'rec-kept', Hash: 'hash-rec-kept', Save: vi.fn(async () => true) },
-        { RecordID: 'rec-cleared', Hash: 'hash-rec-cleared', Save: vi.fn(async () => true) },
-        { RecordID: 'rec-edited', Hash: 'stale', Save: vi.fn(async () => true) },
+        { RecordID: 'rec-other', Hash: 'hash-rec-other', Save: vi.fn(async () => true) },
     ];
 
-    /** A processor whose basis hash is `hash-<RecordID>` and whose outputs exist for the kept record only. */
-    function processorWithOutputs(present: string[] = ['rec-kept']) {
-        const processor = {
+    /** A processor whose basis hash is `hash-<RecordID>`. */
+    function hashingProcessor() {
+        return {
             ProcessRecord: vi.fn(async (_r: RecordRef): Promise<RecordResult> => ({ Status: 'Succeeded' })),
             ComputeBasisHash: vi.fn(async (r: RecordRef) => `hash-${r.RecordID}`),
-            RecordsWithOutputs: vi.fn(async (rs: RecordRef[]) => new Set(rs.map((r) => r.RecordID).filter((id) => present.includes(id)))),
         };
-        return processor;
-    }
-
-    function check(processor: IRecordProcessor, extra: { OverwriteHumanValues?: boolean; strategy?: 'Checksum' | 'UpdatedAt'; lastRunAt?: Date } = {}) {
-        return WatermarkService.Instance.CheckBatchWatermarks({
-            recordProcessID, entityID, records: [kept, cleared, edited], strategy: extra.strategy || 'Checksum', skipUnchanged: true,
-            lastRunAt: extra.lastRunAt, processor, contextUser: user, OverwriteHumanValues: extra.OverwriteHumanValues,
-        });
     }
 
     /** Serves the stored watermarks to the service's watermark read (the mocked RunView). */
@@ -327,65 +316,19 @@ describe('WatermarkService: what an unchanged watermark cannot vouch for', () =>
     beforeEach(() => serve(watermarks()));
     afterEach(() => vi.restoreAllMocks());
 
-    it('processes an unchanged record whose outputs are gone, keeping its hash so the watermark is refreshed', async () => {
-        const decisions = await check(processorWithOutputs());
-        expect(decisions.get('rec-cleared')).toMatchObject({ shouldSkip: false, basisHash: 'hash-rec-cleared' });
-        expect(decisions.get('rec-cleared')?.existingWatermark).toBeDefined();
-    });
-
-    it('still skips an unchanged record whose outputs exist', async () => {
-        const decisions = await check(processorWithOutputs());
-        expect(decisions.get('rec-kept')?.shouldSkip).toBe(true);
-        expect(decisions.get('rec-edited')?.shouldSkip).toBe(false);
-    });
-
-    it('asks for outputs once per batch, about the unchanged records only', async () => {
-        const processor = processorWithOutputs();
-        await check(processor);
-        expect(processor.RecordsWithOutputs).toHaveBeenCalledTimes(1);
-        expect(processor.RecordsWithOutputs.mock.calls[0][0].map((r: RecordRef) => r.RecordID)).toEqual(['rec-kept', 'rec-cleared']);
-    });
-
-    it('processes the unchanged records when the outputs check fails', async () => {
-        const processor = processorWithOutputs();
-        processor.RecordsWithOutputs.mockRejectedValueOnce(new Error('view failed'));
-        const decisions = await check(processor);
-        expect(decisions.get('rec-kept')?.shouldSkip).toBe(false);
-        expect(decisions.get('rec-cleared')?.shouldSkip).toBe(false);
-    });
-
-    it('skips on the hash alone for a processor with no outputs to check', async () => {
-        const { RecordsWithOutputs: _none, ...withoutOutputs } = processorWithOutputs();
-        const decisions = await check(withoutOutputs);
-        expect(decisions.get('rec-kept')?.shouldSkip).toBe(true);
-        expect(decisions.get('rec-cleared')?.shouldSkip).toBe(true);
-    });
-
-    it('processes every unchanged record of a run that overwrites human values, keeping each hash', async () => {
-        const processor = processorWithOutputs(['rec-kept', 'rec-cleared']);
-        const decisions = await check(processor, { OverwriteHumanValues: true });
+    it('processes every unchanged record, keeping each hash so its watermark is refreshed', async () => {
+        const processor = hashingProcessor();
+        const params = { recordProcessID, entityID, records: [kept, other], strategy: 'Checksum' as const, skipUnchanged: true, processor, contextUser: user };
+        expect((await WatermarkService.Instance.CheckBatchWatermarks(params)).get('rec-kept')?.shouldSkip).toBe(true);
+        const decisions = await WatermarkService.Instance.CheckBatchWatermarks({ ...params, OverwriteHumanValues: true });
         expect(decisions.get('rec-kept')).toMatchObject({ shouldSkip: false, basisHash: 'hash-rec-kept' });
-        expect(decisions.get('rec-cleared')).toMatchObject({ shouldSkip: false, basisHash: 'hash-rec-cleared' });
-        expect(processor.ComputeBasisHash).toHaveBeenCalledTimes(3);
+        expect(decisions.get('rec-other')).toMatchObject({ shouldSkip: false, basisHash: 'hash-rec-other' });
     });
 
-    it('applies both rules to the UpdatedAt strategy', async () => {
-        const lastRunAt = new Date('2026-10-01T00:00:00Z');
-        const old = (r: RecordRef): RecordRef => ({ ...r, Record: { __mj_UpdatedAt: new Date('2026-09-01T00:00:00Z') } });
-        const records = [old(kept), old(cleared)];
-        const processor = processorWithOutputs();
-        const params = { recordProcessID, entityID, records, strategy: 'UpdatedAt' as const, skipUnchanged: true, lastRunAt, processor, contextUser: user };
-        const byOutputs = await WatermarkService.Instance.CheckBatchWatermarks(params);
-        expect(byOutputs.get('rec-kept')?.shouldSkip).toBe(true);
-        expect(byOutputs.get('rec-cleared')?.shouldSkip).toBe(false);
-        const overwriting = await WatermarkService.Instance.CheckBatchWatermarks({ ...params, OverwriteHumanValues: true });
-        expect(overwriting.get('rec-kept')?.shouldSkip).toBe(false);
-    });
-
-    it('integrates with RecordSetProcessor: a run that overwrites human values processes the unchanged record and refreshes its watermark', async () => {
+    it('integrates with RecordSetProcessor: the unchanged record is processed and its watermark refreshed', async () => {
         const stored = watermarks();
         serve(stored);
-        const processor = processorWithOutputs(['rec-kept', 'rec-cleared']);
+        const processor = hashingProcessor();
         const result = await RecordSetProcessor.Instance.Process({
             source: new ArraySource([kept], entityID), processor, tracker: new NoOpTracker(), contextUser: user,
             recordProcessID, entityID, skipUnchanged: true, watermarkStrategy: 'Checksum', overwriteHumanValues: true,
@@ -396,20 +339,9 @@ describe('WatermarkService: what an unchanged watermark cannot vouch for', () =>
         expect(stored[0].Save).toHaveBeenCalledTimes(1);
         expect(stored[0].Hash).toBe('hash-rec-kept');
     });
-
-    it('integrates with RecordSetProcessor: an unchanged record whose outputs are gone is processed, the others still skipped', async () => {
-        const processor = processorWithOutputs();
-        const result = await RecordSetProcessor.Instance.Process({
-            source: new ArraySource([kept, cleared], entityID), processor, tracker: new NoOpTracker(), contextUser: user,
-            recordProcessID, entityID, skipUnchanged: true, watermarkStrategy: 'Checksum',
-        });
-        expect(result.Skipped).toBe(1);
-        expect(processor.ProcessRecord).toHaveBeenCalledTimes(1);
-        expect(processor.ProcessRecord.mock.calls[0][0]).toMatchObject({ RecordID: 'rec-cleared' });
-    });
 });
 
-describe('RecordSetProcessor: a real run that does not skip refreshes its watermarks (QF-I1)', () => {
+describe('RecordSetProcessor: a real run that does not skip refreshes its watermarks', () => {
     const user = new UserInfo();
     const recordProcessID = 'rp-refresh';
     const entityID = 'entity-refresh';

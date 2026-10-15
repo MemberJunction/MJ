@@ -20,12 +20,8 @@ export class LookupConstraintValues {
     private static readonly IDENTIFIER = /^[A-Za-z0-9_]+$/;
 
     /**
-     * Reads the lookup entity's allowed values (every row matching the optional Filter). The entity and match column
-     * are the ones `ResolveConstraint` resolved (the constraint's own, else the target field's foreign key and the
-     * target's `LookupMatchField`), so the rows loaded are the rows the write-back matches against. Rows whose match
-     * column is empty are skipped: they cannot be answered. The rows come back in one order (by match value, ordinal),
-     * whatever order the provider returns them in: the list is hashed and rendered into the prompt, so the order must
-     * not change between runs of an unchanged taxonomy.
+     * Reads the lookup entity's allowed values (every row matching the optional Filter), skipping rows with an empty
+     * match column, in a stable order (the list is hashed and rendered into the prompt).
      * @param resolved - the output's lookup constraint as `ResolveConstraint` resolved it
      * @throws Error when no entity resolved, a field is not a plain identifier, or the read fails.
      */

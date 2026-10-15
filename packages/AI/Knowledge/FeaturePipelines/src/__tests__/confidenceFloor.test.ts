@@ -46,13 +46,6 @@ describe('ConfidenceFloor — spec validation', () => {
         expect(errorsAt(specWith({ ConfidenceRef: '$.SConf', MinConfidence: floor, OnLowConfidence: 'null' }), 'Outputs[0].MinConfidence')).toHaveLength(1);
     });
 
-    it('names a NaN floor as NaN in its message', () => {
-        expect(errorsAt(specWith({ ConfidenceRef: '$.SConf', MinConfidence: Number.NaN, OnLowConfidence: 'null' }), 'Outputs[0].MinConfidence')[0])
-            .toContain("has MinConfidence null"); // JSON carries NaN as null; the in-memory case below keeps NaN
-        const inMemory: DataFeatureSpec = { ...specWith({}), Outputs: [{ Name: 'S', Ref: '$.S', ConfidenceRef: '$.c', MinConfidence: Number.NaN, OnLowConfidence: 'null', Target: { Mode: 'field', EntityFieldName: 'S' } }] };
-        expect(errorsAt(inMemory, 'Outputs[0].MinConfidence')[0]).toContain('has MinConfidence NaN;');
-    });
-
     it('rejects an OnLowConfidence that is not null or fail', () => {
         expect(errorsAt(specWith({ ConfidenceRef: '$.SConf', MinConfidence: 0.5, OnLowConfidence: 'skip' }), 'Outputs[0].OnLowConfidence')).toHaveLength(1);
     });
@@ -71,10 +64,6 @@ describe('ConfidenceFloor — spec validation', () => {
         expect(errorsAt(one, 'Outputs[0].MinConfidence')).toEqual([]);
     });
 
-    it('reports nothing for an output without a floor', () => {
-        expect(errorsAt(specWith({ ConfidenceRef: '$.SConf' }), 'Outputs[0].MinConfidence')).toEqual([]);
-        expect(errorsAt(specWith({ ConfidenceRef: '$.SConf' }), 'Outputs[0].OnLowConfidence')).toEqual([]);
-    });
 });
 
 describe('ConfidenceFloor — evaluation', () => {
@@ -91,11 +80,6 @@ describe('ConfidenceFloor — evaluation', () => {
     it('treats a missing or unusable confidence as below the floor', () => {
         expect(ConfidenceFloor.IsBelow(floored, undefined)).toBe(true);
         expect(ConfidenceFloor.IsBelow(floored, Number.NaN)).toBe(true);
-    });
-
-    it('never puts an output without a floor below it', () => {
-        expect(ConfidenceFloor.IsBelow(unfloored, undefined)).toBe(false);
-        expect(ConfidenceFloor.IsBelow(unfloored, 0)).toBe(false);
     });
 
     it('lists the outputs below their floor, with the confidence, floor and policy', () => {

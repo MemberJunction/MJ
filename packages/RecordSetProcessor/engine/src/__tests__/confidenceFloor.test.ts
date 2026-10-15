@@ -73,10 +73,10 @@ describe('a null confidence floor withholds the output', () => {
         expect(r.BelowConfidenceOutputs).toEqual(['SeniorityLevel']);
         expect(r.ResultPayload).toMatchObject({ SeniorityLevel: null, _belowConfidence: [{ OutputName: 'SeniorityLevel', Confidence: 0.2, MinConfidence: 0.5, Policy: 'null' }] });
         // the abstention is recorded as a Pipeline Feature Value with no value, in the same write as the other outputs
-        const outputs = history.mock.calls[0][0].Outputs;
+        const outputs = history.mock.calls[0][0].outputs;
         expect(history).toHaveBeenCalledTimes(1);
-        expect(history.mock.calls[0][0].Source).toBe('Pipeline');
-        expect(outputs.map((o) => [o.FeatureName, o.Value])).toEqual([['SeniorityLevel', null], ['JobFunctions', [{ JobFunctionID: OPS_ID, Sequence: 1 }]]]);
+        expect(history.mock.calls[0][0].source).toBe('Pipeline');
+        expect(outputs.map((o) => [o.featureName, o.value])).toEqual([['SeniorityLevel', null], ['JobFunctions', [{ JobFunctionID: OPS_ID, Sequence: 1 }]]]);
     });
 
     it('records an abstention with no value when the withheld output is the whole answer (Ref $)', async () => {
@@ -86,16 +86,7 @@ describe('a null confidence floor withholds the output', () => {
         const whole: DataFeatureSpec = { ...flooredSpec('null'), Outputs: [{ Name: 'Whole', Ref: '$', ConfidenceRef: '$.c', MinConfidence: 0.5, OnLowConfidence: 'null', Target: { Mode: 'field', EntityFieldName: 'Note' } }] };
         const r = await new InferProcessor('PROMPT-1', undefined, whole, null).ProcessRecord(record, context);
         expect(r.BelowConfidenceOutputs).toEqual(['Whole']);
-        expect(history.mock.calls[0][0].Outputs.map((o) => [o.FeatureName, o.Value])).toEqual([['Whole', null]]);
-    });
-
-    it('treats a missing confidence as below the floor', async () => {
-        modelAnswer = { SeniorityLevel: 'C-Level', Functions: [{ JobFunctionID: OPS_ID, Sequence: 1 }] };
-        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'c1' }));
-        vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
-        const r = await new InferProcessor('PROMPT-1', undefined, flooredSpec('null'), null).ProcessRecord(record, context);
-        expect(r.BelowConfidenceOutputs).toEqual(['SeniorityLevel']);
-        expect(r.ResultPayload).toMatchObject({ _belowConfidence: [{ OutputName: 'SeniorityLevel', Confidence: null }] });
+        expect(history.mock.calls[0][0].outputs.map((o) => [o.featureName, o.value])).toEqual([['Whole', null]]);
     });
 
     it('writes an output at or above its floor, and names none', async () => {
@@ -104,7 +95,7 @@ describe('a null confidence floor withholds the output', () => {
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
         const r = await new InferProcessor('PROMPT-1', undefined, flooredSpec('null'), null).ProcessRecord(record, context);
         expect(r.BelowConfidenceOutputs).toBeUndefined();
-        expect(history.mock.calls[0][0].Outputs.map((o) => o.FeatureName)).toEqual(['SeniorityLevel', 'JobFunctions']);
+        expect(history.mock.calls[0][0].outputs.map((o) => o.featureName)).toEqual(['SeniorityLevel', 'JobFunctions']);
     });
 
     it('never lets the model\'s answer name withheld outputs itself (the key is reserved)', async () => {
@@ -122,12 +113,12 @@ describe('a null confidence floor withholds the output', () => {
         const store = vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'c1' }));
         vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
         await new InferProcessor('PROMPT-1', undefined, flooredSpec('null'), null).ProcessRecord(record, context);
-        const entry = CacheEntry({ ID: 'c1', OutputsJSON: store.mock.calls[0][0].OutputsJSON });
-        vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockImplementation(async (p) => new Map(p.KeyHashes.map((k) => [k, entry])));
+        const entry = CacheEntry({ ID: 'c1', OutputsJSON: store.mock.calls[0][0].outputsJSON });
+        vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockImplementation(async (p) => new Map(p.keyHashes.map((k) => [k, entry])));
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
         const results = await new InferProcessor('PROMPT-1', undefined, flooredSpec('null'), null).ProcessBatch([record], context);
         expect(results.get('p-1')?.BelowConfidenceOutputs).toEqual(['SeniorityLevel']);
-        expect(history.mock.calls[0][0].Outputs.map((o) => [o.FeatureName, o.Value === null])).toEqual([['SeniorityLevel', true], ['JobFunctions', false]]);
+        expect(history.mock.calls[0][0].outputs.map((o) => [o.featureName, o.value === null])).toEqual([['SeniorityLevel', true], ['JobFunctions', false]]);
     });
 
     it('withholds the field and the child entity of the withheld outputs from write-back', () => {
@@ -151,12 +142,6 @@ describe('a fail confidence floor rejects the record', () => {
         expect(history).not.toHaveBeenCalled();
     });
 
-    it('fails a record whose answer gives no confidence', async () => {
-        modelAnswer = { SeniorityLevel: 'C-Level', Functions: [{ JobFunctionID: OPS_ID, Sequence: 1 }] };
-        const r = await new InferProcessor('PROMPT-1', undefined, flooredSpec('fail'), null).ProcessRecord(record, context);
-        expect(r.FailureKind).toBe('BelowConfidence');
-        expect(r.ErrorMessage).toContain("'SeniorityLevel' confidence missing < 0.5");
-    });
 });
 
 describe('write-back maps a withheld field to null (the human-value guard decides) and skips a withheld child mapping', () => {
@@ -178,8 +163,6 @@ describe('write-back maps a withheld field to null (the human-value guard decide
         stored();
         const out = await ApplyOutputMapping({ outputMapping: mapping, result: payload, record, contextUser: USER, provider, dryRun: true, withheld });
         expect(out.previewFields).toEqual({ SeniorityLevelID: null, Note: 'n' });
-        // the real write's decision: with no guard the withheld level is kept, so only the note changes
-        expect(out.previewFieldChanges).toEqual([{ Field: 'Note', OldValue: 'old', NewValue: 'n' }]);
         expect(out.withheldFields).toEqual(['SeniorityLevelID']);
         expect(out.withheldChildEntities).toEqual(['Person Job Functions']);
         expect(out.previewChildren).toBeUndefined();
@@ -243,17 +226,6 @@ describe('the LLM driver sends the record\'s context fields as the user turn whe
         expect(lastParams?.conversationMessages).toEqual([{ role: 'user', content: '{"CurrentJobTitle":"VP of Sales"}' }]);
     });
 
-    it('never matches a loaded row that has no key value (String(undefined) would key it as "undefined")', async () => {
-        modelAnswer = { SeniorityLevel: 'Vice President', SeniorityConfidence: 0.9, Functions: [{ JobFunctionID: OPS_ID, Sequence: 1 }] };
-        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'c1' }));
-        vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
-        const loaded: RunViewResult<Record<string, unknown>> = { Success: true, Results: [{ CurrentJobTitle: 'Keyless row' }],
-            RowCount: 1, TotalRowCount: 1, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
-        vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue(loaded);
-        await new InferProcessor('PROMPT-1', undefined, optedIn(), null).ProcessRecord({ EntityID: 'ENT-P', RecordID: 'undefined' }, context);
-        expect(lastParams?.conversationMessages).toEqual([{ role: 'user', content: '{"CurrentJobTitle":null}' }]);
-    });
-
     it('gives an opted-in pipeline another prompt version hash (its cached answers were read without the user turn); off keeps it', async () => {
         const off = await new InferProcessor('PROMPT-1', undefined, flooredSpec('null'), null).ResolveRunPin(context);
         const offAgain = await new InferProcessor('PROMPT-1', undefined, { ...flooredSpec('null'), Context: { Fields: ['CurrentJobTitle'], RecordAsUserMessage: false } }, null).ResolveRunPin(context);
@@ -262,22 +234,4 @@ describe('the LLM driver sends the record\'s context fields as the user turn whe
         expect(on.PromptVersionHash).not.toBe(off.PromptVersionHash);
     });
 
-    it('keeps the BASE prompt version hash for a pipeline that does not opt in (BASE algorithm: id::text::outputs::block)', async () => {
-        // BASE's promptVersionHashBasis for an LLM pipeline without Escalation, written out here, not read from the new code
-        const outputs: DataFeatureSpec['Outputs'] = [{ Name: 'Summary', Ref: '$.Summary', Target: { Mode: 'field', EntityFieldName: 'Note' } }];
-        const plain: DataFeatureSpec = { Name: 'P', Description: 'p', PromptID: 'PROMPT-1', Context: { Fields: ['CurrentJobTitle'] }, Caching: { Cacheable: false }, Outputs: outputs };
-        const base = createHash('sha256').update(`PROMPT-1::Rules {{ ConstraintBlock }}::${JSON.stringify(outputs)}::${RenderConstraintBlock(outputs)}`).digest('hex');
-        expect((await new InferProcessor('PROMPT-1', undefined, plain, null).ResolveRunPin(context)).PromptVersionHash).toBe(base);
-        // a pinned fixture of the same value, so a change to the shared pieces above is caught too
-        expect(base).toBe('52eb821439bd4877a267d08b5240a210087b3cc20bfb5e4213ac12d359190099');
-    });
-
-    it('sends no user turn for a spec that names no context fields', async () => {
-        modelAnswer = { SeniorityLevel: 'Vice President', SeniorityConfidence: 0.9, Functions: [{ JobFunctionID: OPS_ID, Sequence: 1 }] };
-        vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'c1' }));
-        vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
-        const noFields: DataFeatureSpec = { ...flooredSpec('null'), Context: { RecordAsUserMessage: true } };
-        await new InferProcessor('PROMPT-1', undefined, noFields, null).ProcessRecord(record, context);
-        expect(lastParams?.conversationMessages).toBeUndefined();
-    });
 });

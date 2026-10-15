@@ -63,9 +63,7 @@ compute it.
   a transaction is joined instead (it must not have touched the pipeline's version rows in it). So the pipeline never
   ends with two Active versions, a scheduled run cannot activate past a concurrent on-demand
   activation, and a refusing golden-set result is never overwritten by a stale passing one. A refusal is thrown after
-  the transaction committed, so the Candidate it registered stays. A version-number collision on registration (only
-  possible from a writer that bypasses the lock) retries with the next number, bounded by
-  `MAX_VERSION_REGISTRATION_ATTEMPTS`.
+  the transaction committed, so the Candidate it registered stays.
 - A dry run only reads (no lock): it creates and activates nothing, and reports in `WouldRefuse` why the real run
   would be refused (each dry-run record carries it as a warning).
 - **Unattended version changes** (`PlanUnattended`, run every 15 minutes by the scheduling engine's Feature Pipeline
@@ -98,9 +96,9 @@ hashed as they are.
 A `lookup` output constraint names the entity whose rows are the allowed answers (`Entity`, `MatchField`, optional
 `DisplayFields` and `Filter`). `LookupConstraintValues.Load` reads those rows through the run's provider (field names
 must be plain identifiers) and `LookupConstraintValues.Apply` attaches them to the resolved constraint. The runner
-then renders them into the constraint block (each value with its display text) and `OutputValidator.ValidateOutputValue`
+then renders them into the constraint block (each value with its display text) and `ValidateOutputValue`
 accepts only an existing row's value, returned in the row's own form. An array output sets `ItemRef` (for example
-`$.JobFunctionID`) and `OutputValidator.ValidateOutputItems` checks every item there. An answer that fails its
+`$.JobFunctionID`) and `ValidateOutputItems` checks every item there. An answer that fails its
 constraints fails the record with `FailureKind: 'RejectedInvalid'`, and nothing is cached or recorded for it. The loaded
 rows are part of the prompt version hash and the constraint hash, so a changed taxonomy is a new pipeline version.
 
@@ -150,14 +148,9 @@ same value, reasoning and confidence is left untouched (`Unchanged`), a changed 
 inserted (`Upserted`). The previous values of an updated row are in Record Changes. The outcome's `Previous` holds each
 feature's latest `Source='Pipeline'` value before the call, on any key. Every key part is a required parameter.
 
-**Race rule.** Two runs can insert the same new key at once. The loser's insert fails on the unique index; it then
-re-reads the key, and when a row now exists it applies its output to that row (once). The race is recognised by the
-row, never by the provider's error text. A failed insert with no row behind it is a real error and is thrown.
-
 ## Dedup Cache scope
 
 Every cache call carries a `FeatureValueCacheScope`: the pipeline (or the whole prompt, `scope: 'prompt'`), the prompt,
-its version hash, the constraint hash, and the pin's `aiModelID` and `parametersHash`, plus the caller's provider (cache
-reads and writes never fall back to the process-wide provider). `Store` refreshes an existing row for the key in place,
+its version hash, the constraint hash, and the pin's `aiModelID` and `parametersHash`, plus the caller's provider. `Store` refreshes an existing row for the key in place,
 expired or not. A hit records its hit count unless `recordHit` is false; a hit count that cannot be saved is logged and
 does not fail the lookup.

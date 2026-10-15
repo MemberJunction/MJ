@@ -1,7 +1,6 @@
 /**
  * @fileoverview `MJ: Feature Pipeline Versions` with the activation save check: a gated version can be Active only with
- * a stored golden-set result at or above its threshold. Runs on both tiers before a save, so no save path (the version
- * registry, the record form, the API, metadata sync) can activate a version the golden set has not passed.
+ * a stored golden-set result at or above its threshold, on every save path.
  * @module @memberjunction/feature-pipelines
  */
 import { BaseEntity } from '@memberjunction/core';
@@ -19,11 +18,7 @@ export interface RequiredCaseFailure {
     Outputs: string[];
 }
 
-/**
- * The part of a version's `ResultDetails` JSON this package reads. The golden-set driver stores its score under `Score`
- * (beside the per-case answers and the label-quality record) and types the object it stores against this interface, so
- * the stored shape and this reader cannot drift apart.
- */
+/** The part of a version's `ResultDetails` JSON this package reads (the golden-set driver writes it typed by this). */
 export interface GoldenSetResultDetails {
     Score: {
         /** The required cases answered wrong, in case order; empty when every required case is right. */
@@ -33,10 +28,7 @@ export interface GoldenSetResultDetails {
 
 @RegisterClass(BaseEntity, 'MJ: Feature Pipeline Versions')
 export class MJFeaturePipelineVersionEntityExtended extends MJFeaturePipelineVersionEntity {
-    /**
-     * Whether a version has a stored golden-set result at or above its threshold. The one predicate behind the save
-     * check, the run gate (`FeaturePipelineVersionService.ResolveForRun`) and `RecordGoldenSetResult`.
-     */
+    /** Whether a version has a stored golden-set result at or above its threshold (the save check and the run gate). */
     public static HasPassingResult(v: VersionActivationFields): boolean {
         return !!v.GoldenSetTestRunID && typeof v.ResultValue === 'number' && typeof v.Threshold === 'number' && v.ResultValue >= v.Threshold;
     }
@@ -53,9 +45,8 @@ export class MJFeaturePipelineVersionEntityExtended extends MJFeaturePipelineVer
     }
 
     /**
-     * Why a stored golden-set result does not pass, for a refusal message: the required cases answered wrong when there
-     * are any (a wrong required case sets the result to 0, so "0 is below the threshold" alone would hide the cause),
-     * else the result against the threshold.
+     * Why a stored golden-set result does not pass: the required cases answered wrong when there are any, else the
+     * result against the threshold.
      * @param resultText the result value as the message shows it
      */
     public static DescribeShortfall(v: Pick<MJFeaturePipelineVersionEntity, 'Threshold' | 'ResultDetails'>, resultText: string): string {
@@ -71,10 +62,7 @@ export class MJFeaturePipelineVersionEntityExtended extends MJFeaturePipelineVer
         return `${failures.length} required case(s) wrong: ${failures.map((f) => `${f.CaseID} (${f.Outputs.join(', ')})`).join('; ')}`;
     }
 
-    /**
-     * The required cases a version's stored golden-set result answered wrong ({@link GoldenSetResultDetails}); empty when
-     * the details are absent, not JSON, or carry no well-formed list (a result stored before required cases existed).
-     */
+    /** The required cases a version's stored golden-set result answered wrong; empty when the details carry none. */
     public static RequiredFailuresOf(v: Pick<MJFeaturePipelineVersionEntity, 'ResultDetails'>): RequiredCaseFailure[] {
         const score = MJFeaturePipelineVersionEntityExtended.ParseDetails(v.ResultDetails)?.Score;
         const failures = score && typeof score === 'object' ? score.RequiredFailures : undefined;

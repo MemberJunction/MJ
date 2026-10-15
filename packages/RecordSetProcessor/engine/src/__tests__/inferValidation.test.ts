@@ -122,7 +122,7 @@ describe('the run keeps the version it resolved', () => {
         expect(result.Warnings).toContain(`A real run would be refused: ${refusal}`);
     });
 
-    it('reports a dry run\'s refusal at run level, so a run whose records were all skipped still reports it (F16)', async () => {
+    it('reports a dry run\'s refusal at run level, so a run whose records were all skipped still reports it', async () => {
         const refusal = 'Feature Pipeline version v6 is not activated: run its golden-set test.';
         vi.spyOn(FeaturePipelineVersionService.Instance, 'ResolveForRun').mockResolvedValue({ Version: null, Status: null, WouldRefuse: refusal });
         const p = new InferProcessor('PROMPT-1', undefined, spec, null);
@@ -191,23 +191,23 @@ describe('reasoning and confidence', () => {
         vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'c1' }));
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
         await new InferProcessor('PROMPT-1', undefined, withConfidence, null).ProcessRecord(record, context);
-        const outputs = history.mock.calls[0][0].Outputs;
-        expect(outputs.find((o) => o.FeatureName === 'SeniorityLevel')).toMatchObject({ Reasoning: 'Director is a department leader', Confidence: 0.92 });
-        expect(outputs.find((o) => o.FeatureName === 'JobFunctions')?.Confidence).toBe(0.7);
+        const outputs = history.mock.calls[0][0].outputs;
+        expect(outputs.find((o) => o.featureName === 'SeniorityLevel')).toMatchObject({ reasoning: 'Director is a department leader', confidence: 0.92 });
+        expect(outputs.find((o) => o.featureName === 'JobFunctions')?.confidence).toBe(0.7);
     });
     it('ignores a ConfidenceRef value outside 0..1', async () => {
         modelAnswer = { SeniorityLevel: 'Director', SeniorityConfidence: 1.5, Functions: [] };
         vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'c1' }));
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
         await new InferProcessor('PROMPT-1', undefined, withConfidence, null).ProcessRecord(record, context);
-        expect(history.mock.calls[0][0].Outputs.find((o) => o.FeatureName === 'SeniorityLevel')?.Confidence ?? null).toBeNull();
+        expect(history.mock.calls[0][0].outputs.find((o) => o.featureName === 'SeniorityLevel')?.confidence ?? null).toBeNull();
     });
     it('drops reasoning when CaptureReasoning is false', async () => {
         modelAnswer = { SeniorityLevel: 'Director', Reasoning: 'x', Functions: [] };
         vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'c1' }));
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
         await new InferProcessor('PROMPT-1', undefined, { ...withConfidence, CaptureReasoning: false }, null).ProcessRecord(record, context);
-        expect(history.mock.calls[0][0].Outputs[0].Reasoning ?? null).toBeNull();
+        expect(history.mock.calls[0][0].outputs[0].reasoning ?? null).toBeNull();
     });
 
     describe('a cache hit records what the miss that stored it recorded', () => {
@@ -228,30 +228,30 @@ describe('reasoning and confidence', () => {
             await new InferProcessor('PROMPT-1', undefined, nulling, null).ProcessRecord(record, context);
             const stored = store.mock.calls[0][0];
             const entry = CacheEntry({
-                ID: 'c1', OutputsJSON: stored.OutputsJSON, Reasoning: stored.Reasoning || null, AIPromptRunID: 'AIRUN-1',
+                ID: 'c1', OutputsJSON: stored.outputsJSON, Reasoning: stored.reasoning || null, AIPromptRunID: 'AIRUN-1',
             });
-            return { outputs: history.mock.calls[0][0].Outputs, entry: entry };
+            return { outputs: history.mock.calls[0][0].outputs, entry: entry };
         };
 
         it('on a single-record hit: the confidences its payload stores, less replaced outputs, and its reasoning', async () => {
             const miss = await runMiss();
             vi.mocked(FeatureValueCacheService.Instance.RecordFeatureValues).mockClear();
             expect(miss.outputs).toEqual([
-                expect.objectContaining({ FeatureName: 'SeniorityLevel', Confidence: undefined, Reasoning: 'Leads the cheese practice' }),
-                expect.objectContaining({ FeatureName: 'JobFunctions', Confidence: 0.7 }),
+                expect.objectContaining({ featureName: 'SeniorityLevel', confidence: undefined, reasoning: 'Leads the cheese practice' }),
+                expect.objectContaining({ featureName: 'JobFunctions', confidence: 0.7 }),
             ]);
             vi.spyOn(FeatureValueCacheService.Instance, 'Lookup').mockResolvedValue(miss.entry);
             const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
             await new InferProcessor('PROMPT-1', undefined, nulling, null).ProcessRecord(record, context);
-            expect(history.mock.calls[0][0].Outputs).toEqual(miss.outputs);
+            expect(history.mock.calls[0][0].outputs).toEqual(miss.outputs);
         });
         it('on a batch hit: the same', async () => {
             const miss = await runMiss();
             vi.mocked(FeatureValueCacheService.Instance.RecordFeatureValues).mockClear();
-            vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockImplementation(async (p) => new Map(p.KeyHashes.map((k) => [k, miss.entry])));
+            vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockImplementation(async (p) => new Map(p.keyHashes.map((k) => [k, miss.entry])));
             const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
             await new InferProcessor('PROMPT-1', undefined, nulling, null).ProcessBatch([record], context);
-            expect(history.mock.calls[0][0].Outputs).toEqual(miss.outputs);
+            expect(history.mock.calls[0][0].outputs).toEqual(miss.outputs);
         });
         it('drops the stored reasoning once the pipeline no longer captures it', async () => {
             const miss = await runMiss();
@@ -259,7 +259,7 @@ describe('reasoning and confidence', () => {
             vi.spyOn(FeatureValueCacheService.Instance, 'Lookup').mockResolvedValue(miss.entry);
             const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
             await new InferProcessor('PROMPT-1', undefined, { ...nulling, CaptureReasoning: false }, null).ProcessRecord(record, context);
-            expect(history.mock.calls[0][0].Outputs.map((o) => o.Reasoning ?? null)).toEqual([null, null]);
+            expect(history.mock.calls[0][0].outputs.map((o) => o.reasoning ?? null)).toEqual([null, null]);
         });
     });
 });
@@ -324,9 +324,9 @@ describe('a key group\'s records', () => {
         await new InferProcessor('PROMPT-1', undefined, grouped, null).ProcessBatch(records, context);
         const stored = store.mock.calls[0][0];
         const entry = CacheEntry({
-            ID: 'c1', OutputsJSON: stored.OutputsJSON, Reasoning: stored.Reasoning || null, AIPromptRunID: 'AIRUN-1',
+            ID: 'c1', OutputsJSON: stored.outputsJSON, Reasoning: stored.reasoning || null, AIPromptRunID: 'AIRUN-1',
         });
-        vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockImplementation(async (p) => new Map(p.KeyHashes.map((k) => [k, entry])));
+        vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockImplementation(async (p) => new Map(p.keyHashes.map((k) => [k, entry])));
         const rerun = await new InferProcessor('PROMPT-1', undefined, grouped, null).ProcessBatch(records, context);
         expect([rerun.get('p-1')?.Outcome, rerun.get('p-2')?.Outcome]).toEqual(['Unchanged', 'Unchanged']);
         expect(history.Rows.get('p-2')).toBe(history.Rows.get('p-1'));
@@ -351,7 +351,7 @@ describe('reserved payload keys', () => {
         vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(CacheEntry({ ID: 'c1' }));
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
         const r = await new InferProcessor('PROMPT-1', undefined, withConfidence, null).ProcessRecord(record, context);
-        expect(history.mock.calls[0][0].Outputs.map((o) => [o.FeatureName, o.Confidence])).toEqual([['SeniorityLevel', 0.6], ['JobFunctions', 0.7]]);
+        expect(history.mock.calls[0][0].outputs.map((o) => [o.featureName, o.confidence])).toEqual([['SeniorityLevel', 0.6], ['JobFunctions', 0.7]]);
         expect(r.ResultPayload).not.toHaveProperty('_confidence');
         expect(r.ResultPayload).not.toHaveProperty('_violations');
     });
@@ -363,7 +363,7 @@ describe('reserved payload keys', () => {
         vi.spyOn(FeatureValueCacheService.Instance, 'Lookup').mockResolvedValue(entry);
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
         await new InferProcessor('PROMPT-1', undefined, withConfidence, null).ProcessRecord(record, context);
-        expect(history.mock.calls[0][0].Outputs.find((o) => o.FeatureName === 'SeniorityLevel')?.Confidence).toBe(0.6);
+        expect(history.mock.calls[0][0].outputs.find((o) => o.featureName === 'SeniorityLevel')?.confidence).toBe(0.6);
     });
     it('a hit\'s result reports the same Confidence as the miss that stored it', async () => {
         modelAnswer = { SeniorityLevel: 'Director', SeniorityConfidence: 0.6, Functions: [{ JobFunctionID: '7E010001-A101-4B01-8C01-000000000007', Confidence: 0.7 }] };
@@ -371,7 +371,7 @@ describe('reserved payload keys', () => {
         vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
         const miss = await new InferProcessor('PROMPT-1', undefined, withConfidence, null).ProcessRecord(record, context);
         const entry = CacheEntry({
-            ID: 'c1', OutputsJSON: store.mock.calls[0][0].OutputsJSON, Reasoning: null, AIPromptRunID: 'AIRUN-1',
+            ID: 'c1', OutputsJSON: store.mock.calls[0][0].outputsJSON, Reasoning: null, AIPromptRunID: 'AIRUN-1',
         });
         vi.spyOn(FeatureValueCacheService.Instance, 'Lookup').mockResolvedValue(entry);
         const hit = await new InferProcessor('PROMPT-1', undefined, withConfidence, null).ProcessRecord(record, context);

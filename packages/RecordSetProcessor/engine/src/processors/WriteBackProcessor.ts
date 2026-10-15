@@ -10,15 +10,12 @@ import type { RecordFeatureValuesOutcome } from '@memberjunction/feature-pipelin
 import {
     FeaturePipelineRunPin,
     IRecordProcessor,
-    RecordBatchOutcome,
     RecordProcessorContext,
     RecordRef,
     RecordResult,
     WriteBackRunPayload,
 } from '@memberjunction/record-set-processor-base';
 import { OutputMappingConfig, RunProvenance, ApplyOutputMapping, type HumanValueGuardSource, type WithheldTargetSource } from '../writeBack';
-import { OutputMappingPresence, type RecordedAnswerSource } from '../outputPresence';
-import { PreviewRecordNames, type WriteBackPreviewItem } from '../previewRecordNames';
 
 /** The hook a processor may expose to adjust its result before write-back (`InferProcessor.beforeWriteBack`). */
 interface BeforeWriteBackHook {
@@ -26,10 +23,7 @@ interface BeforeWriteBackHook {
     beforeWriteBack(outputMapping: OutputMappingConfig | undefined, result: unknown, record: RecordRef, context: RecordProcessorContext): Promise<void>;
 }
 
-/**
- * A processor whose per-record values must commit with the record's write-back (InferProcessor's Feature Values):
- * it queues them, and the write-back saves them first inside its unit, or discards them for a record that failed.
- */
+/** A processor whose per-record values commit with the record's write-back (InferProcessor's Feature Values). */
 export interface DeferredFeatureValueSource {
     /** From now on, queue the per-record Feature Value writes instead of saving them. */
     DeferFeatureValuesToWriteBack(): void;
@@ -47,11 +41,8 @@ export class WriteBackProcessor implements IRecordProcessor {
      * @param dryRun - When true, the inner work still runs but the write-back only computes a
      *   preview (no entity is saved / no child is created), so a dry-run of any wrapped work type
      *   reports its effect without mutating data, and fails a record whose real write would fail.
-     *   Mirrors `FieldRulesProcessor`'s dry-run. A run whose context is a dry run
-     *   (`RecordProcessorContext.dryRun`) previews too, whatever this was built with.
+     *   Mirrors `FieldRulesProcessor`'s dry-run. A dry-run context previews too.
      * @param run - Optional run provenance information stamped on write-back operations.
-     * When `inner` keeps per-record values that must commit with the write-back ({@link DeferredFeatureValueSource}),
-     * it is told to defer them here; on a dry-run they are then never written.
      */
     constructor(
         private readonly inner: IRecordProcessor,
@@ -96,63 +87,14 @@ export class WriteBackProcessor implements IRecordProcessor {
         return this.inner.CurrentRunRefusal ? this.inner.CurrentRunRefusal() : null;
     }
 
-    /**
-     * The records that still hold this write-back's outputs, read once for the batch on the run's provider
-     * ({@link OutputMappingPresence.RecordsWithOutputs}): a target holds a value, or the record's latest recorded
-     * answer for it was empty. The watermark gate processes an unchanged record missing from the answer instead of
-     * skipping it.
-     *
-     * Checked only when the inner processor records its answers ({@link RecordedAnswerSource}: Infer). For an Action,
-     * Agent or registry processor every record counts as holding its outputs, so it is skipped on its watermark alone as
-     * before: it records no answer, so an empty target may be a legitimately empty result, and re-running it to find
-     * out is paid and has side effects.
-     * @param records - the batch's records whose watermark matched
-     * @param context - the run's per-record context (its provider, user, pipeline and entity)
-     * @throws OutputPresenceReadError when a read fails
-     */
-    public async RecordsWithOutputs(records: RecordRef[], context: RecordProcessorContext): Promise<Set<string>> {
-        const outputs = WriteBackProcessor.recordsAnswers(this.inner) ? this.inner.RecordedAnswerOutputs() : [];
-        if (outputs.length === 0 || !context.recordProcessID || !context.entityID) {
-            return new Set(records.map((r) => r.RecordID));
-        }
-        return OutputMappingPresence.RecordsWithOutputs({
-            OutputMapping: this.outputMapping, Records: records, Provider: context.provider, ContextUser: context.contextUser,
-            Answers: { RecordProcessID: context.recordProcessID, EntityID: context.entityID, Outputs: outputs },
-            LookupCache: this._lookupCache,
-        });
-    }
-
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
         const result = await this.inner.ProcessRecord(record, context);
         return result.Status === 'Succeeded' ? this.WriteBackOne(record, result, context) : this.WithoutWriteBack(record, result);
     }
 
     /**
-     * Names what a dry-run batch's previews show (the processed records, the foreign-key values), all at once
-     * ({@link PreviewRecordNames.NameWriteBackBatch}: one read per related entity for the whole batch, none for a record
-     * the source loaded with its name fields), so the preview dialog reads no records itself. The record loop calls it
-     * once per dry-run batch (never on a real run), before it records the results; a result without a write-back (a failed
-     * record's inner result) is left as it is.
-     */
-    public async CompleteDryRunBatch(outcomes: RecordBatchOutcome[], context: RecordProcessorContext): Promise<void> {
-        const items: WriteBackPreviewItem[] = [];
-        for (const { Record, Result } of outcomes) {
-            if (WriteBackProcessor.IsWriteBackRunPayload(Result.ResultPayload) && Result.ResultPayload.writeBack) {
-                items.push({ Record, WriteBack: Result.ResultPayload.writeBack });
-            }
-        }
-        await PreviewRecordNames.NameWriteBackBatch(items, this.outputMapping, context.provider, context.contextUser);
-    }
-
-    /** Whether a result payload is a write-back run's `{ output, writeBack }` (the payload this processor builds). */
-    protected static IsWriteBackRunPayload(payload: unknown): payload is WriteBackRunPayload {
-        return payload !== null && typeof payload === 'object' && 'writeBack' in payload;
-    }
-
-    /**
-     * Runs one successful result's write-back — the inner processor's `beforeWriteBack` hook, then
-     * {@link ApplyWriteBack} — and turns a write-back error into the record's failure. The single path both
-     * {@link ProcessRecord} and {@link ProcessBatch} use, so the two cannot drift.
+     * Runs one successful result's write-back (`beforeWriteBack`, then {@link ApplyWriteBack}) and turns a write-back
+     * error into the record's failure; the one path of {@link ProcessRecord} and {@link ProcessBatch}.
      */
     protected async WriteBackOne(record: RecordRef, result: RecordResult, context: RecordProcessorContext): Promise<RecordResult> {
         try {
@@ -182,24 +124,20 @@ export class WriteBackProcessor implements IRecordProcessor {
     protected RunProvenanceFor(result: RecordResult, context: RecordProcessorContext): RunProvenance {
         return {
             ...this.run,
-            ProcessRunID: context.processRunID || this.run?.ProcessRunID,
-            PromptID: result.PromptID || this.run?.PromptID,
-            AIPromptRunID: result.AIPromptRunID || this.run?.AIPromptRunID,
-            PromptVersionHash: result.PromptVersionHash || this.run?.PromptVersionHash,
-            FeatureValueCacheID: result.FeatureValueCacheID || this.run?.FeatureValueCacheID,
-            ExecutedAt: this.run?.ExecutedAt || new Date().toISOString(),
+            ProcessRunID: context.processRunID ?? this.run?.ProcessRunID,
+            PromptID: result.PromptID ?? this.run?.PromptID,
+            AIPromptRunID: result.AIPromptRunID ?? this.run?.AIPromptRunID,
+            PromptVersionHash: result.PromptVersionHash ?? this.run?.PromptVersionHash,
+            FeatureValueCacheID: result.FeatureValueCacheID ?? this.run?.FeatureValueCacheID,
+            ExecutedAt: this.run?.ExecutedAt ?? new Date().toISOString(),
         };
     }
 
     /**
-     * Applies the OutputMapping to one successful result, with the human-value guard (when the inner processor can
-     * create one) and the run's overwrite switch. The inner processor's deferred Feature Values are written first
-     * inside the write-back's unit. The record's outcome is `Upserted` when the write-back or the Feature Values
-     * changed anything, `Unchanged` when the Feature Values all held their values and nothing else changed. A dry run
-     * whose preview found what the real write would fail on (`WriteBackResult.PreviewErrors`) is `Failed`, naming it.
-     * A run is a dry run when this processor was built as one or the run's context is one; that single flag drives both
-     * the preview and the record's result. A dry-run result carries `DryRun: true` and no `Outcome` (nothing was
-     * written), whether it succeeded or failed its preview.
+     * Applies the OutputMapping to one successful result, with the human-value guard and the run's overwrite switch;
+     * the inner processor's deferred Feature Values are written first inside the write-back's unit. The outcome is
+     * `Upserted` when anything changed, else `Unchanged`. A dry run carries `DryRun: true` and no `Outcome`, and fails
+     * when its preview found what the real write would fail on.
      */
     protected async ApplyWriteBack(record: RecordRef, result: RecordResult, context: RecordProcessorContext, run: RunProvenance): Promise<RecordResult> {
         const dry = this.dryRun || context.DryRun === true;
@@ -257,11 +195,6 @@ export class WriteBackProcessor implements IRecordProcessor {
         return 'beforeWriteBack' in p && typeof p.beforeWriteBack === 'function';
     }
 
-    /** Whether a processor records its answers as Feature Values (a capability check, not a class check). */
-    private static recordsAnswers(p: IRecordProcessor): p is IRecordProcessor & RecordedAnswerSource {
-        return 'RecordedAnswerOutputs' in p && typeof p.RecordedAnswerOutputs === 'function';
-    }
-
     /** Whether a processor's results can withhold write-back targets (a capability check, not a class check). */
     private static supportsWithheldTargets(p: IRecordProcessor): p is IRecordProcessor & WithheldTargetSource {
         return 'WithheldWriteBackTargets' in p && typeof p.WithheldWriteBackTargets === 'function';
@@ -295,7 +228,7 @@ export class WriteBackProcessor implements IRecordProcessor {
             for (const record of records) {
                 const res = innerResults.get(record.RecordID);
                 if (!res || res.Status !== 'Succeeded') {
-                    outResults.set(record.RecordID, this.WithoutWriteBack(record, res || { Status: 'Failed', ErrorMessage: 'No result returned from batch processor' }));
+                    outResults.set(record.RecordID, this.WithoutWriteBack(record, res ?? { Status: 'Failed', ErrorMessage: 'No result returned from batch processor' }));
                     continue;
                 }
 

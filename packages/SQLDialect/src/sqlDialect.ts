@@ -510,15 +510,6 @@ export abstract class SQLDialect implements SQLParserDialect {
     abstract CastToUUID(expr: string): string;
 
     /**
-     * Returns an expression converting `expr` to `sqlType` that yields NULL, instead of failing the statement, when the
-     * value does not convert — so one query can judge many values and report each bad one.
-     * SQL Server: TRY_CONVERT(sqlType, expr). PostgreSQL has no non-failing conversion and throws.
-     * @param expr - the expression to convert
-     * @param sqlType - the full target type as metadata declares it (e.g. `decimal(5,4)`, `uniqueidentifier`)
-     */
-    abstract TryConvert(expr: string, sqlType: string): string;
-
-    /**
      * Returns the empty-GUID sentinel literal
      * (`00000000-0000-0000-0000-000000000000`) formatted for use in a
      * CASE-comparison expression. The base class returns the literal as a

@@ -12,15 +12,15 @@ export class HistoryStoreDouble {
 
     /** What the real store compares for one write: each output's value, reasoning and confidence. */
     public static Comparable(params: RecordFeatureValuesParams): string {
-        return JSON.stringify(params.Outputs.map((o) => [o.FeatureName, o.Value === undefined ? null : o.Value, o.Reasoning || null, o.Confidence ?? null]));
+        return JSON.stringify(params.outputs.map((o) => [o.featureName, o.value === undefined ? null : o.value, o.reasoning || null, o.confidence ?? null]));
     }
 
     /** Writes a record's outputs: Unchanged when they equal what the record last held, else Upserted. */
     public readonly Write = async (params: RecordFeatureValuesParams): Promise<RecordFeatureValuesOutcome> => {
         const next = HistoryStoreDouble.Comparable(params);
-        const same = this.Rows.get(params.RecordID) === next;
-        this.Rows.set(params.RecordID, next);
-        const n = params.Outputs.length;
+        const same = this.Rows.get(params.recordID) === next;
+        this.Rows.set(params.recordID, next);
+        const n = params.outputs.length;
         return same ? { Upserted: 0, Unchanged: n, Previous: {} } : { Upserted: n, Unchanged: 0, Previous: {} };
     };
 }

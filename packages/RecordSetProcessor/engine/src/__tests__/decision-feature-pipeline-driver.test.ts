@@ -560,7 +560,7 @@ describe('DecisionFeaturePipelineDriver', () => {
             const recordFeatureValues = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
             answerWith(decided(answers));
             const result = await new InferProcessor(PROMPT_ID, undefined, decisionSpec(outputs), null).ProcessRecord(ticket('T-1'), context);
-            return { result, featureValues: recordFeatureValues.mock.calls.map(([params]) => params.Outputs) };
+            return { result, featureValues: recordFeatureValues.mock.calls.map(([params]) => params.outputs) };
         }
 
         const offTheList = choice('Reopened', 0.9, { Reopened: 0.9, Open: 0.05, Closed: 0.05 });
@@ -572,7 +572,7 @@ describe('DecisionFeaturePipelineDriver', () => {
             // The driver's confidences ride in the payload under the reserved key, so a cache hit replays them
             expect(result.ResultPayload).toEqual({ Status: 'Open', [InferProcessor.DRIVER_CONFIDENCE_KEY]: { Status: 0.9 } });
             expect(result.Confidence).toEqual({ Status: 0.9 });
-            expect(featureValues).toEqual([[expect.objectContaining({ FeatureName: 'Status', Value: 'Open', Confidence: 0.9 })]]);
+            expect(featureValues).toEqual([[expect.objectContaining({ featureName: 'Status', value: 'Open', confidence: 0.9 })]]);
         });
 
         it('fails the record for an answer off the value list when OnViolation is fail, writing nothing', async () => {
@@ -594,9 +594,9 @@ describe('DecisionFeaturePipelineDriver', () => {
             expect(result.Confidence).toEqual({ IsUrgent: 0.8 });
             expect(featureValues).toHaveLength(1);
             const [urgent, status] = featureValues[0];
-            expect(urgent).toEqual(expect.objectContaining({ FeatureName: 'IsUrgent', Value: true, Confidence: 0.8 }));
-            expect(status).toEqual(expect.objectContaining({ FeatureName: 'Status', Value: null }));
-            expect(status.Confidence).toBeUndefined();
+            expect(urgent).toEqual(expect.objectContaining({ featureName: 'IsUrgent', value: true, confidence: 0.8 }));
+            expect(status).toEqual(expect.objectContaining({ featureName: 'Status', value: null }));
+            expect(status.confidence).toBeUndefined();
         });
 
         it('writes an answer along a nested Ref, so its Feature Values row carries the value with its confidence', async () => {
@@ -607,7 +607,7 @@ describe('DecisionFeaturePipelineDriver', () => {
             expect(result.Status).toBe('Succeeded');
             expect(result.ResultPayload).toEqual({ IsUrgent: true, flags: { urgent: true }, [InferProcessor.DRIVER_CONFIDENCE_KEY]: { IsUrgent: 0.93 } });
             expect(result.ResultPayload).not.toHaveProperty(['flags.urgent']);
-            expect(featureValues).toEqual([[expect.objectContaining({ FeatureName: 'IsUrgent', Value: true, Confidence: 0.93 })]]);
+            expect(featureValues).toEqual([[expect.objectContaining({ featureName: 'IsUrgent', value: true, confidence: 0.93 })]]);
         });
 
         it("writes 'Other' with no confidence when OnViolation is coerce-to-other", async () => {
@@ -617,8 +617,8 @@ describe('DecisionFeaturePipelineDriver', () => {
             expect(result.ResultPayload).toEqual(expect.objectContaining({ Status: 'Other' }));
             expect(result.Confidence).toBeUndefined();
             const [status] = featureValues[0];
-            expect(status).toEqual(expect.objectContaining({ FeatureName: 'Status', Value: 'Other' }));
-            expect(status.Confidence).toBeUndefined();
+            expect(status).toEqual(expect.objectContaining({ featureName: 'Status', value: 'Other' }));
+            expect(status.confidence).toBeUndefined();
         });
     });
 
@@ -675,10 +675,10 @@ describe('DecisionFeaturePipelineDriver', () => {
             expect(results.get('T-2')?.Confidence).toEqual({ IsUrgent: 0.95 });
             expect(recordFeatureValues).toHaveBeenCalledTimes(2);
             for (const [call] of recordFeatureValues.mock.calls) {
-                expect(call.Outputs).toEqual([expect.objectContaining({ FeatureName: 'IsUrgent', Value: true, Confidence: 0.95 })]);
-                expect(call.AIPromptRunID).toBe('PR-BATCH-1');
+                expect(call.outputs).toEqual([expect.objectContaining({ featureName: 'IsUrgent', value: true, confidence: 0.95 })]);
+                expect(call.aiPromptRunID).toBe('PR-BATCH-1');
             }
-            expect(recordFeatureValues.mock.calls.map(([call]) => call.RecordID)).toEqual(['T-1', 'T-2']);
+            expect(recordFeatureValues.mock.calls.map(([call]) => call.recordID)).toEqual(['T-1', 'T-2']);
         });
     });
 });

@@ -18,27 +18,27 @@ describe('FeatureValueKey.NormalizeValue', () => {
         expect(FeatureValueKey.NormalizeValue(decomposed)).toBe(precomposed);
     });
     it('leaves non-text key inputs unchanged in a cache key', async () => {
-        const k = await FeatureValueCacheService.Instance.ComputeCacheKey({ KeyFields: ['N', 'B', 'X'], RecordData: { N: 42, B: false, X: null } });
-        expect(k.KeyJSON).toBe(JSON.stringify({ B: false, N: 42, X: null }));
+        const k = await FeatureValueCacheService.Instance.ComputeCacheKey({ keyFields: ['N', 'B', 'X'], recordData: { N: 42, B: false, X: null } });
+        expect(k.keyJSON).toBe(JSON.stringify({ B: false, N: 42, X: null }));
     });
 });
 
 describe('ComputeCacheKey normalisation', () => {
     const svc = FeatureValueCacheService.Instance;
     it('gives one key to the same title with different case and spacing', async () => {
-        const a = await svc.ComputeCacheKey({ KeyFields: ['CurrentJobTitle'], RecordData: { CurrentJobTitle: 'Director of Sales' } });
-        const b = await svc.ComputeCacheKey({ KeyFields: ['CurrentJobTitle'], RecordData: { CurrentJobTitle: ' director  of sales ' } });
-        expect(a.KeyHash).toBe(b.KeyHash);
-        expect(a.KeyDisplay).toBe('Director of Sales');
+        const a = await svc.ComputeCacheKey({ keyFields: ['CurrentJobTitle'], recordData: { CurrentJobTitle: 'Director of Sales' } });
+        const b = await svc.ComputeCacheKey({ keyFields: ['CurrentJobTitle'], recordData: { CurrentJobTitle: ' director  of sales ' } });
+        expect(a.keyHash).toBe(b.keyHash);
+        expect(a.keyDisplay).toBe('Director of Sales');
     });
     it('resolves key-field names case-insensitively', async () => {
-        const k = await svc.ComputeCacheKey({ KeyFields: ['currentjobtitle'], RecordData: { CurrentJobTitle: 'Owner' } });
-        expect(k.KeyJSON).toBe(JSON.stringify({ currentjobtitle: 'owner' }));
+        const k = await svc.ComputeCacheKey({ keyFields: ['currentjobtitle'], recordData: { CurrentJobTitle: 'Owner' } });
+        expect(k.keyJSON).toBe(JSON.stringify({ currentjobtitle: 'owner' }));
     });
     it('normalises whole-record keys too', async () => {
-        const a = await svc.ComputeCacheKey({ RecordData: { Title: 'VP Sales' } });
-        const b = await svc.ComputeCacheKey({ RecordData: { Title: 'vp  sales' } });
-        expect(a.KeyHash).toBe(b.KeyHash);
+        const a = await svc.ComputeCacheKey({ recordData: { Title: 'VP Sales' } });
+        const b = await svc.ComputeCacheKey({ recordData: { Title: 'vp  sales' } });
+        expect(a.keyHash).toBe(b.keyHash);
     });
 });
 

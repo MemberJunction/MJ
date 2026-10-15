@@ -125,7 +125,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         const storeSpy = vi
             .spyOn(FeatureValueCacheService.Instance, 'Store')
             .mockImplementation(async (params) => ({
-                ID: `cache-for-${params.KeyDisplay}`,
+                ID: `cache-for-${params.keyDisplay}`,
                 ...params,
             } as unknown as MJFeatureValueCacheEntity));
 
@@ -140,7 +140,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         expect(batchLookupSpy).toHaveBeenCalledTimes(1);
 
         // BatchLookup was called with 2 distinct keys, NOT 4!
-        const distinctKeys = batchLookupSpy.mock.calls[0][0].KeyHashes;
+        const distinctKeys = batchLookupSpy.mock.calls[0][0].keyHashes;
         expect(distinctKeys.length).toBe(2);
 
         // Store was called only TWICE (once for Software Engineer, once for VP Sales), NOT 4 times!
@@ -183,7 +183,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
 
         vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockImplementation(async (params) => {
             const map = new Map();
-            map.set(params.KeyHashes[0], mockCacheEntry);
+            map.set(params.keyHashes[0], mockCacheEntry);
             return map;
         });
 
@@ -211,7 +211,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
 
         await new InferProcessor('prompt-1', undefined, spec, null).ProcessBatch(records, context);
         const first = lookup.mock.calls[0][0];
-        expect(first.AIModelID).toBe('model-A');
+        expect(first.aiModelID).toBe('model-A');
 
         const prompt = AIEngine.Instance.Prompts[0];
         prompt.Temperature = 0;
@@ -220,7 +220,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         } finally {
             prompt.Temperature = null;
         }
-        expect(lookup.mock.calls[1][0].ParametersHash).not.toBe(first.ParametersHash);
+        expect(lookup.mock.calls[1][0].parametersHash).not.toBe(first.parametersHash);
     });
 
     it('changes the watermark basis when the model or a parameter changes', async () => {
@@ -260,7 +260,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         const r1 = results.get('r1');
         expect(r1?.Status).toBe('Succeeded');
         expect(r1?.Warnings?.[0]).toContain('UQ_FeatureValueCache_Scoped');
-        expect(history.mock.calls[0][0].FeatureValueCacheID ?? null).toBeNull();
+        expect(history.mock.calls[0][0].featureValueCacheID ?? null).toBeNull();
         expect(logged.mock.calls.flat().join(' ')).toContain('UQ_FeatureValueCache_Scoped');
     });
 
@@ -296,12 +296,12 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
         vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async () => cacheRow({ ID: 'c1' }));
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
-        const key = await FeatureValueCacheService.Instance.ComputeCacheKey({ KeyFields: ['Title'], RecordData: { Title: 'Owner' } });
+        const key = await FeatureValueCacheService.Instance.ComputeCacheKey({ keyFields: ['Title'], recordData: { Title: 'Owner' } });
         const results = await new InferProcessor('prompt-1', undefined, spec, null).ProcessBatch(records, context);
         expect(results.get('r1')?.Outcome).toBe('Upserted');
         expect(results.get('r1')?.PipelineVersion).toBeNull();
-        expect(history.mock.calls[0][0]).toMatchObject({ AIModelID: 'model-A', InputHash: key.KeyHash, PipelineVersion: null });
-        expect(typeof history.mock.calls[0][0].ParametersHash).toBe('string');
+        expect(history.mock.calls[0][0]).toMatchObject({ aiModelID: 'model-A', inputHash: key.keyHash, pipelineVersion: null });
+        expect(typeof history.mock.calls[0][0].parametersHash).toBe('string');
     });
 
     it('gives each written record the pin its values were keyed on, and reports it as the run pin', async () => {
@@ -310,7 +310,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         expect(processor.CurrentRunPin()).toBeNull();
         const result = await processor.ProcessRecord({ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }, context);
         const written = history.mock.calls[0][0];
-        const pin = { PipelineVersion: null, PromptVersionHash: written.PromptVersionHash, AIModelID: 'model-A', ParametersHash: written.ParametersHash };
+        const pin = { PipelineVersion: null, PromptVersionHash: written.promptVersionHash, AIModelID: 'model-A', ParametersHash: written.parametersHash };
         expect(result.PipelinePin).toEqual(pin);
         expect(processor.CurrentRunPin()).toEqual(pin);
         expect(new WriteBackProcessor(processor, { fields: {} }).CurrentRunPin()).toEqual(pin);
@@ -326,27 +326,27 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         const results = await processor.ProcessBatch(records, context);
         expect([...results.values()].map((r) => r.PipelineVersion)).toEqual([7, 7]);
         expect(history).toHaveBeenCalledTimes(2);
-        expect(history.mock.calls.map((c) => c[0].PipelineVersion)).toEqual([7, 7]);
+        expect(history.mock.calls.map((c) => c[0].pipelineVersion)).toEqual([7, 7]);
     });
 
     it('keys a cache hit\'s Feature Values on the pin and the input hash, and reports an unchanged hit Unchanged', async () => {
         const records: RecordRef[] = [{ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }];
-        vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockImplementation(async (p) => new Map([[p.KeyHashes[0],
+        vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockImplementation(async (p) => new Map([[p.keyHashes[0],
             await cacheRow({ ID: 'cache-1', OutputsJSON: '{"StandardTitle":"OWNER","Department":"Sales"}', Reasoning: null, AIPromptRunID: 'run-0' })]]));
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues')
             .mockResolvedValue({ Upserted: 0, Unchanged: 2, Previous: { StandardTitle: null, Department: null } });
-        const key = await FeatureValueCacheService.Instance.ComputeCacheKey({ KeyFields: ['Title'], RecordData: { Title: 'Owner' } });
+        const key = await FeatureValueCacheService.Instance.ComputeCacheKey({ keyFields: ['Title'], recordData: { Title: 'Owner' } });
         const results = await new InferProcessor('prompt-1', undefined, spec, null).ProcessBatch(records, context);
         expect(results.get('r1')?.Outcome).toBe('Unchanged');
-        expect(history.mock.calls[0][0]).toMatchObject({ AIModelID: 'model-A', InputHash: key.KeyHash, FeatureValueCacheID: 'cache-1' });
+        expect(history.mock.calls[0][0]).toMatchObject({ aiModelID: 'model-A', inputHash: key.keyHash, featureValueCacheID: 'cache-1' });
     });
 
     it('keys an uncacheable pipeline\'s Feature Values on the hash of its context fields', async () => {
         const uncached: DataFeatureSpec = { ...spec, Caching: { Cacheable: false } };
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
-        const key = await FeatureValueCacheService.Instance.ComputeCacheKey({ KeyFields: ['Title'], RecordData: { Title: 'Owner' } });
+        const key = await FeatureValueCacheService.Instance.ComputeCacheKey({ keyFields: ['Title'], recordData: { Title: 'Owner' } });
         await new InferProcessor('prompt-1', undefined, uncached, null).ProcessRecord({ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }, context);
-        expect(history.mock.calls[0][0].InputHash).toBe(key.KeyHash);
+        expect(history.mock.calls[0][0].inputHash).toBe(key.keyHash);
     });
 
     it('keeps each record\'s Feature Values as they were before this run wrote them', async () => {
@@ -358,7 +358,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
         vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async () => cacheRow({ ID: 'c1' }));
         vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockImplementation(async (p) => ({
-            Upserted: 2, Unchanged: 0, Previous: { StandardTitle: p.RecordID === 'r1' ? before : null, Department: null },
+            Upserted: 2, Unchanged: 0, Previous: { StandardTitle: p.recordID === 'r1' ? before : null, Department: null },
         }));
         const processor = new InferProcessor('prompt-1', undefined, spec, null);
         await processor.ProcessBatch(records, context);
@@ -388,7 +388,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
         vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockImplementation(async () => cacheRow({ ID: 'c1' }));
         vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockImplementation(async (p) => {
-            if (p.RecordID === 'r2') {
+            if (p.recordID === 'r2') {
                 throw new Error('FK_FeatureValue_Entity');
             }
             return UPSERTED;
@@ -470,7 +470,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues');
         const results = await new InferProcessor('prompt-1', undefined, spec, null).ProcessBatch(records, { ...context, DryRun: true });
         expect(results.get('r1')?.Status).toBe('Succeeded');
-        expect(lookup.mock.calls[0][0].RecordHit).toBe(false);
+        expect(lookup.mock.calls[0][0].recordHit).toBe(false);
         expect(store).not.toHaveBeenCalled();
         expect(history).not.toHaveBeenCalled();
     });
@@ -481,7 +481,7 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         const result = await new InferProcessor('prompt-1', undefined, spec, null)
             .ProcessRecord({ EntityID: 'ent-1', RecordID: 'r1', Record: { Title: 'Owner' } }, { ...context, DryRun: true });
         expect(result.Status).toBe('Succeeded');
-        expect(lookup.mock.calls[0][0].RecordHit).toBe(false);
+        expect(lookup.mock.calls[0][0].recordHit).toBe(false);
         expect(store).not.toHaveBeenCalled();
     });
 

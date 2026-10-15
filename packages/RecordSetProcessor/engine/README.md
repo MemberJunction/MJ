@@ -23,16 +23,8 @@ pluggable seams defined in [`@memberjunction/record-set-processor-base`](../base
   the pipeline's configured temperature, max tokens and seed is refused (the record fails); every record that made a
   call carries its `ParameterFidelity`, and a refusal on any record is the run's fidelity
 - **Skipping unchanged records** (`skipUnchanged`, by `Checksum` or `UpdatedAt`) — a record whose watermark says
-  "unchanged" is skipped unless the run overwrites human values (every record is then processed) or its processor
-  reports its outputs gone. The engine asks the processor's optional `RecordsWithOutputs` once per batch about the
-  unchanged records. `WriteBackProcessor` checks only when its inner processor records its answers as Feature Values
-  (Infer, `RecordedAnswerSource`): in one `RunViews` call it reads the mapped fields, the child rows and the latest
-  `Source='Pipeline'` answers (`OutputMappingPresence`). A target that holds nothing counts as present when its latest
-  answer was empty (null, `[]`, or a field answer whose lookup misses) and as missing after a non-empty answer or when no
-  answer is recorded, so a deleted output is re-derived while an empty answer stays skipped. Each distinct unmatched
-  field answer is looked up once per batch, in parallel. Action, Agent and registry processors are not
-  checked (re-running them is paid and has side effects) and skip on the watermark alone. A record turned back is
-  processed and its watermark refreshed; when the check fails, the batch's unchanged records are processed.
+  "unchanged" is skipped unless the run overwrites human values (every record is then processed and its watermark
+  refreshed).
   Watermarks are written after a record succeeds on a real (non-dry) run, with or without `skipUnchanged`: a
   `Checksum` run that does not skip (e.g. a version backfill) skips nothing but still refreshes the watermark of each
   succeeded record whose processor computes a basis hash (`ComputeBasisHash`, e.g. Infer), read in one query per batch,

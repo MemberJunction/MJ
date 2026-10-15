@@ -49,10 +49,7 @@ export interface EscalationTargetProcessor {
     readonly ConstraintHash: string;
     /** Whether the target writes `MJ: Feature Values` history. Off for an escalation target: the Decision pipeline records the final answer. */
     WritesHistory: boolean;
-    /**
-     * The target's run-level checks, as when it runs on its own: an unresolvable prompt or driver, or a prompt template
-     * that does not render the output constraints, refuses the target before any record reaches its model.
-     */
+    /** The target's run-level checks, as when it runs on its own. */
     Preflight(context: RecordProcessorContext): Promise<void>;
     /**
      * The target's pin (prompt, model, parameters, spec) as it stands; a Decision pipeline's version covers it.
@@ -188,12 +185,8 @@ export class FeaturePipelineEscalator {
     }
 
     /**
-     * The escalation target's pin as it stands, for the Decision pipeline's version: the target computes the escalated
-     * records' answers, so a change to its prompt, model, parameters or spec is a new version of the Decision pipeline.
-     * It needs the target built, not its run-level checks: a target that cannot run still has a pin, and its records
-     * fail when they escalate.
-     * @throws EscalationTargetUnresolvableError when the target cannot be used as configured (the reason every
-     * escalating record fails with)
+     * The escalation target's pin as it stands; the Decision pipeline's version covers it.
+     * @throws EscalationTargetUnresolvableError when the target cannot be used as configured
      * @throws Error when the target's row or what its pin needs cannot be loaded
      */
     public async ResolveTargetPin(context: RecordProcessorContext, entityID: string): Promise<FeaturePipelinePinData> {
@@ -280,18 +273,13 @@ export class FeaturePipelineEscalator {
         if (specProblem) {
             throw new EscalationTargetUnresolvableError(`${label} ${specProblem}.`);
         }
-        // The Decision pipeline records each escalated record's final answer, so the target records none. Set before
-        // its Preflight: a target that writes no Feature Values registers and activates no versions of its own (a
-        // gated target is still checked against its gate, read-only).
+        // The Decision pipeline records each escalated record's final answer, so the target records none (set before
+        // its Preflight, so it registers no versions of its own)
         processor.WritesHistory = false;
         return { Processor: processor, ID: row.ID, Name: row.Name, Label: label };
     }
 
-    /**
-     * Runs the target's run-level checks once, before any record escalates, so a target that would call its model
-     * without the allowed values is refused here as it is when it runs on its own; the refusal names the
-     * pipeline and fails every escalating record.
-     */
+    /** Runs the target's run-level checks once, before any record escalates; a refusal fails every escalating record. */
     private async preflightTarget(processor: EscalationTargetProcessor, targetContext: RecordProcessorContext, label: string): Promise<void> {
         try {
             await processor.Preflight(targetContext);
@@ -358,8 +346,7 @@ export class FeaturePipelineEscalator {
         }
         const key = target.Processor.FeatureValueKeyOf(request.Record.RecordID);
         if (!key) {
-            // a target reports success only after its Feature Value write (InferProcessor.WithFeatureValues), so a
-            // success without a key means the target is not keying its answers: the answer cannot be keyed either
+            // a success without a key means the target is not keying its answers, so this answer cannot be keyed either
             return {
                 ErrorMessage: DescribeEscalationFailure(
                     this.escalationReason(request.BelowFloor),

@@ -46,7 +46,7 @@ describe('GenericProcessRunTracker.CompleteRun', () => {
     const counts = { Processed: 1, Success: 1, Error: 0, Skipped: 0, Total: 1 };
     const result = {
         RecordProcessID: 'RP-1', Pin: null, ParameterFidelity: null, Attempted: 1, Upserted: 1, Unchanged: 0, Previewed: 0,
-        RejectedInvalid: 0, Failed: 0, Skipped: 0, HumanValuesPreserved: 0, Status: 'completed' as const,
+        RejectedInvalid: 0, BelowConfidence: 0, Failed: 0, Skipped: 0, HumanValuesPreserved: 0, Status: 'completed' as const,
     };
     const complete = async (run: RunDouble, summary: Parameters<GenericProcessRunTracker['CompleteRun']>[1]): Promise<void> => {
         // a handle carrying the run double; the tracker writes header fields and calls Save

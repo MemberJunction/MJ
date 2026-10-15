@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
-import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJTagEntity, MJTaggedItemEntity, MJTagScopeEntity, MJTagSynonymEntity } from '@memberjunction/core-entities';
 import { TagScopeContext } from './TagScopeContext';
 import { TagScopeFilterBuilder } from './TagScopeFilterBuilder';
@@ -19,16 +19,6 @@ export interface TagTreeNode {
     Description: string | null;
     /** Child tags in the hierarchy */
     Children: TagTreeNode[];
-}
-
-/** The answer of {@link TagEngineBase.FindTaggedItems}. */
-export interface TaggedItemLookup {
-    /** False when the read failed; `Items` is then empty, which does not mean no links exist. */
-    Success: boolean;
-    /** The read's error, when it failed. */
-    ErrorMessage?: string;
-    /** The links found, one per (tag, entity, record). */
-    Items: MJTaggedItemEntity[];
 }
 
 /**
@@ -353,38 +343,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
     }
 
     /**
-     * The existing TaggedItems that link any of the given tags to one entity record: the lookup {@link CreateTaggedItem}
-     * uses to decide between updating a link's weight and creating a link, exposed so a caller that previews the write
-     * decides the same way. One query for all the tags.
-     *
-     * @param entityID - The entity ID (from the Entities metadata)
-     * @param recordID - The specific record ID
-     * @param tagIDs - The tags to look for
-     * @param contextUser - The user context for the operation
-     * @returns `Success` false (with `ErrorMessage`) when the read failed, which is not the same as "no links"
-     */
-    public async FindTaggedItems(
-        entityID: string,
-        recordID: string,
-        tagIDs: string[],
-        contextUser: UserInfo
-    ): Promise<TaggedItemLookup> {
-        if (tagIDs.length === 0) {
-            return { Success: true, Items: [] };
-        }
-        const rv = this.RunViewProviderToUse;
-        const tagList = tagIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',');
-        const result = await rv.RunView<MJTaggedItemEntity>({
-            EntityName: 'MJ: Tagged Items',
-            ExtraFilter: `TagID IN (${tagList}) AND EntityID='${EscapeSQLString(entityID)}' AND RecordID='${EscapeSQLString(recordID)}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
-        return { Success: result.Success, ErrorMessage: result.ErrorMessage, Items: result.Success ? result.Results : [] };
-    }
-
-    /**
-     * The existing TaggedItem matching the given tag+entity+record, or null (also when the read fails: the write then
-     * creates the link).
+     * Query the database for an existing TaggedItem matching the given tag+entity+record.
      */
     private async findExistingTaggedItem(
         tagID: string,
@@ -392,8 +351,18 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
         recordID: string,
         contextUser: UserInfo
     ): Promise<MJTaggedItemEntity | null> {
-        const lookup = await this.FindTaggedItems(entityID, recordID, [tagID], contextUser);
-        return lookup.Items[0] || null;
+        const rv = this.RunViewProviderToUse;
+        const result = await rv.RunView<MJTaggedItemEntity>({
+            EntityName: 'MJ: Tagged Items',
+            ExtraFilter: `TagID='${tagID}' AND EntityID='${entityID}' AND RecordID='${recordID}'`,
+            ResultType: 'entity_object',
+            MaxRows: 1
+        }, contextUser);
+
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0];
+        }
+        return null;
     }
 
     /**

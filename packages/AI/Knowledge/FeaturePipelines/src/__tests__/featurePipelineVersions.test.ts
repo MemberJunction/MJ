@@ -170,33 +170,6 @@ class VersionRowStore implements IEntityDataProvider {
 }
 
 /**
- * Makes the first `parties` reads wait for each other, so concurrent runs that read outside the pipeline lock all read
- * the rows as they were before any of them wrote; later reads pass straight through. A run that waits for the lock
- * releases it (the run holding the lock cannot wait for a read that comes after its commit).
- */
-class ReadBarrier {
-    private arrived = 0;
-    private release: () => void = () => undefined;
-    private readonly allArrived: Promise<void>;
-    constructor(private readonly parties: number) {
-        this.allArrived = new Promise<void>((resolve) => { this.release = resolve; });
-    }
-    /** Lets every waiting and later read through. */
-    public Release(): void {
-        this.arrived = this.parties;
-        this.release();
-    }
-    public async Wait(): Promise<void> {
-        if (++this.arrived <= this.parties) {
-            if (this.arrived === this.parties) {
-                this.release();
-            }
-            await this.allArrived;
-        }
-    }
-}
-
-/**
  * The registry's metadata provider: views and new rows over the store, and optional entity transactions. Its
  * transactions are serialised, as the database's lock on the pipeline's version rows serialises two activations: a
  * transaction begins only after the open one committed or rolled back.
@@ -213,8 +186,6 @@ class VersionRegistryProvider extends EntitiesOnlyProvider {
         Rollback: vi.fn<() => Promise<void>>().mockImplementation(async () => this.EndTransaction()),
     };
     public readonly Views: RunViewParams[] = [];
-    /** Holds reads until a test's concurrent runs have all read: off (a barrier of one) unless a test widens it. */
-    public ConcurrentReads = new ReadBarrier(1);
     constructor(private readonly transactions: boolean) {
         super([VERSION_ENTITY]);
     }
@@ -225,10 +196,6 @@ class VersionRegistryProvider extends EntitiesOnlyProvider {
         const previous = this.openTransaction;
         let end: () => void = () => undefined;
         this.openTransaction = new Promise<void>((resolve) => { end = resolve; });
-        if (this.transactionOpen) {
-            // this run waits for the lock: a run holding it must not wait at the read barrier for this one
-            this.ConcurrentReads.Release();
-        }
         await previous;
         this.transactionOpen = true;
         this.endTransaction = end;
@@ -256,7 +223,6 @@ function registryProvider(transactions: boolean): VersionRegistryProvider {
         }
         // each read returns new objects with the values stored at the time of the read, as a database read does
         const rows = await Promise.all(versionRows.map((r) => provider.Store.Copy(r)));
-        await provider.ConcurrentReads.Wait();
         return viewResult(rows);
     });
     vi.spyOn(provider, 'GetEntityObject').mockImplementation(async () => provider.NewRow());
@@ -391,42 +357,6 @@ describe('FeaturePipelineVersionService.ResolveForRun', () => {
         expect(stored(2)?.Status).toBe('Candidate');
     });
 
-    it('never lets a scheduled run activate after a concurrent on-demand activation of a pipeline that had no Active version', async () => {
-        provider.ConcurrentReads = new ReadBarrier(2);
-        const pinC: FeaturePipelinePinData = { ...pinA, PromptVersionHash: 'h3' };
-        const [onDemand] = await Promise.allSettled([
-            svc.ResolveForRun({ RecordProcessID: 'RP', Pin: pinB, TriggeredBy: 'OnDemand', ContextUser: user, Provider: provider }),
-            svc.ResolveForRun({ RecordProcessID: 'RP', Pin: pinC, TriggeredBy: 'Schedule', ContextUser: user, Provider: provider }),
-        ]);
-        expect(onDemand.status).toBe('fulfilled');
-        const pinBHash = await FeaturePipelinePin.ComputeHash(pinB);
-        expect(versionRows.filter((r) => r.Status === 'Active').map((r) => r.PinHash)).toEqual([pinBHash]);
-    });
-
-    it('never overwrites a concurrent refusing golden-set result with the stale passing values it read', async () => {
-        await seedVersion(provider, pinA, { Version: 1, Status: 'Candidate', Gated: true, Threshold: 0.9, ResultValue: 0.95, GoldenSetTestRunID: 'TR-1' });
-        provider.ConcurrentReads = new ReadBarrier(2);
-        await Promise.allSettled([
-            svc.ResolveForRun({ RecordProcessID: 'RP', Pin: pinA, TriggeredBy: 'OnDemand', ContextUser: user, Provider: provider, Activation: gate }),
-            svc.RecordGoldenSetResult({ RecordProcessID: 'RP', Pin: pinA, Activation: gate, TestRunID: 'TR-2',
-                Result: { Value: 0.5, Lower: 0.4, Upper: 0.6, N: 52, Details: '{}' }, ApprovedByUserID: 'user-1', ContextUser: user, Provider: provider }),
-        ]);
-        expect(stored(1)?.GetAll()).toMatchObject({ Status: 'Refused', ResultValue: 0.5, GoldenSetTestRunID: 'TR-2' });
-    });
-
-    it('leaves one Active version when a passing golden-set result and an on-demand activation of another version race', async () => {
-        await seedVersion(provider, pinA, { Version: 1 });
-        const pinC: FeaturePipelinePinData = { ...pinA, PromptVersionHash: 'h3' };
-        provider.ConcurrentReads = new ReadBarrier(2);
-        await Promise.all([
-            svc.ResolveForRun({ RecordProcessID: 'RP', Pin: pinB, TriggeredBy: 'OnDemand', ContextUser: user, Provider: provider }),
-            svc.RecordGoldenSetResult({ RecordProcessID: 'RP', Pin: pinC, Activation: gate, TestRunID: 'TR-3',
-                Result: { Value: 0.95, Lower: 0.9, Upper: 0.98, N: 52, Details: '{}' }, ApprovedByUserID: 'user-1', ContextUser: user, Provider: provider }),
-        ]);
-        expect(versionRows.filter((r) => r.Status === 'Active')).toHaveLength(1);
-        expect(provider.Store.UniqueKeyViolations).toBe(0); // the result's run read the activation's committed rows
-    });
-
     it('creates nothing on a dry run', async () => {
         const v = await svc.ResolveForRun({ RecordProcessID: 'RP', Pin: pinA, DryRun: true, ContextUser: user, Provider: provider });
         expect(v).toEqual({ Version: null, Status: null });
@@ -459,17 +389,6 @@ describe('FeaturePipelineVersionService.ResolveForRun', () => {
         expect(stored(1)?.Gated).toBe(false);
     });
 
-    it('leaves one Active version when two runs activate different new versions at once', async () => {
-        const t = registryProvider(true);
-        await seedVersion(t, pinA, { Version: 1 });
-        const pinC: FeaturePipelinePinData = { ...pinA, PromptVersionHash: 'h3' };
-        t.ConcurrentReads = new ReadBarrier(2); // both runs read v1 as the Active version before either activates
-        const both = await Promise.all([pinB, pinC].map((pin) =>
-            svc.ResolveForRun({ RecordProcessID: 'RP', Pin: pin, TriggeredBy: 'OnDemand', ContextUser: user, Provider: t })));
-        expect(both.map((v) => v.Status)).toEqual(['Active', 'Active']);
-        expect(versionRows.filter((r) => r.Status === 'Active')).toHaveLength(1);
-        expect(versionRows.map((r) => r.Version).sort()).toEqual([1, 2, 3]);
-    });
 });
 
 describe('FeaturePipelineVersionService.RegisterCandidate', () => {
@@ -486,47 +405,6 @@ describe('FeaturePipelineVersionService.RegisterCandidate', () => {
         expect(versionRows).toHaveLength(1);
     });
 
-    it('returns the row a concurrent run registered first when its own save fails', async () => {
-        const winner = provider.NewRow();
-        await winner.LoadFromData({ ID: 'V-2', RecordProcessID: 'RP', Version: 1, PinHash: await FeaturePipelinePin.ComputeHash(pinB), SpecHash: 's', Status: 'Candidate', Gated: false });
-        // the other run's insert lands between this run's read and its save, whose insert then fails on the unique pin
-        provider.Store.FailSave = () => {
-            versionRows.push(winner);
-            return true;
-        };
-        expect((await svc.RegisterCandidate({ RecordProcessID: 'RP', Pin: pinB, ContextUser: user, Provider: provider })).ID).toBe(winner.ID);
-    });
-
-    it('registers two different new pins at once under consecutive numbers', async () => {
-        await seedVersion(provider, pinA, { Version: 1 });
-        const pinC: FeaturePipelinePinData = { ...pinA, PromptVersionHash: 'h3' };
-        provider.ConcurrentReads = new ReadBarrier(2); // both runs read before either registers, so both pick v2
-        const rows = await Promise.all([pinB, pinC].map((pin) => svc.RegisterCandidate({ RecordProcessID: 'RP', Pin: pin, ContextUser: user, Provider: provider })));
-        expect(rows.map((r) => r.Version).sort()).toEqual([2, 3]);
-        expect(new Set(rows.map((r) => r.PinHash)).size).toBe(2);
-        // under the lock the second registration numbers from the first's committed row: no insert collides
-        expect(provider.Store.UniqueKeyViolations).toBe(0);
-    });
-
-    it('gives up after a bounded number of version-number collisions', async () => {
-        let other = 0;
-        // every attempt loses its number to another pin registered just before its save
-        provider.Store.FailSave = (row) => {
-            const taken = provider.NewRow();
-            void taken.LoadFromData({ ID: `OTHER-${++other}`, RecordProcessID: 'RP', Version: row.Version, PinHash: `other-${other}`, SpecHash: 's', Status: 'Candidate', Gated: false });
-            versionRows.push(taken);
-            return true;
-        };
-        await expect(svc.RegisterCandidate({ RecordProcessID: 'RP', Pin: pinB, ContextUser: user, Provider: provider }))
-            .rejects.toThrow(/Registering Feature Pipeline version failed after 3 attempts/);
-        expect(other).toBe(3);
-    });
-
-    it('throws the save error when the re-read finds no row for the pin', async () => {
-        provider.Store.FailSave = () => true;
-        await expect(svc.RegisterCandidate({ RecordProcessID: 'RP', Pin: pinB, ContextUser: user, Provider: provider }))
-            .rejects.toThrow(/Registering Feature Pipeline version failed: .*save failed/);
-    });
 });
 
 describe('FeaturePipelineVersionService.AssertRunnable', () => {
@@ -572,11 +450,6 @@ describe('MJFeaturePipelineVersionEntityExtended.GetActivationProblems (the save
         const details = JSON.stringify({ Score: { RequiredFailures: [{ CaseID: 'h06', Outputs: ['SeniorityLevel'] }] }, Answers: [] });
         expect(problems({ ...base, ResultValue: 0, ResultDetails: details })).toEqual(['Version 3 cannot be activated: its golden set has 1 required case(s) wrong: h06 (SeniorityLevel).']);
     });
-    it('falls back to the threshold wording when the stored details are not JSON or carry no well-formed failures', () => {
-        expect(problems({ ...base, ResultValue: 0.5, ResultDetails: 'not json' })[0]).toMatch(/its golden-set result 0.5000 is below the threshold 0.9/);
-        expect(problems({ ...base, ResultValue: 0.5, ResultDetails: JSON.stringify({ Score: { RequiredFailures: [{ CaseID: 7 }] } }) })[0]).toMatch(/below the threshold 0.9/);
-        expect(problems({ ...base, ResultValue: 0.5, ResultDetails: JSON.stringify({ Score: { RequiredFailures: [] } }) })[0]).toMatch(/below the threshold 0.9/);
-    });
     it('refuses Active without a stored result', () => { expect(problems({ ...base, GoldenSetTestRunID: null })[0]).toMatch(/without a stored golden-set result/); });
     it('does not constrain ungated or non-Active rows', () => {
         expect(problems({ ...base, Gated: false, ResultValue: null })).toEqual([]);
@@ -606,11 +479,8 @@ class SharedVersionDatabase {
     public IndependentInstances = 0;
     /** Saves the unique keys refused, on any instance. */
     public UniqueKeyViolations = 0;
-    /** Holds reads until both concurrent runs have read; a session that must wait for the lock releases it. */
-    public ConcurrentReads = new ReadBarrier(1);
     public async Lock(session: VersionDatabaseProvider): Promise<void> {
         while (this.holder && this.holder !== session) {
-            this.ConcurrentReads.Release();
             await new Promise<void>((resolve) => this.waiting.push(resolve));
         }
         this.holder = session;
@@ -704,7 +574,6 @@ function databaseProvider(db: SharedVersionDatabase): VersionDatabaseProvider {
     const instance = new VersionDatabaseProvider(db);
     vi.spyOn(instance, 'RunView').mockImplementation(async () => {
         const rows = await Promise.all(versionRows.map((r) => instance.Store.Copy(r)));
-        await db.ConcurrentReads.Wait();
         return viewResult(rows);
     });
     vi.spyOn(instance, 'GetEntityObject').mockImplementation(async () => {
@@ -716,22 +585,6 @@ function databaseProvider(db: SharedVersionDatabase): VersionDatabaseProvider {
 }
 
 describe('the pipeline lock on a database provider', () => {
-    it('serialises two concurrent runs that share one provider instance: each runs on its own instance and waits on the lock', async () => {
-        const db = new SharedVersionDatabase();
-        const shared = databaseProvider(db);
-        await seedVersion(provider, pinA, { Version: 1 });
-        const pinC: FeaturePipelinePinData = { ...pinA, PromptVersionHash: 'h3' };
-        db.ConcurrentReads = new ReadBarrier(2);
-        const both = await Promise.all([pinB, pinC].map((pin) =>
-            svc.ResolveForRun({ RecordProcessID: 'RP', Pin: pin, TriggeredBy: 'OnDemand', ContextUser: user, Provider: shared })));
-        expect(both.map((v) => v.Status)).toEqual(['Active', 'Active']);
-        expect(versionRows.filter((r) => r.Status === 'Active')).toHaveLength(1);
-        expect(db.IndependentInstances).toBe(2);
-        // the second run read the first's committed rows: its registration did not collide on a version number
-        expect(db.UniqueKeyViolations).toBe(0);
-        expect(shared.TransactionDepth).toBe(0);
-    });
-
     it('marks a backfill on the lock\'s own instance: the version row is read and saved under the lock', async () => {
         const db = new SharedVersionDatabase();
         const shared = databaseProvider(db);

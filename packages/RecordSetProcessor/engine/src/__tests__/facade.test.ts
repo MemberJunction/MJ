@@ -581,10 +581,6 @@ describe('ApplyOutputMapping', () => {
             { OrderID: 'c1', Sku: 'ITEM-A', Qty: 1 },
             { OrderID: 'c1', Sku: 'ITEM-B', Qty: 3 },
         ]);
-        expect(out.previewChildChanges).toEqual([
-            { Entity: 'OrderLine', Action: 'insert', Values: { OrderID: 'c1', Sku: 'ITEM-A', Qty: 1 } },
-            { Entity: 'OrderLine', Action: 'insert', Values: { OrderID: 'c1', Sku: 'ITEM-B', Qty: 3 } },
-        ]);
     });
 
     it('previews tags in dry-run mode under constrained and auto-grow', async () => {
@@ -604,7 +600,6 @@ describe('ApplyOutputMapping', () => {
             return undefined;
         });
         const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
-        const mockFind = vi.spyOn(TagEngine.Instance, 'FindTaggedItems').mockResolvedValue({ Success: true, Items: [] });
 
         const { provider, created } = fakeProvider();
         const out = await ApplyOutputMapping({
@@ -637,8 +632,6 @@ describe('ApplyOutputMapping', () => {
             rootTagID: 'root-1',
             depth: 1,
             error: undefined,
-            alreadyLinked: false,
-            reweighted: false,
         });
         // Deep Tag is matched at depth 2 (under tag-1 -> root-1), so exceeds maxDepth 1
         expect(out.previewTags?.[1].matched).toBe(true);
@@ -669,7 +662,6 @@ describe('ApplyOutputMapping', () => {
         mockResolveTag.mockRestore();
         mockGetTagByID.mockRestore();
         mockConfig.mockRestore();
-        mockFind.mockRestore();
     });
 
     it('creates TaggedItem records for resolved tags in non-dry-run mode', async () => {
@@ -750,7 +742,6 @@ describe('ApplyOutputMapping', () => {
             return undefined;
         });
         const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
-        const mockFind = vi.spyOn(TagEngine.Instance, 'FindTaggedItems').mockResolvedValue({ Success: true, Items: [] });
 
         const { provider } = fakeProvider();
         const out = await ApplyOutputMapping({
@@ -779,7 +770,6 @@ describe('ApplyOutputMapping', () => {
         mockResolveTag.mockRestore();
         mockGetTagByID.mockRestore();
         mockConfig.mockRestore();
-        mockFind.mockRestore();
     });
 
     it('throws when resolved tag is not a descendant of root tag in non-dry-run mode', async () => {
