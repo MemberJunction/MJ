@@ -351,7 +351,7 @@ export async function ProbeRoleRowFilterAgainstEntity(
 ): Promise<string | null> {
     const predicate = new RowLevelSecurityFilterInfo({ FilterText: filterText })
         .MarkupFilterText(contextUser)
-        .replace(/\{\{\w+\}\}/g, UNRESOLVED_TOKEN_PLACEHOLDER);
+        .replace(/\{\{\w+\}\}/g, () => UNRESOLVED_TOKEN_PLACEHOLDER);
     const sql =
         `SELECT 1 AS ${provider.QuoteIdentifier('Probe')} ` +
         `FROM ${provider.QuoteSchemaAndView(entity.SchemaName, entity.BaseView)} ` +
