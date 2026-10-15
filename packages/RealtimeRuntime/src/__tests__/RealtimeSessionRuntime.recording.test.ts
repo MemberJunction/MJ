@@ -477,6 +477,31 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         ]);
     });
 
+    it('a pagehide while End is stopping the recorder does not send a second terminal when Stop flushes zero frames', async () => {
+        const { runtime, transport, recorder, log } = await startRecorded();
+        recorder.Capture(WINDOW - 2);
+        transport.HoldNextUpload = new Promise(() => undefined);
+        await vi.advanceTimersByTimeAsync(FLUSH_MS);
+        recorder.Capture(7);
+        recorder.PacketsFlushedOnStop = 0;
+        let releaseStop: () => void = () => undefined;
+        recorder.StopGate = new Promise<void>((resolve) => {
+            releaseStop = resolve;
+        });
+        const ending = runtime.EndRealtimeSession();
+        await vi.advanceTimersByTimeAsync(0);
+        const logBefore = log.length;
+
+        runtime.SendRecordingTerminal();
+        releaseStop();
+        await ending;
+
+        expect(transport.Terminals).toHaveLength(1);
+        expect(transport.Terminals[0].Input.LastShardIndex).toBe(1);
+        const networkEvents = log.slice(logBefore).filter((e) => !e.startsWith('put:') && !e.startsWith('delete:'));
+        expect(networkEvents).toEqual(['terminal:session-1/1', 'upload(keepalive):session-1/0']);
+    });
+
     it('End re-sends with keepalive, after the terminal, a shard whose ordinary upload is still in flight', async () => {
         const { runtime, recorder, transport, log } = await startRecorded();
         recorder.Capture(WINDOW - 2);

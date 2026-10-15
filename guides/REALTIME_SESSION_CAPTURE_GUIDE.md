@@ -21,8 +21,8 @@ seam, or the `RealtimeRecordingController`.
   `RecordingStartedAt` (the `t0`). Capture happens on **both** topologies: server-side (server-bridged)
   and **in the browser** (client-direct).
 - A **capture-time waveform** (normalized `0..1` max-abs peaks) is computed cheaply *during* recording
-  and written as a **`peaks.json` sidecar** in the same storage folder as the WAV, so a player renders
-  the waveform instantly without re-decoding the audio.
+  (server-bridged) or during server-side assembly (client-direct) and written as a **`peaks.json` sidecar**
+  in the same storage folder as the WAV, so a player renders the waveform instantly without re-decoding the audio.
 - Playback **streams** the recording over HTTP Range via `mj-storage-media-player` → the
   `CreateMediaAccessToken` mutation → the `GET /media/:fileId?token=` route (not a base64 download).
 - Recording is **OFF by default**, resolved **runtime param > agent (`RecordingDefault`) > off**,

@@ -117,4 +117,15 @@ describe('RecordingShardWindow', () => {
     expect(first.PacketCount + ParseRecordingShard(tail!.Bytes).PacketCount).toBe(250);
     expect(RECORDING_SHARD_HEADER_BYTES).toBe(28);
   });
+
+  it('does not seal when pending bytes equal RECORDING_TERMINAL_MAX_BYTES, only when the next packet exceeds it', () => {
+    // 28-byte header + 243 packets of cost 202 (200-byte payload) + 1 packet of cost 38 (36-byte payload) = 49,152 === RECORDING_TERMINAL_MAX_BYTES.
+    const window = new RecordingShardWindow();
+    expect(window.Append([...packets(243, 200), ...packets(1, 36)])).toEqual([]);
+
+    const sealed = window.Append(packets(1, 1));
+    expect(sealed).toHaveLength(1);
+    expect(sealed[0].Bytes.length).toBe(RECORDING_TERMINAL_MAX_BYTES);
+    expect(ParseRecordingShard(sealed[0].Bytes).PacketCount).toBe(244);
+  });
 });

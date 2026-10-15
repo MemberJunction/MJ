@@ -52,6 +52,21 @@ describe('ReleaseUserRecordingShards (logout)', () => {
         await expect(ReleaseUserRecordingShards(store, null, 'user-a', 3000)).resolves.toEqual({ Delivered: 0, TimedOut: false });
         expect(store.Keys).toEqual(['b-call/0']);
     });
+
+    it("drains across multiple 50-shard passes when a user has more than one page of pending shards at logout", async () => {
+        const store = new FakeShardStore();
+        for (let i = 0; i < 120; i++) {
+            await store.Put({ SessionID: 'a-call', UserID: 'user-a', Index: i, Bytes: new Uint8Array([i & 0xff]), SavedAt: i + 1 });
+        }
+        await store.Put({ SessionID: 'b-call', UserID: 'user-b', Index: 0, Bytes: new Uint8Array([9]), SavedAt: 200 });
+        const transport = new FakeRecordingTransport();
+
+        const result = await ReleaseUserRecordingShards(store, transport, 'user-a', 3000);
+
+        expect(result).toEqual({ Delivered: 120, TimedOut: false });
+        expect(transport.Uploads).toHaveLength(120);
+        expect(store.Keys).toEqual(['b-call/0']);
+    });
 });
 
 describe('ReleaseRecordingShardsAtLogout', () => {

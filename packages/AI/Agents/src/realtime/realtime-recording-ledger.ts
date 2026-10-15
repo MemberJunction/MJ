@@ -4,7 +4,7 @@
  * (`RecordingStatus`, expected shards, captured samples, gaps, assembly version).
  *
  * Every write goes through a guarded stored procedure (migration
- * `V202610130440__v6.2.x__Realtime_Recording_Shard_Ledger.sql`): each needs one conditional statement
+ * `V202610151535__v6.2.x__Realtime_Recording_Shard_Ledger.sql`): each needs one conditional statement
  * whose outcome is the arbitration signal (insert-if-absent, monotonic terminal stamp, atomic claim,
  * version-fenced finish), which `BaseEntity.Save` cannot express. Reads use `RunView` with `BypassCache`:
  * the procs change the rows without raising entity events, so a cached read would never be invalidated

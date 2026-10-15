@@ -125,6 +125,14 @@ interface RecordingShardPipeline {
   Queue: RecordingShardQueue;
   /** Null when the provider has no REST configuration: shards are then only kept in the store. */
   Transport: IRecordingTransport | null;
+  /**
+   * The most recent `final: true` terminal request dispatched for this pipeline, along with the
+   * `LastSealedIndex` it covered. When `SendRecordingTerminal` (`pagehide`) fires while `finishRecording`
+   * is awaiting `stopRecorder` and `Stop()` flushes zero additional packets, `finishRecording` reuses
+   * this terminal instead of sending a duplicate final terminal and re-running
+   * `resendUnacknowledgedWithKeepalive`.
+   */
+  FinalTerminal?: { LastSealedIndex: number; Acked: Promise<boolean> };
 }
 
 /** Options of {@link RealtimeSessionRuntime.SendRecordingTerminal}. */
@@ -2645,7 +2653,11 @@ export class RealtimeSessionRuntime {
       if (pipeline.Window.LastSealedIndex < 0) {
         return;
       }
-      void this.dispatchRecordingTerminal(pipeline, sealed, tail, true, options?.Final ?? true);
+      const final = options?.Final ?? true;
+      if (sealed.length === 0 && !tail && pipeline.FinalTerminal?.LastSealedIndex === pipeline.Window.LastSealedIndex) {
+        return;
+      }
+      void this.dispatchRecordingTerminal(pipeline, sealed, tail, true, final);
     } catch (error) {
       console.warn(`[RealtimeSession] Failed to send the recording terminal for session ${pipeline.SessionID}:`, error);
     }
@@ -2686,7 +2698,7 @@ export class RealtimeSessionRuntime {
       stored = deferStore ? this.storeShardsLater(pipeline, toStore) : this.storeShards(pipeline, toStore);
     }
     this.resendUnacknowledgedWithKeepalive(pipeline, sealedNow, stored);
-    return terminalAcked.then(async (acked) => {
+    const ackedPromise = terminalAcked.then(async (acked) => {
       await stored;
       if (!tail) {
         return acked;
@@ -2699,6 +2711,10 @@ export class RealtimeSessionRuntime {
       }
       return acked;
     });
+    if (final) {
+      pipeline.FinalTerminal = { LastSealedIndex: pipeline.Window.LastSealedIndex, Acked: terminalAcked };
+    }
+    return ackedPromise;
   }
 
   /** Counts `bytes` against the page's keepalive budget until `request` settles. */
@@ -2837,6 +2853,9 @@ export class RealtimeSessionRuntime {
       if (pipeline.Window.LastSealedIndex < 0) {
         pipeline.Queue.Close();
         return null;
+      }
+      if (sealed.length === 0 && !tail && pipeline.FinalTerminal?.LastSealedIndex === pipeline.Window.LastSealedIndex) {
+        return { Pipeline: pipeline, Acked: pipeline.FinalTerminal.Acked };
       }
       return { Pipeline: pipeline, Acked: this.dispatchRecordingTerminal(pipeline, sealed, tail, false, true) };
     } catch (error) {
