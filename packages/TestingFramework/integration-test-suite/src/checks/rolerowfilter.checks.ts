@@ -347,7 +347,8 @@ export async function CheckRf1SharedSubqueryRoleFilterEditable(ctx: IntegrationC
         await refreshSecurity(ctx);
         const userA = cachedUser(fx.UserIDs[0]);
         const clause = entityOf(ctx, ENTITY_ONE).GetEffectiveRowFilterWhereClause(userA, EntityPermissionType.Read, '');
-        Assert(clause.includes('vwUsers u') && clause.includes(userA.ID),
+        const markedUpUserId = /u\.ID = '([0-9A-Fa-f-]{36})'/.exec(clause)?.[1];
+        Assert(clause.includes('vwUsers u') && markedUpUserId != null && UUIDsEqual(markedUpUserId, userA.ID),
             `after the edit, the runtime clause must be the NEW text marked up for the user, got: '${clause}'`);
         fx.UserA = userA;
         fx.UserB = cachedUser(fx.UserIDs[1]);
