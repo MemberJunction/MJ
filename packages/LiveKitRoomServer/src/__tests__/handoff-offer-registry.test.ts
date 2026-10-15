@@ -105,8 +105,11 @@ describe('HandoffOfferRegistry', () => {
     const view = ToOfferView(offer);
     expect(view).not.toHaveProperty('TargetUserID');
     expect(Object.keys(view).sort()).toEqual(
-      ['AgentName', 'CallerLabel', 'CreatedAt', 'ExpiresAt', 'Mode', 'OfferID', 'RoomName', 'Status', 'Summary'].sort(),
+      ['AgentName', 'CallerLabel', 'CreatedAt', 'ExpiresAt', 'InteractionID', 'Mode', 'OfferID', 'RoomName', 'Status', 'Summary'].sort(),
     );
+    expect(view.InteractionID).toBeNull();
+    const offerWithInteraction = (await registry.Create(input({ InteractionID: 'int-456' })))!;
+    expect(ToOfferView(offerWithInteraction).InteractionID).toBe('int-456');
     expect(new Date(view.ExpiresAt).getTime()).toBe(offer.ExpiresAtMs);
   });
 

@@ -17,6 +17,7 @@ import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
 import { VectorDBBase, BaseResponse, QueryByVectorValues } from '@memberjunction/ai-vectordb';
 import { MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
+import type { LaneKind } from './ScopeExplanation';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeExternalIndexConstraint } from './search.types';
 import { CheckScopeJsonFilter, ScopeFilterCheck } from './ScopeFilterGuard';
 
@@ -51,6 +52,9 @@ interface UnmergedFilters {
 @RegisterClass(BaseSearchProvider, 'VectorSearchProvider')
 export class VectorSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'vector';
+
+    /** Reads the scope's `Vector` external-index rows (see `BaseSearchProvider.ConsumesLaneKinds`). */
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['ExternalIndex'];
 
     private available = false;
 
@@ -97,11 +101,6 @@ export class VectorSearchProvider extends BaseSearchProvider {
         scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]> {
         try {
-            await AIEngine.Instance.Config(false, contextUser);
-
-            // Honor per-provider query transform
-            const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
-
             // Determine the scoped vector-index subset. When scopeConstraints.ExternalIndexes
             // is provided, filter to rows where IndexType='Vector' (3rd-party rows are for
             // other providers) and match the listed VectorIndexIDs. When absent, fall back
@@ -109,6 +108,15 @@ export class VectorSearchProvider extends BaseSearchProvider {
             const scopedVectorRows = scopeConstraints?.ExternalIndexes
                 ? scopeConstraints.ExternalIndexes.filter(r => r.IndexType === 'Vector' && r.VectorIndexID)
                 : undefined;
+            if (scopedVectorRows?.length === 0) {
+                // The scope names no vector index: nothing for this provider, and nothing to query.
+                return [];
+            }
+
+            await AIEngine.Instance.Config(false, contextUser);
+
+            // Honor per-provider query transform
+            const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
 
             const rv = new RunView();
             const indexResult = await rv.RunView<MJVectorIndexEntity>({
@@ -150,7 +158,16 @@ export class VectorSearchProvider extends BaseSearchProvider {
             );
 
             const groupResults = await Promise.all(modelGroupPromises);
-            return groupResults.flat();
+            // Each embedding model is its own ranked list. Scores are comparable within a model
+            // (so sort by them there, across that model's indexes) but not between models, so
+            // tag each result with its model's FusionLane and let RRF merge the models by rank.
+            const modelIDs = Array.from(indexesByModel.keys());
+            return groupResults.flatMap((results, i) => {
+                const lane = `vector:${modelIDs[i]}`;
+                return [...results]
+                    .sort((a, b) => b.Score - a.Score)
+                    .map(r => ({ ...r, FusionLane: lane }));
+            });
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`VectorSearchProvider: Search failed: ${msg}`);
@@ -347,18 +364,23 @@ export class VectorSearchProvider extends BaseSearchProvider {
             return [];
         }
 
-        // Colocated path: wire in the active data-provider connection and run a hybrid
-        // (vector + keyword) query in the same database as the entity rows. TryWireColocatedHost
-        // is a no-op for non-colocated providers, so this is safe to attempt unconditionally.
+        // Colocated path: wire in the active data-provider connection and run the query in the
+        // same database as the entity rows. TryWireColocatedHost is a no-op for non-colocated
+        // providers, so this is safe to attempt unconditionally.
+        //
+        // VECTOR-ONLY on purpose. This is the semantic lane: MJ's own keyword and full-text lanes do
+        // the text matching, and MJ's RRF fuses every lane. Asking the store for its own
+        // vector+keyword RRF here would count text matches twice (in this lane and in MJ's
+        // keyword lane), and its score would be an RRF value (<= 2/61) where MinScore's semantic
+        // floor expects a similarity. Vector-only returns a true similarity, like SQL Server's.
         vectorDBInstance.TryWireColocatedHost(this.Provider);
         if (vectorDBInstance.SupportsColocatedQuery) {
             const colocated = await vectorDBInstance.ColocatedQuery({
                 indexName: AIEngine.Instance.GetProviderIndexName(vectorIndex),
                 vector: queryVector,
-                keyword: queryText,
                 topK,
                 filter,
-                fusion: 'rrf',
+                fusion: 'vector-only',
                 includeMetadata: true,
             }, contextUser);
             const [fallbackEntity, entityByContentSourceID] = await Promise.all([

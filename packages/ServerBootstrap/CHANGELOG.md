@@ -1,5 +1,530 @@
 # @memberjunction/server-bootstrap
 
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- 10c2311: Add the Clef and Kev decision models and two drivers to reach them. `CloudflareDecision`, in the new `@memberjunction/ai-cloudflare` package, calls Cloudflare's Clef and Clef-flash on Workers AI (`@cf/cloudflare/clef`, `@cf/cloudflare/clef-flash`); its account ID comes from a `<accountId>:<apiToken>` key, a credential's `accountId`, or `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_WORKERS_AI_BASE_URL` or a credential's `endpoint` routes it through an AI Gateway. `SystemOneDecision`, in the new `@memberjunction/ai-systemone` package, calls any server with a `/v1/systemone` route (Kev's own server, llama.cpp's `llama-server`, TypeSafe), with the endpoint from an `API Key with Endpoint` credential or `SYSTEMONE_BASE_URL` and an optional bearer token. The System One wire mapping that Jev, Kev and Clef share moves out of `OpenRouterDecision` into a new `BaseSystemOneDecision` in `@memberjunction/ai`; `OpenRouterDecision` keeps its behaviour, statics and constructor, except that a key resolved from an AI Credential binding now sends the credential's `apiKey` as the bearer token instead of the credential's JSON, and a key that starts with `{` but is not valid JSON now fails before any request instead of being sent whole as the token. Metadata adds the `Cloudflare` and `System One Endpoint` vendors, the `Clef` and `Clef-flash` models, and `Kev-0.8B`, `Kev-4B`, `Kev-9B` and `Kev-27B` (Kev-4B also on OpenRouter, as `jaredpalmer/kev-4b-20260924`), with their limits and prices. The `Default Decision` prompt's bindings are unchanged. The one change in default behaviour: as active `Decision` models, the new models join the power-matched fallback candidates of any Decision prompt that does not require specific models, after its bound models, and only when their credentials resolve. `Default Decision` fails over across models (its `FailoverStrategy` is the column default, `SameModelDifferentVendor`, which `AIDecisionRunner` treats as the whole candidate list), so a call reaches one of them when every credentialed candidate ahead of it (Jev, when its key is set, and `LLM Decision`) has failed with an error that allows failover. Kev-4B on OpenRouter resolves with the OpenRouter key Jev already uses. A missing account ID, token or endpoint, or an API key that starts with `{` but is not valid JSON (a legacy `AI_VENDOR_API_KEY__*` value or runtime `apiKeys` entry; bound AI Credentials always arrive as valid JSON), fails a call before any request with a `NoCredentials` error that allows failover, so a misconfigured fallback does not stop the failover loop and a malformed key's text is never sent as a token.
+
+  `BaseModelRunner` in `@memberjunction/ai-prompts` now finds a `ModelVendor` credential binding on any Active row of a model on a vendor, Inference Provider rows first, both when it checks whether a candidate has a credential and when it resolves one. It used to read only the first Active row, so for any model with both a Model Developer row and an Inference Provider row on one vendor (Clef and Clef-flash on Cloudflare, and many existing models, such as Claude 4.5 Opus on Anthropic, Grok 4 on x.ai, Gemini 3 Flash on Google and the OpenAI embedding models), a credential bound to the Inference Provider row was found only when that row happened to load first, which depends on the rows' keys. A binding on another model's row still does not apply. The fix applies to every runner built on `BaseModelRunner` (prompts and agents, embeddings, rerankers, image and media generation, and decisions), not only to decisions.
+
+- 7384dd6: Conversation forks: a conversation is Main (the messages with no branch) plus forks (`MJ: Conversation Branches`). A fork starts at a message and shows as a chip under it (kind icon, up to three avatars, message count, name, last activity); it opens as a full view where the inherited history sits faded behind a dashed rail, up to a fork marker, and the fork's own messages behind a solid rail. "Fork from here" on one of your own messages opens a new fork that replaces that message at once (it starts from the message before it, the composer starts with the message's text, the fork is created on the first send and named from that message, and leaving without sending creates nothing), Edit ("Save as fork"; the original message stays) and Regenerate (the first answer stays) each start a fork. A Forks button lists every fork, nested under its parent, with All and Mine filters. Everyone who can see a conversation sees its forks and who started each one. What a person is looking at is per person and in memory; nothing about the view is stored on the conversation, and changing the view ends an active voice session.
+  - New entity `MJ: Conversation Branches` with `Kind` (Fork, Edit, Regenerate; default Fork), `SourceDetailID` and `UserID`; new columns `ConversationDetail.BranchID` and `ConversationDetail.ReplacedAt` (migration, so `minor`).
+  - New authorization `Conversations: Fork`, granted to the UI role. The server refuses to create a fork for a person without it; deny it to a role to turn forking off for that role's members. Each person can also switch forking off in My Profile ("Fork when I edit or regenerate"; user setting `mj.conversations.forking.v1`).
+  - When forking is off for a person, Edit and Regenerate change the latest turn in place: Regenerate (latest answer) and "Save and resend" (latest user message) hide the current answer and run the agent again; earlier user messages can still be edited ("Save", shown as edited). A replaced answer keeps its row (`ReplacedAt` and `HiddenToUser` set) and is left out of the chat, export, pins, the mobile transcript, rubric subjects, the returning-visitor recap and every agent context read (`ConversationEngine.LiveRowsFilter` and `IsReplacedRow`). A turn a fork depends on is not changed in place.
+  - Every writer sets `BranchID` itself (null is Main): the composer and its agent turns, `AgentRunner`, the task-graph deliverer, an agent request resumed from the Agent Requests dashboard or API (the fork of the message that started the run) and realtime transcripts (a voice session's fork is fixed when it starts). The server no longer stamps it and refuses a `BranchID` that names a fork of another conversation.
+  - A fork that still has its own messages or child forks cannot be deleted on its own (its messages would move into Main); deleting the conversation deletes its forks and messages.
+  - `ConversationEngine` gains `CreateFork`, `ForkPointFrom`, `EditForkPoint`, `RegenerateForkPoint`, `SourceRowsFilter`, `BuildForkSummaries`, `LoadForkSummaries`, `ForkDisplayName`, `LiveRowsFilter` and `IsReplacedRow`.
+  - **Removed public Angular API** (the ParentID-based thread panel; a host app that binds any of these must drop the binding): `ConversationChatAreaComponent`'s `ThreadId` input and `ThreadOpened`/`ThreadClosed` outputs; the `ThreadPanelComponent` export; `ConversationWorkspaceComponent`'s `OpenThread`, `CloseThread` and `SelectedThreadId`; `ChatConversationsResource`'s `SelectedThreadId`, `OnThreadOpened` and `OnThreadClosed`; `MessageListComponent`'s `ReplyInThread` and `ViewThread` outputs. Their deprecated camelCase aliases (`threadId`, `threadOpened`, `threadClosed`, `openThread`, `closeThread`, `selectedThreadId`, `onThreadOpened`, `onThreadClosed`, `replyInThread`, `viewThread`) are removed with them.
+
+  Message-anchored scope: every reader of one conversation reads one path through `ConversationScope` (`LoadScope`, `TrunkScope`, `ScopeFilter`, `ScopeSubquery`, `IsInScope`, `FilterToScope`, `ArtifactVersionScopeFilter`): the open view in the chat (window, pins, artifacts, agent polling, export, voice start), and Main for the mobile app, the realtime widget, meeting transcripts, the conversation overview, rubric subjects and the returning-visitor recap. Artifact history is path-aware: the viewer takes a `Scope` input and lists only the versions a message on the path links (any direction) or that no message links, labels a gap as `v4 · from v2`, and falls back to the newest visible version with a notice. Search results carry the fork of each hit; opening one opens that fork, or Main. Skip requests carry `conversationBranchID` from the reply's fork, so Skip Brain keeps one mirror record per path.
+
+- c0ebd97: New package `@memberjunction/actions-peopledatalabs`: a table-agnostic People Data Labs client
+  (bulk person enrichment with education and employment history, person search, a size-1 count, and
+  the free school autocomplete and cleaner), a credentials resolver (a company's `People Data Labs`
+  Company Integration credential, else `PDL_API_KEY`), and the `People Data Labs - Enrich People`
+  action, which returns data and writes nothing. Adds the `People Data Labs` row to `MJ: Integrations`
+  (new `metadata/integrations/`) and registers the package in both server bootstrap manifests.
+- 7dc604e: Add Perplexity's `pplx-decider-v1-27b` as a Decision model. `PerplexityDecision`, in `@memberjunction/ai-systemone`, calls Perplexity's Decisions API (`POST https://api.perplexity.ai/v1/decisions`, the model's only managed host) with a Perplexity API key as the bearer token; the endpoint can be overridden by the constructor or a credential's `endpoint`, and a missing key fails before any request with a `NoCredentials` error that allows failover. Metadata adds the `Perplexity` vendor (credential type `API Key`) and the `Perplexity Decider v1 27B` model, with Perplexity's limits (128 questions, 255 options, 10 levels, 262,144 input tokens) and price ($0.04 per million input tokens, output free). The `Default Decision` prompt's bindings are unchanged; as an active Decision model the Decider joins its power-matched fallbacks, after Jev and `LLM Decision`, once its key resolves.
+
+### Patch Changes
+
+- 91be34f: Gemini Live on Gemini Enterprise (Vertex AI): a server driver and a browser driver. `GeminiEnterpriseRealtime` (`@memberjunction/ai-vertex`) reads `AI_VENDOR_API_KEY__GeminiEnterpriseRealtime` (or a run's key), a JSON string in the shapes `VertexLLM` takes: an inline service account, a key-file path (environment key only), or neither for Application Default Credentials. A client-direct session goes through MJAPI's realtime relay: the mint issues one relay session per call, whose policy writes the Live setup from the connect config and adds a `google-auth-library` bearer token (scope `cloud-platform`) on each upstream open, never at the mint. The browser gets the relay URL, with the ticket in its path, and a pact whose config holds only the response modalities and the avatar's name: no system prompt, no tools, no credential. The upstream is the Vertex AI `v1` Live socket on the location's host (`us` and `eu` on `aiplatform.<location>.rep.googleapis.com`); the mint warns when the location is not `us`, `eu` or `us-central1`. A bridged session uses `@google/genai` in Vertex mode, audio only. The constructor never throws; a key that cannot be read fails the session with a reason that quotes none of it. `GeminiEnterpriseRealtimeClient` (`'gemini-enterprise'`, `@memberjunction/ai-realtime-client`) runs the web SDK in Vertex mode against the relay URL with a placeholder API key that never leaves the page, always states its response modalities (VIDEO while it shows the avatar), and resumes on the same URL. Both Vertex drivers now read their key through shared helpers (`ParseVertexAICredentials`, `VertexKeySourceOf`, `CreateVertexAuthClient`, `VertexGenAIOptions`) and build the `google-auth-library` client themselves instead of passing the deprecated `keyFile` or `credentials` options to `GoogleAuth`: an inline service account becomes a `JWT` client with the `cloud-platform` scope, and a key without credentials still uses Application Default Credentials. **Change to run-key handling in `VertexLLM`: a key may name a key file (`keyFilePath`) only when it is the driver's environment key (`AI_VENDOR_API_KEY__VertexLLM`; `AI_VENDOR_API_KEY__GeminiEnterpriseRealtime` for the realtime driver), byte for byte. A run's key (`apiKeys`), an MJ Credential (the Google Cloud Platform credential type's Key File Path) or any other key that names a key file is refused when the client is created, with an error that does not quote the path; use an inline service account (`serviceAccountJson`) or Application Default Credentials instead.** Environment keys behave as before: MJ reads the key file and builds the client for its `type` (service account, authorized user, impersonated service account, external account, GDCH). The file is now read when the client is created rather than at the first request, and its errors no longer quote the path. `GeminiRealtime` gains the protected `SessionPactFor`. The realtime runtime keeps the new client from being tree-shaken, and the server and browser class-registration manifests register the two drivers. Integration checks RD13 (the avatar from the voiced agent's persona, through the session prep) and RD14 (every realtime vendor DriverClass resolves). Nothing selects the Enterprise driver until its vendor row ships.
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [51c469d]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [eba8ade]
+- Updated dependencies [155aa45]
+- Updated dependencies [4412e85]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [822ed69]
+- Updated dependencies [1da00cb]
+- Updated dependencies [92ecdf9]
+- Updated dependencies [1aa4e00]
+- Updated dependencies [acf0f5b]
+- Updated dependencies [b73b878]
+- Updated dependencies [989f7fe]
+- Updated dependencies [b699a37]
+- Updated dependencies [bd0ee83]
+- Updated dependencies [fd2a410]
+- Updated dependencies [0dbd455]
+- Updated dependencies [dde482c]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [a1e9d87]
+- Updated dependencies [1a091ac]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [1a95eaf]
+- Updated dependencies [0a7c255]
+- Updated dependencies [32fedd8]
+- Updated dependencies [fcf8e1c]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [ef182be]
+- Updated dependencies [af6f892]
+- Updated dependencies [59d47d5]
+- Updated dependencies [aaf74ca]
+- Updated dependencies [432fe69]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [91be34f]
+- Updated dependencies [f5e317c]
+- Updated dependencies [6055792]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [a1eaf42]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [111a5f3]
+- Updated dependencies [4c682c1]
+- Updated dependencies [7e86ce0]
+- Updated dependencies [5123afa]
+- Updated dependencies [5e09eaf]
+- Updated dependencies [e533f99]
+- Updated dependencies [0c68021]
+- Updated dependencies [584fc44]
+- Updated dependencies [ad3f44f]
+- Updated dependencies [1c76559]
+- Updated dependencies [465c950]
+- Updated dependencies [c28e243]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [69bf67c]
+- Updated dependencies [95e5dd9]
+- Updated dependencies [0a27507]
+- Updated dependencies [ecc5658]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [be3dae0]
+- Updated dependencies [c0ebd97]
+- Updated dependencies [7dc604e]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [35d3c95]
+- Updated dependencies [33bd959]
+- Updated dependencies [dbc3462]
+- Updated dependencies [21175fa]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [7177e09]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [45359c6]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [8ed4049]
+- Updated dependencies [36380f9]
+- Updated dependencies [b3db2aa]
+- Updated dependencies [6c8798b]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [5e21f50]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d0df5a1]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [02bb563]
+- Updated dependencies [c26b355]
+- Updated dependencies [a66f4b0]
+- Updated dependencies [ed326fb]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [ff58383]
+- Updated dependencies [31057d8]
+- Updated dependencies [57096ab]
+- Updated dependencies [1ef460d]
+- Updated dependencies [aac148b]
+- Updated dependencies [a7fd6e9]
+- Updated dependencies [f2f6f4b]
+- Updated dependencies [a28ce42]
+- Updated dependencies [9ce70b3]
+- Updated dependencies [bc0e36f]
+- Updated dependencies [e1942c7]
+- Updated dependencies [382b9aa]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [bdea87a]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [b653746]
+- Updated dependencies [d7acea0]
+- Updated dependencies [57fea6a]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [d2ccfef]
+- Updated dependencies [8a9d203]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai-agents@6.2.0-edge.4
+  - @memberjunction/ai-core-plus@6.2.0-edge.4
+  - @memberjunction/server@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/ai-engine-base@6.2.0-edge.4
+  - @memberjunction/ai-gemini@6.2.0-edge.4
+  - @memberjunction/actions-apollo@6.2.0-edge.4
+  - @memberjunction/ai-vertex@6.2.0-edge.4
+  - @memberjunction/core-entities-server@6.2.0-edge.4
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.4
+  - @memberjunction/ai-bridge-server@6.2.0-edge.4
+  - @memberjunction/storage@6.2.0-edge.4
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.4
+  - @memberjunction/generic-database-provider@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ai-openrouter@6.2.0-edge.4
+  - @memberjunction/ai-prompts@6.2.0-edge.4
+  - @memberjunction/ai-cloudflare@6.2.0-edge.4
+  - @memberjunction/ai-systemone@6.2.0-edge.4
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.4
+  - @memberjunction/codegen-lib@6.2.0-edge.4
+  - @memberjunction/rubrics@6.2.0-edge.4
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.4
+  - @memberjunction/dynamic-packages@6.2.0-edge.4
+  - @memberjunction/encryption@6.2.0-edge.4
+  - @memberjunction/testing-integration@6.2.0-edge.4
+  - @memberjunction/scheduling-engine@6.2.0-edge.4
+  - @memberjunction/testing-engine@6.2.0-edge.4
+  - @memberjunction/ai-openai@6.2.0-edge.4
+  - @memberjunction/core-actions@6.2.0-edge.4
+  - @memberjunction/actions-peopledatalabs@6.2.0-edge.4
+  - @memberjunction/predictive-studio@6.2.0-edge.4
+  - @memberjunction/record-set-processor@6.2.0-edge.4
+  - @memberjunction/ai-assemblyai@6.2.0-edge.4
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.4
+  - @memberjunction/ai-inworld@6.2.0-edge.4
+  - @memberjunction/ai-huggingface@6.2.0-edge.4
+  - @memberjunction/search-engine@6.2.0-edge.4
+  - @memberjunction/actions@6.2.0-edge.4
+  - @memberjunction/database-designer-actions@6.2.0-edge.4
+  - @memberjunction/templates@6.2.0-edge.4
+  - @memberjunction/record-cloning-base@6.2.0-edge.4
+  - @memberjunction/record-cloning@6.2.0-edge.4
+  - @memberjunction/scheduling-actions@6.2.0-edge.4
+  - @memberjunction/integration-engine@6.2.0-edge.4
+  - @memberjunction/ai-agent-harness@6.2.0-edge.4
+  - @memberjunction/ai-agent-manager@6.2.0-edge.4
+  - @memberjunction/database-designer-core@6.2.0-edge.4
+  - @memberjunction/ai-form-builder@6.2.0-edge.4
+  - @memberjunction/action-runtime-host@6.2.0-edge.4
+  - @memberjunction/messaging-adapters@6.2.0-edge.4
+  - @memberjunction/task-graph@6.2.0-edge.4
+  - @memberjunction/computer-use-engine@6.2.0-edge.4
+  - @memberjunction/ai-reranker@6.2.0-edge.4
+  - @memberjunction/ai-segmentation@6.2.0-edge.4
+  - @memberjunction/content-autotagging@6.2.0-edge.4
+  - @memberjunction/feature-pipelines@6.2.0-edge.4
+  - @memberjunction/tag-engine-base@6.2.0-edge.4
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.4
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.4
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.4
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.4
+  - @memberjunction/remote-browser-server@6.2.0-edge.4
+  - @memberjunction/actions-base@6.2.0-edge.4
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.4
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.4
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.4
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.4
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.4
+  - @memberjunction/actions-content-autotag@6.2.0-edge.4
+  - @memberjunction/archiving-engine@6.2.0-edge.4
+  - @memberjunction/communication-types@6.2.0-edge.4
+  - @memberjunction/entity-communications-base@6.2.0-edge.4
+  - @memberjunction/communication-ms-graph@6.2.0-edge.4
+  - @memberjunction/communication-sendgrid@6.2.0-edge.4
+  - @memberjunction/doc-utils@6.2.0-edge.4
+  - @memberjunction/external-data-sources@6.2.0-edge.4
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.4
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.4
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.4
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.4
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.4
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.4
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.4
+  - @memberjunction/integration-actions@6.2.0-edge.4
+  - @memberjunction/queue@6.2.0-edge.4
+  - @memberjunction/react-linter@6.2.0-edge.4
+  - @memberjunction/record-comparison@6.2.0-edge.4
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.4
+  - @memberjunction/web-search-engine@6.2.0-edge.4
+  - @memberjunction/work-queue-engine@6.2.0-edge.4
+  - @memberjunction/esignature@6.2.0-edge.4
+  - @memberjunction/geo-core@6.2.0-edge.4
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.4
+  - @memberjunction/ai-anthropic@6.2.0-edge.4
+  - @memberjunction/ai-azure@6.2.0-edge.4
+  - @memberjunction/ai-bedrock@6.2.0-edge.4
+  - @memberjunction/ai-betty@6.2.0-edge.4
+  - @memberjunction/ai-betty-bot@6.2.0-edge.4
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.4
+  - @memberjunction/ai-cerebras@6.2.0-edge.4
+  - @memberjunction/ai-cohere@6.2.0-edge.4
+  - @memberjunction/ai-deepinfra@6.2.0-edge.4
+  - @memberjunction/ai-fireworks@6.2.0-edge.4
+  - @memberjunction/ai-groq@6.2.0-edge.4
+  - @memberjunction/ai-heygen@6.2.0-edge.4
+  - @memberjunction/ai-inception@6.2.0-edge.4
+  - @memberjunction/ai-lmstudio@6.2.0-edge.4
+  - @memberjunction/ai-llamacpp@6.2.0-edge.4
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.4
+  - @memberjunction/ai-minimax@6.2.0-edge.4
+  - @memberjunction/ai-mistral@6.2.0-edge.4
+  - @memberjunction/ai-ollama@6.2.0-edge.4
+  - @memberjunction/ai-siliconflow@6.2.0-edge.4
+  - @memberjunction/ai-zhipu@6.2.0-edge.4
+  - @memberjunction/ai-xai@6.2.0-edge.4
+  - @memberjunction/work-queue-server@6.2.0-edge.4
+  - @memberjunction/remote-browser-selfhost@6.2.0-edge.4
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.4
+  - @memberjunction/ai-vectors-memory-server@6.2.0-edge.4
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.4
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.4
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.4
+  - @memberjunction/archiving-action@6.2.0-edge.4
+  - @memberjunction/auth-providers@6.2.0-edge.4
+  - @memberjunction/data-context-server@6.2.0-edge.4
+  - @memberjunction/rubrics-base@6.2.0-edge.4
+  - @memberjunction/server-extensions-core@6.2.0-edge.4
+  - @memberjunction/work-queue-samples@6.2.0-edge.4
+  - @memberjunction/esignature-docusign@6.2.0-edge.4
+  - @memberjunction/esignature-dropboxsign@6.2.0-edge.4
+  - @memberjunction/esignature-pandadoc@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Minor Changes
+
+- 60bd774: Form contributions can be metadata rows, not only compiled panels, and users can place, share, hide and remove them from the form itself.
+
+  **Contributions from metadata.** A `MJ: Entity Form Contributions` row (migration `V202610051244__v6.2.x__Entity_Form_Contributions`) mounts a `MJ: Components` row (`Type='Widget'`, spec `componentRole: 'form-panel'`) on an entity's form. It carries the same registration bag as `@RegisterClassEx` plus `Presentation`, `Title`, `Icon`, `Configuration`, `Precedence` and User/Role/Global scope. `CollectFormContributionRegistrations` merges rows with class registrations, and the form collapses the list once per resolve (`ResolveFormContributionWinners`): one winner per `ContributionKey`, the higher rank wins, a compiled panel wins a tie against any row, and between rows `User` beats `Role` beats `Global` (`FormContributionOutranks`). `CollectFormPanelRegistrations` stays as a deprecated wrapper that returns compiled registrations only. Wildcard (`'*'`) registrations take part on every form, but their place claims are ignored: one that claims a grid, a section or a tab replaces nothing, and one that names a section to draw in draws at its slot. `InteractiveFormsEngine` caches the rows and the full custom forms (in the browser, the shared ones and the signed-in user's own) and fetches each panel component by ID once (`GetComponentByID`); `InteractiveFormPanelComponent` renders them, and a panel can change only the fields it claims, in edit mode. On the 11 identity, permission and form-metadata entities in `RESTRICTED_FORM_ENTITIES`, only `User` rows and full custom forms render.
+
+  **One rule set, shared by the browser and the server.** The contribution key is derived once (`ResolveContributionWriteKey` in `@memberjunction/interactive-component-types/forms`). `@memberjunction/core-entities` `custom/FormScope/` holds the spec-to-row mapper (`ApplyContributionSpecToRow`), the claim validator (`ContributionClaimRefusal`), the scope rules (`FormScopeWriteRefusal`, which normalizes Scope and fails closed, `ComponentWriteRefusal`, `FormRowComponentRefusal`, `ComponentNameCollisionRefusal`, `IsCallersOwnComponent`, `IsCanonicalFormScope`, `ContributionScopeRank`, `FormContributionOutranks`, `IsSelectableFormOverride`, `FormScopeAllowedOnEntity`, `UserCanManageFormDefaults`), the hide-setting key helpers, and the retire rule (`ActiveContributionSiblings`, which compares keys ignoring case as the SQL Server unique index does).
+
+  **What a panel can stand in for.** One claim per row, enforced by the database: a related grid, one or several field sections (`ReplacesSectionKey`, `ReplacesSectionKeys`), a group of fields (`ReplacesFieldNames`, rendered once inside that section), or a place inside a section (`InSectionKey` + `SectionPosition`). A compiled panel renders at the slot it registered for, and a panel standing in for something takes its place. The `top-area` slot is accepted by the CHECK constraint but no form emits it, so the placement dialog does not offer it.
+
+  **Authoring.** New actions `Create Form Contribution`, `Modify Form Contribution`, `Activate Form Contribution Version`, `Get Form Contributions For Entity` and `Get Form Composition For Entity`. The write actions, and the existing Modify / Activate / Revert Interactive Form actions, change only the caller's own `User` rows; a `Role` or `Global` row returns `FORBIDDEN` for every caller. A spec with more than one claim returns `INVALID_CLAIM` before any write. The contribution actions write the Component and the row in one transaction, and so do the Modify and Activate Interactive Form paths for a full form's Component and override; Create and Revert Interactive Form do not. Modify and Activate Interactive Form set the prior version aside after that transaction, and Activate returns `PERSIST_FAILED`, with the new form already Active, when it cannot. Activating a target that is already Active also sets aside the caller's other Active personal forms for that entity. `Modify Form Contribution` accepts an optional `Precedence`. `Get Form Composition For Entity` answers for the form the user sees as far as metadata can tell (hidden panels, restricted entities, the same collapse; no compiled panels, and no rows while the kill switch is off) and returns `QUERY_FAILED` when a query fails. The artifact viewer previews a form-panel spec and offers **Add to my form**, which opens a placement dialog: the entity's real form, read-only and scaled, with the panel drawn where it will go, the positions the form actually has, order within a position, what it replaces, and draft or active. The dialog starts from the claims the panel proposes that it offers on the open form, and on a full custom form the panel starts as a draft. New `mj-icon-picker` (`@memberjunction/ng-ui-components`) chooses a Font Awesome solid or regular icon by looking at it.
+
+  **Managing a form.** A "Manage this form" drawer lists the form choice and every panel; Escape closes it and focus stays inside it. Any user can hide a panel shared with them and remove their own. Hide and Show change the open form at once: its slot-mounted panels remount, and a stock grid comes back when the panel that took it over is hidden. Publishing a panel or a full custom form to a role or everyone needs the new `Manage Form Defaults` authorization (Developer and Integration; owners count). `MJEntityFormContributionEntityServer` and `MJEntityFormOverrideEntityServer` enforce it on every save, replayed save and delete. Turning a panel on, or publishing it, retires the Active sibling for the same audience and key in the same transaction and sets the panel component's status. The stock UI role can create and update `MJ: Components` (not delete), so any user can create or change their own panel through the actions and turn it on, off or to a draft in the drawer. Without `Manage Form Defaults` the server requires the component to be the caller's own (`IsCallersOwnComponent`): used only by their own personal rows, or used by no row and created by them, as its Internal `Create` record in `MJ: Record Changes` shows. That applies to any update or delete of the component, whatever columns it changes (`MJComponentEntityServer`, `ComponentWriteRefusal`), to a contribution or override row created or re-pointed at it (`FormRowComponentRefusal`), and to reusing its name (`ComponentNameCollisionRefusal`, names compared trimmed and lower-cased, in any namespace, and sent as a Unicode literal on SQL Server); a form can also load a component by name, so a component no row uses still matters. With the grant, a delete or a change to a component's specification, status, name, namespace or type, and pointing a row at it, are refused only when another user's personal row uses the component. The reads run as the caller in one batch, the changed columns come from the stored row, and a failed read refuses the write. Publishing a draft, an off panel or a set-aside form turns it on, and the chooser says so. A set-aside (`Inactive`) shared form is retracted; a set-aside personal form stays in its owner's picker. The placement preview never saves form state.
+
+  **Form context.** The record container publishes its full composition snapshot to `FormCompositionRegistry` (`@memberjunction/ng-base-forms`), where the apply path reads it. Agents get a compact `FormAgentContext` in `AdditionalContext.Form` (entity, record key, form choice, and each section's key, title, variant, hidden flag and holding contribution), published by the record tab while it is the tab on screen. `RecordPrimaryKey` is a `CompositeKey.ToURLSegment()` string, or null for an unsaved record. The `SkipFormContext` mirror in `@askskip/types` must follow this shape.
+
+  **Kill switch.** On a Node host, `MJ_FORMS_METADATA_CONTRIBUTIONS=false` makes the engine on that process load no row. In Explorer, the `MJ: Instance Configurations` key `Forms.MetadataContributions.Enabled` set to `false` turns rows off on every form; the shell applies it after `InstanceConfigEngine.Config()` and before any form opens, it can only turn the source off, and the source stays on when Instance Config fails to load. `Get Form Contributions For Entity` and `Get Form Composition For Entity` list no row when either setting is off and report `MetadataContributionsEnabled`. The write actions still write rows. The seed row reaches a database through `mj sync push`.
+
+  **Section counts and empty sections.** A saved record fetches every related-section count and the tag, attachment and version badges in one `RunViews` call; an all-`count_only` batch runs as one `UNION ALL` statement in `GenericDatabaseProvider`, with each view's security path intact. New `whenEmpty` (`'show'` default | `'hide'` | `'more'`) and `showCount` on `EntityRelationship.Configuration.UI` and on contributions, with entity defaults `UI.Form.RelatedWhenEmpty` and `UI.Form.ShowRelatedCounts`.
+
+  **Fixes.** Eleven compiled panel registrations named their entity without the `MJ: ` prefix: the five overview cards and the realtime panel mounted only through the slot host's loose name match, which the rail did not apply, and the five header panels also used `slot: 'header'`, which is not a `FormPanelSlot`, so they never rendered. All eleven now use `MJ: ` names and the slot host matches names exactly, so the hero headers render above the overview cards on `MJ: Users`, `MJ: Companies`, `MJ: Employees`, `MJ: Conversations` and `MJ: AI Agent Categories`. The overview cards query `MJ: ` entity names (four of them queried unprefixed names and showed empty states), the overview cards and the realtime panel show a load error instead of an empty state when a query fails, and conversation turn pills and counts use the stored `User`/`AI` roles. CodeGen no longer corrupts generated validators that contain escapes, and a table-level validator's metadata guard includes the validator's `Name`.
+
+  **Behaviour changes to know about.** `BaseFormPanel.Validate()` now runs on Save (through `BaseFormComponent.ValidateAsync()`) and may return a Promise. A React panel whose `Validate` throws does not block the save and shows the failure in the panel, as it does an error from `<mj-react-component>`; a field edit from a panel that the record refuses is logged and dropped. After upgrade, editing or deleting an existing `Role` or `Global` full custom form needs `Manage Form Defaults`, and an `mj sync push` of `Global` rows needs a sync user who holds it or is an Owner. The UI role gains Create and Update on `MJ: Components`. Without `Manage Form Defaults`, whatever role grants component rights, a caller can change or delete a component, on any column, only when it is their own (used only by their own personal rows, or used by none and created by them), and two such users cannot give components the same name. With the grant, a delete or a change to one of the five guarded columns (specification, status, name, namespace or type) is refused only when another user's personal row uses the component, and a change to any other column passes. `MJRecordChangeEntityServer` refuses a caller creating a record change whose `Source` is `Internal` and `Type` is `Create` through the API; other record changes, such as version-label snapshots, are unchanged. `mj sync push` runs as the `System` user, which must hold the Developer role and so holds the grant by default; a sync user that is neither an Owner nor a holder of the grant can push changes only to components of its own. Every `mj-form-field` carries `data-field-name` and `data-field-label`. Collapsible-panel move up/down follows the visual order. New user setting `mj.formPanels.hidden.<entity>`; the existing `mj.formVariant.<entity>` is also read by `Get Form Composition For Entity`. `ng-conversations` gains a type-only dependency on `ng-base-forms`. `Get Active Form For Entity` applies the restricted-entity rule, so a Role or Global form on one of those entities is neither active nor listed. A `form-panel` spec must set `entityName`; the artifact viewer no longer falls back to `dataRequirements` for a panel.
+
+  **PostgreSQL.** `UQ_EntityFormContribution_Key` and `UQ_EntityFormContribution_RelatedClaim` include nullable columns (`UserID`, `RoleID`, `RelatedJoinField`). SQL Server treats NULLs as equal in a unique index; PostgreSQL does not, so the converted indexes need `NULLS NOT DISTINCT` (PostgreSQL 15+) or a `COALESCE` expression index to refuse the same duplicates. PostgreSQL also compares the key case-sensitively, so there the case-insensitive retire rule is stricter than the index.
+
+  **Deploy order:** deploy the server code before pushing the metadata. The UI role's grants ship as metadata only: write access to `MJ: Entity Form Contributions` and `MJ: Entity Form Overrides`, and Create and Update on `MJ: Components`. Only the new server subclasses keep that access to the user's own rows and components, so the component guard must be live before the UI role gains Update: apply the release build's consolidated metadata-sync migration together with the server deploy, never before it. A development database that already ran an earlier copy of the migration needs a Flyway repair or a rebuild.
+
+- 49e0bd8: Add the MemberJunction Durable Work Queue and Messaging Framework:
+  - **Core & Data Layer**: Transport-neutral queue contracts, database schema and entities for transports, topics, subscriptions, messages, deliveries, and deduplication ledger, backed by guarded-write stored procedures (`spWorkQueue*`) with SQL Server and PostgreSQL support.
+  - **Transports**: Native Database transport driver, consumer, and operator; AWS transport (`@memberjunction/work-queue-aws` with SNS topic publishing, SQS FIFO consumer, visibility-timeout leases, dead-letter redrive, binding validation, and LocalStack conformance); and in-memory reference transport.
+  - **Runtime & Host**: Competing-consumer `WorkQueueHost` (supporting continuous daemon and one-shot `RunOnce` container modes), `WorkQueueSweeper` (handling lease expiry and retention purging under a distributed sweep lock), REST publish endpoint (`POST /work-queue/topics/{topic}/messages` with API-key and scope authorization), and seven Remote Operations for operator control (`WorkQueue.GetSubscriptionStats`, `ReplayDeadLetter`, `DiscardDelivery`, `ValidateBindings`, etc.).
+  - **Operator Surface**: Explorer `WorkQueueDashboard` with Overview, Dead Letters (envelope/payload inspection and replay/discard), Partitions (blocked, in-flight, and idle keys), and Bindings validation tabs, plus a new "Work Queue" application record.
+  - **Tooling & Samples**: `mj queue` CLI commands (stats, dead-letters, partitions, replay, discard, backlog, work, export-topology, import-bindings, validate-bindings) and `@memberjunction/work-queue-samples` (`HelloWorldHandler` with sample topologies).
+
+### Patch Changes
+
+- 28df136: In-memory vector search is faster, keeps its index current incrementally, and on a server no longer blocks the event loop.
+
+  **`@memberjunction/ai-vectors-memory`** (browser-safe; same public API)
+  - **Packed storage.** Vectors are stored in one contiguous typed array with cached norms, not a `Map` of number arrays. `float64` (the default) gives results bit-identical to before. `new SimpleVectorService({ Precision: 'float32' })` halves the memory for embeddings. Results are re-scored with the same kernels, so `FindNearest`, `FindSimilar`, `FindAboveThreshold`, K-Means and DBSCAN return exactly what they did before.
+  - **Faster kernels.** Cosine, euclidean and dot product scans are specialised per precision and reuse cached norms. In JavaScript alone, a top-10 cosine search over 20,000 × 1,536 vectors drops from 80 ms to 65 ms. With a metadata filter it drops from 12 ms to 9 ms.
+  - **Async variants.** `FindNearestAsync`, `KMeansClusterAsync` and `DBSCANClusterAsync` let a registered `BaseVectorAccelerator` run the work elsewhere. Without one they run in-process.
+  - **Incremental index cache.** `SimpleVectorServiceProvider` applies entity saves and deletes to a loaded index in place instead of discarding it. Patching one row takes about 0.2 ms; the old rebuild re-read and re-parsed every row, about 4.4 s of parsing alone for 20,000 vectors. A remote invalidate without record data is re-read in one batched query, once per user an index was loaded as. A stale index keeps serving while it reloads. `InvalidateIndex` now also supersedes a load already in flight, so the next query cannot be answered from rows read before the invalidate.
+  - **`SimpleVectorDatabase` no longer serves one user's cached rows to another.** Rows are read as the calling user, but the parsed index was reused whenever the row count matched. A user who could see a different set of rows of the same size got the first user's rows. The cache is now reused only when the rows' keys, `__mj_UpdatedAt` values and vector presence, and the index config, all match. A row whose vector size differs from the rest is now skipped, with one log line, instead of failing every query. An empty query vector now returns a failure response instead of throwing.
+  - **`SimpleVectorDatabase` applies metadata filters.** `QueryIndex` used to ignore `filter`, so a search scope's `MetadataFilter` — including a tenant push-down — had no effect on this driver. It is now evaluated in memory (`$eq $ne $gt $gte $lt $lte $in $nin $exists $and $or`), and a filter it cannot apply fails the query instead of running unfiltered. The evaluator is exported as `CompileMetadataFilter`. The driver now also reports `IsReadOnly = true` and `RequiresAPIKey = false`, and `ListVectorIDs` returns the contract's `NextPaginationToken` (it returned `NextCursor`); `SimpleVectorServiceProvider.ListVectorIDs` had the same bug.
+  - **Fixes.** A query whose dimensions differ from the index, or an unknown metric, is logged once rather than once per row. `GetVector` and `ExportVectors` return copies, never live storage.
+
+  **`@memberjunction/ai-vectors-memory-server`** (new, server-only)
+
+  Registers a `WorkerPoolVectorAccelerator`. Under 32 concurrent searches the longest event-loop stall drops from 2.5 s to 13 ms. Stores are allocated in `SharedArrayBuffer`, so large searches and clustering run on a worker-thread pool without copying. Exact searches use the optional `usearch` native SIMD backend, but only when its candidate set can be proven complete. Otherwise they fall back to JavaScript. Opt-in HNSW approximate search (`MJ_VECTOR_ANN=1`) is available for very large cosine indexes. Every failure degrades to in-process work. The browser-manifest leakage gate denies the package.
+
+  **`@memberjunction/core-entities-server`.** When the embedder returns an empty vector or throws, `MJQueryEntityServer` now clears the stored vector (both columns and the model ID) and logs the error, as `MJTagEntityServer` already did, instead of keeping a vector computed from the previous text. The save still succeeds.
+
+  **Consumers.** `AIEngine` (notes, examples), `TagEngine` and `QueryEngineServer` use `float32` storage and `FindNearestAsync`. `ClusteringEngine` uses the async clustering methods. `@memberjunction/server-bootstrap` loads the server accelerator, so a standard MJAPI gets it with no configuration.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies
+- Updated dependencies [49e0bd8]
+- Updated dependencies [3023468]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [54f4bc1]
+- Updated dependencies [0a75bb2]
+- Updated dependencies [fe39606]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [b545842]
+- Updated dependencies [24ddecc]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [801036d]
+- Updated dependencies [bea2386]
+- Updated dependencies [d046715]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [72e082b]
+- Updated dependencies [28c92e0]
+- Updated dependencies [997fe44]
+- Updated dependencies [3204a32]
+- Updated dependencies [a8e162d]
+- Updated dependencies [1595b7d]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [fbad999]
+- Updated dependencies [4840fff]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [8db8973]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [eeee8d4]
+- Updated dependencies [28df136]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/core-entities-server@6.2.0-edge.3
+  - @memberjunction/generic-database-provider@6.2.0-edge.3
+  - @memberjunction/server@6.2.0-edge.3
+  - @memberjunction/codegen-lib@6.2.0-edge.3
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.3
+  - @memberjunction/ai-engine-base@6.2.0-edge.3
+  - @memberjunction/tag-engine-base@6.2.0-edge.3
+  - @memberjunction/core-actions@6.2.0-edge.3
+  - @memberjunction/ai-agents@6.2.0-edge.3
+  - @memberjunction/computer-use-engine@6.2.0-edge.3
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.3
+  - @memberjunction/ai-prompts@6.2.0-edge.3
+  - @memberjunction/testing-engine@6.2.0-edge.3
+  - @memberjunction/testing-integration@6.2.0-edge.3
+  - @memberjunction/ai-gemini@6.2.0-edge.3
+  - @memberjunction/ai-vertex@6.2.0-edge.3
+  - @memberjunction/ai-anthropic@6.2.0-edge.3
+  - @memberjunction/rubrics@6.2.0-edge.3
+  - @memberjunction/ai-openai@6.2.0-edge.3
+  - @memberjunction/ai-bridge-server@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+  - @memberjunction/actions-base@6.2.0-edge.3
+  - @memberjunction/task-graph@6.2.0-edge.3
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.3
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.3
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.3
+  - @memberjunction/ai-vectors-memory-server@6.2.0-edge.3
+  - @memberjunction/work-queue-engine@6.2.0-edge.3
+  - @memberjunction/work-queue-server@6.2.0-edge.3
+  - @memberjunction/work-queue-samples@6.2.0-edge.3
+  - @memberjunction/ai-agent-harness@6.2.0-edge.3
+  - @memberjunction/predictive-studio@6.2.0-edge.3
+  - @memberjunction/ai-assemblyai@6.2.0-edge.3
+  - @memberjunction/ai-azure@6.2.0-edge.3
+  - @memberjunction/ai-bedrock@6.2.0-edge.3
+  - @memberjunction/ai-betty@6.2.0-edge.3
+  - @memberjunction/ai-betty-bot@6.2.0-edge.3
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.3
+  - @memberjunction/ai-cerebras@6.2.0-edge.3
+  - @memberjunction/ai-cohere@6.2.0-edge.3
+  - @memberjunction/ai-deepinfra@6.2.0-edge.3
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.3
+  - @memberjunction/ai-fireworks@6.2.0-edge.3
+  - @memberjunction/ai-groq@6.2.0-edge.3
+  - @memberjunction/ai-heygen@6.2.0-edge.3
+  - @memberjunction/ai-huggingface@6.2.0-edge.3
+  - @memberjunction/ai-inception@6.2.0-edge.3
+  - @memberjunction/ai-inworld@6.2.0-edge.3
+  - @memberjunction/ai-lmstudio@6.2.0-edge.3
+  - @memberjunction/ai-llamacpp@6.2.0-edge.3
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.3
+  - @memberjunction/ai-minimax@6.2.0-edge.3
+  - @memberjunction/ai-mistral@6.2.0-edge.3
+  - @memberjunction/ai-ollama@6.2.0-edge.3
+  - @memberjunction/ai-openrouter@6.2.0-edge.3
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.3
+  - @memberjunction/ai-siliconflow@6.2.0-edge.3
+  - @memberjunction/ai-zhipu@6.2.0-edge.3
+  - @memberjunction/ai-xai@6.2.0-edge.3
+  - @memberjunction/remote-browser-server@6.2.0-edge.3
+  - @memberjunction/ai-reranker@6.2.0-edge.3
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.3
+  - @memberjunction/actions@6.2.0-edge.3
+  - @memberjunction/action-runtime-host@6.2.0-edge.3
+  - @memberjunction/communication-ms-graph@6.2.0-edge.3
+  - @memberjunction/content-autotagging@6.2.0-edge.3
+  - @memberjunction/queue@6.2.0-edge.3
+  - @memberjunction/messaging-adapters@6.2.0-edge.3
+  - @memberjunction/record-set-processor@6.2.0-edge.3
+  - @memberjunction/search-engine@6.2.0-edge.3
+  - @memberjunction/templates@6.2.0-edge.3
+  - @memberjunction/ai-agent-manager@6.2.0-edge.3
+  - @memberjunction/ai-form-builder@6.2.0-edge.3
+  - @memberjunction/ai-segmentation@6.2.0-edge.3
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.3
+  - @memberjunction/database-designer-actions@6.2.0-edge.3
+  - @memberjunction/database-designer-core@6.2.0-edge.3
+  - @memberjunction/feature-pipelines@6.2.0-edge.3
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.3
+  - @memberjunction/actions-apollo@6.2.0-edge.3
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.3
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.3
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.3
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.3
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.3
+  - @memberjunction/actions-content-autotag@6.2.0-edge.3
+  - @memberjunction/archiving-engine@6.2.0-edge.3
+  - @memberjunction/communication-types@6.2.0-edge.3
+  - @memberjunction/entity-communications-base@6.2.0-edge.3
+  - @memberjunction/communication-sendgrid@6.2.0-edge.3
+  - @memberjunction/doc-utils@6.2.0-edge.3
+  - @memberjunction/encryption@6.2.0-edge.3
+  - @memberjunction/external-data-sources@6.2.0-edge.3
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.3
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.3
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.3
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.3
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.3
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.3
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.3
+  - @memberjunction/integration-actions@6.2.0-edge.3
+  - @memberjunction/integration-engine@6.2.0-edge.3
+  - @memberjunction/storage@6.2.0-edge.3
+  - @memberjunction/react-linter@6.2.0-edge.3
+  - @memberjunction/record-cloning@6.2.0-edge.3
+  - @memberjunction/record-comparison@6.2.0-edge.3
+  - @memberjunction/scheduling-actions@6.2.0-edge.3
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.3
+  - @memberjunction/scheduling-engine@6.2.0-edge.3
+  - @memberjunction/web-search-engine@6.2.0-edge.3
+  - @memberjunction/esignature@6.2.0-edge.3
+  - @memberjunction/geo-core@6.2.0-edge.3
+  - @memberjunction/remote-browser-selfhost@6.2.0-edge.3
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.3
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.3
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.3
+  - @memberjunction/archiving-action@6.2.0-edge.3
+  - @memberjunction/auth-providers@6.2.0-edge.3
+  - @memberjunction/data-context-server@6.2.0-edge.3
+  - @memberjunction/record-cloning-base@6.2.0-edge.3
+  - @memberjunction/rubrics-base@6.2.0-edge.3
+  - @memberjunction/server-extensions-core@6.2.0-edge.3
+  - @memberjunction/esignature-docusign@6.2.0-edge.3
+  - @memberjunction/esignature-dropboxsign@6.2.0-edge.3
+  - @memberjunction/esignature-pandadoc@6.2.0-edge.3
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.3
+  - @memberjunction/dynamic-packages@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Minor Changes

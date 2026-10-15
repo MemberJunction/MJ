@@ -18,7 +18,6 @@ export class MJMeetingParticipantFormComponent extends BaseFormComponent {
             { sectionKey: 'meetingContext', sectionName: 'Meeting Context', isExpanded: true },
             { sectionKey: 'participantIdentity', sectionName: 'Participant Identity', isExpanded: true },
             { sectionKey: 'meetingParticipation', sectionName: 'Meeting Participation', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

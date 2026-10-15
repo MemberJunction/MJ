@@ -126,7 +126,10 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAISkillPermissions', sectionName: 'AI Skill Permissions', isExpanded: false },
             { sectionKey: 'mJProjects', sectionName: 'Projects', isExpanded: false },
             { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false },
+            { sectionKey: 'mJWorkQueueDeliveries', sectionName: 'Work Queue Deliveries', isExpanded: false },
             { sectionKey: 'mJAISkills', sectionName: 'AI Skills', isExpanded: false },
+            { sectionKey: 'mJWorkQueueMessages', sectionName: 'Work Queue Messages', isExpanded: false },
+            { sectionKey: 'mJEntityFormContributions', sectionName: 'Entity Form Contributions', isExpanded: false },
             { sectionKey: 'mJRubricVersions', sectionName: 'Rubric Versions', isExpanded: false },
             { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false },
             { sectionKey: 'mJRubricEvaluations', sectionName: 'Rubric Evaluations', isExpanded: false },
@@ -134,7 +137,8 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJInteractionEvents', sectionName: 'Interaction Events', isExpanded: false },
             { sectionKey: 'mJMeetingParticipants', sectionName: 'Meeting Participants', isExpanded: false },
             { sectionKey: 'mJMeetings', sectionName: 'Meetings', isExpanded: false },
-            { sectionKey: 'mJInteractionOffers', sectionName: 'Interaction Offers', isExpanded: false }
+            { sectionKey: 'mJInteractionOffers', sectionName: 'Interaction Offers', isExpanded: false },
+            { sectionKey: 'mJConversationBranches', sectionName: 'Conversation Branches', isExpanded: false }
         ]);
     }
 }

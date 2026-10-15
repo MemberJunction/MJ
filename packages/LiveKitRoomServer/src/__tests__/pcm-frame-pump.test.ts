@@ -160,6 +160,17 @@ describe('PcmFramePump', () => {
     expect(clock.HasTicker).toBe(false);
   });
 
+  it('reports how much sent audio is still ahead of real time', () => {
+    const p = pump({ Music: constant(0.5, 0.1), Loop: false }); // 100 ms = 5 frames, all inside the initial lead
+    p.Start();
+    expect(ended).toEqual(['Completed']);
+    expect(p.QueuedAheadMs).toBe(100);
+    clock.NowMs = 60;
+    expect(p.QueuedAheadMs).toBe(40);
+    clock.NowMs = 250;
+    expect(p.QueuedAheadMs).toBe(0);
+  });
+
   it('refuses empty music', () => {
     expect(() => pump({ Music: new Int16Array(0) })).toThrow(/non-empty/);
   });

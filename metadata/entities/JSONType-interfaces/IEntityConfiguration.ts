@@ -131,6 +131,20 @@ export interface IEntityFormConfiguration {
      * `inclusion: 'Primary'` is never capped by this number.
      */
     PrimaryRelatedBudget?: number;
+
+    /**
+     * Default empty-section behaviour for this form's related sections when a
+     * relationship does not set `UI.whenEmpty` itself.
+     * `'show'` | `'hide'` | `'more'` — see `IEntityRelationshipUIConfiguration.whenEmpty`.
+     * Omit to treat as `'show'`.
+     */
+    RelatedWhenEmpty?: 'show' | 'hide' | 'more';
+
+    /**
+     * Default for prefetching related-section row counts (badges) when a
+     * relationship does not set `UI.showCount` itself. Omit to treat as `true`.
+     */
+    ShowRelatedCounts?: boolean;
 }
 
 /**
@@ -144,6 +158,13 @@ export interface IEntityCloneConfiguration {
     Enabled?: boolean;
     /** Hard refusal: this entity's rows are never created by the clone engine, as root or as child. Overrides every relationship policy. Use for audit, run, credential and metadata entities. */
     NotCloneable?: boolean;
+    /**
+     * Lets a NotCloneable entity's rows be copied after all, but only as children of a template copy: a
+     * clone run under a preset with `TemplateSourceField` whose source record has that flag set. Use for
+     * rows that are private to a person (conversations, dashboard preferences) and must never be copied
+     * from one user to another, yet belong in a template built to be copied.
+     */
+    CloneableFromTemplate?: boolean;
     /** Shown to users and returned in warnings when NotCloneable or Enabled=false. */
     NotCloneableReason?: string;
     /** Authorization name checked with ancestors. Default 'Clone Records'; resolved per §9.1. */
@@ -305,5 +326,13 @@ export interface IClonePreset {
     Options?: Record<string, unknown>;
     /** Edge policy overrides, keyed by related entity name. */
     Relationships?: Record<string, { Policy: 'Deep' | 'Reference' | 'Skip' }>;
+    /**
+     * Makes this a template preset. Names a boolean field on the root entity; the preset is offered and
+     * applied only when the source record has it set (e.g. `IsTemplate` on `MJ: Users`), and the plan is
+     * blocked otherwise. A template preset may open edges the configuration Locks and copy children whose
+     * entity is `CloneableFromTemplate`: those protections keep a person's private records from being
+     * copied to someone else, which does not apply to a record built to be copied.
+     */
+    TemplateSourceField?: string;
 }
 

@@ -1,9 +1,12 @@
 import {
+    AIErrorInfo,
     AudioModel,
     AudioSplitter,
     BaseAudioGenerator,
     BaseSpeechToText,
+    BuildCancellationErrorInfo,
     ErrorAnalyzer,
+    IsRequestAborted,
     ModelUsage,
     PronounciationDictionary,
     SpeechResult,
@@ -57,6 +60,18 @@ function supportsVerboseJson(model: string): boolean {
 }
 
 /**
+ * Classifies a failed transcription. A request ended by its `CancellationToken` is a cancellation
+ * (never failed over), or a network error when the signal was aborted by a timeout; anything else is
+ * the analyzer's reading of the SDK's error, which keeps its HTTP status.
+ */
+function classifyTranscriptionError(error: unknown, signal: AbortSignal | undefined): AIErrorInfo {
+    if (IsRequestAborted(error, signal)) {
+        return BuildCancellationErrorInfo({ error, signal, provider: 'Groq Whisper' });
+    }
+    return ErrorAnalyzer.analyzeError(error, 'Groq Whisper');
+}
+
+/**
  * Groq implementation of {@link BaseAudioGenerator}, covering speech-to-text via Whisper.
  *
  * Groq offers no text-to-speech surface, so `CreateSpeech` and the voice/dictionary methods
@@ -104,6 +119,9 @@ export class GroqAudioGenerator extends BaseAudioGenerator {
      * limits by audio-seconds per minute, so firing an hour of audio at once buys nothing
      * but 429s, and a partial failure mid-way would leave a transcript with an unmarked
      * hole in it.
+     *
+     * `params.CancellationToken` is passed to each piece's request, and no further piece is sent once
+     * it aborts; the failure is then classified as a cancellation.
      */
     public async SpeechToText(params: SpeechToTextParams): Promise<SpeechResult> {
         const result = new SpeechResult();
@@ -117,7 +135,8 @@ export class GroqAudioGenerator extends BaseAudioGenerator {
                 SPLIT_TARGET_BYTES,
                 this.Splitter,
                 'Groq',
-                (piece) => this.transcribeOne(piece, model, params),
+                (piece, signal) => this.transcribeOne(piece, model, params, signal),
+                params.CancellationToken,
             );
 
             if (transcription.text.trim().length === 0) {
@@ -135,7 +154,7 @@ export class GroqAudioGenerator extends BaseAudioGenerator {
                 result.usage = ModelUsage.ForMedia('Seconds', transcription.durationSeconds);
             }
         } catch (error) {
-            const errorInfo = ErrorAnalyzer.analyzeError(error, 'Groq Whisper');
+            const errorInfo = classifyTranscriptionError(error, params.CancellationToken);
             result.success = false;
             result.errorMessage = error?.message || 'Unknown error occurred';
             // Kept so a caller can tell a rejected upload (a 400) from an outage: the message alone
@@ -159,7 +178,7 @@ export class GroqAudioGenerator extends BaseAudioGenerator {
         throw new Error('SpeechToText requires either audioData (Buffer) or audioFile (base 64 string)');
     }
 
-    private async transcribeOne(audio: Buffer, model: string, params: SpeechToTextParams): Promise<TranscriptionPiece> {
+    private async transcribeOne(audio: Buffer, model: string, params: SpeechToTextParams, signal: AbortSignal | undefined): Promise<TranscriptionPiece> {
         // `verbose_json` rather than `json` purely for the `duration` field — the quantity Groq
         // bills by. The transcript text is identical between the two formats. Models that would
         // reject verbose_json fall back to `json` and simply report no duration.
@@ -170,7 +189,7 @@ export class GroqAudioGenerator extends BaseAudioGenerator {
             language: params.language,
             prompt: params.prompt,
             temperature: params.temperature,
-        });
+        }, { signal });
 
         // groq-sdk types the verbose response as the plain transcription shape, without `duration`.
         // Narrow it here and range-check rather than trusting the cast: an absent or nonsense

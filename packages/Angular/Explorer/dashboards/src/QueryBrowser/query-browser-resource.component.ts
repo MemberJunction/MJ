@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ElementRef, NgZone, HostListener, ViewChild } from '@angular/core';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { GroupByUUID, RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey, RunQuery, RunQueryResult } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
@@ -807,10 +807,11 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
         // Use filtered queries (status + search filters applied)
         const visibleQueries = this.FilteredQueries;
+        const queriesByCategory = GroupByUUID(visibleQueries, q => q.CategoryID);
 
         // Create nodes for all categories, restoring expanded state
         for (const category of this.Categories) {
-            const queriesInCategory = visibleQueries.filter(q => UUIDsEqual(q.CategoryID, category.ID));
+            const queriesInCategory = queriesByCategory.Get(category.ID) ?? [];
             categoryMap.set(category.ID, {
                 category,
                 children: [],

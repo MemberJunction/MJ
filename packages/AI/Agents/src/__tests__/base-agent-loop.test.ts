@@ -56,8 +56,12 @@ import { LogErrorEx, LogStatus } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import type { AIEngine } from '@memberjunction/aiengine';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
 import { PayloadFeedbackManager } from '../PayloadFeedbackManager';
+import { AIAPIKeys } from '@memberjunction/ai';
+import { UserInfo as CoreUserInfo } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 // ============================================================================
 // Module mocks (boundaries only)
@@ -166,6 +170,8 @@ interface ScriptedActionParam {
 /** ActionResult-shaped record returned from the scripted RunAction boundary. */
 interface ScriptedActionResult {
     Success: boolean;
+    /** The raw result code (`ActionResult.ResultCode`) — set by the engine's own refusals, e.g. AUDIENCE_UNSUPPORTED. */
+    ResultCode?: string;
     Message: string;
     Params: ScriptedActionParam[];
     Result: { ResultCode: string } | null;
@@ -180,6 +186,10 @@ interface RunActionCall {
     activeSkillIDs?: unknown;
     /** `RunActionParams.RuntimeAPIKeyResolver` (the run's scoped key resolver) — absent when the run has no keys. */
     resolveAPIKey?: unknown;
+    /** `RunActionParams.CredentialScope` — absent when the run sets none. */
+    credentialScope?: unknown;
+    /** `RunActionParams.Audience` — absent when the run's audience adds no reader. */
+    audience?: unknown;
 }
 
 /** Save-queue flush diagnostics (shape from AgentRunStepSaveQueue.Flush). */
@@ -206,10 +216,13 @@ class MockStepEntity {
     public InputData: string | null = null;
     public OutputData: string | null = null;
     public PayloadAtStart: string | null = null;
+    public PayloadAtStartSourceStepID: string | null = null;
     public PayloadAtEnd: string | null = null;
     public Skills: string | null = null;
 
     public saveCount = 0;
+    /** True once the INSERT has landed (BaseEntity.IsSaved). */
+    public IsSaved = false;
 
     constructor(private readonly seq: number) {}
 
@@ -219,6 +232,7 @@ class MockStepEntity {
 
     public async Save(): Promise<boolean> {
         this.saveCount++;
+        this.IsSaved = true;
         return true;
     }
 }
@@ -281,6 +295,8 @@ class LoopHarness {
     public steps: MockStepEntity[] = [];
     public runActionCalls: RunActionCall[] = [];
     public runActionParamsJSON: string[] = [];
+    /** `RunActionParams.RunScope` per dispatch — kept off the call record so the toEqual assertions over it stay exact. */
+    public runScopes: unknown[] = [];
     /** Scripted RunAction responder — override per test. */
     public runAction: (call: RunActionCall) => ScriptedActionResult = () => ({
         Success: true,
@@ -314,6 +330,7 @@ class LoopHarness {
             Agents: [],
             AgentRelationships: [],
             AgentCategories: [],
+            ResolveAgentStorageAccountID: () => null,
             ScopedPromptParts: [],
             ScopedPromptConfigs: [],
             AgentTypes: [
@@ -363,9 +380,20 @@ class LoopHarness {
                     ResultCodes: { Items: [] },
                 },
             ],
-            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown }; RuntimeAPIKeyResolver?: unknown }): Promise<ScriptedActionResult> => {
+            RunAction: async (input: {
+                Action: { Name: string };
+                Params: ScriptedActionParam[];
+                Context?: { ActiveSkillIDs?: unknown };
+                RuntimeAPIKeyResolver?: unknown;
+                CredentialScope?: unknown;
+                Audience?: unknown;
+                RunScope?: unknown;
+            }): Promise<ScriptedActionResult> => {
+                this.runScopes.push(input.RunScope);
                 const call: RunActionCall = { actionName: input.Action.Name, params: input.Params, activeSkillIDs: input.Context?.ActiveSkillIDs };
                 if (input.RuntimeAPIKeyResolver !== undefined) call.resolveAPIKey = input.RuntimeAPIKeyResolver;
+                if (input.CredentialScope !== undefined) call.credentialScope = input.CredentialScope;
+                if (input.Audience !== undefined) call.audience = input.Audience;
                 // What any log of the whole RunActionParams could contain — kept off the call record so
                 // the toEqual assertions over runActionCalls stay exact.
                 this.runActionParamsJSON.push(JSON.stringify({ ...input, Action: input.Action.Name }));
@@ -455,6 +483,11 @@ class HarnessAgent extends BaseAgent {
     /** The decision service this agent asks through, so a test can spy on this agent's calls alone. */
     public get DecisionService(): AgentDecisionService {
         return this._agentDecisionService;
+    }
+
+    /** Builds the agent's base catalog (sub-agents + actions) from the given engine rows. */
+    public ExposeBuildAgentBaseCatalog(agent: MJAIAgentEntityExtended, engine: AIEngine) {
+        return this.buildAgentBaseCatalog(agent, engine);
     }
 }
 
@@ -629,7 +662,9 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         const [, prompt1, actionStep, prompt2] = harness.steps;
         expect(JSON.parse(prompt1.PayloadAtStart ?? 'null')).toEqual(initialPayload);
         expect(JSON.parse(prompt1.PayloadAtEnd ?? 'null')).toEqual(afterStep1);
-        expect(JSON.parse(actionStep.PayloadAtStart ?? 'null')).toEqual(afterStep1);
+        // The action step starts from prompt 1's end, so it stores a pointer to prompt 1 instead of a copy
+        expect(actionStep.PayloadAtStart).toBeNull();
+        expect(actionStep.PayloadAtStartSourceStepID).toBe(prompt1.ID);
         expect(JSON.parse(actionStep.PayloadAtEnd ?? 'null')).toEqual(afterStep1);
         expect(JSON.parse(prompt2.PayloadAtEnd ?? 'null')).toEqual(finalPayload);
 
@@ -789,6 +824,91 @@ describe('BaseAgent.Execute — the run\'s runtime API keys reach actions as a S
         const { agent } = makeAgent(script());
         await agent.Execute(makeParams());
         expect('resolveAPIKey' in harness.runActionCalls[0]).toBe(false);
+        expect('credentialScope' in harness.runActionCalls[0]).toBe(false);
+    });
+});
+
+describe('BaseAgent.Execute — a RuntimeOnly credential scope reaches every prompt and action in the run', () => {
+    // #601 in Skip: an org's key was rejected, failover reached a vendor the org had no key for, and
+    // the run finished on the platform's key. The scope is the caller saying "only my keys", so it
+    // has to arrive wherever a key is spent — or a path that drops it falls back silently.
+    const KEYS = [{ driverClass: 'GeminiLLM', apiKey: 'sk-gemini' }];
+    const okAction = () => { harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null }); };
+    const script = () => [() => llmEnvelope(actionsEnvelope()), () => llmEnvelope(successEnvelope())];
+
+    it('every prompt the agent runs carries the scope alongside the keys', async () => {
+        okAction();
+        const { agent, runner } = makeAgent(script());
+        await agent.Execute(makeParams({ apiKeys: KEYS, CredentialScope: 'RuntimeOnly' }));
+        expect(runner.Calls.length).toBeGreaterThan(0);
+        for (const call of runner.Calls) {
+            expect(call.CredentialScope).toBe('RuntimeOnly');
+            expect(call.apiKeys).toBe(KEYS);
+        }
+    });
+
+    it('the agent\'s own prompt, run as the system prompt\'s child, carries the scope too', async () => {
+        // The Loop type has a system prompt, so the agent's prompt goes out as a child prompt — with
+        // its own params, which the runner resolves keys for separately from the parent's.
+        okAction();
+        const { agent, runner } = makeAgent(script());
+        await agent.Execute(makeParams({ apiKeys: KEYS, CredentialScope: 'RuntimeOnly' }));
+        expect(runner.Calls.length).toBeGreaterThan(0);
+        for (const call of runner.Calls) {
+            const child = call.childPrompts?.[0]?.childPrompt;
+            expect(child).toBeDefined();
+            expect(child?.CredentialScope).toBe('RuntimeOnly');
+            expect(child?.apiKeys).toBe(KEYS);
+        }
+    });
+
+    describe('with a platform key for a class the run lacks', () => {
+        // Without a platform key the resolver answers undefined under ANY scope, so a dropped scope
+        // would pass unnoticed. With one, 'Any' would hand the action the platform's key.
+        const PLATFORM_ENV = 'AI_VENDOR_API_KEY__OPENAIIMAGEGENERATOR';
+        const clearKeyCache = (): void => {
+            (AIAPIKeys as unknown as Record<string, Record<string, string>>)['_cachedAPIKeys'] = {};
+        };
+        let saved: string | undefined;
+
+        beforeEach(() => {
+            saved = process.env[PLATFORM_ENV];
+            process.env[PLATFORM_ENV] = 'sk-platform-image';
+            clearKeyCache();
+        });
+
+        afterEach(() => {
+            if (saved === undefined) delete process.env[PLATFORM_ENV];
+            else process.env[PLATFORM_ENV] = saved;
+            clearKeyCache();
+        });
+
+        it('under the default scope the action falls back to the platform key — the control for the case below', async () => {
+            okAction();
+            const { agent } = makeAgent(script());
+            await agent.Execute(makeParams({ apiKeys: KEYS }));
+            const resolve = harness.runActionCalls[0].resolveAPIKey as (driverClass: string) => string | undefined;
+            expect(resolve('OpenAIImageGenerator')).toBe('sk-platform-image');
+        });
+
+        it('an action is told the scope, and the resolver has no platform fallback for a class the run lacks', async () => {
+            okAction();
+            const { agent } = makeAgent(script());
+            await agent.Execute(makeParams({ apiKeys: KEYS, CredentialScope: 'RuntimeOnly' }));
+            const call = harness.runActionCalls[0];
+            expect(call.credentialScope).toBe('RuntimeOnly');
+            const resolve = call.resolveAPIKey as (driverClass: string) => string | undefined;
+            expect(resolve('GeminiLLM')).toBe('sk-gemini');
+            expect(resolve('OpenAIImageGenerator')).toBeUndefined();
+        });
+    });
+
+    it('an action is told the scope even when the run carries no keys, so it does not reach for GetAIAPIKey', async () => {
+        okAction();
+        const { agent } = makeAgent(script());
+        await agent.Execute(makeParams({ CredentialScope: 'RuntimeOnly' }));
+        expect(harness.runActionCalls[0].credentialScope).toBe('RuntimeOnly');
+        expect('resolveAPIKey' in harness.runActionCalls[0]).toBe(false);
     });
 });
 
@@ -876,6 +996,75 @@ describe('BaseAgent.Execute — cancellation', () => {
         expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Actions']);
         // The action itself had already completed before the abort was observed.
         expect(harness.steps[2].Status).toBe('Completed');
+    });
+
+    it('a prompt the caller cancels mid-call finalizes the run Cancelled, not Failed, though the prompt came back as a fatal failure', async () => {
+        const controller = new AbortController();
+        const { agent, runner, flushSteps } = makeAgent([
+            () => {
+                controller.abort('user stopped the request');
+                return {
+                    success: false,
+                    status: 'Cancelled',
+                    cancelled: true,
+                    cancellationReason: 'user_requested',
+                    errorMessage: 'Chat completion was cancelled',
+                    chatResult: {
+                        success: false,
+                        errorInfo: { errorType: 'Unknown', severity: 'Fatal', canFailover: false, providerErrorCode: 'request_cancelled' },
+                    } as AIPromptRunResult['chatResult'],
+                };
+            },
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ cancellationToken: controller.signal }));
+
+        expect(runner.Calls).toHaveLength(1);
+        expect(result.success).toBe(false);
+        expect(harness.run.Status).toBe('Cancelled');
+        expect(harness.run.ErrorMessage).toBe('user stopped the request');
+        await flushSteps();
+        expect(harness.steps[1].StepType).toBe('Prompt');
+        expect(harness.steps[1].ErrorMessage).toBe('Cancelled during prompt execution');
+    });
+
+    it('a cancellation that lands right after nine failed steps still ends the run Cancelled, not by the consecutive-failure limit', async () => {
+        const controller = new AbortController();
+        const failures = Array.from({ length: 9 }, () => () => llmFailure('Rate limit exceeded — 429'));
+        const { agent, runner } = makeAgent([
+            ...failures,
+            () => {
+                controller.abort('user stopped the request');
+                return llmFailure('Chat completion was cancelled');
+            },
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ cancellationToken: controller.signal }));
+
+        expect(runner.Calls).toHaveLength(10);
+        expect(result.success).toBe(false);
+        expect(harness.run.Status).toBe('Cancelled');
+        expect(harness.run.ErrorMessage).toBe('user stopped the request');
+    });
+
+    it('a Stop that lands while a final answer is being processed still completes the run: the work had finished', async () => {
+        const controller = new AbortController();
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const onProgress = (progress: { step: string }): void => {
+            // Fires right after the prompt step's own cancellation check, while its answer is processed.
+            if (progress.step === 'decision_processing') {
+                controller.abort('user stopped too late');
+            }
+        };
+
+        const result = await agent.Execute(makeParams({ cancellationToken: controller.signal, onProgress }));
+
+        expect(controller.signal.aborted).toBe(true);
+        expect(runner.Calls).toHaveLength(1);
+        expect(result.success).toBe(true);
+        expect(harness.run.Status).toBe('Completed');
     });
 
     it('a token aborted before execution starts yields a cancelled result without creating a run or executing a prompt', async () => {
@@ -1206,6 +1395,20 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
             expect(asked.AgentID).toBe(AGENT_ID);
         });
 
+        it('asks on the run\'s execution scope, so the check spends the run\'s keys and never the platform\'s', async () => {
+            const keys = [{ driverClass: 'GeminiLLM', apiKey: 'sk-gemini' }];
+            const { agent } = makeAgent(truncatingScript([]));
+            const ask = vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.9));
+
+            await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY }, apiKeys: keys, configurationId: 'config-1', CredentialScope: 'RuntimeOnly' }));
+
+            expect(ask).toHaveBeenCalledTimes(1);
+            const scope = ask.mock.calls[0][0].ExecutionScope;
+            expect(scope?.apiKeys).toBe(keys);
+            expect(scope?.configurationId).toBe('config-1');
+            expect(scope?.CredentialScope).toBe('RuntimeOnly');
+        });
+
         it('uses the agent\'s decisionPromptName', async () => {
             harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ decisionsEnabled: true, payloadFeedbackCheck: true, decisionPromptName: 'Custom Decision' }) });
             const { agent } = makeAgent(truncatingScript([]));
@@ -1445,7 +1648,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
 
     /** Run params for an agent whose finishIf gates are `mode` (gates are opt-in; the default is off). */
     function gateParams(mode: 'on' | 'shadow'): ExecuteAgentParams {
-        return makeParams({ data: { __agentTypePromptParams: { finishIfMode: mode } } });
+        return makeParams({ data: { __agentTypePromptParams: { finishIfMode: mode } }, TrustReservedRunData: true });
     }
 
     function gatedActionsEnvelope(): LoopAgentResponse {
@@ -1652,6 +1855,27 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:') && c.includes('"id":"triage"'))).toBe(true);
     });
 
+    it('asks the finishIf gate and the turn\'s decisions on the run\'s execution scope', async () => {
+        const ask = answerDecisions(0.4);
+        const { agent } = makeAgent([
+            () => llmEnvelope(gatedActionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const keys = [{ driverClass: 'GeminiLLM', apiKey: 'sk-gemini' }];
+        const params: ExecuteAgentParams = { ...gateParams('on'), apiKeys: keys, configurationId: 'config-1', CredentialScope: 'RuntimeOnly' };
+
+        await agent.Execute(params);
+
+        const gateCalls = ask.mock.calls.filter(([args]) => 'q1' in args.Questions);
+        expect(gateCalls).toHaveLength(1);
+        expect(decisionCalls(ask)).toHaveLength(1);
+        for (const [args] of [...gateCalls, ...decisionCalls(ask)]) {
+            expect(args.ExecutionScope?.apiKeys).toBe(keys);
+            expect(args.ExecutionScope?.configurationId).toBe('config-1');
+            expect(args.ExecutionScope?.CredentialScope).toBe('RuntimeOnly');
+        }
+    });
+
     it('in shadow mode, records a passing gate, does not end the run, and asks the decisions for the next prompt', async () => {
         const ask = answerDecisions(0.95);
         const { agent, runner } = makeAgent([
@@ -1809,6 +2033,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         const result = await agent.Execute(makeParams({
             payload: { tickets: ['Printer on fire.', 'Password reset.', 'Coffee machine.'] },
             data: { __agentTypePromptParams: { decisionsMaxCallsPerTurn: 2 } },
+            TrustReservedRunData: true,
         }));
 
         expect(result.success).toBe(true);
@@ -1839,7 +2064,7 @@ describe('BaseAgent.Execute — a finishIfMode that is not a mode', () => {
             () => llmEnvelope(actionsEnvelope()),
             () => llmEnvelope(successEnvelope()),
         ]);
-        const result = await agent.Execute(makeParams({ data: { __agentTypePromptParams: { finishIfMode } } }));
+        const result = await agent.Execute(makeParams({ data: { __agentTypePromptParams: { finishIfMode } }, TrustReservedRunData: true }));
         expect(result.success).toBe(true);
         expect(runner.Calls).toHaveLength(2);
     }
@@ -2008,5 +2233,384 @@ describe("BaseAgent.Execute — a memory rerank's cost", () => {
         expect(result.success).toBe(false);
         expect(harness.run.ErrorMessage).toContain('Maximum token limit of 100 exceeded');
         expect(harness.runActionCalls).toHaveLength(0);
+    });
+});
+
+describe('BaseAgent.Execute — a run with an audience (ExecuteAgentParams.Audience)', () => {
+    const READER_ID = 'aaaaaaaa-0000-4000-8000-0000000000b2';
+    const UNKNOWN_ID = 'aaaaaaaa-0000-4000-8000-0000000000e2';
+    const READER = new CoreUserInfo(undefined, { ID: READER_ID, Name: 'Room Reader', Email: 'reader@test.mj', UserRoles: [] });
+    const room = { Audience: { Mode: 'Intersection' as const, UserIDs: [READER_ID] } };
+
+    beforeEach(() => {
+        UserCache.Instance.SetUsers([READER]);
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        UserCache.Instance.SetUsers([]);
+    });
+
+    it('fails the run before any prompt when the audience names a user who does not exist (after one cache refresh)', async () => {
+        const refresh = vi.spyOn(UserCache.Instance, 'Refresh').mockResolvedValue(undefined);
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        const result = await agent.Execute(makeParams({ Audience: { Mode: 'Intersection', UserIDs: [READER_ID, UNKNOWN_ID] } }));
+
+        expect(result.success).toBe(false);
+        expect(runner.Calls).toHaveLength(0);
+        expect(harness.runActionCalls).toHaveLength(0);
+        expect(harness.run.Status).toBe('Failed');
+        expect(harness.run.ErrorMessage).toContain(UNKNOWN_ID);
+        // The refresh reads through the run's provider; the harness provider is not a database provider,
+        // so the cache is only consulted again — the point here is that the run is refused, not skipped.
+        expect(refresh).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['an Intersection with no readers', { Mode: 'Intersection' as const, UserIDs: [] }],
+        ['a Caller audience that names readers', { Mode: 'Caller' as const, UserIDs: [READER_ID] }],
+    ])('fails the run before any prompt for %s', async (_label, audience) => {
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const result = await agent.Execute(makeParams({ Audience: audience }));
+        expect(result.success).toBe(false);
+        expect(runner.Calls).toHaveLength(0);
+        expect(harness.run.ErrorMessage).toMatch(/^Invalid Audience: /);
+    });
+
+    it('hands every action dispatch the hydrated readers', async () => {
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams(room));
+
+        expect(result.success).toBe(true);
+        expect(harness.runActionCalls).toHaveLength(1);
+        expect(harness.runActionCalls[0].audience).toEqual({ Readers: [READER] });
+    });
+
+    it('runs as with no audience when the only reader is the caller: no Audience on the dispatch, task graphs as configured', async () => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }) });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        await agent.Execute(makeParams({ Audience: { Mode: 'Intersection', UserIDs: [USER_ID.toUpperCase()] } }));
+
+        expect(harness.runActionCalls[0].audience).toBeUndefined();
+        expect(runner.Calls[0].data?.__agentTypePromptParams).toMatchObject({ enableTaskGraphs: true });
+    });
+
+    it('locks out an action the engine refuses for the audience: the model is told, and it is never dispatched again', async () => {
+        harness.runAction = () => ({
+            Success: false,
+            ResultCode: 'AUDIENCE_UNSUPPORTED',
+            Message: `Action '${ACTION_NAME}' is not available here: its output would be shown to people besides the caller.`,
+            Params: [],
+            Result: null,
+            LogEntry: null,
+        });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        await agent.Execute(makeParams(room));
+
+        expect(harness.runActionCalls).toHaveLength(1);
+        const told = (runner.Calls[1].conversationMessages ?? []).map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)));
+        // Told it is unavailable in a shared conversation — not that it failed with a configuration or credential error.
+        expect(told.some((c) => c.includes('[CRITICAL/NOT_AVAILABLE_IN_SHARED_CONVERSATION]') && c.includes(ACTION_NAME))).toBe(true);
+        expect(told.some((c) => c.includes('[CRITICAL/ACTION_UNAVAILABLE]') || c.includes('configuration or credential error'))).toBe(false);
+        const repeat = (runner.Calls[2].conversationMessages ?? []).map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)));
+        expect(repeat.some((c) => c.includes('not available in this shared conversation') && c.includes('Do not call it again'))).toBe(true);
+    });
+
+    it('withholds task graphs from the prompt, without writing the cached base params', async () => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }) });
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        await agent.Execute(makeParams(room));
+
+        expect(runner.Calls[0].data?.__agentTypePromptParams).toMatchObject({ enableTaskGraphs: false, includeResponseTypeDefinition: { tasks: false } });
+        const catalog = (harness.engineInstance.GetAgentBaseCatalog as (id: string) => { baseAgentTypePromptParams: Record<string, unknown> })(AGENT_ID);
+        expect(catalog.baseAgentTypePromptParams.enableTaskGraphs).toBe(true);
+    });
+
+    it("offers no client tools and injects none of the caller's app context (control: both without an audience)", async () => {
+        const data = {
+            clientTools: [{ Name: 'NavigateTo', Description: 'Open a view in the browser', InputSchema: {} }],
+            appContext: { App: { Name: 'CRM' }, AdditionalContext: { selectedAccount: 'Acme (private)' } },
+        };
+        const roomRun = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await roomRun.agent.Execute(makeParams({ ...room, data }));
+        expect(roomRun.runner.Calls[0].data?.clientToolDetails).toBe('');
+        expect(roomRun.runner.Calls[0].data?.appContext).toBe('');
+        expect(JSON.stringify(roomRun.runner.Calls[0].data)).not.toContain('Acme (private)');
+
+        harness = new LoopHarness();
+        const alone = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await alone.agent.Execute(makeParams({ data }));
+        expect(alone.runner.Calls[0].data?.clientToolDetails).toContain('NavigateTo');
+        expect(alone.runner.Calls[0].data?.appContext).toContain('Acme (private)');
+    });
+
+    it('leaves the memory-writes docs out of the prompt for an agent that may write memory (control: they are in without one)', async () => {
+        harness.agent = makeAgentRow({ AllowMemoryWrite: true });
+        const roomRun = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await roomRun.agent.Execute(makeParams(room));
+        expect(roomRun.runner.Calls[0].data?._MEMORY_WRITES_ENABLED).toBeUndefined();
+
+        harness = new LoopHarness();
+        harness.agent = makeAgentRow({ AllowMemoryWrite: true });
+        const alone = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await alone.agent.Execute(makeParams());
+        expect(alone.runner.Calls[0].data?._MEMORY_WRITES_ENABLED).toBe(true);
+    });
+
+    it('forgets the hydrated readers when the run ends, so a later direct dispatch hydrates its own', async () => {
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await agent.Execute(makeParams(room));
+        const state = agent as unknown as { _audienceReaders: unknown; _audienceSource: unknown; _runScope: unknown };
+        expect(state._audienceReaders).toBeUndefined();
+        expect(state._audienceSource).toBeUndefined();
+        expect(state._runScope).toBeUndefined();
+    });
+
+    it('refuses a session-driven (realtime) agent type before opening a session', async () => {
+        class SessionAgent extends HarnessAgent {
+            public SessionsOpened = 0;
+            protected override isSessionDrivenAgentType(_agentType: BaseAgentType): _agentType is BaseAgentType & { IsSessionDriven: true } {
+                return true;
+            }
+            protected override async executeRealtimeSession<R>(): Promise<never> {
+                this.SessionsOpened++;
+                throw new Error('a session must not be opened for a room');
+            }
+        }
+        const agent = new SessionAgent();
+        (agent as unknown as AgentInternals)._promptRunner = new ScriptedPromptRunner([() => llmEnvelope(successEnvelope())]);
+
+        const result = await agent.Execute(makeParams(room));
+
+        expect(result.success).toBe(false);
+        expect(agent.SessionsOpened).toBe(0);
+        expect(harness.run.ErrorMessage).toMatch(/session-driven/);
+    });
+});
+
+describe('BaseAgent.Execute — the run scope on every action dispatch (RunActionParams.RunScope)', () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000a7';
+    const scopedRun = (): FakeAgentRun & { PrimaryScopeRecordID?: string; SecondaryScopes?: string } =>
+        harness.run as FakeAgentRun & { PrimaryScopeRecordID?: string; SecondaryScopes?: string };
+
+    it('hands every dispatch the scope initializeAgentRun validated and wrote to the run row (defaults applied)', async () => {
+        harness.agent = makeAgentRow({ ScopeConfig: JSON.stringify({ dimensions: [{ name: 'Region', defaultValue: 'EMEA' }] }) });
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT, SecondaryScopes: { Team: 'alpha' } }));
+
+        expect(result.success).toBe(true);
+        const expected = { PrimaryScopeEntityName: null, PrimaryScopeRecordID: TENANT, SecondaryScopes: { Team: 'alpha', Region: 'EMEA' } };
+        expect(harness.runScopes).toEqual([expected, expected]);
+        expect(scopedRun().PrimaryScopeRecordID).toBe(TENANT);
+        expect(JSON.parse(scopedRun().SecondaryScopes ?? '{}')).toEqual(expected.SecondaryScopes);
+    });
+
+    it('an unscoped run hands every dispatch a RunScope of nulls — "inside a run, no tenant"', async () => {
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        await agent.Execute(makeParams());
+
+        expect(harness.runScopes).toEqual([{ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null }]);
+    });
+
+    it('forgets the run scope once the run is over, so a later direct dispatch resolves its own', async () => {
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT }));
+
+        const action = (harness.actionEngineInstance.Actions as MJActionEntityExtended[])[0];
+        await agent.ExecuteSingleAction(makeParams(), { name: ACTION_NAME, params: {} }, action, TEST_USER as unknown as UserInfo);
+
+        expect(harness.runScopes[0]).toMatchObject({ PrimaryScopeRecordID: TENANT });
+        expect(harness.runScopes[1]).toMatchObject({ PrimaryScopeRecordID: null });
+    });
+});
+
+describe("BaseAgent.Execute — memory, RAG and the prompt read the run's validated scope", () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000c7';
+    type Spied = { mock: { calls: unknown[][] } };
+    function spyContext(agent: HarnessAgent): { memory: Spied; rag: Spied; parts: Spied } {
+        const keyhole = agent as unknown as Record<string, (...args: unknown[]) => unknown>;
+        return {
+            memory: vi.spyOn(keyhole, 'InjectContextMemory').mockResolvedValue({ notes: [], examples: [] }),
+            rag: vi.spyOn(keyhole, 'InjectPreExecutionRAG').mockResolvedValue(null),
+            parts: vi.spyOn(keyhole, 'InjectScopedPromptParts').mockReturnValue(undefined),
+        };
+    }
+
+    it('hands notes, pre-execution RAG and scoped prompt parts the scope the run row records: trimmed, defaults applied', async () => {
+        harness.agent = makeAgentRow({ ScopeConfig: JSON.stringify({ dimensions: [{ name: 'Region', defaultValue: 'EMEA' }] }) });
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const spies = spyContext(agent);
+
+        await agent.Execute(makeParams({ PrimaryScopeRecordID: `  ${TENANT}  `, SecondaryScopes: { Team: 'alpha' } }));
+
+        const expected = { RecordID: TENANT, Secondary: { Team: 'alpha', Region: 'EMEA' } };
+        const memory = spies.memory.mock.calls[0];
+        expect({ RecordID: memory[7], Secondary: memory[8] }).toEqual(expected);
+        const rag = spies.rag.mock.calls[0];
+        expect({ RecordID: rag[6], Secondary: rag[7] }).toEqual(expected);
+        const parts = spies.parts.mock.calls[0];
+        expect({ RecordID: parts[3], Secondary: parts[4] }).toEqual(expected);
+        expect(harness.run).toMatchObject({ PrimaryScopeRecordID: TENANT });
+    });
+
+    it('never reads a scope from data the caller was not trusted to set', async () => {
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const spies = spyContext(agent);
+
+        await agent.Execute(makeParams({ data: { PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'US' } } }));
+
+        expect(spies.memory.mock.calls[0].slice(6, 9)).toEqual([undefined, undefined, undefined]);
+        expect(spies.rag.mock.calls[0].slice(5, 8)).toEqual([undefined, undefined, undefined]);
+    });
+
+    it('withholds task graphs from the prompt of a tenant-scoped run (control: an unscoped run keeps them)', async () => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }) });
+        const scoped = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await scoped.agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT }));
+        expect(scoped.runner.Calls[0].data?.__agentTypePromptParams)
+            .toMatchObject({ enableTaskGraphs: false, includeResponseTypeDefinition: { tasks: false } });
+
+        harness = new LoopHarness();
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }) });
+        const unscoped = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await unscoped.agent.Execute(makeParams());
+        expect(unscoped.runner.Calls[0].data?.__agentTypePromptParams).toMatchObject({ enableTaskGraphs: true });
+    });
+});
+
+describe('BaseAgent.Execute — the reserved run-data keys count only with TrustReservedRunData', () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000b7';
+    /** What an untrusted caller (a browser, an Execute Agent action call, MCP, A2A) might put in `data`. */
+    const hostileData = (): Record<string, unknown> => ({
+        topic: 'refunds',
+        PrimaryScopeRecordID: TENANT,
+        SecondaryScopes: { Region: 'EMEA' },
+        __agentTypePromptParams: { enableTaskGraphs: true },
+    });
+    const scopedRun = (): FakeAgentRun & { PrimaryScopeRecordID?: string | null } => harness.run as FakeAgentRun & { PrimaryScopeRecordID?: string | null };
+    const promptParamsSeen = (runner: ScriptedPromptRunner): Record<string, unknown> | undefined =>
+        runner.Calls[0].data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+    const reservedKeyLogs = (): string[] => vi.mocked(LogStatus).mock.calls.map((c) => String(c[0])).filter((m) => m.includes('reserved run-data key'));
+
+    beforeEach(() => {
+        vi.mocked(LogStatus).mockClear();
+    });
+
+    function makeRun(): { agent: HarnessAgent; runner: ScriptedPromptRunner } {
+        return makeAgent([() => llmEnvelope(actionsEnvelope()), () => llmEnvelope(successEnvelope())]);
+    }
+
+    it('without it, drops the scope and agent-type keys from data before the run starts, and keeps the rest', async () => {
+        const { agent, runner } = makeRun();
+
+        const result = await agent.Execute(makeParams({ data: hostileData() }));
+
+        expect(result.success).toBe(true);
+        expect(harness.runScopes).toEqual([{ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null }]);
+        expect(scopedRun().PrimaryScopeRecordID ?? null).toBeNull();
+        expect(promptParamsSeen(runner)?.enableTaskGraphs).not.toBe(true);
+        expect(runner.Calls[0].data?.topic).toBe('refunds');
+    });
+
+    it("never mutates the caller's params or data, and logs the dropped keys once, never their values", async () => {
+        const data = hostileData();
+        const params = makeParams({ data });
+        const { agent } = makeRun();
+
+        await agent.Execute(params);
+
+        expect(params.data).toBe(data);
+        expect(data).toEqual(hostileData());
+        expect(reservedKeyLogs()).toHaveLength(1);
+        expect(reservedKeyLogs()[0]).toContain('PrimaryScopeRecordID, SecondaryScopes, __agentTypePromptParams');
+        expect(reservedKeyLogs()[0]).not.toContain(TENANT);
+    });
+
+    it('with it, the run reads its scope and agent-type parameters from data, as a trusted server caller intends', async () => {
+        const { agent, runner } = makeRun();
+
+        await agent.Execute(makeParams({ data: hostileData(), TrustReservedRunData: true }));
+
+        expect(harness.runScopes).toEqual([{ PrimaryScopeEntityName: null, PrimaryScopeRecordID: TENANT, SecondaryScopes: { Region: 'EMEA' } }]);
+        expect(scopedRun().PrimaryScopeRecordID).toBe(TENANT);
+        // The trusted agent-type params turn task graphs on, but a tenant-scoped run withholds them (a graph runs outside its scope).
+        expect(promptParamsSeen(runner)?.enableTaskGraphs).toBe(false);
+        expect(reservedKeyLogs()).toHaveLength(0);
+    });
+
+    it('with it and no scope in data, the agent-type parameters from data apply (task graphs on)', async () => {
+        const { agent, runner } = makeRun();
+
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { enableTaskGraphs: true } }, TrustReservedRunData: true }));
+
+        expect(promptParamsSeen(runner)?.enableTaskGraphs).toBe(true);
+    });
+
+    it('leaves the first-class scope fields alone: server code sets a scope without the marker', async () => {
+        const { agent } = makeRun();
+
+        await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT, data: { PrimaryScopeRecordID: 'aaaaaaaa-0000-4000-8000-0000000000ff' } }));
+
+        expect(harness.runScopes[0]).toMatchObject({ PrimaryScopeRecordID: TENANT });
+    });
+});
+
+describe('BaseAgent.buildAgentBaseCatalog — relationship targets', () => {
+    const LEAD_ID = 'aaaaaaaa-4444-4000-8000-000000000001';
+    const SKIP_ID = 'aaaaaaaa-4444-4000-8000-000000000002';
+    const RESEARCH_ID = 'aaaaaaaa-4444-4000-8000-000000000003';
+
+    it('leaves a Disabled relationship target out of the sub-agent catalog', () => {
+        const lead = makeAgentRow({ ID: LEAD_ID, Name: 'Dashboards Expert' });
+        const engine = {
+            Agents: [
+                lead,
+                makeAgentRow({ ID: SKIP_ID, Name: 'Skip', Status: 'Disabled' }),
+                makeAgentRow({ ID: RESEARCH_ID, Name: 'Research Agent' }),
+            ],
+            AgentRelationships: [
+                { AgentID: LEAD_ID, SubAgentID: SKIP_ID, Status: 'Active' },
+                { AgentID: LEAD_ID, SubAgentID: RESEARCH_ID, Status: 'Active' },
+            ],
+            AgentActions: [],
+            AgentTypes: [],
+        };
+
+        const catalog = new HarnessAgent().ExposeBuildAgentBaseCatalog(
+            lead as unknown as MJAIAgentEntityExtended,
+            engine as unknown as AIEngine,
+        );
+
+        expect(catalog.uniqueActiveSubAgents.map(a => a.Name)).toEqual(['Research Agent']);
+        expect(catalog.subAgentCount).toBe(1);
+        expect(catalog.subAgentDetails).toContain('Research Agent');
+        expect(catalog.subAgentDetails).not.toContain('Skip');
     });
 });

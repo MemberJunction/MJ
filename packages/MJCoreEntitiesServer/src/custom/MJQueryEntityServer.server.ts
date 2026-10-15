@@ -7,7 +7,7 @@ import {
     DatabasePlatform,
 } from "@memberjunction/core";
 import { MJQuerySQLEntity, MJQueryEntityExtended, MJSQLDialectEntity, QueryEngine } from "@memberjunction/core-entities";
-import { RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { Float32VectorToBase64, RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { EmbedTextLocalHelper } from "./util";
 import {
     RunExtractionPipeline,
@@ -43,7 +43,13 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
 
     /**
      * Generates an embedding from composite text (Name + UserQuestion + Description) for richer semantic search.
-     * Stores the vector in EmbeddingVector and the model reference in EmbeddingModelID.
+     * Stores the vector in EmbeddingVector (JSON) and EmbeddingVectorBinary (float32 bytes, base64), and the
+     * model reference in EmbeddingModelID.
+     *
+     * Same contract as `MJTagEntityServer`: when no vector comes back — empty text, an empty result or an
+     * embedder error — all three columns are cleared, so a query whose text changed never keeps a vector
+     * computed from its old text. An embedder error is logged and does not fail the save; the query simply
+     * has no semantic match until its next successful embedding.
      */
     protected async GenerateCompositeEmbedding(): Promise<void> {
         const parts = [
@@ -53,17 +59,30 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         ].filter(p => p.trim().length > 0);
 
         if (parts.length === 0) {
-            this.EmbeddingVector = null;
-            this.EmbeddingModelID = null;
+            this.clearEmbedding();
             return;
         }
 
         const compositeText = parts.join(' | ');
-        const result = await this.EmbedTextLocal(compositeText);
-        if (result && result.vector && result.vector.length > 0) {
-            this.EmbeddingVector = JSON.stringify(result.vector);
-            this.EmbeddingModelID = result.modelID;
+        try {
+            const result = await this.EmbedTextLocal(compositeText);
+            if (result?.vector && result.vector.length > 0) {
+                this.EmbeddingVector = JSON.stringify(result.vector);
+                this.EmbeddingVectorBinary = Float32VectorToBase64(result.vector);
+                this.EmbeddingModelID = result.modelID;
+                return;
+            }
+        } catch (error) {
+            LogError(`[MJQueryEntityServer] Embedding refresh failed for query "${this.Name}": ${error instanceof Error ? error.message : String(error)}`);
         }
+        this.clearEmbedding();
+    }
+
+    /** Clears the stored vector (both forms) and the model it was computed with. */
+    private clearEmbedding(): void {
+        this.EmbeddingVector = null;
+        this.EmbeddingVectorBinary = null;
+        this.EmbeddingModelID = null;
     }
 
     // ─── Save / Delete Overrides ─────────────────────────────────────────────────
@@ -82,6 +101,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
                 await this.GenerateCompositeEmbedding();
             } else if (!this.Description || this.Description.trim().length === 0) {
                 this.EmbeddingVector = null;
+                this.EmbeddingVectorBinary = null;
                 this.EmbeddingModelID = null;
             }
 
@@ -93,7 +113,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
 
             // Extract and sync parameters AFTER saving, outside of any transaction
             if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
-                await this.extractAndSyncDataAsync();
+                await this.extractAndSyncDataAsync(options?.SkipEntityAIActions === true);
                 await this.autoConvertDialectsAsync();
             } else if (!this.SQL || this.SQL.trim().length === 0) {
                 this.UsesTemplate = false;
@@ -191,7 +211,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * Builds the QuerySyncContext from this entity instance for use by the extraction pipeline.
      * Resolves the SQL to the appropriate dialect variant for the connected database.
      */
-    private buildSyncContext(): QuerySyncContext {
+    private buildSyncContext(skipAIEnrichment = false): QuerySyncContext {
         return {
             queryID: this.ID,
             queryName: this.Name,
@@ -202,6 +222,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             runViewProvider: this.RunViewProviderToUse,
             platform: this.currentPlatform,
             parameterHints: this.ParameterHints,
+            SkipAIEnrichment: skipAIEnrichment,
         };
     }
 
@@ -210,18 +231,22 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * when a dialect variant matching the current platform is saved — this handles
      * the timing issue where the parent Query is saved before its QuerySQL children
      * exist in the cache.
+     *
+     * @param skipAIEnrichment Skip the LLM enrichment stage, as `SkipEntityAIActions` does for Save.
      */
-    public async RerunExtraction(): Promise<void> {
-        await this.extractAndSyncDataAsync();
+    public async RerunExtraction(skipAIEnrichment = false): Promise<void> {
+        await this.extractAndSyncDataAsync(skipAIEnrichment);
     }
 
     /**
      * Runs the extraction pipeline and saves the UsesTemplate flag.
      * On error, sets UsesTemplate=false and attempts to save so the query remains usable.
+     *
+     * @param skipAIEnrichment Skip the LLM enrichment stage (the save asked to skip AI actions).
      */
-    private async extractAndSyncDataAsync(): Promise<void> {
+    private async extractAndSyncDataAsync(skipAIEnrichment: boolean): Promise<void> {
         try {
-            const ctx = this.buildSyncContext();
+            const ctx = this.buildSyncContext(skipAIEnrichment);
             const pipelineResult = await RunExtractionPipeline(ctx);
             this.UsesTemplate = pipelineResult.UsesTemplate;
 

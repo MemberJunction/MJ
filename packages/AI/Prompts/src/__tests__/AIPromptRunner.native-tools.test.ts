@@ -144,6 +144,34 @@ describe('applyNativeToolCalling — filling the outgoing request', () => {
         expect(GetToolCallingMode(chatParams)).toBe('Native');
     });
 
+    it('keeps a forced complete_task when the implicit model receives it', () => {
+        engineState.configuration = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true, NativeControlFlow: 'implicit' } };
+        const chatParams = new ChatParams();
+        const tools = [{ name: 'run_ad_hoc_query', description: 'x', inputSchema: { type: 'object' } }, { name: 'complete_task', description: 'y', inputSchema: { type: 'object' } }];
+        priv(runner).applyNativeToolCalling(chatParams, prompt(), { tools, controlFlowToolNames: ['complete_task'], toolChoice: { name: 'complete_task' } }, model(), VENDOR_ID);
+        expect(chatParams.toolChoice).toEqual({ name: 'complete_task' });
+    });
+
+    it("sends 'auto' in place of a forced complete_task to a model whose catalog rejects forced tool choice", () => {
+        engineState.configuration = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true, NativeControlFlow: 'implicit', SupportsForcedToolChoice: false } };
+        const chatParams = new ChatParams();
+        const tools = [{ name: 'run_ad_hoc_query', description: 'x', inputSchema: { type: 'object' } }, { name: 'complete_task', description: 'y', inputSchema: { type: 'object' } }];
+        priv(runner).applyNativeToolCalling(chatParams, prompt(), { tools, controlFlowToolNames: ['complete_task'], toolChoice: { name: 'complete_task' } }, model(), VENDOR_ID);
+        expect(chatParams.tools?.map((t) => t.name)).toEqual(['run_ad_hoc_query', 'complete_task']);
+        expect(chatParams.toolChoice).toBe('auto');
+    });
+
+    it("downgrades a forced complete_task to 'none' on a hybrid model, which never receives it", () => {
+        // A named choice for an undeclared tool is rejected by every provider; the hybrid's terminal
+        // answer is the envelope, which 'none' asks for.
+        engineState.configuration = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true } };
+        const chatParams = new ChatParams();
+        const tools = [{ name: 'run_ad_hoc_query', description: 'x', inputSchema: { type: 'object' } }, { name: 'complete_task', description: 'y', inputSchema: { type: 'object' } }];
+        priv(runner).applyNativeToolCalling(chatParams, prompt(), { tools, controlFlowToolNames: ['complete_task'], toolChoice: { name: 'complete_task' } }, model(), VENDOR_ID);
+        expect(chatParams.tools?.map((t) => t.name)).toEqual(['run_ad_hoc_query']);
+        expect(chatParams.toolChoice).toBe('none');
+    });
+
     it('an orchestrator with only control tools sends nothing on a hybrid model (Envelope)', () => {
         engineState.configuration = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true } };
         const chatParams = new ChatParams();

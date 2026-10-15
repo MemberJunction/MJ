@@ -15,6 +15,7 @@
  */
 
 import { serve, MJServerOptions } from '@memberjunction/server';
+import { LoadVectorMemoryServer } from '@memberjunction/ai-vectors-memory-server';
 import {
   MJ_SERVER_EXTENSIONS_EXPORT,
   describeServerExtensionMount,
@@ -26,6 +27,9 @@ import { FindWorkspacePackageDir, LoadDynamicPackages, resolvePackageJsonFromHos
 import path from 'node:path';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { readFileSync } from 'node:fs';
+// Registers the AWS work-queue transport (driver factory + manifest enricher). Deliberately NOT in
+// ServerBootstrapLite: CodeGen, MetadataSync and the data providers must never load AWS clients (work-queue 03 §0).
+import '@memberjunction/work-queue-engine/aws';
 
 /** Process ID MJAPI identifies itself with to the dynamic-package loader (entry `Processes` filters match it). */
 export const MJAPI_PROCESS_ID = 'mjapi';
@@ -240,6 +244,10 @@ export async function CreateMJServer(options: MJServerConfig = {}): Promise<void
   // No banner here: serve()'s StartupLogger shows a transient "Bootstrapping…"
   // indicator while booting and prints the 🚀 summary block once ready, so the
   // rocket appears only after launch.
+
+  // Server-side vector acceleration (worker pool + optional native backend) for every
+  // in-memory vector index in this process; registered before any engine builds one.
+  LoadVectorMemoryServer();
 
   // Configuration has already been loaded and merged by MJServer's config.ts at module init time
   // We just need to load the raw user config to access codeGeneration.packages setting

@@ -276,7 +276,7 @@
     "fields": {
       "Name": "Claude 4.5 Sonnet",
       "PowerRank": 19,
-      "Description": "Anthropic's most capable coding model with advanced reasoning and analysis capabilities. Features a 200K token context window with extended thinking support, state-of-the-art performance on coding benchmarks, and excellent instruction following.",
+      "Description": "Anthropic's most capable coding model with advanced reasoning and analysis capabilities. Features a 200K token context window with extended thinking support, state-of-the-art performance on coding benchmarks, and excellent instruction following. DEPRECATED 2026-09-30 by Anthropic; retires on the Claude API 2026-11-30, replaced by Claude Sonnet 5.5. Context 200K, max output 64K (the 8,192 previously recorded here was wrong). Source: https://platform.claude.com/docs/en/models/sonnet-4-5/overview",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 9,
@@ -317,11 +317,11 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Deprecated",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-sonnet-4-5-20250929",
             "MaxInputTokens": 200000,
-            "MaxOutputTokens": 8192,
+            "MaxOutputTokens": 64000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
@@ -331,8 +331,8 @@
             "ID": "1D5E5FAF-7BB8-4B3F-B11E-F972D6D39C64"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:13.566Z",
-            "checksum": "8201160a283008c489e5e156ce66955602feec5d88a28195b2a737c65ae22dbe"
+            "lastModified": "2026-10-06T20:21:36.918Z",
+            "checksum": "287cd8d08c0ace7ca6693fb45ba8a660d02660bb4979c569e51751217aed5edd"
           }
         },
         {
@@ -344,7 +344,7 @@
             "DriverClass": "BedrockLLM",
             "APIName": "anthropic.claude-sonnet-4-5-20250929-v1:0",
             "MaxInputTokens": 200000,
-            "MaxOutputTokens": 8192,
+            "MaxOutputTokens": 64000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
@@ -359,8 +359,8 @@
             "ID": "64AFB52F-BCB3-4DEE-A02F-65673F0270CE"
           },
           "sync": {
-            "lastModified": "2026-09-13T20:06:39.530Z",
-            "checksum": "d02ef66bf59dd7fecaf9ddb20b8b1492a7f027a56925dfc25235d5e26cb31557"
+            "lastModified": "2026-10-06T20:21:36.936Z",
+            "checksum": "c3e4f45166942bac946c3e5b5ca96ac7b127465f951fd949ba517adfaa0376ee"
           }
         },
         {
@@ -372,7 +372,7 @@
             "DriverClass": "OpenRouterLLM",
             "APIName": "anthropic/claude-sonnet-4.5",
             "MaxInputTokens": 200000,
-            "MaxOutputTokens": 8192,
+            "MaxOutputTokens": 64000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
@@ -382,8 +382,8 @@
             "ID": "C20C599E-055D-479C-9BBC-83A9EDC981B8"
           },
           "sync": {
-            "lastModified": "2026-06-16T01:17:09.582Z",
-            "checksum": "3241b95d225d98ae2a290cf186abdd82942f401b5073f6c9eeb843f5921e052d"
+            "lastModified": "2026-10-06T20:21:36.950Z",
+            "checksum": "de31431804be6cae0e10d17e514cf1b1698f0dc25fdef0b358d1a25964fa8638"
           }
         }
       ],
@@ -442,8 +442,8 @@
       "ID": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
     },
     "sync": {
-      "lastModified": "2026-09-13T20:06:37.964Z",
-      "checksum": "709830944032a5c5200ebdc7a314f91bf41ef0d0beaf87ae111e59cbba61b6b3"
+      "lastModified": "2026-10-06T20:21:36.773Z",
+      "checksum": "65f041a3eba5206ad37f36002809ddcba7bcc7d0cffbcbc3a1376274c97c7efa"
     }
   },
   {
@@ -540,9 +540,9 @@
     "fields": {
       "Name": "Nano Banana Pro",
       "PowerRank": 20,
-      "Description": "Google's most advanced image generation model (November 2025), officially Gemini 3 Pro Image. Exceptional quality with support for up to 4K resolution (3840x2160). Features advanced style control, negative prompts, and seed-based reproducibility. State-of-the-art prompt understanding and image editing capabilities. DEPRECATION: the gemini-3-pro-image-preview endpoint shuts down 2026-06-25; migrate to gemini-2.5-flash-image (Nano Banana).",
+      "Description": "Google's most advanced image generation model (November 2025), officially Gemini 3 Pro Image. Exceptional quality with support for up to 4K resolution (3840x2160). Features advanced style control, negative prompts, and seed-based reproducibility. State-of-the-art prompt understanding and image editing capabilities. Google lists gemini-3-pro-image as Stable (1K, 2K and 4K output; the -preview endpoint is the legacy ID). Supports up to 6 reference objects and character/style references.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
-      "IsActive": false,
+      "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 6,
       "InheritTypeModalities": true
@@ -573,9 +573,9 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1,
-            "Status": "Inactive",
+            "Status": "Active",
             "DriverClass": "GeminiImageGenerator",
-            "APIName": "gemini-3-pro-image-preview",
+            "APIName": "gemini-3-pro-image",
             "MaxInputTokens": 12000,
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
@@ -615,6 +615,26 @@
           "sync": {
             "lastModified": "2026-10-02T21:42:01.475Z",
             "checksum": "6857f2cb25cef676bcdbd6f4a6e4e977e026e201c5cc32c3ec5b40a8d2602359"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-05-28T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Image Generation",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.134,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
+            "ProcessingType": "Realtime",
+            "Comments": "Nano Banana Pro (gemini-3-pro-image, the Stable ID) pricing as of October 2026 (Standard tier). Per output image: 1K and 2K $0.134 (1120 output tokens; the representative figure here), 4K $0.24; image input 560 tokens ($0.0011 per image); text/image input $2.00 per 1M tokens. StartedAt is the reported Stable date (2026-05-28, third-party reports; Google's page states no date). Source: https://ai.google.dev/gemini-api/docs/pricing (last updated 2026-10-13).",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "789572FB-7710-409C-9FA3-CCAD426A56C8"
           }
         }
       ]
@@ -1127,7 +1147,7 @@
       "Description": "Llama 2 70B on Groq",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 2,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -1168,8 +1188,8 @@
       "ID": "E3A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-09-13T20:06:37.957Z",
-      "checksum": "b9d48e817a3c202c4e5ce4ae4606a11e45619051e1156c1df4612ff8b566d892"
+      "lastModified": "2026-10-06T20:21:36.788Z",
+      "checksum": "6a11926f3e70746d6fed83eadabbdf36bb7ba59c9168cc2a64c43d42776dac27"
     }
   },
   {
@@ -6201,23 +6221,48 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
             "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 4,
             "OutputPricePerUnit": 12,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Mistral Large pricing as of Jan 2025 (estimated)",
+            "Comments": "Mistral Large pricing as of Jan 2025 (estimated) EXPIRED 2026-10-05: superseded by the row starting 2026-10-05 at $0.5/$1.5. The vendor does not publish when the price changed, so 2026-10-05 is the observation date.",
             "CacheReadPricePerUnit": 0.4,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-10-05T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "4BE324BB-70A8-420B-BE87-0CDA6ECE336D"
           },
           "sync": {
-            "lastModified": "2026-06-05T02:25:05.431Z",
-            "checksum": "0220501b50e03873c4ffb33c7ec63ebf69e3a31fe959ad9381ecb5cb82d99903"
+            "lastModified": "2026-10-06T20:21:37.010Z",
+            "checksum": "62eb457667246f5024e4140265358afebb9b752b5e473a12c38e6447ff1712af"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "StartedAt": "2026-10-05T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.5,
+            "OutputPricePerUnit": 1.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Mistral Large on Mistral's own platform, priced 2026-10-05 from Mistral's model catalogue. The route's id is the floating alias `mistral-large-latest`, which now resolves to Mistral Large 3 (`mistral-large-2512`, GA, 256K context) at $0.50/$1.50 per 1M. MJ previously recorded $4/$12, which matches no current Mistral model - Mistral Large 2.1 (`mistral-large-2411`) carried $2/$6 and was retired 2026-05-31. Note this alias now resolves to the same model as MJ's separate \"Mistral Large 3\" record. Source: https://github.com/mistralai/platform-docs-public/blob/main/src/schema/models/models/mistral-large-3-25-12.ts"
+          },
+          "primaryKey": {
+            "ID": "D9647EC6-403F-4A99-AA1E-9B2BF642C7F4"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:37.057Z",
+            "checksum": "1383bc2ae6627d265851212137bb35032120be900e35ef7d7ddf9f7d7870ddd5"
           }
         }
       ]
@@ -6589,23 +6634,48 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
             "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2.75,
             "OutputPricePerUnit": 8.1,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Mistral Medium pricing as of Jan 2025",
+            "Comments": "Mistral Medium pricing as of Jan 2025 EXPIRED 2026-10-05: superseded by the row starting 2026-10-05 at $1.5/$7.5. The vendor does not publish when the price changed, so 2026-10-05 is the observation date.",
             "CacheReadPricePerUnit": 0.275,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-10-05T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "675E5E06-184C-4503-A457-3594B9946C25"
           },
           "sync": {
-            "lastModified": "2026-06-05T02:25:05.552Z",
-            "checksum": "48ba965894711d150d6bc2ed43cf0fdc45095527b4e0341927151eb865768c4b"
+            "lastModified": "2026-10-06T20:21:37.075Z",
+            "checksum": "bdfd76a91d340bd19705f98a487640b0fd1b57daeb168c9729c7a74ad9e4fa40"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "StartedAt": "2026-10-05T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.5,
+            "OutputPricePerUnit": 7.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Mistral Medium on Mistral's own platform, priced 2026-10-05 from Mistral's model catalogue. The route's id is the floating alias `mistral-medium-latest`, which now resolves to Mistral Medium 3.5 (`mistral-medium-3-5`, GA, 256K context) at $1.50/$7.50 per 1M. MJ previously recorded $2.75/$8.10. This alias now resolves to the same model as MJ's separate \"Mistral Medium 3.5\" record. Source: https://github.com/mistralai/platform-docs-public/blob/main/src/schema/models/models/mistral-medium-3-5-26-04.ts"
+          },
+          "primaryKey": {
+            "ID": "352CF0E5-B93D-41A1-8E92-C3273B6A257F"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:37.089Z",
+            "checksum": "1da9958c052512087c92b80fe90deaefd9f905f985a50b8d7eb2196bf06ad7db"
           }
         }
       ]
@@ -7903,23 +7973,24 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 0.5,
             "OutputPricePerUnit": 0.77,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025",
+            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025. EXPIRED 2026-01-12: exact duplicate of the row starting 2026-01-12 at the same rate, left behind by the January 2026 seed import. Expired rather than deleted so the pricing history stays intact; the 2026-01-12 row remains the single Active row.",
             "CacheReadPricePerUnit": 0.25,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-01-12T23:25:17.216Z"
           },
           "primaryKey": {
             "ID": "CCA0A4DC-497D-4E11-BEBB-392E0074A7CA"
           },
           "sync": {
-            "lastModified": "2026-06-05T02:25:05.838Z",
-            "checksum": "f0a727cc78d0957a0de340cf96937b839cb5fe12005c7cb38566ce1a48c66d42"
+            "lastModified": "2026-10-06T20:21:37.114Z",
+            "checksum": "3f0cc28fec8419d31a0aee1c358d0ce8c264eea25c45aa6cc01c304939320854"
           }
         },
         {
@@ -8342,23 +8413,24 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 1.5,
             "OutputPricePerUnit": 7.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Batch",
-            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025",
+            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025. EXPIRED 2026-01-12: exact duplicate of the row starting 2026-01-12 at the same rate, left behind by the January 2026 seed import. Expired rather than deleted so the pricing history stays intact; the 2026-01-12 row remains the single Active row.",
             "CacheReadPricePerUnit": 0.15,
-            "CacheWritePricePerUnit": 1.875
+            "CacheWritePricePerUnit": 1.875,
+            "EndedAt": "2026-01-12T23:25:17.216Z"
           },
           "primaryKey": {
             "ID": "6C644B8C-CB68-461D-A00B-36F62855539B"
           },
           "sync": {
-            "lastModified": "2026-06-05T02:25:05.954Z",
-            "checksum": "b542e0fdbd829d4191887dbb0087b8c4a2fadda98ead603058abfccf08537e3f"
+            "lastModified": "2026-10-06T20:21:37.131Z",
+            "checksum": "28e62eff9119a00643818349e32697bca0a344fb1142c0b1c20e328428442fe0"
           }
         },
         {
@@ -8464,23 +8536,24 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 7.5,
             "OutputPricePerUnit": 37.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Batch",
-            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025",
+            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025. EXPIRED 2026-01-12: exact duplicate of the row starting 2026-01-12 at the same rate, left behind by the January 2026 seed import. Expired rather than deleted so the pricing history stays intact; the 2026-01-12 row remains the single Active row.",
             "CacheReadPricePerUnit": 0.75,
-            "CacheWritePricePerUnit": 9.375
+            "CacheWritePricePerUnit": 9.375,
+            "EndedAt": "2026-01-12T23:25:17.216Z"
           },
           "primaryKey": {
             "ID": "A727C77A-6F00-4990-9E1D-67B95F49CCF5"
           },
           "sync": {
-            "lastModified": "2026-06-05T02:25:05.996Z",
-            "checksum": "852754f9f7b92a23bc8ef402865a319135d8c744d81911d8d76cace031778a92"
+            "lastModified": "2026-10-06T20:21:37.147Z",
+            "checksum": "1a2d9f6b1b1a0b22b397099c3b3a500fc910b6025dd1b675133e067898f82fa1"
           }
         },
         {
@@ -8610,23 +8683,24 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 0.11,
             "OutputPricePerUnit": 0.34,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025",
+            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025. EXPIRED 2026-01-12: exact duplicate of the row starting 2026-01-12 at the same rate, left behind by the January 2026 seed import. Expired rather than deleted so the pricing history stays intact; the 2026-01-12 row remains the single Active row.",
             "CacheReadPricePerUnit": 0.055,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-01-12T23:25:17.216Z"
           },
           "primaryKey": {
             "ID": "DA3A0E18-83DD-4329-AC87-0D8E9D563F01"
           },
           "sync": {
-            "lastModified": "2026-06-05T02:25:06.061Z",
-            "checksum": "65b086f201426b892dfaba67a9f6b75c5f13b810083e7f791e56646d21f79d83"
+            "lastModified": "2026-10-06T20:21:37.163Z",
+            "checksum": "4f92bfc2af22c03dde035811e5d1aa4fdb11e0456b439ef457cfa2ede380c1e7"
           }
         },
         {
@@ -8898,7 +8972,7 @@
             "OutputPricePerUnit": 0.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-20B pricing on Groq as of August 2025 EXPIRED 2026-10-02: superseded by the Groq rate observed on 2026-10-02 ($0.075/$0.3); the vendor does not publish the changeover date, so the observation date is used. Source: https://console.groq.com/docs/models",
+            "Comments": "GPT-OSS-20B pricing on Groq as of August 2025. EXPIRED 2026-10-02: superseded by the Groq rate observed on 2026-10-02 ($0.075/$0.3); the vendor does not publish the changeover date, so the observation date is used. Source: https://console.groq.com/docs/models",
             "CacheReadPricePerUnit": 0.05,
             "CacheWritePricePerUnit": null,
             "EndedAt": "2026-10-02T00:00:00.000Z"
@@ -8907,8 +8981,8 @@
             "ID": "42B213D6-BC91-4B4B-88D7-2C7ADCF0D789"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:01.620Z",
-            "checksum": "74d61ba72a17f8d6392135dfe6af76b3a588417299c9e89317d69c3e8e77a950"
+            "lastModified": "2026-10-06T20:21:37.178Z",
+            "checksum": "471fcbac1a1b096d6eb02e9d0237b291e913cbee12324919d4db96cb418fbb78"
           }
         },
         {
@@ -8940,23 +9014,24 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
             "StartedAt": "2026-03-15T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 0.07,
             "OutputPricePerUnit": 0.2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-20B pricing on Amazon Bedrock (US East) as of March 2026",
+            "Comments": "GPT-OSS-20B pricing on Amazon Bedrock (US East) as of March 2026 EXPIRED 2026-10-05: superseded by the row starting 2026-10-05 at $0.07/$0.3. The vendor does not publish when the price changed, so 2026-10-05 is the observation date.",
             "CacheReadPricePerUnit": null,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-10-05T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "DCCC3E1A-B295-45F4-BEA8-A7DB4BBF80FB"
           },
           "sync": {
-            "lastModified": "2026-06-03T16:00:04.622Z",
-            "checksum": "ef0c4b2e9c596d78a8c52ed5b8a34daa3e94492f273e9beb93840dc2c81b0134"
+            "lastModified": "2026-10-06T20:21:37.195Z",
+            "checksum": "2cf712a87efee4199e5132c7e9c017aebe12d410055ffbb7a84c82a7421c9180"
           }
         },
         {
@@ -9005,6 +9080,30 @@
           "sync": {
             "lastModified": "2026-10-02T21:42:01.655Z",
             "checksum": "6311d00d26d214ea76b02cdca1c47c0c0921de326864dd2281470ca4dcef2ec4"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-10-05T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.07,
+            "OutputPricePerUnit": 0.3,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null,
+            "Comments": "GPT-OSS-20B on Amazon Bedrock. Input $0.07/1M, output $0.30/1M, read 2026-10-05 from the AWS Bedrock price list (us-east-1, publication 2026-10-03), which prices it at $0.00007 and $0.0003 per 1K tokens under both the plain and the \"mantle\" usagetype families. MJ previously recorded $0.20 output. Flex and batch tiers are half rate ($0.035/$0.15) and are not modelled. Source: https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrock/current/us-east-1/index.json"
+          },
+          "primaryKey": {
+            "ID": "77D9EA03-64BA-459C-AAE6-6C25CD202C26"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:37.209Z",
+            "checksum": "0c0f99385092f07e3268829729fced8c7a8bd849fa32bfcf94e421253c0bae02"
           }
         }
       ]
@@ -9158,7 +9257,7 @@
       "Description": "Gemini 1.5 Flash is a fast and versatile multimodal model for scaling across diverse tasks.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -9284,8 +9383,8 @@
       "ID": "791C357A-F821-F011-8B3D-000D3A9E3408"
     },
     "sync": {
-      "lastModified": "2026-09-13T20:06:38.752Z",
-      "checksum": "86762d70bd82f01806c01c18aa39f8bccc0f65ae8765ea735ebf501d89aeb235"
+      "lastModified": "2026-10-06T20:21:36.819Z",
+      "checksum": "b716ffda493665314c4ee8c245a364899443d05113ca18ff240904a4934b2425"
     }
   },
   {
@@ -9430,7 +9529,7 @@
       "Description": "Gemini 2.5 Pro Preview Model",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 7,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true,
@@ -9557,8 +9656,8 @@
       "ID": "8D5D433E-F36B-1410-8DA9-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-09-13T20:06:38.767Z",
-      "checksum": "22f4a1c2ece95215ad8fe6c67f72ebfd5fc84678851fc161c6aa1312f1acb832"
+      "lastModified": "2026-10-06T20:21:36.832Z",
+      "checksum": "db081a91483c37e7c6a49999339c026de5d0c28fcfd8c7c67fa83faea5a43c00"
     }
   },
   {
@@ -9567,7 +9666,7 @@
       "Description": "Gemini 2.5 Flash Preview Model",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 7,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true,
@@ -9694,8 +9793,8 @@
       "ID": "905D433E-F36B-1410-8DA9-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-09-13T20:06:38.713Z",
-      "checksum": "6a809e46ba6658bd762687349f6205b6bdd85043b42d27fc9cfc8c5d2f84d1b2"
+      "lastModified": "2026-10-06T20:21:36.845Z",
+      "checksum": "5e5ff84052a42180fb55baff3cbfd222d22c7fb12dae534cfdb0f4a6236ddaf5"
     }
   },
   {
@@ -9840,7 +9939,7 @@
       "Description": "Gemini 1.5 Pro",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -9966,8 +10065,8 @@
       "ID": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-09-13T20:06:38.733Z",
-      "checksum": "19ec0e8c6a43c4309091f3d9783795281e6b312490acbb5e3c9b1603c379de83"
+      "lastModified": "2026-10-06T20:21:36.861Z",
+      "checksum": "40e7e1f2707055aa66314c924a50fa9ad07229a4019c7fdfee78097683cdca5d"
     }
   },
   {
@@ -12035,7 +12134,7 @@
             "OutputPricePerUnit": 0.75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-120B pricing on Groq as of August 2025 EXPIRED 2026-10-02: superseded by the Groq rate observed on 2026-10-02 ($0.15/$0.6); the vendor does not publish the changeover date, so the observation date is used. Source: https://console.groq.com/docs/models",
+            "Comments": "GPT-OSS-120B pricing on Groq as of August 2025. EXPIRED 2026-10-02: superseded by the Groq rate observed on 2026-10-02 ($0.15/$0.6); the vendor does not publish the changeover date, so the observation date is used. Source: https://console.groq.com/docs/models",
             "CacheReadPricePerUnit": 0.075,
             "CacheWritePricePerUnit": null,
             "EndedAt": "2026-10-02T00:00:00.000Z"
@@ -12044,8 +12143,8 @@
             "ID": "37F35DF1-C29A-4ECA-BE52-0A8691842527"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:01.754Z",
-            "checksum": "67bd7dc504134118671832abfd75f3571b3109a7d9da70188a1bf9eb56894a3d"
+            "lastModified": "2026-10-06T20:21:37.244Z",
+            "checksum": "229679d155ea5b82f25c458f449a75465aa05b7d8c43fde98f93dcfd0565b678"
           }
         },
         {
@@ -12060,7 +12159,7 @@
             "OutputPricePerUnit": 0.69,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-OSS-120B pricing on Cerebras as of August 2025 EXPIRED 2026-10-02: superseded by the Cerebras rate observed on 2026-10-02 ($0.35/$0.75); the vendor does not publish the changeover date, so the observation date is used. Source: https://inference-docs.cerebras.ai/models/openai-oss.md",
+            "Comments": "GPT-OSS-120B pricing on Cerebras as of August 2025. EXPIRED 2026-10-02: superseded by the Cerebras rate observed on 2026-10-02 ($0.35/$0.75); the vendor does not publish the changeover date, so the observation date is used. Source: https://inference-docs.cerebras.ai/models/openai-oss.md",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null,
             "EndedAt": "2026-10-02T00:00:00.000Z"
@@ -12069,8 +12168,8 @@
             "ID": "E6FD1FF0-B83B-4A6A-A5A0-944F73209188"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:01.771Z",
-            "checksum": "e258f7229360cf9588bce2eb81953324b3469bffb2ed9e09ccc6536b58959594"
+            "lastModified": "2026-10-06T20:21:37.258Z",
+            "checksum": "1428c103918968cb79a3c84cd37abde1f15f2eee3a4f00c5d0ee76134797fd0a"
           }
         },
         {
@@ -13679,8 +13778,8 @@
             "Status": "Active",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-sonnet-4-6",
-            "MaxInputTokens": 200000,
-            "MaxOutputTokens": 64000,
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
@@ -13690,8 +13789,8 @@
             "ID": "3FF6CCCA-6E57-4300-8C2F-01F450F29AC4"
           },
           "sync": {
-            "lastModified": "2026-03-17T01:57:33.218Z",
-            "checksum": "087358d0424930fc5dd137471c9b71c396dc452cfa9e6029da77e07e68a3b9f1"
+            "lastModified": "2026-10-06T20:21:37.517Z",
+            "checksum": "ceae7679f7266aba2b1bfed30911c6aee3e7e76f5c14ed3748d70d7d45a415d9"
           }
         },
         {
@@ -13702,8 +13801,8 @@
             "Status": "Active",
             "DriverClass": "BedrockLLM",
             "APIName": "anthropic.claude-sonnet-4-6",
-            "MaxInputTokens": 200000,
-            "MaxOutputTokens": 64000,
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
@@ -13718,8 +13817,8 @@
             "ID": "C4A8498E-28B6-4F12-882A-7626764DA0CF"
           },
           "sync": {
-            "lastModified": "2026-09-13T20:06:41.258Z",
-            "checksum": "7f59944fe733bb3c633b884ad9181c0f685dcbccede9c4ef24d2337ffe717818"
+            "lastModified": "2026-10-06T20:21:37.530Z",
+            "checksum": "a2a51191ff995adcfebd8539ed1a0a1bfb683f30e5230cf0c6d91e5a5d9168f1"
           }
         },
         {
@@ -13730,8 +13829,8 @@
             "Status": "Active",
             "DriverClass": "OpenRouterLLM",
             "APIName": "anthropic/claude-sonnet-4.6",
-            "MaxInputTokens": 200000,
-            "MaxOutputTokens": 64000,
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
@@ -13741,8 +13840,8 @@
             "ID": "710F0B11-2F62-4980-8E35-649889A6E995"
           },
           "sync": {
-            "lastModified": "2026-06-16T01:17:10.751Z",
-            "checksum": "43d157087554bd2a5deba8beae62364cd24f6ec2c56f9b884cb0a66bf7689eec"
+            "lastModified": "2026-10-06T20:21:37.544Z",
+            "checksum": "f2a54e7f489597641ab30bed9e78b37f25abc4e3f8d59babb72e468be0be35ac"
           }
         }
       ],
@@ -17142,7 +17241,7 @@
             "Priority": 1,
             "Status": "Active",
             "DriverClass": "MistralLLM",
-            "APIName": "mistral-medium-3.5",
+            "APIName": "mistral-medium-3-5",
             "MaxInputTokens": 256000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
@@ -17158,8 +17257,8 @@
             "ID": "15A40998-1969-4F21-B4C0-A720CCD7CE41"
           },
           "sync": {
-            "lastModified": "2026-09-13T20:06:41.336Z",
-            "checksum": "79521aa55dfde659a81d6da0af18b049fd4e04d27117a099b4c0a8050b198b5f"
+            "lastModified": "2026-10-06T20:21:37.567Z",
+            "checksum": "d8e68ab081419697cca226b2aea3581713148feafdf233033cff99e34fd243bd"
           }
         },
         {
@@ -18579,14 +18678,16 @@
             "OutputPricePerUnit": 25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 4.8 pricing on Anthropic as of May 28, 2026 launch. Same per-token rates as Opus 4.7 ($5/$25 per 1M tokens). 5min cache write $6.25/1M, 1hr cache write $10/1M, cache hit $0.50/1M. Batch pricing $2.50/$12.50 per 1M (50% discount). Fast Mode tier $10/$50 per 1M (Opus 4.8 only — substantially cheaper than 4.6/4.7 Fast Mode at $30/$150). Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/about-claude/models/overview"
+            "Comments": "Claude Opus 4.8 pricing on Anthropic as of May 28, 2026 launch. Same per-token rates as Opus 4.7 ($5/$25 per 1M tokens). 5min cache write $6.25/1M, 1hr cache write $10/1M, cache hit $0.50/1M. Batch pricing $2.50/$12.50 per 1M (50% discount). Fast Mode tier $10/$50 per 1M (Opus 4.8 only — substantially cheaper than 4.6/4.7 Fast Mode at $30/$150). Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/about-claude/models/overview. Cache rates added 2026-10-05 from Anthropic's own rate card: cache read/refresh $0.5/1M, 5-minute cache write $6.25/1M. The base $5/$25 rate is unchanged, so this row is amended rather than superseded. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": 6.25
           },
           "primaryKey": {
             "ID": "F083F65E-40F5-44BE-8AEB-45754AE2CD56"
           },
           "sync": {
-            "lastModified": "2026-06-05T02:25:08.319Z",
-            "checksum": "90300d7d0ca5d2004c9a6553e64b38980162748199d88b994efe02e3ae6c61fd"
+            "lastModified": "2026-10-06T20:21:37.734Z",
+            "checksum": "763176e0baf5b674129149e1cfb5951f23f1c9a9118ea1295733e1e4650e15bc"
           }
         },
         {
@@ -18601,14 +18702,16 @@
             "OutputPricePerUnit": 25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 4.8 pricing on Amazon Bedrock as of May 28, 2026 simultaneous launch. Vendor-parity pricing with Anthropic direct ($5/$25 per 1M). Cross-region inference still adds ~10%. Sources: https://www.aboutamazon.com/news/aws/anthropic-claude-4-opus-sonnet-amazon-bedrock ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-4-8.html"
+            "Comments": "Claude Opus 4.8 pricing on Amazon Bedrock as of May 28, 2026 simultaneous launch. Vendor-parity pricing with Anthropic direct ($5/$25 per 1M). Cross-region inference still adds ~10%. Sources: https://www.aboutamazon.com/news/aws/anthropic-claude-4-opus-sonnet-amazon-bedrock ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-4-8.html Cache rates added 2026-10-05 from the AWS Bedrock price list (us-east-1, publication 2026-09-30), global cross-region tier: cache read $0.5/1M, 5-minute cache write $6.25/1M. The base $5/$25 already matched that tier, so this row is amended rather than superseded. Regional (in-region) inference is 10% higher and is not modelled. Source: https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/current/us-east-1/index.json",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": 6.25
           },
           "primaryKey": {
             "ID": "0E631D75-1587-48A0-B4BF-48323F09DF45"
           },
           "sync": {
-            "lastModified": "2026-06-05T02:25:08.335Z",
-            "checksum": "e1da80a886f693037fbbe3945ac12c3ffd5f2a6bd12dfa4af02b6fdd88a78951"
+            "lastModified": "2026-10-06T20:21:37.753Z",
+            "checksum": "d14afc76811e204f57f7c6106f93294065380093a28d07cfca9306cf85862b7a"
           }
         }
       ]
@@ -18650,7 +18753,7 @@
             "Priority": 0,
             "Status": "Active",
             "SupportedResponseFormats": "Any",
-            "SupportsEffortLevel": true,
+            "SupportsEffortLevel": false,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
@@ -18673,7 +18776,7 @@
             "MaxInputTokens": 256000,
             "MaxOutputTokens": 2000000,
             "SupportedResponseFormats": "Any, JSON",
-            "SupportsEffortLevel": true,
+            "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
@@ -19695,7 +19798,7 @@
             "OutputPricePerUnit": 4.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GLM 5.2 Standard-tier serverless pricing on Fireworks.ai: $1.40/$4.40 per 1M tokens with $0.14 cached-input — vendor-parity with Z.AI direct. Live on Fireworks day-zero. Batch inference is billed at 50% of these rates. Priority tier is $1.75/$5.50 / $0.18 cached and Fast tier (accounts/fireworks/routers/glm-5p2-fast, ~2x throughput) is $2.10/$6.60 / $0.21 cached — neither is modeled here. Sources: https://docs.fireworks.ai/serverless/pricing ; https://fireworks.ai/models/fireworks/glm-5p2 ; https://fireworks.ai/blog/glm-5p2 EXPIRED 2026-09-26: Fireworks removed glm-5p2 from serverless. Row preserved for historical pricing lookups. Source: https://docs.fireworks.ai/updates/changelog",
+            "Comments": "GLM 5.2 Standard-tier serverless pricing on Fireworks.ai: $1.40/$4.40 per 1M tokens with $0.14 cached-input — vendor-parity with Z.AI direct. Live on Fireworks day-zero. Batch inference is billed at 50% of these rates. Priority tier is $1.75/$5.50 / $0.18 cached and Fast tier (accounts/fireworks/routers/glm-5p2-fast, ~2x throughput) is $2.10/$6.60 / $0.21 cached — neither is modeled here. Sources: https://docs.fireworks.ai/serverless/pricing ; https://fireworks.ai/models/fireworks/glm-5p2 ; https://fireworks.ai/blog/glm-5p2. EXPIRED 2026-09-26: Fireworks removed glm-5p2 from serverless. Row preserved for historical pricing lookups. Source: https://docs.fireworks.ai/updates/changelog",
             "CacheReadPricePerUnit": 0.14,
             "CacheWritePricePerUnit": null,
             "EndedAt": "2026-09-26T00:00:00.000Z"
@@ -19704,8 +19807,8 @@
             "ID": "815E9451-CEBB-4FCA-92A1-BEB6ABA61F3D"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:02.536Z",
-            "checksum": "49b3fb7d4aa0b803b7c265d2e8a25fe98c5d3231b3dbb6c2af2f136449fc03be"
+            "lastModified": "2026-10-06T20:21:37.777Z",
+            "checksum": "82deb46a44ee4bf0a9859337dbfbf23ed2756eaec0503b85e689ba9d732aa8d2"
           }
         }
       ]
@@ -19860,7 +19963,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "MistralLLM",
             "APIName": "magistral-medium-2509",
             "MaxInputTokens": 128000,
@@ -19879,8 +19982,8 @@
             "ID": "00BBB344-8F0F-4A0C-9D37-D465D24ED975"
           },
           "sync": {
-            "lastModified": "2026-09-13T20:06:40.825Z",
-            "checksum": "eda4aaeb70bc5c53773df1771763a8602ccf668cb29ca023adc5770357d9b74d"
+            "lastModified": "2026-10-06T20:21:37.303Z",
+            "checksum": "a2f17e47108a3d367bd84b379d742dd112edb618a38fadb37fb92241704b0a75"
           }
         },
         {
@@ -19941,21 +20044,22 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
             "StartedAt": "2025-09-18T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2,
             "OutputPricePerUnit": 5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Magistral Medium 1.2 (magistral-medium-2509) pricing on Mistral direct API. $2.00 / $5.00 per 1M tokens. Reasoning model — expect 2-5x more output tokens than a generalist for the same task. Sources: https://mistral.ai/pricing/ ; https://docs.mistral.ai/models/magistral-medium-1-2-25-09 ; https://artificialanalysis.ai/providers/mistral"
+            "Comments": "Magistral Medium 1.2 (magistral-medium-2509) pricing on Mistral direct API. $2.00 / $5.00 per 1M tokens. Reasoning model — expect 2-5x more output tokens than a generalist for the same task. Sources: https://mistral.ai/pricing/ ; https://docs.mistral.ai/models/magistral-medium-1-2-25-09 ; https://artificialanalysis.ai/providers/mistral EXPIRED 2026-07-31: Mistral retired this model on its own platform. Its catalogue entry carries status \"Deprecated\", legacy true and retirementDate 2026-07-31, naming Mistral Medium 3.5 as the replacement. Only the Mistral-direct route is retired - the Amazon Bedrock and OpenRouter rows are untouched, and AWS still sells the Bedrock edition. Row preserved for historical pricing lookups. Source: https://github.com/mistralai/platform-docs-public/blob/main/src/schema/models/models/magistral-medium-1-2-25-09.ts",
+            "EndedAt": "2026-07-31T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "EBC21B92-084E-47D9-9289-4A07CECDAACB"
           },
           "sync": {
-            "lastModified": "2026-07-01T23:25:34.694Z",
-            "checksum": "bafcd20a1313edf87abda335ee326967752785c3679a1bc4226f319705623d07"
+            "lastModified": "2026-10-06T20:21:37.329Z",
+            "checksum": "40d56380049371618d7fbd3da03e5f34407ecd9275589aa47c111a396aead7e9"
           }
         },
         {
@@ -20035,7 +20139,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "MistralLLM",
             "APIName": "magistral-small-2509",
             "MaxInputTokens": 128000,
@@ -20054,8 +20158,8 @@
             "ID": "2FCEE235-EB0B-4A16-8F20-0CA71D26E2B3"
           },
           "sync": {
-            "lastModified": "2026-09-13T20:06:40.836Z",
-            "checksum": "8b1b8b70b13bd299412ac4368b9e761c627ff057794a57977ff340cdc1115a3e"
+            "lastModified": "2026-10-06T20:21:37.347Z",
+            "checksum": "3950af72e707e477da49bc122c325ba5c423e04f54c4da6066ddb8d6b14987e5"
           }
         },
         {
@@ -20116,21 +20220,22 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
             "StartedAt": "2025-09-18T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 0.5,
             "OutputPricePerUnit": 1.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Magistral Small 1.2 (magistral-small-2509) pricing on Mistral direct API. $0.50 / $1.50 per 1M tokens. Open weights under Apache 2.0. Reasoning model - expect 2-5x more output tokens than a generalist. Sources: https://mistral.ai/pricing/ ; https://huggingface.co/mistralai/Magistral-Small-2509 ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-mistral-ai-magistral-small-2509.html"
+            "Comments": "Magistral Small 1.2 (magistral-small-2509) pricing on Mistral direct API. $0.50 / $1.50 per 1M tokens. Open weights under Apache 2.0. Reasoning model - expect 2-5x more output tokens than a generalist. Sources: https://mistral.ai/pricing/ ; https://huggingface.co/mistralai/Magistral-Small-2509 ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-mistral-ai-magistral-small-2509.html EXPIRED 2026-07-31: Mistral retired this model on its own platform. Its catalogue entry carries status \"Deprecated\", legacy true and retirementDate 2026-07-31, naming Mistral Small 4 as the replacement. Only the Mistral-direct route is retired - the Amazon Bedrock and OpenRouter rows are untouched, and AWS still sells the Bedrock edition. Row preserved for historical pricing lookups. Source: https://github.com/mistralai/platform-docs-public/blob/main/src/schema/models/models/magistral-small-1-2-25-09.ts",
+            "EndedAt": "2026-07-31T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "1A59B71B-E08C-47EB-9E6B-CCD66BA7B66F"
           },
           "sync": {
-            "lastModified": "2026-07-01T23:25:34.795Z",
-            "checksum": "fbe02fb0cbaccb714034a8e770fc02b4cad25450c5b72d46ef4129af690beb3c"
+            "lastModified": "2026-10-06T20:21:37.361Z",
+            "checksum": "13daf73b1c29cc391119969529e0c5befb9bcfeec89e274d9063780593795145"
           }
         },
         {
@@ -20287,21 +20392,22 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "StartedAt": "2026-06-30T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2,
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Sonnet 5 launch pricing on Anthropic direct as of June 30, 2026 GA: $2/$10 per 1M tokens (in/out). Introductory rate; steps up to standard $3/$15 per 1M tokens on September 1, 2026 (parity with Sonnet 4.6 per-token pricing). New Claude 5 tokenizer produces ~30-35% more tokens for the same input text than Sonnet 4.6, so blended per-request cost may still rise even at unchanged token rates. Sources: https://www.anthropic.com/news/claude-sonnet-5 ; https://platform.claude.com/docs/en/about-claude/pricing ; https://thenewstack.io/claude-sonnet-5-launch/ ; https://simonwillison.net/2026/Jun/30/claude-sonnet-5/"
+            "Comments": "Claude Sonnet 5 launch pricing on Anthropic direct as of June 30, 2026 GA: $2/$10 per 1M tokens (in/out). Introductory rate; steps up to standard $3/$15 per 1M tokens on September 1, 2026 (parity with Sonnet 4.6 per-token pricing). New Claude 5 tokenizer produces ~30-35% more tokens for the same input text than Sonnet 4.6, so blended per-request cost may still rise even at unchanged token rates. Sources: https://www.anthropic.com/news/claude-sonnet-5 ; https://platform.claude.com/docs/en/about-claude/pricing ; https://thenewstack.io/claude-sonnet-5-launch/ ; https://simonwillison.net/2026/Jun/30/claude-sonnet-5/. EXPIRED 2026-09-01: superseded by the row starting 2026-09-01 at the same $2/$10 rate. Two concurrent Active rows existed for this model+vendor because the launch row was written for introductory pricing through 2026-08-31 and a second row was added when that became the standard price; Anthropic has confirmed the scheduled increase to $3/$15 will not occur. Closing this row leaves one Active row and a contiguous history. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "EndedAt": "2026-09-01T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "960E27FF-F0D4-49FF-A77B-2A7295A63661"
           },
           "sync": {
-            "lastModified": "2026-07-07T15:18:22.984Z",
-            "checksum": "479521d7e4ad8c79f94d3082b8ff0f6aa2d73b32d47d2b368daf613141ba4237"
+            "lastModified": "2026-10-06T20:21:37.618Z",
+            "checksum": "a0210ec25637cd85c35ea4cadd785280114337281cf4f15abc4d4e7e62f2a01e"
           }
         },
         {
@@ -20309,21 +20415,22 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
             "StartedAt": "2026-06-30T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2,
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Sonnet 5 launch pricing on Amazon Bedrock as of June 30, 2026 simultaneous availability. Vendor-parity with Anthropic direct ($2/$10 per 1M tokens intro; steps to $3/$15 on Sept 1, 2026). Cross-region inference adds ~10%. Model ID: anthropic.claude-sonnet-5. Sources: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5.html ; https://aws.amazon.com/blogs/machine-learning/introducing-claude-sonnet-5-on-aws-anthropics-most-capable-sonnet-model/"
+            "Comments": "Claude Sonnet 5 launch pricing on Amazon Bedrock as of June 30, 2026 simultaneous availability. Vendor-parity with Anthropic direct ($2/$10 per 1M tokens intro; steps to $3/$15 on Sept 1, 2026). Cross-region inference adds ~10%. Model ID: anthropic.claude-sonnet-5. Sources: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5.html ; https://aws.amazon.com/blogs/machine-learning/introducing-claude-sonnet-5-on-aws-anthropics-most-capable-sonnet-model/. EXPIRED 2026-09-01: superseded by the row starting 2026-09-01 at the same $2/$10 rate. Two concurrent Active rows existed for this model+vendor because the launch row was written for introductory pricing through 2026-08-31 and a second row was added when that became the standard price; Anthropic has confirmed the scheduled increase to $3/$15 will not occur. Closing this row leaves one Active row and a contiguous history. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "EndedAt": "2026-09-01T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "E87DBE7D-F9BC-476A-8CFB-3A410E5DFEDC"
           },
           "sync": {
-            "lastModified": "2026-07-07T15:18:22.996Z",
-            "checksum": "83533ea236724fdcedab9ddf88b45e5237d4815101d72f2c7eaceabddd2ecb14"
+            "lastModified": "2026-10-06T20:21:37.636Z",
+            "checksum": "f011d10bb95d6e337c3acd983d67e766115cc45802dd54ce4e0cae6d93e94e38"
           }
         },
         {
@@ -20331,21 +20438,22 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "StartedAt": "2026-06-30T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2,
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Sonnet 5 on OpenRouter (passthrough pricing). Source: https://openrouter.ai/anthropic/claude-sonnet-5"
+            "Comments": "Claude Sonnet 5 on OpenRouter (passthrough pricing). Source: https://openrouter.ai/anthropic/claude-sonnet-5. EXPIRED 2026-09-01: superseded by the row starting 2026-09-01 at the same $2/$10 rate. Two concurrent Active rows existed for this model+vendor because the launch row was written for introductory pricing through 2026-08-31 and a second row was added when that became the standard price; Anthropic has confirmed the scheduled increase to $3/$15 will not occur. Closing this row leaves one Active row and a contiguous history. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "EndedAt": "2026-09-01T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "57EB99A8-3D01-49EF-83FC-C33404EF2834"
           },
           "sync": {
-            "lastModified": "2026-07-07T15:18:23.007Z",
-            "checksum": "1b56baa15af7e127189388873027de6e61c7e10b570b2ab796dca30645cc423b"
+            "lastModified": "2026-10-06T20:21:37.651Z",
+            "checksum": "ee09612e91d8848607719f777bd0cec1dab203bc9575b781863b93acd47797c8"
           }
         },
         {
@@ -20360,16 +20468,16 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Sonnet 5 PERMANENT pricing effective September 1, 2026 on Anthropic direct. Anthropic announced 2026-08-10 that the introductory $2/$10 per 1M rate — originally scheduled to expire August 31, 2026 and step up to $3/$15 (parity with Sonnet 4.6 per-token pricing) — is now PERMANENT. This row exists to document the price freeze in the cost history: it fires on the same date the previously-scheduled step-up would have taken effect, at the introductory rate rather than the cancelled $3/$15. Prices are unchanged from the 2026-06-30 launch row. Cache-read and cache-write rates are unchanged from the prior row (previously not recorded; leaving null to avoid asserting values not verified from a first-party source at this cutover). The stale 'steps up on Sept 1' guidance in the June 30 row's Comments field should be understood as superseded by this row's presence. Sources: https://x.com/claudeai/status/2086891169217122586 ; https://platform.claude.com/docs/en/about-claude/pricing ; https://www.anthropic.com/news/claude-sonnet-5",
-            "CacheReadPricePerUnit": null,
-            "CacheWritePricePerUnit": null
+            "Comments": "Claude Sonnet 5 PERMANENT pricing effective September 1, 2026 on Anthropic direct. Anthropic announced 2026-08-10 that the introductory $2/$10 per 1M rate — originally scheduled to expire August 31, 2026 and step up to $3/$15 (parity with Sonnet 4.6 per-token pricing) — is now PERMANENT. This row exists to document the price freeze in the cost history: it fires on the same date the previously-scheduled step-up would have taken effect, at the introductory rate rather than the cancelled $3/$15. Prices are unchanged from the 2026-06-30 launch row. Cache-read and cache-write rates are unchanged from the prior row (previously not recorded; leaving null to avoid asserting values not verified from a first-party source at this cutover). The stale 'steps up on Sept 1' guidance in the June 30 row's Comments field should be understood as superseded by this row's presence. Sources: https://x.com/claudeai/status/2086891169217122586 ; https://platform.claude.com/docs/en/about-claude/pricing ; https://www.anthropic.com/news/claude-sonnet-5. Cache rates added 2026-10-05 from Anthropic's own rate card: cache read/refresh $0.2/1M, 5-minute cache write $2.5/1M. The base $2/$10 rate is unchanged, so this row is amended rather than superseded. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": 2.5
           },
           "primaryKey": {
             "ID": "DF0BC95F-36E4-4902-BD4D-BA22AB708E3D"
           },
           "sync": {
-            "lastModified": "2026-08-20T22:30:02.956Z",
-            "checksum": "5acb0208fcce33276ca637d6d7015a6b1284e31f6f8c4e5850af50dee35120fc"
+            "lastModified": "2026-10-06T20:21:37.672Z",
+            "checksum": "1a9dc392ff977450ad640f3d2a8d2da359f1b9a23485e4eaca9076f6ad148a9b"
           }
         },
         {
@@ -20384,16 +20492,16 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Sonnet 5 PERMANENT pricing effective September 1, 2026 on Amazon Bedrock. Same rationale as the Anthropic direct row: Anthropic's Aug 10 announcement making $2/$10 permanent flows through to Bedrock, which follows Anthropic direct list pricing. Bedrock cross-region inference may still add ~10% on top of these figures. Sources: https://x.com/claudeai/status/2086891169217122586 ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5.html",
-            "CacheReadPricePerUnit": null,
-            "CacheWritePricePerUnit": null
+            "Comments": "Claude Sonnet 5 PERMANENT pricing effective September 1, 2026 on Amazon Bedrock. Same rationale as the Anthropic direct row: Anthropic's Aug 10 announcement making $2/$10 permanent flows through to Bedrock, which follows Anthropic direct list pricing. Bedrock cross-region inference may still add ~10% on top of these figures. Sources: https://x.com/claudeai/status/2086891169217122586 ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5.html Cache rates added 2026-10-05 from the AWS Bedrock price list (us-east-1, publication 2026-09-30), global cross-region tier: cache read $0.2/1M, 5-minute cache write $2.5/1M. The base $2/$10 already matched that tier, so this row is amended rather than superseded. Regional (in-region) inference is 10% higher and is not modelled. Source: https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/current/us-east-1/index.json",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": 2.5
           },
           "primaryKey": {
             "ID": "423EA5DF-A1F7-4A02-9E60-6BA17FDC410B"
           },
           "sync": {
-            "lastModified": "2026-08-20T22:30:02.974Z",
-            "checksum": "2c4679300f0c5a9ff5e68a31a29dbbb48a7d18596f6a3c87a9ed95bce81928e5"
+            "lastModified": "2026-10-06T20:21:37.689Z",
+            "checksum": "41604cf251990b780e52b9bef0e179a29b9e197bbe01ad579e4d088b6d10b30c"
           }
         },
         {
@@ -20558,14 +20666,16 @@
             "OutputPricePerUnit": 50,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Fable 5 pricing on Anthropic direct as of June 9, 2026 GA: $10/$50 per 1M tokens (in/out) - exactly 2x Opus 4.8's rate card. Pricing shared with Claude Mythos 5 (same specs). Sources: https://www.anthropic.com/news/claude-fable-5-mythos-5 ; https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/about-claude/models/introducing-claude-fable-5-and-claude-mythos-5"
+            "Comments": "Claude Fable 5 pricing on Anthropic direct as of June 9, 2026 GA: $10/$50 per 1M tokens (in/out) - exactly 2x Opus 4.8's rate card. Pricing shared with Claude Mythos 5 (same specs). Sources: https://www.anthropic.com/news/claude-fable-5-mythos-5 ; https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/about-claude/models/introducing-claude-fable-5-and-claude-mythos-5. Cache rates added 2026-10-05 from Anthropic's own rate card: cache read/refresh $1/1M, 5-minute cache write $12.5/1M. The base $10/$50 rate is unchanged, so this row is amended rather than superseded. Source: https://platform.claude.com/docs/en/about-claude/pricing",
+            "CacheReadPricePerUnit": 1,
+            "CacheWritePricePerUnit": 12.5
           },
           "primaryKey": {
             "ID": "68745FF6-D11E-4E02-B889-7A21939AFC65"
           },
           "sync": {
-            "lastModified": "2026-07-07T15:18:22.686Z",
-            "checksum": "9d53f113f71ee6562c75c890362eb6397a4309001488aad6aba6f39ac90025b0"
+            "lastModified": "2026-10-06T20:21:37.376Z",
+            "checksum": "749bf42a415ab459380064db2924f162ecc1e807c186e2124c9949036a0bedf2"
           }
         },
         {
@@ -20580,14 +20690,16 @@
             "OutputPricePerUnit": 50,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Fable 5 pricing on Amazon Bedrock. Originally available June 9, 2026, briefly withdrawn to comply with a US government export-control directive, restored on July 1, 2026 with stronger guardrails. Vendor-parity pricing with Anthropic direct ($10/$50 per 1M). Model ID: anthropic.claude-fable-5. Cross-region inference adds ~10%. Sources: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-fable-5.html ; https://www.aboutamazon.com/news/aws/claude-fable-5-anthropic-available-amazon-bedrock"
+            "Comments": "Claude Fable 5 pricing on Amazon Bedrock. Originally available June 9, 2026, briefly withdrawn to comply with a US government export-control directive, restored on July 1, 2026 with stronger guardrails. Vendor-parity pricing with Anthropic direct ($10/$50 per 1M). Model ID: anthropic.claude-fable-5. Cross-region inference adds ~10%. Sources: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-fable-5.html ; https://www.aboutamazon.com/news/aws/claude-fable-5-anthropic-available-amazon-bedrock Cache rates added 2026-10-05 from the AWS Bedrock price list (us-east-1, publication 2026-09-30), global cross-region tier: cache read $1/1M, 5-minute cache write $12.5/1M. The base $10/$50 already matched that tier, so this row is amended rather than superseded. Regional (in-region) inference is 10% higher and is not modelled. Source: https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/current/us-east-1/index.json",
+            "CacheReadPricePerUnit": 1,
+            "CacheWritePricePerUnit": 12.5
           },
           "primaryKey": {
             "ID": "631D63B0-27FF-4149-BDD5-B144E1B96465"
           },
           "sync": {
-            "lastModified": "2026-07-07T15:18:22.699Z",
-            "checksum": "b015174676a91dc4cee3a3a9044dff72a7b95e15917ebceecd2e4517a9563e33"
+            "lastModified": "2026-10-06T20:21:37.391Z",
+            "checksum": "85ed4624de3195394ad05158ac82ecbaf7d30e12b610b2cafa562d94c1f91ede"
           }
         },
         {
@@ -21181,7 +21293,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "StartedAt": "2026-07-10T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2.5,
@@ -21190,14 +21302,15 @@
             "CacheWritePricePerUnit": null,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.6-terra pricing on OpenAI as of July 2026. $2.50/$15.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. SUPERSEDED 2026-07-30 by 20% price cut to $2.00/$12.00 (see next cost row)."
+            "Comments": "GPT 5.6-terra pricing on OpenAI as of July 2026. $2.50/$15.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. SUPERSEDED 2026-07-30 by 20% price cut to $2.00/$12.00 (see next cost row). EXPIRED 2026-07-30: superseded by the row starting 2026-07-30, which records the lower rate. The older row was never closed, leaving two concurrent Active rows for the same model+vendor. No new vendor data was needed for this fix - both rows were already in the catalogue.",
+            "EndedAt": "2026-07-30T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "60C58C8B-B5A4-4335-BCFD-2D2A65AD7DEA"
           },
           "sync": {
-            "lastModified": "2026-08-05T18:34:33.556Z",
-            "checksum": "cfdfe8b56cdf5ac11cf641e06becdb7cf0d88ac28b27e4489553efb5b7de2063"
+            "lastModified": "2026-10-06T20:21:37.412Z",
+            "checksum": "e8f51261f0d17e7331ec25850dfc9ad0309269374c639e87d8a849b5ee814505"
           }
         },
         {
@@ -21304,7 +21417,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "StartedAt": "2026-07-10T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 1,
@@ -21313,14 +21426,15 @@
             "CacheWritePricePerUnit": null,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.6-luna pricing on OpenAI as of July 2026. $1.00/$6.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. SUPERSEDED 2026-07-30 by 80% price cut to $0.20/$1.20 (see next cost row)."
+            "Comments": "GPT 5.6-luna pricing on OpenAI as of July 2026. $1.00/$6.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. SUPERSEDED 2026-07-30 by 80% price cut to $0.20/$1.20 (see next cost row). EXPIRED 2026-07-30: superseded by the row starting 2026-07-30, which records the lower rate. The older row was never closed, leaving two concurrent Active rows for the same model+vendor. No new vendor data was needed for this fix - both rows were already in the catalogue.",
+            "EndedAt": "2026-07-30T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "5121599E-71C3-46AB-9AA5-43006565F2B7"
           },
           "sync": {
-            "lastModified": "2026-08-05T18:34:33.612Z",
-            "checksum": "375caa454aef8b46578a621e73a5a25de8aa1d6c8492b062803b9bafc8eb5ea1"
+            "lastModified": "2026-10-06T20:21:37.433Z",
+            "checksum": "76ffd2da3a14367f088a3bbdf748b2655034ce73ebd1a7eba098399820e5eb0f"
           }
         },
         {
@@ -22493,16 +22607,16 @@
             "OutputPricePerUnit": 25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 5 launch pricing on Anthropic direct as of July 24, 2026: $5/$25 per 1M tokens — same as Opus 4.8 at doubled Frontier-Bench performance. Cache hit at $0.50/1M (up to 90% savings). Batch API 50% discount ($2.50/$12.50). Fast mode at $10/$50 per 1M (2.5x throughput / 2x price). Sources: https://www.anthropic.com/news/claude-opus-5 ; https://platform.claude.com/docs/en/about-claude/models/overview ; https://platform.claude.com/docs/en/about-claude/pricing ; https://openrouter.ai/anthropic/claude-opus-5",
+            "Comments": "Claude Opus 5 launch pricing on Anthropic direct as of July 24, 2026: $5/$25 per 1M tokens — same as Opus 4.8 at doubled Frontier-Bench performance. Cache hit at $0.50/1M (up to 90% savings). Batch API 50% discount ($2.50/$12.50). Fast mode at $10/$50 per 1M (2.5x throughput / 2x price). Sources: https://www.anthropic.com/news/claude-opus-5 ; https://platform.claude.com/docs/en/about-claude/models/overview ; https://platform.claude.com/docs/en/about-claude/pricing ; https://openrouter.ai/anthropic/claude-opus-5 AMENDED 2026-10-12: 5-minute cache write recorded as $6.25/1M from https://platform.claude.com/docs/en/about-claude/pricing (1-hour cache write $10/1M is not representable in this schema). Base rates unchanged.",
             "CacheReadPricePerUnit": 0.5,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": 6.25
           },
           "primaryKey": {
             "ID": "BF1FE2DA-3B0D-479C-B30D-1AFF62970BB5"
           },
           "sync": {
-            "lastModified": "2026-07-28T16:46:12.683Z",
-            "checksum": "a5db2bd4bfe0a895fb93ecb18f9a0884eaf188a2cd577f8e9ccc1992f94575ab"
+            "lastModified": "2026-10-13T18:59:59.068Z",
+            "checksum": "6926a66b67dd5d58b293d120ea4e8086847d28d80c65325549d9d89a5f3a4eda"
           }
         },
         {
@@ -24200,7 +24314,7 @@
             "OutputPricePerUnit": 0.1667,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GLM-5.3-Flash on OpenRouter listed at $0.05/$0.1667 per 1M input/output as of 2026-08-26. Values reflect a limited-time 50% Z.AI promo (through 2026-09-09 16:00 UTC); a follow-up cost row should be added once the promo expires so the historical rate is preserved and post-promo pricing is captured accurately. Source: https://openrouter.ai/z-ai/glm-5.3-flash EXPIRED 2026-09-09T16:00Z: Z.AI's 50% launch promo ended at 24:00 Singapore time (UTC+8) on 2026-09-09, the date and time pre-announced in the 2026-09-07 research report. Superseded by the list-rate row below. Note the promo figure recorded here ($0.05/$0.1667) is the rate captured at 2026-08-26; Z.AI's own later materials describe the promo as $0.075/$0.25, so the two disagree — the discrepancy is left as recorded rather than rewritten after the fact, and it does not affect the forward rate.",
+            "Comments": "GLM-5.3-Flash on OpenRouter listed at $0.05/$0.1667 per 1M input/output as of 2026-08-26. Values reflect a limited-time 50% Z.AI promo (through 2026-09-09 16:00 UTC); a follow-up cost row should be added once the promo expires so the historical rate is preserved and post-promo pricing is captured accurately. Source: https://openrouter.ai/z-ai/glm-5.3-flash. EXPIRED 2026-09-09T16:00Z: Z.AI's 50% launch promo ended at 24:00 Singapore time (UTC+8) on 2026-09-09, the date and time pre-announced in the 2026-09-07 research report. Superseded by the list-rate row below. Note the promo figure recorded here ($0.05/$0.1667) is the rate captured at 2026-08-26; Z.AI's own later materials describe the promo as $0.075/$0.25, so the two disagree — the discrepancy is left as recorded rather than rewritten after the fact, and it does not affect the forward rate.",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null,
             "EndedAt": "2026-09-09T16:00:00.000Z"
@@ -24209,8 +24323,8 @@
             "ID": "C4F43C5F-1AAD-4EEB-A90D-8840A3C3756E"
           },
           "sync": {
-            "lastModified": "2026-09-13T20:06:42.006Z",
-            "checksum": "2109dd8f663f315296457a404cebd57bcf16c8f12d394a7d85b042eb17d53275"
+            "lastModified": "2026-10-06T20:21:37.463Z",
+            "checksum": "ea6442815736f396d0f24ab5d8c6712d2e857afed89bf9070449996b4081bd06"
           }
         },
         {
@@ -24509,7 +24623,12 @@
       "SpeedRank": 6,
       "CostRank": 10,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Fable 5"
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Fable 5",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsForcedToolChoice": false
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -24639,16 +24758,16 @@
             "OutputPricePerUnit": 50,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Fable 5.1 pricing on Amazon Bedrock at vendor parity with Anthropic direct ($10/$50 per 1M). Bedrock model ID anthropic.claude-fable-5-1. Regional and multi-region endpoints carry a 10% premium over global endpoints; Bedrock sets its own retirement schedule independently of the Claude API. Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-fable-5-1.html",
-            "CacheReadPricePerUnit": null,
-            "CacheWritePricePerUnit": null
+            "Comments": "Claude Fable 5.1 pricing on Amazon Bedrock at vendor parity with Anthropic direct ($10/$50 per 1M). Bedrock model ID anthropic.claude-fable-5-1. Regional and multi-region endpoints carry a 10% premium over global endpoints; Bedrock sets its own retirement schedule independently of the Claude API. Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-fable-5-1.html Cache rates added 2026-10-05 from the AWS Bedrock price list (us-east-1, publication 2026-09-30), global cross-region tier: cache read $0.25/1M, 5-minute cache write $12.5/1M. The base $10/$50 already matched that tier, so this row is amended rather than superseded. Regional (in-region) inference is 10% higher and is not modelled. Source: https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/current/us-east-1/index.json",
+            "CacheReadPricePerUnit": 0.25,
+            "CacheWritePricePerUnit": 12.5
           },
           "primaryKey": {
             "ID": "AC766DB5-E4C0-4974-9C28-0861B8215DC1"
           },
           "sync": {
-            "lastModified": "2026-09-10T17:40:34.201Z",
-            "checksum": "80128670a54895a321d62e5ef04c7519dd5a80d7892ff99ed14a61c205a192c6"
+            "lastModified": "2026-10-06T20:21:37.586Z",
+            "checksum": "58749ca432f19007df88c78e7fabcd72e7a4b5d256375c8f35e8d3eea317f139"
           }
         },
         {
@@ -24681,8 +24800,8 @@
       "ID": "E36C093C-7A76-4096-954E-1284394FAEF0"
     },
     "sync": {
-      "lastModified": "2026-09-10T17:40:33.989Z",
-      "checksum": "71760f6c3ec98270798544441d210c5fd395f5e13cee281855309a2431ccd058"
+      "lastModified": "2026-10-06T20:21:37.480Z",
+      "checksum": "68cefaa71e012c375ca3b56c0753acd9e48381b197e2f0a8ac2246b6e24f0f0a"
     }
   },
   {
@@ -25151,7 +25270,12 @@
       "IsActive": true,
       "SpeedRank": 10,
       "CostRank": 5,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Realtime": {
+          "FullDuplex": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -25164,14 +25288,19 @@
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer",
+            "ModelConfiguration": {
+              "Realtime": {
+                "FullDuplex": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "F3431AC6-C079-4866-9F46-A2F38E5A57EB"
           },
           "sync": {
-            "lastModified": "2026-09-11T18:26:10.511Z",
-            "checksum": "4c36fe1d06911fb5186661acf8a5c6e0774e82d8b49fe2bd22b181ce78f636b9"
+            "lastModified": "2026-10-13T18:59:58.599Z",
+            "checksum": "a2f9c947629d79f37348f6b767f5b430c587ae114009a3d1af0e36f591d0a03e"
           }
         },
         {
@@ -25185,14 +25314,19 @@
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "Realtime": {
+                "FullDuplex": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "29B5A4BC-C201-4341-B60E-C3E929E4E513"
           },
           "sync": {
-            "lastModified": "2026-09-11T18:26:10.530Z",
-            "checksum": "79018d295810b843d44e85aa24d229a5bc213930a7edb5dfb4fd5458e1bf523d"
+            "lastModified": "2026-10-13T18:59:58.610Z",
+            "checksum": "c3d0b34b26b211adb27295f11b168b29fd116053f61ad706b8218c56c49cd9c1"
           }
         }
       ],
@@ -25259,8 +25393,8 @@
       "ID": "51F8EF42-316F-41CB-81E9-A63996AD90F7"
     },
     "sync": {
-      "lastModified": "2026-09-11T18:26:10.296Z",
-      "checksum": "2f15dc0b913fa23cfa395c278048ceeee97896b3541e3d6c27b0b1da7652ada5"
+      "lastModified": "2026-10-13T18:59:58.428Z",
+      "checksum": "bc4af87f06f3e6a8924e7f6a76de601dfb2942ba417144f276994cb6dd68045b"
     }
   },
   {
@@ -25480,7 +25614,8 @@
           },
           "TurnDetection": {
             "Coverage": "audioActivityAndAllVideo"
-          }
+          },
+          "FullDuplex": true
         }
       }
     },
@@ -25507,7 +25642,8 @@
                 },
                 "TurnDetection": {
                   "Coverage": "audioActivityAndAllVideo"
-                }
+                },
+                "FullDuplex": true
               }
             }
           },
@@ -25515,8 +25651,53 @@
             "ID": "36768861-A896-4650-9A3D-7844F305C551"
           },
           "sync": {
-            "lastModified": "2026-09-16T01:46:08.462Z",
-            "checksum": "dd069eb4871bed14cdbceb9ce69965f0b21537fa59061b6aaa1e2390d206505b"
+            "lastModified": "2026-10-13T18:59:58.624Z",
+            "checksum": "f76a116dd620031395b7c9d85715edf6980dd24fd5aa3192d1319ad90a6cd6f9"
+          }
+        },
+        {
+          "_comments": [
+            "Realtime.TurnDetection.Coverage is audioActivityOnly on this row, unlike the model's and the Google row's: Gemini Enterprise refuses TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO at session setup (1007, invalid value at setup.realtime_input_config.turn_coverage; found against Vertex AI on 2026-10-09). The Gemini Enterprise driver sends only activity there whatever is configured.",
+            "Realtime.Pricing.AvatarVideoOutput is $1.00 per 1M avatar video output tokens, Google's Vertex AI Live API list price. It prices the output tokens Google reports as VIDEO, not the stored video seconds: Google bills avatar video only while the avatar speaks, while the stored seconds also count the idle avatar between answers."
+          ],
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiEnterpriseRealtime",
+            "APIName": "gemini-3.8-live",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "Realtime": {
+                "IdleSignal": "turnComplete",
+                "Tooling": {
+                  "SupportsBlockingExecution": true,
+                  "SupportsScheduling": true
+                },
+                "TurnDetection": {
+                  "Coverage": "audioActivityOnly"
+                },
+                "FullDuplex": true,
+                "Pricing": {
+                  "AvatarVideoOutput": {
+                    "Price": 1,
+                    "Unit": "Per 1M Tokens",
+                    "Currency": "USD"
+                  }
+                }
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "F1530B5B-DF16-4A9F-9B86-CE5515A16C3C"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:58.655Z",
+            "checksum": "51f16226a9c90357f52aa5878e19760240c5c8130b5f2bf7be816d9e9b1c0ee1"
           }
         }
       ],
@@ -25567,6 +25748,29 @@
           "sync": {
             "lastModified": "2026-09-16T01:46:08.522Z",
             "checksum": "3309f8854e907cea481f6e2381b9fc1cc2487f8e17e8750cec56ea9c75186d56"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-10-08T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "InputPricePerUnit": 0.75,
+            "OutputPricePerUnit": 4.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.8 Live on Vertex AI (Gemini Enterprise) text token pricing: $0.75 / 1M input tokens, $4.50 / 1M output tokens. Mirrors the Gemini Developer API list price; VERIFY against the Vertex AI price list. Avatar video output is priced separately, by ModelConfiguration.Realtime.Pricing.AvatarVideoOutput on the Vertex AI model-vendor row: $1.00 / 1M avatar video output tokens, which Google charges only while the avatar speaks.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "DAE66EEC-FC6D-4F23-B3F4-C83E30C2A8E1"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:58.688Z",
+            "checksum": "7e95abc3bdec1ed116ec70e212355f063777496d8f7652afe0bee612f900ee51"
           }
         }
       ],
@@ -25660,6 +25864,21 @@
             "lastModified": "2026-09-16T01:46:08.653Z",
             "checksum": "16dd2415bd0f49e0bd34d574f77c77aa96912cbdf9218f57d322995db6f5574a"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Video",
+            "Direction": "Output",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "3DE5F368-BF5E-4806-8043-8B09BE7CEAE9"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:58.714Z",
+            "checksum": "968bb22ce632976471cae7c63db3166279bf4a2465570f67ef7b82771a70fcd5"
+          }
         }
       ]
     },
@@ -25667,8 +25886,8 @@
       "ID": "C5650EB0-9394-4800-B514-462272FF4011"
     },
     "sync": {
-      "lastModified": "2026-09-16T01:46:08.294Z",
-      "checksum": "ad5d50d8a30f7e2ecdf59f430ed3d0691debe4b319014f2f5cb41432c26a32a7"
+      "lastModified": "2026-10-13T18:59:58.442Z",
+      "checksum": "6296cb2ae9000460689cb318ec3399cc1153e51a0d1532c3fc18012d89ee215d"
     }
   },
   {
@@ -25691,7 +25910,11 @@
           "Reasoning": {
             "IncludeThoughtSummaries": true,
             "Level": "medium"
-          }
+          },
+          "TurnDetection": {
+            "Coverage": "audioActivityAndAllVideo"
+          },
+          "FullDuplex": true
         }
       }
     },
@@ -25719,7 +25942,11 @@
                 "Reasoning": {
                   "IncludeThoughtSummaries": true,
                   "Level": "medium"
-                }
+                },
+                "TurnDetection": {
+                  "Coverage": "audioActivityAndAllVideo"
+                },
+                "FullDuplex": true
               }
             }
           },
@@ -25727,8 +25954,8 @@
             "ID": "9C4C6061-5E16-48FD-806F-4D441FEBECAB"
           },
           "sync": {
-            "lastModified": "2026-09-16T01:46:08.460Z",
-            "checksum": "c56a71ab624693152dae987664d6bbdb65193a43b484d22a189be3060c87ffbb"
+            "lastModified": "2026-10-13T18:59:58.729Z",
+            "checksum": "0db6d9de8e1aace6e1c29f2404e8c50118599996d0d6d9921e4f186fa881205c"
           }
         }
       ],
@@ -25879,8 +26106,8 @@
       "ID": "A49C8499-56ED-4BFB-9538-9A0472B5AB23"
     },
     "sync": {
-      "lastModified": "2026-09-16T01:46:08.293Z",
-      "checksum": "83bc5757be51e2f182f05d5808eec3f18d478d1f706ab1ed7f94ab3a32ccf9ab"
+      "lastModified": "2026-10-13T18:59:58.453Z",
+      "checksum": "c8628a3c011e5a4e229901512e6b0a2916f194975ba3a355d2402b4196a743e0"
     }
   },
   {
@@ -26050,7 +26277,8 @@
           "SupportsNativeToolCalling": true,
           "DefaultToNativeToolCalling": false,
           "NativeControlFlow": "implicit",
-          "NativeToolResults": true
+          "NativeToolResults": true,
+          "SupportsForcedToolChoice": false
         }
       }
     },
@@ -26229,8 +26457,8 @@
       "ID": "82151749-3597-4C99-8D7D-F8171A7155E8"
     },
     "sync": {
-      "lastModified": "2026-09-29T19:19:10.160Z",
-      "checksum": "1cbf05427b71ac371ccf3ec0392776c01137d6611454915278d28ade4223362f"
+      "lastModified": "2026-10-06T20:21:37.795Z",
+      "checksum": "65c92675285c0185b4a14d9f3020b5430fa328364bb9a4e8583e77eece0de013"
     }
   },
   {
@@ -27270,7 +27498,8 @@
           "SupportsNativeToolCalling": true,
           "DefaultToNativeToolCalling": false,
           "NativeControlFlow": "implicit",
-          "NativeToolResults": true
+          "NativeToolResults": true,
+          "SupportsForcedToolChoice": false
         }
       }
     },
@@ -27383,16 +27612,16 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "CacheReadPricePerUnit": 0.2,
+            "CacheReadPricePerUnit": 0.1,
             "CacheWritePricePerUnit": 2.5,
-            "Comments": "Claude Sonnet 5.5 launch pricing on Anthropic direct (2026-09-28), from Anthropic's own rate card: $2/$10 per 1M in/out, cache reads $0.20/1M, 5-minute cache write $2.50/1M, 1-hour cache write $4/1M (not representable in this schema). Batch API is half rate ($1/$5). Source: https://platform.claude.com/docs/en/about-claude/pricing"
+            "Comments": "Claude Sonnet 5.5 launch pricing on Anthropic direct (2026-09-28), from Anthropic's own rate card: $2/$10 per 1M in/out, cache reads $0.20/1M, 5-minute cache write $2.50/1M, 1-hour cache write $4/1M (not representable in this schema). Batch API is half rate ($1/$5). Source: https://platform.claude.com/docs/en/about-claude/pricing CORRECTION 2026-10-12: cache reads are $0.10/1M, not $0.20 — Anthropic prices cache hits and refreshes on Claude Sonnet 5.5 at 0.05x the base input price (footnote 2 on the rate card), not the standard 0.1x. Re-verified at https://platform.claude.com/docs/en/about-claude/pricing on 2026-10-12."
           },
           "primaryKey": {
             "ID": "D5CC6302-C694-4FDD-ADC5-96C1428819BC"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:02.439Z",
-            "checksum": "2a2854d9080a8d16cbe813857ff6b96c98994f1b4a1c66a79373ba8b0c766aad"
+            "lastModified": "2026-10-13T18:59:59.050Z",
+            "checksum": "1544f8d0949de8e7727c9831464636fbf2c8d1879c6ed8d9add70be00075bcd2"
           }
         },
         {
@@ -27449,8 +27678,8 @@
       "ID": "1B9038F1-3790-4298-B42C-8F2E7FE78E0E"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:02.294Z",
-      "checksum": "4875e26176dd0e05f8e9f1536bc5d87783e8724130ffa228401990280b7f2ec8"
+      "lastModified": "2026-10-06T20:21:37.716Z",
+      "checksum": "c9118bbf3a3530a5696fa7d0ea92bf3fc6692c2eee5c30bf96c4a25607087250"
     }
   },
   {
@@ -27678,6 +27907,479 @@
     "sync": {
       "lastModified": "2026-10-02T21:42:01.957Z",
       "checksum": "178ae924b353d6547990c51b0afc608433e035b4f948843b0c4b67deed7c7534"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Haiku 5.5",
+      "Description": "Anthropic's fastest and lowest-cost model, released October 7, 2026. 1M token context window, 128K max output tokens, text and image input with text output. First Haiku-class model with an adjustable effort setting. Tiered pricing: $0.10/$0.50 per 1M input/output tokens for prompts up to 100K tokens, $0.50/$2.50 above 100K. Anthropic reports it costs roughly 75% less to run on average than Claude Haiku 4.5. Positioned for high-volume, latency-sensitive work (classification, extraction, routing, summarisation, compaction) and subagent workloads; Sonnet 5.5 and Opus 5.5 remain the recommended choices for complex agentic coding. Manual extended thinking (thinking.type=enabled with budget_tokens) is not accepted - use adaptive thinking with effort. temperature, top_p and top_k return a 400 error. Available on the Claude API, Amazon Bedrock, Google Cloud and Microsoft Foundry.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "PowerRank": 20,
+      "IsActive": true,
+      "SpeedRank": 12,
+      "CostRank": 2,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "E740E87A-B6CD-4E20-8F14-FF515C35F1E1"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:58.845Z",
+            "checksum": "3e41e7b84fc0e09d56d2341a6f75070218b44a0117ef018daf6e988e0128bbc5"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-haiku-5-5",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "F4E63A5E-FA8D-45D4-9598-42975D902BF9"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:58.862Z",
+            "checksum": "3d855c2b0d29dc11613703729921f248569dbbbeba798833240bc38eee711cb6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "anthropic.claude-haiku-5-5",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "3CF8A8DC-DF90-4BA2-AAD5-6B27DF714285"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:58.879Z",
+            "checksum": "3c847ba708edf7a4e3fa2a022fe12b85aaa3c06801c9287734b41a45a74066f7"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-10-07T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.1,
+            "OutputPricePerUnit": 0.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.01,
+            "CacheWritePricePerUnit": 0.125,
+            "Comments": "Pricing as of 2026-10-07 (launch) from https://platform.claude.com/docs/en/about-claude/pricing and https://www.anthropic.com/claude-haiku-5-5. This row records the base tier, for prompts up to 100,000 tokens: $0.10 input / $0.50 output per 1M tokens, cache hits and refreshes $0.01/MTok, 5-minute cache writes $0.125/MTok (1-hour cache writes $0.20/MTok are not modelled). NOT MODELLED: prompts over 100,000 tokens bill at $0.50 input / $2.50 output per 1M tokens with cache reads $0.05/MTok - 5x the rates in this row. MJ stores one price pair per route, so long-prompt traffic on this model is under-costed until request-level tiering is supported. Batch API is 50% off."
+          },
+          "primaryKey": {
+            "ID": "951B360F-E614-4849-A287-1B7686551F23"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:58.899Z",
+            "checksum": "2b14d7fb641f532a1853c12bb828390114be92c0c75e731c1ce747a589c0d1e6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-10-07T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.1,
+            "OutputPricePerUnit": 0.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.01,
+            "CacheWritePricePerUnit": 0.125,
+            "Comments": "Base tier (prompts up to 100,000 tokens) mirroring Anthropic's published list price from https://platform.claude.com/docs/en/about-claude/pricing and https://www.anthropic.com/claude-haiku-5-5; the >100K tier at $0.50/$2.50 is not modelled, as above. PROVENANCE: Amazon sets its own Bedrock rates and the AWS rate card was not reachable from the session that added this row (2026-10-12), so this is Anthropic's list price mirrored onto the Bedrock route - the same seeding convention used for every other Claude/Bedrock row in this catalogue, each of which matched the AWS rate card when checked on 2026-10-05. Confirm against https://aws.amazon.com/bedrock/pricing/ and correct if Bedrock differs. Regional (non-global) Bedrock endpoints carry a 10% premium that is not modelled."
+          },
+          "primaryKey": {
+            "ID": "E49E769D-2845-4549-8F5A-7F9569B619CC"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:58.921Z",
+            "checksum": "9dab9abe8d0eb2799c681749fc11f860f28f2958188b326acabe742a4f90e720"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AA4E20A1-A62E-4A3F-86AD-1AC14C797CEA"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:58.772Z",
+      "checksum": "723f14c0a0c8f31457b280c504bb4cb109da51960d079ab412685964e8bde3c8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mistral Large 4",
+      "Description": "Mistral AI's largest open-weight model (public preview, October 6, 2026). Granular Mixture-of-Experts: 1.05T total parameters with 52B active, plus a 1.6B vision encoder. Natively multimodal, general purpose, with a 1M token context window. Mistral states weights will be published at the end of October 2026; until then the preview is being red-teamed with cybersecurity partners. Available through the Mistral API and Mistral Studio. Launch pricing is 50% off for two weeks from release; the standard rates are $1.36 input / $0.14 cached input / $4.18 output per 1M tokens.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "PowerRank": 22,
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 3,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Mistral Large 3",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "2C112253-9327-478F-AA2B-7DF9436DC41B"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:58.946Z",
+            "checksum": "9ed516d989df157a1ed4354af44dc8fc0709a0811e6c13953441b19d0ab3ed85"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MistralLLM",
+            "APIName": "mistral-large-4",
+            "MaxInputTokens": 1048576,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C8DC5F43-0C3F-459C-A8C6-E71ACEC4748D"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:58.969Z",
+            "checksum": "53df7e49e871f2fc7d677467be6178e0bfde8f092eee97eb0c0de776021acf65"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "StartedAt": "2026-10-06T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.68,
+            "OutputPricePerUnit": 2.09,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.07,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Launch pricing as of 2026-10-06 from https://mistral.ai/pricing/api/ and https://docs.mistral.ai/resources/changelogs - $0.68 input / $0.07 cached input / $2.09 output per 1M tokens. ACTION REQUIRED: this is a promotional rate, 50% off for two weeks from release per Mistral's changelog, so it is expected to lapse around 2026-10-20. When it does, expire this row (Status=Expired plus EndedAt) and add the standard rate of $1.36 input / $0.14 cached input / $4.18 output per 1M tokens, which Mistral's pricing page already shows as the pre-discount price."
+          },
+          "primaryKey": {
+            "ID": "C4469E28-2E1C-42C1-AFFD-1F010805E410"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:58.990Z",
+            "checksum": "7302fba442075d466227c5754008434686c5f612aa574bf71464cb74858406f5"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "BE2A6CFF-7AC9-4742-851C-04399DA91214"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:58.794Z",
+      "checksum": "5c6cd5d8c752dcea24ae1ef3b0bd4647f320a1774fe67bf841b344eef0b2c8d1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nano Banana 2",
+      "PowerRank": 17,
+      "Description": "Google's high-efficiency image generation and editing model, officially Gemini 3.1 Flash Image (released 2026-02-26). Optimized for speed and high-volume use; outputs 0.5K (512px), 1K, 2K and 4K; multi-reference consistency (up to 14 reference images); image editing. Google lists it as Stable on the Gemini API; Nano Banana 2.1 (2026-10-06) is its successor.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 4,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "D3B0C2C7-8E95-4506-B30A-81C55D0E0BC5"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiImageGenerator",
+            "APIName": "gemini-3.1-flash-image",
+            "MaxInputTokens": 12000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "FD104F11-1A25-492C-95A3-0BC8DF30E213"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-02-26T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Image Generation",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.067,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
+            "ProcessingType": "Realtime",
+            "Comments": "Nano Banana 2 (gemini-3.1-flash-image) pricing as of October 2026 (Standard tier). Per output image: 0.5K $0.045, 1K $0.067 (the representative figure here), 2K $0.101, 4K $0.151; text/image input $0.50 per 1M tokens; Batch tier about half. Source: https://ai.google.dev/gemini-api/docs/pricing (last updated 2026-10-13).",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "820748AD-351A-4525-B95C-8CCA04783C41"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DBA14F67-F123-4A08-B8EF-2710E9798B31"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nano Banana 2 Lite",
+      "PowerRank": 12,
+      "Description": "Google's ultra-low-latency, cost-effective image generation and editing model, officially Gemini 3.1 Flash Lite Image (released 2026-06-30). 1K output only; aspect ratios 1:1, 3:2, 2:3, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9 and 21:9. Not optimized for multiple reference inputs or multi-turn sequential editing. Google lists it as Stable.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
+      "IsActive": true,
+      "SpeedRank": 11,
+      "CostRank": 2,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "B3E935A6-0777-4564-A498-B3115ACA70E8"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiImageGenerator",
+            "APIName": "gemini-3.1-flash-lite-image",
+            "MaxInputTokens": 12000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7AE381C1-F61F-4A7B-80E8-B15E7A169A33"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-06-30T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Image Generation",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.0336,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
+            "ProcessingType": "Realtime",
+            "Comments": "Nano Banana 2 Lite (gemini-3.1-flash-lite-image) pricing as of October 2026 (Standard tier): $0.0336 per 1K image (1K only); text/image/video input $0.25 per 1M tokens. Source: https://ai.google.dev/gemini-api/docs/pricing (last updated 2026-10-13).",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "645E395F-8C04-4B71-B3A5-67440288EF88"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C8BCB0E4-DB18-4A3C-82B7-BA9E3926F3AD"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nano Banana 2.1",
+      "PowerRank": 18,
+      "Description": "Google's current high-efficiency image generation and editing model, officially gemini-nano-banana-2.1 (released 2026-10-06, straight to general availability). Improved visual quality, typography and multi-turn consistency over Nano Banana 2, which it succeeds; conversational editing; 1K, 2K and 4K output (no 512px). Google lists it as New Stable.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 3,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "A427434D-7B01-465B-871C-F662316865F2"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiImageGenerator",
+            "APIName": "gemini-nano-banana-2.1",
+            "MaxInputTokens": 12000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "48C54F42-B877-4D95-A615-2E0932597ACE"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-10-06T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Image Generation",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.0336,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
+            "ProcessingType": "Realtime",
+            "Comments": "Nano Banana 2.1 (gemini-nano-banana-2.1) pricing as of October 2026 (Standard tier). Per output image: 1K $0.0336 (the representative figure here), 2K $0.0504, 4K $0.113; text/image/video input $1.50 per 1M tokens. Source: https://ai.google.dev/gemini-api/docs/pricing (last updated 2026-10-13).",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "96B433D1-06B8-408C-BB92-A7ECCB71642A"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A207B3C3-0CF0-41D8-9CB4-04FE747DDDD6"
     }
   }
 ]

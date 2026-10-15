@@ -1,5 +1,248 @@
 # @memberjunction/mobile-app
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 51634e7: A picked voice's avatar now shows only when the voiced agent's own video setting is on, so a pick no longer turns on billed avatar video by itself. The runtime override can't turn `realtime.video.enabled` on in `ResolveEffectiveRealtimeConfig` (it can still turn it off), and both override builders (`BuildRealtimeOverridesJson`, `BuildRealtimeConfigOverridesJson`) send the pick as `realtime.video.avatarId` alone. A call that picked an avatar while the setting is off is audio only with the new reason `video-off` (`RealtimeAvatarUnavailableReason`, `ResolveRealtimeAvatar`'s `AvatarPicked`), which stands whatever the model renders; the call and mobile notices say "Audio only: this agent's avatar isn't turned on". An older client reads the reason as unknown and says "Audio only: the avatar can't be shown in this call".
+- a4b23b7: A call whose mint gives an avatar reason this version doesn't know, such as a newer server's, now says it is audio only instead of showing no notice. `ParseRealtimeAvatarStatus` keeps such a status without the reason and marks it `ReasonUnknown` (`ParsedRealtimeAvatarStatus`); a reason that isn't text still reads as no status. The runtime's notice then has no `Reason` (`RealtimeAvatarNotice.Reason` is optional), and the call overlay and the mobile voice screen say "Audio only: the avatar can't be shown in this call" (`AVATAR_NOTICE_CALL_UNKNOWN_REASON_TEXT` in `ng-realtime-media`, with a copy in the mobile app). `AvatarNoticeText` gives a `null` reason that line without `NameAgent` and the meeting's `AVATAR_NOTICE_UNKNOWN_REASON_TEXT` with it, so the meeting room reads as before. A host words it with `unknown` in the call overlay's `AvatarNoticeLabels`, as in the meeting room.
+- 676f0dc: The words a call shows now match across the web and the phone. The phone's red call button is named "End call" for screen readers, as the web names it, and its hint says "Tap to end the call · swipe right for keyboard" (it said "Stop" and "Tap to stop"). The words for what agents see are plural only in a room with more than one agent: the participant tile's chip says "Agents can see", the self-view's badge "Agents can see this" and the control "Let agents see me" / "Hide from agents" (named "Let agents in this room see your camera and screen") there, and "Agent can see", "Agent can see this" and "Let the agent see me" / "Hide from the agent" (named "Let the agent see your camera and screen") in a call with one agent. `mj-media-tile`, `mj-self-view`, `mj-media-controls` and `mj-livekit-control-bar` take an `AgentCount` input (1 by default); `mj-livekit-room` passes its number of agents (`AgentCount`, participants whose role is `agent`), and the words are exported as `AgentVisionText(agentCount)`.
+- ae0a662: Markdown now renders math: TeX the way language models write it (`$…$` and `\(…\)` inline, `$$…$$` and `\[…\]` for display) and MathML markup, including the prefixed `<mml:math>` that JATS article XML uses.
+  - **markdown-core:** a new `CreateMathExtension` recognizes the math and emits a `code.mj-math` placeholder holding the TeX (a `math` / `mathBlock` token on the AST path). It is tokenized first, so `_` and `*` inside a formula no longer become emphasis, and smartypants leaves its quotes and dashes alone. Single dollars follow Pandoc's rule, so prices stay prices ("$5 and $10", "$5-$10"), and `\[…\]`/`\(…\)` count only around something that reads as TeX, so escaped brackets like "\[1\]" stay brackets. MathML elements (`<math>` or `<mml:math>`) are matched whole, emitted with their prefixes removed, and kept away from markdown, so pretty-printed formulas don't turn into code blocks or emphasis. On by default; `enableMath: false` turns it off.
+  - **ng-markdown:** `MarkdownService.RenderMath(container)` typesets the placeholders with KaTeX as MathML, which browsers lay out natively, so hosts need no KaTeX stylesheet or fonts. KaTeX is loaded on first use, like Mermaid, so documents without math never download it. `<mj-markdown>` calls it after render (new `EnableMath` input). TeX that KaTeX can't parse, or that defines macros, stays visible as source; user sizes are capped. The sanitizer now allows MathML (DOMPurify's MathML profile, plus `columnalign`/`columnspacing`, which its list misspells or lacks). Chrome ignores MathML's `mathvariant` and `columnalign`, so styled letters are spelled with Unicode math characters (\mathbf{E} as 𝐄, \mathbb{R} as ℝ) and the stylesheet aligns `aligned`/`cases` columns.
+  - **ng-chat:** typesets math in its messages (`RenderMath` after `parse()`).
+  - **mobile-app:** shows math as its source, without delimiters, until mobile has a typesetter.
+
+- 08a4cfc: The meeting bot publishes an agent's avatar. Before an agent's meeting session opens, the room coordinator asks the native room module whether the bot can publish one (`describeAvatarVideo`: `@livekit/rtc-node` with video publishing, and ffmpeg 4.2 or later with the H.264 and AAC decoders, from `MJ_FFMPEG_PATH` or the `PATH`, probed once per thread); only then does the session ask for it (`RealtimeAvatarSettings.Delivery: 'room'`, threaded through the bridged session prep), and the Gemini driver grants it on an endpoint that renders avatars (VIDEO, the avatar at 2 Mbps), with the decision on `IRealtimeSession.AvatarStatus`. A granted bridged Gemini session sends the avatar's fragmented MP4 as typed frames through `IRealtimeSession.OnVideoFrame`, plays PCM only before a turn's first video, drops media from `interrupted` to that turn's `turnComplete`, and reports the avatar video it generated as `OutputTokenDetails.VideoSeconds` deltas through `OnUsage` (counted up to `generationComplete`). The engine sends the pieces on `video-out` with their MIME type; in a full-duplex multi-agent room each piece passes the floor gate by its audio's duration (`FullDuplexTurnGate.OnOutputDuration`). The LiveKit bridge routes `video/mp4` frames to the room client (`publishAvatarMedia`), which reads them with Core's fMP4 reader (`ReadFmp4Fragment`, `AvccToAnnexB`, `AdtsHeader`, and `Fmp4AudioSeconds` beside AV9's `Fmp4VideoSeconds`; `ReadFmp4Init` also reads a track's size, the trex sample size and flags, the H.264 parameter sets and the AAC config), decodes them in two long-lived ffmpeg child processes, queues the voice on the bot's audio track and shows each frame on a camera track (`agent-avatar`, LiveKit's default simulcast, published at the first frame) when the voice's playout reaches the frame's timestamp. A barge-in drops the queued frames and fences both decoders; the last frame stays on screen. A decoder that dies is restarted; three failures of one decoder within 60 s, or a refused camera track, take the avatar down: the track is unpublished, the bot sets `mj.agentAvatar` to `audio-only:<reason>` (agent bot tokens now carry `canUpdateOwnMetadata`), and the engine replaces the model session with an audio-only one (`StartBridgeSessionParams.RecoverRealtimeSessionWithoutAvatar`). The bot's join token carries `mj.agentAvatar` (`on`, or `audio-only:<reason>` with `decoder-missing` when the host has no usable ffmpeg); Core adds the attribute helpers and the reasons `decoder-missing`, `decoder-failed` and `publish-failed`, which `ParseRealtimeAvatarStatus` reads and `REALTIME_AVATAR_UNAVAILABLE_REASONS` lists (from the same table); the call and mobile notices word them "Audio only for {Agent}: the avatar couldn't be shown in this meeting". `GeminiEnterpriseRealtime` renders a bridged session's avatar the same way. With the media worker on, the pieces are transferred to the worker, a restarted worker gets the stream's init again, and one restarted after a take-down joins audio only. Integration check RD17 (the LiveKit provider allows video out, and the native module answers the avatar probe). The MJAPI image can install a pinned LGPL static ffmpeg (BtbN) checked against its sha256; it is off by default (`INSTALL_FFMPEG=false`, so meetings stay audio only): fill in the pin values and build with `--build-arg INSTALL_FFMPEG=true` to turn it on.
+- c1f1efe: feat(mobile-app): the voice screen says once per call why the call has no avatar
+
+  The mobile voice screen shows the realtime runtime's avatar notice under its top row, in the same words as the web call overlay, for example "Audio only: this app can't show the avatar" when an agent's avatar was granted (the app has no surface to play it) or "Audio only: this voice model can't show an avatar". It shows once per call, has a ✕ named "Dismiss", hides itself after 10 seconds, and goes when the session ends; a new call (switching agent) can show it again. TalkBack reads it through a polite live region and VoiceOver through a queued announcement. `AvatarNoticePresenter` holds those rules and `AvatarNoticeText` the sentences, one per reason, keyed by every reason `@memberjunction/ai` defines.
+
+- e67ba34: The mobile app takes iOS out of the call audio category only when the last open voice call releases the microphone (#5421). The category is shared by the whole app, but each run of the voice screen makes its own realtime runtime and media host, and each releases the microphone on its own. A call abandoned while its microphone was opening releases once the opening returns, which could be after the user had started a newer call, and that release reset the category in the middle of the newer call. `ConfigureVoiceAudioSession` and `ResetVoiceAudioSession` now take the call they are for (the media host passes itself) and count the open calls: the category goes back to normal when the last one releases it, a call counts once however many times it configures or releases, and a release from a call that never set the category, such as one whose microphone permission was refused, does nothing.
+- 78e9138: fix(mobile-app): the voice call's buttons have names a screen reader reads
+
+  The voice call's three buttons had no accessibility role or label, so VoiceOver and TalkBack had no name to read for them (#5449). The red button is now a button named "End call", as the web call names it, and the screen's hint says "Tap to end the call". The two side buttons are the mobile plan's keyboard mode and menu, which nothing is wired to yet: they are buttons named "Keyboard" and "Menu", and disabled, so a screen reader says they can't be used rather than offering a button that does nothing. On screen only the hint's words change.
+
+- 6e0a19e: fix(mobile-app): the voice call's transcript card stays above the controls on small phones
+
+  The voice screen is now a column with the call controls and their hint in flow at the bottom, instead of pinned 80 and 36 pt above the screen's bottom edge on top of the rest, so nothing above them can run under them (#5344). The orb's stage and the transcript card share the space between the top row (and the avatar notice, while it shows) and the controls: the card always keeps room for its label and two caption lines at the phone's text size, and the stage takes the rest up to its full size, scaling the orb, its ripples and the waveform down evenly below that (`VoiceStageLayout`). A caption longer than the card's room scrolls inside the card, kept at its latest words. In a browser harness at 375 × 667, the card ran 64 pt under the controls, 120 pt with the notice shown and 250 pt with a long caption; it now ends above them in each case, with the orb at 162 pt, or 133 pt while the notice shows. Phones with room keep the full-size orb. The stage, the card and the controls move into `VoiceCallBody`, which holds no state, so the layout is tested without a renderer.
+
+- 8704df6: A phone call never asks the model for an avatar. A caller hears the agent and sees no video, but a voiced agent whose persona has a face still asked for its avatar on a phone call: on a carrier call (Twilio, Vonage, RingCentral) the Gemini driver refused it as `bridged` and logged that on every call, and on a call that reached a LiveKit room through SIP the room coordinator asked for room delivery whenever its host could publish, so the model rendered avatar video, billed per minute, that the caller never saw. The session prep now decides before the driver: a session marked as a phone call (`PrepareClientSessionInput.PhoneCall`, set from `params.data.realtimePhoneCall`, which `CreateBridgeRealtimeSession` sets from `BridgeRealtimeSessionContext.PhoneCall`) carries no avatar request, keeps the avatar persona's voice so the agent sounds the same as in a call that shows its face, and the default model walk prefers no avatar model for it. The telephony call starter marks every carrier call as a phone call; the room call starter passes its channel to the coordinator (`AgentRoomHostOptions.Channel`), which on `'phone'` skips the native module's avatar probe, passes no room delivery, and marks the session (`RealtimeSessionStartContext.PhoneCall`). Core gains the reason `'phone'` (`RealtimeAvatarUnavailableReason`, read by `ParseRealtimeAvatarStatus` and the bot attribute reader); a phone call's bridged session reports `{ Requested: true, Granted: false, Reason: 'phone' }` as its `AvatarStatus`, so a SIP call's bot joins with `mj.agentAvatar` `audio-only:phone`, and the notice reads "Audio only for {Agent}: the avatar isn't shown on phone calls" (`ng-realtime-media` and the mobile app's copy). The `bridged` reason now covers only a server-side session whose host can't publish video into a room. Integration check RD13 also checks that a phone call in a room that could publish the avatar asks for none and keeps the persona's voice.
+- afe9eb4: A relayed call (Gemini Enterprise) that reaches its 30-minute cap, or its shorter `MaxSessionSeconds`, now ends with its own message instead of a connection error. MJAPI's relay closes the browser leg with `REALTIME_RELAY_TIME_LIMIT_CLOSE_CODE` (4000, "Call time limit reached"; the upstream still gets 1000). `GeminiRealtimeClient` ends the call on that code with a fatal error whose `Code` is `REALTIME_CLIENT_TIME_LIMIT_ERROR_CODE` (`'time-limit'`), without trying to resume. `RealtimeSessionRuntime.LastSessionError` keeps the call's fatal client error until the next start, and `DescribeCallEnd` words a time-limit end (`REALTIME_CALL_TIME_LIMIT_END`): the call bar and the audio hero say "Time limit reached" (`RealtimeAgentBannerComponent.ErrorLabel`), and the widget (`mj-error` code `time-limit`) and the phone's error screen say "This call reached its time limit. Start a new call to keep talking." The avatar tile's state chip still says "Connection error".
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [c8409ce]
+- Updated dependencies [7ada797]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [e4c355e]
+- Updated dependencies [4412e85]
+- Updated dependencies [6dce70c]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [1da00cb]
+- Updated dependencies [b699a37]
+- Updated dependencies [dde482c]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [91be34f]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [ae0a662]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [318084b]
+- Updated dependencies [69bf67c]
+- Updated dependencies [97a85b9]
+- Updated dependencies [efe4738]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [dbc3462]
+- Updated dependencies [d9da1ad]
+- Updated dependencies [1c9ac95]
+- Updated dependencies [c5472d2]
+- Updated dependencies [4fb501e]
+- Updated dependencies [2de7fe0]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [ae78a45]
+- Updated dependencies [8704df6]
+- Updated dependencies [b2f8b5b]
+- Updated dependencies [5345e3d]
+- Updated dependencies [dcfdda4]
+- Updated dependencies [d714f25]
+- Updated dependencies [a35b50f]
+- Updated dependencies [3e7f8c8]
+- Updated dependencies [4889ca0]
+- Updated dependencies [ca2791b]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [7f243eb]
+- Updated dependencies [a3fcce8]
+- Updated dependencies [a08ed58]
+- Updated dependencies [2bc4677]
+- Updated dependencies [42f8016]
+- Updated dependencies [6b587b3]
+- Updated dependencies [891dc77]
+- Updated dependencies [98dbb78]
+- Updated dependencies [0a952ee]
+- Updated dependencies [72827e6]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [18c66ce]
+- Updated dependencies [84fc9d4]
+- Updated dependencies [6328ed3]
+- Updated dependencies [b3db2aa]
+- Updated dependencies [6c8798b]
+- Updated dependencies [b6b3990]
+- Updated dependencies [20d1f4a]
+- Updated dependencies [f1fb411]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [6a19f78]
+- Updated dependencies [e402de5]
+- Updated dependencies [74d9357]
+- Updated dependencies [a5b4a72]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d0df5a1]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [44428b5]
+- Updated dependencies [1b8791e]
+- Updated dependencies [02bb563]
+- Updated dependencies [c26b355]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [c9e1891]
+- Updated dependencies [aac148b]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [0a3a56a]
+- Updated dependencies [7a08dc1]
+- Updated dependencies [cf50330]
+- Updated dependencies [cbddadb]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [f00d5fc]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai-core-plus@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.4
+  - @memberjunction/ai-realtime-client@6.2.0-edge.4
+  - @memberjunction/realtime-runtime@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/markdown-core@6.2.0-edge.4
+  - @memberjunction/conversations-runtime@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/react-runtime@6.2.0-edge.4
+  - @memberjunction/interactive-component-types@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- 41c2c08: Stop serializing the whole metadata graph into a store nothing can read it back from
+
+  `ProviderBase.SaveLocalMetadataToStorage()` ran `JSON.stringify` over the entire metadata graph on
+  every metadata reload, then copied it into a `Blob`, gzipped it, and base64-encoded it one byte at a
+  time. The snapshot exists so a cold process can start from a cached copy instead of querying — which
+  only works if the store outlives the writer. On a server with no `REDIS_URL` the store is an
+  in-process `Map`, so the only possible reader is the heap that already holds the live objects, and
+  the whole round trip buys nothing.
+
+  Measured on a 791-entity tenant: 131.5M characters per stringify, ~10s and ~1.2GB of transient heap
+  per refresh against a 2.2GB steady state, and the final flatten of that string needs one contiguous
+  ~500MB allocation. Saved queries are metadata members, so an agent writing them marks metadata stale
+  and triggers a refresh roughly every 30 seconds; two overlapping refreshes exhausted the heap and
+  MJAPI died with `Reached heap limit Allocation failed` inside `String::SlowFlatten`.
+
+  `ILocalStorageProvider` gains an optional `SupportsCrossProcessPersistence`. `ProviderBase` skips
+  both the save and the load when it is `false`, logging the reason once per process. A provider that
+  does not declare it is treated as persistent, so Redis and browser behaviour is unchanged — the
+  conservative direction, since a pointless save only wastes work while wrongly skipping a necessary
+  one would leave a cache that never populates. Every in-repo provider now declares it, including the
+  instrumented test wrapper, which delegates to the store it wraps.
+
+  `arrayBufferToBase64` / `base64ToArrayBuffer` use Node's native codec when `Buffer` exists, falling
+  back to the existing loops in the browser. The byte-at-a-time encoder built a rope the size of the
+  payload and then forced a flatten, measured at 3702ms for an 8.6MB buffer under heap pressure
+  against 191ms cold.
+
+  `TelemetryManager.trimIfNeeded()` only ever trimmed `_events`. Three collections derived from it were
+  never released for the life of the process: `_insights` grew by one entry per emitted warning,
+  `_patterns` by one per distinct fingerprint (every new filter combination is a new fingerprint, so it
+  grew with query variety), and `_insightDedupeWindow` by one per dedupe key. All three are now bound
+  on the same schedule as the events they come from — `maxInsights` defaults to 1000, and the two map
+  sweeps are O(n) so they run at most once a minute rather than on every recorded event.
+
+  After the equivalent patch on a live tenant: the refresh cycle went from 10019/9372/8994 ms to
+  330/214/298 ms, heap peak from 3597/3171/3171 MB to 1576/1575/1575 MB, the per-refresh transient
+  spike from +1.0-1.2 GB to 0, and the retained baseline from 2204 MB to 1575 MB.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [5acbec6]
+- Updated dependencies [50a2cf6]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [bea2386]
+- Updated dependencies [d046715]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [72e082b]
+- Updated dependencies [28c92e0]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.3
+  - @memberjunction/ai-realtime-client@6.2.0-edge.3
+  - @memberjunction/realtime-runtime@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+  - @memberjunction/interactive-component-types@6.2.0-edge.3
+  - @memberjunction/conversations-runtime@6.2.0-edge.3
+  - @memberjunction/react-runtime@6.2.0-edge.3
+  - @memberjunction/markdown-core@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Patch Changes

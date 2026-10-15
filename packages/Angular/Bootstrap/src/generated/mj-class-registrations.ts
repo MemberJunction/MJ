@@ -11,10 +11,11 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (7 classes)
+// @memberjunction/ai-realtime-client (8 classes)
 import {
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
     OpenAILiveClient,
@@ -27,13 +28,14 @@ import {
     SaveEntityGraphOperation,
 } from '@memberjunction/core';
 
-// @memberjunction/ai-vectors-memory (2 classes)
+// @memberjunction/ai-vectors-memory (3 classes)
 import {
+    BaseVectorAccelerator,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (440 classes)
+// @memberjunction/core-entities (451 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -202,6 +204,8 @@ import {
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -257,6 +261,7 @@ import {
     MJEntityFieldEntityExtended,
     MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -399,6 +404,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -445,6 +451,7 @@ import {
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
     MJThemeEntity,
+    MJThemeEntityExtended,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -471,6 +478,12 @@ import {
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
+    MJWorkQueueDeduplicationEntity,
+    MJWorkQueueDeliveryEntity,
+    MJWorkQueueMessageEntity,
+    MJWorkQueueSubscriptionEntity,
+    MJWorkQueueTopicEntity,
+    MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -550,11 +563,16 @@ import {
     MJWorkOSProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (8 classes)
+// @memberjunction/ng-conversations (13 classes)
 import {
     AgentMentionProvider,
     ClientContextChannel,
+    IdentityVerificationChannel,
+    InteractiveComponentChannel,
+    RealtimeAvatarChannel,
+    RealtimeCameraChannel,
     RealtimeMediaChannel,
+    RealtimeScreenShareChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
     RemoteBrowserChannel,
@@ -693,7 +711,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (107 classes)
+// @memberjunction/ng-dashboards (110 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -734,6 +752,7 @@ import {
     CredentialsOverviewResourceComponent,
     CredentialsTypesResourceComponent,
     DashboardBrowserResourceComponent,
+    DashboardsCategoriesResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
     DatabaseDesignerDashboardComponent,
@@ -755,6 +774,7 @@ import {
     ListsMyListsResource,
     ListsOperationsResource,
     ListsSharedWithMeResource,
+    LoginStudioResourceComponent,
     MCPDashboardComponent,
     MCPResourceComponent,
     MappingWorkspaceComponent,
@@ -799,6 +819,7 @@ import {
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
     VisualizeResourceComponent,
+    WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
     WorkflowsDashboardComponent,
     WorkflowsResourceComponent,
@@ -833,12 +854,14 @@ import {
 const CLASS_REGISTRATIONS_0: any[] = [
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
     OpenAILiveClient,
     OpenAIRealtimeClient,
     xAIRealtimeClient,
     SaveEntityGraphOperation,
+    BaseVectorAccelerator,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
     AIAgentPermissionProvider,
@@ -1008,6 +1031,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationBranchEntity,
+    MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
@@ -1027,14 +1052,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardEntity,
     MJDashboardEntityExtended,
     MJDashboardPartTypeEntity,
-    MJDashboardPermissionEntity,
-    MJDashboardPermissionEntityExtended,
-    MJDashboardUserPreferenceEntity,
-    MJDashboardUserStateEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardPermissionEntity,
+    MJDashboardPermissionEntityExtended,
+    MJDashboardUserPreferenceEntity,
+    MJDashboardUserStateEntity,
     MJDataContextEntity,
     MJDataContextItemEntity,
     MJDatasetEntity,
@@ -1067,6 +1092,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityFieldEntityExtended,
     MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -1209,6 +1235,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1229,16 +1256,16 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJTagCoOccurrenceEntity,
     MJTagEntity,
     MJTagScopeEntity,
     MJTagSuggestionEntity,
     MJTagSynonymEntity,
     MJTaggedItemEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJTaskDependencyEntity,
     MJTaskEntity,
     MJTaskTypeEntity,
@@ -1259,6 +1286,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
     MJThemeEntity,
+    MJThemeEntityExtended,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -1285,6 +1313,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
+    MJWorkQueueDeduplicationEntity,
+    MJWorkQueueDeliveryEntity,
+    MJWorkQueueMessageEntity,
+    MJWorkQueueSubscriptionEntity,
+    MJWorkQueueTopicEntity,
+    MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -1332,7 +1366,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkOSProvider,
     AgentMentionProvider,
     ClientContextChannel,
+    IdentityVerificationChannel,
+    InteractiveComponentChannel,
+    RealtimeAvatarChannel,
+    RealtimeCameraChannel,
     RealtimeMediaChannel,
+    RealtimeScreenShareChannel,
     RealtimeWhiteboardChannel,
     RecordMentionProvider,
     RemoteBrowserChannel,
@@ -1421,6 +1460,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RubricFormPolicy,
     RubricPublishPanel,
     RubricScaleFormPolicy,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     RubricScaleLevelsPanel,
     RubricVersionFormPolicy,
     RubricVersionSummaryPanel,
@@ -1439,10 +1482,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ActionExecutionMonitoringComponent,
     ActionExplorerComponent,
     ActionsOverviewComponent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     ActivityComponent,
     AdminDataSchemaComponent,
     AdminDevToolsResourceComponent,
@@ -1476,6 +1515,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CredentialsOverviewResourceComponent,
     CredentialsTypesResourceComponent,
     DashboardBrowserResourceComponent,
+    DashboardsCategoriesResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
     DatabaseDesignerDashboardComponent,
@@ -1497,6 +1537,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ListsMyListsResource,
     ListsOperationsResource,
     ListsSharedWithMeResource,
+    LoginStudioResourceComponent,
     MCPDashboardComponent,
     MCPResourceComponent,
     MappingWorkspaceComponent,
@@ -1541,6 +1582,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
     VisualizeResourceComponent,
+    WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
     WorkflowsDashboardComponent,
     WorkflowsResourceComponent,
@@ -1572,7 +1614,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 715;
+export const CLASS_REGISTRATIONS_COUNT = 736;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

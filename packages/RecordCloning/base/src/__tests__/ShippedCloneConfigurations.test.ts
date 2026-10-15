@@ -190,14 +190,19 @@ describe('shipped clone configurations', () => {
 
     it('never lists a NotCloneable entity as a Deep child (NotCloneable wins, so that edge could never copy)', () => {
         const notCloneable = new Set([...byName].filter(([, c]) => c.NotCloneable).map(([n]) => n));
+        // The one exception: a template preset may copy a child its entity marks CloneableFromTemplate.
+        const fromTemplate = new Set([...byName].filter(([, c]) => c.CloneableFromTemplate).map(([n]) => n));
         const contradictions: string[] = [];
         for (const [name, config] of byName) {
-            const edges = [
-                ...Object.entries(config.Relationships ?? {}),
-                ...(config.Presets ?? []).flatMap((p) => Object.entries(p.Relationships ?? {})),
+            const edges: Array<[string, { Policy?: string } | undefined, boolean]> = [
+                ...Object.entries(config.Relationships ?? {}).map(([k, r]): [string, { Policy?: string } | undefined, boolean] => [k, r, false]),
+                ...(config.Presets ?? []).flatMap((p) =>
+                    Object.entries(p.Relationships ?? {}).map(([k, r]): [string, { Policy?: string } | undefined, boolean] => [k, r, !!p.TemplateSourceField])
+                ),
             ];
-            for (const [key, rel] of edges) {
-                if (rel?.Policy === 'Deep' && notCloneable.has(key.split('.')[0])) contradictions.push(`${name} -> ${key}`);
+            for (const [key, rel, isTemplatePreset] of edges) {
+                const child = key.split('.')[0];
+                if (rel?.Policy === 'Deep' && notCloneable.has(child) && !(isTemplatePreset && fromTemplate.has(child))) contradictions.push(`${name} -> ${key}`);
             }
         }
         expect(contradictions).toEqual([]);
@@ -225,7 +230,7 @@ describe('shipped clone configurations', () => {
         const users = byName.get('MJ: Users')!;
         const settings = users.Relationships?.['MJ: User Settings'];
 
-        it('skips User Settings unless a preset opts in, and only with-settings does', () => {
+        it('skips User Settings unless a preset opts in, and only with-settings and the template copy do', () => {
             expect(settings?.Policy).toBe('Skip');
             const res = ResolveEdgePolicy({
                 FromKey: 'MJ: Users::1', ToKey: 'MJ: User Settings::2', Kind: 'Relationship',
@@ -234,12 +239,51 @@ describe('shipped clone configurations', () => {
             });
             expect(res.Policy).toBe('Skip');
             const deepPresets = (users.Presets ?? []).filter((p) => p.Relationships?.['MJ: User Settings']?.Policy === 'Deep').map((p) => p.Key);
-            expect(deepPresets).toEqual(['with-settings']);
+            expect(deepPresets).toEqual(['with-settings', 'template']);
         });
 
         it('never copies device tokens, chat drafts or recording consent, even with with-settings', () => {
             const prefixes = (settings?.ExcludeRows ?? []).filter((r) => r.Field === 'Setting').flatMap((r) => r.StartsWith ?? []);
             expect(prefixes).toEqual(expect.arrayContaining(['mobile.', 'mj.chat.drafts', 'mj.realtimeVoice.recordingConsent']));
+        });
+    });
+
+    describe('MJ: Users template copy', () => {
+        const users = byName.get('MJ: Users')!;
+        const template = (users.Presets ?? []).find((p) => p.Key === 'template');
+
+        it('ships a template preset gated on IsTemplate', () => {
+            expect(template?.TemplateSourceField).toBe('IsTemplate');
+            // Each child is named by the one foreign key it is copied through, so no row is reached twice.
+            for (const rel of ['MJ: Dashboards.UserID', 'MJ: Conversations.UserID', 'MJ: Conversation Details.ConversationID', 'MJ: Artifacts.UserID', 'MJ: Artifact Versions.ArtifactID']) {
+                expect(template?.Relationships?.[rel]?.Policy, rel).toBe('Deep');
+            }
+        });
+
+        it('keeps dashboards and conversations Locked Skip for every other preset', () => {
+            expect(users.Relationships?.['MJ: Conversations']).toMatchObject({ Policy: 'Skip', Locked: true });
+            expect(users.Relationships?.['MJ: Dashboards']).toMatchObject({ Policy: 'Skip', Locked: true });
+            for (const preset of (users.Presets ?? []).filter((p) => !p.TemplateSourceField)) {
+                const keys = Object.keys(preset.Relationships ?? {});
+                expect(keys.filter((k) => k.startsWith('MJ: Conversations') || k.startsWith('MJ: Dashboards')), preset.Key).toEqual([]);
+            }
+        });
+
+        it("keeps dashboard and view names: they are unique per user, so the entities' '(copy)' rename doesn't apply", () => {
+            for (const name of ['MJ: Dashboards', 'MJ: User Views']) {
+                expect(byName.get(name)?.Naming?.Strategy, name).toBe('suffix');
+                expect(users.Descendants?.[name]?.Naming?.Strategy, name).toBe('none');
+            }
+        });
+
+        it('never makes the copy a template itself', () => {
+            expect(users.Fields?.Reset?.IsTemplate).toBe(false);
+        });
+
+        it('lets conversations be copied only from a template, never in general', () => {
+            for (const name of ['MJ: Conversations', 'MJ: Conversation Details']) {
+                expect(byName.get(name)).toMatchObject({ NotCloneable: true, CloneableFromTemplate: true });
+            }
         });
     });
 });

@@ -117,11 +117,81 @@ describe('RoomAudioPlayer', () => {
     expect(clients[0].Published.length).toBe(sent + LEAD);
   });
 
-  it('leaves the room by itself when non-looping audio ends', async () => {
-    const pcm = new Int16Array(ROOM_AUDIO_SAMPLE_RATE / 10).fill(1000); // 100 ms
-    await player.Start({ RoomName: 'room-a', Source: { Kind: 'Pcm', Pcm: pcm, SampleRate: ROOM_AUDIO_SAMPLE_RATE }, Loop: false, ContextUser: user });
-    await vi.waitFor(() => expect(clients[0].Disconnects).toBe(1));
+  it('leaves the room by itself when non-looping audio ends, once the audio sent ahead has played out', async () => {
+    const pcm = new Int16Array(ROOM_AUDIO_SAMPLE_RATE / 10).fill(1000); // 100 ms: all 5 frames go out in the initial lead
+    const handle = await player.Start({ RoomName: 'room-a', Source: { Kind: 'Pcm', Pcm: pcm, SampleRate: ROOM_AUDIO_SAMPLE_RATE }, Loop: false, ContextUser: user });
+    expect(clients[0].Published.length).toBe(5);
+    expect(clients[0].Disconnects).toBe(0); // the room is still playing the 100 ms just sent
+    expect(handle.EndReason).toBeNull();
+    clock.Advance(100);
+    await expect(handle.Ended).resolves.toBe('Completed');
+    expect(handle.EndReason).toBe('Completed');
+    expect(clients[0].Disconnects).toBe(1);
     expect(player.GetActive('room-a')).toEqual([]);
+  });
+
+  describe('Ended', () => {
+    const shortClip = (): { Kind: 'Pcm'; Pcm: Int16Array; SampleRate: number } => ({
+      Kind: 'Pcm',
+      Pcm: new Int16Array(ROOM_AUDIO_SAMPLE_RATE / 2).fill(500), // 500 ms
+      SampleRate: ROOM_AUDIO_SAMPLE_RATE,
+    });
+
+    it('resolves Completed only after a non-looping clip has been sent in full and played out', async () => {
+      const handle = await player.Start({ RoomName: 'room-a', Source: shortClip(), Loop: false, ContextUser: user });
+      let reason: string | null = null;
+      void handle.Ended.then((r) => (reason = r));
+      clock.Advance(300);
+      await Promise.resolve();
+      expect(reason).toBeNull();
+      clock.Advance(400); // last frame sent at ~350 ms of 500; the room finishes playing at 500 ms
+      await expect(handle.Ended).resolves.toBe('Completed');
+      expect(clients[0].Published.length).toBe(25); // 500 ms = 25 frames of 20 ms
+    });
+
+    it('resolves Stopped when stopped mid-clip, and Stop resolves after the bot has left', async () => {
+      const handle = await player.Start({ RoomName: 'room-a', Source: shortClip(), Loop: false, ContextUser: user });
+      clock.Advance(100);
+      await handle.Stop();
+      expect(clients[0].Disconnects).toBe(1);
+      await expect(handle.Ended).resolves.toBe('Stopped');
+      expect(handle.EndReason).toBe('Stopped');
+    });
+
+    it('resolves Stopped when stopped while the sent tail is still playing out', async () => {
+      const handle = await player.Start({ RoomName: 'room-a', Source: shortClip(), Loop: false, ContextUser: user });
+      clock.Advance(360); // every frame sent; the room has ~140 ms left to play
+      expect(handle.EndReason).toBeNull();
+      await handle.Stop();
+      await expect(handle.Ended).resolves.toBe('Stopped');
+      clock.Advance(500); // the cancelled drain must not flip the reason
+      expect(handle.EndReason).toBe('Stopped');
+    });
+
+    it('resolves Failed when the outbound sink breaks', async () => {
+      const handle = await player.Start({ RoomName: 'room-a', Source: shortClip(), Loop: false, ContextUser: user });
+      clients[0].PublishError = new Error('sink gone');
+      clock.Advance(40);
+      await expect(handle.Ended).resolves.toBe('Failed');
+      expect(clients[0].Disconnects).toBe(1);
+      expect(player.GetActive('room-a')).toEqual([]);
+    });
+
+    it('resolves Disconnected when the server drops the bot', async () => {
+      const handle = await player.Start({ RoomName: 'room-a', Source: shortClip(), Loop: false, ContextUser: user });
+      clients[0].SimulateServerDisconnect();
+      await expect(handle.Ended).resolves.toBe('Disconnected');
+      await handle.Stop(); // a later Stop does not change the reason
+      expect(handle.EndReason).toBe('Disconnected');
+    });
+
+    it('a looping playback never completes on its own; it resolves Stopped when stopped', async () => {
+      const handle = await player.Start({ RoomName: 'room-a', Source: { Kind: 'ComfortTone' }, ContextUser: user });
+      clock.Advance(30_000);
+      expect(handle.EndReason).toBeNull();
+      await player.StopAllInRoom('room-a');
+      await expect(handle.Ended).resolves.toBe('Stopped');
+    });
   });
 
   it('resamples caller PCM to the room rate', async () => {

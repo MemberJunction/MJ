@@ -42,11 +42,12 @@ import { CallLifecycleTracker, type TrackedSession } from './callLifecycleTracke
 import { CreateCallerIdentityResolver, type ICallerIdentityResolver } from './callerIdentity.js';
 import { TelephonyCapacity, type CallCapacityLease, type ICallCapacity } from './telephonyCapacity.js';
 import { AuthorizeOutboundCallOrRelease } from './telephonyCallSession.js';
-import { OutboundCallRefusedError, OutboundRateLimiter, ResolveOutboundPolicy, ResolveTransferDirectory, MaskNumber, type OutboundGuardDeps } from './outboundCallPolicy.js';
+import { OutboundCallRefusedError, OutboundRateLimiter, ResolveOutboundPolicy, ResolveTransferDirectory, MaskNumber, IsValidE164, type OutboundGuardDeps } from './outboundCallPolicy.js';
 import { CreateSipTrunkCarrier } from './sipTrunkCarrier.js';
 import { FindInboundRoute, FindPhoneAgentIdentity, LoadActiveAgentIdentity } from './agentIdentityLookup.js';
 import { RoomCallSessionStarter } from './roomCallSession.js';
 import { InteractionLifecycleService } from './interactionLifecycle.js';
+import { GetLiveKitSipInboundHandler, type ILiveKitSipInboundHandler } from './livekit-sip-runtime.js';
 
 /** The part of the bridge engine this service drives (a `Pick` so tests inject a fake). */
 type SipBridgeEngine = Pick<AIBridgeEngine, 'Config' | 'ProviderByDriverClass'>;
@@ -88,6 +89,8 @@ export interface LiveKitSipTelephonyServiceDeps {
     canRunAgent?: OutboundGuardDeps['CanRunAgent'];
     /** Overrides the room-call starter (tests). */
     starter?: RoomCallSessionStarter;
+    /** Optional custom inbound handler (e.g. for Contact Center entry point routing). */
+    inboundHandler?: ILiveKitSipInboundHandler;
 }
 
 /** Admits and places phone calls over LiveKit SIP. One instance per server. */
@@ -101,6 +104,7 @@ export class LiveKitSipTelephonyService {
     private readonly starter: RoomCallSessionStarter;
     private readonly tracker: CallLifecycleTracker;
     private readonly roomPrefix: string;
+    private inboundHandler?: ILiveKitSipInboundHandler;
     /** Rooms already handled as a call (inbound admitted/refused, or placed by us), so a retried webhook or a second phone leg starts nothing. */
     private readonly handledRooms = new Set<string>();
     /** The room each live agent session's bridge is in (the lifecycle tracker only knows bridge ids). */
@@ -110,6 +114,7 @@ export class LiveKitSipTelephonyService {
         private readonly config: LiveKitSipSettings,
         deps: LiveKitSipTelephonyServiceDeps = {},
     ) {
+        this.inboundHandler = deps.inboundHandler;
         this.sip = deps.sip ?? new LiveKitSipService({ ServerUrl: config.serverUrl, ApiKey: config.apiKey, ApiSecret: config.apiSecret });
         this.engine = deps.engine ?? AIBridgeEngine.Instance;
         this.coordinator = deps.coordinator ?? LiveKitAgentRoomCoordinator.Instance;
@@ -140,6 +145,21 @@ export class LiveKitSipTelephonyService {
         this.wireHandoffEngine();
     }
 
+    /** Sets or unsets the custom inbound call handler. */
+    public SetInboundHandler(handler: ILiveKitSipInboundHandler | undefined): void {
+        this.inboundHandler = handler;
+    }
+
+    /** Removes one participant (the caller of a refused or completed call). Best-effort. */
+    public async HangUpParticipant(roomName: string, identity: string): Promise<void> {
+        return this.hangUpLeg(roomName, identity);
+    }
+
+    /** Removes every phone (SIP) participant from the room. Best-effort. */
+    public async HangUpRoom(roomName: string): Promise<void> {
+        return this.hangUpPhoneLegs(roomName);
+    }
+
     /**
      * Startup work that talks to LiveKit: checks the carrier settings, verifies the outbound trunk, and (when
      * `autoProvision` is set) creates the inbound trunk and dispatch rule. Never throws: a LiveKit that is down at boot must
@@ -162,6 +182,16 @@ export class LiveKitSipTelephonyService {
     public async HandleWebhookEvent(event: LiveKitRoomWebhookEvent, contextUser: UserInfo, provider: IMetadataProvider): Promise<LiveKitSipInboundResult> {
         if (event.Event === 'room_finished') {
             this.handledRooms.delete(roomKey(event.RoomName));
+            const handler = this.inboundHandler ?? GetLiveKitSipInboundHandler();
+            if (handler?.HandleRoomFinished) {
+                try {
+                    await handler.HandleRoomFinished(event.RoomName, contextUser, provider);
+                } catch (finishErr) {
+                    LogError(
+                        `[Telephony][LiveKitSip] custom inbound handler HandleRoomFinished threw error for room ${event.RoomName}: ${finishErr instanceof Error ? finishErr.message : String(finishErr)}`
+                    );
+                }
+            }
             return { accepted: false, reason: 'room finished' };
         }
         if (event.Event !== 'participant_joined' || !event.IsSipParticipant || !event.RoomName.startsWith(this.roomPrefix)) {
@@ -229,9 +259,36 @@ export class LiveKitSipTelephonyService {
     // ── inbound ──────────────────────────────────────────────────────────────────
 
     private async admitInbound(event: LiveKitRoomWebhookEvent, contextUser: UserInfo, provider: IMetadataProvider): Promise<LiveKitSipInboundResult> {
+        const handler = this.inboundHandler ?? GetLiveKitSipInboundHandler();
+        const dialed = event.DialedNumber ?? '';
+        if (handler) {
+            try {
+                const handledResult = await handler.HandleInboundCall({
+                    Event: event,
+                    DialedNumber: dialed,
+                    CallerNumber: event.CallerNumber,
+                    RoomName: event.RoomName,
+                    ParticipantIdentity: event.ParticipantIdentity,
+                    ContextUser: contextUser,
+                    MetadataProvider: provider,
+                    HangUp: () => this.hangUpLeg(event.RoomName, event.ParticipantIdentity),
+                });
+                if (handledResult.Handled) {
+                    return handledResult.Outcome ?? { accepted: true };
+                }
+            } catch (handlerErr) {
+                const message = handlerErr instanceof Error ? handlerErr.message : String(handlerErr);
+                LogError(
+                    `[Telephony][LiveKitSip] custom inbound handler threw error for room ${event.RoomName}: ${message}`
+                );
+                await this.hangUpLeg(event.RoomName, event.ParticipantIdentity);
+                void this.recordRefusedInteraction(event, undefined, 'HandlerError', contextUser, provider);
+                return { accepted: false, reason: `Custom inbound handler threw: ${message}` };
+            }
+        }
+
         await this.engine.Config(false, contextUser, provider);
         const carrier = this.resolveProvider();
-        const dialed = event.DialedNumber ?? '';
         const identity = await FindPhoneAgentIdentity(dialed, carrier.ID, contextUser);
         if (!identity) {
             await this.hangUpLeg(event.RoomName, event.ParticipantIdentity);
@@ -393,9 +450,78 @@ export class LiveKitSipTelephonyService {
 
     // ── wiring and startup checks ────────────────────────────────────────────────
 
+    private cachedTrunkNumbers?: Set<string>;
+    private lastMissRefresh = 0;
+    private static readonly TRUNK_CACHE_REFRESH_MIN_INTERVAL_MS = 60_000;
+
+    private async loadTrunkNumbers(trunkID?: string): Promise<Set<string>> {
+        if (this.cachedTrunkNumbers) {
+            return this.cachedTrunkNumbers;
+        }
+        try {
+            const trunks = await this.sip.ListOutboundTrunks();
+            const trunk = trunkID ? trunks.find((t) => t.TrunkID === trunkID) : undefined;
+            const numbers = trunk?.Numbers ?? [];
+            this.cachedTrunkNumbers = new Set(numbers);
+        } catch (e) {
+            LogError(`[Telephony][LiveKitSip] could not load outbound trunk numbers: ${e instanceof Error ? e.message : String(e)}`);
+            this.cachedTrunkNumbers = new Set();
+        }
+        return this.cachedTrunkNumbers;
+    }
+
+    private async refreshTrunkNumbersOnMiss(trunkID?: string): Promise<Set<string>> {
+        const now = Date.now();
+        if (now - this.lastMissRefresh < LiveKitSipTelephonyService.TRUNK_CACHE_REFRESH_MIN_INTERVAL_MS && this.cachedTrunkNumbers) {
+            return this.cachedTrunkNumbers;
+        }
+        this.lastMissRefresh = now;
+        try {
+            const trunks = await this.sip.ListOutboundTrunks();
+            const trunk = trunkID ? trunks.find((t) => t.TrunkID === trunkID) : undefined;
+            const numbers = trunk?.Numbers ?? [];
+            this.cachedTrunkNumbers = new Set(numbers);
+        } catch (e) {
+            LogError(`[Telephony][LiveKitSip] could not refresh outbound trunk numbers: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        return this.cachedTrunkNumbers ?? new Set();
+    }
+
+    private async validateFromNumber(fromNumber: string | undefined, trunkID: string): Promise<string | undefined> {
+        const trimmed = typeof fromNumber === 'string' ? fromNumber.trim() : undefined;
+        if (!trimmed) {
+            return this.config.outboundFromNumber;
+        }
+
+        if (!IsValidE164(trimmed)) {
+            throw new Error(`FromNumber '${trimmed}' is not a valid E.164 phone number.`);
+        }
+
+        let ownedTrunkNumbers = await this.loadTrunkNumbers(trunkID);
+        if (ownedTrunkNumbers.has(trimmed)) {
+            return trimmed;
+        }
+
+        if (this.config.numbers && this.config.numbers.includes(trimmed)) {
+            return trimmed;
+        }
+
+        // On cache miss, refresh the trunk-numbers cache (throttled to at most once per interval)
+        // so a newly added trunk number doesn't require a service restart.
+        ownedTrunkNumbers = await this.refreshTrunkNumbersOnMiss(trunkID);
+        if (ownedTrunkNumbers.has(trimmed)) {
+            return trimmed;
+        }
+
+        throw new Error(`FromNumber '${trimmed}' is not owned by this organization.`);
+    }
+
     /** Gives the handoff engine what only the LiveKit SIP path can: dialing a number into a room, and starting another agent in one. */
     private wireHandoffEngine(): void {
         const trunkID = this.config.outboundTrunkId;
+        if (trunkID) {
+            void this.loadTrunkNumbers(trunkID);
+        }
         this.handoff.Configure({
             Presence: this.sip,
             Observer: {
@@ -415,8 +541,15 @@ export class LiveKitSipTelephonyService {
             },
             Dialer: trunkID
                 ? {
-                      DialIntoRoom: (request: DialIntoRoomRequest) =>
-                          this.sip.DialIntoRoom({ ...request, TrunkID: trunkID, FromNumber: this.config.outboundFromNumber, WaitUntilAnswered: true }),
+                      DialIntoRoom: async (request: DialIntoRoomRequest): Promise<void> => {
+                          const validatedFrom = await this.validateFromNumber(request.FromNumber, trunkID);
+                          return this.sip.DialIntoRoom({
+                              ...request,
+                              TrunkID: trunkID,
+                              FromNumber: validatedFrom,
+                              WaitUntilAnswered: true,
+                          });
+                      },
                   }
                 : undefined,
             AgentStarter: (request: StartRoomAgentRequest) => this.starter.StartRoomAgent(request),
