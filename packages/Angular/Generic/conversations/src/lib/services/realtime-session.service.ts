@@ -26,6 +26,7 @@ import { BuildNarrationInstructions } from './narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../components/realtime/channels/base-realtime-channel-client';
 import { RealtimeAudioRecorder } from './realtime-audio-recorder';
+import { BrowserRecordingUnloadGuard } from './browser-recording-unload-guard';
 
 /**
  * `MJ: User Settings` key for the per-user "record this voice call" consent toggle. Stored as
@@ -342,6 +343,13 @@ function trackKeyFromJSON(raw: JSONValue): string | null {
   return `${direction}:${modality}`;
 }
 
+/** A finished recording encoded for the consolidated upload after session close. */
+interface StoppedRecording {
+  MimeType: string;
+  AudioBase64: string;
+  Peaks: number[];
+}
+
 /**
  * Drives a **client-direct** real-time voice session: the browser mints an ephemeral
  * token from the MJ server, then connects DIRECTLY to the realtime provider. Audio
@@ -377,6 +385,8 @@ export class RealtimeSessionService {
   private _agentName$ = new BehaviorSubject<string>('Sage');
   private _modelName$ = new BehaviorSubject<string | null>(null);
   private _minimized$ = new BehaviorSubject<boolean>(false);
+  private _savingRecording$ = new BehaviorSubject<boolean>(false);
+  private teardownInFlight: Promise<void> | null = null;
   private _activeChannels$ = new BehaviorSubject<BaseRealtimeChannelClient[]>([]);
   private _channelFocus$ = new Subject<RealtimeChannelFocusEvent>();
   // ─── Generic session-lifecycle events (consumed by RealtimeSessionsAdapter to
@@ -428,6 +438,19 @@ export class RealtimeSessionService {
    * pure presentation state, reset to `false` at session start and teardown.
    */
   public readonly Minimized$: Observable<boolean> = this._minimized$.asObservable();
+
+  /** True from the first recorded teardown statement until the upload settles. */
+  public readonly SavingRecording$: Observable<boolean> = this._savingRecording$.asObservable();
+
+  public get IsSavingRecording(): boolean {
+    return this._savingRecording$.value;
+  }
+
+  constructor() {
+    const unloadGuard = new BrowserRecordingUnloadGuard(typeof window === 'undefined' ? null : window);
+    // Root singleton: the subscription lives as long as the app.
+    this.SavingRecording$.subscribe(saving => unloadGuard.SetArmed(saving));
+  }
 
   /**
    * The session's ACTIVE interactive-channel plugins, resolved from the `MJ: AI Agent
@@ -1279,43 +1302,56 @@ export class RealtimeSessionService {
     }
   }
 
-  /**
-   * Stops the active recorder and uploads the captured audio via `UploadRealtimeRecording`.
-   * Fully best-effort and wrapped in try/catch — recording upload must NEVER block teardown.
-   * No-op when nothing was recorded or there's no session id to attach the file to.
-   */
-  private async stopAndUploadRecording(agentSessionId: string | null): Promise<void> {
+  /** Stops and encodes the recording so session close can run before the slow upload. */
+  private async stopRecording(): Promise<StoppedRecording | null> {
     this.stopSegmentFlushing();
     const recorder = this.recorder;
     this.recorder = null;
     this.currentTurnStartMs = null;
     this.turnAudioStartCaptured = false;
     if (!recorder) {
-      return;
+      return null;
     }
     try {
-      // Capture the recorder MIME (now 'audio/wav') BEFORE Stop() — the getter reads '' once stopped.
+      // Capture MIME before Stop resets it; GetPeaks retains its capture-time snapshot.
       const mimeType = recorder.MimeType;
       const blob = await recorder.Stop();
-      // Read the real waveform peaks computed during capture (survives Stop via the recorder's snapshot).
       const peaks = recorder.GetPeaks();
-      if (!blob || blob.size === 0 || !agentSessionId) {
-        console.warn('[RealtimeSession] ⚠️ recording NOT uploaded — empty blob or no session id.');
-        return;
+      if (!blob || blob.size === 0) {
+        console.warn('[RealtimeSession] ⚠️ recording NOT uploaded — empty blob.');
+        return null;
       }
       const audioBase64 = await this.blobToBase64(blob);
       if (!audioBase64) {
         console.warn('[RealtimeSession] ⚠️ recording NOT uploaded — base64 encoding failed.');
-        return;
+        return null;
       }
-      await this.uploadRecording(agentSessionId, audioBase64, mimeType, peaks);
+      return { MimeType: mimeType, AudioBase64: audioBase64, Peaks: peaks };
     } catch (error) {
-      console.warn('[RealtimeSession] Failed to stop/upload call recording:', error);
+      console.warn('[RealtimeSession] Failed to stop call recording:', error);
+      return null;
+    }
+  }
+
+  /** Best-effort consolidated upload after the server session has closed. Never throws. */
+  private async uploadStoppedRecording(agentSessionId: string | null, recording: StoppedRecording | null): Promise<void> {
+    if (!recording) {
+      return;
+    }
+    if (!agentSessionId) {
+      console.warn('[RealtimeSession] ⚠️ recording NOT uploaded — no session id.');
+      return;
+    }
+    try {
+      await this.uploadRecording(agentSessionId, recording.AudioBase64, recording.MimeType, recording.Peaks);
+    } catch (error) {
+      console.warn(`[RealtimeSession] Failed to upload call recording for session ${agentSessionId}:`, error);
     }
   }
 
   /**
-   * Runs the `UploadRealtimeRecording` mutation; failures are logged, never thrown. Sends the
+   * Runs the `UploadRealtimeRecording` mutation; transport failures are caught by
+   * uploadStoppedRecording, and server refusals are logged here. Sends the
    * capture-time waveform `peaks` (max-abs per bucket, normalized 0..1) so the server can persist a
    * `peaks.json` sidecar for fast waveform rendering without re-decoding the audio.
    */
@@ -2798,6 +2834,25 @@ export class RealtimeSessionService {
    * @param closeServerSession when true, calls `CloseAgentSession` on the server.
    */
   private async teardown(closeServerSession: boolean): Promise<void> {
+    if (this.teardownInFlight) {
+      await this.teardownInFlight;
+      return;
+    }
+    this.teardownInFlight = this.runTeardown(closeServerSession).finally(() => {
+      if (this._savingRecording$.value) {
+        this._savingRecording$.next(false);
+      }
+      this.teardownInFlight = null;
+    });
+    await this.teardownInFlight;
+  }
+
+  /** The teardown body is coalesced so repeated End calls close and upload once. */
+  private async runTeardown(closeServerSession: boolean): Promise<void> {
+    // Arm before the first await to cover even the beginning of recorded teardown.
+    if (this.recorder) {
+      this._savingRecording$.next(true);
+    }
     // First: stop asserting liveness. A pulse racing the close would re-stamp LastActiveAt on a
     // session we are deliberately ending, leaving an Idle row the janitor then has to age out.
     this.stopLivenessPulse();
@@ -2814,14 +2869,17 @@ export class RealtimeSessionService {
     this.localStream = null;
 
     if (this.client) {
-      await this.client.Disconnect();
-      this.client = null;
+      try {
+        await this.client.Disconnect();
+      } catch (error) {
+        console.error(`[RealtimeSession] Driver failed to disconnect (session ${this.agentSessionId}); continuing teardown:`, error);
+      } finally {
+        this.client = null;
+      }
     }
 
-    // Stop + upload the call recording WHILE the live session id is still set (the file is
-    // attached to it). Best-effort and never blocks teardown — stopAndUploadRecording swallows
-    // its own errors. No-op when nothing was recorded.
-    await this.stopAndUploadRecording(this.agentSessionId);
+    // Detach and encode now; upload only after usage flush and server close below.
+    const recording = await this.stopRecording();
     this.recordingStartedAtIso = null;
 
     // Final usage flush WHILE the live session id is still set (the relay mutation also
@@ -2836,6 +2894,10 @@ export class RealtimeSessionService {
     if (closeServerSession && this.agentSessionId) {
       await this.closeServerSession(this.agentSessionId);
     }
+
+    // The large upload may be aborted on unload; the small session close must already be done.
+    // UploadRealtimeRecording accepts a Closed session and upload failures never throw here.
+    await this.uploadStoppedRecording(this.agentSessionId, recording);
 
     // Capture the session id BEFORE we null it so the lifecycle emit carries it.
     // Skip emitting when there was no live session (defensive — teardown is safe
