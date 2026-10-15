@@ -37,6 +37,7 @@ import { EntityInfo, RecordMergeRequest, RecordMergeResult, FieldPermissionAcces
 import { TransactionGroupBase } from '../generic/transactionGroup';
 import { RunViewParams } from '../views/runView';
 import { BaseEntity } from '../generic/baseEntity';
+import { Metadata } from '../generic/metadata';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 import { ClearAllDataHooks } from '../generic/dataHooks';
 import { RegisterClassEx, UUIDsEqual } from '@memberjunction/global';
@@ -1057,5 +1058,171 @@ describe('Denied fields whose Name is not a valid identifier', () => {
 
         expect(provider.applyProjection([{ ID: '1', Base_Salary: 250000 }], viewParams(), hr)[0].Base_Salary).toBe(250000);
         expect(provider.applyProjection([{ ID: '1', 'Base Salary': 250000 }], viewParams(), hr)[0]['Base Salary']).toBe(250000);
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// IS-A inheritance — a child's mirror of a parent field obeys the parent's rules
+//
+// An IS-A child carries each ancestor's fields as mirror fields of its own, read from the same
+// row. When enforcement asked only the child's own flag (off on nearly every child), a role
+// denied a field on the parent read it through the child's RunView, load and GetAll().
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('IS-A inheritance of field rules', () => {
+    const PEOPLE_ID = 'B0000000-0000-0000-0000-000000000001';
+    const CONTACTS_ID = 'B0000000-0000-0000-0000-000000000002';
+    const KEY_CONTACTS_ID = 'B0000000-0000-0000-0000-000000000003';
+    const UNSECURED_ROOT_ID = 'B0000000-0000-0000-0000-000000000004';
+    const UNSECURED_CHILD_ID = 'B0000000-0000-0000-0000-000000000005';
+
+    const bothRoles = (entityId: string) => [HR_ROLE_ID, INTERN_ROLE_ID].map(roleId => (
+        { EntityID: entityId, RoleID: roleId, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true }
+    ));
+
+    function entityInit(
+        id: string, name: string, parentId: string | null, enableFLS: boolean,
+        fields: Record<string, unknown>[]
+    ): Record<string, unknown> {
+        return {
+            ID: id, Name: name, ParentID: parentId, SchemaName: 'dbo', BaseTable: name.replace(/\s/g, ''),
+            BaseView: `vw${name.replace(/\s/g, '')}`, IncludeInAPI: true, AllowCreateAPI: true, AllowUpdateAPI: true,
+            AllowDeleteAPI: true, EnableFieldLevelSecurity: enableFLS, Permissions: bothRoles(id),
+            Fields: [
+                { ID: `${id}-id`, EntityID: id, Sequence: 1, Name: 'ID', Entity: name, Type: 'uniqueidentifier', IsPrimaryKey: true },
+                ...fields.map((f, i) => ({ EntityID: id, Entity: name, Type: 'nvarchar', Sequence: i + 2, ...f })),
+            ],
+        };
+    }
+
+    /** People: Phone is HR-only; Email is readable by the intern but not updatable or creatable. */
+    const peopleFields = [
+        { ID: 'p-name', Name: 'Name', EntityFieldPermissions: openTo('p-name') },
+        { ID: 'p-phone', Name: 'Phone', EntityFieldPermissions: openTo('p-phone', [HR_ROLE_ID]) },
+        {
+            ID: 'p-email', Name: 'Email',
+            EntityFieldPermissions: [
+                ...openTo('p-email', [HR_ROLE_ID]),
+                { ID: 'p-email-intern', EntityFieldID: 'p-email', RoleID: INTERN_ROLE_ID, ReadAccess: ALLOW, UpdateAccess: NONE, CreateAccess: NONE },
+            ],
+        },
+    ];
+    /** A child's mirrors of the People fields: same names, no rules of their own. */
+    const mirrors = (prefix: string) => ['Name', 'Phone', 'Email'].map(n => ({ ID: `${prefix}-${n.toLowerCase()}`, Name: n }));
+
+    function build(contactsFLS = false, contactsFieldExtras: Record<string, unknown>[] = []): EntityInfo[] {
+        return [
+            new EntityInfo(entityInit(PEOPLE_ID, 'People', null, true, peopleFields)),
+            new EntityInfo(entityInit(CONTACTS_ID, 'Sales Contacts', PEOPLE_ID, contactsFLS, [
+                ...mirrors('c'), { ID: 'c-score', Name: 'LeadScore' }, ...contactsFieldExtras,
+            ])),
+            new EntityInfo(entityInit(KEY_CONTACTS_ID, 'Key Contacts', CONTACTS_ID, false, [
+                ...mirrors('k'), { ID: 'k-score', Name: 'LeadScore' }, { ID: 'k-tier', Name: 'Tier' },
+            ])),
+            new EntityInfo(entityInit(UNSECURED_ROOT_ID, 'Plain Parents', null, false, [{ ID: 'u-phone', Name: 'Phone' }])),
+            new EntityInfo(entityInit(UNSECURED_CHILD_ID, 'Plain Children', UNSECURED_ROOT_ID, false, [{ ID: 'uc-phone', Name: 'Phone' }])),
+        ];
+    }
+
+    let provider: TestProvider;
+    let previousProvider: IMetadataProvider;
+    const byName = (name: string) => provider.EntityByName(name)!;
+    const intern = () => buildUser([INTERN_ROLE_ID]);
+    const hr = () => buildUser([HR_ROLE_ID]);
+
+    function seed(entities: EntityInfo[]): void {
+        provider = new TestProvider();
+        provider.seedEntities(entities);
+        Metadata.Provider = provider; // ParentEntityInfo resolves through the global provider
+    }
+
+    beforeEach(() => {
+        previousProvider = Metadata.Provider;
+        seed(build());
+    });
+    afterEach(() => {
+        Metadata.Provider = previousProvider;
+    });
+
+    describe('FieldLevelSecurityApplies', () => {
+        it('is true on the entity that has the flag on', () => {
+            expect(byName('People').FieldLevelSecurityApplies).toBe(true);
+        });
+        it('is true on a child whose own flag is off when its parent has it on', () => {
+            expect(byName('Sales Contacts').EnableFieldLevelSecurity).toBe(false);
+            expect(byName('Sales Contacts').FieldLevelSecurityApplies).toBe(true);
+        });
+        it('is true two levels down', () => {
+            expect(byName('Key Contacts').FieldLevelSecurityApplies).toBe(true);
+        });
+        it('is false when no entity in the chain has it on', () => {
+            expect(byName('Plain Parents').FieldLevelSecurityApplies).toBe(false);
+            expect(byName('Plain Children').FieldLevelSecurityApplies).toBe(false);
+        });
+    });
+
+    describe('denied sets on a child with its own flag off', () => {
+        it('REGRESSION: denies the parent-denied field on the child', () => {
+            expect([...byName('Sales Contacts').GetDeniedReadFields(intern())]).toEqual(['phone']);
+        });
+        it('denies it two levels down, through a middle entity whose flag is also off', () => {
+            expect([...byName('Key Contacts').GetDeniedReadFields(intern())]).toEqual(['phone']);
+        });
+        it('denies nothing to a role the parent allows', () => {
+            expect(byName('Sales Contacts').GetDeniedReadFields(hr()).size).toBe(0);
+        });
+        it('carries update and create denials as well as read', () => {
+            const contacts = byName('Sales Contacts');
+            expect([...contacts.GetDeniedUpdateFields(intern())].sort()).toEqual(['email', 'phone']);
+            expect([...contacts.GetDeniedCreateFields(intern())].sort()).toEqual(['email', 'phone']);
+        });
+        it('never denies the child\'s own fields — the child has no rules to apply', () => {
+            expect(byName('Sales Contacts').GetDeniedReadFields(intern()).has('leadscore')).toBe(false);
+        });
+        it('answers the single-field predicates the same way', () => {
+            const contacts = byName('Sales Contacts');
+            expect(contacts.IsFieldReadableByUser('Phone', intern())).toBe(false);
+            expect(contacts.IsFieldUpdatableByUser('Email', intern())).toBe(false);
+            expect(contacts.IsFieldReadableByUser('Email', intern())).toBe(true);
+        });
+        it('denies nothing when no entity in the chain has field security on', () => {
+            expect(byName('Plain Children').GetDeniedReadFields(intern()).size).toBe(0);
+        });
+    });
+
+    describe('a child with its own flag on as well', () => {
+        it('keeps the parent\'s denial even where the child\'s own rows allow the mirror', () => {
+            // The child has its own flag on and rows opening every one of its fields to both roles.
+            const openField = (id: string, name: string) => ({ ID: id, Name: name, EntityFieldPermissions: openTo(id) });
+            const contacts = new EntityInfo(entityInit(CONTACTS_ID, 'Sales Contacts', PEOPLE_ID, true, [
+                openField('c-name', 'Name'), openField('c-phone', 'Phone'),
+                openField('c-email', 'Email'), openField('c-score', 'LeadScore'),
+            ]));
+            seed(build().map(e => (e.ID === CONTACTS_ID ? contacts : e)));
+            expect([...byName('Sales Contacts').GetDeniedReadFields(intern())]).toEqual(['phone']);
+        });
+        it('still applies its own rules to its own fields', () => {
+            seed(build(true));
+            // The child's fields carry no rows here, so on an enabled entity they are all denied.
+            expect(byName('Sales Contacts').GetDeniedReadFields(hr()).has('leadscore')).toBe(true);
+        });
+    });
+
+    describe('enforcement points gate on the inherited rules', () => {
+        const contactsView = (extra: Partial<RunViewParams> = {}): RunViewParams =>
+            ({ EntityName: 'Sales Contacts', ...extra }) as RunViewParams;
+
+        it('REGRESSION: RunView projection strips the parent-denied column from child rows', () => {
+            const rows = [{ ID: '1', Name: 'Ada', Phone: '555-0100', Email: 'a@x.test', LeadScore: 7 }];
+            expect(provider.applyProjection(rows, contactsView(), intern())).toEqual([
+                { ID: '1', Name: 'Ada', Email: 'a@x.test', LeadScore: 7 },
+            ]);
+        });
+        it('the predicate gate rejects a filter on the parent-denied field through the child', () => {
+            expect(() => provider.assertPredicates(contactsView({ ExtraFilter: "Phone = '555-0100'" }), intern())).toThrow();
+        });
+        it('the predicate gate allows the same filter to a role the parent allows', () => {
+            expect(() => provider.assertPredicates(contactsView({ ExtraFilter: "Phone = '555-0100'" }), hr())).not.toThrow();
+        });
     });
 });

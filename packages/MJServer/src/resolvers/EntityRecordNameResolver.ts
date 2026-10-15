@@ -123,11 +123,11 @@ export class EntityRecordNameResolver extends ResolverBase {
    *
    * Resolves the name field the same way the provider's own lookup does — the designated
    * `IsNameField`, else a field literally called `Name` — so the check cannot drift from the
-   * value it is guarding. Fails OPEN only where field security does not apply at all (flag off,
-   * no user, no name field), matching every other FLS gate.
+   * value it is guarding. Fails OPEN only where field security does not apply at all (no entity
+   * in its IS-A chain has it on, no user, no name field), matching every other FLS gate.
    */
   protected IsNameFieldDeniedToUser(entity: EntityInfo, contextUser?: UserInfo): boolean {
-    if (!entity?.EnableFieldLevelSecurity || !contextUser) {
+    if (!entity?.FieldLevelSecurityApplies || !contextUser) {
       return false;
     }
     const nameField =

@@ -1836,7 +1836,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * server's own `ReadableFields___`; see {@link ApplyServerFieldAccess}.
      */
     private GetDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
-        if (!entityInfo?.EnableFieldLevelSecurity || !this.CurrentUser) {
+        if (!entityInfo?.FieldLevelSecurityApplies || !this.CurrentUser) {
             return new Set<string>();
         }
         return entityInfo.GetDeniedReadFields(this.CurrentUser);
@@ -1858,7 +1858,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * non-nullable column is broken on such a server regardless.
      */
     private FieldSecurityTransportSelection(entityInfo: EntityInfo): string {
-        return entityInfo?.EnableFieldLevelSecurity ? ReadableFieldsTransportKey : '';
+        return entityInfo?.FieldLevelSecurityApplies ? ReadableFieldsTransportKey : '';
     }
 
     /**
