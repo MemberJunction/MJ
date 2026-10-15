@@ -6,7 +6,8 @@
     position: fixed;
     inset: 0;
     background: transparent;
-    z-index: 1000;
+    /* The drawer rung of the shared scale; mj-dialog sits above it (--mj-z-dialog). */
+    z-index: var(--mj-z-drawer);
     transition: background 0.3s ease;
     pointer-events: none;
 }
@@ -36,7 +37,7 @@
     height: 100vh;
     background: var(--mj-bg-surface);
     box-shadow: var(--mj-shadow-lg);
-    z-index: 1001;
+    z-index: calc(var(--mj-z-drawer) + 1);
     display: flex;
     flex-direction: column;
     transform: translateX(100%);
@@ -67,7 +68,7 @@
     background: var(--mj-bg-surface);
     border-radius: 16px;
     box-shadow: var(--mj-shadow-lg);
-    z-index: 1001;
+    z-index: calc(var(--mj-z-drawer) + 1);
     display: flex;
     flex-direction: column;
     opacity: 0;
