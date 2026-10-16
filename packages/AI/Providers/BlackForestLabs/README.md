@@ -49,7 +49,7 @@ sequenceDiagram
 - **Image Editing**: Inpainting and outpainting via FLUX Fill model with mask support
 - **Image Variations**: Create variations using FLUX Kontext Pro for image-to-image generation
 - **Async Task Polling**: Configurable polling with adjustable interval and timeout
-- **Multiple Models**: Support for FLUX.2 Pro (32B), FLUX 1.1 Pro, FLUX Dev, FLUX Schnell, and FLUX Ultra
+- **Multiple Models**: Support for FLUX.2 Pro (32B), FLUX 1.1 Pro, FLUX Dev, and FLUX Ultra
 - **Seed Reproducibility**: Deterministic generation with seed parameter support
 - **Resolution Control**: Custom width/height and aspect ratio settings up to 4MP
 
@@ -94,7 +94,6 @@ generator.setPollingConfig({
 | FLUX.2 Pro | `flux-2-pro` | 32B parameter, photorealistic 4MP images |
 | FLUX 1.1 Pro | `flux-1.1-pro` | Production-ready, high-volume workloads |
 | FLUX.1 Dev | `flux-dev` | Open-weights 12B for development |
-| FLUX Schnell | `flux-schnell` | Fast generation |
 | FLUX Ultra | `flux-ultra` | Ultra-high quality |
 
 ## Class Registration

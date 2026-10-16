@@ -55,7 +55,7 @@ vi.mock('@memberjunction/ai', async (importOriginal) => {
     }
   }
 
-    return {
+  return {
     BaseImageGenerator: MockBaseImageGenerator,
     ImageGenerationParams: class {},
     ImageGenerationResult: class {},
@@ -172,16 +172,16 @@ describe('FLUXImageGenerator', () => {
         .bind(generator);
       expect(fn('flux-2-pro')).toBe('/flux-2-pro');
       expect(fn('flux-1.1-pro')).toBe('/flux-pro-1.1');
-      expect(fn('flux-1.1-pro-ultra')).toBe('/flux-pro-1.1-ultra');
-      expect(fn('flux-ultra')).toBe('/flux-pro-1.1-ultra');
-      expect(fn('flux-1-fill-pro')).toBe('/flux-pro-1.0-fill');
       expect(fn('flux-dev')).toBe('/flux-dev');
+      expect(fn('flux-ultra')).toBe('/flux-pro-1.1-ultra');
     });
 
     it('should return default endpoint for unknown model', () => {
       const fn = (generator as unknown as Record<string, (...args: unknown[]) => unknown>)['getModelEndpoint']
         .bind(generator);
       expect(fn('unknown-model')).toBe('/flux-pro-1.1');
+      expect(fn('flux-pro')).toBe('/flux-pro-1.1');
+      expect(fn('flux-schnell')).toBe('/flux-pro-1.1');
     });
   });
 
@@ -220,37 +220,10 @@ describe('FLUXImageGenerator', () => {
 
       const pollFn = (generator as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['pollForResult']
         .bind(generator);
-      const res = (await pollFn({ id: 'task-regional-1', pollingUrl: regionalUrl })) as Record<string, unknown>;
+      const res = (await pollFn({ id: 'task-regional-1', polling_url: regionalUrl })) as Record<string, unknown>;
       expect(res.status).toBe('Ready');
       expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(mockFetch.mock.calls[0][0]).toBe(regionalUrl);
-    });
-
-    it('rejects a non-BFL or non-HTTPS polling_url and falls back to ${baseUrl}/get_result?id=...', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          id: 'task-fallback-1',
-          status: 'Ready',
-          result: { sample: 'https://delivery.us1.bfl.ai/sample.jpg' },
-        }),
-      });
-
-      const pollFn = (generator as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['pollForResult']
-        .bind(generator);
-      await pollFn({ id: 'task-fallback-1', pollingUrl: 'https://evil.example.com/get_result?id=task-fallback-1' });
-      expect(mockFetch.mock.calls[0][0]).toBe('https://api.bfl.ai/v1/get_result?id=task-fallback-1');
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          id: 'task-fallback-2',
-          status: 'Ready',
-          result: { sample: 'https://delivery.us1.bfl.ai/sample.jpg' },
-        }),
-      });
-      await pollFn({ id: 'task-fallback-2', pollingUrl: 'http://api.bfl.ai/v1/get_result?id=task-fallback-2' });
-      expect(mockFetch.mock.calls[1][0]).toBe('https://api.bfl.ai/v1/get_result?id=task-fallback-2');
     });
 
     it('falls back to ${baseUrl}/get_result?id=... when polling_url is absent', async () => {
@@ -289,6 +262,33 @@ describe('FLUXImageGenerator', () => {
       const result = await generator.GenerateImage({ prompt: 'test' } as never);
       expect(result.success).toBe(false);
       expect(result.errorMessage).toContain('Network error');
+    });
+
+    it('fails without sending a poll request when polling_url is non-BFL or non-HTTPS', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'task-bad-host',
+          polling_url: 'https://evil.example.com/get_result?id=task-bad-host',
+        }),
+      });
+
+      const badHostResult = await generator.GenerateImage({ prompt: 'test' } as never);
+      expect(badHostResult.success).toBe(false);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      mockFetch.mockClear();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'task-bad-scheme',
+          polling_url: 'http://api.bfl.ai/v1/get_result?id=task-bad-scheme',
+        }),
+      });
+
+      const badSchemeResult = await generator.GenerateImage({ prompt: 'test' } as never);
+      expect(badSchemeResult.success).toBe(false);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('treats No Card Generated as a final failure and surfaces Moderation Reasons', async () => {
@@ -358,6 +358,87 @@ describe('FLUXImageGenerator', () => {
       expect(result.usage?.cost).toBeCloseTo(0.048, 6);
       expect(result.usage?.costCurrency).toBe('USD');
       expect(result.metadata).toEqual({ seed: 12345, cost: 4.8 });
+    });
+
+    it('falls back to submit cost when Ready result has no settled cost', async () => {
+      const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: 'task-submit-cost-only',
+            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-submit-cost-only',
+            cost: 4,
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: 'task-submit-cost-only',
+            status: 'Ready',
+            result: {
+              sample: 'https://delivery.us1.bfl.ai/results/sample.png',
+            },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          headers: new Headers({ 'content-type': 'image/png' }),
+          arrayBuffer: async () =>
+            imageBytes.buffer.slice(imageBytes.byteOffset, imageBytes.byteOffset + imageBytes.byteLength),
+        });
+
+      const result = await generator.GenerateImage({ prompt: 'submit cost fallback' } as never);
+      expect(result.success).toBe(true);
+      expect(result.usage?.cost).toBeCloseTo(0.04, 6);
+      expect(result.usage?.costCurrency).toBe('USD');
+      expect(result.metadata).toEqual({ cost: 4 });
+    });
+  });
+
+  /* ---- CreateVariation ---- */
+  describe('CreateVariation', () => {
+    it('sends input_image (not image) to /flux-kontext-pro', async () => {
+      const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: 'task-kontext-1',
+            polling_url: 'https://api.bfl.ai/v1/get_result?id=task-kontext-1',
+            cost: 4,
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: 'task-kontext-1',
+            status: 'Ready',
+            result: {
+              sample: 'https://delivery.us1.bfl.ai/results/variation.png',
+            },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          headers: new Headers({ 'content-type': 'image/png' }),
+          arrayBuffer: async () =>
+            imageBytes.buffer.slice(imageBytes.byteOffset, imageBytes.byteOffset + imageBytes.byteLength),
+        });
+
+      const result = await generator.CreateVariation({
+        image: Buffer.from('source-image'),
+        prompt: 'Make it winter',
+      } as never);
+
+      expect(result.success).toBe(true);
+      expect(mockFetch.mock.calls[0][0]).toBe('https://api.bfl.ai/v1/flux-kontext-pro');
+      const submitBody = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string) as Record<
+        string,
+        unknown
+      >;
+      expect(submitBody.input_image).toBe('base64data');
+      expect(submitBody.image).toBeUndefined();
     });
   });
 });

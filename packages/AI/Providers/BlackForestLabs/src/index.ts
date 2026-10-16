@@ -30,7 +30,6 @@ interface BFLPollingConfig {
 interface BFLTaskResponse {
     id: string;
     polling_url?: string;
-    pollingUrl?: string;
     cost?: number | null;
     input_mp?: number | null;
     output_mp?: number | null;
@@ -124,11 +123,8 @@ export class FLUXImageGenerator extends BaseImageGenerator {
                 return this.createErrorResult(startTime, 'No task ID returned from BFL API');
             }
 
-            // Poll for result using BFL's returned polling_url when valid
-            const resultResponse = await this.pollForResult(
-                { id: taskResponse.id, pollingUrl: taskResponse.polling_url ?? taskResponse.pollingUrl },
-                params.CancellationToken
-            );
+            // Poll for result using BFL's returned polling_url when present
+            const resultResponse = await this.pollForResult(taskResponse, params.CancellationToken);
 
             if (this.isFailureStatus(resultResponse.status)) {
                 return this.createErrorResult(startTime, this.formatFailureMessage('Generation failed', resultResponse));
@@ -138,17 +134,11 @@ export class FLUXImageGenerator extends BaseImageGenerator {
                 return this.createErrorResult(startTime, 'No image URL in result');
             }
 
-            const requestedFormat = typeof requestBody.output_format === 'string' &&
-                (requestBody.output_format === 'jpeg' || requestBody.output_format === 'png' || requestBody.output_format === 'webp')
-                ? requestBody.output_format
-                : 'png';
-
             // Download image and create result
             const generatedImage = await this.downloadImage(
                 resultResponse.result.sample,
                 0,
-                params.CancellationToken,
-                requestedFormat
+                params.CancellationToken
             );
 
             const result = this.createSuccessResult(startTime, [generatedImage]);
@@ -194,16 +184,13 @@ export class FLUXImageGenerator extends BaseImageGenerator {
             }
 
             // Wait for result
-            const resultResponse = await this.pollForResult(
-                { id: taskResponse.id, pollingUrl: taskResponse.polling_url ?? taskResponse.pollingUrl },
-                params.CancellationToken
-            );
+            const resultResponse = await this.pollForResult(taskResponse, params.CancellationToken);
 
             if (resultResponse.status !== 'Ready' || !resultResponse.result?.sample) {
                 return this.createErrorResult(startTime, this.formatFailureMessage('Edit failed', resultResponse));
             }
 
-            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0, params.CancellationToken, 'png');
+            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0, params.CancellationToken);
 
             const result = this.createSuccessResult(startTime, [generatedImage]);
             this.applyUsageAndMetadata(result, taskResponse, resultResponse);
@@ -231,7 +218,7 @@ export class FLUXImageGenerator extends BaseImageGenerator {
 
             const requestBody: Record<string, unknown> = {
                 prompt: variationPrompt,
-                image: imageInput.base64,
+                input_image: imageInput.base64,
                 output_format: 'png'
             };
 
@@ -243,16 +230,13 @@ export class FLUXImageGenerator extends BaseImageGenerator {
             }
 
             // Wait for result
-            const resultResponse = await this.pollForResult(
-                { id: taskResponse.id, pollingUrl: taskResponse.polling_url ?? taskResponse.pollingUrl },
-                params.CancellationToken
-            );
+            const resultResponse = await this.pollForResult(taskResponse, params.CancellationToken);
 
             if (resultResponse.status !== 'Ready' || !resultResponse.result?.sample) {
                 return this.createErrorResult(startTime, this.formatFailureMessage('Variation failed', resultResponse));
             }
 
-            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0, params.CancellationToken, 'png');
+            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0, params.CancellationToken);
 
             const result = this.createSuccessResult(startTime, [generatedImage]);
             this.applyUsageAndMetadata(result, taskResponse, resultResponse);
@@ -317,13 +301,8 @@ export class FLUXImageGenerator extends BaseImageGenerator {
         const modelEndpoints: Record<string, string> = {
             'flux-2-pro': '/flux-2-pro',
             'flux-1.1-pro': '/flux-pro-1.1',
-            'flux-1.1-pro-ultra': '/flux-pro-1.1-ultra',
-            'flux-pro': '/flux-pro',
             'flux-dev': '/flux-dev',
-            'flux-schnell': '/flux-schnell',
-            'flux-ultra': '/flux-pro-1.1-ultra',
-            'flux-1-fill-pro': '/flux-pro-1.0-fill',
-            'flux-1-kontext-pro': '/flux-kontext-pro'
+            'flux-ultra': '/flux-pro-1.1-ultra'
         };
 
         return modelEndpoints[model.toLowerCase()] || '/flux-pro-1.1';
@@ -396,12 +375,12 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Poll for task completion using BFL's returned `polling_url` when present and valid
-     * (HTTPS URL whose hostname ends with `.bfl.ai`), falling back to `${this._baseUrl}/get_result?id=${id}`.
+     * Poll for task completion using BFL's returned `polling_url` (or `${this._baseUrl}/get_result?id=${id}`
+     * when `polling_url` is omitted). Only an `https://` URL whose hostname ends in `.bfl.ai` is polled.
      * The signal aborts the poll in flight and the wait between polls.
      */
     private async pollForResult(
-        task: { id: string; pollingUrl?: string; polling_url?: string } | string,
+        task: { id: string; polling_url?: string },
         signal?: AbortSignal
     ): Promise<BFLResultResponse> {
         const startTime = Date.now();
@@ -435,28 +414,16 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Backwards-compatible alias for {@link pollForResult}.
+     * Validate and resolve the polling URL for a submitted task. Falls back to
+     * `${this._baseUrl}/get_result?id=${id}` only when `polling_url` is missing.
+     * Any non-`https:` or non-`.bfl.ai` URL throws without sending the API key.
      */
-    private async waitForResult(
-        task: { id: string; pollingUrl?: string; polling_url?: string } | string,
-        signal?: AbortSignal
-    ): Promise<BFLResultResponse> {
-        return this.pollForResult(task, signal);
-    }
-
-    /**
-     * Validate and resolve the polling URL for a submitted task. Only HTTPS URLs whose
-     * hostname ends with `.bfl.ai` are accepted; anything else falls back to `${this._baseUrl}/get_result?id=${id}`.
-     */
-    private resolvePollingUrl(task: { id: string; pollingUrl?: string; polling_url?: string } | string): string {
-        if (typeof task === 'string') {
-            return `${this._baseUrl}/get_result?id=${task}`;
+    private resolvePollingUrl(task: { id: string; polling_url?: string }): string {
+        const candidate = task.polling_url ?? `${this._baseUrl}/get_result?id=${task.id}`;
+        if (!this.isValidBflPollingUrl(candidate)) {
+            throw new Error(`Refusing to poll non-BFL or non-HTTPS URL: ${candidate}`);
         }
-        const candidate = task.pollingUrl ?? task.polling_url;
-        if (candidate && this.isValidBflPollingUrl(candidate)) {
-            return candidate;
-        }
-        return `${this._baseUrl}/get_result?id=${task.id}`;
+        return candidate;
     }
 
     private isValidBflPollingUrl(url: string): boolean {
@@ -517,13 +484,12 @@ export class FLUXImageGenerator extends BaseImageGenerator {
 
     /**
      * Download an image from URL and convert to GeneratedImage, inferring `format`
-     * from the response `Content-Type` header before falling back to `fallbackFormat`.
+     * from the response `Content-Type` header before falling back to `'png'`.
      */
     private async downloadImage(
         url: string,
         index: number,
-        signal?: AbortSignal,
-        fallbackFormat: GeneratedImage['format'] = 'png'
+        signal?: AbortSignal
     ): Promise<GeneratedImage> {
         const response = await fetch(url, { signal });
 
@@ -532,8 +498,8 @@ export class FLUXImageGenerator extends BaseImageGenerator {
             throw new Error(`Failed to download image: ${response.status}`);
         }
 
-        const contentType = response.headers?.get?.('content-type')?.toLowerCase() ?? '';
-        let format: GeneratedImage['format'] = fallbackFormat;
+        const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+        let format: GeneratedImage['format'] = 'png';
         if (contentType.includes('image/jpeg') || contentType.includes('image/jpg')) {
             format = 'jpeg';
         } else if (contentType.includes('image/png')) {
