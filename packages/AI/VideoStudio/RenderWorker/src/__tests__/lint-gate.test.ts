@@ -49,7 +49,8 @@ describe('lint-gate static and HyperFrames lint checks', () => {
 
         const bundle = makeBundleWithEntryContent(html, [
             { Path: 'styles/app.css', Content: '.box { background: url("../assets/local.png"); }' },
-            { Path: 'scripts/app.js', Content: 'const label = "Revenue Growth";' },
+            { Path: 'scripts/app.js', Content: 'import { label } from "./helper.js";\nconsole.log(label);' },
+            { Path: 'scripts/helper.js', Content: 'export const label = "Revenue Growth";' },
         ]);
 
         const staged = await StageRenderBundle(bundle, { InjectPreamble: false });
@@ -77,6 +78,7 @@ describe('lint-gate static and HyperFrames lint checks', () => {
         ['Inline JS string literal URL', '<script>const u = "https://evil.example.com/api";</script>'],
         ['Relative path escaping bundle root', '<img src="../../outside.png" />'],
         ['HTML event handler with entity-encoded URL', '<div onclick="fetch(&#34;https://evil.test&#34;)">x</div>'],
+        ['Unresolvable gsap/dist script path (producer CDN rewrite vector)', '<script src="p/q/gsap/dist/../../evil-pkg@1.0.0/x.js"></script>'],
     ])('catches MJ_NON_BUNDLE_URL vector (%s) with BlockRender: true', async (_label, snippet) => {
         const bundle = makeBundleWithEntryContent(`<!doctype html><html><body>${snippet}</body></html>`);
         const staged = await StageRenderBundle(bundle, { InjectPreamble: false });
@@ -87,6 +89,69 @@ describe('lint-gate static and HyperFrames lint checks', () => {
             expect(result.Issues.some((i) => i.Code === MJ_NON_BUNDLE_URL_CODE)).toBe(true);
         } finally {
             await staged.Cleanup();
+        }
+    });
+
+    it('blocks <script src> and JS import specifiers that target bundle.Assets instead of bundle.Files', async () => {
+        const payloadBase64 = Buffer.from('fetch("https://evil.test");', 'utf8').toString('base64');
+        const scriptAssetBundle: RenderProjectBundle = {
+            Format: '16:9',
+            EntryFile: 'index.html',
+            Files: [
+                {
+                    Path: 'index.html',
+                    Content: '<!doctype html><html><body><script src="p.bin"></script></body></html>',
+                },
+            ],
+            Assets: [
+                {
+                    Key: 'p',
+                    RelativePath: 'p.bin',
+                    MimeType: 'application/octet-stream',
+                    DataBase64: payloadBase64,
+                },
+            ],
+            DataSnapshot: {},
+            Seed: 1,
+        };
+        const stagedScript = await StageRenderBundle(scriptAssetBundle, { InjectPreamble: false });
+        try {
+            const res = await RunLintGate(scriptAssetBundle, stagedScript.RootDir, new FakeRenderBackend());
+            expect(res.BlockRender).toBe(true);
+            expect(res.Passed).toBe(false);
+            expect(res.Issues.some((i) => i.Code === MJ_NON_BUNDLE_URL_CODE && i.File === 'index.html')).toBe(true);
+        } finally {
+            await stagedScript.Cleanup();
+        }
+
+        const importAssetBundle: RenderProjectBundle = {
+            Format: '16:9',
+            EntryFile: 'index.html',
+            Files: [
+                {
+                    Path: 'index.html',
+                    Content: '<!doctype html><html><body><script type="module">import "./m.js";</script></body></html>',
+                },
+            ],
+            Assets: [
+                {
+                    Key: 'm',
+                    RelativePath: 'm.js',
+                    MimeType: 'text/javascript',
+                    DataBase64: payloadBase64,
+                },
+            ],
+            DataSnapshot: {},
+            Seed: 1,
+        };
+        const stagedImport = await StageRenderBundle(importAssetBundle, { InjectPreamble: false });
+        try {
+            const res = await RunLintGate(importAssetBundle, stagedImport.RootDir, new FakeRenderBackend());
+            expect(res.BlockRender).toBe(true);
+            expect(res.Passed).toBe(false);
+            expect(res.Issues.some((i) => i.Code === MJ_NON_BUNDLE_URL_CODE && i.File === 'index.html')).toBe(true);
+        } finally {
+            await stagedImport.Cleanup();
         }
     });
 

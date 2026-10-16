@@ -23,7 +23,6 @@ import {
     type VideoFormat,
 } from '@memberjunction/video-studio-core';
 import {
-    PINNED_HYPERFRAMES_VERSION,
     RenderWorkerError,
     type BackendCheckJob,
     type RenderBackend,
@@ -325,7 +324,7 @@ export async function RunRenderJob(
 
         const videoBytes = await fs.readFile(rendered.OutputPath);
         const probe = await backend.Probe(rendered.OutputPath);
-        const rendererVersion = backend.GetRendererVersion?.() ?? PINNED_HYPERFRAMES_VERSION;
+        const rendererVersion = backend.GetRendererVersion();
 
         return {
             Format: req.Bundle.Format,
@@ -430,7 +429,7 @@ export async function RunStillsJob(
                 ImageBase64: Buffer.from(bytes).toString('base64'),
             };
         });
-        const rendererVersion = backend.GetRendererVersion?.() ?? PINNED_HYPERFRAMES_VERSION;
+        const rendererVersion = backend.GetRendererVersion();
 
         return {
             Format: req.Bundle.Format,
@@ -616,7 +615,16 @@ export async function RunKeyframesJob(
  * Queries the render backend health status (`NodeVersion`, `HyperFramesVersion`, `ChromiumVersion`, `FfmpegVersion`).
  */
 export async function GetWorkerHealth(backend: RenderBackend): Promise<RenderHealth> {
-    return await backend.Health();
+    try {
+        return await backend.Health();
+    } catch (error) {
+        return {
+            Healthy: false,
+            NodeVersion: process.version,
+            HyperFramesVersion: '',
+            Errors: [error instanceof Error ? error.message : String(error)],
+        };
+    }
 }
 
 interface ContactSheetRenderSpec {
@@ -715,7 +723,7 @@ function buildContactSheetHtml(spec: ContactSheetRenderSpec, width: number, heig
         '<meta charset="utf-8" />',
         '<style>',
         `  * { box-sizing: border-box; margin: 0; padding: 0; }`,
-        `  body { width: ${width}px; height: ${height}px; background: #0f172a; color: #f8fafc; font-family: 'MJ Sans', sans-serif; padding: 16px; }`,
+        `  body { width: ${width}px; height: ${height}px; background: #0f172a; color: #f8fafc; font-family: 'MJ Sans'; padding: 16px; }`,
         `  .header { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #94a3b8; }`,
         `  .grid { display: grid; grid-template-columns: repeat(${spec.Columns}, 1fr); gap: 16px; }`,
         `  .tile { background: #1e293b; border: 1px solid #334155; border-radius: 6px; overflow: hidden; }`,

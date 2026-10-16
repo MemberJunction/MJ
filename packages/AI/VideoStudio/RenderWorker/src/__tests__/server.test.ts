@@ -267,9 +267,37 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
         expect(secondVideoRes.status).toBe(404);
     });
 
-    it('queues a second /render behind the first when Concurrency = 1', async () => {
+    it('expires unfetched videos in the video store after VideoTtlMs and returns 404 on GET /videos/:id', async () => {
         const server = CreateRenderWorkerServer({
-            Backend: new FakeRenderBackend({ StepDelayMs: 30 }),
+            Backend: new FakeRenderBackend(),
+            VideoTtlMs: 35,
+        });
+        serversToClose.push(server);
+        const port = await server.Listen(0);
+
+        const renderRes = await fetch(`http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Render}`, {
+            method: 'POST',
+            body: JSON.stringify(createValidRenderRequest()),
+        });
+        expect(renderRes.status).toBe(200);
+        const events = await parseNdjsonStream(renderRes);
+        const resultEvent = events.find((e) => e.Type === 'Result');
+        expect(resultEvent?.Type).toBe('Result');
+        if (!resultEvent || resultEvent.Type !== 'Result') {
+            throw new Error('Expected terminal Result event');
+        }
+
+        await new Promise((r) => setTimeout(r, 70));
+
+        const expiredRes = await fetch(
+            `http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Video}/${encodeURIComponent(resultEvent.Result.VideoID)}`,
+        );
+        expect(expiredRes.status).toBe(404);
+    });
+
+    it('queues a second /render strictly behind the first in FIFO order when Concurrency = 1', async () => {
+        const server = CreateRenderWorkerServer({
+            Backend: new FakeRenderBackend({ StepDelayMs: 25 }),
             Concurrency: 1,
         });
         serversToClose.push(server);
@@ -277,17 +305,94 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
         const renderUrl = `http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Render}`;
         const payload = JSON.stringify(createValidRenderRequest());
 
-        const [resA, resB] = await Promise.all([
-            fetch(renderUrl, { method: 'POST', body: payload }),
-            fetch(renderUrl, { method: 'POST', body: payload }),
-        ]);
+        let sequenceCounter = 0;
+        const arrivalLog: Array<{ Job: 'A' | 'B'; Event: RenderStreamEvent; Seq: number; AtMs: number }> = [];
+        let resolveFirstProgressA!: () => void;
+        const firstProgressAPromise = new Promise<void>((resolve) => {
+            resolveFirstProgressA = resolve;
+        });
 
-        const [eventsA, eventsB] = await Promise.all([
-            parseNdjsonStream(resA),
-            parseNdjsonStream(resB),
-        ]);
+        const consumeStream = async (job: 'A' | 'B', responsePromise: Promise<Response>): Promise<RenderStreamEvent[]> => {
+            const res = await responsePromise;
+            const reader = res.body?.getReader();
+            if (!reader) {
+                throw new Error('Missing response body stream');
+            }
+            const decoder = new TextDecoder();
+            let buffer = '';
+            const events: RenderStreamEvent[] = [];
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    break;
+                }
+                buffer += decoder.decode(value, { stream: true });
+                let newlineIdx = buffer.indexOf('\n');
+                while (newlineIdx >= 0) {
+                    const line = buffer.slice(0, newlineIdx).trim();
+                    buffer = buffer.slice(newlineIdx + 1);
+                    if (line.length > 0) {
+                        const event = JSON.parse(line) as RenderStreamEvent;
+                        events.push(event);
+                        arrivalLog.push({
+                            Job: job,
+                            Event: event,
+                            Seq: ++sequenceCounter,
+                            AtMs: performance.now(),
+                        });
+                        if (job === 'A' && event.Type === 'Progress') {
+                            resolveFirstProgressA();
+                        }
+                    }
+                    newlineIdx = buffer.indexOf('\n');
+                }
+            }
+            return events;
+        };
+
+        const streamAPromise = consumeStream('A', fetch(renderUrl, { method: 'POST', body: payload }));
+        await firstProgressAPromise;
+        const streamBPromise = consumeStream('B', fetch(renderUrl, { method: 'POST', body: payload }));
+
+        const [eventsA, eventsB] = await Promise.all([streamAPromise, streamBPromise]);
         expect(eventsA.some((e) => e.Type === 'Result')).toBe(true);
         expect(eventsB.some((e) => e.Type === 'Result')).toBe(true);
+
+        const resultALog = arrivalLog.find((entry) => entry.Job === 'A' && entry.Event.Type === 'Result');
+        const firstProgressBLog = arrivalLog.find((entry) => entry.Job === 'B' && entry.Event.Type === 'Progress');
+        expect(resultALog).toBeDefined();
+        expect(firstProgressBLog).toBeDefined();
+        expect(firstProgressBLog!.Seq).toBeGreaterThan(resultALog!.Seq);
+        expect(firstProgressBLog!.AtMs).toBeGreaterThanOrEqual(resultALog!.AtMs);
+    });
+
+    it('Close() resolves promptly while a stalled partial upload is still in progress', async () => {
+        const server = CreateRenderWorkerServer({
+            Backend: new FakeRenderBackend(),
+        });
+        serversToClose.push(server);
+        const port = await server.Listen(0);
+
+        const stalledReq = http.request({
+            hostname: '127.0.0.1',
+            port,
+            path: RENDER_WORKER_ROUTES.Check,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': '65536',
+            },
+        });
+        stalledReq.on('error', () => undefined);
+        stalledReq.write('{"Bundle":');
+
+        await new Promise((r) => setTimeout(r, 25));
+
+        const startedAt = performance.now();
+        await server.Close();
+        const closeElapsedMs = performance.now() - startedAt;
+        expect(closeElapsedMs).toBeLessThan(1000);
+        stalledReq.destroy();
     });
 
     it('aborts a hanging data-fake-hang render on per-request TimeoutMs with Error event Code: Timeout, and times out hanging /check with 504 Timeout', async () => {

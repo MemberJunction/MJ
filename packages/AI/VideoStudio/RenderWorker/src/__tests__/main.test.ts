@@ -1,3 +1,6 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
     RENDER_WORKER_ENV,
@@ -15,6 +18,10 @@ import {
     ParseRenderWorkerEnv,
     StartRenderWorkerFromEnv,
 } from '../main.js';
+
+const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
+const PACKAGE_JSON_PATH = path.resolve(THIS_DIR, '../../package.json');
+const PNPM_LOCK_PATH = path.resolve(THIS_DIR, '../../../../../../pnpm-lock.yaml');
 
 describe('main CLI entrypoint and environment configuration', () => {
     const serversToClose: RenderWorkerServer[] = [];
@@ -92,12 +99,44 @@ describe('main CLI entrypoint and environment configuration', () => {
         expect(health.Healthy).toBe(true);
     });
 
-    it('resolves all 6 @hyperframes/* packages to the exact same version matching GetInstalledHyperFramesVersion()', () => {
+    it('resolves all 6 @hyperframes/* packages to the exact same version matching GetInstalledHyperFramesVersion() and throws on missing package', () => {
         const subpackages = ['producer', 'engine', 'lint', 'core', 'parsers', 'studio-server'];
         const expected = GetInstalledHyperFramesVersion();
         expect(expected).toBe('0.8.134');
         for (const sub of subpackages) {
             expect(GetInstalledHyperFramesPackageVersion(sub)).toBe(expected);
+        }
+        expect(() => GetInstalledHyperFramesPackageVersion('does-not-exist')).toThrow(
+            /Unable to resolve installed version for @hyperframes\/does-not-exist/,
+        );
+    });
+
+    it('pins every @hyperframes/* and hyperframes dependency to an identical exact semver in package.json and pnpm-lock.yaml', () => {
+        const pkgRaw = JSON.parse(fs.readFileSync(PACKAGE_JSON_PATH, 'utf8')) as {
+            dependencies?: Record<string, string>;
+            devDependencies?: Record<string, string>;
+        };
+        const allDeps = { ...(pkgRaw.dependencies ?? {}), ...(pkgRaw.devDependencies ?? {}) };
+        const hfDeps = Object.entries(allDeps).filter(
+            ([name]) => name === 'hyperframes' || name.startsWith('@hyperframes/'),
+        );
+        expect(hfDeps.length).toBe(7);
+
+        const exactSemverRegex = /^\d+\.\d+\.\d+$/;
+        const versions = new Set<string>();
+        for (const [, spec] of hfDeps) {
+            expect(spec).toMatch(exactSemverRegex);
+            versions.add(spec);
+        }
+        expect(versions.size).toBe(1);
+        const pinnedVersion = [...versions][0]!;
+        expect(pinnedVersion).toBe(GetInstalledHyperFramesVersion());
+
+        const lockfile = fs.readFileSync(PNPM_LOCK_PATH, 'utf8');
+        const lockMatches = [...lockfile.matchAll(/@hyperframes\/[a-z-]+@(\d+\.\d+\.\d+)/g)];
+        expect(lockMatches.length).toBeGreaterThanOrEqual(6);
+        for (const match of lockMatches) {
+            expect(match[1]).toBe(pinnedVersion);
         }
     });
 });

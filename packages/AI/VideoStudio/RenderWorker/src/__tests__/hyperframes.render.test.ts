@@ -1,12 +1,13 @@
 import { execFile } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as http from 'node:http';
+import * as net from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import * as zlib from 'node:zlib';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import type { CapturedStill, RenderProjectBundle } from '@memberjunction/video-studio-core';
 import { StageRenderBundle } from '../bundle.js';
 import { HyperFramesRenderBackend } from '../hyperframes-backend.js';
@@ -274,6 +275,138 @@ describe.skipIf(process.env.VIDEO_STUDIO_RENDER_TESTS !== '1')(
         );
 
         it(
+            'makes zero non-loopback socket connections during RunRenderJob, RunStillsJob, and RunContactSheetJob on an MJ Sans + MJVideo.OnFrame-only composition with deterministic MJVideo.Random()',
+            async () => {
+                const nonLoopbackTargets: string[] = [];
+                const origConnect = net.Socket.prototype.connect;
+                const connectSpy = vi
+                    .spyOn(net.Socket.prototype, 'connect')
+                    .mockImplementation(function (this: net.Socket, ...args: unknown[]) {
+                        const first = args[0];
+                        let host: string | undefined;
+                        if (typeof first === 'object' && first !== null && 'host' in first) {
+                            const h = (first as { host?: unknown }).host;
+                            if (typeof h === 'string') {
+                                host = h;
+                            }
+                        } else if (typeof first === 'number' && typeof args[1] === 'string') {
+                            host = args[1];
+                        }
+                        if (
+                            host &&
+                            host !== '127.0.0.1' &&
+                            host !== 'localhost' &&
+                            host !== '::1' &&
+                            !host.startsWith('127.')
+                        ) {
+                            nonLoopbackTargets.push(host);
+                        }
+                        return (origConnect as (...a: unknown[]) => net.Socket).apply(this, args);
+                    });
+
+                // Pure MJVideo.OnFrame-only fixture (no authored __hf or __timelines) using bundled 'MJ Sans' and MJVideo.Random()
+                const onFrameOnlyHtml = [
+                    '<!doctype html>',
+                    '<html><head><meta charset="utf-8" />',
+                    '<style>',
+                    "  body { margin: 0; width: 320px; height: 180px; font-family: 'MJ Sans'; }",
+                    '  #stage { width: 320px; height: 180px; display: flex; align-items: center; justify-content: center; font-size: 28px; color: #ffffff; }',
+                    '</style>',
+                    '</head><body>',
+                    '<div id="root" data-composition-id="onframe-only" data-duration="2.5" data-fps="15" data-width="320" data-height="180">',
+                    '  <div id="stage">Init</div>',
+                    '</div>',
+                    '<script>',
+                    '  window.MJVideo.OnFrame(function(frame, time) {',
+                    '    var r = Math.floor(window.MJVideo.Random() * 200) + 20;',
+                    '    var g = Math.floor(window.MJVideo.Random() * 200) + 20;',
+                    '    var b = Math.floor(window.MJVideo.Random() * 200) + 20;',
+                    '    var el = document.getElementById("stage");',
+                    '    if (el) {',
+                    '      el.style.backgroundColor = "rgb(" + r + "," + g + "," + b + ")";',
+                    '      el.textContent = "F" + frame + ":" + r + "-" + g + "-" + b;',
+                    '    }',
+                    '  });',
+                    '</script>',
+                    '</body></html>',
+                ].join('\n');
+
+                const bundle: RenderProjectBundle = {
+                    Format: '16:9',
+                    EntryFile: 'index.html',
+                    Files: [{ Path: 'index.html', Content: onFrameOnlyHtml }],
+                    Assets: [],
+                    DataSnapshot: {},
+                    Seed: 777,
+                };
+
+                try {
+                    const renderRes = await RunRenderJob(
+                        {
+                            Bundle: bundle,
+                            Width: 320,
+                            Height: 180,
+                            Fps: 15,
+                            DurationSeconds: 2.5,
+                            Quality: 'draft',
+                        },
+                        backend,
+                    );
+                    expect(renderRes.FrameCount).toBe(38);
+
+                    const stillsMulti = await RunStillsJob(
+                        {
+                            Bundle: bundle,
+                            Width: 320,
+                            Height: 180,
+                            Fps: 15,
+                            Points: [
+                                { Key: 't0', TimestampSeconds: 0, Role: 'BeatStart', Label: 'Start' },
+                                { Key: 't1', TimestampSeconds: 1, Role: 'BeatMidpoint', Label: 'One' },
+                                { Key: 't1_5', TimestampSeconds: 1.5, Role: 'BeatMidpoint', Label: 'Mid' },
+                                { Key: 't2', TimestampSeconds: 2, Role: 'FinalHold', Label: 'Two' },
+                            ],
+                        },
+                        backend,
+                    );
+                    const stillsSingleT2 = await RunStillsJob(
+                        {
+                            Bundle: bundle,
+                            Width: 320,
+                            Height: 180,
+                            Fps: 15,
+                            Points: [{ Key: 'only2', TimestampSeconds: 2, Role: 'FinalHold', Label: 'Two' }],
+                        },
+                        backend,
+                    );
+
+                    const bufT0 = Buffer.from(stillsMulti.Stills[0]!.ImageBase64, 'base64');
+                    const bufT1_5 = Buffer.from(stillsMulti.Stills[2]!.ImageBase64, 'base64');
+                    const bufT2FromMulti = Buffer.from(stillsMulti.Stills[3]!.ImageBase64, 'base64');
+                    const bufT2Single = Buffer.from(stillsSingleT2.Stills[0]!.ImageBase64, 'base64');
+
+                    // Stills at t=0 and t=1.5 differ (MJVideo.OnFrame + MJVideo.Random() advanced the visual state)
+                    expect(bufT0.equals(bufT1_5)).toBe(false);
+                    // Stills at t=2 captured in [2] vs [0, 1, 1.5, 2] are byte-identical (per-frame PRNG reseed)
+                    expect(bufT2Single.equals(bufT2FromMulti)).toBe(true);
+
+                    const sheetRes = await RunContactSheetJob(
+                        {
+                            Format: '16:9',
+                            Stills: stillsMulti.Stills,
+                        },
+                        backend,
+                    );
+                    expect(sheetRes.Sheets).toHaveLength(1);
+                    expect(nonLoopbackTargets).toEqual([]);
+                } finally {
+                    connectSpy.mockRestore();
+                }
+            },
+            120_000,
+        );
+
+        it(
             'extracts keyframes from an ffmpeg testsrc clip with a cut: <= MaxFrames, sorted, with a SceneChange',
             async () => {
                 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-vs-testsrc-'));
@@ -324,7 +457,7 @@ describe.skipIf(process.env.VIDEO_STUDIO_RENDER_TESTS !== '1')(
         );
 
         it(
-            'CSP forced: lint gate bypassed through job seam; fetch, Image.src, WebSocket and CSS url() make zero loopback requests',
+            'CSP forced: lint gate bypassed through RunRenderJob seam (no request interception) makes zero loopback requests, while negative control without CSP <meta> hits loopback server',
             async () => {
                 const hits: string[] = [];
                 const loopbackServer = http.createServer((req, res) => {
@@ -339,11 +472,12 @@ describe.skipIf(process.env.VIDEO_STUDIO_RENDER_TESTS !== '1')(
                 const html = [
                     '<!doctype html>',
                     '<html><head><meta charset="utf-8" />',
-                    `<style>body { width: 320px; height: 180px; background-image: url("http://127.0.0.1:${port}/css-bg.png"); }</style>`,
+                    `<style>body { width: 320px; height: 180px; font-family: 'MJ Sans'; background-image: url("http://127.0.0.1:${port}/css-bg.png"); }</style>`,
                     '</head><body>',
-                    '<div id="root" data-composition-id="csp-comp" data-duration="1" data-fps="15" data-width="320" data-height="180" data-no-timeline>CSP</div>',
+                    '<div id="root" data-composition-id="csp-comp" data-duration="0.4" data-fps="10" data-width="320" data-height="180" data-no-timeline>CSP</div>',
                     '<script>',
                     '(function() {',
+                    '  window.__hf = { duration: 0.4, seek: function() {} };',
                     `  try { fetch("http://127.0.0.1:${port}/fetch").catch(function(){}); } catch (e) {}`,
                     `  try { var img = new Image(); img.src = "http://127.0.0.1:${port}/img.png"; document.body.appendChild(img); } catch (e) {}`,
                     `  try { new WebSocket("ws://127.0.0.1:${port}/ws"); } catch (e) {}`,
@@ -351,38 +485,59 @@ describe.skipIf(process.env.VIDEO_STUDIO_RENDER_TESTS !== '1')(
                     '</script></body></html>',
                 ].join('\n');
 
-                const staged = await StageRenderBundle(
-                    {
-                        Format: '16:9',
-                        EntryFile: 'index.html',
-                        Files: [{ Path: 'index.html', Content: html }],
-                        Assets: [],
-                        DataSnapshot: {},
-                        Seed: 1,
-                    },
-                    {
-                        Geometry: { Width: 320, Height: 180, Fps: 15, DurationSeconds: 1 },
-                    },
-                );
+                const bundle: RenderProjectBundle = {
+                    Format: '16:9',
+                    EntryFile: 'index.html',
+                    Files: [{ Path: 'index.html', Content: html }],
+                    Assets: [],
+                    DataSnapshot: {},
+                    Seed: 1,
+                };
 
                 try {
-                    const buffers = await backend.CaptureStills({
-                        RootDir: staged.RootDir,
-                        EntryFile: 'index.html',
-                        Width: 320,
-                        Height: 180,
-                        Fps: 15,
-                        TimestampsSeconds: [0, 0.5],
-                        ImageFormat: 'png',
-                    });
-                    expect(buffers).toHaveLength(2);
+                    // 1. RunRenderJob with SkipLintGate: true injects the CSP <meta> tag and runs @hyperframes/producer
+                    //    (which has NO Puppeteer request interception). The CSP <meta> tag alone blocks all requests.
+                    const renderRes = await RunRenderJob(
+                        {
+                            Bundle: bundle,
+                            Width: 320,
+                            Height: 180,
+                            Fps: 10,
+                            DurationSeconds: 0.4,
+                            Quality: 'draft',
+                        },
+                        backend,
+                        undefined,
+                        undefined,
+                        { SkipLintGate: true },
+                    );
+                    expect(renderRes.FrameCount).toBe(4);
                     expect(hits).toEqual([]);
+
+                    // 2. Negative control: stage the same HTML with InjectPreamble: false (no CSP <meta>) and render via backend.Render
+                    const unstagedPreamble = await StageRenderBundle(bundle, {
+                        InjectPreamble: false,
+                        Geometry: { Width: 320, Height: 180, Fps: 10, DurationSeconds: 0.4 },
+                    });
+                    try {
+                        await backend.Render({
+                            RootDir: unstagedPreamble.RootDir,
+                            EntryFile: 'index.html',
+                            Width: 320,
+                            Height: 180,
+                            Fps: 10,
+                            DurationSeconds: 0.4,
+                            Quality: 'draft',
+                        });
+                        expect(hits.length).toBeGreaterThan(0);
+                    } finally {
+                        await unstagedPreamble.Cleanup();
+                    }
                 } finally {
-                    await staged.Cleanup();
                     await new Promise<void>((resolve) => loopbackServer.close(() => resolve()));
                 }
             },
-            60_000,
+            90_000,
         );
     },
 );

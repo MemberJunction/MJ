@@ -10,12 +10,12 @@ import {
     type RenderResultMetadata,
     type RenderStreamEvent,
     type RenderWorkerErrorBody,
+    type RenderWorkerErrorCode,
     type StillsRequest,
 } from '@memberjunction/video-studio-core';
 import {
     RenderWorkerError,
     type RenderBackend,
-    type RenderWorkerLocalErrorCode,
 } from './backend.js';
 import {
     StageRenderBundle,
@@ -158,8 +158,8 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
         Math.max(50, options.NonRenderTimeoutMs ?? DEFAULT_NON_RENDER_TIMEOUT_MS),
     );
     const tempRoot = options.TempRoot?.trim() || undefined;
-    const heartbeatMs = Math.max(20, options.HeartbeatIntervalMs ?? DEFAULT_HEARTBEAT_MS);
-    const videoTtlMs = Math.max(100, options.VideoTtlMs ?? DEFAULT_VIDEO_TTL_MS);
+    const heartbeatMs = Math.max(10, options.HeartbeatIntervalMs ?? DEFAULT_HEARTBEAT_MS);
+    const videoTtlMs = Math.max(10, options.VideoTtlMs ?? DEFAULT_VIDEO_TTL_MS);
 
     const semaphore = new AsyncSemaphore(maxConcurrency);
     const activeAbortControllers = new Set<AbortController>();
@@ -681,7 +681,7 @@ function toRenderWorkerError(error: unknown): RenderWorkerError {
     return new RenderWorkerError('Internal', message || 'Internal render worker error.');
 }
 
-function statusCodeForErrorCode(code: RenderWorkerLocalErrorCode): number {
+function statusCodeForErrorCode(code: RenderWorkerErrorCode): number {
     switch (code) {
         case 'Unauthorized':
             return 401;

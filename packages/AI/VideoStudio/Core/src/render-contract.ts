@@ -445,6 +445,9 @@ export interface RenderHealth {
 
 /**
  * Structured error codes returned by the render worker HTTP endpoints.
+ *
+ * `'GEOMETRY_MISMATCH'` (HTTP 400) indicates the request geometry (`Width`, `Height`, or
+ * `DurationSeconds`) differs from the composition's `data-width`, `data-height`, or `data-duration` attributes.
  */
 export type RenderWorkerErrorCode =
     | 'Unauthorized'
@@ -452,6 +455,7 @@ export type RenderWorkerErrorCode =
     | 'BodyTooLarge'
     | 'InvalidRequest'
     | 'InvalidBundle'
+    | 'GEOMETRY_MISMATCH' // HTTP 400: request geometry differs from the composition's data-* attributes
     | 'LintBlocked'
     | 'TooManyStills'
     | 'Timeout'

@@ -41,7 +41,6 @@ import type {
     RenderProgressPhase,
 } from '@memberjunction/video-studio-core';
 import {
-    PINNED_HYPERFRAMES_VERSION,
     RenderWorkerError,
     type BackendCheckJob,
     type BackendProbeResult,
@@ -73,26 +72,27 @@ export const CHECK_CLI_TIMEOUT_MS = 120_000;
 const PACKAGE_ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * Resolves the installed version of `@hyperframes/<subpackage>` from its `package.json` at runtime,
- * falling back to `PINNED_HYPERFRAMES_VERSION` if resolution fails.
+ * Resolves the installed version of `@hyperframes/<subpackage>` from its `package.json` at runtime.
+ * Throws if the package's `package.json` cannot be read or lacks a valid `version` field.
  */
 export function GetInstalledHyperFramesPackageVersion(subpackage = 'producer'): string {
+    const pkgJsonPath = path.join(PACKAGE_ROOT_DIR, 'node_modules', '@hyperframes', subpackage, 'package.json');
     try {
-        const pkgJsonPath = path.join(PACKAGE_ROOT_DIR, 'node_modules', '@hyperframes', subpackage, 'package.json');
         const raw = fssync.readFileSync(pkgJsonPath, 'utf8');
         const parsed = JSON.parse(raw) as { version?: unknown };
         if (typeof parsed.version === 'string' && parsed.version.trim().length > 0) {
             return parsed.version.trim();
         }
-    } catch {
-        // Fall back to pinned version
+    } catch (err) {
+        throw new Error(
+            `Unable to resolve installed version for @hyperframes/${subpackage} from ${pkgJsonPath}: ${err instanceof Error ? err.message : String(err)}`,
+        );
     }
-    return PINNED_HYPERFRAMES_VERSION;
+    throw new Error(`Invalid or missing version for @hyperframes/${subpackage} in ${pkgJsonPath}`);
 }
 
 /**
- * Resolves the installed `@hyperframes/producer` version from its `package.json` at runtime,
- * falling back to `PINNED_HYPERFRAMES_VERSION` if resolution fails.
+ * Resolves the installed `@hyperframes/producer` version from its `package.json` at runtime.
  */
 export function GetInstalledHyperFramesVersion(): string {
     return GetInstalledHyperFramesPackageVersion('producer');
@@ -387,8 +387,15 @@ export class HyperFramesRenderBackend implements RenderBackend {
 
     public async Health(): Promise<RenderHealth> {
         const errors: string[] = [];
+        let hyperFramesVersion = '';
         let chromiumVersion: string | undefined;
         let ffmpegVersion: string | undefined;
+
+        try {
+            hyperFramesVersion = GetInstalledHyperFramesVersion();
+        } catch (error) {
+            errors.push(`HyperFrames check failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
 
         try {
             const browserBin = resolveBrowserBinary();
@@ -411,7 +418,7 @@ export class HyperFramesRenderBackend implements RenderBackend {
         return {
             Healthy: errors.length === 0,
             NodeVersion: process.version,
-            HyperFramesVersion: GetInstalledHyperFramesVersion(),
+            HyperFramesVersion: hyperFramesVersion,
             ChromiumVersion: chromiumVersion,
             FfmpegVersion: ffmpegVersion,
             Errors: errors,

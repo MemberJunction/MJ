@@ -91,18 +91,30 @@ export async function RunLintGate(
  * and `MJ_NETWORK_API` violations.
  */
 export function ScanAuthoredFilesForLintIssues(bundle: RenderProjectBundle): CheckIssue[] {
+    const authoredFilePaths = buildAuthoredFilePathSet(bundle);
     const issues: CheckIssue[] = [];
     for (const file of bundle.Files) {
         const lower = file.Path.toLowerCase();
         if (lower.endsWith('.html') || lower.endsWith('.htm') || lower.endsWith('.svg')) {
-            issues.push(...scanHtmlFile(file));
+            issues.push(...scanHtmlFile(file, authoredFilePaths));
         } else if (lower.endsWith('.css')) {
             issues.push(...scanCssBlock(file.Content, file.Path, 1));
         } else {
-            issues.push(...scanJsBlock(file.Content, file.Path, 1));
+            issues.push(...scanJsBlock(file.Content, file.Path, 1, authoredFilePaths));
         }
     }
     return SortCheckIssues(deduplicateIssues(issues));
+}
+
+function buildAuthoredFilePathSet(bundle: RenderProjectBundle): ReadonlySet<string> {
+    const paths = new Set<string>();
+    for (const file of bundle.Files) {
+        const resolved = resolveBundleRelativePath('', file.Path);
+        if (resolved) {
+            paths.add(resolved);
+        }
+    }
+    return paths;
 }
 
 /**
@@ -134,7 +146,9 @@ export function SortCheckIssues(issues: readonly CheckIssue[]): CheckIssue[] {
     });
 }
 
-function scanHtmlFile(file: RenderCompositionFile): CheckIssue[] {
+const HTML_SCRIPT_TAG_ATTR_REGEX = /\b(src|href|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/gi;
+
+function scanHtmlFile(file: RenderCompositionFile, authoredFilePaths: ReadonlySet<string>): CheckIssue[] {
     const issues: CheckIssue[] = [];
     const html = file.Content;
 
@@ -152,6 +166,27 @@ function scanHtmlFile(file: RenderCompositionFile): CheckIssue[] {
         const issue = checkUrlReference(rawUrl, file.Path, line, `HTML attribute "${attrName}"`);
         if (issue) {
             issues.push(issue);
+        }
+    }
+
+    for (const scriptTagMatch of html.matchAll(/<script\b([^>]*)>/gi)) {
+        const attrs = scriptTagMatch[1] ?? '';
+        const tagLine = computeLineNumber(html, scriptTagMatch.index ?? 0);
+        for (const attrMatch of attrs.matchAll(HTML_SCRIPT_TAG_ATTR_REGEX)) {
+            const attrName = attrMatch[1] ?? 'src';
+            const rawUrl = decodeHtmlEntities((attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? '').trim());
+            if (!checkUrlReference(rawUrl, file.Path, tagLine, `HTML attribute "${attrName}"`)) {
+                const targetIssue = checkScriptOrImportTarget(
+                    rawUrl,
+                    file.Path,
+                    tagLine,
+                    `HTML <script ${attrName}>`,
+                    authoredFilePaths,
+                );
+                if (targetIssue) {
+                    issues.push(targetIssue);
+                }
+            }
         }
     }
 
@@ -176,7 +211,7 @@ function scanHtmlFile(file: RenderCompositionFile): CheckIssue[] {
     for (const match of html.matchAll(HTML_EVENT_HANDLER_ATTR_REGEX)) {
         const handlerJs = decodeHtmlEntities(match[1] ?? match[2] ?? match[3] ?? '');
         const line = computeLineNumber(html, match.index ?? 0);
-        issues.push(...scanJsBlock(handlerJs, file.Path, line));
+        issues.push(...scanJsBlock(handlerJs, file.Path, line, authoredFilePaths));
     }
 
     for (const match of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
@@ -188,7 +223,7 @@ function scanHtmlFile(file: RenderCompositionFile): CheckIssue[] {
     for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
         const block = match[1] ?? '';
         const line = computeLineNumber(html, match.index ?? 0);
-        issues.push(...scanJsBlock(block, file.Path, line));
+        issues.push(...scanJsBlock(block, file.Path, line, authoredFilePaths));
     }
 
     return issues;
@@ -233,7 +268,12 @@ function scanCssBlock(css: string, filePath: string, baseLine: number): CheckIss
     return issues;
 }
 
-function scanJsBlock(js: string, filePath: string, baseLine: number): CheckIssue[] {
+function scanJsBlock(
+    js: string,
+    filePath: string,
+    baseLine: number,
+    authoredFilePaths: ReadonlySet<string>,
+): CheckIssue[] {
     const issues: CheckIssue[] = [];
 
     for (const rule of JS_NETWORK_API_RULES) {
@@ -247,7 +287,13 @@ function scanJsBlock(js: string, filePath: string, baseLine: number): CheckIssue
         for (const match of js.matchAll(regex)) {
             const specifier = (match[1] ?? match[2] ?? match[3] ?? '').trim();
             const line = baseLine + computeLineNumber(js, match.index ?? 0) - 1;
-            const issue = checkUrlReference(specifier, filePath, line, 'JS import specifier');
+            const issue = checkScriptOrImportTarget(
+                specifier,
+                filePath,
+                line,
+                'JS import specifier',
+                authoredFilePaths,
+            );
             if (issue) {
                 issues.push(issue);
             }
@@ -267,6 +313,32 @@ function scanJsBlock(js: string, filePath: string, baseLine: number): CheckIssue
     }
 
     return issues;
+}
+
+function checkScriptOrImportTarget(
+    rawUrl: string,
+    filePath: string,
+    line: number,
+    contextLabel: string,
+    authoredFilePaths: ReadonlySet<string>,
+): CheckIssue | null {
+    const urlIssue = checkUrlReference(rawUrl, filePath, line, contextLabel);
+    if (urlIssue) {
+        return urlIssue;
+    }
+    const trimmed = rawUrl.trim();
+    const resolved = resolveBundleRelativePath(filePath, trimmed);
+    if (!resolved || !authoredFilePaths.has(resolved)) {
+        return {
+            Code: MJ_NON_BUNDLE_URL_CODE,
+            Category: 'RemoteUrl',
+            Severity: 'Error',
+            Message: `Script or module reference "${trimmed}" in ${contextLabel} must resolve to an entry in bundle.Files.`,
+            File: filePath,
+            Line: line,
+        };
+    }
+    return null;
 }
 
 function looksLikeUrlOrTraversalInLiteral(literal: string): boolean {
@@ -326,6 +398,23 @@ function escapesBundleRoot(fromFilePath: string, referenceUrl: string): boolean 
     if (!cleanRef) {
         return false;
     }
+    return resolveBundleRelativePath(fromFilePath, referenceUrl) === null;
+}
+
+function resolveBundleRelativePath(fromFilePath: string, referenceUrl: string): string | null {
+    const trimmed = referenceUrl.trim();
+    if (
+        !trimmed ||
+        trimmed.startsWith('#') ||
+        /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) ||
+        trimmed.startsWith('//')
+    ) {
+        return null;
+    }
+    const cleanRef = (trimmed.split(/[?#]/)[0] ?? '').replace(/\\/g, '/');
+    if (!cleanRef) {
+        return null;
+    }
     const dirNormalized = path.posix.dirname(fromFilePath.replace(/\\/g, '/'));
     const stack =
         cleanRef.startsWith('/') || dirNormalized === '.' || dirNormalized === ''
@@ -339,14 +428,14 @@ function escapesBundleRoot(fromFilePath: string, referenceUrl: string): boolean 
         }
         if (seg === '..') {
             if (stack.length === 0) {
-                return true;
+                return null;
             }
             stack.pop();
         } else {
             stack.push(seg);
         }
     }
-    return false;
+    return stack.length > 0 ? stack.join('/') : null;
 }
 
 function buildNetworkApiIssue(filePath: string, line: number, label: string): CheckIssue {

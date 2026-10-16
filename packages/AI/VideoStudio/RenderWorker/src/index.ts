@@ -21,7 +21,6 @@ export {
     type FakeRenderBackendOptions,
     type MeasuredText,
     type RenderBackend,
-    type RenderWorkerLocalErrorCode,
 } from './backend.js';
 
 export {
